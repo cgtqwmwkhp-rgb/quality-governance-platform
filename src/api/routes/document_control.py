@@ -20,7 +20,7 @@ from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
-from src.domain.exceptions import NotFoundError
+from src.domain.exceptions import FeatureNotProvisionedError, MeasurementUnavailableError, NotFoundError
 from src.domain.models.document_control import (
     ControlledDocument,
     ControlledDocumentVersion,
@@ -34,9 +34,83 @@ from src.domain.models.document_control import (
 from src.domain.models.user import User
 from src.domain.services.document_version_service import assert_document_metadata_editable, document_version_service
 from src.domain.services.gkb_golden_thread import GoldenThreadContext, decide_golden_thread_publish
+from src.domain.services.schema_presence import absent_tables
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# ============ Tables this module reads that production does not have ============
+#
+# Seven of the tables backing this router have no create migration. They exist in
+# every test database — both CI harnesses build their schema with
+# ``Base.metadata.create_all`` — and in no deployment, which is why nothing here
+# ever failed a gate while four of these endpoints returned 500s in production.
+# All seven are on the deferral register at
+# ``docs/governance/alembic_check_excluded_tables.md`` marked "migration coverage
+# pending", so the honest statement is not "temporarily broken" but "never built".
+#
+# Named per read rather than as one set, because the endpoints diverge: the
+# document-detail read needs two of them and is still worth answering without
+# either, whereas a distribution write needs exactly one and cannot be answered
+# at all without it. A single shared tuple would make every surface as
+# unavailable as the least available one.
+#
+# ``docs/ops/absent-table-disclosure.md`` maps each name to the surfaces above it.
+
+APPROVAL_WORKFLOW_TABLES: tuple[str, ...] = (DocumentApprovalWorkflow.__tablename__,)
+APPROVAL_INSTANCE_TABLES: tuple[str, ...] = (
+    DocumentApprovalInstance.__tablename__,
+    DocumentApprovalAction.__tablename__,
+)
+DISTRIBUTION_TABLES: tuple[str, ...] = (DocumentDistribution.__tablename__,)
+ACCESS_LOG_TABLES: tuple[str, ...] = (DocumentAccessLog.__tablename__,)
+OBSOLETE_RECORD_TABLES: tuple[str, ...] = (ObsoleteDocumentRecord.__tablename__,)
+
+
+async def _refuse_write_if_unprovisioned(db: DbSession, tables: tuple[str, ...], what: str) -> None:
+    """Refuse a write whose table is absent, before the transaction is poisoned.
+
+    Raises :class:`FeatureNotProvisionedError` rather than letting the INSERT
+    fail. Two reasons beyond the message being better: on PostgreSQL the failed
+    statement aborts the transaction, so any legitimate change staged alongside it
+    is lost to ``InFailedSqlTransaction`` at commit rather than to a clear error;
+    and the same absent table raises a different exception class on SQLite, so
+    there is no one thing to catch.
+    """
+    absent = await absent_tables(db, tables)
+    if not absent:
+        return
+
+    logger.error("%s cannot be recorded — absent tables: %s", what, ", ".join(absent))
+    raise FeatureNotProvisionedError(
+        f"{what} cannot be recorded because {', '.join(absent)} "
+        f"{'is' if len(absent) == 1 else 'are'} absent from this database. "
+        "Nothing was saved. This feature has no create-migration yet, so retrying "
+        "will not help until one is deployed.",
+        missing_tables=absent,
+    )
+
+
+async def _refuse_read_if_unmeasurable(db: DbSession, tables: tuple[str, ...], what: str) -> None:
+    """Refuse a read whose only source is absent, rather than answering ``[]``.
+
+    An empty list is reserved for a table that was read and found empty. For a
+    list endpoint absence is inherently coercible to empty — every defensive
+    client writes ``items ?? []`` — so the only signal a consumer cannot flatten
+    back into "there is nothing" is not-a-success.
+    """
+    absent = await absent_tables(db, tables)
+    if not absent:
+        return
+
+    logger.error("%s is unreadable — absent tables: %s", what, ", ".join(absent))
+    raise MeasurementUnavailableError(
+        f"{what} cannot be listed because {', '.join(absent)} "
+        f"{'is' if len(absent) == 1 else 'are'} absent from this database. "
+        "This is not a report that there are none.",
+        missing_tables=absent,
+    )
 
 
 def _utcnow() -> datetime:
@@ -636,7 +710,14 @@ async def list_workflows(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> list[dict[str, Any]]:
-    """List approval workflows"""
+    """List approval workflows, or report that none can be listed.
+
+    An empty array here would say "this tenant has configured no approval
+    workflows", which is a sentence a reader acts on by configuring one. While the
+    table is absent that is not what is true, so the absence is reported instead.
+    """
+    await _refuse_read_if_unmeasurable(db, APPROVAL_WORKFLOW_TABLES, "Approval workflows")
+
     result = await db.execute(
         _tenant_stmt(
             select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.is_active == True),
@@ -666,6 +747,8 @@ async def create_workflow(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create approval workflow"""
+    await _refuse_write_if_unprovisioned(db, APPROVAL_WORKFLOW_TABLES, "An approval workflow")
+
     workflow = DocumentApprovalWorkflow(tenant_id=_tenant_id(current_user), **workflow_data.model_dump())
     db.add(workflow)
     await db.commit()
@@ -681,7 +764,21 @@ async def submit_for_approval(
     workflow_id: int = Query(...),
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Submit document for approval"""
+    """Submit document for approval.
+
+    Checked before the document is touched, because the effect of not checking is
+    not merely a bad error message: ``document.status`` is set to
+    ``pending_approval`` in the same transaction as the approval instance, so a
+    failing INSERT takes the status change down with it. A user would be told the
+    submission failed while the register showed the document awaiting an approval
+    that no table can hold.
+    """
+    await _refuse_write_if_unprovisioned(
+        db,
+        APPROVAL_WORKFLOW_TABLES + APPROVAL_INSTANCE_TABLES,
+        "A submission for approval",
+    )
+
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
         apply_tenant_filter(
@@ -740,6 +837,12 @@ async def take_approval_action(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Take action on an approval request"""
+    await _refuse_write_if_unprovisioned(
+        db,
+        APPROVAL_INSTANCE_TABLES + APPROVAL_WORKFLOW_TABLES,
+        "An approval decision",
+    )
+
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
         apply_tenant_filter(
@@ -837,6 +940,8 @@ async def distribute_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
+    await _refuse_write_if_unprovisioned(db, DISTRIBUTION_TABLES, "A controlled-copy distribution")
+
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
         apply_tenant_filter(
@@ -876,6 +981,8 @@ async def acknowledge_distribution(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Acknowledge receipt of document"""
+    await _refuse_write_if_unprovisioned(db, DISTRIBUTION_TABLES, "A distribution acknowledgment")
+
     result = await db.execute(
         _tenant_stmt(
             select(DocumentDistribution).where(
@@ -908,7 +1015,16 @@ async def mark_document_obsolete(
     current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Mark document as obsolete"""
+    """Mark document as obsolete.
+
+    Refused rather than partially applied. The retention record and the status
+    change are one transaction on purpose: obsoleting a controlled document
+    without recording its retention end date would satisfy the request and lose
+    the reason the record exists. So while the retention table is absent, the
+    honest outcome is that the document stays current and the caller is told why.
+    """
+    await _refuse_write_if_unprovisioned(db, OBSOLETE_RECORD_TABLES, "An obsolete-document record")
+
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
         apply_tenant_filter(
@@ -957,7 +1073,14 @@ async def get_access_log(
     limit: int = Query(100, ge=1, le=500),
     db: DbSession = None,
 ) -> list[dict[str, Any]]:
-    """Get document access log"""
+    """Get document access log, or report that it cannot be read.
+
+    An empty access log asserts that nobody has opened this document, which is an
+    ISO-relevant claim and a stronger one than it looks. It must not be produced
+    by a table that was never there to be read.
+    """
+    await _refuse_read_if_unmeasurable(db, ACCESS_LOG_TABLES, "The document access log")
+
     result = await db.execute(
         _tenant_stmt(
             select(DocumentAccessLog).where(DocumentAccessLog.document_id == document_id),
@@ -989,8 +1112,24 @@ async def get_document_summary(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Get document control summary statistics"""
+    """Get document control summary statistics, omitting any figure not measured.
+
+    Seven of the eight figures aggregate ``controlled_documents``, which exists
+    and holds rows. Only ``pending_acknowledgments`` reads
+    ``document_distributions``, which does not exist — and because one query in a
+    request is enough to abort the whole transaction, that single figure has been
+    taking the other seven down with it and answering this endpoint with a 500.
+
+    So the unmeasurable figure is omitted and named, rather than the measurable
+    ones being discarded to protect it. Omitted rather than reported as ``0``:
+    that substitution is the defect PR #1402 fixed on the acknowledgment
+    dashboard, where "0% compliance" was read as an audit finding when it was
+    only a table nobody could open. It is also omitted rather than sent as
+    ``null``, because a client writing ``pending_acknowledgments ?? 0`` would
+    reconstruct the same lie from a null.
+    """
     tenant_id = _tenant_id(current_user)
+    unmeasurable_ack_tables = await absent_tables(db, DISTRIBUTION_TABLES)
     result = await db.execute(
         apply_tenant_filter(
             select(func.count(ControlledDocument.id)).where(ControlledDocument.is_current == True),
@@ -1059,17 +1198,19 @@ async def get_document_summary(
     obsolete = result.scalar()
 
     # Pending acknowledgments
-    result = await db.execute(
-        apply_tenant_filter(
-            select(func.count(DocumentDistribution.id)).where(
-                DocumentDistribution.acknowledged == False,
-                DocumentDistribution.acknowledgment_required == True,
-            ),
-            DocumentDistribution,
-            tenant_id,
+    pending_ack: Optional[int] = None
+    if not unmeasurable_ack_tables:
+        result = await db.execute(
+            apply_tenant_filter(
+                select(func.count(DocumentDistribution.id)).where(
+                    DocumentDistribution.acknowledged == False,
+                    DocumentDistribution.acknowledgment_required == True,
+                ),
+                DocumentDistribution,
+                tenant_id,
+            )
         )
-    )
-    pending_ack = result.scalar()
+        pending_ack = result.scalar()
 
     # By type
     result = await db.execute(
@@ -1083,16 +1224,36 @@ async def get_document_summary(
     )
     by_type = result.all()
 
-    return {
+    summary: dict[str, Any] = {
         "total_documents": total,
         "active": active,
         "draft": draft,
         "pending_approval": pending_approval,
         "overdue_review": overdue_review,
         "obsolete": obsolete,
-        "pending_acknowledgments": pending_ack,
         "by_type": {dtype: count for dtype, count in by_type},
     }
+
+    if unmeasurable_ack_tables:
+        logger.error(
+            "pending acknowledgments are unmeasurable — absent tables: %s",
+            ", ".join(unmeasurable_ack_tables),
+        )
+        summary["unmeasurable"] = {
+            "pending_acknowledgments": {
+                "missing_tables": list(unmeasurable_ack_tables),
+                "provisioning_state": "migration_pending",
+                "reason": (
+                    "Outstanding acknowledgments cannot be counted because "
+                    f"{', '.join(unmeasurable_ack_tables)} is absent from this "
+                    "database. This is not a count of zero."
+                ),
+            }
+        }
+    else:
+        summary["pending_acknowledgments"] = pending_ack
+
+    return summary
 
 
 # ============ Single-segment catch-all — MUST stay last in this module ============
@@ -1112,8 +1273,34 @@ async def get_document(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Get detailed document information"""
+    """Get detailed document information, disclosing any part that is unavailable.
+
+    The document, its version history and its metadata all come from tables that
+    exist and hold rows. Two subordinate reads do not: the distribution list, and
+    the access-log row this endpoint writes on every view. Because a failed
+    statement aborts the whole transaction on PostgreSQL, those two have been
+    denying access to every controlled document's detail — and silently dropping
+    the ``view_count`` increment staged in the same commit.
+
+    So the readable part is served and the unreadable parts are named in an
+    ``unavailable`` block. That block is the load-bearing half: ``distributions``
+    still arrives as ``[]`` because the one consumer reads
+    ``detail.distributions.length`` and a missing key would crash the page, and
+    ``[]`` on its own is exactly the "no controlled copies issued" claim that must
+    not be made here. The array is safe to render only because something beside it
+    says it was never read; ``frontend/src/pages/DocumentControl.tsx`` is changed
+    in the same commit to say so.
+
+    The skipped access-log write is disclosed for the same reason it is skipped:
+    no trail is recorded either way while the table is absent, so failing the read
+    would buy no audit integrity and would hide the gap behind a generic 500. A
+    human auditor needs to see it in the payload, not only in the logs.
+    """
     tenant_id = _tenant_id(current_user)
+    unavailable_reads = await absent_tables(db, DISTRIBUTION_TABLES + ACCESS_LOG_TABLES)
+    distributions_unavailable = DocumentDistribution.__tablename__ in unavailable_reads
+    access_log_unavailable = DocumentAccessLog.__tablename__ in unavailable_reads
+
     result = await db.execute(
         apply_tenant_filter(
             select(ControlledDocument).where(ControlledDocument.id == document_id),
@@ -1136,27 +1323,36 @@ async def get_document(
     versions = result.scalars().all()
 
     # Get distributions
-    result = await db.execute(
-        apply_tenant_filter(
-            select(DocumentDistribution).where(DocumentDistribution.document_id == document_id),
-            DocumentDistribution,
-            tenant_id,
+    distributions: Any = []
+    if not distributions_unavailable:
+        result = await db.execute(
+            apply_tenant_filter(
+                select(DocumentDistribution).where(DocumentDistribution.document_id == document_id),
+                DocumentDistribution,
+                tenant_id,
+            )
         )
-    )
-    distributions = result.scalars().all()
+        distributions = result.scalars().all()
 
     # Log access
-    log = DocumentAccessLog(
-        tenant_id=tenant_id,
-        document_id=document_id,
-        user_name=current_user.full_name,
-        action="view",
-    )
-    db.add(log)
+    if not access_log_unavailable:
+        log = DocumentAccessLog(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            user_name=current_user.full_name,
+            action="view",
+        )
+        db.add(log)
+    else:
+        logger.error(
+            "document %s viewed without an access-log entry — absent tables: %s",
+            document_id,
+            DocumentAccessLog.__tablename__,
+        )
     document.view_count += 1
     await db.commit()
 
-    return {
+    detail: dict[str, Any] = {
         "id": document.id,
         "document_number": document.document_number,
         "title": document.title,
@@ -1206,3 +1402,25 @@ async def get_document(
             for d in distributions
         ],
     }
+
+    unavailable_fields: dict[str, str] = {}
+    if distributions_unavailable:
+        unavailable_fields["distributions"] = (
+            "The controlled-copy distribution list could not be read. The empty "
+            "list beside this notice is not a record that no copies were issued."
+        )
+    if access_log_unavailable:
+        unavailable_fields["access_log"] = (
+            "This view was not recorded in the document access log, and the log "
+            "cannot be read. Access history for this document is not being kept."
+        )
+
+    if unavailable_fields:
+        detail["unavailable"] = {
+            "fields": sorted(unavailable_fields),
+            "missing_tables": list(unavailable_reads),
+            "provisioning_state": "migration_pending",
+            "reasons": unavailable_fields,
+        }
+
+    return detail
