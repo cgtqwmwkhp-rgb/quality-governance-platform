@@ -169,8 +169,19 @@ PROVENANCE_RULES: dict[str, tuple[AttributionRule, ...]] = {
 }
 
 
+# Each primary key in an expanded IN clause costs one bind parameter, and the
+# PostgreSQL wire protocol caps those per statement. 754 drafts is well inside the
+# limit today, but the scan covers 86 tables and nothing bounds a future one.
+_KEY_BATCH = 5000
+
+
 class RowSetDrifted(RuntimeError):
     """Raised when the rows to update no longer match the reviewed manifest."""
+
+
+def _batched(keys: list[Any]) -> list[list[Any]]:
+    """Split keys into batches. An empty input yields no batches, never an empty IN."""
+    return [keys[start : start + _KEY_BATCH] for start in range(0, len(keys), _KEY_BATCH)]
 
 
 def backfill_scope() -> tuple[str, ...]:
@@ -466,15 +477,24 @@ async def plan(*, limit: int, max_orphan_age_days: int) -> dict[str, Any]:
                 )
                 continue
             newest = age["newest_orphan"]
-            if isinstance(newest, datetime):
-                naive_cutoff = cutoff if newest.tzinfo else cutoff.replace(tzinfo=None)
-                if newest >= naive_cutoff:
-                    blockers.append(
-                        f"{table}'s newest orphan was created {newest.isoformat()}, within the last "
-                        f"{max_orphan_age_days} day(s). Recent orphans mean the write path is still "
-                        "producing them; backfilling would mask a live defect. Fix the writer first"
-                    )
-                    continue
+            if not isinstance(newest, datetime):
+                # A created_at column that yields no usable timestamp — all NULL, or
+                # a plain date — cannot show these rows are historical. Silently
+                # skipping the age check here would be the whole point of it lost.
+                blockers.append(
+                    f"{table} holds {len(rows)} orphan(s) whose newest created_at is {newest!r}, which is "
+                    "not a timestamp, so they cannot be shown to be historical rather than a live "
+                    "write-path defect"
+                )
+                continue
+            naive_cutoff = cutoff if newest.tzinfo else cutoff.replace(tzinfo=None)
+            if newest >= naive_cutoff:
+                blockers.append(
+                    f"{table}'s newest orphan was created {newest.isoformat()}, within the last "
+                    f"{max_orphan_age_days} day(s). Recent orphans mean the write path is still "
+                    "producing them; backfilling would mask a live defect. Fix the writer first"
+                )
+                continue
 
             creator_column = _creator_column(rules)
             creators = (
@@ -589,7 +609,9 @@ async def apply_plan(assignments: dict[str, list[dict[str, Any]]], pks: dict[str
             statement = sa.text(  # noqa: S608
                 f"SELECT {pk} FROM {table} WHERE tenant_id IS NULL AND {pk} IN :planned{lock}"
             ).bindparams(sa.bindparam("planned", expanding=True))
-            still_null = set((await db.execute(statement, {"planned": planned})).scalars().all())
+            still_null: set[Any] = set()
+            for batch in _batched(planned):
+                still_null.update((await db.execute(statement, {"planned": batch})).scalars().all())
             missing = [key for key in planned if key not in still_null]
             if missing:
                 drifted[table] = missing
@@ -611,8 +633,9 @@ async def apply_plan(assignments: dict[str, list[dict[str, Any]]], pks: dict[str
                 statement = sa.text(  # noqa: S608
                     f"UPDATE {table} SET tenant_id = :tenant_id WHERE tenant_id IS NULL AND {pk} IN :keys"
                 ).bindparams(sa.bindparam("keys", expanding=True))
-                result = await db.execute(statement, {"tenant_id": tenant_id, "keys": keys})
-                written += result.rowcount or 0
+                for batch in _batched(keys):
+                    result = await db.execute(statement, {"tenant_id": tenant_id, "keys": batch})
+                    written += result.rowcount or 0
             if written != len(rows):
                 await db.rollback()
                 raise RowSetDrifted(f"{table}: updated {written} row(s) but planned {len(rows)}; rolled back")
