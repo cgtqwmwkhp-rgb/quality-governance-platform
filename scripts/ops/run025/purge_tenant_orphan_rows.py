@@ -53,7 +53,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -70,23 +69,19 @@ from scripts.ops.run021._common import (
 )
 from scripts.ops.run025._dependencies import InboundRef, RowKey, deletion_order, dependent_ids, inbound_refs
 from scripts.ops.run025._models import migration_target_tables
+
+# Reference parsing lives in _references so this script and
+# purge_reviewed_debris_rows cannot drift on what counts as a sequential
+# reference. Re-exported under the original private names because that is what
+# this module's callers and tests already use.
+from scripts.ops.run025._references import SEQUENTIAL_REFERENCE, reference_parts as _reference_parts
 from scripts.ops.run025.inventory_tenant_id_nulls import _reflect, _rls_blinded, dsn_label
 
-#: ``PREFIX-YYYY-NNNN``, the sequential form ``ReferenceNumberService`` mints.
-SEQUENTIAL_REFERENCE = re.compile(r"^([A-Z]+)-(\d{4})-(\d+)$")
+__all__ = ["SEQUENTIAL_REFERENCE", "PurgeBlocked", "plan", "apply_plan", "main"]
 
 
 class PurgeBlocked(RuntimeError):
     """Raised when the reviewed row set cannot be deleted safely."""
-
-
-def _reference_parts(reference: Optional[str]) -> Optional[tuple[str, str, int]]:
-    if not reference:
-        return None
-    match = SEQUENTIAL_REFERENCE.match(reference.strip())
-    if not match:
-        return None
-    return match.group(1), match.group(2), int(match.group(3))
 
 
 async def _candidate_rows(db: Any, tables: list[str], reflected: dict[str, dict[str, Any]]) -> dict[str, list[dict]]:

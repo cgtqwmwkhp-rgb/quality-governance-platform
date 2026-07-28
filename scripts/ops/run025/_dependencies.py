@@ -31,7 +31,7 @@ database's own catalogue, never from argv.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
 import sqlalchemy as sa
 
@@ -106,11 +106,40 @@ def inbound_refs(sync_session: Any, parents: Sequence[str]) -> dict[str, list[In
     return found
 
 
-async def dependent_ids(db: Any, ref: InboundRef, parent_id: int) -> list[int]:
-    """Primary keys of rows referencing ``parent_id`` through ``ref``."""
-    sql = sa.text(f"SELECT id FROM {ref.child_table} WHERE {ref.child_column} = :parent_id ORDER BY id")  # noqa: S608
-    rows = (await db.execute(sql, {"parent_id": parent_id})).scalars().all()
-    return [int(row) for row in rows]
+def single_column_primary_keys(sync_session: Any, tables: Sequence[str]) -> dict[str, Optional[str]]:
+    """Single-column primary key per table, or ``None`` when there isn't one.
+
+    A row can only be addressed individually — deleted by key, recorded in a
+    manifest by key, re-verified by key — if it has one of these. A table without
+    one has to be reported, never swept with a predicate, so "no key" is a normal
+    answer that the caller is expected to turn into a refusal.
+    """
+    inspector = sa.inspect(sync_session.get_bind())
+    present = set(inspector.get_table_names())
+    keys: dict[str, Optional[str]] = {}
+    for table in tables:
+        if table not in present:
+            keys[table] = None
+            continue
+        columns = inspector.get_pk_constraint(table).get("constrained_columns") or []
+        keys[table] = columns[0] if len(columns) == 1 else None
+    return keys
+
+
+async def dependent_ids(db: Any, ref: InboundRef, parent_id: int, *, key_column: str = "id") -> list[Any]:
+    """Primary keys of rows referencing ``parent_id`` through ``ref``.
+
+    ``key_column`` defaults to ``id`` because every table in this schema happens to
+    have one, but it is a parameter rather than an assumption: a junction table
+    added later with a composite key would otherwise make this raise
+    ``UndefinedColumn`` from inside a dependency scan, which reads like a broken
+    script rather than the "I cannot check this table" it actually is. Callers
+    resolve the real key with :func:`single_column_primary_keys` first.
+    """
+    sql = sa.text(  # noqa: S608
+        f"SELECT {key_column} FROM {ref.child_table} WHERE {ref.child_column} = :parent_id ORDER BY {key_column}"
+    )
+    return list((await db.execute(sql, {"parent_id": parent_id})).scalars().all())
 
 
 def deletion_order(candidates: Iterable[RowKey], edges: Iterable[tuple[RowKey, RowKey]]) -> list[RowKey]:
