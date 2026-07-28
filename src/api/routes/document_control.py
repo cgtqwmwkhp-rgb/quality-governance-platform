@@ -39,6 +39,24 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _utcnow() -> datetime:
+    """Current UTC instant as a naive datetime, matching this module's columns.
+
+    Every ``DateTime`` column in ``src/domain/models/document_control.py`` is
+    declared without ``timezone=True``, so Postgres stores them as ``timestamp
+    without time zone``. asyncpg refuses to adapt an aware datetime for such a
+    column and raises ``DataError: can't subtract offset-naive and offset-aware
+    datetimes``, which surfaces as a 500 — it does not silently coerce, and
+    SQLite does not reproduce it, so this only ever fails against Postgres.
+
+    ``document_version_service`` already writes these columns via the same
+    ``.replace(tzinfo=None)``; this keeps the routes consistent with both it and
+    the models' own column defaults. Do not "fix" this by making the value aware:
+    the column type is what defines the contract, and changing it is a migration.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def _tenant_id(current_user: CurrentUser) -> int:
     """Return the authenticated tenant or reject unscoped document-control access."""
     return require_tenant_id(getattr(current_user, "tenant_id", None))
@@ -201,7 +219,7 @@ async def list_documents(
                 "owner_name": d.owner_name,
                 "effective_date": (d.effective_date.isoformat() if d.effective_date else None),
                 "next_review_date": (d.next_review_date.isoformat() if d.next_review_date else None),
-                "is_overdue": (d.next_review_date < datetime.now(timezone.utc) if d.next_review_date else False),
+                "is_overdue": (d.next_review_date < _utcnow() if d.next_review_date else False),
             }
             for d in documents
         ],
@@ -398,7 +416,7 @@ async def update_document(
     for key, value in update_data.items():
         setattr(document, key, value)
 
-    document.updated_at = datetime.now(timezone.utc)
+    document.updated_at = _utcnow()
     await db.commit()
     await db.refresh(document)
 
@@ -698,7 +716,7 @@ async def submit_for_approval(
 
     # Set due date based on workflow
     if workflow.auto_escalate_after_days:
-        instance.due_date = datetime.now(timezone.utc) + timedelta(days=workflow.auto_escalate_after_days)
+        instance.due_date = _utcnow() + timedelta(days=workflow.auto_escalate_after_days)
 
     document.status = "pending_approval"
 
@@ -773,13 +791,13 @@ async def take_approval_action(
         # Check if this was the last step
         if instance.current_step >= len(workflow.workflow_steps):
             instance.status = "approved"
-            instance.completed_date = datetime.now(timezone.utc)
+            instance.completed_date = _utcnow()
             instance.final_decision = "approved"
             if document:
                 document.status = "approved"
-                document.approved_date = datetime.now(timezone.utc)
-                document.effective_date = datetime.now(timezone.utc)
-                document.next_review_date = datetime.now(timezone.utc) + timedelta(
+                document.approved_date = _utcnow()
+                document.effective_date = _utcnow()
+                document.next_review_date = _utcnow() + timedelta(
                     days=document.review_frequency_months * 30,
                 )
         else:
@@ -787,7 +805,7 @@ async def take_approval_action(
 
     elif action_request.action == "rejected":
         instance.status = "rejected"
-        instance.completed_date = datetime.now(timezone.utc)
+        instance.completed_date = _utcnow()
         instance.final_decision = "rejected"
         instance.final_comments = action_request.comments
         if document:
@@ -834,7 +852,7 @@ async def distribute_document(
     dist = DocumentDistribution(
         tenant_id=tenant_id,
         document_id=document_id,
-        notified_date=datetime.now(timezone.utc),
+        notified_date=_utcnow(),
         **distribution.model_dump(),
     )
     db.add(dist)
@@ -874,7 +892,7 @@ async def acknowledge_distribution(
         raise NotFoundError("Distribution not found")
 
     dist.acknowledged = True
-    dist.acknowledged_date = datetime.now(timezone.utc)
+    dist.acknowledged_date = _utcnow()
     await db.commit()
 
     return {"message": "Acknowledgment recorded"}
@@ -906,7 +924,7 @@ async def mark_document_obsolete(
     # Update document
     document.status = "obsolete"
     document.is_current = False
-    document.obsolete_date = datetime.now(timezone.utc)
+    document.obsolete_date = _utcnow()
     document.obsolete_reason = obsolete_data.obsolete_reason
     document.superseded_by = obsolete_data.superseded_by_id
 
@@ -914,11 +932,11 @@ async def mark_document_obsolete(
     record = ObsoleteDocumentRecord(
         tenant_id=tenant_id,
         document_id=document_id,
-        obsolete_date=datetime.now(timezone.utc),
+        obsolete_date=_utcnow(),
         obsolete_reason=obsolete_data.obsolete_reason,
         superseded_by_id=obsolete_data.superseded_by_id,
         retention_required=True,
-        retention_end_date=datetime.now(timezone.utc) + timedelta(days=document.retention_period_years * 365),
+        retention_end_date=_utcnow() + timedelta(days=document.retention_period_years * 365),
     )
     db.add(record)
     await db.commit()
@@ -1021,7 +1039,7 @@ async def get_document_summary(
     result = await db.execute(
         apply_tenant_filter(
             select(func.count(ControlledDocument.id)).where(
-                ControlledDocument.next_review_date < datetime.now(timezone.utc),
+                ControlledDocument.next_review_date < _utcnow(),
                 ControlledDocument.status == "active",
                 ControlledDocument.is_current == True,
             ),

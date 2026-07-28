@@ -312,13 +312,49 @@ class TestNoRouteIsShadowed:
 # The five routes this branch fixes — resolution plus real HTTP
 # ---------------------------------------------------------------------------
 
-FIXED_LITERALS = [
-    "/api/v1/document-control/summary",
-    "/api/v1/document-control/workflows",
-    "/api/v1/evidence-assets/download",
-    "/api/v1/policy-acknowledgments/dashboard",
-    "/api/v1/policy-acknowledgments/reminders-needed",
-]
+# What each newly-reachable literal must answer, stated exactly.
+#
+# This started life as ``status_code != 404``, which was too weak: unshadowing
+# ``/summary`` exposed a 500 behind it (an aware datetime bound against a naive
+# column) and "not a 404" accepted that happily. A reachability test that tolerates
+# a 500 is not measuring reachability, it is measuring routing — and routing is
+# already covered by ``test_literal_resolves_to_its_own_handler`` without needing a
+# request. The point of driving real HTTP is to prove the handler *runs*.
+#
+# Note what this suite structurally CANNOT check, so nobody reads a pass as more
+# than it is: the integration harness calls ``Base.metadata.create_all``, so every
+# model's table exists here whether or not a migration creates it. Seven
+# document-control tables have no migration at all — ``document_approval_workflows``
+# and ``document_distributions`` among them — so ``/workflows`` and ``/summary``
+# return 200 here and 500 against a migrations-only database. That gap is real but
+# it is migration drift, not route shadowing, and detecting it needs a database
+# built by Alembic alone. See the PR discussion; it belongs with whoever owns
+# ``alembic/``. Do not weaken the statuses below to paper over it.
+EXPECTED_STATUS: dict[str, tuple[frozenset[int], str]] = {
+    "/api/v1/document-control/summary": (
+        frozenset({200}),
+        "returns the document counts it exists to return",
+    ),
+    "/api/v1/document-control/workflows": (
+        frozenset({200}),
+        "returns the (possibly empty) list of approval workflows",
+    ),
+    "/api/v1/evidence-assets/download": (
+        frozenset({422}),
+        "its own signature requires key/expires/sig, so a bare GET is a query-level 422 — "
+        "reaching that proves the handler answered rather than the by-id route",
+    ),
+    "/api/v1/policy-acknowledgments/dashboard": (
+        frozenset({200}),
+        "returns the compliance dashboard",
+    ),
+    "/api/v1/policy-acknowledgments/reminders-needed": (
+        frozenset({200}),
+        "returns the set of acknowledgments due a reminder",
+    ),
+}
+
+FIXED_LITERALS = list(EXPECTED_STATUS)
 
 # The by-id routes that were moved. Each must still answer its own path.
 MOVED_CATCH_ALLS = [
@@ -365,7 +401,14 @@ class TestFixedRoutesAreReachable:
                 f"GET {path} returned the {param} int-parsing 422, so it is still being matched "
                 f"as the by-id route and is unreachable. Body: {response.text}"
             )
-        assert response.status_code != 404, f"GET {path} returned 404: {response.text}"
+        expected, because = EXPECTED_STATUS[path]
+        assert response.status_code in expected, (
+            f"GET {path} returned {response.status_code}; expected {sorted(expected)} because it "
+            f"{because}. Reaching the handler is only half of it — the handler has to work. A 5xx "
+            f"here means the endpoint was unreachable long enough for a defect to accumulate behind "
+            f"it unnoticed; fix the handler rather than widening this expectation. "
+            f"Body: {response.text}"
+        )
 
     @pytest.mark.parametrize("route_path,probe,param", MOVED_CATCH_ALLS)
     def test_moved_by_id_route_still_owns_its_path(self, route_path: str, probe: str, param: str) -> None:
