@@ -13,6 +13,7 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.core.config import settings
 from src.core.security import decode_token, ensure_access_token_not_revoked
+from src.domain.authz.extraction import REQUIRED_PERMISSION_ATTR
 from src.domain.exceptions import TokenRevokedError
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
@@ -142,6 +143,11 @@ def require_permission(permission: str):
             )
         return current_user
 
+    # Record the token so the permission-catalogue test can walk the app's routes
+    # and read it back. Deliberately not left to closure introspection: a closure
+    # variable read by name goes quietly to None the day someone renames the
+    # parameter, and the catalogue test would then pass while checking nothing.
+    setattr(permission_checker, REQUIRED_PERMISSION_ATTR, permission)
     return permission_checker
 
 
