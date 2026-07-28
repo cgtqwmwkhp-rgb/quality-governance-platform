@@ -1,4 +1,4 @@
-"""What an application role sees of the four debris rows, against real PostgreSQL RLS.
+"""What an application role sees of the six debris rows, against real PostgreSQL RLS.
 
 Why this cannot be a unit test
 ------------------------------
@@ -20,6 +20,19 @@ delete, whatever tenant it sets. Two consequences, both silent:
 Task 5 was to establish what an application role actually sees rather than to accept
 that a bypass role saw everything, so both roles are exercised here against the same
 rows.
+
+``audit_responses`` is the interesting exception and is reproduced as the exception it
+is. Measured on a database built by the full alembic chain, ``audit_runs``,
+``audit_findings``, ``risks_v2`` and ``users`` all have ``relrowsecurity`` and
+``relforcerowsecurity`` true with one ``tenant_isolation`` policy each, while
+``audit_responses``, ``audit_questions`` and ``audit_sections`` have neither and no
+policy at all — they carry a ``tenant_id`` that nothing enforces. So an application
+role sees the two reviewed responses perfectly well while being blind to the four rows
+around them, which is a worse starting position than being blind to all six: two thirds
+of the set looks already-deleted and the visible third looks ready to delete. The
+refusal has to come from the four it cannot see, and
+:func:`test_an_app_role_sees_the_responses_but_not_their_parents_and_still_refuses`
+is that case.
 
 Why a private schema and ``SET ROLE``
 -------------------------------------
@@ -49,16 +62,26 @@ from scripts.ops.run025.purge_reviewed_debris_rows import PreconditionDrifted, R
 
 SMOKE_EMAIL = "smoke-runner@plantexpand.com"
 
+#: The marker the smoke test wrote into ``audit_responses.notes``.
+RESPONSE_MARKER = "E2E response"
+
 #: The production policy, copied from ``20260222_add_row_level_security`` and
 #: ``20260719_rls_gt_exp``. Reproduced verbatim rather than approximated, because the
 #: whole question is how it treats a NULL ``tenant_id``.
 POLICY_PREDICATE = "tenant_id = current_setting('app.current_tenant_id', true)::int"
 
-#: Only the tables this purge reads or writes. ``users`` is included because
-#: provenance is re-verified through it and it is under FORCE RLS in production too: a
-#: role that can see an audit run but not the account that created it still cannot
-#: establish that the row is debris.
+#: The tables this purge touches that are under FORCE RLS in production. ``users`` is
+#: included because provenance is re-verified through it and it is under FORCE RLS
+#: there too: a role that can see an audit run but not the account that created it
+#: still cannot establish that the row is debris.
+#:
+#: ``audit_responses`` and ``audit_questions`` are deliberately *not* here. Neither has
+#: RLS enabled in production and neither has a policy, so putting them under one would
+#: make this fixture prove something production does not do.
 RLS_TABLES: tuple[str, ...] = ("users", "audit_runs", "audit_findings", "risks_v2")
+
+#: Reviewed tables with a ``tenant_id`` and nothing enforcing it.
+UNPROTECTED_TABLES: tuple[str, ...] = ("audit_responses", "audit_questions")
 
 _DDL: tuple[str, ...] = (
     "CREATE TABLE users ("
@@ -101,6 +124,23 @@ _DDL: tuple[str, ...] = (
     " CONSTRAINT audit_finding_risks_risk_fkey"
     " FOREIGN KEY (risk_id) REFERENCES risks_v2(id) ON DELETE CASCADE"
     " )",
+    "CREATE TABLE audit_questions ("
+    " id SERIAL PRIMARY KEY,"
+    " question_text TEXT NOT NULL,"
+    " tenant_id INTEGER"
+    " )",
+    # No created_by_id, as production has none. That is what makes the parent run and
+    # the notes marker the only provenance available for these two rows.
+    "CREATE TABLE audit_responses ("
+    " id SERIAL PRIMARY KEY,"
+    " run_id INTEGER NOT NULL,"
+    " question_id INTEGER NOT NULL,"
+    " response_value VARCHAR(500),"
+    " notes TEXT,"
+    " tenant_id INTEGER,"
+    " CONSTRAINT audit_responses_run_id_fkey FOREIGN KEY (run_id) REFERENCES audit_runs(id) ON DELETE CASCADE,"
+    " CONSTRAINT audit_responses_question_id_fkey FOREIGN KEY (question_id) REFERENCES audit_questions(id)"
+    " )",
 )
 
 
@@ -142,7 +182,7 @@ class _ProbeSession:
 
 
 class _Probe:
-    """A private schema holding the four debris rows under production's RLS."""
+    """A private schema holding the six debris rows under production's RLS."""
 
     def __init__(self, engine: Any, schema: str, role: str):
         self._engine = engine
@@ -151,6 +191,7 @@ class _Probe:
         self.run_ids: tuple[int, ...] = ()
         self.finding_id = 0
         self.risk_id = 0
+        self.response_ids: tuple[int, ...] = ()
 
     @property
     def reviewed(self) -> tuple[ReviewedRow, ...]:
@@ -183,17 +224,38 @@ class _Probe:
                 creator_email=SMOKE_EMAIL,
                 evidence="escalation of that finding",
             ),
+            ReviewedRow(
+                table="audit_responses",
+                row_id=self.response_ids[0],
+                parent_column="run_id",
+                parent_table="audit_runs",
+                parent_row_id=self.run_ids[0],
+                marker_column="notes",
+                marker_value=RESPONSE_MARKER,
+                evidence="sole response of the first smoke run",
+            ),
+            ReviewedRow(
+                table="audit_responses",
+                row_id=self.response_ids[1],
+                parent_column="run_id",
+                parent_table="audit_runs",
+                parent_row_id=self.run_ids[1],
+                marker_column="notes",
+                marker_value=RESPONSE_MARKER,
+                evidence="sole response of the second smoke run",
+            ),
         )
 
     def session(self, *, as_app_role: bool, tenant: Optional[int] = None) -> _ProbeSession:
         return _ProbeSession(self._engine, self.role if as_app_role else None, tenant)
 
     async def rows_visible(self, *, as_app_role: bool, tenant: Optional[int] = None) -> dict[str, int]:
-        """How many of the four reviewed rows each table yields to this role."""
+        """How many of the six reviewed rows each table yields to this role."""
         wanted = {
             "audit_runs": list(self.run_ids),
             "audit_findings": [self.finding_id],
             "risks_v2": [self.risk_id],
+            "audit_responses": list(self.response_ids),
         }
         counts: dict[str, int] = {}
         async with self.session(as_app_role=as_app_role, tenant=tenant) as db:
@@ -210,8 +272,11 @@ class _Probe:
         return counts
 
 
-ALL_FOUR_VISIBLE = {"audit_runs": 2, "audit_findings": 1, "risks_v2": 1}
-NONE_VISIBLE = {"audit_runs": 0, "audit_findings": 0, "risks_v2": 0}
+ALL_SIX_VISIBLE = {"audit_runs": 2, "audit_findings": 1, "risks_v2": 1, "audit_responses": 2}
+
+#: What an application role sees. The four protected rows disappear; the two responses
+#: do not, because nothing enforces their tenant column.
+ONLY_THE_RESPONSES_VISIBLE = {"audit_runs": 0, "audit_findings": 0, "risks_v2": 0, "audit_responses": 2}
 
 
 def _database_url() -> str:
@@ -296,6 +361,25 @@ async def probe():
                 {"title": "Audit escalation: AUD-2026-0006 / FND-2026-0001", "creator": smoke_id},
             )
         ).scalar()
+        question_id = (
+            await db.execute(
+                sa.text("INSERT INTO audit_questions (question_text, tenant_id) VALUES ('Ok?', NULL) RETURNING id")
+            )
+        ).scalar()
+        fixture.response_ids = tuple(
+            [
+                (
+                    await db.execute(
+                        sa.text(
+                            "INSERT INTO audit_responses (run_id, question_id, response_value, notes, tenant_id) "
+                            "VALUES (:run_id, :question_id, 'yes', :notes, NULL) RETURNING id"
+                        ),
+                        {"run_id": run_id, "question_id": question_id, "notes": RESPONSE_MARKER},
+                    )
+                ).scalar()
+                for run_id in fixture.run_ids
+            ]
+        )
         await db.commit()
 
     try:
@@ -323,18 +407,43 @@ def _run_scripts_as(probe: _Probe, monkeypatch, *, app_role: bool, tenant: Optio
 # --------------------------------------------------------------------------- #
 
 
-async def test_a_bypass_role_sees_all_four_rows_and_an_app_role_sees_none(probe):
-    """The measured difference, on the same four rows, in one test.
+async def test_a_bypass_role_sees_all_six_rows_and_an_app_role_sees_only_the_responses(probe):
+    """The measured difference, on the same six rows, in one test.
 
     This is the answer to "``tables_hidden_by_rls`` came back empty for my
     connection": it was empty because that connection bypasses RLS, and that says
     nothing at all about an application role.
+
+    The two responses stay visible because nothing protects them, which is worse than
+    total blindness rather than better — see the module docstring.
     """
-    assert await probe.rows_visible(as_app_role=False) == ALL_FOUR_VISIBLE
-    assert await probe.rows_visible(as_app_role=True) == NONE_VISIBLE
+    assert await probe.rows_visible(as_app_role=False) == ALL_SIX_VISIBLE
+    assert await probe.rows_visible(as_app_role=True) == ONLY_THE_RESPONSES_VISIBLE
 
 
-async def test_no_tenant_setting_reveals_a_row_that_has_no_tenant(probe):
+async def test_the_reviewed_response_table_has_no_policy_protecting_it(probe):
+    """Reproduced from production rather than assumed, and asserted so that a future
+    migration adding a policy here shows up as a changed fact rather than as a test
+    that quietly starts proving something else."""
+    async with probe.session(as_app_role=False) as db:
+        rows = (
+            await db.execute(
+                sa.text(
+                    "SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, "
+                    "(SELECT count(*) FROM pg_policies p WHERE p.schemaname = :schema "
+                    " AND p.tablename = c.relname) AS policies "
+                    "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = :schema AND c.relname = ANY(:tables)"
+                ),
+                {"schema": probe.schema, "tables": list(UNPROTECTED_TABLES)},
+            )
+        ).all()
+
+    assert {row[0] for row in rows} == set(UNPROTECTED_TABLES)
+    assert all((row[1], row[2], row[3]) == (False, False, 0) for row in rows), rows
+
+
+async def test_no_tenant_setting_reveals_a_protected_row_that_has_no_tenant(probe):
     """There is no value of ``app.current_tenant_id`` that helps.
 
     ``NULL = 1`` is NULL, not true, so the policy filters these rows for every tenant.
@@ -343,8 +452,8 @@ async def test_no_tenant_setting_reveals_a_row_that_has_no_tenant(probe):
     """
     for tenant in (1, 2, 99):
         assert (
-            await probe.rows_visible(as_app_role=True, tenant=tenant) == NONE_VISIBLE
-        ), f"tenant {tenant} should reveal nothing"
+            await probe.rows_visible(as_app_role=True, tenant=tenant) == ONLY_THE_RESPONSES_VISIBLE
+        ), f"tenant {tenant} should reveal nothing that is under a policy"
 
 
 async def test_rls_exposure_classifies_the_two_roles_differently(probe):
@@ -375,27 +484,40 @@ async def test_a_bypass_role_plans_the_delete_cleanly(probe, monkeypatch):
     result = await plan(reviewed=probe.reviewed)
 
     assert result["blockers"] == []
-    assert result["rows_present"] == 4
+    assert result["rows_present"] == 6
     assert result["row_level_security"]["bypasses_rls"] is True
+    order = result["deletion_order"]
+    for index, run_id in enumerate(probe.run_ids):
+        assert order.index(f"audit_responses#{probe.response_ids[index]}") < order.index(f"audit_runs#{run_id}")
 
 
-async def test_an_app_role_refuses_instead_of_reporting_nothing_to_do(probe, monkeypatch):
+async def test_an_app_role_sees_the_responses_but_not_their_parents_and_still_refuses(probe, monkeypatch):
     """The worst outcome available here, and the one that must not happen.
 
-    Blind to all four rows, the script would otherwise see an empty result set and
-    report "nothing to do" — which an operator would read as the purge already having
-    been done and the migration as unblocked, while all four rows are still there.
+    An application role reads two of the six rows and nothing of the other four. Left
+    to itself that is a coherent-looking story — "the runs, the finding and the risk
+    have already been purged, here are the two leftover responses" — and a script that
+    believed it would delete two rows, report success, and leave the four rows the
+    migration is actually blocked on exactly where they were.
+
+    So the four unreadable rows are refusals rather than absences, and the two readable
+    ones do not soften that: the set was reviewed whole.
     """
     _run_scripts_as(probe, monkeypatch, app_role=True)
 
     result = await plan(reviewed=probe.reviewed)
 
-    assert result["rows_present"] == 0
+    assert result["rows_present"] == 2, "only the two unprotected responses are readable"
     assert result["rows_already_absent"] == [], "absence must not be recorded as absence when it cannot be trusted"
-    assert len(result["blockers"]) == 4
-    assert all("absence cannot be distinguished from being hidden" in blocker for blocker in result["blockers"])
-    assert all("rolsuper or rolbypassrls" in blocker for blocker in result["blockers"])
+    hidden = [blocker for blocker in result["blockers"] if "absence cannot be distinguished" in blocker]
+    assert len(hidden) == 4
+    assert all("rolsuper or rolbypassrls" in blocker for blocker in hidden)
     assert sorted(result["row_level_security"]["subject_to_rls"]) == sorted(RLS_TABLES)
+    # The responses themselves verified cleanly, which is exactly why the refusal has
+    # to come from elsewhere.
+    responses = [entry for entry in result["row_verification"] if entry["table"] == "audit_responses"]
+    assert len(responses) == 2
+    assert all(entry["problems"] == [] for entry in responses), responses
 
 
 async def test_the_delete_an_app_role_issues_removes_nothing_and_says_nothing(probe):
@@ -413,7 +535,7 @@ async def test_the_delete_an_app_role_issues_removes_nothing_and_says_nothing(pr
         await db.commit()
 
     assert (
-        await probe.rows_visible(as_app_role=False) == ALL_FOUR_VISIBLE
+        await probe.rows_visible(as_app_role=False) == ALL_SIX_VISIBLE
     ), "the row is still there; the delete simply did nothing"
 
 
@@ -424,7 +546,7 @@ async def test_apply_as_an_app_role_rolls_back_rather_than_reporting_success(pro
     with pytest.raises(PreconditionDrifted, match="row-level security"):
         await apply_plan([("audit_runs", probe.run_ids[0])], reviewed=probe.reviewed)
 
-    assert await probe.rows_visible(as_app_role=False) == ALL_FOUR_VISIBLE
+    assert await probe.rows_visible(as_app_role=False) == ALL_SIX_VISIBLE
 
 
 async def test_an_app_role_that_can_see_a_run_but_not_its_creator_still_refuses(probe, monkeypatch):
@@ -442,7 +564,7 @@ async def test_an_app_role_that_can_see_a_run_but_not_its_creator_still_refuses(
         )
         await db.commit()
 
-    assert await probe.rows_visible(as_app_role=True, tenant=1) == {**NONE_VISIBLE, "audit_runs": 1}
+    assert await probe.rows_visible(as_app_role=True, tenant=1) == {**ONLY_THE_RESPONSES_VISIBLE, "audit_runs": 1}
 
     _run_scripts_as(probe, monkeypatch, app_role=True, tenant=1)
     result = await plan(reviewed=probe.reviewed)

@@ -33,6 +33,17 @@ The measured production shape, 2026-07-28
 816 inherit a tenant from ``david.harris@plantexpand.com`` (active, tenant 1). Four
 cannot: two audit runs, one finding and one risk, all created by
 ``smoke-runner@plantexpand.com`` (deactivated, ``tenant_id`` NULL).
+
+Two further debris rows sit in ``audit_responses``, which is *absent from the list
+above* and absent from the backfill's count for a reason worth stating plainly:
+``AuditResponse`` does not declare ``tenant_id`` even though the production table
+has it, and the backfill enumerates from model metadata. Production holds 315
+tenant-less ``audit_responses`` rows that no script in this family can see. This
+fixture seeds tenant-less responses deliberately, and the backfill's totals stay at
+820/816 with them present — which is the blind spot, observable rather than argued.
+
+Requires a database built by the alembic chain, not by ``Base.metadata.create_all``:
+on the latter, ``audit_responses.tenant_id`` does not exist at all.
 """
 
 from __future__ import annotations
@@ -64,8 +75,22 @@ PRODUCTION_ORPHANS: dict[str, int] = {
     "risks_v2": 1,
 }
 TOTAL_ORPHANS = sum(PRODUCTION_ORPHANS.values())
+
+#: Debris rows the backfill can see: the two runs, the finding and the risk.
 DEBRIS_ROWS = 4
 INHERITABLE_ORPHANS = TOTAL_ORPHANS - DEBRIS_ROWS
+
+#: Debris rows the backfill cannot see, because ``AuditResponse`` declares no
+#: ``tenant_id``. Deleted by the purge all the same, and counted in its manifest.
+UNDECLARED_DEBRIS_ROWS = 2
+REVIEWED_ROWS = DEBRIS_ROWS + UNDECLARED_DEBRIS_ROWS
+
+#: Genuine responses, spread over three of the surviving runs. Production's real runs
+#: carry 3 to 58 responses each; the two debris runs carry exactly one apiece.
+GENUINE_RESPONSES_PER_RUN: tuple[int, ...] = (3, 5, 8)
+
+#: What the smoke test wrote in ``notes``, and the marker the reviewed set turns on.
+RESPONSE_MARKER = "E2E response"
 
 SMOKE_EMAIL = "smoke-runner@plantexpand.com"
 OWNER_EMAIL = "david.harris@plantexpand.com"
@@ -99,7 +124,10 @@ class SeededShape:
     debris_run_ids: tuple[int, int]
     debris_finding_id: int
     debris_risk_id: int
+    debris_response_ids: tuple[int, int]
     inheritable_run_ids: tuple[int, ...]
+    question_ids: tuple[int, ...]
+    genuine_response_ids: tuple[int, ...]
     job_ids: tuple[int, ...]
     draft_ids: tuple[int, ...]
 
@@ -110,6 +138,8 @@ class SeededShape:
             ("audit_runs", self.debris_run_ids[1]),
             ("audit_findings", self.debris_finding_id),
             ("risks_v2", self.debris_risk_id),
+            ("audit_responses", self.debris_response_ids[0]),
+            ("audit_responses", self.debris_response_ids[1]),
         )
 
 
@@ -191,6 +221,73 @@ async def _user(conn: Any, *, email: str, is_active: bool, tenant_id: Optional[i
     )
 
 
+async def _require_tenant_column(conn: Any, table: str) -> None:
+    """Refuse to seed a table whose ``tenant_id`` this database does not have.
+
+    ``audit_responses``, ``audit_questions`` and ``audit_sections`` carry
+    ``tenant_id`` in production but their models do not declare it, so a database
+    built by ``Base.metadata.create_all`` — which is how the integration suite builds
+    its schema — has no such column. Seeding into it would fail with a driver error
+    several frames from the cause, so the cause is stated here instead.
+    """
+    present = (
+        await conn.execute(
+            sa.text(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+                "AND table_name = :table AND column_name = 'tenant_id'"
+            ),
+            {"table": table},
+        )
+    ).scalar()
+    if present is None:
+        raise RuntimeError(
+            f"{table} has no tenant_id column in this database. This fixture reproduces production, "
+            "which has one; a schema built from model metadata does not, because the model does not "
+            "declare it. Build the database with the alembic chain."
+        )
+
+
+async def _questions(conn: Any, *, template_id: int, unique: str) -> tuple[int, ...]:
+    """One section and eight questions, enough for the busiest genuine run seeded.
+
+    ``uq_audit_responses_run_question`` is UNIQUE on ``(run_id, question_id)``, so a
+    run with eight responses needs eight distinct questions.
+    """
+    section_id = await _insert(
+        conn,
+        "audit_sections",
+        {
+            "template_id": template_id,
+            "title": f"Seeded section {unique or 'prodsim'}",
+            "sort_order": 1,
+            "weight": 1.0,
+            "is_repeatable": False,
+            "is_active": True,
+        },
+    )
+    return tuple(
+        [
+            await _insert(
+                conn,
+                "audit_questions",
+                {
+                    "template_id": template_id,
+                    "section_id": section_id,
+                    "question_text": f"Seeded question {index + 1}?",
+                    "question_type": "yes_no",
+                    "is_required": True,
+                    "allow_na": False,
+                    "is_active": True,
+                    "max_score": 1.0,
+                    "weight": 1.0,
+                    "sort_order": index + 1,
+                },
+            )
+            for index in range(max(GENUINE_RESPONSES_PER_RUN))
+        ]
+    )
+
+
 async def seed_production_shape(
     conn: Any,
     *,
@@ -199,6 +296,7 @@ async def seed_production_shape(
     link_risk_to_finding: bool = False,
     point_a_draft_at_debris_run: bool = False,
     surviving_finding_above_the_debris_one: bool = False,
+    surviving_risk_above_the_debris_one: bool = False,
 ) -> SeededShape:
     """Seed 820 tenant-less rows matching production, and return their keys.
 
@@ -220,10 +318,15 @@ async def seed_production_shape(
     is the worst realistic outcome available: deleting a smoke-test audit run
     silently destroying a genuine draft.
 
-    ``surviving_finding_above_the_debris_one`` adds an attributed finding with a
-    higher reference, which is what makes the sequence survive the delete. It is the
-    difference between a reference-reuse hazard and no hazard, and which of the two
-    production is in can only be established by the dry run there.
+    ``surviving_finding_above_the_debris_one`` and
+    ``surviving_risk_above_the_debris_one`` add an attributed finding and risk with
+    higher references, which is what makes each sequence survive the delete. That is
+    the difference between a reference-reuse hazard and no hazard. Left off, the
+    reproduction is the pessimistic case — the debris row is the only row in its
+    table, so deleting it resets the sequence. Production turned out to be the other
+    case, with 204 findings and 204 risks either side, measured by the dry run there:
+    both come back safe. Turn these on to reproduce production; leave them off to
+    watch the reference-reuse refusal fire.
     """
     created = datetime.now(timezone.utc) - _ORPHAN_AGE
     suffix = f"{reference_base:d}" if reference_base else ""
@@ -371,11 +474,80 @@ async def seed_production_shape(
         },
     )
 
+    if surviving_risk_above_the_debris_one:
+        await _insert(
+            conn,
+            "risks_v2",
+            {
+                "reference": f"RSK-2026-{reference_base + 9:04d}",
+                "title": "Genuine operational risk",
+                "description": "Raised by a risk owner, nothing to do with the smoke test.",
+                "category": "operational",
+                "inherent_likelihood": 3,
+                "inherent_impact": 3,
+                "inherent_score": 9,
+                "residual_likelihood": 2,
+                "residual_impact": 3,
+                "residual_score": 6,
+                "tenant_id": tenant_id,
+                "created_by": owner_user_id,
+                "created_at": (created + timedelta(days=1)).replace(tzinfo=None),
+            },
+        )
+
     if link_risk_to_finding:
         await conn.execute(
             sa.text("INSERT INTO audit_finding_risks (audit_finding_id, risk_id) VALUES (:finding_id, :risk_id)"),
             {"finding_id": debris_finding_id, "risk_id": debris_risk_id},
         )
+
+    await _require_tenant_column(conn, "audit_responses")
+    question_ids = await _questions(conn, template_id=template_id, unique=unique)
+
+    async def _response(*, run_id: int, question_id: int, notes: str, seconds: int, tenant: Optional[int]) -> int:
+        return await _insert(
+            conn,
+            "audit_responses",
+            {
+                "run_id": run_id,
+                "question_id": question_id,
+                "response_value": "yes",
+                "is_na": False,
+                "score": 1.0,
+                "max_score": 1.0,
+                "notes": notes,
+                # Tenant-less, as production's 315 are. Invisible to the backfill
+                # either way, because the model does not declare the column.
+                "tenant_id": tenant,
+                "created_at": created + timedelta(seconds=seconds),
+            },
+        )
+
+    # One response per debris run, on the same question, both "yes", both marked —
+    # the smoke test asserting a single question, written seconds after its run.
+    debris_response_ids = (
+        await _response(
+            run_id=debris_run_ids[0], question_id=question_ids[0], notes=RESPONSE_MARKER, seconds=2, tenant=None
+        ),
+        await _response(
+            run_id=debris_run_ids[1], question_id=question_ids[0], notes=RESPONSE_MARKER, seconds=63, tenant=None
+        ),
+    )
+
+    # Genuine answers on genuine runs. Real notes, so a reviewed set that reached one
+    # of these would be refused on the marker rather than passing unnoticed.
+    genuine_response_ids: list[int] = []
+    for run_offset, count in enumerate(GENUINE_RESPONSES_PER_RUN):
+        for index in range(count):
+            genuine_response_ids.append(
+                await _response(
+                    run_id=inheritable_run_ids[run_offset],
+                    question_id=question_ids[index % len(question_ids)],
+                    notes=f"Observed on site, evidence photo {index + 1}",
+                    seconds=300 + run_offset * 60 + index,
+                    tenant=None,
+                )
+            )
 
     # Import jobs and drafts: real work by an active user, hung off the genuine audit
     # runs rather than the debris ones.
@@ -431,7 +603,10 @@ async def seed_production_shape(
         debris_run_ids=debris_run_ids,
         debris_finding_id=debris_finding_id,
         debris_risk_id=debris_risk_id,
+        debris_response_ids=debris_response_ids,
         inheritable_run_ids=inheritable_run_ids,
+        question_ids=question_ids,
+        genuine_response_ids=tuple(genuine_response_ids),
         job_ids=tuple(job_ids),
         draft_ids=tuple(draft_ids),
     )
@@ -469,5 +644,25 @@ def reviewed_set_for(shape: SeededShape) -> tuple[Any, ...]:
             creator_column="created_by",
             creator_email=shape.smoke_email,
             evidence="auto-escalation of that finding",
+        ),
+        ReviewedRow(
+            table="audit_responses",
+            row_id=shape.debris_response_ids[0],
+            parent_column="run_id",
+            parent_table="audit_runs",
+            parent_row_id=shape.debris_run_ids[0],
+            marker_column="notes",
+            marker_value=RESPONSE_MARKER,
+            evidence="sole response of the first smoke run",
+        ),
+        ReviewedRow(
+            table="audit_responses",
+            row_id=shape.debris_response_ids[1],
+            parent_column="run_id",
+            parent_table="audit_runs",
+            parent_row_id=shape.debris_run_ids[1],
+            marker_column="notes",
+            marker_value=RESPONSE_MARKER,
+            evidence="sole response of the second smoke run",
         ),
     )

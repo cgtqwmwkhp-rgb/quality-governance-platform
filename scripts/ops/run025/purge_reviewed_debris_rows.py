@@ -1,20 +1,31 @@
 #!/usr/bin/env python3
-"""Delete the four reviewed CI-debris rows, and nothing else, ever.
+"""Delete the six reviewed CI-debris rows, and nothing else, ever.
 
 Scope
 -----
-Production holds 820 tenant-less rows outside the ``20260901_case_tenant_nn``
-scope. 816 of them inherit a real tenant from an active user who already holds
-one. Four do not: they were created by ``smoke-runner@plantexpand.com`` (user id
-4), a deactivated account whose own ``tenant_id`` is NULL, so there is no
-evidence to inherit and the only remaining attribution would be the invented
-single-tenant default.
+Of the tenant-less rows outside the ``20260901_case_tenant_nn`` scope that
+``backfill_tenant_orphan_rows`` can see, 816 inherit a real tenant from an active
+user who already holds one. Four do not: they were created by
+``smoke-runner@plantexpand.com`` (user id 4), a deactivated account whose own
+``tenant_id`` is NULL, so there is no evidence to inherit and the only remaining
+attribution would be the invented single-tenant default.
 
-Deleting those four *first* is what lets the backfill then run on inheritance
-alone. That is not a workaround for
-``backfill_tenant_orphan_rows``'s single-tenant precondition — it removes the need
-for it, so the migration family's "do not invent ``tenant_id = 1``" fail-safe is
-satisfied on its own terms rather than overridden.
+Two more rows joined the set on 2026-07-28. ``audit_responses#1`` and ``#2`` are
+the single answer each smoke run recorded, seconds after its parent run; they were
+found because ``audit_responses.run_id`` is ``ON DELETE CASCADE``, so the first
+production dry run refused rather than let them be destroyed unreviewed. They were
+then inspected and approved on the same evidence. That is the only way this set
+grows: another reviewed row, not a flag that widens the delete.
+
+``audit_responses`` records no creator at all, so those two are held by their
+parent run plus the ``notes = 'E2E response'`` marker the smoke test wrote. See
+:class:`ReviewedRow` for why that is treated as borrowing the parent's evidence
+rather than as a weaker standard of proof.
+
+Deleting these *first* is what lets the backfill then run on inheritance alone.
+That is not a workaround for ``backfill_tenant_orphan_rows``'s single-tenant
+precondition — it removes the need for it, so the migration family's "do not invent
+``tenant_id = 1``" fail-safe is satisfied on its own terms rather than overridden.
 
 Why this is a separate script from ``purge_tenant_orphan_rows``
 --------------------------------------------------------------
@@ -23,9 +34,9 @@ the ten tables the migration names, parsed out of the migration itself. Its safe
 story is "exactly the rows that make revision 20260901 refuse", and it is correct
 for that job — which is why it reports nothing to do today.
 
-This script selects rows by *identity*: four primary keys, in three tables the
-migration does not touch, each carrying its own recorded expectation about who
-created it. Three things follow, and each of them argues against widening the
+This script selects rows by *identity*: six primary keys, in four tables the
+migration does not touch, each carrying its own recorded expectation about where it
+came from. Three things follow, and each of them argues against widening the
 predicate script instead:
 
 1. **The reviewed set is a literal, so it can be re-verified.** A predicate cannot
@@ -41,7 +52,7 @@ predicate script instead:
    ``audit_runs`` and ``risks_v2`` would put one script astride both sets and
    silently retire that guarantee.
 3. **The two want opposite defaults.** Widening would mean a flag that switches a
-   ``DELETE`` between "every NULL-tenant row in these tables" and "only these four
+   ``DELETE`` between "every NULL-tenant row in these tables" and "only these six
    ids". A flag that changes which rows a delete targets is the one flag most
    worth not having.
 
@@ -49,18 +60,24 @@ Refusals
 --------
 Every one of these stops the run rather than warning:
 
-* **A precondition that has moved since the review.** The row must still exist,
-  still be NULL-tenant, still have been created by the expected account, and that
-  account must still be deactivated and still hold no tenant of its own. If the
-  account were reactivated, or had gained a tenant, these rows would no longer be
-  unattributable debris — they would be inheritable history, and they belong in
-  the backfill instead of here.
-* **A dependent row outside the four.** ``audit_findings.run_id`` and
-  ``audit_finding_risks`` are both ``ON DELETE CASCADE``, and the drafts and jobs
-  tables cascade off ``audit_runs`` too — so a careless delete of one audit run can
-  reach the 754 import drafts that are real user work. Anything referencing a
-  doomed row and not itself doomed is a refusal, reported by constraint, child
-  table and child key.
+* **A precondition that has moved since the review.** The row must still exist and
+  still be NULL-tenant. A row with a creator must still name the expected account,
+  and that account must still be deactivated and still hold no tenant of its own —
+  if it were reactivated, or had gained a tenant, the row would no longer be
+  unattributable debris but inheritable history, and it belongs in the backfill
+  instead of here. A row held by a parent must still hang off that same reviewed
+  parent and still carry its marker.
+* **A reviewed table with no ``tenant_id`` column.** Checked rather than assumed,
+  because ``AuditResponse`` does not declare the column its production table has.
+  See :data:`TENANT_COLUMN`.
+* **A dependent row outside the reviewed set.** ``audit_responses.run_id``,
+  ``audit_findings.run_id`` and ``audit_finding_risks`` are all ``ON DELETE
+  CASCADE``, and the drafts and jobs tables cascade off ``audit_runs`` too — so a
+  careless delete of one audit run can reach the 754 import drafts that are real
+  user work. This is the guard that stopped the first production run: it named the
+  two ``audit_responses`` rows, which is how they came to be reviewed at all.
+  Anything referencing a doomed row and not itself doomed is a refusal, reported by
+  constraint, child table and child key.
 * **Row-level security that could hide the rows.** ``audit_runs``,
   ``audit_findings``, ``risks_v2`` and ``users`` are all under FORCE RLS with a
   ``tenant_isolation`` policy comparing ``tenant_id`` against
@@ -136,23 +153,79 @@ class ReviewedRow:
     against the database at run time, and a mismatch is a refusal: the approval was
     given for a row with these properties, so a row without them is a different
     row as far as that approval is concerned.
+
+    There are two shapes of evidence here, because the rows come in two kinds.
+
+    **Created by a known account.** ``creator_column`` plus ``creator_email``: the
+    row names a user, and that user must still be the deactivated smoke runner with
+    no tenant of its own. This is the stronger form and every row that *has* a
+    creator column uses it.
+
+    **Owned by a row that is itself reviewed debris.** ``parent_column``,
+    ``parent_table`` and ``parent_row_id``, optionally with ``marker_column`` and
+    ``marker_value``. ``audit_responses`` records no creator at all — there is no
+    ``created_by_id`` on the table — so the only provenance available is that the
+    row hangs off a run which *has* been shown to be smoke-test debris, and that it
+    carries the marker the smoke test wrote. The parent must itself be in the
+    reviewed set, checked by :func:`assert_reviewed_set_coherent`, so this borrows
+    the parent's account evidence rather than inventing weaker evidence of its own.
+
+    A row with neither is rejected at import time. "I could not establish where this
+    came from" must never be a way of getting a row onto the list.
     """
 
     table: str
     row_id: int
-    creator_column: str
-    creator_email: str
     evidence: str
+    creator_column: Optional[str] = None
+    creator_email: Optional[str] = None
+    parent_column: Optional[str] = None
+    parent_table: Optional[str] = None
+    parent_row_id: Optional[int] = None
+    marker_column: Optional[str] = None
+    marker_value: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        has_creator = bool(self.creator_column and self.creator_email)
+        has_parent = bool(self.parent_column and self.parent_table and self.parent_row_id is not None)
+        if not has_creator and not has_parent:
+            raise ValueError(
+                f"{self.table}#{self.row_id} declares neither a creator nor a reviewed parent, so nothing "
+                "about it can be re-verified against the database. A row whose provenance cannot be "
+                "re-established must not be on the reviewed list at all."
+            )
+        if bool(self.marker_column) != bool(self.marker_value):
+            raise ValueError(
+                f"{self.table}#{self.row_id} declares half a marker expectation; give both "
+                "marker_column and marker_value or neither"
+            )
+
+    @property
+    def key(self) -> RowKey:
+        return (self.table, self.row_id)
+
+    @property
+    def parent_key(self) -> Optional[RowKey]:
+        if self.parent_table is None or self.parent_row_id is None:
+            return None
+        return (self.parent_table, self.parent_row_id)
 
 
 #: The reviewed set, measured on production 2026-07-28 and agreed with David
-#: Harris. All four were created by ``smoke-runner@plantexpand.com`` (user id 4), a
-#: deactivated account with ``tenant_id`` NULL, which is why none of them can
-#: inherit a tenant.
+#: Harris. Four rows were created directly by ``smoke-runner@plantexpand.com`` (user
+#: id 4), a deactivated account with ``tenant_id`` NULL, which is why none of them
+#: can inherit a tenant. Two more — the ``audit_responses`` rows — record no creator
+#: at all and are held by their parent run plus the marker the smoke test wrote.
 #:
 #: Held as a literal, in code, deliberately. Passing primary keys on a command line
 #: would make the delete set an operator's transcription of a review rather than the
 #: review itself, and there would be nothing to re-verify against.
+#:
+#: The two responses were added on 2026-07-28 after the production dry run refused
+#: on them: ``audit_responses.run_id`` is ``ON DELETE CASCADE``, so deleting the two
+#: smoke runs would have destroyed them silently. They were then inspected and found
+#: to be debris on the same evidence, which is the "another reviewed row, approved on
+#: the same evidence" path — not an override, and deliberately not a sweep flag.
 REVIEWED_DEBRIS: tuple[ReviewedRow, ...] = (
     ReviewedRow(
         table="audit_runs",
@@ -182,11 +255,45 @@ REVIEWED_DEBRIS: tuple[ReviewedRow, ...] = (
         creator_email="smoke-runner@plantexpand.com",
         evidence='auto-escalation of that finding, title "Audit escalation: AUD-2026-0006 / FND-2026-0001"',
     ),
+    # The single answer each smoke run recorded, two and three seconds after its
+    # parent run was created. Genuine runs in production carry 3 to 58 responses;
+    # these carry exactly one each, on the same question, both "yes". No creator
+    # column exists on this table, so the parent run and the marker are the evidence.
+    ReviewedRow(
+        table="audit_responses",
+        row_id=1,
+        parent_column="run_id",
+        parent_table="audit_runs",
+        parent_row_id=5,
+        marker_column="notes",
+        marker_value="E2E response",
+        evidence='sole response of smoke run 5, notes "E2E response", written 2s after the run',
+    ),
+    ReviewedRow(
+        table="audit_responses",
+        row_id=2,
+        parent_column="run_id",
+        parent_table="audit_runs",
+        parent_row_id=6,
+        marker_column="notes",
+        marker_value="E2E response",
+        evidence='sole response of smoke run 6, notes "E2E response", written 3s after the run',
+    ),
 )
 
 #: ``users`` is read to re-verify provenance, and it is under FORCE RLS too, so its
 #: visibility has to be established alongside the target tables.
 PROVENANCE_TABLE = "users"
+
+#: Every reviewed table must have this column in the *database*, whatever its model
+#: says. Three facts depend on it and none of them degrade gracefully: "still
+#: tenant-less" is the reviewed property, ``tenant_id IS NULL`` is restated in the
+#: DELETE so the statement itself cannot remove an attributed row, and RLS visibility
+#: is reasoned about in terms of it. ``audit_responses`` is the reason this is
+#: checked rather than assumed — the column exists in production but
+#: ``AuditResponse`` does not declare it, so a database built from model metadata
+#: rather than the migration chain does not have it at all.
+TENANT_COLUMN = "tenant_id"
 
 
 class PurgeBlocked(RuntimeError):
@@ -199,6 +306,38 @@ class PreconditionDrifted(RuntimeError):
 
 def reviewed_tables(reviewed: tuple[ReviewedRow, ...] = REVIEWED_DEBRIS) -> list[str]:
     return sorted({row.table for row in reviewed})
+
+
+def assert_reviewed_set_coherent(reviewed: tuple[ReviewedRow, ...] = REVIEWED_DEBRIS) -> None:
+    """Check the list against itself, before any database is opened.
+
+    Two ways a hand-edited literal goes wrong, both of which would otherwise only
+    show up as a confusing database result:
+
+    *Duplicates.* The same row twice would be counted twice in the manifest and
+    would make the second DELETE's rowcount zero, which the apply path reads as
+    drift.
+
+    *A parent nobody approved.* A row held by its parent is only as approved as that
+    parent is. If the parent is not on the list, the row has no provenance — that is
+    exactly the shape of "a genuine run's response added to the debris list", where
+    the response would then be deleted on the strength of a run that was never
+    reviewed and is not being deleted.
+    """
+    seen: set[RowKey] = set()
+    for row in reviewed:
+        if row.key in seen:
+            raise RuntimeError(f"refusing to run: {row.table}#{row.row_id} appears twice in the reviewed set")
+        seen.add(row.key)
+
+    for row in reviewed:
+        parent = row.parent_key
+        if parent is not None and parent not in seen:
+            raise RuntimeError(
+                f"refusing to run: {row.table}#{row.row_id} is held by {parent[0]}#{parent[1]}, which is not "
+                "itself in the reviewed set. A row whose only provenance is its parent inherits that "
+                "parent's approval, so an unreviewed parent means the row has no approval to inherit."
+            )
 
 
 def assert_outside_migration_scope(reviewed: tuple[ReviewedRow, ...] = REVIEWED_DEBRIS) -> None:
@@ -343,20 +482,76 @@ class RowVerdict:
         return (self.reviewed.table, self.reviewed.row_id)
 
     def as_report(self) -> dict[str, Any]:
-        return {
-            "table": self.reviewed.table,
-            "id": self.reviewed.row_id,
-            "evidence": self.reviewed.evidence,
+        reviewed = self.reviewed
+        row = self.row or {}
+        report: dict[str, Any] = {
+            "table": reviewed.table,
+            "id": reviewed.row_id,
+            "evidence": reviewed.evidence,
             "present": self.present,
-            "tenant_id": (self.row or {}).get("tenant_id", "(row not read)"),
-            "creator_column": self.reviewed.creator_column,
-            "creator_id": (self.row or {}).get(self.reviewed.creator_column),
-            "creator_email": (self.creator or {}).get("email"),
-            "creator_is_active": (self.creator or {}).get("is_active"),
-            "creator_tenant_id": (self.creator or {}).get("tenant_id"),
-            "expected_creator_email": self.reviewed.creator_email,
+            "tenant_id": row.get(TENANT_COLUMN, "(row not read)"),
             "problems": list(self.problems),
         }
+        if reviewed.creator_column is not None:
+            report["creator_column"] = reviewed.creator_column
+            report["creator_id"] = row.get(reviewed.creator_column)
+            report["creator_email"] = (self.creator or {}).get("email")
+            report["creator_is_active"] = (self.creator or {}).get("is_active")
+            report["creator_tenant_id"] = (self.creator or {}).get("tenant_id")
+            report["expected_creator_email"] = reviewed.creator_email
+        else:
+            report["creator_column"] = None
+            report["provenance"] = (
+                f"no creator column on {reviewed.table}; held by reviewed parent "
+                f"{reviewed.parent_table}#{reviewed.parent_row_id}"
+            )
+        if reviewed.parent_column is not None:
+            report["parent_column"] = reviewed.parent_column
+            report["parent_id"] = row.get(reviewed.parent_column)
+            report["expected_parent"] = f"{reviewed.parent_table}#{reviewed.parent_row_id}"
+        if reviewed.marker_column is not None:
+            report["marker_column"] = reviewed.marker_column
+            report["marker"] = row.get(reviewed.marker_column)
+            report["expected_marker"] = reviewed.marker_value
+        return report
+
+
+def _missing_expectation_columns(reviewed: ReviewedRow, columns: set[str]) -> list[str]:
+    """Every column an expectation names must exist before the row can be read.
+
+    A missing column is not a soft failure. ``dict.get`` on a column that is not
+    there returns ``None``, which for the tenant check reads as "tenant-less" and for
+    the marker check reads as "marker absent" — the first silently agreeing with the
+    reviewed property and the second silently disagreeing with it. Neither is an
+    answer, so the row is refused before anything is read.
+    """
+    table = reviewed.table
+    problems: list[str] = []
+
+    if TENANT_COLUMN not in columns:
+        problems.append(
+            f"{table} has no {TENANT_COLUMN} column in this database. The reviewed property is that "
+            f"the row is tenant-less, and the DELETE restates {TENANT_COLUMN} IS NULL as its own "
+            "guard; with no such column neither is possible. Note that AuditResponse, AuditQuestion "
+            "and AuditSection do not declare tenant_id even though production has it, so a database "
+            "built from model metadata rather than the migration chain will land here"
+        )
+    if reviewed.creator_column is not None and reviewed.creator_column not in columns:
+        problems.append(
+            f"{table} has no {reviewed.creator_column} column in this database, so the row's "
+            "provenance cannot be re-verified and it must not be deleted on trust"
+        )
+    if reviewed.parent_column is not None and reviewed.parent_column not in columns:
+        problems.append(
+            f"{table} has no {reviewed.parent_column} column in this database, so it cannot be shown "
+            f"to still hang off reviewed debris {reviewed.parent_table}#{reviewed.parent_row_id}"
+        )
+    if reviewed.marker_column is not None and reviewed.marker_column not in columns:
+        problems.append(
+            f"{table} has no {reviewed.marker_column} column in this database, so the "
+            f"{reviewed.marker_value!r} marker the review turned on cannot be re-read"
+        )
+    return problems
 
 
 async def verify_reviewed_row(
@@ -376,16 +571,9 @@ async def verify_reviewed_row(
     problems: list[str] = []
     table = reviewed.table
 
-    if reviewed.creator_column not in columns:
-        return RowVerdict(
-            reviewed,
-            None,
-            None,
-            [
-                f"{table} has no {reviewed.creator_column} column in this database, so the row's "
-                "provenance cannot be re-verified and it must not be deleted on trust"
-            ],
-        )
+    missing = _missing_expectation_columns(reviewed, columns)
+    if missing:
+        return RowVerdict(reviewed, None, None, missing)
 
     # Table and column names come from the reviewed literal above and are checked
     # against the reflected schema before use. Nothing here originates in argv.
@@ -412,12 +600,38 @@ async def verify_reviewed_row(
 
     row_dict = dict(row)
 
-    if row_dict.get("tenant_id") is not None:
+    if row_dict.get(TENANT_COLUMN) is not None:
         problems.append(
-            f"{table}#{reviewed.row_id} now holds tenant_id={row_dict['tenant_id']!r}. It was "
+            f"{table}#{reviewed.row_id} now holds tenant_id={row_dict[TENANT_COLUMN]!r}. It was "
             "reviewed as tenant-less; something has attributed it since. Deleting an attributed "
             "row is outside what was approved"
         )
+
+    if reviewed.parent_column is not None:
+        actual_parent = row_dict.get(reviewed.parent_column)
+        if actual_parent != reviewed.parent_row_id:
+            problems.append(
+                f"{table}#{reviewed.row_id} now has {reviewed.parent_column}={actual_parent!r}, not "
+                f"{reviewed.parent_row_id!r}. Its whole provenance is that it hangs off reviewed "
+                f"debris {reviewed.parent_table}#{reviewed.parent_row_id}; re-parented, it is a row "
+                "belonging to something nobody has looked at"
+            )
+
+    if reviewed.marker_column is not None:
+        actual_marker = row_dict.get(reviewed.marker_column)
+        normalised = actual_marker.strip() if isinstance(actual_marker, str) else actual_marker
+        if normalised != reviewed.marker_value:
+            problems.append(
+                f"{table}#{reviewed.row_id} now has {reviewed.marker_column}={actual_marker!r}, not "
+                f"{reviewed.marker_value!r}. That marker is what identified it as the smoke test's own "
+                "output rather than a real answer someone recorded"
+            )
+
+    if reviewed.creator_column is None:
+        # No creator column exists on this table; the parent and marker checks above
+        # are the provenance, and assert_reviewed_set_coherent has already shown the
+        # parent is itself reviewed.
+        return RowVerdict(reviewed, row_dict, None, problems)
 
     creator_id = row_dict.get(reviewed.creator_column)
     if creator_id is None:
@@ -542,6 +756,7 @@ async def scan_dependents(
 
 async def plan(*, reviewed: tuple[ReviewedRow, ...] = REVIEWED_DEBRIS) -> dict[str, Any]:
     """Work out whether the reviewed rows may be deleted. Read-only."""
+    assert_reviewed_set_coherent(reviewed)
     assert_outside_migration_scope(reviewed)
     tables = reviewed_tables(reviewed)
     blockers: list[str] = []
@@ -598,7 +813,7 @@ async def plan(*, reviewed: tuple[ReviewedRow, ...] = REVIEWED_DEBRIS) -> dict[s
         if out_of_scope:
             affected = ", ".join(sorted({record["child"] for record in out_of_scope}))
             blockers.append(
-                f"{len(out_of_scope)} row(s) outside the reviewed four are affected by these deletes "
+                f"{len(out_of_scope)} row(s) outside the reviewed set are affected by these deletes "
                 f"({affected}); see dependents_outside_reviewed_set for the constraint and effect of "
                 "each. Deleting anyway would destroy or silently rewrite records nobody approved"
             )
@@ -711,7 +926,7 @@ async def apply_plan(
                 # tenant_id IS NULL is restated here rather than trusted from the
                 # check above: it makes the statement itself unable to remove an
                 # attributed row.
-                sa.text(f"DELETE FROM {table} WHERE id = :row_id AND tenant_id IS NULL"),  # noqa: S608
+                sa.text(f"DELETE FROM {table} WHERE id = :row_id AND {TENANT_COLUMN} IS NULL"),  # noqa: S608
                 {"row_id": row_id},
             )
             affected = result.rowcount or 0
@@ -752,7 +967,7 @@ async def _amain(args: argparse.Namespace) -> int:
         print(
             "REFUSING: --tenant-id means nothing here. Every row in the reviewed set has no tenant, "
             "which is the entire reason it is in the set; a tenant filter could only ever exclude all "
-            "four or none of them.",
+            "of them or none of them.",
             file=sys.stderr,
         )
         return 2
@@ -819,7 +1034,7 @@ async def _amain(args: argparse.Namespace) -> int:
     if not order:
         payload["outcome"] = "nothing-to-do"
         payload["note"] = (
-            "All four reviewed rows are already absent, and this role is not subject to row-level "
+            "Every reviewed row is already absent, and this role is not subject to row-level "
             "security on their tables, so that absence is real rather than a filtered view. Re-run "
             "backfill_tenant_orphan_rows to confirm it now reports inheritance only."
         )
