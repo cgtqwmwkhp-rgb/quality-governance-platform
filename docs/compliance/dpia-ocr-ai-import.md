@@ -3,7 +3,7 @@
 **Document ID:** DPIA-QGP-OCR-AI-2026-001  
 **Platform:** Quality Governance Platform (QGP)  
 **Version:** 1.0  
-**Status:** Complete — pending DPO residual-risk acceptance (EA-03)  
+**Status:** Complete — DPO residual-risk acceptance (EA-03) accepted by **David Harris, 2026-07-28** (see `e4-dual-ocr-redaction-gate.md` sign-off log and its note on retrospective dating). **This DPIA is now materially incomplete on a separate point: it does not name all live AI processors — see the correction notice below.**  
 **Owner:** Privacy / Platform Engineering  
 **Related:** [`../privacy/dpia-template.md`](../privacy/dpia-template.md), [`../privacy/dpia-checklist.md`](../privacy/dpia-checklist.md), [`../privacy/dpia-incidents.md`](../privacy/dpia-incidents.md), [`dpia-quality-governance-platform.md`](dpia-quality-governance-platform.md)
 
@@ -126,10 +126,34 @@ Imported blobs under **legal hold** (`EvidenceRetentionPolicy.LEGAL_HOLD` on `ev
 
 Residual risk of document egress to AI processors is **accepted as Medium** pending DPO sign-off, on the condition that: providers remain optional/fail-closed when unconfigured, human review gates promotion, and sub-processor contracts are in place before production enablement of Mistral/Gemini keys.
 
+> **CORRECTION NOTICE — 2026-07-28. Two of that statement's three conditions are not
+> currently met, and the assessment was scoped to the wrong set of processors.**
+>
+> **The processor set is wrong.** This DPIA assesses egress to Mistral and Gemini. The
+> data controller confirmed on 28/07 that **Pinecone, Voyage, OpenAI and Anthropic are
+> also enabled and in use in production**, and Azure Document Intelligence is enabled
+> too. None of the five appears in this assessment or in the published Article 30
+> register. The Pinecone/Voyage pair is a different risk class from everything assessed
+> here: Voyage generates embeddings and **Pinecone retains them** in a third-country
+> vector database (index `qgp-documents`), so this is persistent storage outside the UK,
+> not transient processing that fails soft. A DPIA that does not name the processor that
+> *retains* the content is not an assessment of the actual processing.
+>
+> **"Optional / fail-closed when unconfigured" no longer describes production**, because
+> the keys are configured and the providers are live.
+>
+> **Pre-egress redaction is still a planned control, not an implemented one**, so the
+> minimisation posture that the E4 gate's Ops row attests to is not in force.
+>
+> The residual-risk acceptance recorded below is therefore sound as to the question it was
+> put (OCR egress to Mistral/Gemini/Azure DI) and does **not** extend to Pinecone, Voyage,
+> OpenAI or Anthropic, which were never assessed. Re-scoping this DPIA is outstanding
+> work, tracked as C-31.
+
 | Role | Name | Date | Decision |
 | --- | --- | --- | --- |
 | Assessor | Platform Engineering | 2026-07-11 | DPIA body complete |
-| DPO / Privacy lead | _Pending_ | | Accept / reject residual risk |
+| DPO / Privacy lead | **David Harris** | 2026-07-28 | Accept residual risk — **scope limited to the processors assessed in this document**, see correction notice above |
 | Accountable owner | _Pending_ | | Production AI key enablement |
 
 ---
