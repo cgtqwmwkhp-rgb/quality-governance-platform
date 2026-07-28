@@ -13,8 +13,8 @@ calls ``init_db`` whenever ``settings.is_development``, so the shared schema end
 up holding every declared table no matter what the migrations create. On CI,
 Alembic runs first and ``create_all`` then fills in the seven tables Alembic
 never created. A test using that database would pass whether or not the defect
-were fixed — which is precisely how four of these endpoints came to be returning
-500s in production with every gate green.
+were fixed — which is precisely how endpoints that cannot work in production came
+to be shipped with every gate green.
 
 The tables are removed with real DDL rather than by patching an exception, so
 what gets pinned is the database's behaviour and not a guess about it. The

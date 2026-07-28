@@ -1,12 +1,12 @@
 """Document control must say which of its tables production does not have.
 
 Seven tables this module reads have no create migration and are absent from
-production, verified two ways: an ``information_schema`` read of the production
-database, and ``alembic upgrade head`` against a clean PostgreSQL 14, which
-produced the same sixteen absent tables repo-wide. All seven are on the deferral
-register at ``docs/governance/alembic_check_excluded_tables.md`` marked "migration
-coverage pending", so the honest description is not "temporarily broken" but
-"never built".
+production. Those seven specifically were read from production's
+``information_schema`` in the Run 021 measurement work; a local
+``alembic upgrade head`` against a clean PostgreSQL 14 agrees, and finds nine more
+absent that nothing reads. All seven are on the deferral register at
+``docs/governance/alembic_check_excluded_tables.md`` marked "migration coverage
+pending", so the honest description is not "temporarily broken" but "never built".
 
 Both classes of endpoint are pinned here, and the distinction between them is the
 whole point of the file:
@@ -20,9 +20,11 @@ whole point of the file:
   ``TestAWriteThatDidNotHappen`` pin that absence is never expressible as an empty
   list, a zero, or a silent success.
 
-Every test here fails before the change: the endpoints raised ``ProgrammingError``
-and answered 500, and the two partially-readable ones took their readable figures
-down with them.
+Measured against the base commit, 20 of the 27 tests here fail: the endpoints
+raise a driver error and answer 500, and the two partially-readable ones take
+their readable figures down with them. The 7 that pass unchanged are the harness
+self-checks and ``TestAReadThatHappened`` — they are here precisely because they
+must pass both before and after, or this work has broken something that worked.
 """
 
 from __future__ import annotations

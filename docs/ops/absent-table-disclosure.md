@@ -5,35 +5,51 @@
 **Audience:** Testers, on-call, auditors, anyone deciding whether a failing screen is a defect
 **Status:** Honesty lock — disclosure only. No feature in this document has been built.
 
-Sixteen tables the SQLAlchemy models declare are not in the database. This
-document records which they are, how that was measured, which user-facing
-surfaces read them, and what each surface now says.
+Sixteen tables the SQLAlchemy models declare are not in the database, seven of
+them confirmed absent in production. This document records which they are, how
+each was measured and where, which user-facing surfaces read them, and what each
+surface now says.
 
 It exists because a tester without this list will log a schema absence as a
-functional defect, and because four document-control endpoints spent months
-returning 500s in production with every CI gate green.
+functional defect, and because the document-control endpoints above these tables
+cannot have been working in production while every CI gate stayed green.
 
 ---
 
 ## 1. How this was measured, and in which environment
 
-Two independent measurements agree on the same sixteen names.
+Read this section before quoting any number from this document. The two
+measurements below do not cover the same ground, and the difference matters.
 
-| Measurement | Environment | Method | Date |
+| Measurement | Environment | Covers | Method |
 |---|---|---|---|
-| Production read | **production** | `information_schema` query against the live database, recorded in the Run 021 verification work | 28 Jul 2026 |
-| Reproduction | **local PostgreSQL 14**, built by `alembic upgrade head` on an empty database | `scripts/ops/run026/inventory_declared_vs_actual_tables.py`, artefact at [`docs/evidence/run026-local-alembic-head-absent-tables-20260728.json`](../evidence/run026-local-alembic-head-absent-tables-20260728.json) | 28 Jul 2026 |
+| Production read | **production** (`qgp_prod_live`, read-only) | the **7** document-control tables named below, and the count of 240 base tables | `information_schema` existence query, run and recorded in the Run 021 coverage measurement of 28 Jul 2026 |
+| Local reproduction | **local PostgreSQL 14**, built by `alembic upgrade head` on an empty database | all **248** declared tables | `scripts/ops/run026/inventory_declared_vs_actual_tables.py`, artefact at [`docs/evidence/run026-local-alembic-head-absent-tables-20260728.json`](../evidence/run026-local-alembic-head-absent-tables-20260728.json) |
 
-The second is not a substitute for the first, and is not quoted here as a
-production fact on its own. It matters because production's schema is built by
-the same migrations, so a table that no migration creates is absent from any
-Alembic-built deployment — which makes the finding reproducible by anyone with a
+**What is a production fact:** the seven document-control tables are absent from
+production. Those seven were enumerated in production directly, and they are the
+only tables any change in this work depends on.
+
+**What is not:** the figure of sixteen. Only the local build enumerated all 248
+declared tables; the Run 021 work states sixteen but explicitly did not re-derive
+the list, so the nine names beyond document control (§2) rest on the local
+reproduction and on the deferral register, not on a recorded production read.
+Nothing is disclosed on their behalf — none of them has a reader — so no
+user-facing behaviour depends on that weaker evidence.
+
+The local build is worth having anyway, because production's schema is built by
+the same migrations: a table no migration creates is absent from any
+Alembic-built deployment, which makes the finding reproducible by anyone with a
 local Postgres and no production credentials. Where the two could still differ is
-a table created out-of-band by hand; none of these sixteen was.
+a table created out-of-band by hand — which is exactly why the seven that matter
+were checked in production rather than inferred.
 
-**248** tables declared, **240** present, **16** absent, and **8** present without
-a model (`alembic_version`, four `risk_*_mapping` junctions, two audit
-clause-mapping junctions, `escalation_rules_config`).
+Locally: **248** tables declared, of which **232** are present and **16** absent;
+the database holds **240** tables in total, the other **8** having no model
+(`alembic_version`, four `risk_*_mapping` junctions, two audit clause-mapping
+junctions, `escalation_rules_config`). Production also reports **240** base
+tables, which is consistent with the same sixteen being absent there, but
+consistency is not enumeration and is not claimed as such.
 
 ### Why the existing tools could not report this
 
@@ -56,7 +72,10 @@ clause-mapping junctions, `escalation_rules_config`).
 
 A table that exists and holds no rows is a different state, and usually a
 legitimate one: a new tenant has no records yet. Seventeen tables on the deferral
-register are in that state in production. **Nothing in this work changes their
+register were reported in that state in production by the Run 021 measurement,
+which recorded the `count(*)` queries it ran but not their per-table results — so
+treat the seventeen as that work's finding rather than as re-derived here. It is
+the safe direction to be uncertain in: **nothing in this work changes their
 behaviour**, and no endpoint above them has been made to error. See §4.
 
 Row counts can only be read from a deployment real users write to. The tooling
@@ -68,9 +87,14 @@ production.
 
 ## 2. The sixteen absent tables
 
-All sixteen are already on the deferral register marked "migration coverage
-pending", with named owners. The honest description is therefore not
-"temporarily broken" but **never built**: the code exists, the migration does not.
+All sixteen are already on the deferral register with named owners, and fourteen
+of them are marked "migration coverage pending" — for those the honest
+description is not "temporarily broken" but **never built**: the code exists, the
+migration does not. The two exceptions are noted in the table and neither has a
+reader.
+
+The first seven are the production-verified set. The remaining nine rest on the
+local reproduction only (§1), and none of them is read by anything.
 
 | Table | Reader | Disclosed by |
 |---|---|---|
@@ -91,8 +115,15 @@ pending", with named owners. The honest description is therefore not
 | `root_cause_analyses` | **nothing** — model retained after a migration dropped the table | not disclosed (§4) |
 | `escalation_rules` | **nothing** — the ORM model is never queried | not disclosed (§4) |
 
+The last two are the register's exceptions to "migration coverage pending":
+`root_cause_analyses` was built and then dropped by a migration, and
+`escalation_rules` is an ORM name for the migrated `escalation_rules_config`. So
+"never built" is the wrong phrase for both — and immaterial, because neither is
+read.
+
 Only six of the sixteen have a reader. Every one of those six is read by
-`src/api/routes/document_control.py`.
+`src/api/routes/document_control.py`, and every one of the six is
+production-verified absent.
 
 ---
 
@@ -100,6 +131,14 @@ Only six of the sixteen have a reader. Every one of those six is read by
 
 Router prefix `/api/v1/document-control`. The page is **Document Control**, a
 top-level menu item (`/document-control` in `Layout.tsx`).
+
+Every "Was: 500" below was **observed** against a database with these seven
+tables dropped — `tests/integration/test_document_control_absent_table_disclosure.py`
+run against the base commit fails 20 of 27 that way. It is **inferred** for
+production, from the table being absent there and the handler querying it
+unconditionally. No captured production response is quoted here: the Run 021
+probes of these endpoints were unauthenticated and returned 401, and nobody is
+going to reproduce a 500 in production to prove a point.
 
 ### Reads — 503 `MEASUREMENT_UNAVAILABLE`, naming the table
 
@@ -192,8 +231,9 @@ Two near-misses worth naming, because both look like readers and are not:
 `src/api/routes/iso27001.py` reads `src/domain/models/iso27001.py`, whose tables —
 `information_assets`, `iso27001_controls`, `soa_control_entries`,
 `security_incidents`, `access_control_records`, `business_continuity_plans`,
-`supplier_security_assessments` — **are all present**. They hold no rows, so those
-endpoints return empty lists, and that is a true answer. The similarly named
+`supplier_security_assessments` — **are all present**, in the local Alembic build
+and, per Run 021, in production. They hold no rows, so those endpoints return
+empty lists, and that is a true answer. The similarly named
 `ims_*` tables in `src/domain/models/ims_unification.py` are a different, unread
 set. Anyone reading "ISO 27001 controls are absent" from the deferral register is
 reading the wrong row.
@@ -203,6 +243,13 @@ reading the wrong row.
 Zero rows is what a customer with no records looks like. Turning that into an
 error would be the mirror image of the defect being fixed here, and worse, because
 it would break software that works. No endpoint above them was changed.
+
+That holds regardless of how firmly the seventeen is established (§1): an
+uncertain row count is not a reason to change behaviour, only a reason not to.
+The suite pins this directly — `TestAReadThatHappened` asserts that a present,
+empty distribution list, workflow list and access log each still answer `200`
+with `[]` and no disclosure attached, and those assertions pass on the base
+commit as well as after the change.
 
 Whether those capabilities — ISO 27001 controls, the Statement of Applicability,
 management review, supplier security assessment — are in scope at all is a
