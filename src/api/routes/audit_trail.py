@@ -191,28 +191,6 @@ async def get_user_activity(
     return entries
 
 
-@router.get("/{entry_id}", response_model=AuditLogDetailResponse)
-async def get_audit_entry(
-    entry_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> Any:
-    """Get a single audit log entry with full details."""
-    result = await db.execute(
-        select(AuditLogEntry).where(
-            AuditLogEntry.id == entry_id,
-            AuditLogEntry.tenant_id == _tid(current_user),
-        )
-    )
-    entry = result.scalar_one_or_none()
-
-    if not entry:
-        raise NotFoundError("Audit entry not found")
-
-    await _name_legacy_actors(db, [entry])
-    return entry
-
-
 # ============================================================================
 # Chain Verification
 # ============================================================================
@@ -385,3 +363,34 @@ async def list_entity_types(current_user: CurrentUser) -> Any:
         "workflow",
         "auth",
     ]
+
+
+# ============================================================================
+# Single Entry Lookup
+#
+# MUST stay last: FastAPI matches in declaration order, so "/{entry_id}" will
+# swallow any literal GET path declared after it (the literal arrives as
+# entry_id and fails int parsing with a 422). Add new literal routes above.
+# ============================================================================
+
+
+@router.get("/{entry_id}", response_model=AuditLogDetailResponse)
+async def get_audit_entry(
+    entry_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> Any:
+    """Get a single audit log entry with full details."""
+    result = await db.execute(
+        select(AuditLogEntry).where(
+            AuditLogEntry.id == entry_id,
+            AuditLogEntry.tenant_id == _tid(current_user),
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        raise NotFoundError("Audit entry not found")
+
+    await _name_legacy_actors(db, [entry])
+    return entry
