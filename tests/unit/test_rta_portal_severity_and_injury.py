@@ -9,11 +9,7 @@ injury and left damage_only unreachable.
 
 from src.api.routes.employee_portal import QuickReportCreate, build_rta_portal_fields
 from src.domain.models.rta import RTASeverity
-from src.domain.services.rta_severity import (
-    derive_portal_rta_severity,
-    interpret_rta_injury_answer,
-    read_reported_bool,
-)
+from src.domain.services.rta_severity import derive_portal_rta_severity, interpret_rta_injury_answer, read_reported_bool
 
 
 def _rta_report(severity: str, submission: dict) -> QuickReportCreate:

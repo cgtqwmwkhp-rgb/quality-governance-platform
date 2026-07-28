@@ -39,12 +39,8 @@ from src.domain.models.rta import RoadTrafficCollision, RTAStatus
 from src.domain.services.api_idempotency_service import begin_idempotent_create, complete_idempotent_create
 from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.portal_triage_service import assign_and_notify_portal_intake
-from src.domain.services.rta_severity import (
-    derive_portal_rta_severity,
-    interpret_rta_injury_answer,
-    read_reported_bool,
-)
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.rta_severity import derive_portal_rta_severity, interpret_rta_injury_answer, read_reported_bool
 
 logger = logging.getLogger(__name__)
 
