@@ -14,6 +14,12 @@ import { test, expect, Page, Request } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import {
+  OUTPUT_PATH,
+  RESULTS_DIR,
+  readWorkflowAuditEntries,
+  writeWorkflowAuditEntry,
+} from '../utils/workflow-audit-artifacts';
 
 // Types
 interface WorkflowStep {
@@ -38,6 +44,9 @@ interface WorkflowEntry {
   recovery_path: string;
   expected_apis: string[];
   max_duration_seconds: number;
+  /** Declared bounded error states (admin-login; see LOGIN_UX_CONTRACT.md). */
+  error_terminal_states?: Array<{ error_code: string; ui_element: string; message?: string }>;
+  recovery_actions?: Array<{ action: string; selector: string; applies_to?: string[] }>;
 }
 
 interface StepResult {
@@ -46,6 +55,16 @@ interface StepResult {
   result: 'PASS' | 'FAIL' | 'SKIP';
   duration_ms: number;
   error?: string;
+}
+
+interface RecoveryStateEvidence {
+  detected: boolean;
+  /** Which selector matched, so a reader can judge the finding rather than trust it. */
+  matched_selector: string | null;
+  /** The matched element's test id, or its trimmed text when it has none. */
+  detail: string | null;
+  /** Selector of the recovery affordance found alongside it, if any. */
+  retry_affordance: string | null;
 }
 
 interface WorkflowAuditResult {
@@ -61,6 +80,113 @@ interface WorkflowAuditResult {
   expected_apis: string[];
   step_results: StepResult[];
   error_message?: string;
+  recovery_state?: RecoveryStateEvidence;
+}
+
+/**
+ * Elements that exist only to announce a failed operation.
+ *
+ * The previous locator was
+ *   '[data-testid*="error"], .error, .alert-danger, :text("Error"), :text("retry")'
+ * which is not evidence of anything. `[data-testid*="error"]` matches the dynamic
+ * form renderer's own `upload-errors-<field>` container, `.error` matches any
+ * element that happens to carry that class, and the `:text()` clauses match any
+ * page containing the word "Error" or "retry" anywhere — including help copy and
+ * a "Retry" button on an unrelated panel. It reported "(Recovery state visible)"
+ * on runs that had reached no recovery state at all, and that false positive was
+ * read as corroborating evidence by two separate investigations into the
+ * portal-incident-report failure.
+ *
+ * These require a purpose-built announcement: an ARIA alert, or a test id whose
+ * name is exactly an error hook (`*-error`, `error-*`) rather than merely
+ * containing the substring.
+ */
+const RECOVERY_INDICATOR_SELECTORS = [
+  '[role="alert"]',
+  '[data-testid$="-error"]',
+  '[data-testid^="error-"]',
+  '.alert-danger',
+];
+
+/**
+ * Screen-reader-only live regions are announcement channels, not recovery UI.
+ *
+ * LiveAnnouncer mounts a permanent, empty `<div role="alert" class="sr-only">` on
+ * every page, and `.sr-only` here is a 1x1px clipped box — which Playwright counts
+ * as visible, because it has a non-empty bounding box. Matching it would have made
+ * `[role="alert"]` fire on every page in the application: the same class of false
+ * positive this locator was rewritten to remove. Real banners (Toast, ErrorState,
+ * FormField, SessionExpiryWarning) also carry aria-live, so aria-live cannot be
+ * used to tell them apart — but they occupy real space and they say something.
+ */
+const MIN_PERCEPTIBLE_PX = 8;
+
+async function isPerceptibleAnnouncement(
+  element: import('@playwright/test').Locator,
+): Promise<{ perceptible: boolean; text: string }> {
+  const text = ((await element.textContent().catch(() => null)) || '').trim();
+  if (!text) return { perceptible: false, text };
+  const box = await element.boundingBox().catch(() => null);
+  if (!box || box.width < MIN_PERCEPTIBLE_PX || box.height < MIN_PERCEPTIBLE_PX) {
+    return { perceptible: false, text };
+  }
+  return { perceptible: true, text };
+}
+
+/** Affordances that let a user leave a recovery state, per LOGIN_UX_CONTRACT.md. */
+const RECOVERY_AFFORDANCE_SELECTORS = [
+  '[data-testid="retry-button"]',
+  '[data-testid$="-retry"]',
+  'button:has-text("Retry")',
+  'button:has-text("Try again")',
+];
+
+/**
+ * Look for a genuine, named recovery state and record what was actually found.
+ *
+ * A workflow's own declared recovery selectors take precedence when the registry
+ * provides them (admin-login declares error_terminal_states/recovery_actions).
+ */
+async function findRecoveryState(
+  page: Page,
+  workflow: WorkflowEntry,
+): Promise<RecoveryStateEvidence> {
+  const declared = [
+    ...(workflow.error_terminal_states || []).map(s => s.ui_element).filter(Boolean),
+    ...(workflow.recovery_actions || []).map(a => a.selector).filter(Boolean),
+  ] as string[];
+
+  const evidence: RecoveryStateEvidence = {
+    detected: false,
+    matched_selector: null,
+    detail: null,
+    retry_affordance: null,
+  };
+
+  for (const selector of [...declared, ...RECOVERY_INDICATOR_SELECTORS]) {
+    const element = page.locator(selector).first();
+    const visible = await element.isVisible().catch(() => false);
+    if (!visible) continue;
+
+    const { perceptible, text } = await isPerceptibleAnnouncement(element);
+    if (!perceptible) continue;
+
+    evidence.detected = true;
+    evidence.matched_selector = selector;
+    evidence.detail =
+      (await element.getAttribute('data-testid').catch(() => null)) || text.slice(0, 120);
+    break;
+  }
+
+  for (const selector of RECOVERY_AFFORDANCE_SELECTORS) {
+    const visible = await page.locator(selector).first().isVisible().catch(() => false);
+    if (visible) {
+      evidence.retry_affordance = selector;
+      break;
+    }
+  }
+
+  return evidence;
 }
 
 // Load registry
@@ -73,8 +199,17 @@ function loadWorkflows(): WorkflowEntry[] {
   return registry.p0_workflows || [];
 }
 
-// Test storage
-const workflowAuditResults: WorkflowAuditResult[] = [];
+/**
+ * Record a journey's outcome.
+ *
+ * Written to its own file the moment the journey ends, rather than pushed to a
+ * module-level array: Playwright retires a worker after a test fails, so the
+ * later journeys run in a fresh process and an in-memory array would lose either
+ * the failure or everything after it.
+ */
+function recordResult(result: WorkflowAuditResult): void {
+  writeWorkflowAuditEntry(result.workflowId, result);
+}
 
 // Test data replacements (environment variable or defaults)
 function replaceTestData(value: string): string {
@@ -121,7 +256,19 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
 const workflows = loadWorkflows();
 
 test.describe('Workflow Audit (P0 Critical Paths)', () => {
-  test.describe.configure({ mode: 'serial' }); // Serial - workflows have state
+  // 'default', not 'serial'. Under 'serial' the first failure skips every
+  // remaining test in the group, and portal-incident-report is declared first —
+  // so one broken journey silently took four other P0 journeys with it
+  // (portal-near-miss-report, portal-rta-report, admin-login,
+  // admin-view-incident), and the artifact carried 1 of 5 declared entries. A
+  // gate cannot report on journeys it never ran.
+  //
+  // 'default' keeps what 'serial' was chosen for — declaration order, no two
+  // workflows driving the same staging API at once — while letting each journey
+  // be measured on its own merits. Results are written per journey rather than
+  // accumulated in memory, because Playwright retires a worker after a failure
+  // and the remaining journeys then run in a new process.
+  test.describe.configure({ mode: 'default' });
   
   for (const workflow of workflows) {
     test(`[${workflow.criticality}] ${workflow.workflowId}: ${workflow.name}`, async ({ page }) => {
@@ -157,7 +304,7 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
           // is a real failure, and the entry must still reach the artifact.
           result.error_message = `Auth setup failed: ${error.message?.slice(0, 200)}`;
           result.total_duration_ms = Date.now() - workflowStartTime;
-          workflowAuditResults.push(result);
+          recordResult(result);
           expect(result.result).toBe('PASS');
           return;
         }
@@ -167,7 +314,7 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
         result.result = 'SKIP';
         result.error_message = `Auth type ${workflow.auth_type} not configured`;
         result.total_duration_ms = Date.now() - workflowStartTime;
-        workflowAuditResults.push(result);
+        recordResult(result);
         test.skip(true, result.error_message);
         return;
       }
@@ -315,19 +462,19 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
       } catch (error: any) {
         result.result = 'FAIL';
         result.error_message = error.message?.slice(0, 200);
-        
-        // Check for recovery state
-        const recoveryStateVisible = await page.locator(
-          '[data-testid*="error"], .error, .alert-danger, :text("Error"), :text("retry")'
-        ).first().isVisible().catch(() => false);
-        
-        if (recoveryStateVisible) {
-          result.error_message += ' (Recovery state visible)';
+
+        result.recovery_state = await findRecoveryState(page, workflow);
+        if (result.recovery_state.detected) {
+          // Name the element that matched. "(Recovery state visible)" on its own
+          // told a reader nothing they could check.
+          result.error_message += ` (Recovery state: ${result.recovery_state.matched_selector}`
+            + `${result.recovery_state.detail ? ` → ${result.recovery_state.detail}` : ''}`
+            + `${result.recovery_state.retry_affordance ? '; retry offered' : '; no retry offered'})`;
         }
       }
       
       result.total_duration_ms = Date.now() - workflowStartTime;
-      workflowAuditResults.push(result);
+      recordResult(result);
       
       // Assert for test framework
       expect(result.result).toBe('PASS');
@@ -335,32 +482,44 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
   }
 });
 
-// Write results after all tests
+/**
+ * Merge the per-workflow entry files into the artifact the aggregator reads.
+ *
+ * Runs in every worker, and reads the directory rather than this process's own
+ * results, so the last worker to finish emits the complete set however the run
+ * was split across workers or retries.
+ */
 test.afterAll(async () => {
-  const outputPath = path.join(__dirname, '../results/workflow_audit.json');
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  
+  fs.mkdirSync(RESULTS_DIR, { recursive: true });
+
+  const declarationOrder = new Map(workflows.map((w, index) => [w.workflowId, index]));
+  const results = readWorkflowAuditEntries<WorkflowAuditResult>().sort(
+    (a, b) =>
+      (declarationOrder.get(a.workflowId) ?? Number.MAX_SAFE_INTEGER) -
+      (declarationOrder.get(b.workflowId) ?? Number.MAX_SAFE_INTEGER),
+  );
+
   // Identify dead ends (workflows that failed mid-step)
-  const deadEnds = workflowAuditResults
+  const deadEnds = results
     .filter(r => r.result === 'FAIL' && r.completed_steps < r.total_steps)
     .map(r => ({
       workflowId: r.workflowId,
       failed_at_step: r.step_results.find(s => s.result === 'FAIL')?.stepId,
       error: r.error_message,
     }));
-  
-  fs.writeFileSync(outputPath, JSON.stringify({
+
+  fs.writeFileSync(OUTPUT_PATH, JSON.stringify({
     audit_type: 'workflow',
     timestamp: new Date().toISOString(),
     // How many entries the registry asked for, as opposed to how many arrived.
-    // A serial suite that aborts, or a crashed worker, drops entries silently;
-    // the aggregator holds the gate when this count is not met.
+    // A crashed worker drops entries silently; the aggregator holds the gate when
+    // this count is not met.
     expected_entries: workflows.length,
-    total_workflows: workflowAuditResults.length,
-    passed: workflowAuditResults.filter(r => r.result === 'PASS').length,
-    failed: workflowAuditResults.filter(r => r.result === 'FAIL').length,
-    skipped: workflowAuditResults.filter(r => r.result === 'SKIP').length,
+    total_workflows: results.length,
+    passed: results.filter(r => r.result === 'PASS').length,
+    failed: results.filter(r => r.result === 'FAIL').length,
+    skipped: results.filter(r => r.result === 'SKIP').length,
     dead_ends: deadEnds,
-    results: workflowAuditResults,
+    results,
   }, null, 2));
 });
