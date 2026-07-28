@@ -466,7 +466,7 @@ jobs:
           echo "[OK] SBOM published to GitHub Release: sbom-latest (sha=${GITHUB_SHA::8})"
 
   lockfile-check:
-    name: Lockfile Freshness Check
+    name: Lockfile Validity Check
     runs-on: ubuntu-latest
 
     steps:
@@ -482,33 +482,44 @@ jobs:
           cache: 'pip'
           cache-dependency-path: requirements.txt
 
-      - name: Install pip-tools
-        run: python -m pip install --upgrade pip pip-tools
+      - name: Install tooling
+        run: python -m pip install --upgrade pip pip-tools packaging
 
-      - name: Verify lockfile is fresh
+      # Blocking. Asserts the properties a lockfile exists to provide: every
+      # declared dependency resolved, every pin inside its declared range, every
+      # entry hash-verified. Deterministic — it reads two files in the repository
+      # and never contacts an index, so the same commit always gets the same answer.
+      - name: Verify lockfile is a valid lock for requirements.txt
+        run: python scripts/verify_lockfile.py
+
+      # Advisory only. This used to be the blocking check, and because 32 of the
+      # declared dependencies are ranges, pip-compile resolved them to whatever
+      # PyPI was serving at that moment — so any upstream release turned a
+      # perfectly good lockfile "stale" and failed every open pull request. It
+      # broke four times in one night on fastapi alone, and each unblock meant
+      # regenerating the lock inside an unrelated pull request, which is an
+      # unreviewed dependency bump riding along with a change about something
+      # else. Dependabot is the reviewed channel for upgrades. Keeping the
+      # comparison as a warning preserves the visibility without the false red.
+      - name: Report available upgrades (non-blocking)
+        continue-on-error: true
         run: |
-          if [ ! -f requirements.lock ]; then
-            echo "[FAIL] requirements.lock is required and missing."
-            echo "[INFO] Run: ./scripts/generate_lockfile.sh"
-            exit 1
+          pip-compile requirements.txt -o requirements.lock.check \
+            --no-header --strip-extras --allow-unsafe --generate-hashes --quiet
+          if diff -q requirements.lock requirements.lock.check > /dev/null 2>&1; then
+            echo "[OK] requirements.lock also matches the newest resolvable set."
+            exit 0
           fi
-
-          pip-compile requirements.txt -o requirements.lock.check --no-header --strip-extras --allow-unsafe --generate-hashes --quiet
-          if ! diff -q requirements.lock requirements.lock.check > /dev/null 2>&1; then
-            echo "[WARN] requirements.lock has minor drift (likely upstream releases)."
-            echo "[INFO] Checking if only comment/hash changes (acceptable drift)..."
-            # Fail only if package names or versions differ (not just comments/hashes)
-            ADDED=$(diff requirements.lock requirements.lock.check | grep "^>" | grep -v "^>.*#" | grep -v "^> *--hash" | grep -c "==" || true)
-            REMOVED=$(diff requirements.lock requirements.lock.check | grep "^<" | grep -v "^<.*#" | grep -v "^< *--hash" | grep -c "==" || true)
-            if [ "$ADDED" -gt 0 ] || [ "$REMOVED" -gt 0 ]; then
-              echo "[FAIL] requirements.lock has package version changes. Run: ./scripts/generate_lockfile.sh"
-              diff requirements.lock requirements.lock.check || true
-              exit 1
-            fi
-            echo "[OK] requirements.lock drift is comment/hash only (acceptable)"
-          else
-            echo "[OK] requirements.lock is up to date"
-          fi
+          echo "[INFO] Newer versions are available within the declared ranges:"
+          diff requirements.lock requirements.lock.check \
+            | grep -E '^[<>].*==' | grep -v -- '--hash' | sort -u | head -40 || true
+          {
+            echo "### Dependency upgrades available"
+            echo ""
+            echo "The lockfile is valid, but newer versions exist inside the declared ranges."
+            echo "These are handled by Dependabot and are **not** a reason to regenerate the"
+            echo "lockfile inside an unrelated pull request."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   integration-tests:
     name: Integration Tests
