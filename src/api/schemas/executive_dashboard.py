@@ -98,8 +98,17 @@ class RTASummary(BaseModel):
 
 
 class RiskSummary(BaseModel):
-    """Risk module summary."""
+    """Risk module summary.
 
+    Two populations, kept apart on purpose. `register_total` is the whole
+    Enterprise Risk Register visible to the tenant and reconciles exactly with
+    `GET /api/v1/risk-register/`; `total_active` and the level breakdown cover
+    the narrower not-closed subset reported by `/risk-register/summary`.
+    `register_total` is None when the aggregate could not be computed, so a
+    failure does not read as an empty register.
+    """
+
+    register_total: Optional[int] = None
     total_active: int
     by_level: Dict[str, int]
     high_critical: int

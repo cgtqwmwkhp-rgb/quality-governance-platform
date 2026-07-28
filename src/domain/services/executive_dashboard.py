@@ -22,11 +22,12 @@ from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatu
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.policy_acknowledgment import AcknowledgmentStatus, PolicyAcknowledgment
-from src.domain.models.risk import Risk
+from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.rta import RTA, RTAStatus
 from src.domain.models.training_matrix import TrainingMatrixCell, TrainingMatrixImport
 from src.domain.models.workflow_rules import SLATracking
 from src.domain.services.asset_health_analytics_service import AssetHealthRow, aggregate_asset_health_kpis
+from src.domain.services.risk_service import register_active_clause, register_visibility_clause
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ _EMPTY_RTA_SUMMARY: Dict[str, Any] = {
     "closed": 0,
 }
 _EMPTY_RISK_SUMMARY: Dict[str, Any] = {
+    # None (not 0): a failed summary must not look like an empty register (PX-226).
+    "register_total": None,
     "total_active": 0,
     "by_level": {},
     "high_critical": 0,
@@ -127,12 +130,29 @@ class ExecutiveDashboardService:
             return model.tenant_id == self.tenant_id
         return True  # noqa: E712  — SQLAlchemy literal
 
+    async def _recover_session(self) -> None:
+        """Roll back after a failed sub-query so later ones can still run.
+
+        PostgreSQL aborts the whole transaction on the first failing statement
+        and refuses everything after it until the transaction ends. Swallowing
+        the error without rolling back therefore turns one broken aggregate into
+        a dashboard of zeros — every later tile reports "query failed" and falls
+        back to its empty default, which is indistinguishable from real data.
+        Every caller of this service is a read-only GET, so there is nothing to
+        lose by rolling back.
+        """
+        try:
+            await self.db.rollback()
+        except Exception:  # pragma: no cover - the session is already unusable
+            logger.warning("Dashboard session rollback failed", exc_info=True)
+
     async def _safe_call(self, coro, default):
         """Run an async function, returning default on any DB error."""
         try:
             return await coro
         except Exception as e:
             logger.warning("Dashboard query failed: %s", e)
+            await self._recover_session()
             return default
 
     async def _avg_resolution_days(self, start_col: Any, end_col: Any, tf: Any) -> Optional[float]:
@@ -470,33 +490,52 @@ class ExecutiveDashboardService:
         }
 
     async def _get_risk_summary(self) -> Dict[str, Any]:
-        """Get risk summary statistics."""
-        tf = self._tenant_filter(Risk)
+        """Get risk summary statistics from the Enterprise Risk Register.
 
-        total_result = await self.db.execute(select(func.count(Risk.id)).where(and_(tf, Risk.is_active == True)))
-        total = total_result.scalar() or 0
+        Reads ``EnterpriseRisk`` (``risks_v2``) — the store every risk-creating
+        path in the platform writes to — using the same tenant and triage
+        visibility predicates as ``GET /api/v1/risk-register/``. It previously
+        counted the operational ``Risk`` table, which only ``POST /api/v1/risks/``
+        ever writes, so the executive risk tile read an empty table while the
+        register showed a full population (PX-178).
 
-        level_counts = {}
-        for level in ["critical", "high", "medium", "low", "negligible"]:
-            count_result = await self.db.execute(
-                select(func.count(Risk.id)).where(
-                    and_(
-                        tf,
-                        Risk.is_active == True,
-                        Risk.risk_level == level,
-                    )
-                )
-            )
+        ``register_total`` is the whole visible register and reconciles exactly
+        with the register list total. ``total_active`` is the narrower
+        not-closed subset that ``/risk-register/summary`` reports and that the
+        health score consumes; the two are different populations on purpose and
+        are named for what they are (PX-223).
+        """
+        tf = self._tenant_filter(EnterpriseRisk)
+        vis = register_visibility_clause()
+
+        register_total = (
+            await self.db.execute(select(func.count(EnterpriseRisk.id)).where(and_(tf, vis)))
+        ).scalar() or 0
+
+        active = and_(tf, vis, register_active_clause())
+        total = (await self.db.execute(select(func.count(EnterpriseRisk.id)).where(active))).scalar() or 0
+
+        # Canonical 5x5 bands (RiskScoringEngine): low <=4, medium 5-9, high 10-16, critical >=17.
+        # `negligible` is retained at 0 so the by_level key set stays stable for consumers.
+        level_counts: Dict[str, int] = {"negligible": 0}
+        for level, clause in (
+            ("critical", EnterpriseRisk.residual_score >= 17),
+            ("high", EnterpriseRisk.residual_score.between(10, 16)),
+            ("medium", EnterpriseRisk.residual_score.between(5, 9)),
+            ("low", EnterpriseRisk.residual_score <= 4),
+        ):
+            count_result = await self.db.execute(select(func.count(EnterpriseRisk.id)).where(and_(active, clause)))
             level_counts[level] = count_result.scalar() or 0
 
-        avg_result = await self.db.execute(select(func.avg(Risk.risk_score)).where(and_(tf, Risk.is_active == True)))
+        avg_result = await self.db.execute(select(func.avg(EnterpriseRisk.residual_score)).where(active))
         avg_score = avg_result.scalar() or 0
 
         return {
+            "register_total": register_total,
             "total_active": total,
             "by_level": level_counts,
             "high_critical": level_counts.get("critical", 0) + level_counts.get("high", 0),
-            "average_score": round(avg_score, 1),
+            "average_score": round(float(avg_score), 1),
         }
 
     async def _get_kri_summary(self) -> Dict[str, Any]:
@@ -618,6 +657,7 @@ class ExecutiveDashboardService:
         except Exception:
             logger.exception("%s trend failed", name)
             unavailable.append(name)
+            await self._recover_session()
             return []
 
     async def _trend_count_in_window(
