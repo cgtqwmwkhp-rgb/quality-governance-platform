@@ -24,8 +24,19 @@ from scripts.ops.run025._dependencies import InboundRef, deletion_order
 from scripts.ops.run025.assign_tenant_orphan_rows import TenantAmbiguous
 from scripts.ops.run025.assign_tenant_orphan_rows import main as assign_main
 from scripts.ops.run025.assign_tenant_orphan_rows import resolve_tenant
+from scripts.ops.run025.backfill_tenant_orphan_rows import (
+    PROVENANCE_RULES,
+    RowSetDrifted,
+    _assert_disjoint,
+    _creator_column,
+    _debris_signals,
+    apply_plan,
+    backfill_scope,
+)
+from scripts.ops.run025.backfill_tenant_orphan_rows import main as backfill_main
 from scripts.ops.run025.purge_tenant_orphan_rows import _reference_parts
 from scripts.ops.run025.purge_tenant_orphan_rows import main as purge_main
+from tests.unit._tenant_scope_support import model_metadata_summary
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_DIR = REPO_ROOT / "scripts" / "ops" / "run025"
@@ -249,13 +260,21 @@ def test_purge_apply_requires_a_manifest():
     assert "--apply requires --manifest" in source
 
 
-@pytest.mark.parametrize("script", ["purge_tenant_orphan_rows.py", "assign_tenant_orphan_rows.py"])
+@pytest.mark.parametrize(
+    "script",
+    ["purge_tenant_orphan_rows.py", "assign_tenant_orphan_rows.py", "backfill_tenant_orphan_rows.py"],
+)
 def test_mutating_scripts_never_write_outside_an_apply_path(script):
-    """Every DELETE/UPDATE must live in a function only reached under --apply."""
+    """Every DELETE/UPDATE must live in a function only reached under --apply.
+
+    ``AsyncFunctionDef`` is a separate node type from ``FunctionDef``, so matching
+    only the latter skipped every ``async def`` in these scripts — which is all of
+    the database code, including ``apply_plan`` itself. The check now covers both.
+    """
     tree = ast.parse((SCRIPT_DIR / script).read_text(encoding="utf-8"))
     offenders = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef) or node.name == "apply_plan":
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name == "apply_plan":
             continue
         for literal in ast.walk(node):
             if isinstance(literal, ast.Constant) and isinstance(literal.value, str):
@@ -281,3 +300,177 @@ def test_target_tables_are_read_from_the_migration_not_restated():
     assert declared is not None, "the migration no longer declares TARGET_TABLES"
     assert _models.migration_target_tables() == declared
     assert "compliance_evidence_links" in declared
+
+
+# --------------------------------------------------------------------------- #
+# Out-of-scope backfill: scope, provenance, and the single-tenant precondition
+# --------------------------------------------------------------------------- #
+
+
+def test_backfill_can_never_touch_a_case_or_action_table():
+    """The two scripts are kept on disjoint tables so neither can do the other's job.
+
+    ``assign`` refuses production because attributing a *case* to a tenant is a
+    confidentiality claim. That refusal is only worth anything if the production-
+    capable script cannot reach the same tables.
+
+    The real model metadata is fetched from a subprocess: importing it in-process
+    would configure the mapper registry and take unrelated tests down with it, for
+    the reason set out in ``_tenant_scope_support``.
+    """
+    tenant_required = set(model_metadata_summary()["tenant_required"])
+    in_migration = set(_models.migration_target_tables())
+    scope = tenant_required - in_migration
+    assert scope, "the backfill has no tables in scope at all, which cannot be right"
+    assert not scope.intersection(in_migration)
+    for table in ("incidents", "capa_actions", "incident_actions", "road_traffic_collisions"):
+        assert table not in scope
+    for table in PROVENANCE_RULES:
+        assert table in scope, f"{table} has provenance rules but is not a table this script may write to"
+
+
+def test_backfill_scope_subtracts_the_migration_tables(monkeypatch):
+    """The exclusion is a set subtraction, not a hand-maintained list."""
+    monkeypatch.setattr(
+        "scripts.ops.run025.backfill_tenant_orphan_rows.tenant_required_tables",
+        lambda: ["audit_runs", "incidents", "risks_v2"],
+    )
+    assert backfill_scope() == ("audit_runs", "risks_v2")
+
+
+def test_the_disjointness_check_actually_fails_when_it_should():
+    with pytest.raises(RuntimeError, match="case/action migration scope"):
+        _assert_disjoint(("audit_runs", "incidents"))
+
+
+def test_every_table_with_known_production_orphans_has_declared_provenance():
+    """A table with orphans and no rule is refused, so the rules must cover them."""
+    measured_in_production = {
+        "external_audit_import_drafts",
+        "audit_runs",
+        "external_audit_import_jobs",
+        "audit_findings",
+        "risks_v2",
+    }
+    assert measured_in_production.issubset(PROVENANCE_RULES)
+
+
+def test_provenance_rules_never_name_a_case_or_action_table():
+    in_migration = set(_models.migration_target_tables())
+    assert not set(PROVENANCE_RULES).intersection(in_migration)
+
+
+def test_risks_v2_creator_column_is_created_by_not_created_by_id():
+    """Every other table uses created_by_id; a generic sweep would miss this one."""
+    assert _creator_column(PROVENANCE_RULES["risks_v2"]) == "created_by"
+    assert _creator_column(PROVENANCE_RULES["audit_runs"]) == "created_by_id"
+
+
+def test_the_strongest_parent_is_declared_first():
+    """Rules are tried in order, so the first must be the one that implies ownership."""
+    assert PROVENANCE_RULES["audit_findings"][0].parent_table == "audit_runs"
+    assert PROVENANCE_RULES["external_audit_import_drafts"][0].parent_table == "external_audit_import_jobs"
+
+
+def test_debris_signals_separate_synthetic_rows_from_business_records():
+    """Attributing test debris into an audited register is the purge decision inverted."""
+    rows = [
+        {"id": 1, "title": "UAT smoke draft", "created_by_id": 100},
+        {"id": 2, "title": "Nonconformance in goods-in", "created_by_id": 101},
+        {"id": 3, "title": "Genuine finding", "created_by_id": 102},
+    ]
+    creators = {
+        100: {"email": "alice@plantexpand.com", "is_active": True},
+        101: {"email": "smoke-runner@plantexpand.com", "is_active": False},
+        102: {"email": "bob@plantexpand.com", "is_active": False},
+    }
+    signals = _debris_signals(rows, creators, "created_by_id", "id")
+    assert signals["rows_matching_test_tokens"] == 1
+    assert signals["example_test_token_ids"] == [1]
+    assert signals["rows_created_by_ci_smoke_account"] == 1
+    assert signals["rows_created_by_deactivated_user"] == 1
+
+
+def test_backfill_refuses_an_explicitly_named_tenant(monkeypatch):
+    """The default is only defensible as a derived fact, never as an operator's claim."""
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user@localhost/whatever")
+    assert backfill_main(["--tenant-id", "1"]) == 2
+
+
+def test_backfill_refuses_apply_on_production_without_the_acknowledgement(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user@localhost/whatever")
+    with pytest.raises(SystemExit) as excinfo:
+        backfill_main(["--apply"])
+    assert excinfo.value.code == 2
+
+
+def test_backfill_apply_requires_a_manifest():
+    source = (SCRIPT_DIR / "backfill_tenant_orphan_rows.py").read_text(encoding="utf-8")
+    assert "--apply requires --manifest" in source
+
+
+class _DriftingDb:
+    """A database where one planned row stopped being NULL since the plan was built."""
+
+    def __init__(self, visible):
+        self._visible = visible
+        self.rolled_back = False
+        self.committed = False
+        self.updates = 0
+
+    async def run_sync(self, fn):
+        return "sqlite"
+
+    async def execute(self, statement, params=None):
+        text = str(statement).upper()
+        if text.startswith("UPDATE"):
+            self.updates += 1
+            return _FakeResult([])
+        return _ScalarResult(self._visible)
+
+    async def rollback(self):
+        self.rolled_back = True
+
+    async def commit(self):
+        self.committed = True
+
+
+class _ScalarResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._rows
+
+
+@pytest.mark.anyio
+async def test_apply_rolls_back_when_a_planned_row_is_no_longer_orphaned(monkeypatch):
+    """The manifest is the change record; writing a different set would invalidate it."""
+    db = _DriftingDb(visible=[1])
+    monkeypatch.setattr(
+        "scripts.ops.run025.backfill_tenant_orphan_rows.open_session",
+        _session_factory(db),
+    )
+    with pytest.raises(RowSetDrifted, match="no longer NULL-tenant"):
+        await apply_plan({"audit_runs": [{"pk": 1, "tenant_id": 1}, {"pk": 2, "tenant_id": 1}]}, {"audit_runs": "id"})
+    assert db.rolled_back is True
+    assert db.updates == 0, "nothing may be written once drift is detected"
+    assert db.committed is False
+
+
+def _session_factory(db):
+    class _Ctx:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, *_exc):
+            return False
+
+    async def _open_session():
+        return _Ctx()
+
+    return _open_session
