@@ -119,6 +119,27 @@ Frontend Azure AD variables (`VITE_*`) are documented in **`frontend/.env.exampl
 
 ---
 
+## Third-party AI provider credentials (disclosure-bearing)
+
+Setting any variable below enables a **sub-processor**. Each must be declared in
+`src/core/ai_provider_disclosure.py` and published in
+`GET /api/v1/privacy/data-processing-register`; `tests/unit/test_ai_provider_disclosure.py` fails the
+build if a credential exists without a register entry. Rationale and data flows:
+[`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md) §2.0a.
+
+| Variable | Description | Source (typical) | Required environments |
+| --- | --- | --- | --- |
+| `ANTHROPIC_API_KEY` | Preferred shared-AI-client credential: library document analysis, governed-KB mapping, quiz generation, ISO analysis, incident recommendations, H&S analyst notes, audit generation/challenge. | Key Vault | Optional (live in production) |
+| `OPENAI_API_KEY` | Fallback LLM on shared-AI-client paths (selected by `AI_PROVIDER` or Anthropic-key absence). | Key Vault | Optional (live in production) |
+| `AI_PROVIDER` | Provider preference (`anthropic` \| `openai` \| `genspark`); determines which processor receives prompt content. | App Service | Optional |
+| `VOYAGE_API_KEY` | Embedding credential. Receives the **full text of every library document chunk** at index time and search query text. | Key Vault | Optional (live in production) |
+| `PINECONE_API_KEY` | Vector index credential. Pinecone **retains** embeddings plus verbatim 200-character chunk previews and tenant/document identifiers until deleted by ID. | Key Vault | Optional (live in production) |
+| `PINECONE_HOST`, `PINECONE_INDEX`, `PINECONE_ENVIRONMENT` | Index target (default index `qgp-documents`). Determines which vendor-hosted index receives content. | Key Vault / App Service | Optional |
+| `GENSPARK_API_KEY` | Legacy shared-AI-client fallback. | Key Vault | Optional (activation unconfirmed) |
+| `PERPLEXITY_API_KEY` | Horizon scanning and audit-builder research; used by the research helper even when `LIBRARY_HORIZON_PROVIDER=stub`. | Key Vault | Optional (activation unconfirmed) |
+
+---
+
 ## Azure
 
 | Variable | Description | Source (typical) | Required environments |

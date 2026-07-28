@@ -101,3 +101,23 @@ human name.
 | EA tracker (EA-03) | `docs/evidence/external-attestation-tracker.md` |
 | Art. 30 ROPA checklist | `docs/compliance/article-30-ropa-checklist.md` |
 | QGP DI resource | `qgp-docintel` (uksouth) — Key Vault `AZURE-DOCUMENT-INTELLIGENCE-*` |
+
+---
+
+## Post-closure note (2026-07-28) — disclosure follow-up
+
+This gate is not reopened. Two facts found while reconciling the published Article 30 register
+against production are recorded here because they bear on item **A**:
+
+1. Azure AI Document Intelligence was **enabled in production but named in no DPIA and in no
+   published sub-processor register** until 2026-07-28. It now appears in
+   [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §2.0a and in
+   `GET /api/v1/privacy/data-processing-register`.
+2. Item A's "Sub-processors listed on DPA / SCC schedule for the target environment" cannot be
+   evidenced from this repository for any AI processor: no vendor DPA, SCC or UK IDTA artifact is
+   filed here. The `qgp-docintel` resource being in `uksouth` is the only region fact this
+   repository establishes for an AI processor, and it is what the register now cites.
+
+The register's UK South claim for this processor rests on the resource recorded above. If the
+deployed `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` ever points at a resource in another region, the
+register becomes inaccurate — that value is not verifiable from the repository.
