@@ -3,7 +3,7 @@
 **Document ID:** DPIA-QGP-OCR-AI-2026-001  
 **Platform:** Quality Governance Platform (QGP)  
 **Version:** 2.0  
-**Status:** Body complete — **re-review required**: v2.0 adds processors that were already live in production and undisclosed (Anthropic, OpenAI, Voyage AI, Pinecone, Azure AI Document Intelligence). DPO residual-risk acceptance (EA-03) was recorded against v1.0, which covered Mistral and Gemini only.  
+**Status:** Body complete — **re-review required for the v2.0 scope.** EA-03 residual-risk acceptance was given by **David Harris on 2026-07-28** (see `e4-dual-ocr-redaction-gate.md` sign-off log and its note on retrospective dating), but that acceptance was recorded against the **v1.0 scope, which covered Mistral, Gemini and Azure AI Document Intelligence only**. v2.0 adds four processors that were already live in production and undisclosed — Anthropic, OpenAI, Voyage AI and Pinecone — and **no residual-risk acceptance exists for those**. The signature is real and is not superseded; it simply does not reach the expanded set.  
 **Owner:** Privacy / Platform Engineering  
 **Related:** [`../privacy/dpia-template.md`](../privacy/dpia-template.md), [`../privacy/dpia-checklist.md`](../privacy/dpia-checklist.md), [`../privacy/dpia-incidents.md`](../privacy/dpia-incidents.md), [`dpia-quality-governance-platform.md`](dpia-quality-governance-platform.md), [`e4-dual-ocr-redaction-gate.md`](e4-dual-ocr-redaction-gate.md)
 
@@ -232,12 +232,37 @@ v2.0 cannot carry that acceptance forward unchanged:
 
 **Residual risk for the transfers in §2.0a is therefore stated as HIGH and unaccepted, pending controller/DPO decision.** This is a documentation and disclosure statement only — no AI feature has been disabled or gated by this assessment; enablement remains the controller's decision.
 
+> **CORRECTION NOTICE — 2026-07-28. Two of that statement's three conditions are not
+> currently met, and the assessment was scoped to the wrong set of processors.**
+>
+> **The processor set is wrong.** This DPIA assesses egress to Mistral and Gemini. The
+> data controller confirmed on 28/07 that **Pinecone, Voyage, OpenAI and Anthropic are
+> also enabled and in use in production**, and Azure Document Intelligence is enabled
+> too. None of the five appears in this assessment or in the published Article 30
+> register. The Pinecone/Voyage pair is a different risk class from everything assessed
+> here: Voyage generates embeddings and **Pinecone retains them** in a third-country
+> vector database (index `qgp-documents`), so this is persistent storage outside the UK,
+> not transient processing that fails soft. A DPIA that does not name the processor that
+> *retains* the content is not an assessment of the actual processing.
+>
+> **"Optional / fail-closed when unconfigured" no longer describes production**, because
+> the keys are configured and the providers are live.
+>
+> **Pre-egress redaction is still a planned control, not an implemented one**, so the
+> minimisation posture that the E4 gate's Ops row attests to is not in force.
+>
+> The residual-risk acceptance recorded below is therefore sound as to the question it was
+> put (OCR egress to Mistral/Gemini/Azure DI) and does **not** extend to Pinecone, Voyage,
+> OpenAI or Anthropic, which were never assessed. Re-scoping this DPIA is outstanding
+> work, tracked as C-31.
+
 | Role | Name | Date | Decision |
 | --- | --- | --- | --- |
-| Assessor | Platform Engineering | 2026-07-11 | v1.0 DPIA body complete (Mistral / Gemini only) |
+| Assessor | Platform Engineering | 2026-07-11 | v1.0 DPIA body complete (Mistral / Gemini / Azure DI only) |
+| DPO / Privacy lead | **David Harris** | 2026-07-28 | **Accept residual risk — v1.0 scope only** (Mistral / Gemini / Azure DI). See the correction notice above; this acceptance does **not** extend to Pinecone, Voyage AI, OpenAI or Anthropic. |
 | Assessor | Platform Engineering | 2026-07-28 | v2.0 scope corrected to the processors actually live in production |
-| Data controller / accountable owner | David Harris | 2026-07-28 | Confirmed in writing that Pinecone, Voyage AI, OpenAI and Anthropic are enabled and in use in production |
-| DPO / Privacy lead | _Pending — v2.0 scope_ | | Accept / reject residual risk for the expanded processor set |
+| Data controller / accountable owner | **David Harris** | 2026-07-28 | Confirmed in writing that Pinecone, Voyage AI, OpenAI and Anthropic are enabled and in use in production |
+| DPO / Privacy lead | _Pending — v2.0 scope_ | | Accept / reject residual risk for the expanded processor set (Pinecone, Voyage AI, OpenAI, Anthropic) |
 
 ---
 
