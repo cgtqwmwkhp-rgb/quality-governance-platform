@@ -5,10 +5,13 @@ reminders, and compliance reporting.
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.policy_acknowledgment import (
@@ -20,6 +23,27 @@ from src.domain.models.policy_acknowledgment import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class MeasuredCompliance:
+    """Every count in ``metrics`` was read from the database."""
+
+    metrics: Dict[str, Any]
+
+
+@dataclass(frozen=True)
+class UnmeasurableCompliance:
+    """The compliance figures could not be read, so none are carried.
+
+    This type deliberately has no numeric attribute. A caller cannot accidentally
+    render a rate from it; it has to handle the missing tables it names.
+    """
+
+    missing_tables: Tuple[str, ...]
+
+
+ComplianceDashboardResult = Union[MeasuredCompliance, UnmeasurableCompliance]
 
 
 class PolicyAcknowledgmentService:
@@ -317,8 +341,44 @@ class PolicyAcknowledgmentService:
             ack.last_reminder_at = datetime.now(timezone.utc)
             await self.db.commit()
 
-    async def get_compliance_dashboard(self, tenant_id: int | None = None) -> Dict[str, Any]:
-        """Get overall policy acknowledgment compliance dashboard."""
+    # Every count below aggregates this one table, so the dashboard is measurable
+    # exactly when it exists. A count added over a second table must be named here
+    # too, or its absence would be reported as a real zero.
+    COMPLIANCE_DASHBOARD_TABLES: Tuple[str, ...] = (PolicyAcknowledgment.__tablename__,)
+
+    async def absent_dashboard_tables(self) -> Tuple[str, ...]:
+        """Which of the tables the dashboard aggregates are not in the database.
+
+        Asked before measuring rather than inferred from a failed query: production
+        is built by Alembic while the models are the app's own idea of the schema,
+        so the two can disagree, and "this table is not here" has to be reported as
+        such instead of being caught and turned into zeros.
+        """
+        names = self.COMPLIANCE_DASHBOARD_TABLES
+
+        def _absent(sync_conn) -> Tuple[str, ...]:
+            inspector = sa_inspect(sync_conn)
+            return tuple(name for name in names if not inspector.has_table(name))
+
+        connection = await self.db.connection()
+        return await connection.run_sync(_absent)
+
+    async def get_compliance_dashboard(self, tenant_id: int | None = None) -> ComplianceDashboardResult:
+        """Overall policy acknowledgment compliance, or a statement that it is unknown.
+
+        Returns :class:`UnmeasurableCompliance` when a backing table is absent. No
+        exception is swallowed: a query that fails for any other reason propagates,
+        because a caller being told "0% acknowledged" when the truth is "this could
+        not be measured" is a worse outcome than an error.
+        """
+        absent = await self.absent_dashboard_tables()
+        if absent:
+            logger.error(
+                "policy acknowledgment compliance is unmeasurable — absent tables: %s",
+                ", ".join(absent),
+            )
+            return UnmeasurableCompliance(missing_tables=absent)
+
         tenant_filter: list = []
         if tenant_id is not None:
             tenant_filter.append(PolicyAcknowledgment.tenant_id == tenant_id)
@@ -359,14 +419,16 @@ class PolicyAcknowledgmentService:
         # Policies requiring attention (more than 20% overdue)
         # This would require more complex aggregation
 
-        return {
-            "total_assignments": total,
-            "completed": completed,
-            "pending": pending,
-            "overdue": overdue,
-            "completion_rate": completion_rate,
-            "overdue_rate": round((overdue / total * 100), 1) if total > 0 else 0,
-        }
+        return MeasuredCompliance(
+            metrics={
+                "total_assignments": total,
+                "completed": completed,
+                "pending": pending,
+                "overdue": overdue,
+                "completion_rate": completion_rate,
+                "overdue_rate": round((overdue / total * 100), 1) if total > 0 else 0,
+            }
+        )
 
 
 class DocumentReadLogService:

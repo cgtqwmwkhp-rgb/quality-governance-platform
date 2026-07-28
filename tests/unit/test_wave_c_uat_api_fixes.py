@@ -21,6 +21,7 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
+from src.domain.services.policy_acknowledgment import MeasuredCompliance, UnmeasurableCompliance
 
 
 def test_global_search_dual_mount_without_trailing_slash():
@@ -167,27 +168,71 @@ def test_format_request_with_empty_signers():
     assert payload["signers"] == []
 
 
-@pytest.mark.asyncio
-async def test_policy_ack_dashboard_fail_soft_on_missing_table():
+async def _dashboard_with_service(service) -> object:
     db = MagicMock()
     db.rollback = AsyncMock()
-
-    service = MagicMock()
-    service.get_compliance_dashboard = AsyncMock(side_effect=ProgrammingError("SELECT", {}, Exception("missing table")))
-
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
             "src.api.routes.policy_acknowledgment.PolicyAcknowledgmentService",
             lambda _db: service,
         )
-        response = await get_compliance_dashboard(
-            db=db,
-            current_user=SimpleNamespace(id=1, tenant_id=1),
-        )
+        return await get_compliance_dashboard(db=db, current_user=SimpleNamespace(id=1, tenant_id=1))
 
-    assert response.total_assignments == 0
-    assert response.completion_rate == 0.0
-    db.rollback.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_policy_ack_dashboard_reports_unmeasurable_instead_of_zero():
+    """C-23 — an absent backing table must not be answered with 0% compliance.
+
+    This replaces ``test_policy_ack_dashboard_fail_soft_on_missing_table``, which
+    asserted ``total_assignments == 0`` and ``completion_rate == 0.0`` for exactly
+    this condition. That was the fabricated measurement: "0% acknowledged" and
+    "acknowledgment could not be measured" are different statements, and only the
+    second one was true. The assertions here are strictly stronger — the response
+    must carry no number at all, so nothing can be rendered as a percentage.
+
+    ``tests/integration/test_policy_ack_dashboard_honesty.py`` pins the same
+    contract against a database with the table genuinely dropped; this test keeps
+    the route's mapping covered without a database.
+    """
+    service = MagicMock()
+    service.get_compliance_dashboard = AsyncMock(
+        return_value=UnmeasurableCompliance(missing_tables=("policy_acknowledgments",))
+    )
+
+    response = await _dashboard_with_service(service)
+
+    assert response.measurement == "unmeasurable"
+    assert response.missing_tables == ["policy_acknowledgments"]
+    assert not hasattr(response, "metrics")
+    numeric = [
+        key
+        for key, value in response.model_dump().items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    ]
+    assert numeric == [], f"unmeasurable dashboard offered numbers: {numeric}"
+
+
+@pytest.mark.asyncio
+async def test_policy_ack_dashboard_still_reports_a_real_measurement():
+    service = MagicMock()
+    service.get_compliance_dashboard = AsyncMock(
+        return_value=MeasuredCompliance(
+            metrics={
+                "total_assignments": 4,
+                "completed": 1,
+                "pending": 3,
+                "overdue": 0,
+                "completion_rate": 25.0,
+                "overdue_rate": 0.0,
+            }
+        )
+    )
+
+    response = await _dashboard_with_service(service)
+
+    assert response.measurement == "measured"
+    assert response.metrics.total_assignments == 4
+    assert response.metrics.completion_rate == 25.0
 
 
 @pytest.mark.asyncio
