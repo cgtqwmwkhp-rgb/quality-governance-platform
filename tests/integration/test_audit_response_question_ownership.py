@@ -16,14 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.audit import (
-    AuditQuestion,
-    AuditResponse,
-    AuditRun,
-    AuditSection,
-    AuditStatus,
-    AuditTemplate,
-)
+from src.domain.models.audit import AuditQuestion, AuditResponse, AuditRun, AuditSection, AuditStatus, AuditTemplate
 from tests.conftest import generate_test_reference
 
 CALLER_TENANT_ID = 1
