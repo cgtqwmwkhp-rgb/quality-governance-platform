@@ -84,6 +84,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Check code formatting (black)
@@ -304,6 +305,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run fail-fast proof tests (BLOCKING)
@@ -331,6 +333,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run unit tests
@@ -431,7 +434,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
           pip install cyclonedx-bom
 
       - name: Generate SBOM (CycloneDX)
@@ -521,6 +524,60 @@ jobs:
             echo "lockfile inside an unrelated pull request."
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Every job that needs the application's dependencies now installs
+  # requirements.lock, which is hash-pinned, so a given commit is tested against
+  # a dependency set that can be named. Before this, 23 jobs re-resolved the
+  # ranges in requirements.txt at job time: a new upstream release changed what
+  # every open pull request was tested against with no commit anywhere.
+  dependency-integrity:
+    name: Dependency Install Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Deliberately no pip cache. The point of this job is to prove the
+      # lockfile installs from scratch on the runner platform, and a warm cache
+      # would hide a package that has no wheel for linux/x86_64 + cpython 3.11.
+      - name: Install the locked runtime set
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+
+      - name: Record the dependency set this commit was tested against
+        run: |
+          python --version
+          pip --version
+          pip list --format=freeze > installed-from-lock.txt
+          echo "packages installed from the lockfile: $(wc -l < installed-from-lock.txt)"
+
+      # Reproduces the two-step install the test jobs use. Verified locally that
+      # layering the dev tooling uninstalls and upgrades nothing, but that was
+      # measured on macOS/arm64; this proves it on the platform CI actually runs.
+      - name: Layer the development tooling on top
+        run: pip install -r requirements-dev.txt
+
+      - name: Prove the installed environment still matches the lockfile
+        run: |
+          pytest tests/test_lockfile_environment_match.py \
+                 tests/test_dependency_workflow_pinning.py -v
+
+      # Release evidence: for an ISO-audited product "CI was green" has to be
+      # able to say green against what.
+      - name: Upload the installed dependency manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installed-dependency-manifest
+          path: installed-from-lock.txt
+          retention-days: 90
+
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -563,6 +620,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run Alembic migrations
@@ -629,6 +687,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
           pip install pip-audit
 
@@ -680,7 +739,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
 
       - name: Verify application starts
         env:
@@ -755,6 +814,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run Alembic migrations
@@ -908,6 +968,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run Alembic migrations
@@ -1048,6 +1109,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run Alembic migrations
@@ -1317,7 +1379,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
 
       - name: Generate current OpenAPI schema
         env:
@@ -1418,6 +1480,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run contract tests
@@ -1491,6 +1554,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
           pip install locust
 
@@ -1614,6 +1678,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
           pip install "mutmut<3"
 
@@ -1739,7 +1804,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
 
       - name: Apply migrations then check for drift
         env:
@@ -1835,7 +1900,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements.lock
           alembic upgrade head
           PYTHONPATH="${{ github.workspace }}" uvicorn src.main:app --host 0.0.0.0 --port 8000 &
           # Startup pre-warms the OpenAPI schema (~5s), so a fixed sleep raced readiness
@@ -1901,7 +1966,8 @@ jobs:
 
       - name: Check Python licenses
         run: |
-          pip install -r requirements.txt pip-licenses
+          pip install -r requirements.lock
+          pip install pip-licenses
           pip-licenses --fail-on="GPL-3.0-only;AGPL-3.0-only;SSPL-1.0" --format=json --output-file=python-licenses.json
           echo "[OK] Python license check passed"
 
@@ -1988,7 +2054,7 @@ jobs:
           cache-dependency-path: requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.lock
 
       - name: Run schema constraint validation
         run: python3 scripts/validate_schema_constraints.py
@@ -2068,6 +2134,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
           pip install schemathesis
 
@@ -2132,7 +2199,7 @@ jobs:
     name: All Checks Passed
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
-    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build, adr-lifecycle-check, registry-validation, schema-constraint-lint, error-code-coverage, schemathesis-api-tests]
+    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, dependency-integrity, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build, adr-lifecycle-check, registry-validation, schema-constraint-lint, error-code-coverage, schemathesis-api-tests]
     
     steps:
       - name: Checkout code
