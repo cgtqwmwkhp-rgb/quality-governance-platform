@@ -18,8 +18,9 @@ from src.domain.exceptions import ValidationError
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
-from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
+from src.domain.models.rta import RoadTrafficCollision, RTAStatus
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.rta_severity import derive_portal_rta_severity, interpret_rta_injury_answer
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -216,13 +217,14 @@ class PortalService:
 
     async def _submit_rta(self, data: dict, is_anonymous: bool, tracking_code: str) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "rta", RoadTrafficCollision)
-        rta_severity_map = {
-            "low": RTASeverity.DAMAGE_ONLY,
-            "medium": RTASeverity.MINOR_INJURY,
-            "high": RTASeverity.SERIOUS_INJURY,
-            "critical": RTASeverity.FATAL,
-        }
-        rta_severity = rta_severity_map.get(data.get("severity", "low").lower(), RTASeverity.DAMAGE_ONLY)
+        # data["severity"] is the portal's triage word and says nothing about human
+        # harm, so it must not choose an RTASeverity. Injury evidence decides.
+        raw_submission = data.get("reporter_submission")
+        submission: dict[str, Any] = raw_submission if isinstance(raw_submission, dict) else {}
+        rta_severity = derive_portal_rta_severity(
+            driver_injured=interpret_rta_injury_answer(submission.get("driver_injured")),
+            third_party_injured=interpret_rta_injury_answer(submission.get("third_party_injured")),
+        )
 
         display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
         rta = RoadTrafficCollision(
