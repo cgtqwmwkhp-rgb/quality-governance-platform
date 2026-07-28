@@ -131,6 +131,7 @@ async def test_get_summary_reports_essential_compliance_and_pass_rate(db: AsyncS
         AuditResponse(
             run_id=completed_run.id,
             question_id=question.id,
+            tenant_id=TENANT_ID,
             response_value="fail",
             score=0.0,
             max_score=1.0,
@@ -246,6 +247,7 @@ async def test_get_summary_ignores_closed_findings_for_essential_compliance(db: 
         AuditResponse(
             run_id=run.id,
             question_id=open_question.id,
+            tenant_id=TENANT_ID,
             response_value="fail",
             score=0.0,
             max_score=1.0,
@@ -256,6 +258,7 @@ async def test_get_summary_ignores_closed_findings_for_essential_compliance(db: 
         AuditResponse(
             run_id=run.id,
             question_id=closed_question.id,
+            tenant_id=TENANT_ID,
             response_value="fail",
             score=0.0,
             max_score=1.0,
@@ -397,6 +400,7 @@ async def test_get_critical_queue_lists_failed_open_finding(db: AsyncSession):
         AuditResponse(
             run_id=run.id,
             question_id=question.id,
+            tenant_id=TENANT_ID,
             response_value="fail",
             applicability="applicable",
         )
@@ -463,7 +467,14 @@ async def test_get_critical_queue_skips_essential_question_hidden_by_live_condit
     )
     db.add(hidden_run)
     await db.flush()
-    db.add(AuditResponse(run_id=hidden_run.id, question_id=source_question.id, response_value="no"))
+    db.add(
+        AuditResponse(
+            run_id=hidden_run.id,
+            question_id=source_question.id,
+            tenant_id=TENANT_ID,
+            response_value="no",
+        )
+    )
 
     shown_run = AuditRun(
         template_id=template.id,
@@ -475,7 +486,14 @@ async def test_get_critical_queue_skips_essential_question_hidden_by_live_condit
     )
     db.add(shown_run)
     await db.flush()
-    db.add(AuditResponse(run_id=shown_run.id, question_id=source_question.id, response_value="yes"))
+    db.add(
+        AuditResponse(
+            run_id=shown_run.id,
+            question_id=source_question.id,
+            tenant_id=TENANT_ID,
+            response_value="yes",
+        )
+    )
     await db.commit()
 
     service = AuditAnalyticsService(db)
@@ -503,6 +521,7 @@ async def test_export_runs_csv_includes_dimensions_and_applicability(db: AsyncSe
         AuditResponse(
             run_id=run.id,
             question_id=question.id,
+            tenant_id=TENANT_ID,
             response_value="pass",
             score=1.0,
             max_score=1.0,
@@ -550,8 +569,26 @@ async def test_complete_run_essential_fail_overrides_passing_score(db: AsyncSess
     await db.commit()
 
     run = await _make_run(db, template, status=AuditStatus.IN_PROGRESS)
-    db.add(AuditResponse(run_id=run.id, question_id=question.id, response_value="fail", score=0.0, max_score=1.0))
-    db.add(AuditResponse(run_id=run.id, question_id=bonus_question.id, response_value="pass", score=4.0, max_score=4.0))
+    db.add(
+        AuditResponse(
+            run_id=run.id,
+            question_id=question.id,
+            tenant_id=TENANT_ID,
+            response_value="fail",
+            score=0.0,
+            max_score=1.0,
+        )
+    )
+    db.add(
+        AuditResponse(
+            run_id=run.id,
+            question_id=bonus_question.id,
+            tenant_id=TENANT_ID,
+            response_value="pass",
+            score=4.0,
+            max_score=4.0,
+        )
+    )
     await db.commit()
 
     service = AuditService(db)

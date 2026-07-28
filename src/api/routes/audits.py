@@ -76,7 +76,7 @@ from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.audit_analytics_service import SUPPORTED_GROUP_BY, AuditAnalyticsService
 from src.domain.services.audit_scoring_service import AuditScoringService
-from src.domain.services.audit_service import AuditService
+from src.domain.services.audit_service import AuditService, require_run_tenant_id
 from src.domain.services.external_audit_intake_template_resolver import (
     ExternalAuditIntakeTemplateResolver,
     IntakeTemplateResolution,
@@ -1438,6 +1438,7 @@ async def create_response(
     payload = AuditScoringService.apply_derived_scores(question, response_data.model_dump())
     response = AuditResponse(
         run_id=run_id,
+        tenant_id=require_run_tenant_id(run),
         **payload,
     )
 

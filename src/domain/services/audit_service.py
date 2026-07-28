@@ -22,7 +22,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.domain.exceptions import NotFoundError, StateTransitionError, ValidationError
+from src.domain.exceptions import BadRequestError, NotFoundError, StateTransitionError, ValidationError
 from src.domain.models.asset import AssetType, TemplateAssetType
 from src.domain.models.audit import (
     AuditFinding,
@@ -232,6 +232,36 @@ class RunDetail:
     run: AuditRun
     template_name: str | None
     completion_percentage: float
+
+
+# ---------------------------------------------------------------------------
+# Tenancy of rows owned by an audit run
+# ---------------------------------------------------------------------------
+
+
+def require_run_tenant_id(run: AuditRun) -> int:
+    """Return the tenant to stamp on a row owned by *run*.
+
+    The run is the authority, not the caller. The caller's own tenant is the
+    wrong source even where the two agree today: it attributes the row to
+    whoever happened to write it, so the day a run is reachable by someone
+    outside its tenant, the child row is silently relabelled to match the writer
+    instead of standing out as misattributed.
+
+    ``audit_runs.tenant_id`` is declared ``nullable=False`` here but is still
+    NULLABLE in the migrated schema, so this can be ``None`` at runtime.
+    Refusing is the only option that neither writes an unattributed row (the
+    defect this replaces) nor invents an attribution that no authorisation
+    decision supports.
+    """
+    tenant_id = run.tenant_id
+    if tenant_id is None:
+        raise BadRequestError(
+            "Audit run is not attributed to a tenant and cannot accept new records. "
+            "The run needs a tenant before it can be executed.",
+            details={"run_id": run.id},
+        )
+    return tenant_id
 
 
 # ---------------------------------------------------------------------------
@@ -2099,7 +2129,7 @@ class AuditService:
             raise NotFoundError(f"AuditQuestion {data['question_id']} not found")
         payload = AuditScoringService.apply_derived_scores(question, data)
 
-        response = AuditResponse(run_id=run_id, **payload)
+        response = AuditResponse(run_id=run_id, tenant_id=require_run_tenant_id(run), **payload)
         self.db.add(response)
         await self.db.flush()
         await self.db.refresh(response)
