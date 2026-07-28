@@ -36,9 +36,11 @@ If **any** box is checked, complete a DPIA before production enablement. For OCR
 - [ ] Processor / sub-processor contracts and DPA schedule updated if applicable
 - [ ] Residual risk accepted by accountable owner; review date set (≤ 12 months)
 
-### OCR / AI import completeness (when applicable)
+### OCR / AI completeness (when applicable)
 
-- [ ] Sub-processors (Mistral, Google Gemini) listed on DPA schedule for the environment
+- [ ] Sub-processors listed on the DPA schedule for the environment — the full set in [`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md) §2.0a (Mistral, Google Gemini, Azure AI Document Intelligence, Anthropic, OpenAI, Voyage AI, **Pinecone**; Genspark / Perplexity if keyed), not the OCR pair alone
+- [ ] Any processor that **retains** content (currently Pinecone) assessed for storage limitation, erasure and international transfer separately from transient OCR/LLM egress
+- [ ] New AI provider credential declared in `src/core/ai_provider_disclosure.py` and in the published register (the build fails otherwise)
 - [ ] Production API keys only after residual-risk acceptance; placeholders blocked in production
 - [ ] Operators briefed on minimising special-category content in uploaded packs
 - [ ] Legal-hold path understood for evidence assets (`retention_policy=legal_hold`)
