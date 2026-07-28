@@ -60,7 +60,9 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 | `user-accounts` | User account administration | legitimate_interest | `purpose`, `data_subject_categories` | `users_deleted` horizon post-deactivation | Controllers may also rely on contract |
 | `incidents` | Incident / H&S reporting | legal_obligation | `purpose`, `data_subject_categories` | incidents policy days | May include Art. 9 special category |
 | `audit-findings` | Audit findings and evidence | legitimate_interest | `purpose`, `data_subject_categories` | audit_runs policy days | Blob + PostgreSQL |
-| `ocr-ai-import` | External audit OCR / AI import | legitimate_interest | `purpose`, `data_subject_categories` | Per import / evidence policy | Optional Mistral / Gemini; DPIA required |
+| `ocr-ai-import` | External audit OCR / AI import | legitimate_interest | `purpose`, `data_subject_categories` | Per import / evidence policy | Mistral / Gemini / Azure DI; DPIA required |
+| `library-document-index` | Governance library document indexing and semantic search | legitimate_interest | `purpose`, `data_subject_categories`, `third_country_retention` | Follows source document lifecycle — no independent horizon | **Pinecone retains** vectors + verbatim chunk previews; Voyage receives full chunk text |
+| `ai-assisted-case-analysis` | AI-assisted analysis of case-register and audit records | legitimate_interest | `purpose`, `data_subject_categories` | incidents horizon (source records) | Incident / near-miss free text transmitted to Anthropic (or OpenAI / Genspark) |
 | `auth-and-request-logs` | Authentication and API request logs | legitimate_interest | `purpose`, `data_subject_categories` | session_logs policy days | Operational security |
 | `complaints` | Complaints / grievance handling | legitimate_interest | `purpose`, `data_subject_categories` | complaints policy days | Added in Preferred S15 stub expand |
 | `near-misses` | Near-miss / hazard reporting | legitimate_interest | `purpose`, `data_subject_categories` | near_misses policy days | Added in Preferred S15 stub expand |
@@ -78,13 +80,22 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 
 ## 5. Sub-processors (recipients)
 
-| Processor | Role | Optional | Transfer mechanism (documented) | DPA on file? |
-|-----------|------|----------|----------------------------------|--------------|
-| Microsoft Azure | Infrastructure | No | UK/EEA hosting | Operator responsibility — confirm Azure DPA |
-| Mistral AI | OCR / extraction | Yes | SCC or UK IDTA via vendor DPA | **Pending** until production keys + legal file |
-| Google Gemini | Multimodal review | Yes | SCC or UK IDTA via vendor DPA | **Pending** until production keys + legal file |
+| Processor | Role | Optional | Retention posture | Transfer mechanism (established) | DPA on file? |
+|-----------|------|----------|-------------------|----------------------------------|--------------|
+| Microsoft Azure | Infrastructure | No | Hosts platform data | UK/EEA hosting | Operator responsibility — confirm Azure DPA |
+| Azure AI Document Intelligence | Dual-OCR / library failover | Yes | Transient | UK/EEA hosting per E4 gate resource evidence (`qgp-docintel`, uksouth) | Microsoft DPA — operator confirms resource |
+| Mistral AI | OCR / extraction | Yes | Transient | **Unknown** | **Pending** — keys are live |
+| Google Gemini | Multimodal review | Yes | Transient | **Unknown** | **Pending** — keys are live |
+| Anthropic | Document + case analysis | Yes | Transient | **Unknown** | **Pending** — keys are live |
+| OpenAI | Fallback LLM | Yes | Transient | **Unknown** | **Pending** — keys are live |
+| Voyage AI | Embeddings | Yes | Transient | **Unknown** | **Pending** — keys are live |
+| **Pinecone** | Vector index | Yes | **Retains content until deleted by QGP** | **Unknown** | **Pending** — keys are live |
+| Genspark.ai | Legacy fallback LLM | Yes | Transient | **Unknown** | **Pending**; activation unconfirmed |
+| Perplexity | Horizon / research | Yes | Transient | **Unknown** | **Pending**; activation unconfirmed |
 
-- [ ] No production AI keys without DPA path + OCR DPIA residual acceptance (EA-03 / DPIA §9)
+- [x] ~~No production AI keys without DPA path + OCR DPIA residual acceptance~~ — **breached**: production keys for Mistral, Gemini, Anthropic, OpenAI, Voyage and Pinecone are live without a DPA artifact in the repository (controller-confirmed 2026-07-28). Recorded here rather than restated as an intention.
+- [ ] Establish and record a transfer mechanism for each processor above, replacing `Unknown`
+- [ ] Confirm whether the Pinecone index region is inside or outside the UK/EEA
 
 ---
 
@@ -104,6 +115,7 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.7 | 2026-07-28 | Platform Engineering | Sub-processor table expanded to the processors actually live in production (Azure DI, Anthropic, OpenAI, Voyage AI, Pinecone) with retention posture; transfer mechanisms marked **Unknown** rather than guessed; two new activity rows for library indexing and AI-assisted case analysis |
 | 1.5 | 2026-07-12 | Platform Engineering | Gaps A/B/P1 surfaced on LIVE stub via `roles_and_contacts` — still **unsigned** / DPO identity not invented |
 | 1.6 | 2026-07-20 | Platform Engineering | Added per-activity source pointers and controller-review status to the LIVE stub — still **unsigned**, not a completed controller ROPA |
 | 1.4 | 2026-07-12 | Platform Engineering | Gap G surfaced on LIVE stub via `international_transfers` — still **unsigned** / AI vendor DPAs not invented |

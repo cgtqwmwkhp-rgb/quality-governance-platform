@@ -82,8 +82,9 @@ Copy outcomes into `docs/evidence/dpo-signoff-YYYY-Q?.md` when the DPO actually 
 ### 4.2 Risks and conditions
 
 - [ ] Special-category / RIDDOR flows accepted or conditioned
-- [ ] OCR/AI Medium residual risk accepted, rejected, or conditioned (keys remain off until accepted)
-- [ ] Sub-processor list reviewed (Azure required; Mistral / Gemini optional when keys set)
+- [ ] OCR/AI residual risk accepted, rejected, or conditioned — companion DPIA v2.0 §8 now states it as **High and unaccepted**; production keys are already live (controller-confirmed 2026-07-28), so "keys remain off until accepted" no longer describes reality
+- [ ] Sub-processor list reviewed (Azure required; Azure DI, Mistral, Gemini, Anthropic, OpenAI, Voyage AI and **Pinecone** live in production; Genspark / Perplexity if keyed)
+- [ ] Pinecone's persistent retention of document-derived content specifically considered (not the same question as transient OCR egress)
 - [ ] No high residual risk requiring ICO Art. 36 prior consultation (or consultation initiated)
 
 ### 4.3 Machine-readable consistency
@@ -116,8 +117,9 @@ Engineering readiness summary:
 | Controller / processor identity | Documented (tenant controller; Plantexpand operator); LIVE `roles_and_contacts` | DPO confirms roles per DPA — DPO identity not invented |
 | Purposes + lawful bases | Inventory in GDPR §1 + LIVE `activities[].purpose` / `lawful_basis` | DPO confirms per tenant workflow |
 | Data subject / data categories | DPIA + LIVE `data_subject_categories` / `data_categories` | Stub taxonomy only — not full controller ROPA |
-| Recipients / subprocessors | LIVE `subprocessors` + DPIA OCR companion | Signed vendor DPAs still required where AI enabled |
-| International transfers | UK South primary; LIVE `international_transfers` + AI vendors vendor-managed | Confirm SCC/UK IDTA before production AI keys — **no signed DPAs invented** |
+| Recipients / subprocessors | LIVE `subprocessors` (10 entries incl. Anthropic, OpenAI, Voyage AI, Pinecone, Azure DI) + DPIA OCR companion §2.0a | Signed vendor DPAs still required — AI is already enabled |
+| International transfers | UK South primary; LIVE `international_transfers` with AI regions and mechanisms marked `unknown_not_established_in_repository` | Establish each AI vendor's region and safeguard — production AI keys are already live, so this is remediation, not a precondition |
+| Third-party retention | LIVE `subprocessors[].retention_posture` / `retains_content`; `international_transfers.retaining_subprocessors` | **Pinecone retains** document-derived content until QGP deletes it |
 | Retention | Retention policy §7 + LIVE `retention` block | Legal-hold schema gap acknowledged |
 | Security measures (general) | DPIA §5 + security baseline + LIVE `technical_organisational_measures` | Not a substitute for EA-02 pen-test |
 

@@ -125,11 +125,29 @@ DPIA + Art. 30 attestation pack: [`s15-dpia-art30-attestation-pack.md`](s15-dpia
 
 Sub-processors disclosed (also on `/privacy/contact`):
 
-| Processor | Role | Optional |
-|-----------|------|----------|
-| Microsoft Azure | Infrastructure (hosting, DB, blob, Entra ID, logs, Key Vault) | No |
-| Mistral AI | OCR / structured extraction | Yes (keys configured) |
-| Google Gemini | Multimodal review | Yes (keys configured) |
+| Processor | Role | Optional | Retention posture | Region / transfer mechanism |
+|-----------|------|----------|-------------------|------------------------------|
+| Microsoft Azure | Infrastructure (hosting, DB, blob, Entra ID, logs, Key Vault) | No | Hosts platform data | UK South — UK/EEA hosting |
+| Azure AI Document Intelligence | Dual-OCR / library OCR failover (enabled in production, E4 gate closed) | Yes | Transient | UK South per E4 gate resource evidence (`qgp-docintel`, uksouth) |
+| Mistral AI | OCR / structured extraction | Yes (live in production) | Transient | **Unknown** |
+| Google Gemini | Multimodal review | Yes (live in production) | Transient | **Unknown** |
+| Anthropic | Document + case analysis (preferred shared AI client) | Yes (live in production) | Transient | **Unknown** |
+| OpenAI | Fallback LLM on shared AI client paths | Yes (live in production) | Transient | **Unknown** |
+| Voyage AI | Chunk and query embeddings | Yes (live in production) | Transient | **Unknown** |
+| **Pinecone** | **Vector index — stores embeddings and verbatim chunk previews** | Yes (live in production) | **Retains content until deleted by QGP** | **Unknown** |
+| Genspark.ai | Legacy shared-AI-client fallback | Yes | Transient | **Unknown**; activation not confirmed |
+| Perplexity | Horizon scanning / audit-builder research | Yes | Transient | **Unknown**; activation not confirmed |
+
+`Unknown` is literal, not a placeholder for "probably fine": no client in the codebase pins a
+processing region and no vendor DPA / SCC / UK IDTA artifact exists in this repository for the
+third-party AI processors. The controller must establish each vendor's location and safeguard.
+Azure AI Document Intelligence is the one AI processor with a sourced region claim (E4 gate). Detail, data flows and
+what each processor actually receives: [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §2.0a and §3.
+
+The provider ↔ credential ↔ disclosure join is enforced in code
+([`src/core/ai_provider_disclosure.py`](../../src/core/ai_provider_disclosure.py)): adding a provider
+credential to `Settings` without a register entry fails
+`tests/unit/test_ai_provider_disclosure.py`.
 
 ---
 

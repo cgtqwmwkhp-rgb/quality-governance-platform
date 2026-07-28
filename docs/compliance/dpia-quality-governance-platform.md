@@ -136,14 +136,22 @@ Each data category processed is necessary for the stated purpose:
 | R03 | Data retention beyond permitted period | 2 | 3 | 6 | Automated retention enforcement (`retention-automation-evidence.md`), quarterly audit | 2 |
 | R04 | Data subject rights request not fulfilled | 2 | 3 | 6 | DSR workflow in admin panel; 30-day SLA tracked in CAPA | 2 |
 | R05 | Breach notification delay > 72 hours | 2 | 4 | 8 | Incident response runbook (`INCIDENT_TEMPLATE.md`), Azure Monitor alerts | 3 |
-| R06 | Third-party processor non-compliance | 2 | 4 | 8 | Azure DPA in place; no other sub-processors outside Microsoft | 3 |
+| R06 | Third-party processor non-compliance | 2 | 4 | 8 | Azure DPA in place. **Correction (2026-07-28): there are sub-processors outside Microsoft.** Mistral, Google Gemini, Anthropic, OpenAI, Voyage AI and Pinecone are live in production and no vendor DPA artifact is on file — see [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §2.0a | **Re-score required** |
 | R07 | Accidental exposure via API (misconfigured endpoint) | 2 | 4 | 8 | OpenAPI contract tests, DAST advisory scan, Schemathesis property tests (CI) | 3 |
-| R08 | AI/GenSpark processing of PII without consent | 1 | 5 | 5 | GenSpark API called with anonymised finding IDs only; no PII in prompt | 1 |
+| R08 | AI processing of PII | 1 | 5 | 5 | **Correction (2026-07-28): "anonymised finding IDs only; no PII in prompt" is not accurate for current code.** Library document text (≤50k chars), incident descriptions and case reference numbers are transmitted to the shared AI client (Anthropic, or OpenAI / Genspark by precedence) — see [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §3.2–§3.3 | **Re-score required** |
 
 ### 4.2 Overall Risk Conclusion
 
 Residual risk scores are all ≤ 4 (Low–Medium). The processing can proceed. No residual High risks remain
 after mitigation. Continued monitoring via Azure Monitor alerts and quarterly DPIA review is required.
+
+> **Superseded in part (2026-07-28).** This conclusion predates disclosure of the AI processors that
+> are live in production. R06 and R08 above need re-scoring, and the companion DPIA
+> [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) v2.0 §8 states a **High, unaccepted** residual risk
+> for AI transfers — including a persistent transfer of document-derived content to a vendor-hosted
+> vector index (Pinecone) whose region is not established. The "no residual High risks" statement
+> therefore does not hold for third-party AI processing until the controller/DPO decides on that
+> residual.
 
 ---
 
@@ -285,8 +293,9 @@ the evidence a DPO needs so sign-off can complete without further engineering in
 - [ ] Section 1–8 technical content reviewed against live processing
 - [ ] Soft-delete-first + matter-level legal-hold status understood (SSOT above; schema flags may still be Planned)
 - [ ] Special-category / RIDDOR flows accepted or conditioned
-- [ ] Residual risks accepted or conditioned (including OCR/AI Medium residual in companion DPIA)
-- [ ] Sub-processor list on privacy LIVE endpoints reviewed (Azure / optional Mistral / Gemini)
+- [ ] Residual risks accepted or conditioned (including the **High, unaccepted** AI-transfer residual in companion DPIA v2.0 §8)
+- [ ] Sub-processor list on privacy LIVE endpoints reviewed (Azure infrastructure; Azure DI; Mistral; Gemini; Anthropic; OpenAI; Voyage AI; **Pinecone — retains content**; Genspark / Perplexity if keyed)
+- [ ] R06 and R08 re-scored against the disclosed processor set
 - [ ] Art. 30 stub + [`article-30-ropa-checklist.md`](article-30-ropa-checklist.md) accepted as interim **or** full ROPA commissioned
 - [ ] Section 9 DPO name / date / decision / signature completed by DPO (not engineering)
 - [ ] EA-03 deliverable written to `docs/evidence/dpo-signoff-YYYY-Q?.md` and tracker updated
