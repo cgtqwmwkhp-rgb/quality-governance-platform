@@ -11,14 +11,19 @@ module. A disagreement means one of them is lying.
 
 Why this lives in the integration suite
 ---------------------------------------
-It needs a fully mounted app. ``src.main.app`` is a module-level singleton built
-once at import, so in a unit-test session whichever test imports it first fixes
-what every later test sees — and in CI it arrived holding only the six routes
-declared directly on ``app``, with the ``/api/v1`` router contributing nothing.
-The floor below caught that rather than quietly comparing two empty sets, which is
-the whole reason it is there. The precondition is integration-level, so the
-assertion belongs with the harness that guarantees it. Nothing here is weakened to
-make it fit; it is the same check, run where it can mean something.
+Importing ``src.main`` opens a database engine at import time. This suite's
+conftest calls ``assert_test_database_is_local`` before that happens, so the app
+can be imported here without any risk of pointing an engine at a live
+deployment. A unit test would carry no such guarantee. The mechanics of the walk
+itself need none of this and are pinned separately, without an app, in
+``tests/unit/test_permission_route_walk.py``.
+
+The floor below is not decoration. On the first CI run this file reported 6
+routes instead of 980 and refused to compare two near-empty sets. The cause was
+not the app: it was ``include_router`` no longer flattening its routes onto
+``app.routes`` in FastAPI 0.140, so a flat loop saw only what was declared
+directly on the app. The walk now descends, and the unit tests named above fail
+loudly and in seconds if that shape changes again.
 """
 
 from __future__ import annotations

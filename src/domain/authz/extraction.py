@@ -445,13 +445,125 @@ def _iter_dependants(dependant: Any) -> Iterator[Any]:
         yield from _iter_dependants(sub)
 
 
+#: Guards the recursive walk against a router graph that contains a cycle. Far
+#: deeper than any real nesting; exceeded means the shape is not what we think.
+MAX_ROUTER_DEPTH = 25
+
+
+class RouteWalkError(PermissionExtractionError):
+    """The mounted router graph is not a shape the walk can traverse."""
+
+
+def _looks_like_an_untagged_checker(call: Any) -> bool:
+    """Was this callable produced by something named ``require_permission``?
+
+    Matched on a whole dotted component of the qualname, not a substring: a
+    function defined inside ``def test_require_permission_...`` has
+    ``require_permission`` in its qualname without being a checker at all.
+
+    This is a backstop, and a narrow one. It catches a second copy of the
+    existing factory that forgot to tag its checker; it cannot catch a factory
+    under a different name. What guarantees *that* is not caught silently is the
+    static scan, which raises on any permission built from a value it cannot
+    read.
+    """
+    parts = getattr(call, "__qualname__", "").split(".")
+    return "require_permission" in parts
+
+
+def _record_call(result: RouteScanResult, call: Any, label: str) -> None:
+    if call is None:
+        return
+    token = getattr(call, REQUIRED_PERMISSION_ATTR, None)
+    if isinstance(token, str):
+        result.tokens.setdefault(token, set()).add(label)
+    elif _looks_like_an_untagged_checker(call):
+        result.untagged_checkers.append(f"{label} -> {call.__qualname__}")
+
+
+def _record_router_level_dependencies(result: RouteScanResult, holder: Any, label: str) -> None:
+    """Record permissions attached to a whole router rather than one route.
+
+    ``APIRouter(dependencies=[...])`` and ``include_router(..., dependencies=[...])``
+    gate every route beneath them. Nothing in this repo enforces a permission that
+    way today, but it is exactly the "wired up by means a source scan cannot
+    follow" case this walk exists to catch, so it is read rather than assumed
+    absent.
+    """
+    for dependency in getattr(holder, "dependencies", None) or ():
+        _record_call(result, getattr(dependency, "dependency", None), f"{label} (router-level)")
+
+
+def _visit_route_node(result: RouteScanResult, node: Any, prefix: str, seen: set[tuple[int, str]], depth: int) -> None:
+    """Walk one node of the mounted router graph.
+
+    The graph is traversed rather than the top-level list iterated, because
+    ``include_router`` does not necessarily flatten. Under FastAPI 0.135 it
+    copied every route onto ``app.routes``; under 0.140 it appends a single
+    wrapper object holding the original router, and the routes below it are
+    reachable only by descending. A flat loop therefore saw 980 routes on one
+    version and 6 on the other. Nothing here names a FastAPI internal: each
+    shape is recognised by the attribute that makes it traversable, so a
+    version that changes the wrapper's name still works, and a version that
+    changes the *shape* trips the vacuity floor and the synthetic-app tests
+    rather than quietly returning less.
+    """
+    if depth > MAX_ROUTER_DEPTH:
+        raise RouteWalkError(
+            f"router nesting exceeded {MAX_ROUTER_DEPTH} levels at {prefix!r}; "
+            "the mounted graph is not the shape this walk expects."
+        )
+    key = (id(node), prefix)
+    if key in seen:
+        return
+    seen.add(key)
+
+    # A leaf: something with a resolved dependency graph, i.e. a real endpoint.
+    dependant = getattr(node, "dependant", None)
+    if dependant is not None:
+        result.route_count += 1
+        methods = getattr(node, "methods", None) or ()
+        label = f"{','.join(sorted(methods))} {prefix}{getattr(node, 'path', '<unknown>')}"
+        for dep in _iter_dependants(dependant):
+            _record_call(result, getattr(dep, "call", None), label)
+        return
+
+    # A wrapper around a single route, carrying the prefix it was included under.
+    original_route = getattr(node, "original_route", None)
+    if original_route is not None:
+        _visit_route_node(result, original_route, prefix, seen, depth + 1)
+        return
+
+    # A wrapper around a whole included router.
+    original_router = getattr(node, "original_router", None)
+    if original_router is not None:
+        context = getattr(node, "include_context", None)
+        child_prefix = prefix + str(getattr(context, "prefix", "") or "")
+        _record_router_level_dependencies(result, context, child_prefix)
+        _visit_route_node(result, original_router, child_prefix, seen, depth + 1)
+        return
+
+    # Anything holding a route list: the app, a router, a mount.
+    routes = getattr(node, "routes", None)
+    if routes is not None:
+        _record_router_level_dependencies(result, node, prefix)
+        for child in routes:
+            _visit_route_node(result, child, prefix, seen, depth + 1)
+        # Routes deprioritised in matching are still served, so still counted.
+        for child in getattr(node, "_low_priority_routes", None) or ():
+            _visit_route_node(result, child, prefix, seen, depth + 1)
+        return
+
+    sub_app = getattr(node, "app", None)
+    if sub_app is not None and getattr(sub_app, "routes", None) is not None:
+        _visit_route_node(result, sub_app, prefix + str(getattr(node, "path", "") or ""), seen, depth + 1)
+
+
 def tokens_from_registered_routes(app: Any) -> RouteScanResult:
     """Read the permissions wired into the routes ``app`` actually serves.
 
     ``app`` is supplied by the caller rather than imported, to keep this module
-    free of any dependency on the API layer. Routes are duck-typed on having a
-    ``dependant``, which is what a route with a dependency graph has and what a
-    static mount or a plain Starlette route does not.
+    free of any dependency on the API layer.
 
     An untagged checker is reported rather than ignored: a second
     permission-dependency factory that forgot the tag would otherwise shrink this
@@ -459,22 +571,7 @@ def tokens_from_registered_routes(app: Any) -> RouteScanResult:
     is worse than none.
     """
     result = RouteScanResult()
-    for route in getattr(app, "routes", ()) or ():
-        dependant = getattr(route, "dependant", None)
-        if dependant is None:
-            continue
-        result.route_count += 1
-        methods = getattr(route, "methods", None) or ()
-        label = f"{','.join(sorted(methods))} {getattr(route, 'path', '<unknown>')}"
-        for dep in _iter_dependants(dependant):
-            call = getattr(dep, "call", None)
-            if call is None:
-                continue
-            token = getattr(call, REQUIRED_PERMISSION_ATTR, None)
-            if isinstance(token, str):
-                result.tokens.setdefault(token, set()).add(label)
-            elif "require_permission" in getattr(call, "__qualname__", ""):
-                result.untagged_checkers.append(f"{label} -> {call.__qualname__}")
+    _visit_route_node(result, app, "", set(), 0)
     return result
 
 

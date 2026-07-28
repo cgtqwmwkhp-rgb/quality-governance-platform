@@ -18,12 +18,10 @@ mode worth spending assertions on.
 
 The second half of the guard — cross-checking this against the dependency graph of
 the routes the app actually mounts — lives in
-``tests/integration/test_permission_routes_catalogue.py``. It needs a fully mounted
-app, which a unit-test session does not guarantee: ``src.main.app`` is a module-level
-singleton, so whichever test imports it first fixes what every later test sees, and
-in CI it arrived holding only the six routes declared directly on it. That is an
-integration-level precondition, so the assertion lives with the harness that
-guarantees it rather than being weakened to fit here.
+``tests/integration/test_permission_routes_catalogue.py``, because importing
+``src.main`` opens a database engine and only that suite's conftest asserts the
+DSN is local first. The walk it depends on is pinned without an app, against
+whatever FastAPI is installed, in ``tests/unit/test_permission_route_walk.py``.
 """
 
 from __future__ import annotations
