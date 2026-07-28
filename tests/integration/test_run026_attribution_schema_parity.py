@@ -16,6 +16,11 @@ them:
 
 Both fail on the schema as it stood at Run026: 15 absent columns across eight
 tables, and 54 unconstrained attribution columns across 30 tables.
+
+What the models declare is read through ``tests._run026_model_probe``, which
+imports them in a subprocess. Importing them in-process leaves ``Base.registry``
+unable to configure and breaks every later test that instantiates a mapped class;
+see that module for the two pre-existing model defects behind it.
 """
 
 from __future__ import annotations
@@ -23,12 +28,12 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 
-from scripts.ops.run025._models import load_metadata
 from scripts.ops.run026.audit_attribution_schema import (
     ATTRIBUTION_TARGET,
     DEFERRED_ABSENT_COLUMNS,
     DROPPED_PHYSICAL_TABLES,
 )
+from tests._run026_model_probe import probe
 from tests.integration._run026_migrated_schema import (
     ATTRIBUTION_COLUMNS,
     alembic_executable,
@@ -63,6 +68,12 @@ def migrated():
         drop_database(base_url, schema.name)
 
 
+@pytest.fixture(scope="module")
+def declared():
+    """What the models declare, collected once in a subprocess."""
+    return probe()
+
+
 def _auditable_tables(migrated) -> list[str]:
     """Tables the database has that carry at least one attribution column."""
     present = migrated.tables()
@@ -73,7 +84,7 @@ def _auditable_tables(migrated) -> list[str]:
     )
 
 
-def test_every_declared_column_exists_in_the_migrated_schema(migrated):
+def test_every_declared_column_exists_in_the_migrated_schema(migrated, declared):
     """No mapped table may be missing a column its model declares.
 
     Deliberately not filtered by ``_ALEMBIC_CHECK_EXCLUDED_TABLES``. That set
@@ -82,15 +93,14 @@ def test_every_declared_column_exists_in_the_migrated_schema(migrated):
     was never a licence for a declared column to be absent from a table the
     database does have. Filtering by it here is what hid four of these.
     """
-    metadata = load_metadata()
     present_tables = migrated.tables()
 
     absent: list[str] = []
-    for table_name, table in sorted(metadata.tables.items()):
+    for table_name, table in sorted(declared["tables"].items()):
         if table_name not in present_tables or table_name in DROPPED_PHYSICAL_TABLES:
             continue
         actual = migrated.columns(table_name)
-        for column in sorted(table.c.keys()):
+        for column in table["columns"]:
             if column in actual or (table_name, column) in DEFERRED_ABSENT_COLUMNS:
                 continue
             absent.append(f"{table_name}.{column}")
@@ -102,26 +112,26 @@ def test_every_declared_column_exists_in_the_migrated_schema(migrated):
     )
 
 
-def test_selecting_every_mapped_column_succeeds_for_auditable_tables(migrated):
+def test_selecting_every_declared_column_succeeds_for_auditable_tables(migrated, declared):
     """Execute what the ORM emits, rather than comparing column names.
 
     A name comparison can be right about the names and wrong about whether the
-    query runs. This issues the ``SELECT`` the ORM would build for a
-    whole-entity load and lets PostgreSQL be the judge.
+    query runs. This issues the same column list a whole-entity load would and
+    lets PostgreSQL be the judge.
     """
-    metadata = load_metadata()
     present_tables = migrated.tables()
 
     failures: list[str] = []
     for table_name in _auditable_tables(migrated):
-        table = metadata.tables.get(table_name)
+        table = declared["tables"].get(table_name)
         if table is None or table_name not in present_tables:
             continue
-        if any((table_name, column) in DEFERRED_ABSENT_COLUMNS for column in table.c.keys()):
+        if any((table_name, column) in DEFERRED_ABSENT_COLUMNS for column in table["columns"]):
             continue
+        column_list = ", ".join(f'"{column}"' for column in table["columns"])
         with migrated.engine.connect() as conn:
             try:
-                conn.execute(sa.select(*table.c).limit(1))
+                conn.execute(sa.text(f'SELECT {column_list} FROM "{table_name}" LIMIT 1'))  # noqa: S608
             except sa.exc.ProgrammingError as exc:
                 failures.append(f"{table_name}: {str(exc.orig).splitlines()[0]}")
 
