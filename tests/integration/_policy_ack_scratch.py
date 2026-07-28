@@ -1,9 +1,9 @@
 """A private database for the policy-acknowledgment honesty suites.
 
 Not a test module (the leading underscore keeps pytest from collecting it). It
-holds the harness shared by ``test_policy_ack_dashboard_honesty`` and
-``test_policy_ack_my_pending_honesty``, both of which need to observe a table
-that is genuinely absent.
+holds the machinery behind the ``ack_scratch`` and ``ack_scratch_client``
+fixtures in ``tests/integration/conftest.py``, used by every suite that has to
+observe a table which is genuinely absent.
 
 Why a private database is necessary
 -----------------------------------
@@ -31,15 +31,9 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import AsyncIterator
 
-import pytest
 import sqlalchemy as sa
-from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
-
-from src.infrastructure.database import get_db
-from src.main import app
 
 BACKING_TABLE = "policy_acknowledgments"
 
@@ -48,7 +42,7 @@ USER_ID = 1
 
 
 class ScratchDatabase:
-    """A database this test owns, with the app's full declared schema."""
+    """A database one test owns, carrying the app's full declared schema."""
 
     def __init__(self, engine: AsyncEngine):
         self.engine = engine
@@ -119,7 +113,7 @@ class ScratchDatabase:
             await session.commit()
 
 
-async def _make_scratch_engine(tmp_path) -> tuple[AsyncEngine, object]:
+async def make_scratch_engine(tmp_path) -> tuple[AsyncEngine, object]:
     """Build an empty database beside whichever backend the suite is using."""
     base_url = os.environ.get("DATABASE_URL", "")
 
@@ -139,7 +133,7 @@ async def _make_scratch_engine(tmp_path) -> tuple[AsyncEngine, object]:
     return create_async_engine(url), name
 
 
-async def _drop_scratch_database(name: str) -> None:
+async def drop_scratch_database(name: str) -> None:
     base_url = os.environ["DATABASE_URL"]
     admin = create_async_engine(base_url, isolation_level="AUTOCOMMIT")
     try:
@@ -147,43 +141,3 @@ async def _drop_scratch_database(name: str) -> None:
             await conn.execute(sa.text(f'DROP DATABASE IF EXISTS "{name}"'))
     finally:
         await admin.dispose()
-
-
-@pytest.fixture
-async def scratch(tmp_path) -> AsyncIterator[ScratchDatabase]:
-    """A database carrying the app's declared schema, owned by one test."""
-    import src.domain.models  # noqa: F401  — registers models on Base.metadata
-    from src.infrastructure.database import Base
-
-    engine, created_name = await _make_scratch_engine(tmp_path)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    try:
-        yield ScratchDatabase(engine)
-    finally:
-        await engine.dispose()
-        if created_name is not None:
-            await _drop_scratch_database(created_name)
-
-
-@pytest.fixture
-async def scratch_client(scratch: ScratchDatabase) -> AsyncIterator[AsyncClient]:
-    """An authenticated client whose requests read the scratch database."""
-    from tests.integration.conftest import _generate_test_jwt
-
-    async def _get_scratch_db():
-        async with scratch.sessions() as session:
-            yield session
-
-    app.dependency_overrides[get_db] = _get_scratch_db
-    token = _generate_test_jwt(user_id=str(USER_ID), tenant_id=TENANT_ID, role="admin")
-    try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test",
-            headers={"Authorization": f"Bearer {token}"},
-        ) as client:
-            yield client
-    finally:
-        app.dependency_overrides.pop(get_db, None)

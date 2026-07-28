@@ -25,12 +25,7 @@ import pytest
 from httpx import AsyncClient
 
 from src.domain.error_codes import ErrorCode
-from tests.integration._policy_ack_scratch import (  # noqa: F401  — scratch/scratch_client are fixtures
-    BACKING_TABLE,
-    ScratchDatabase,
-    scratch,
-    scratch_client,
-)
+from tests.integration._policy_ack_scratch import BACKING_TABLE, ScratchDatabase
 
 MY_PENDING = "/api/v1/policy-acknowledgments/my-pending"
 
@@ -38,14 +33,13 @@ MY_PENDING = "/api/v1/policy-acknowledgments/my-pending"
 class TestTheHarnessCanSeeAMissingTable:
     """Without this, every assertion below could pass vacuously."""
 
-    async def test_the_schema_starts_with_the_backing_table(self, scratch: ScratchDatabase):
-        assert await scratch.has_backing_table() is True
+    async def test_the_schema_starts_with_the_backing_table(self, ack_scratch: ScratchDatabase):
+        assert await ack_scratch.has_backing_table() is True
 
-    async def test_the_harness_really_lost_the_table(self, scratch: ScratchDatabase):
-        await scratch.drop_backing_table()
-        assert await scratch.has_backing_table() is False, (
-            "the scratch database still has the table, so this file cannot observe "
-            "the condition it exists to test"
+    async def test_the_harness_really_lost_the_table(self, ack_scratch: ScratchDatabase):
+        await ack_scratch.drop_backing_table()
+        assert await ack_scratch.has_backing_table() is False, (
+            "the scratch database still has the table, so this file cannot observe " "the condition it exists to test"
         )
 
 
@@ -53,11 +47,11 @@ class TestAReadThatHappened:
     """A list that was actually read keeps reporting exactly what it found."""
 
     async def test_pending_and_overdue_items_are_listed(
-        self, scratch: ScratchDatabase, scratch_client: AsyncClient
+        self, ack_scratch: ScratchDatabase, ack_scratch_client: AsyncClient
     ):
-        await scratch.seed_acknowledgments(("pending", "overdue", "completed"))
+        await ack_scratch.seed_acknowledgments(("pending", "overdue", "completed"))
 
-        response = await scratch_client.get(MY_PENDING)
+        response = await ack_scratch_client.get(MY_PENDING)
 
         assert response.status_code == 200, response.text
         body = response.json()
@@ -66,7 +60,7 @@ class TestAReadThatHappened:
         assert {item["status"] for item in body["items"]} == {"pending", "overdue"}
 
     async def test_an_empty_queue_is_still_an_empty_list(
-        self, scratch: ScratchDatabase, scratch_client: AsyncClient
+        self, ack_scratch: ScratchDatabase, ack_scratch_client: AsyncClient
     ):
         """Nothing to acknowledge is a real answer and must stay cheap to render.
 
@@ -74,7 +68,7 @@ class TestAReadThatHappened:
         no rows — so it has to keep working exactly as before. The fix narrows
         what ``[]`` is allowed to mean; it does not stop it meaning anything.
         """
-        response = await scratch_client.get(MY_PENDING)
+        response = await ack_scratch_client.get(MY_PENDING)
 
         assert response.status_code == 200, response.text
         assert response.json() == {"items": [], "total": 0}
@@ -83,18 +77,18 @@ class TestAReadThatHappened:
 class TestAReadThatCouldNotHappen:
     """The defect: an absent table answered as an empty reading queue."""
 
-    async def test_absent_table_is_not_a_success(self, scratch: ScratchDatabase, scratch_client: AsyncClient):
-        await scratch.drop_backing_table()
-        assert await scratch.has_backing_table() is False
+    async def test_absent_table_is_not_a_success(self, ack_scratch: ScratchDatabase, ack_scratch_client: AsyncClient):
+        await ack_scratch.drop_backing_table()
+        assert await ack_scratch.has_backing_table() is False
 
-        response = await scratch_client.get(MY_PENDING)
+        response = await ack_scratch_client.get(MY_PENDING)
 
-        assert response.status_code == 503, (
-            f"an unreadable acknowledgment table answered {response.status_code}: {response.text}"
-        )
+        assert (
+            response.status_code == 503
+        ), f"an unreadable acknowledgment table answered {response.status_code}: {response.text}"
 
     async def test_no_empty_list_is_offered_when_nothing_was_read(
-        self, scratch: ScratchDatabase, scratch_client: AsyncClient
+        self, ack_scratch: ScratchDatabase, ack_scratch_client: AsyncClient
     ):
         """The regression that matters: a payload a consumer could render as "all clear".
 
@@ -102,21 +96,21 @@ class TestAReadThatCouldNotHappen:
         ``response.data.items ?? []``, so an ``items`` key of any kind — empty,
         null, missing-from-a-200 — is indistinguishable from a clean inbox.
         """
-        await scratch.drop_backing_table()
+        await ack_scratch.drop_backing_table()
 
-        response = await scratch_client.get(MY_PENDING)
+        response = await ack_scratch_client.get(MY_PENDING)
         body = response.json()
 
         assert "items" not in body, f"unreadable response still offered an items list: {body!r}"
         assert "total" not in body, f"unreadable response still offered a total: {body!r}"
 
     async def test_the_absent_table_is_named_with_a_distinct_error_code(
-        self, scratch: ScratchDatabase, scratch_client: AsyncClient
+        self, ack_scratch: ScratchDatabase, ack_scratch_client: AsyncClient
     ):
         """A generic 500 would not tell an operator which table to migrate."""
-        await scratch.drop_backing_table()
+        await ack_scratch.drop_backing_table()
 
-        body = (await scratch_client.get(MY_PENDING)).json()
+        body = (await ack_scratch_client.get(MY_PENDING)).json()
 
         assert body["error"]["code"] == ErrorCode.MEASUREMENT_UNAVAILABLE.value
         assert body["error"]["code"] == "MEASUREMENT_UNAVAILABLE"
@@ -124,12 +118,12 @@ class TestAReadThatCouldNotHappen:
         assert BACKING_TABLE in body["error"]["message"]
 
     async def test_an_empty_queue_and_an_unreadable_one_are_not_interchangeable(
-        self, scratch: ScratchDatabase, scratch_client: AsyncClient
+        self, ack_scratch: ScratchDatabase, ack_scratch_client: AsyncClient
     ):
         """The whole point: these two must not arrive as the same answer."""
-        empty = await scratch_client.get(MY_PENDING)
-        await scratch.drop_backing_table()
-        unreadable = await scratch_client.get(MY_PENDING)
+        empty = await ack_scratch_client.get(MY_PENDING)
+        await ack_scratch.drop_backing_table()
+        unreadable = await ack_scratch_client.get(MY_PENDING)
 
         assert empty.status_code == 200
         assert unreadable.status_code == 503
@@ -138,16 +132,16 @@ class TestAReadThatCouldNotHappen:
         assert "items" not in unreadable.json()
 
     async def test_the_error_is_not_a_generic_server_fault(
-        self, scratch: ScratchDatabase, scratch_client: AsyncClient
+        self, ack_scratch: ScratchDatabase, ack_scratch_client: AsyncClient
     ):
         """503, not 500: the request is fine and the code is not broken.
 
         The frontend classifies 502/503 as ``UNAVAILABLE`` rather than
         ``SERVER_ERROR``, which is the accurate category for schema lag.
         """
-        await scratch.drop_backing_table()
+        await ack_scratch.drop_backing_table()
 
-        response = await scratch_client.get(MY_PENDING)
+        response = await ack_scratch_client.get(MY_PENDING)
 
         assert response.status_code != 500
         assert response.status_code == 503
