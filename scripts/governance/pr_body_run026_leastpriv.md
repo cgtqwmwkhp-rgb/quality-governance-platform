@@ -69,7 +69,7 @@ The brief says ~1,696 tenant-less rows across 23 tables would vanish, led by `ve
 - [ ] Typecheck — CI after open
 - [ ] Build — CI after open
 - [x] Unit tests — `tests/unit/test_run026_rls_least_privilege.py`, **15 passed** (local). No database required; these parse the migrations with `ast` and assert the design properties directly.
-- [x] Integration tests — `tests/integration/test_run026_rls_least_privilege_postgres.py`, **12 passed** against PostgreSQL 14 at the new head (local)
+- [x] Integration tests — `tests/integration/test_run026_rls_least_privilege_postgres.py`, **12 passed** on PostgreSQL 14 (local) **and 12 passed on PostgreSQL 16 in CI**, none skipped, so the cross-tenant assertions genuinely executed on both
 - [x] Regression check — full integration suite at the new head: **803 passed, 5 skipped, 4 xpassed, 0 failed** (137s, local PostgreSQL 14). Run on a clean database at the *old* head, the only failures were the new tests above, which is the point.
 - [ ] Contract tests — N/A (no API surface)
 - [ ] E2E Smoke — N/A. The app cannot yet run as `qgp_app`; that is CUT-2.
@@ -135,7 +135,7 @@ Two roles; only the application's identity changes.
 ### What remains untested
 - **Anything against production or staging.** Every measurement is from a local PostgreSQL 14 database built by the real migration chain.
 - **The application running end-to-end as `qgp_app`.** Policies, grants and role attributes are proven; a full request path under the new role is not, and cannot be until CUT-2 lands.
-- **PostgreSQL 16**, which CI uses and Azure may run. The empty-string GUC revert was verified on 14 only. The integration test asserts that behaviour explicitly, so CI will tell us if 16 differs.
+- **PostgreSQL minors other than 14 and 16.** The empty-string GUC revert is now confirmed on both: 14 locally, 16 via CI's `postgres:16`, where all 12 integration tests ran rather than skipping. Azure may run a different minor; the test asserts the behaviour explicitly, so a difference would fail rather than diverge silently.
 - **Query-plan impact of `NULLIF` on large tables.** Still a stable once-per-query expression, so index quals on `tenant_id` should be unaffected — but not benchmarked.
 - **Whether production's policy tables actually contain NULL `tenant_id`.** Only the readiness script, run against production, can answer that.
 

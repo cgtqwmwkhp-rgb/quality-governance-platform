@@ -219,9 +219,12 @@ cannot stand behind.
 - The application running end-to-end as `qgp_app`. The policies, grants and role
   attributes are proven; a full request path under the new role is not, and cannot
   be until CUT-2 lands.
-- PostgreSQL 16, which CI uses and Azure may run. The empty-string GUC revert was
-  verified on 14 only. The integration test asserts the revert behaviour explicitly,
-  so CI will say so if 16 differs.
+- PostgreSQL versions other than 14 and 16. The empty-string GUC revert was verified
+  locally on 14 and, via CI (`postgres:16`), on 16 — all 12 integration tests ran
+  rather than skipping, so the pooled-connection behaviour is confirmed on both. Azure
+  Database for PostgreSQL Flexible Server may run a different minor; the integration
+  test asserts the revert behaviour explicitly, so a difference would surface as a
+  failure rather than a silent divergence.
 - Query-plan impact of the `NULLIF` wrapper on large tables. The expression is still
   a stable, once-per-query one, so index quals on `tenant_id` should be unaffected,
   but this was not benchmarked.
