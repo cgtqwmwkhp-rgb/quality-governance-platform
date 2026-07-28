@@ -1,9 +1,22 @@
 """Pydantic schemas for User API."""
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
+
+from src.domain.authz import canonicalise_permissions_input
+
+#: ``permissions`` as it may be *written*: a JSON array of catalogued tokens,
+#: normalised to a canonical form. ``canonicalise_permissions_input`` raises
+#: ``ValueError`` for a wildcard, an unknown token, a reserved token or any of
+#: the other encodings found in the live databases, which Pydantic reports as a
+#: 422 rather than letting it reach the column and become a 500 later.
+#:
+#: Applied only to the request schemas. ``RoleResponse`` reads the column as-is,
+#: because rows written before this validation existed still hold values it would
+#: reject and a response model must not fail on them.
+CataloguedPermissions = Annotated[Optional[str], AfterValidator(canonicalise_permissions_input)]
 
 
 class RoleBase(BaseModel):
@@ -11,7 +24,7 @@ class RoleBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = None
-    permissions: Optional[str] = None
+    permissions: CataloguedPermissions = None
 
 
 class RoleCreate(RoleBase):
@@ -25,7 +38,7 @@ class RoleUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = None
-    permissions: Optional[str] = None
+    permissions: CataloguedPermissions = None
 
 
 class RoleResponse(BaseModel):

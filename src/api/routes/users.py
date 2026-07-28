@@ -21,6 +21,7 @@ from src.api.schemas.user import (
 )
 from src.api.utils.errors import api_error
 from src.core.security import get_password_hash
+from src.domain.authz import describe_stored_permissions
 from src.domain.models.user import Role, User
 from src.domain.services.feature_flag_service import FeatureFlagService
 
@@ -391,6 +392,65 @@ async def create_role(
     return RoleResponse.model_validate(role)
 
 
+def _reject_edit_of_role_with_invalid_stored_permissions(role: Role, update_data: dict) -> None:
+    """Refuse to edit a role whose stored permissions this API would now reject.
+
+    Rows predate any validation, so some hold a wildcard, an uncatalogued token,
+    or a PostgreSQL array literal that the permission check reads lossily. Three
+    things could happen when one of those is edited, and only one of them is
+    honest:
+
+    * Rewrite the stored value to a canonical form. Rejected outright — it
+      silently changes which permissions a role grants, which is a privilege
+      change nobody asked for and nobody would see.
+    * Validate only the incoming field and let the bad row through untouched.
+      Rejected because it lets a defective access-control record be edited and
+      timestamped, which reads afterwards as though someone reviewed it.
+    * Fail the edit, and say exactly what is wrong and what to send. Chosen.
+
+    The escape hatch is that supplying ``permissions`` replaces the bad value:
+    that request has already been validated by the schema, so the fix goes
+    through while an unrelated edit does not.
+
+    Note this cannot rescue a role with ``is_system_role`` set — the caller
+    rejects those earlier with a 400 — so a defective system role still has to be
+    corrected by an operator outside this API.
+    """
+    if "permissions" in update_data:
+        return
+
+    defect = describe_stored_permissions(role.permissions)
+    if defect is None:
+        return
+
+    logger.warning(
+        "Refused edit of role id=%s name=%s: stored permissions are invalid (%s)",
+        role.id,
+        role.name,
+        defect.encoding,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=api_error(
+            ErrorCode.VALIDATION_ERROR,
+            f"Role {role.id} ('{role.name}') cannot be edited because its stored permissions are "
+            f"invalid: {defect.message}. The permission check currently reads it as "
+            f"{list(defect.tokens_seen)!r}. Resend this request including a valid 'permissions' "
+            "JSON array to correct the role and apply your other changes at the same time; "
+            "editing it without fixing the permissions is refused rather than silently rewriting "
+            "the stored value.",
+            details={
+                "role_id": role.id,
+                "stored_encoding": defect.encoding,
+                "tokens_currently_effective": list(defect.tokens_seen),
+                "wildcard_tokens": list(defect.wildcard_tokens),
+                "reserved_tokens": list(defect.reserved_tokens),
+                "unknown_tokens": list(defect.unknown_tokens),
+            },
+        ),
+    )
+
+
 @router.patch("/roles/{role_id}", response_model=RoleResponse)
 async def update_role(
     role_id: int,
@@ -416,6 +476,8 @@ async def update_role(
         )
 
     update_data = role_data.model_dump(exclude_unset=True)
+    _reject_edit_of_role_with_invalid_stored_permissions(role, update_data)
+
     for field, value in update_data.items():
         setattr(role, field, value)
 
