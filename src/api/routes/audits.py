@@ -76,7 +76,7 @@ from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.audit_analytics_service import SUPPORTED_GROUP_BY, AuditAnalyticsService
 from src.domain.services.audit_scoring_service import AuditScoringService
-from src.domain.services.audit_service import AuditService
+from src.domain.services.audit_service import AuditService, question_belongs_to_run, require_run_tenant_id
 from src.domain.services.external_audit_intake_template_resolver import (
     ExternalAuditIntakeTemplateResolver,
     IntakeTemplateResolution,
@@ -1360,16 +1360,16 @@ async def create_response(
 ) -> AuditResponseResponse:
     """Submit a response to an audit question."""
     started = time.perf_counter()
-    # Verify run exists and is in progress
+    # Verify run exists and is in progress. Exact tenant match only: the
+    # previous filter also matched runs with a NULL tenant_id, which is a live
+    # set of rows in the migrated schema (the column is still nullable there),
+    # so any authenticated caller could write into an unattributed run belonging
+    # to another organisation. Nothing below the application enforces this.
     result = await db.execute(
-        select(AuditRun)
-        .options(selectinload(AuditRun.template))
-        .where(
-            AuditRun.id == run_id,
-            or_(
-                AuditRun.tenant_id == current_user.tenant_id,
-                AuditRun.tenant_id.is_(None),
-            ),
+        apply_tenant_filter(
+            select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.id == run_id),
+            AuditRun,
+            current_user.tenant_id,
         )
     )
     run = result.scalar_one_or_none()
@@ -1426,18 +1426,21 @@ async def create_response(
 
     question_result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == response_data.question_id))
     question = question_result.scalar_one_or_none()
-    if not question:
+    if not question or not question_belongs_to_run(run, question):
         _record_audit_endpoint_event(
             "POST /api/v1/audits/runs/{id}/responses",
             404,
             (time.perf_counter() - started) * 1000,
-            "question_not_found",
+            "question_not_found" if question is None else "question_not_in_run_template",
         )
+        # Deliberately the same message either way: a distinct one would confirm
+        # that a question the caller cannot see exists.
         raise NotFoundError("Audit question not found")
 
     payload = AuditScoringService.apply_derived_scores(question, response_data.model_dump())
     response = AuditResponse(
         run_id=run_id,
+        tenant_id=require_run_tenant_id(run),
         **payload,
     )
 
