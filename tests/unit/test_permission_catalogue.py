@@ -15,6 +15,15 @@ Several assertions here exist only to stop this file passing vacuously. This
 codebase already had an OpenAPI contract suite that stayed green while checking
 nothing, so a set comparison between two things that are both empty is a failure
 mode worth spending assertions on.
+
+The second half of the guard — cross-checking this against the dependency graph of
+the routes the app actually mounts — lives in
+``tests/integration/test_permission_routes_catalogue.py``. It needs a fully mounted
+app, which a unit-test session does not guarantee: ``src.main.app`` is a module-level
+singleton, so whichever test imports it first fixes what every later test sees, and
+in CI it arrived holding only the six routes declared directly on it. That is an
+integration-level precondition, so the assertion lives with the harness that
+guarantees it rather than being weakened to fit here.
 """
 
 from __future__ import annotations
@@ -38,7 +47,6 @@ from src.domain.authz.extraction import (
     UndeclaredDynamicSiteError,
     format_divergence_report,
     scan_source_tree,
-    tokens_from_registered_routes,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -49,7 +57,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MIN_FILES_SCANNED = 300
 MIN_REQUIRE_PERMISSION_TOKENS = 60
 MIN_LITERAL_CALL_SITES = 300
-MIN_REGISTERED_ROUTES = 500
 
 
 @pytest.fixture(scope="module")
@@ -161,49 +168,6 @@ def test_every_reserved_token_has_a_stated_reason():
 # --------------------------------------------------------------------------- #
 # Cross-check: the routes the app actually serves
 # --------------------------------------------------------------------------- #
-
-
-def test_registered_routes_agree_with_the_static_scan(scan):
-    """Cross-check the AST scan against the app's real dependency graph.
-
-    The static scan reads source text; this walks the dependency graph of the
-    routes the app actually mounts. They should see the same
-    ``require_permission`` tokens, and a disagreement means one of them is
-    lying — most likely a permission wired up by means a source scan cannot
-    follow, such as a router-level ``dependencies=[...]`` or a loop over a table.
-
-    The app is imported here rather than inside the extractor: ``src/domain`` may
-    not depend on ``src/api``, so wiring the two together is the test's job.
-    """
-    from src.main import app
-
-    routes = tokens_from_registered_routes(app)
-
-    assert routes.route_count >= MIN_REGISTERED_ROUTES, (
-        f"only {routes.route_count} API routes found; the app is probably not fully "
-        "mounted, which would make this cross-check meaningless"
-    )
-    assert not routes.untagged_checkers, (
-        "found permission checkers on live routes with no "
-        f"__qgp_required_permission__ tag: {routes.untagged_checkers}. Anything building a "
-        "permission dependency must tag it, or this cross-check silently stops seeing it."
-    )
-
-    only_on_routes = sorted(routes.token_set - scan.require_permission_tokens)
-    assert not only_on_routes, (
-        f"{only_on_routes} are enforced on mounted routes but the static scan did not find them. "
-        "Something is wiring permissions in a way the source scan cannot read."
-    )
-
-    only_in_source = sorted(scan.require_permission_tokens - routes.token_set)
-    assert not only_in_source, (
-        f"{only_in_source} appear in require_permission calls but on no mounted route. "
-        "Either the router is not included in the app, or the route was removed and the "
-        "call site left behind."
-    )
-
-    uncatalogued = sorted(routes.token_set - ENFORCED_PERMISSIONS)
-    assert not uncatalogued, f"routes enforce uncatalogued tokens: {uncatalogued}"
 
 
 def test_dynamic_permission_sites_are_all_declared_and_resolved(scan):
