@@ -1,7 +1,11 @@
 # C-27: switching the application off `rolbypassrls`
 
-Status: **gates 0 and 1 delivered. The cutover is blocked at gate 2 and must not be
+Status: **CUT-0 and CUT-1 delivered. The cutover is blocked at CUT-2 and must not be
 attempted.**
+
+The `CUT-n` steps below are the cutover sequence for this change only. They are not
+the repository's release Gate 0–5 in `.github/PULL_REQUEST_TEMPLATE.md`, which are a
+separate and unrelated checklist.
 
 ## The finding
 
@@ -70,7 +74,7 @@ gates this change. Two much larger problems are, and neither is about data at al
 
 ## The two real blockers
 
-### Gate 1 — the predicate failed loud, not closed (fixed in this change)
+### CUT-1 — the predicate failed loud, not closed (fixed in this change)
 
 `apply_tenant_guc` binds the tenant with `set_config(..., true)`, which is
 transaction-local. When the transaction ends, PostgreSQL restores the session value
@@ -87,7 +91,7 @@ Fixed by `20260902_rls_guc_guard`, which rewrites all 21 predicates as
 `tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::int` and
 adopts the two missing tables. Inert while the app still bypasses RLS.
 
-### Gate 2 — authentication cannot resolve a tenant (NOT fixed; this is the blocker)
+### CUT-2 — authentication cannot resolve a tenant (NOT fixed; this is the blocker)
 
 `users` is under FORCE RLS. Authentication reads it *before* it knows the tenant,
 because the tenant is a column on the row being fetched:
@@ -120,35 +124,35 @@ Three viable approaches, in the order I would try them:
 
 ## The ordering requirement
 
-Each gate must be complete and verified before the next begins.
+Each step must be complete and verified before the next begins.
 
-| Gate | What | Status |
+| Step | What | Status |
 |---|---|---|
-| 0 | Least-privilege role `qgp_app` created with grants, no credential | **done** (`20260903_app_lp_role`) |
-| 1 | All policy predicates survive an empty GUC; the two unprotected tables adopted | **done** (`20260902_rls_guc_guard`) |
-| 2 | Authentication can resolve a tenant without already having one | **blocked — not started** |
-| 3 | Every background / cross-tenant code path audited for an unbound GUC | not started |
-| 4 | NULL `tenant_id` remediated or explicitly excepted, in policy tables only | not started |
-| 5 | Staging cutover; readiness script clean; soak | not started |
-| 6 | Production cutover, human-authorised | not started |
+| CUT-0 | Least-privilege role `qgp_app` created with grants, no credential | **done** (`20260903_app_lp_role`) |
+| CUT-1 | All policy predicates survive an empty GUC; the two unprotected tables adopted | **done** (`20260902_rls_guc_guard`) |
+| CUT-2 | Authentication can resolve a tenant without already having one | **blocked — not started** |
+| CUT-3 | Every background / cross-tenant code path audited for an unbound GUC | not started |
+| CUT-4 | NULL `tenant_id` remediated or explicitly excepted, in policy tables only | not started |
+| CUT-5 | Staging cutover; readiness script clean; soak | not started |
+| CUT-6 | Production cutover, human-authorised | not started |
 
-Gates 0 and 1 are safe to deploy at any time and change nothing observable, because
+CUT-0 and CUT-1 are safe to deploy at any time and change nothing observable, because
 a `rolbypassrls` role never evaluates a policy. That is the point of doing them
 first.
 
 ### What breaks if the sequence is not followed
 
-- **Skipping gate 2**: total authentication outage. Nobody can log in; every request
+- **Skipping CUT-2**: total authentication outage. Nobody can log in; every request
   with an existing token returns 401. Recovery is reverting the connection string.
-- **Skipping gate 1**: intermittent HTTP 500s (`invalid input syntax for type
+- **Skipping CUT-1**: intermittent HTTP 500s (`invalid input syntax for type
   integer: ""`) on whichever requests happen to land on a recycled connection,
   rather than a clean empty result. Load-dependent, so it may look fine in a smoke
   test and fail under traffic.
-- **Skipping gate 3**: Celery tasks and cross-tenant sweeps silently process zero
+- **Skipping CUT-3**: Celery tasks and cross-tenant sweeps silently process zero
   rows. No error, no alert. `training_matrix_upload_reminder_tasks.py:153`,
   `regulatory_watch_actions.py:108` and `action_service.py:254` all query `users`
   with no tenant filter and would need the GUC bound per tenant.
-- **Skipping gate 4**: rows with a NULL `tenant_id` in a policy table disappear from
+- **Skipping CUT-4**: rows with a NULL `tenant_id` in a policy table disappear from
   the application. On a fresh schema that is `users` and `workflow_rules` only; a
   tenant-less `users` row means that account is permanently locked out, and a
   tenant-less `workflow_rules` row means that automation silently stops firing.
@@ -214,7 +218,7 @@ cannot stand behind.
   PostgreSQL 14 database built by the real migration chain.
 - The application running end-to-end as `qgp_app`. The policies, grants and role
   attributes are proven; a full request path under the new role is not, and cannot
-  be until gate 2 lands.
+  be until CUT-2 lands.
 - PostgreSQL 16, which CI uses and Azure may run. The empty-string GUC revert was
   verified on 14 only. The integration test asserts the revert behaviour explicitly,
   so CI will say so if 16 differs.

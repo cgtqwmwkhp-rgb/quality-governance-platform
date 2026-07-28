@@ -636,7 +636,7 @@ async def test_authentication_is_still_the_blocking_gate(pg_engine, app_role_pre
     match, and the lookup returns nothing. No backfill fixes this; it is the shape
     of the code.
 
-    **This assertion is expected to fail once gate 2 of
+    **This assertion is expected to fail once CUT-2 of
     docs/governance/rls-least-privilege-rollout.md is done, and that failure is the
     signal to invert it.** It is here so the cutover cannot be attempted while the
     blocker is still present without a test going red.
@@ -659,6 +659,6 @@ async def test_authentication_is_still_the_blocking_gate(pg_engine, app_role_pre
 
     assert visible == 0, (
         f"{APP_ROLE} can now see {visible} of {total} users with no tenant bound. If the auth bootstrap "
-        f"has been fixed (gate 2), invert this test: it exists to keep the cutover blocked while the "
+        f"has been fixed (CUT-2), invert this test: it exists to keep the cutover blocked while the "
         f"login path still cannot resolve a tenant."
     )

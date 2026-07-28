@@ -322,7 +322,7 @@ async def _auth_bootstrap(db: Any, role: str) -> dict[str, Any]:
     result["note"] = (
         "Authentication would break: the app cannot read the users row it needs in order to "
         "discover which tenant to bind. Fix the auth bootstrap before changing the role. "
-        "See docs/governance/rls-least-privilege-rollout.md, gate 2."
+        "See docs/governance/rls-least-privilege-rollout.md, CUT-2."
         if not visible
         else "The candidate role can read users without a tenant bound."
     )
