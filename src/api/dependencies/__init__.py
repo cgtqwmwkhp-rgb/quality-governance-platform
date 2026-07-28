@@ -13,6 +13,7 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.core.config import settings
 from src.core.security import decode_token, ensure_access_token_not_revoked
+from src.domain.authz.extraction import REQUIRED_PERMISSION_ATTR
 from src.domain.exceptions import TokenRevokedError
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
@@ -129,14 +130,6 @@ async def get_current_superuser(
     return current_user
 
 
-#: Attribute name under which :func:`require_permission` records the token it
-#: enforces. The permission-catalogue test walks the app's registered routes and
-#: reads this tag, rather than reaching into the checker's closure: a closure
-#: variable read by name goes quietly to ``None`` the day the parameter is
-#: renamed, which would make the catalogue test pass while checking nothing.
-REQUIRED_PERMISSION_ATTR = "__qgp_required_permission__"
-
-
 def require_permission(permission: str):
     """Dependency factory for permission checking."""
 
@@ -150,6 +143,10 @@ def require_permission(permission: str):
             )
         return current_user
 
+    # Record the token so the permission-catalogue test can walk the app's routes
+    # and read it back. Deliberately not left to closure introspection: a closure
+    # variable read by name goes quietly to None the day someone renames the
+    # parameter, and the catalogue test would then pass while checking nothing.
     setattr(permission_checker, REQUIRED_PERMISSION_ATTR, permission)
     return permission_checker
 

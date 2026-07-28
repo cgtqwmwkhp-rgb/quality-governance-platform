@@ -171,8 +171,13 @@ def test_registered_routes_agree_with_the_static_scan(scan):
     ``require_permission`` tokens, and a disagreement means one of them is
     lying — most likely a permission wired up by means a source scan cannot
     follow, such as a router-level ``dependencies=[...]`` or a loop over a table.
+
+    The app is imported here rather than inside the extractor: ``src/domain`` may
+    not depend on ``src/api``, so wiring the two together is the test's job.
     """
-    routes = tokens_from_registered_routes()
+    from src.main import app
+
+    routes = tokens_from_registered_routes(app)
 
     assert routes.route_count >= MIN_REGISTERED_ROUTES, (
         f"only {routes.route_count} API routes found; the app is probably not fully "

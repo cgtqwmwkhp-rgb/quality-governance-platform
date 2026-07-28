@@ -16,12 +16,19 @@ alone sees all enforcement:
     inspecting the app's dependency graph.
 
 ``tokens_from_registered_routes``
-    Walks the dependency graph of the routes actually mounted on the FastAPI
-    app and reads the tag :func:`~src.api.dependencies.require_permission`
-    stamps on each checker. This is the truthful answer to "what must a request
-    satisfy", and it catches tokens wired up by means a static scan cannot
-    follow (a router-level ``dependencies=[...]``, a loop over a table of
-    routes, a factory in another module).
+    Walks the dependency graph of the routes actually mounted on the app and
+    reads the :data:`REQUIRED_PERMISSION_ATTR` tag that
+    ``require_permission`` stamps on each checker. This is the truthful answer
+    to "what must a request satisfy", and it catches tokens wired up by means a
+    static scan cannot follow (a router-level ``dependencies=[...]``, a loop
+    over a table of routes, a factory in another module).
+
+    The app is passed in and the route objects are duck-typed, so this module
+    imports neither ``src.api`` nor FastAPI: ``src/domain`` may not depend on
+    ``src/api`` (``scripts/check_import_boundaries.py`` enforces it), and no
+    other domain module imports a web framework either. The layering that falls
+    out of that is the right way round anyway — the domain owns the name of the
+    tag, the API layer stamps it, and the caller supplies the app.
 
 The scan refuses to be quiet. A regex or a naive AST walk skips any call whose
 argument is not a string literal, so enforcement built from an f-string or a
@@ -45,6 +52,16 @@ PERMISSION_CALLABLES = frozenset({"require_permission", "has_permission"})
 
 #: Keyword name accepted as an alternative to the first positional argument.
 PERMISSION_KEYWORD = "permission"
+
+#: Attribute under which ``src.api.dependencies.require_permission`` records the
+#: token its checker enforces, so the route walk can read it back.
+#:
+#: Declared here, in the lower layer, and imported by the API layer rather than
+#: the other way round. It is one magic string and it needs exactly one owner:
+#: duplicating it would reintroduce, in miniature, the drift this package exists
+#: to remove — the copies would fall out of step and the route walk would quietly
+#: find nothing.
+REQUIRED_PERMISSION_ATTR = "__qgp_required_permission__"
 
 SRC_ROOT = Path(__file__).resolve().parents[2]
 
@@ -428,32 +445,27 @@ def _iter_dependants(dependant: Any) -> Iterator[Any]:
         yield from _iter_dependants(sub)
 
 
-def tokens_from_registered_routes(app: Any = None) -> RouteScanResult:
-    """Read the permissions wired into the routes the app actually serves.
+def tokens_from_registered_routes(app: Any) -> RouteScanResult:
+    """Read the permissions wired into the routes ``app`` actually serves.
 
-    Reads the tag :func:`~src.api.dependencies.require_permission` stamps on its
-    checker. An untagged checker is reported instead of ignored: a second
-    permission-dependency factory that forgot the tag would otherwise shrink
-    this result silently.
+    ``app`` is supplied by the caller rather than imported, to keep this module
+    free of any dependency on the API layer. Routes are duck-typed on having a
+    ``dependant``, which is what a route with a dependency graph has and what a
+    static mount or a plain Starlette route does not.
+
+    An untagged checker is reported rather than ignored: a second
+    permission-dependency factory that forgot the tag would otherwise shrink this
+    result with no complaint, and a cross-check that silently stops seeing things
+    is worse than none.
     """
-    from fastapi.routing import APIRoute
-
-    from src.api.dependencies import REQUIRED_PERMISSION_ATTR
-
-    if app is None:
-        from src.main import app as default_app
-
-        app = default_app
-
     result = RouteScanResult()
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        result.route_count += 1
-        label = f"{','.join(sorted(route.methods or ()))} {route.path}"
+    for route in getattr(app, "routes", ()) or ():
         dependant = getattr(route, "dependant", None)
         if dependant is None:
             continue
+        result.route_count += 1
+        methods = getattr(route, "methods", None) or ()
+        label = f"{','.join(sorted(methods))} {getattr(route, 'path', '<unknown>')}"
         for dep in _iter_dependants(dependant):
             call = getattr(dep, "call", None)
             if call is None:
