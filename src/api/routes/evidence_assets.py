@@ -488,29 +488,6 @@ async def list_evidence_assets(
     )
 
 
-@router.get("/{asset_id}", response_model=EvidenceAssetResponse)
-async def get_evidence_asset(
-    asset_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get a specific evidence asset by ID."""
-    query = select(EvidenceAsset).where(
-        EvidenceAsset.id == asset_id,
-        EvidenceAsset.tenant_id == current_user.tenant_id,
-        EvidenceAsset.deleted_at.is_(None),
-    )
-    result = await db.execute(query)
-    asset = result.scalar_one_or_none()
-
-    if not asset:
-        raise NotFoundError(
-            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
-        )
-
-    return _evidence_asset_response(asset)
-
-
 @router.patch("/{asset_id}", response_model=EvidenceAssetResponse)
 async def update_evidence_asset(
     asset_id: int,
@@ -737,3 +714,39 @@ async def download_file_direct(
         headers["Content-Disposition"] = cd
 
     return Response(content=content, media_type=content_type, headers=headers)
+
+
+# =============================================================================
+# Single-segment catch-all — MUST stay last in this module
+# =============================================================================
+#
+# ``GET /{asset_id}`` matches any single path segment, so FastAPI's
+# declaration-order routing makes it answer every sibling literal declared below
+# it — ``/download`` used to land here and get rejected with a 422
+# ``path -> asset_id`` int-parsing error while still appearing in the OpenAPI
+# document. Any new single-segment literal GET on this router must be declared
+# ABOVE this route.
+# ``tests/integration/test_route_shadowing_guard.py`` enforces this repo-wide.
+
+
+@router.get("/{asset_id}", response_model=EvidenceAssetResponse)
+async def get_evidence_asset(
+    asset_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a specific evidence asset by ID."""
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise NotFoundError(
+            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
+        )
+
+    return _evidence_asset_response(asset)

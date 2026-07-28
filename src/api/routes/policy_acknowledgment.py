@@ -161,27 +161,6 @@ async def get_my_pending_acknowledgments(
     )
 
 
-@router.get("/{acknowledgment_id}", response_model=PolicyAcknowledgmentResponse)
-async def get_acknowledgment(
-    acknowledgment_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get a specific acknowledgment."""
-    result = await db.execute(
-        select(PolicyAcknowledgment).where(
-            PolicyAcknowledgment.id == acknowledgment_id,
-            PolicyAcknowledgment.tenant_id == current_user.tenant_id,
-        )
-    )
-    ack = result.scalar_one_or_none()
-
-    if not ack:
-        raise NotFoundError("Acknowledgment not found")
-
-    return _policy_ack_response(ack)
-
-
 @router.post("/{acknowledgment_id}/open")
 async def record_policy_opened(
     acknowledgment_id: int,
@@ -388,3 +367,37 @@ async def get_user_read_history(
         items=[_read_log_response(l) for l in logs],
         total=len(logs),
     )
+
+
+# =============================================================================
+# Single-segment catch-all — MUST stay last in this module
+# =============================================================================
+#
+# ``GET /{acknowledgment_id}`` matches any single path segment, so FastAPI's
+# declaration-order routing makes it answer every sibling literal declared below
+# it — ``/dashboard`` and ``/reminders-needed`` both used to land here and get
+# rejected with a 422 ``path -> acknowledgment_id`` int-parsing error while still
+# appearing in the OpenAPI document. Any new single-segment literal GET on this
+# router must be declared ABOVE this route.
+# ``tests/integration/test_route_shadowing_guard.py`` enforces this repo-wide.
+
+
+@router.get("/{acknowledgment_id}", response_model=PolicyAcknowledgmentResponse)
+async def get_acknowledgment(
+    acknowledgment_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a specific acknowledgment."""
+    result = await db.execute(
+        select(PolicyAcknowledgment).where(
+            PolicyAcknowledgment.id == acknowledgment_id,
+            PolicyAcknowledgment.tenant_id == current_user.tenant_id,
+        )
+    )
+    ack = result.scalar_one_or_none()
+
+    if not ack:
+        raise NotFoundError("Acknowledgment not found")
+
+    return _policy_ack_response(ack)
