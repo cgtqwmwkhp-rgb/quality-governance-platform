@@ -37,9 +37,16 @@ async def test_create_action_supports_audit_finding_source() -> None:
     db.refresh.side_effect = refresh_side_effect
     current_user = SimpleNamespace(id=7, tenant_id=1)
 
-    with patch(
-        "src.domain.services.reference_number.ReferenceNumberService.generate",
-        new=AsyncMock(return_value="CAPA-2026-0001"),
+    # The audit bridge now really writes (PX-155), and this fake session is built
+    # for the action-creation path only: it would run out of prepared results on
+    # the hash-chain lookup inside AuditLogService. Isolated here, as elsewhere in
+    # tests/unit; the bridge has its own suites.
+    with (
+        patch(
+            "src.domain.services.reference_number.ReferenceNumberService.generate",
+            new=AsyncMock(return_value="CAPA-2026-0001"),
+        ),
+        patch("src.api.routes.actions.record_audit_event", new=AsyncMock()) as audit_mock,
     ):
         response = await create_action(
             ActionCreate(
@@ -62,6 +69,8 @@ async def test_create_action_supports_audit_finding_source() -> None:
     assert response.source_id == 55
     assert response.priority == "high"
     assert response.audit_run_id == 12
+    # The isolation above must not hide a tenant-less audit call.
+    assert audit_mock.await_args.kwargs["tenant_id"] == 1
 
 
 def test_capa_enums_bind_lowercase_values_for_postgres() -> None:
