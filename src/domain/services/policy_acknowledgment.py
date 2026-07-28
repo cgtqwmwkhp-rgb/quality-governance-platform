@@ -14,6 +14,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.exceptions import MeasurementUnavailableError
 from src.domain.models.policy_acknowledgment import (
     AcknowledgmentStatus,
     AcknowledgmentType,
@@ -229,7 +230,26 @@ class PolicyAcknowledgmentService:
         user_id: int,
         tenant_id: int | None = None,
     ) -> List[PolicyAcknowledgment]:
-        """Get all pending acknowledgments for a user."""
+        """Get all pending acknowledgments for a user.
+
+        Raises :class:`MeasurementUnavailableError` when the backing table is
+        absent. An empty list is reserved for the case that was actually read and
+        found to contain nothing, so "you have nothing to acknowledge" is only
+        ever said when it is true.
+        """
+        absent = await self.absent_tables(self.MY_PENDING_TABLES)
+        if absent:
+            logger.error(
+                "pending acknowledgments are unreadable — absent tables: %s",
+                ", ".join(absent),
+            )
+            raise MeasurementUnavailableError(
+                "Pending acknowledgments cannot be listed because "
+                f"{', '.join(absent)} is absent from the database. "
+                "This is not a report that you have nothing to read.",
+                missing_tables=absent,
+            )
+
         filters = [
             PolicyAcknowledgment.user_id == user_id,
             PolicyAcknowledgment.status.in_(
@@ -346,15 +366,20 @@ class PolicyAcknowledgmentService:
     # too, or its absence would be reported as a real zero.
     COMPLIANCE_DASHBOARD_TABLES: Tuple[str, ...] = (PolicyAcknowledgment.__tablename__,)
 
-    async def absent_dashboard_tables(self) -> Tuple[str, ...]:
-        """Which of the tables the dashboard aggregates are not in the database.
+    # The pending-reading query selects from this table alone. Named separately
+    # from the dashboard's tuple because the two reads can diverge.
+    MY_PENDING_TABLES: Tuple[str, ...] = (PolicyAcknowledgment.__tablename__,)
 
-        Asked before measuring rather than inferred from a failed query: production
+    async def absent_tables(self, names: Tuple[str, ...]) -> Tuple[str, ...]:
+        """Which of ``names`` are not present in the database.
+
+        Asked before reading rather than inferred from a failed query: production
         is built by Alembic while the models are the app's own idea of the schema,
-        so the two can disagree, and "this table is not here" has to be reported as
-        such instead of being caught and turned into zeros.
+        so the two can disagree. Inspecting is also dialect-independent, whereas
+        catching the failure is not — the same absent table raises
+        ``ProgrammingError`` on PostgreSQL and ``OperationalError`` on SQLite, so
+        an ``except ProgrammingError`` guard silently covers only one of them.
         """
-        names = self.COMPLIANCE_DASHBOARD_TABLES
 
         def _absent(sync_conn) -> Tuple[str, ...]:
             inspector = sa_inspect(sync_conn)
@@ -362,6 +387,10 @@ class PolicyAcknowledgmentService:
 
         connection = await self.db.connection()
         return await connection.run_sync(_absent)
+
+    async def absent_dashboard_tables(self) -> Tuple[str, ...]:
+        """Which of the tables the dashboard aggregates are not in the database."""
+        return await self.absent_tables(self.COMPLIANCE_DASHBOARD_TABLES)
 
     async def get_compliance_dashboard(self, tenant_id: int | None = None) -> ComplianceDashboardResult:
         """Overall policy acknowledgment compliance, or a statement that it is unknown.

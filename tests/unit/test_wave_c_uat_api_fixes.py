@@ -15,6 +15,8 @@ from src.api.routes.global_search import router as search_router
 from src.api.routes.policy_acknowledgment import get_compliance_dashboard, get_my_pending_acknowledgments
 from src.api.routes.signatures import _format_request
 from src.api.schemas.evidence_asset import EvidenceAssetResponse
+from src.domain.error_codes import ErrorCode
+from src.domain.exceptions import MeasurementUnavailableError
 from src.domain.models.evidence_asset import (
     EvidenceAssetType,
     EvidenceRetentionPolicy,
@@ -236,13 +238,23 @@ async def test_policy_ack_dashboard_still_reports_a_real_measurement():
 
 
 @pytest.mark.asyncio
-async def test_policy_ack_my_pending_fail_soft_on_missing_table():
+async def test_policy_ack_my_pending_refuses_to_answer_an_absent_table_with_an_empty_list():
+    """This test previously asserted the opposite, and the assertion was the defect.
+
+    It required ``items == []`` when the table was missing, which is the same
+    payload as a user with nothing to read. Correcting it rather than deleting it
+    keeps the missing-table case covered while reversing what the case is
+    required to produce.
+    """
     db = MagicMock()
     db.rollback = AsyncMock()
 
     service = MagicMock()
     service.get_user_pending_acknowledgments = AsyncMock(
-        side_effect=ProgrammingError("SELECT", {}, Exception("missing table"))
+        side_effect=MeasurementUnavailableError(
+            "policy_acknowledgments is absent from the database",
+            missing_tables=("policy_acknowledgments",),
+        )
     )
 
     with pytest.MonkeyPatch.context() as mp:
@@ -250,11 +262,33 @@ async def test_policy_ack_my_pending_fail_soft_on_missing_table():
             "src.api.routes.policy_acknowledgment.PolicyAcknowledgmentService",
             lambda _db: service,
         )
+        with pytest.raises(MeasurementUnavailableError) as raised:
+            await get_my_pending_acknowledgments(
+                db=db,
+                current_user=SimpleNamespace(id=1, tenant_id=1),
+            )
+
+    # 503 and a code of its own, so a client can tell "could not look" from a crash.
+    assert raised.value.http_status == 503
+    assert raised.value.code == ErrorCode.MEASUREMENT_UNAVAILABLE.value
+    assert raised.value.details["missing_tables"] == ["policy_acknowledgments"]
+
+
+@pytest.mark.asyncio
+async def test_policy_ack_my_pending_still_returns_a_real_empty_list():
+    """An empty queue that was actually read stays a plain 200 with no items."""
+    service = MagicMock()
+    service.get_user_pending_acknowledgments = AsyncMock(return_value=[])
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "src.api.routes.policy_acknowledgment.PolicyAcknowledgmentService",
+            lambda _db: service,
+        )
         response = await get_my_pending_acknowledgments(
-            db=db,
+            db=MagicMock(),
             current_user=SimpleNamespace(id=1, tenant_id=1),
         )
 
     assert response.items == []
     assert response.total == 0
-    db.rollback.assert_awaited_once()
