@@ -83,6 +83,20 @@ export interface ControlledDocumentDetail {
   download_count: number
   versions: ControlledDocumentVersion[]
   distributions: ControlledDocumentDistribution[]
+  /**
+   * Present only when part of this payload could not be read.
+   *
+   * `distributions` still arrives as `[]` in that case, because this page reads
+   * `detail.distributions.length` and a missing key would crash it. So an empty
+   * array is only safe to render as "none issued" when this field is absent —
+   * consult it before drawing any empty state over a distribution list.
+   */
+  unavailable?: {
+    fields: string[]
+    missing_tables: string[]
+    provisioning_state?: string
+    reasons?: Record<string, string>
+  }
 }
 
 export interface ControlledDocumentCreate {
