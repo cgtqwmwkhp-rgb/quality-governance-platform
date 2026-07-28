@@ -16,14 +16,17 @@ from src.api.schemas.policy_acknowledgment import (
     AcknowledgmentRequirementCreate,
     AcknowledgmentRequirementResponse,
     AssignAcknowledgmentRequest,
+    ComplianceDashboardMetrics,
     ComplianceDashboardResponse,
     DocumentReadLogListResponse,
     DocumentReadLogResponse,
     LogDocumentReadRequest,
+    MeasuredComplianceDashboard,
     PolicyAcknowledgmentListResponse,
     PolicyAcknowledgmentResponse,
     PolicyAcknowledgmentStatusResponse,
     RecordAcknowledgmentRequest,
+    UnmeasurableComplianceDashboard,
 )
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.policy_acknowledgment import (
@@ -33,7 +36,11 @@ from src.domain.models.policy_acknowledgment import (
     PolicyAcknowledgmentRequirement,
 )
 from src.domain.models.user import User
-from src.domain.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
+from src.domain.services.policy_acknowledgment import (
+    DocumentReadLogService,
+    PolicyAcknowledgmentService,
+    UnmeasurableCompliance,
+)
 
 router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgments"])
 logger = logging.getLogger(__name__)
@@ -251,22 +258,27 @@ async def get_compliance_dashboard(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get overall policy acknowledgment compliance dashboard."""
+    """Get overall policy acknowledgment compliance, or report it as unmeasurable.
+
+    A missing backing table used to be caught here and answered with zeros, which
+    told an auditor that nobody had acknowledged anything — a measurement that had
+    never been taken. The two outcomes are now separate response variants, so a
+    caller cannot read a rate that was never computed.
+    """
     service = PolicyAcknowledgmentService(db)
-    try:
-        dashboard = await service.get_compliance_dashboard(tenant_id=current_user.tenant_id)
-    except ProgrammingError:
-        logger.exception("GET /policy-acknowledgments/dashboard — table unavailable")
-        await db.rollback()
-        dashboard = {
-            "total_assignments": 0,
-            "completed": 0,
-            "pending": 0,
-            "overdue": 0,
-            "completion_rate": 0.0,
-            "overdue_rate": 0.0,
-        }
-    return ComplianceDashboardResponse(**dashboard)
+    result = await service.get_compliance_dashboard(tenant_id=current_user.tenant_id)
+
+    if isinstance(result, UnmeasurableCompliance):
+        return UnmeasurableComplianceDashboard(
+            reason=(
+                "Acknowledgment compliance cannot be measured: "
+                f"{', '.join(result.missing_tables)} absent from the database. "
+                "This is not a report of zero compliance."
+            ),
+            missing_tables=list(result.missing_tables),
+        )
+
+    return MeasuredComplianceDashboard(metrics=ComplianceDashboardMetrics(**result.metrics))
 
 
 @router.post("/check-overdue")
