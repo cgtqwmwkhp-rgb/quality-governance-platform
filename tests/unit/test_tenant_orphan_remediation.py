@@ -21,8 +21,11 @@ import pytest
 
 from scripts.ops.run025 import _models
 from scripts.ops.run025._dependencies import InboundRef, deletion_order
-from scripts.ops.run025.assign_tenant_orphan_rows import TenantAmbiguous, main as assign_main, resolve_tenant
-from scripts.ops.run025.purge_tenant_orphan_rows import _reference_parts, main as purge_main
+from scripts.ops.run025.assign_tenant_orphan_rows import TenantAmbiguous
+from scripts.ops.run025.assign_tenant_orphan_rows import main as assign_main
+from scripts.ops.run025.assign_tenant_orphan_rows import resolve_tenant
+from scripts.ops.run025.purge_tenant_orphan_rows import _reference_parts
+from scripts.ops.run025.purge_tenant_orphan_rows import main as purge_main
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_DIR = REPO_ROOT / "scripts" / "ops" / "run025"

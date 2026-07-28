@@ -58,7 +58,7 @@ from scripts.ops.run021._common import (
     require_database_url,
 )
 from scripts.ops.run025._models import migration_target_tables
-from scripts.ops.run025.inventory_tenant_id_nulls import IDENTIFYING_COLUMNS, dsn_label, _reflect, _rls_blinded
+from scripts.ops.run025.inventory_tenant_id_nulls import IDENTIFYING_COLUMNS, _reflect, _rls_blinded, dsn_label
 
 
 class TenantAmbiguous(RuntimeError):

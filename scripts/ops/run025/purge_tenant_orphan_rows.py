@@ -70,7 +70,7 @@ from scripts.ops.run021._common import (
 )
 from scripts.ops.run025._dependencies import InboundRef, RowKey, deletion_order, dependent_ids, inbound_refs
 from scripts.ops.run025._models import migration_target_tables
-from scripts.ops.run025.inventory_tenant_id_nulls import dsn_label, _reflect, _rls_blinded
+from scripts.ops.run025.inventory_tenant_id_nulls import _reflect, _rls_blinded, dsn_label
 
 #: ``PREFIX-YYYY-NNNN``, the sequential form ``ReferenceNumberService`` mints.
 SEQUENTIAL_REFERENCE = re.compile(r"^([A-Z]+)-(\d{4})-(\d+)$")
