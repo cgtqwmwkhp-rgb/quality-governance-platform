@@ -243,6 +243,46 @@ describe('Dashboard (role-aware living dashboard)', () => {
       expect(toolComplianceValue).toHaveTextContent('100%')
     })
 
+    it('no training requirements defined shows an unavailable dash, not 0% compliance', async () => {
+      authMocks.hasRole.mockReturnValue(true)
+      // Default mock is already staging's shape: Overall 0/0, required_row_count 0.
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      const trainingValue = await screen.findByTestId('pulse-training-compliance-value')
+      expect(trainingValue).toHaveTextContent('—')
+      expect(trainingValue).not.toHaveTextContent('0')
+    })
+
+    it('shows the real training percentage once a denominator exists', async () => {
+      authMocks.hasRole.mockReturnValue(true)
+      trainingMatrixApi.getSummary.mockResolvedValue({
+        module_ok: [{ role: 'Overall', ok: 41, total: 50, pct: 82, metric: 'module_ok' }],
+        people_fully_ok: [],
+        horizons: {},
+        top_overdue_courses: [],
+        required_row_count: 50,
+        person_count: 12,
+        atlas_hub_url: '',
+      })
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      const trainingValue = await screen.findByTestId('pulse-training-compliance-value')
+      expect(trainingValue).toHaveTextContent('82%')
+    })
+
     it('keeps My Day when engineer link probe fails (does not treat as unlinked)', async () => {
       engineersApi.getByUserMe.mockRejectedValue(new Error('timeout'))
       authMocks.hasRole.mockReturnValue(false)

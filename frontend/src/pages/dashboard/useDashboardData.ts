@@ -35,6 +35,7 @@ import type { ActionsViewCounts } from '../../api/actionsClient'
 import { weeklyToSparkPoints, type SparkPoint } from './PulseSparkline'
 import type { RecentCaseRow, RecentCasesData } from './RecentCasesPanel'
 import { auditScoreMetricFromDashboard } from './auditPulseMetrics'
+import { trainingComplianceMetricFromSummary } from './trainingPulseMetrics'
 
 /** Org role tiers used across the app ('manager' on most governance routes, 'supervisor' on workforce routes). */
 const ORG_ROLE_NAMES = ['admin', 'manager', 'supervisor'] as const
@@ -263,11 +264,7 @@ export function useDashboardData(): DashboardData {
       setPulse({
         trainingCompliancePct:
           trainingSummaryMetric.status === 'ok'
-            ? {
-                status: 'ok',
-                value: trainingSummaryMetric.value.module_ok.find((s) => s.role === 'Overall')
-                  ?.pct ?? 0,
-              }
+            ? trainingComplianceMetricFromSummary(trainingSummaryMetric.value)
             : metricUnavailable(),
         toolCompliancePct:
           assetHealthMetric.status === 'ok'
