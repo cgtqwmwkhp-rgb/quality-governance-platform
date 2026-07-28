@@ -35,6 +35,35 @@ _DPIA_DOC = "docs/compliance/dpia-quality-governance-platform.md"
 _DPIA_EVIDENCE = "docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md"
 
 
+# Azure hosting regions per purpose, from resource enumeration of the live
+# subscription by the accountable owner on 2026-07-28 and from ADR-0019, which
+# documents the same split. Production is NOT single-region: application
+# processing and document storage at rest are in West Europe (Netherlands) while
+# the primary database and cache are in UK South. Both are inside the UK/EEA, so
+# no third-country transfer arises here — but an Article 30 record has to state
+# where processing actually happens, and "UK South" alone was false.
+_AZURE_REGION_VERIFIED_ON = "2026-07-28"
+_AZURE_REGIONS_BY_PURPOSE: dict[str, str] = {
+    "app_hosting": "West Europe",
+    "blob_storage": "West Europe",
+    "key_vault": "West Europe",
+    "application_insights": "West Europe",
+    "postgresql": "UK South",
+    "redis_cache": "UK South",
+    "container_registry": "UK South",
+    # Entra ID is a directory service with no region pinned by this platform, and
+    # the Log Analytics workspace region was not part of the verified enumeration.
+    "entra_id": UNKNOWN,
+    "log_analytics_workspace": UNKNOWN,
+}
+_AZURE_REGION_EVIDENCE = (
+    "Azure CLI resource enumeration of the live subscription by the accountable owner "
+    f"({_AZURE_REGION_VERIFIED_ON}); docs/adr/ADR-0019-production-hosting-isolation-and-region.md "
+    "documents the same split; docs/run026-IT-HANDOVER-infrastructure-package.md (Item 3) "
+    "carries the remediation handover."
+)
+
+
 def _security_email() -> str:
     return (os.getenv("SECURITY_CONTACT_EMAIL") or _DEFAULT_SECURITY_EMAIL).strip()
 
@@ -130,6 +159,53 @@ def _optional_ai_transfer_status() -> str:
     return "pending_vendor_dpa_before_production_keys"
 
 
+def _azure_region_defect() -> dict[str, Any]:
+    """Record the verified UK South / West Europe split and its actual consequence.
+
+    Deliberately not framed as an unlawful transfer: West Europe is in the EEA and
+    the UK recognises EEA hosting, so no SCC or IDTA is engaged. What is wrong is
+    the accuracy of the record, and any customer-facing "hosted in the UK"
+    statement that relies on it.
+    """
+    west_europe = sorted(purpose for purpose, region in _AZURE_REGIONS_BY_PURPOSE.items() if region == "West Europe")
+    uk_south = sorted(purpose for purpose, region in _AZURE_REGIONS_BY_PURPOSE.items() if region == "UK South")
+    return {
+        "summary": (
+            "Production is split across two regions. Application processing "
+            "(API, Celery worker, beat), uploaded document storage at rest, secrets "
+            "and telemetry are in West Europe (Netherlands); the primary database, "
+            "cache and container registry are in UK South."
+        ),
+        "west_europe_purposes": west_europe,
+        "uk_south_purposes": uk_south,
+        "lawfulness": (
+            "No third-country transfer and no unlawfulness of the kind that applies to the "
+            "US-hosted AI processors in this register: West Europe is inside the EEA. No SCC "
+            "or UK IDTA is engaged by this split."
+        ),
+        "why_it_matters": (
+            "An Art. 30 record must state where processing occurs, and this register "
+            "previously stated UK South for hosting, blob storage and processing. Any "
+            "customer-facing statement, tender response or DPA saying the platform is "
+            "'hosted in the UK' is false for application processing and for uploaded "
+            "document storage at rest — a factual misstatement to data subjects and "
+            "customers."
+        ),
+        "status": "known_infrastructure_defect_scheduled_for_remediation",
+        "remediation": (
+            "IT to co-locate production in UK South after UAT (target: single-region UK South). "
+            "Storage requires a copy, so the blob account move is its own change — see ADR-0019."
+        ),
+        "verified_on": _AZURE_REGION_VERIFIED_ON,
+        "verification_method": "azure_cli_resource_enumeration_by_accountable_owner",
+        "sources": [
+            "docs/adr/ADR-0019-production-hosting-isolation-and-region.md",
+            "docs/run026-IT-HANDOVER-infrastructure-package.md (Item 3)",
+            "docs/compliance/gdpr-compliance.md §7 International Transfers",
+        ],
+    }
+
+
 def _international_transfers() -> dict[str, Any]:
     """Art. 30(1)(e) international transfers / safeguards summary (unsigned stub).
 
@@ -138,8 +214,16 @@ def _international_transfers() -> dict[str, Any]:
     """
     subprocessors = _subprocessors()
     return {
-        "primary_hosting_region": "UK South",
+        # Application processing runs in West Europe; the primary database is in UK
+        # South. Verified against the live subscription — see _azure_region_defect().
+        "primary_hosting_region": "West Europe",
+        "primary_database_region": "UK South",
+        "hosting_regions": sorted({region for region in _AZURE_REGIONS_BY_PURPOSE.values() if region != UNKNOWN}),
+        "hosting_regions_by_purpose": dict(_AZURE_REGIONS_BY_PURPOSE),
+        "documents_at_rest_region": "West Europe",
         "primary_hosting_mechanism": "uk_eea_hosting",
+        "hosting_region_evidence": _AZURE_REGION_EVIDENCE,
+        "azure_region_defect": _azure_region_defect(),
         "policy_doc": "docs/compliance/gdpr-compliance.md",
         "policy_section_ref": "§7 International Transfers",
         "dpia_refs": [
@@ -147,10 +231,13 @@ def _international_transfers() -> dict[str, Any]:
             "docs/compliance/dpia-ocr-ai-import.md",
         ],
         "default_posture": (
-            "Primary platform processing is hosted in Azure UK South (UK/EEA). "
-            "AI subprocessors are enabled in production; their hosting regions and "
-            "transfer safeguards are not established in this repository and must be "
-            "treated as third-country transfers until the controller confirms them."
+            "Primary application processing and uploaded-document storage at rest are in "
+            "Azure West Europe (Netherlands); the primary database and cache are in Azure "
+            "UK South. Both regions are inside the UK/EEA, so hosting raises no "
+            "third-country transfer — but this is not UK-only hosting, and it is not "
+            "described as such. AI subprocessors are enabled in production; their hosting "
+            "regions and transfer safeguards are not established in this repository and "
+            "must be treated as third-country transfers until the controller confirms them."
         ),
         "optional_ai_transfer_status": _optional_ai_transfer_status(),
         "subprocessor_transfer_mechanisms": [
@@ -171,7 +258,9 @@ def _international_transfers() -> dict[str, Any]:
             "listed as unknown are genuinely unestablished in the repository — a "
             "lawful-sounding placeholder would make this register false. "
             "retaining_subprocessors names AI processors that hold content rather "
-            "than returning a result and keeping nothing."
+            "than returning a result and keeping nothing. Hosting is UK/EEA but not "
+            "UK-only: see azure_region_defect for the verified per-purpose split and "
+            "its remediation status."
         ),
     }
 
@@ -269,8 +358,10 @@ def _ai_subprocessor_entries() -> list[dict[str, Any]]:
             "regions": ["UK South"],
             "region_evidence": (
                 "docs/compliance/e4-dual-ocr-redaction-gate.md — dedicated resource qgp-docintel "
-                "provisioned in uksouth. The runtime endpoint comes from configuration, so this "
-                "register cannot verify the deployed value matches that resource."
+                f"provisioned in uksouth, confirmed present in UK South by live resource "
+                f"enumeration on {_AZURE_REGION_VERIFIED_ON}. The runtime endpoint comes from "
+                "configuration, so this register cannot verify the deployed value points at that "
+                "resource."
             ),
             "transfer_mechanism": "uk_eea_hosting_per_e4_gate_resource_evidence",
             "transfer_safeguard_status": "microsoft_dpa_operator_confirms_resource_matches_e4_evidence",
@@ -537,16 +628,16 @@ def _subprocessors() -> list[dict[str, Any]]:
         {
             "name": "Microsoft Azure",
             "role": "infrastructure_processor",
-            "purposes": [
-                "app_hosting",
-                "postgresql",
-                "blob_storage",
-                "entra_id",
-                "log_analytics",
-                "key_vault",
-            ],
-            "regions": ["UK South"],
-            "region_evidence": "docs/compliance/gdpr-compliance.md §7; docs/compliance/dpia-quality-governance-platform.md",
+            "purposes": sorted(_AZURE_REGIONS_BY_PURPOSE),
+            "regions": sorted({region for region in _AZURE_REGIONS_BY_PURPOSE.values() if region != UNKNOWN}),
+            "regions_by_purpose": dict(_AZURE_REGIONS_BY_PURPOSE),
+            "region_evidence": _AZURE_REGION_EVIDENCE,
+            "personal_data_at_rest": {
+                "uploaded_documents_and_evidence": "West Europe (production blob storage account)",
+                "relational_records_incidents_complaints_users": "UK South (production PostgreSQL)",
+                "cached_operational_data": "UK South (production Redis)",
+                "secrets": "West Europe (production Key Vault)",
+            },
             "transfer_mechanism": "uk_eea_hosting",
             "transfer_safeguard_status": "operator_confirms_microsoft_dpa",
             "retention_posture": HOSTS_PLATFORM_DATA,
@@ -557,6 +648,7 @@ def _subprocessors() -> list[dict[str, Any]]:
             ],
             "retention_note": "Primary hosting; retention follows src.core.retention_config horizons.",
             "data_transmitted": ["all_platform_data_in_scope_of_hosting"],
+            "known_region_defect": _azure_region_defect(),
             "optional": False,
             "activation": {
                 "status": "active_in_production",
@@ -564,7 +656,7 @@ def _subprocessors() -> list[dict[str, Any]]:
                 "credentials_present_in_this_environment": None,
                 "evidence": "primary hosting — not credential-gated in this register",
             },
-            "unknown_fields": [],
+            "unknown_fields": ["entra_id_region", "log_analytics_workspace_region"],
             "dpa_doc": "docs/compliance/gdpr-compliance.md",
         }
     ]

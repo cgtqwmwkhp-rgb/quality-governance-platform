@@ -194,6 +194,56 @@ def test_a_concrete_region_claim_must_cite_repository_evidence():
         )
 
 
+def test_azure_hosting_regions_are_reported_per_purpose_not_as_one_region():
+    """Production is two regions, and the register must not flatten that.
+
+    Verified against the live subscription on 2026-07-28: application processing,
+    uploaded-document storage at rest, secrets and telemetry are in West Europe;
+    the database and cache are in UK South. A single ``UK South`` value — which
+    this register published until that check — is false for processing and for
+    documents at rest.
+    """
+    azure = next(row for row in _subprocessors() if row["name"] == "Microsoft Azure")
+    by_purpose = azure["regions_by_purpose"]
+
+    assert by_purpose["app_hosting"] == "West Europe"
+    assert by_purpose["blob_storage"] == "West Europe"
+    assert by_purpose["key_vault"] == "West Europe"
+    assert by_purpose["postgresql"] == "UK South"
+    assert by_purpose["redis_cache"] == "UK South"
+    assert sorted(azure["regions"]) == ["UK South", "West Europe"]
+
+    assert set(azure["purposes"]) == set(by_purpose), "every hosting purpose must state where it happens"
+    assert azure["region_evidence"], "a concrete region claim must cite its source"
+    assert "West Europe" in azure["personal_data_at_rest"]["uploaded_documents_and_evidence"]
+
+
+def test_transfers_block_does_not_claim_uk_only_hosting():
+    transfers = _international_transfers()
+
+    assert transfers["primary_hosting_region"] == "West Europe"
+    assert transfers["primary_database_region"] == "UK South"
+    assert transfers["documents_at_rest_region"] == "West Europe"
+    assert sorted(transfers["hosting_regions"]) == ["UK South", "West Europe"]
+    assert "West Europe" in transfers["default_posture"]
+    assert "hosted in Azure UK South" not in transfers["default_posture"]
+
+
+def test_azure_region_split_is_recorded_as_a_defect_not_as_an_unlawful_transfer():
+    """The split is an accuracy defect inside the UK/EEA — not an SCC/IDTA problem."""
+    defect = _international_transfers()["azure_region_defect"]
+
+    assert defect["status"] == "known_infrastructure_defect_scheduled_for_remediation"
+    assert defect["verified_on"] == "2026-07-28"
+    assert defect["verification_method"] == "azure_cli_resource_enumeration_by_accountable_owner"
+    assert any("ADR-0019" in source for source in defect["sources"])
+    assert "no third-country transfer" in defect["lawfulness"].lower()
+    assert "blob_storage" in defect["west_europe_purposes"]
+    assert "postgresql" in defect["uk_south_purposes"]
+    # Hosting keeps its UK/EEA mechanism: the register must not imply an SCC/IDTA is owed here.
+    assert _international_transfers()["primary_hosting_mechanism"] == "uk_eea_hosting"
+
+
 def test_no_ai_processor_claims_a_uk_eea_mechanism_without_evidence():
     for row in _subprocessors():
         if row["transfer_mechanism"].startswith("uk_eea"):

@@ -34,7 +34,7 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 | D | Categories of data subjects | Platform DPIA §2; LIVE `activities[].data_subject_categories` | Ready for review | LIVE subject-category field added (unsigned stub) — expand if controllers require finer taxonomy |
 | E | Categories of personal data | LIVE `activities[].data_categories`; PII inventory script evidence | Ready for review | Re-run `scripts/governance/audit_pii_fields.py` on model changes |
 | F | Categories of recipients | LIVE `subprocessors`; GDPR §8 | Ready for review | Link **signed** vendor DPAs (paths only after legal files exist) |
-| G | Transfers to third country / international org + safeguards | Platform DPIA §7; OCR DPIA §3.1 / §5; LIVE `international_transfers` + subprocessors `transfer_mechanism` | Ready for review | LIVE transfers summary added (unsigned stub) — Confirm SCC / UK IDTA for Mistral / Gemini **before** production AI keys; **do not invent** signed vendor DPAs |
+| G | Transfers to third country / international org + safeguards | Platform DPIA §7; OCR DPIA §3.1 / §5; LIVE `international_transfers` + subprocessors `transfer_mechanism` | **Corrected 2026-07-28** | Hosting is UK/EEA across **two** regions (West Europe processing + documents at rest, UK South database) — no third-country transfer, no SCC/IDTA engaged; see [`gdpr-compliance.md`](gdpr-compliance.md) §7.1. AI processors are live with regions and safeguards **unestablished**; **do not invent** signed vendor DPAs |
 | H | Retention periods (or criteria) | [`../privacy/data-retention-policy.md`](../privacy/data-retention-policy.md); LIVE `retention` + `activities[].retention_days` | Ready for review | Matter hold register is LIVE; retention workers still do **not** consume active holds — no automated purge-prevention claim (§7a honesty) |
 | I | General description of technical / organisational security measures | Platform DPIA §5; `docs/security/security-baseline.md`; LIVE `technical_organisational_measures` | Ready for review | LIVE TOM summary added (unsigned stub) — **not** a substitute for EA-02 external pen-test |
 
@@ -82,7 +82,7 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 
 | Processor | Role | Optional | Retention posture | Transfer mechanism (established) | DPA on file? |
 |-----------|------|----------|-------------------|----------------------------------|--------------|
-| Microsoft Azure | Infrastructure | No | Hosts platform data | UK/EEA hosting | Operator responsibility — confirm Azure DPA |
+| Microsoft Azure | Infrastructure (hosting, DB, blob, Entra ID, logs, Key Vault) | No | Hosts platform data | UK/EEA hosting — **two regions, verified 2026-07-28:** application processing, uploaded documents at rest, secrets and telemetry in **West Europe**; database, cache and registry in **UK South**. No third-country transfer; no SCC/IDTA engaged. See [`gdpr-compliance.md`](gdpr-compliance.md) §7.1 | Operator responsibility — confirm Azure DPA |
 | Azure AI Document Intelligence | Dual-OCR / library failover | Yes | Transient | UK/EEA hosting per E4 gate resource evidence (`qgp-docintel`, uksouth) | Microsoft DPA — operator confirms resource |
 | Mistral AI | OCR / extraction | Yes | Transient | **Unknown** | **Pending** — keys are live |
 | Google Gemini | Multimodal review | Yes | Transient | **Unknown** | **Pending** — keys are live |
@@ -115,7 +115,7 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.7 | 2026-07-28 | Platform Engineering | Sub-processor table expanded to the processors actually live in production (Azure DI, Anthropic, OpenAI, Voyage AI, Pinecone) with retention posture; transfer mechanisms marked **Unknown** rather than guessed; two new activity rows for library indexing and AI-assisted case analysis |
+| 1.7 | 2026-07-28 | Platform Engineering | Sub-processor table expanded to the processors actually live in production (Azure DI, Anthropic, OpenAI, Voyage AI, Pinecone) with retention posture; transfer mechanisms marked **Unknown** rather than guessed; two new activity rows for library indexing and AI-assisted case analysis; Microsoft Azure hosting corrected from "UK South" to the verified West Europe / UK South split (element G) |
 | 1.5 | 2026-07-12 | Platform Engineering | Gaps A/B/P1 surfaced on LIVE stub via `roles_and_contacts` — still **unsigned** / DPO identity not invented |
 | 1.6 | 2026-07-20 | Platform Engineering | Added per-activity source pointers and controller-review status to the LIVE stub — still **unsigned**, not a completed controller ROPA |
 | 1.4 | 2026-07-12 | Platform Engineering | Gap G surfaced on LIVE stub via `international_transfers` — still **unsigned** / AI vendor DPAs not invented |

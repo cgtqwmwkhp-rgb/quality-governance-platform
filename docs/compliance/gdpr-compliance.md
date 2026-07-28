@@ -96,7 +96,54 @@ See also: [`docs/evidence/retention-automation-evidence.md`](../evidence/retenti
 
 ## 7. International Transfers
 
-The platform is hosted entirely within Azure UK South region. No personal data is transferred outside the UK/EEA. If future requirements necessitate international transfers, appropriate safeguards (Standard Contractual Clauses or adequacy decisions) will be implemented before any transfer occurs.
+### 7.1 Platform hosting — UK/EEA, but not UK-only
+
+**Corrected 2026-07-28.** This section previously stated that the platform is "hosted entirely within
+Azure UK South region". That was false. Production is split across two Azure regions:
+
+| Purpose | Region | Resource (production) |
+|---------|--------|------------------------|
+| Application processing — API, Celery worker, Celery beat | **West Europe** (Netherlands) | `app-qgp-prod`, `app-qgp-prod-worker`, `app-qgp-prod-beat` on `plan-qgp-staging-weu` |
+| **Uploaded documents / evidence at rest** | **West Europe** | production blob storage account (container `evidence-assets`) |
+| Secrets | **West Europe** | `kv-qgp-prod` |
+| Telemetry | **West Europe** | `appi-qgp-staging` (Application Insights) |
+| Frontend | **West Europe** | `qgp-frontend` |
+| Primary database (personal data at rest) | UK South | `psql-qgp-prod` (PostgreSQL 16) |
+| Cache | UK South | `redis-qgp-prod` |
+| OCR (Azure AI Document Intelligence) | UK South | `qgp-docintel` |
+
+**Legal characterisation — do not overstate this.** The Netherlands is in the EEA. There is **no
+third-country transfer** and **no unlawfulness** of the kind that applies to the US-hosted AI
+processors in §8. **No SCC or UK IDTA is engaged by this split**, and none should be attached to it.
+
+**What is actually wrong** is the accuracy of the Article 30 record: it stated UK South for hosting,
+blob storage and application processing when those are in West Europe. An Art. 30 record must state
+where processing occurs. The practical exposure is that **any customer-facing statement, tender
+response or DPA saying the platform is "hosted in the UK" is false for application processing and
+for uploaded document storage at rest** — a factual misstatement to data subjects and customers.
+Statements should say UK/EEA, or state the split.
+
+**Status:** known infrastructure defect, scheduled for remediation by IT after UAT. Target is
+co-location in **UK South**; the blob storage account requires a copy, so it is treated as its own
+change. Sources: [`../adr/ADR-0019-production-hosting-isolation-and-region.md`](../adr/ADR-0019-production-hosting-isolation-and-region.md)
+(documents the same split, status Proposed 2026-07-25) and
+`docs/run026-IT-HANDOVER-infrastructure-package.md` (Item 3). Verified 2026-07-28 by Azure CLI
+resource enumeration of the live subscription by the accountable owner.
+
+Machine-readable equivalent: `GET /api/v1/privacy/data-processing-register` →
+`international_transfers.hosting_regions_by_purpose` and `international_transfers.azure_region_defect`.
+
+Two regions are not separately verified and are published as unknown: the Entra ID directory region
+(a directory service this platform does not region-pin) and the Log Analytics workspace region.
+
+### 7.2 AI sub-processor transfers
+
+Transfers to the AI processors in §8 are a separate and more serious question: their regions and
+transfer safeguards are **not established**, and no vendor DPA, SCC or UK IDTA artifact exists in
+this repository. See [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §2.0a. If future requirements
+necessitate a confirmed third-country transfer, appropriate safeguards (SCCs, UK IDTA, or an
+adequacy decision) must be in place before the transfer — for the AI processors already live, that
+is remediation rather than a precondition.
 
 ---
 
@@ -115,7 +162,8 @@ include complaints, near-misses, CAPA, risk register, and RTA plus additive `pur
 `roles_and_contacts` block for Art. 30 A/B/P1 pointers (**DPO identity not invented**;
 `dpo.contact_email` stays `null` until appointed), a
 `technical_organisational_measures` block for Art. 30(1)(g) (general TOMs; **not** EA-02),
-and `international_transfers` for Art. 30(1)(e) (UK South primary; optional AI vendor
+and `international_transfers` for Art. 30(1)(e) (West Europe application processing and
+documents at rest, UK South database — both UK/EEA, see §7.1; AI vendor
 transfers pending SCC/UK IDTA — **no signed vendor DPAs invented**).
 Signed DPA links + EA-01/02/04 are still required before treating it as a full controller ROPA.
 LIVE `dpia.attestation_pack` / `dpia.article_30_checklist` point at the attestation pack.
@@ -127,7 +175,7 @@ Sub-processors disclosed (also on `/privacy/contact`):
 
 | Processor | Role | Optional | Retention posture | Region / transfer mechanism |
 |-----------|------|----------|-------------------|------------------------------|
-| Microsoft Azure | Infrastructure (hosting, DB, blob, Entra ID, logs, Key Vault) | No | Hosts platform data | UK South — UK/EEA hosting |
+| Microsoft Azure | Infrastructure (hosting, DB, blob, Entra ID, logs, Key Vault) | No | Hosts platform data | **Split, verified 2026-07-28:** app processing, uploaded documents at rest, secrets and telemetry in **West Europe**; database, cache and registry in **UK South**. UK/EEA hosting, no third-country transfer — see §7.1 |
 | Azure AI Document Intelligence | Dual-OCR / library OCR failover (enabled in production, E4 gate closed) | Yes | Transient | UK South per E4 gate resource evidence (`qgp-docintel`, uksouth) |
 | Mistral AI | OCR / structured extraction | Yes (live in production) | Transient | **Unknown** |
 | Google Gemini | Multimodal review | Yes (live in production) | Transient | **Unknown** |

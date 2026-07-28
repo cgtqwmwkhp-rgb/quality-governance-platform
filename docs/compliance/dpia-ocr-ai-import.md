@@ -43,7 +43,7 @@ Published machine-readable equivalent: `GET /api/v1/privacy/data-processing-regi
 | --- | --- | --- | --- | --- |
 | Mistral AI | OCR + structured extraction | External audit document bytes / page images; library document bytes when native extraction is thin or empty; extracted text for analysis | Transient — returns a result; nothing stored by QGP | **Unknown** — not established in repo |
 | Google Gemini | Multimodal review | External audit document bytes for second-pass review | Transient | **Unknown** |
-| Azure AI Document Intelligence | Dual-OCR / library OCR failover | Library and external-audit document bytes when Mistral/native OCR is thin or fails | Transient | **UK South** on documentary evidence — the [E4 gate](e4-dual-ocr-redaction-gate.md) records a dedicated `qgp-docintel` resource in `uksouth`; the deployed `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` value is not verifiable from the repository |
+| Azure AI Document Intelligence | Dual-OCR / library OCR failover | Library and external-audit document bytes when Mistral/native OCR is thin or fails | Transient | **UK South** — the [E4 gate](e4-dual-ocr-redaction-gate.md) records a dedicated `qgp-docintel` resource in `uksouth`, confirmed in UK South by live resource enumeration on 2026-07-28; the deployed `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` value is not verifiable from the repository |
 | Anthropic | Document + case analysis (preferred shared AI client) | Library document text (≤50k chars per analysis), incident descriptions, aggregated incident/near-miss themes with case reference numbers, audit finding and clause text | Transient | **Unknown** |
 | OpenAI | Fallback LLM on shared AI client paths | Same prompt content as Anthropic when selected by `AI_PROVIDER` / key precedence | Transient | **Unknown** |
 | Voyage AI | Embeddings | Full text of **every** library document chunk at index time; user search query text | Transient — returns vectors | **Unknown** |
@@ -86,6 +86,10 @@ Import draft / review workspace (human-in-the-loop)
         ▼
 Promotion to tenant records (audits, findings, CAPA, risks) — no auto-live findings from provider failure paths
 ```
+
+The Azure Blob storage that holds source files (container `evidence-assets`) is in **West Europe**,
+not UK South — UK/EEA, so no third-country transfer, but see platform DPIA §2.2a and
+[`gdpr-compliance.md`](gdpr-compliance.md) §7.1. Corrected 2026-07-28.
 
 ### 3.2 Governance library indexing (persistent egress — third-party retention)
 
