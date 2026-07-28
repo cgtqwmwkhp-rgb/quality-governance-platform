@@ -111,6 +111,17 @@ class _MockUser:
 # Permission sets
 # ---------------------------------------------------------------------------
 
+# Every token here must appear in ENFORCED_PERMISSIONS
+# (src/domain/authz/catalogue.py); tests/unit/test_permission_catalogue.py fails
+# if one does not. Fourteen tokens were removed when that guard was added because
+# no code path checks them — four audit_template:* tokens whose routes are gated
+# on audit:* instead, plus a set of :read/:delete tokens for endpoints that are
+# gated by authentication or by CurrentSuperuser rather than by a permission.
+# Granting a token nothing ever asks for changed no test outcome, under either
+# this file's substring matching or the real exact-membership check in
+# User.has_permission. This list is intentionally still a subset of the
+# catalogue: it is one admin persona, not the full admin grant. The proposed full
+# grant is ADMIN_ROLE_PERMISSIONS in the catalogue module.
 _ADMIN_PERMS = ",".join(
     [
         "incident:create",
@@ -126,47 +137,33 @@ _ADMIN_PERMS = ",".join(
         "rta:update",
         "rta:delete",
         "policy:create",
-        "policy:read",
         "policy:update",
         "policy:delete",
         "action:create",
-        "action:read",
         "action:update",
-        "action:delete",
         "capa:create",
-        "capa:read",
         "capa:update",
-        "capa:delete",
         "investigation:create",
-        "investigation:read",
         "investigation:update",
         "investigation:approve_customer_omit",
         "document:create",
         "document:read",
         "document:update",
         "engineer:create",
-        "engineer:read",
         "engineer:update",
         "assessment:create",
-        "assessment:read",
         "assessment:update",
         "audit:create",
         "audit:read",
         "audit:update",
         "audit:delete",
         "standard:create",
-        "standard:read",
         "standard:update",
         "risk:create",
-        "risk:read",
         "risk:update",
         "near_miss:create",
         "near_miss:read",
         "near_miss:update",
-        "audit_template:create",
-        "audit_template:read",
-        "audit_template:update",
-        "audit_template:delete",
     ]
 )
 

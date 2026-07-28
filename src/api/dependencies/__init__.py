@@ -129,6 +129,14 @@ async def get_current_superuser(
     return current_user
 
 
+#: Attribute name under which :func:`require_permission` records the token it
+#: enforces. The permission-catalogue test walks the app's registered routes and
+#: reads this tag, rather than reaching into the checker's closure: a closure
+#: variable read by name goes quietly to ``None`` the day the parameter is
+#: renamed, which would make the catalogue test pass while checking nothing.
+REQUIRED_PERMISSION_ATTR = "__qgp_required_permission__"
+
+
 def require_permission(permission: str):
     """Dependency factory for permission checking."""
 
@@ -142,6 +150,7 @@ def require_permission(permission: str):
             )
         return current_user
 
+    setattr(permission_checker, REQUIRED_PERMISSION_ATTR, permission)
     return permission_checker
 
 
