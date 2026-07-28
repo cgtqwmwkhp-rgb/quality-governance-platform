@@ -9,7 +9,6 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import and_, select
-from sqlalchemy.exc import ProgrammingError
 
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.api.schemas.policy_acknowledgment import (
@@ -150,17 +149,18 @@ async def get_my_pending_acknowledgments(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get current user's pending acknowledgments."""
+    """Get current user's pending acknowledgments.
+
+    No failure is converted into an empty list here. If the backing table is
+    absent the service raises ``MeasurementUnavailableError`` and the caller gets
+    a 503 naming it, because an empty reading queue is something a user acts on
+    by doing nothing.
+    """
     service = PolicyAcknowledgmentService(db)
-    try:
-        pending = await service.get_user_pending_acknowledgments(
-            current_user.id,
-            tenant_id=current_user.tenant_id,
-        )
-    except ProgrammingError:
-        logger.exception("GET /policy-acknowledgments/my-pending — table unavailable")
-        await db.rollback()
-        return PolicyAcknowledgmentListResponse(items=[], total=0)
+    pending = await service.get_user_pending_acknowledgments(
+        current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
 
     return PolicyAcknowledgmentListResponse(
         items=[_policy_ack_response(a) for a in pending],
