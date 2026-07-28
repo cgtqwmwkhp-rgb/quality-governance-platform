@@ -3,6 +3,12 @@
 Values align with ``04-reference/QGP-Lookup-Configuration-Values.md`` so admin
 and portal channels stay compatible. Customers are intentionally excluded —
 those are contract-specific business data.
+
+``complaint_types`` and ``incident_types`` are not free-form: their codes are
+submitted verbatim as enum-validated API fields, so every code has to be a
+member of the matching enum. See ``lookup_enum_contract`` for why, and
+``tests/integration/test_lookup_enum_contract.py`` for the test that holds the
+two halves together.
 """
 
 from __future__ import annotations
@@ -53,30 +59,27 @@ LOOKUP_DEFAULT_ROWS: tuple[LookupDefaultRow, ...] = (
     LookupDefaultRow("severity_levels", "medium", "Medium", 3),
     LookupDefaultRow("severity_levels", "low", "Low", 4),
     LookupDefaultRow("severity_levels", "negligible", "Negligible", 5),
-    # 3. Incident Types
+    # 3. Incident Types — codes are ``IncidentType`` members (R22-01). The label
+    # carries the UK construction and utilities wording; the code is what the
+    # form submits as ``incident_type``, so it cannot be anything else.
     LookupDefaultRow("incident_types", "injury", "Injury / accident", 1),
-    LookupDefaultRow("incident_types", "ill_health", "Occupational ill health", 2),
-    LookupDefaultRow("incident_types", "dangerous_occurrence", "Dangerous occurrence (RIDDOR Schedule 2)", 3),
-    LookupDefaultRow("incident_types", "hazard", "Hazard / unsafe condition", 4),
-    LookupDefaultRow("incident_types", "property_damage", "Property or asset damage", 5),
-    LookupDefaultRow("incident_types", "vehicle_incident", "Vehicle incident", 6),
-    LookupDefaultRow("incident_types", "environmental", "Environmental (spill, leak, emission)", 7),
-    LookupDefaultRow("incident_types", "fire", "Fire or explosion", 8),
-    LookupDefaultRow("incident_types", "utility_strike", "Utility strike / service damage", 9),
-    LookupDefaultRow("incident_types", "security", "Security, theft or violence", 10),
-    LookupDefaultRow("incident_types", "quality", "Quality or service failure", 11),
-    LookupDefaultRow("incident_types", "other", "Other", 12),
-    # 4. Complaint Types
-    LookupDefaultRow("complaint_types", "workmanship", "Workmanship / repair defect", 1),
-    LookupDefaultRow("complaint_types", "service_quality", "Service quality", 2),
-    LookupDefaultRow("complaint_types", "delay", "Delay or missed SLA", 3),
-    LookupDefaultRow("complaint_types", "damage", "Damage to customer property", 4),
+    LookupDefaultRow("incident_types", "near_miss", "Near miss / close call", 2),
+    LookupDefaultRow("incident_types", "hazard", "Hazard / unsafe condition", 3),
+    LookupDefaultRow("incident_types", "property_damage", "Property, plant or vehicle damage", 4),
+    LookupDefaultRow("incident_types", "environmental", "Environmental (spill, leak, emission)", 5),
+    LookupDefaultRow("incident_types", "security", "Security, theft or violence", 6),
+    LookupDefaultRow("incident_types", "quality", "Quality or service failure", 7),
+    LookupDefaultRow("incident_types", "other", "Other", 8),
+    # 4. Complaint Types — codes are ``ComplaintType`` members (PX-281/282).
+    LookupDefaultRow("complaint_types", "service", "Service or workmanship", 1),
+    LookupDefaultRow("complaint_types", "product", "Product, plant or materials supplied", 2),
+    LookupDefaultRow("complaint_types", "delivery", "Delivery, delay or missed appointment", 3),
+    LookupDefaultRow("complaint_types", "communication", "Communication or updates", 4),
     LookupDefaultRow("complaint_types", "billing", "Billing or invoicing", 5),
-    LookupDefaultRow("complaint_types", "conduct", "Staff conduct or behaviour", 6),
-    LookupDefaultRow("complaint_types", "communication", "Communication or updates", 7),
-    LookupDefaultRow("complaint_types", "hse_concern", "Health, safety or environmental concern", 8),
-    LookupDefaultRow("complaint_types", "vehicle_standard", "Vehicle or plant standard", 9),
-    LookupDefaultRow("complaint_types", "other", "Other", 10),
+    LookupDefaultRow("complaint_types", "staff", "Staff conduct or behaviour", 6),
+    LookupDefaultRow("complaint_types", "safety", "Health and safety concern", 7),
+    LookupDefaultRow("complaint_types", "environmental", "Environmental (noise, spill, waste)", 8),
+    LookupDefaultRow("complaint_types", "other", "Other", 9),
     # 5. Medical Assistance
     LookupDefaultRow("medical_assistance", "none", "None required", 1),
     LookupDefaultRow("medical_assistance", "self_administered", "Self-administered first aid", 2),

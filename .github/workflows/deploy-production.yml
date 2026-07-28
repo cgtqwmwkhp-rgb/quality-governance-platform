@@ -632,6 +632,7 @@ jobs:
               PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
               PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-aped-4627-b74a}" \
               UAT_MODE="READ_WRITE" \
+              DEFAULT_TENANT_ID="1" \
               APPLICATIONINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
               CORS_ORIGINS='["https://app-qgp-prod.azurestaticapps.net","https://purple-water-03205fa03.6.azurestaticapps.net"]' \
               CELERY_BROKER_URL="${REDIS_URL_VAL}" \
