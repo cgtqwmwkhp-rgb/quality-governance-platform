@@ -12,7 +12,7 @@ Provides:
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.risk_register import (
@@ -26,6 +26,34 @@ from src.domain.models.risk_register import (
     RiskControlMapping,
     RiskNote,
 )
+
+# ---------------------------------------------------------------------------
+# Canonical register-population predicates (PX-178)
+# ---------------------------------------------------------------------------
+# The register list, the register summary and the executive dashboard must all
+# count the same rows. Defining the predicates once here — in the domain, where
+# both the API routes and the dashboard service may import them — is what stops
+# a KPI tile disagreeing with the register it links to.
+
+RISK_REGISTER_CLOSED_STATUS = "closed"
+
+
+def register_visibility_clause() -> ColumnElement[bool]:
+    """Rows the Enterprise Risk Register treats as part of the register.
+
+    Import-sourced suggestions awaiting triage are held back from every headline
+    view until a human accepts them, so they are excluded here rather than at
+    each call site.
+    """
+    return or_(
+        EnterpriseRisk.suggestion_triage_status.is_(None),
+        EnterpriseRisk.suggestion_triage_status == "accepted",
+    )
+
+
+def register_active_clause() -> ColumnElement[bool]:
+    """Register rows that are still live work (everything not closed)."""
+    return EnterpriseRisk.status != RISK_REGISTER_CLOSED_STATUS
 
 
 def naive_utc_cutoff(days: int) -> datetime:
