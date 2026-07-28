@@ -47,3 +47,8 @@ class ErrorCode(str, Enum):
     INTERNAL_ERROR = "INTERNAL_ERROR"
     DATABASE_ERROR = "DATABASE_ERROR"
     CONFIGURATION_ERROR = "CONFIGURATION_ERROR"
+
+    # Distinct from DATABASE_ERROR: the query did not fail, it was never asked,
+    # because a table it needs is not in the database. Separate code so a client
+    # can tell "we could not look" from "the lookup broke".
+    MEASUREMENT_UNAVAILABLE = "MEASUREMENT_UNAVAILABLE"
