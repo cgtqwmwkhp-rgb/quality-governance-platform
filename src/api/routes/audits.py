@@ -1360,16 +1360,16 @@ async def create_response(
 ) -> AuditResponseResponse:
     """Submit a response to an audit question."""
     started = time.perf_counter()
-    # Verify run exists and is in progress
+    # Verify run exists and is in progress. Exact tenant match only: the
+    # previous filter also matched runs with a NULL tenant_id, which is a live
+    # set of rows in the migrated schema (the column is still nullable there),
+    # so any authenticated caller could write into an unattributed run belonging
+    # to another organisation. Nothing below the application enforces this.
     result = await db.execute(
-        select(AuditRun)
-        .options(selectinload(AuditRun.template))
-        .where(
-            AuditRun.id == run_id,
-            or_(
-                AuditRun.tenant_id == current_user.tenant_id,
-                AuditRun.tenant_id.is_(None),
-            ),
+        apply_tenant_filter(
+            select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.id == run_id),
+            AuditRun,
+            current_user.tenant_id,
         )
     )
     run = result.scalar_one_or_none()

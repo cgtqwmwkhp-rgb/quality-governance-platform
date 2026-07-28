@@ -24,7 +24,7 @@ import pytest
 
 from src.api.routes.audits import create_response
 from src.api.schemas.audit import AuditResponseCreate
-from src.domain.exceptions import BadRequestError
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.audit import AuditQuestion, AuditResponse, AuditRun, AuditStatus
 from src.domain.services.audit_service import require_run_tenant_id
 
@@ -237,6 +237,63 @@ async def test_create_response_refuses_a_run_that_is_not_attributed_to_a_tenant(
         )
 
     assert db.added == []
+
+
+@pytest.mark.asyncio
+async def test_create_response_looks_up_the_run_on_an_exact_tenant_match() -> None:
+    """The filter used to be ``or_(tenant_id == caller, tenant_id IS NULL)``.
+
+    That second branch is live: the migrated schema still allows NULL and
+    production holds 37 such runs out of 83, so any authenticated caller could
+    write into an unattributed run belonging to another organisation. RLS does
+    not cover it — the application role bypasses RLS entirely.
+
+    This is asserted on the compiled statement rather than end to end because
+    the row the removed branch matched cannot exist in either test harness:
+    ``audit_runs.tenant_id`` is NOT NULL in both. The shape of the query is
+    therefore the strongest available evidence.
+    """
+    db = _RecordingSession([None])
+
+    with pytest.raises(NotFoundError, match="Audit run not found"):
+        await create_response(
+            run_id=11,
+            response_data=AuditResponseCreate(question_id=5, response_value="yes"),
+            db=db,
+            current_user=SimpleNamespace(id=1, tenant_id=CALLER_TENANT),
+        )
+
+    assert len(db.statements) == 1
+    sql = str(db.statements[0].compile(compile_kwargs={"literal_binds": True})).upper()
+    assert "TENANT_ID" in sql
+    assert "IS NULL" not in sql
+    assert " OR " not in sql
+
+
+@pytest.mark.asyncio
+async def test_create_response_matches_nothing_when_the_caller_has_no_tenant() -> None:
+    """A tenant-less caller must not fall through to an unscoped query."""
+    db = _RecordingSession([None])
+
+    with pytest.raises(NotFoundError, match="Audit run not found"):
+        await create_response(
+            run_id=11,
+            response_data=AuditResponseCreate(question_id=5, response_value="yes"),
+            db=db,
+            current_user=SimpleNamespace(id=1, tenant_id=None),
+        )
+
+    sql = str(db.statements[0].compile(compile_kwargs={"literal_binds": True})).upper()
+    assert "FALSE" in sql or "1 != 1" in sql
+
+
+def test_create_response_source_has_no_permissive_tenant_branch() -> None:
+    """Guards the shape as well as one compiled statement."""
+    import inspect
+
+    source = inspect.getsource(create_response)
+    assert "is_(None)" not in source
+    assert "AuditRun.tenant_id" not in source
 
 
 # ---------------------------------------------------------------------------
