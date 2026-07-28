@@ -145,18 +145,28 @@ async def _collect_readiness_reasons(
     *,
     investigation: InvestigationRun,
     investigation_id: int,
-    tenant_id: int,
+    current_user: Any,
     gate: str,
 ) -> tuple[list[str], list, list]:
     """Collect completion/closure readiness reasons (shared by GET + PATCH gates).
 
     ``gate`` is ``complete`` (status → completed) or ``close`` (status → closed).
     Returns ``(reasons, open_work, missing_items)``.
+
+    The probe scope is derived from the run here, at the one point both the GET
+    and the PATCH gate pass through, rather than being handed in by each caller —
+    that is what stops the two from ever being given different tenants.
     """
     from src.domain.services.investigation_closure_helpers import (
         CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
         collect_summary_readiness_blockers,
         fetch_open_work_for_investigation,
+        resolve_investigation_closure_scope,
+    )
+
+    tenant_id = resolve_investigation_closure_scope(
+        investigation,
+        caller_tenant_id=getattr(current_user, "tenant_id", None),
     )
 
     reasons: list[str] = []
@@ -254,14 +264,14 @@ async def _collect_closure_reasons(
     *,
     investigation: InvestigationRun,
     investigation_id: int,
-    tenant_id: int,
+    current_user: Any,
 ) -> tuple[list[str], list]:
     """Collect closure readiness reasons (same contract as GET /closure-validation)."""
     reasons, open_work, _missing = await _collect_readiness_reasons(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
+        current_user=current_user,
         gate="close",
     )
     return reasons, open_work
@@ -280,12 +290,11 @@ async def _ensure_investigation_ready_for_status(
     """Raise BadRequestError(400) when the run cannot reach completed/closed."""
     from src.domain.services.investigation_closure_helpers import open_work_to_payload
 
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     reasons, open_work, missing_items = await _collect_readiness_reasons(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
+        current_user=current_user,
         gate=gate,
     )
     reasons, open_work, override_meta = _apply_open_work_override(
@@ -888,20 +897,19 @@ async def get_closure_validation(
     from src.domain.services.investigation_closure_helpers import open_work_to_payload
 
     investigation = await _get_investigation_or_404(investigation_id, db, current_user)
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
 
     close_reasons, open_work, missing_items = await _collect_readiness_reasons(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
+        current_user=current_user,
         gate="close",
     )
     complete_reasons, _complete_open_work, complete_missing = await _collect_readiness_reasons(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
+        current_user=current_user,
         gate="complete",
     )
 

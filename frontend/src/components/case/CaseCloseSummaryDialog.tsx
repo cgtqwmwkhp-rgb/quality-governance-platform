@@ -115,7 +115,12 @@ export function CaseCloseSummaryDialog({
   // The operator can satisfy the lessons gate right here, so only work they
   // cannot fix in this dialog keeps Confirm disabled.
   const blockedByOpenWork = (validation?.reasons ?? []).includes(CLOSURE_REASON_OPEN_ACTIONS)
-  const canConfirm = Boolean(validation) && !blockedByOpenWork && lessonsPresent && !submitting
+  // Absent on a server that predates the transition check: treat as allowed so
+  // the dialog behaves as it did rather than blocking every close.
+  const transitionAllowed = validation?.transition_allowed !== false
+  const nextStatuses = validation?.allowed_next_statuses ?? []
+  const canConfirm =
+    Boolean(validation) && transitionAllowed && !blockedByOpenWork && lessonsPresent && !submitting
 
   const handleConfirm = async () => {
     if (!canConfirm) return
@@ -232,6 +237,32 @@ export function CaseCloseSummaryDialog({
               </div>
             </section>
 
+            {!transitionAllowed ? (
+              <div
+                className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"
+                role="alert"
+                data-testid={`${testIdPrefix}-close-summary-transition-blocked`}
+              >
+                <p className="font-medium text-destructive">
+                  {t('caseClosure.transitionBlockedTitle', {
+                    defaultValue: 'This case cannot close from {{from}}',
+                    from: formatCodedValue(summary.status),
+                  })}
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  {nextStatuses.length > 0
+                    ? t('caseClosure.transitionBlockedNext', {
+                        defaultValue: 'Move it to {{statuses}} first.',
+                        statuses: nextStatuses.map((s) => formatCodedValue(s)).join(' or '),
+                      })
+                    : t(
+                        'caseClosure.transitionBlockedDeadEnd',
+                        'No route from this status to closed. Ask an administrator.',
+                      )}
+                </p>
+              </div>
+            ) : null}
+
             <section aria-label={t('caseClosure.actions', 'Actions')}>
               <p className="text-sm text-foreground">
                 {t('caseClosure.actionsCount', {
@@ -307,6 +338,10 @@ export function CaseCloseSummaryDialog({
                 <ChecklistRow
                   ok={!blockedByOpenWork}
                   label={t('caseClosure.checkActions', 'No incomplete actions')}
+                />
+                <ChecklistRow
+                  ok={transitionAllowed}
+                  label={t('caseClosure.checkTransition', 'Status can move to closed')}
                 />
               </ul>
             </section>

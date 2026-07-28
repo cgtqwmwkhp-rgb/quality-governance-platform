@@ -62,6 +62,14 @@ class CaseClosureValidationResponse(BaseModel):
     open_work: List[CaseClosureBlockingItem] = Field(default_factory=list)
     open_work_count: int = 0
     lessons_present: bool = False
+    transition_allowed: bool = Field(
+        default=True,
+        description="False when this status cannot move straight to closed, whatever else is in order.",
+    )
+    allowed_next_statuses: List[str] = Field(
+        default_factory=list,
+        description="Legal next statuses for this case, reported when the close transition is refused.",
+    )
     summary: CaseClosureSummary
 
     model_config = {"json_schema_extra": {"examples": [{"can_close": False, "reasons": ["MISSING_LESSONS_LEARNT"]}]}}
