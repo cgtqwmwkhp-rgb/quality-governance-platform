@@ -264,6 +264,25 @@ def require_run_tenant_id(run: AuditRun) -> int:
     return tenant_id
 
 
+def question_belongs_to_run(run: AuditRun, question: AuditQuestion) -> bool:
+    """Whether *question* is part of the template *run* is executing.
+
+    Both response write paths fetched the question by bare primary key, so a
+    caller could attach an answer to any question in the system — including one
+    from another tenant's private template, whose text is then rendered back in
+    the run. Zero of the 315 existing rows do this, so it is latent rather than
+    an active leak.
+
+    ``run.template_id`` is already how a run's questions are resolved
+    everywhere else, including the scorer (``complete_run``) and the completion
+    percentage: a response outside it is not counted towards the run at all.
+    This makes the write path agree with the read path rather than introducing a
+    new rule. Template versions are JSON snapshots and cloning produces a
+    separate template with its own runs, so neither repoints a run's questions.
+    """
+    return question.template_id == run.template_id
+
+
 # ---------------------------------------------------------------------------
 # Standalone audit-event helper (backward-compatible public API)
 # ---------------------------------------------------------------------------
@@ -2125,7 +2144,7 @@ class AuditService:
             raise ValidationError("Response already exists for this question in this run")
 
         question = await self.db.get(AuditQuestion, data["question_id"])
-        if not question:
+        if not question or not question_belongs_to_run(run, question):
             raise NotFoundError(f"AuditQuestion {data['question_id']} not found")
         payload = AuditScoringService.apply_derived_scores(question, data)
 
