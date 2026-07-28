@@ -291,6 +291,7 @@ jobs:
               PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
               PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-aped-4627-b74a}" \
               UAT_MODE="READ_WRITE" \
+              DEFAULT_TENANT_ID="1" \
               CELERY_BROKER_URL="${REDIS_URL_VAL}" \
               CELERY_RESULT_BACKEND="${REDIS_URL_VAL}" \
               REDIS_URL="${REDIS_URL_VAL}" \
@@ -834,6 +835,25 @@ jobs:
             fi
           done
           python3 scripts/smoke/check_email_config.py
+
+      - name: Portal intake tenant config smoke
+        run: |
+          set -euo pipefail
+          # get_default_portal_tenant_id() fails closed with 503 CONFIGURATION_ERROR
+          # when DEFAULT_TENANT_ID is unset, which is correct — a public submission
+          # must not silently land in tenant 1. But it means the whole portal intake
+          # journey is dead on an environment that is missing the setting, and it
+          # only shows up when someone tries to submit. Staging was missing it while
+          # production had it set by hand, so the complaint journey could not be
+          # exercised anywhere except production. Assert it rather than rediscover it.
+          VAL=$(az webapp config appsettings list \
+                  -g rg-qgp-staging -n "${{ secrets.AZURE_WEBAPP_NAME }}" \
+                  --query "[?name=='DEFAULT_TENANT_ID'].value | [0]" -o tsv 2>/dev/null || true)
+          if [ -z "${VAL:-}" ] || [ "$VAL" = "null" ]; then
+            echo "❌ DEFAULT_TENANT_ID is not set — portal intake will return 503 CONFIGURATION_ERROR"
+            exit 1
+          fi
+          echo "✅ DEFAULT_TENANT_ID=$VAL — portal intake tenant is configured"
 
       - name: Post-deploy SLO assertion (D18 — error rate + latency)
         id: slo-check
