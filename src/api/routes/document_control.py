@@ -254,108 +254,6 @@ async def create_document(
     }
 
 
-@router.get("/{document_id}", response_model=dict)
-async def get_document(
-    document_id: int,
-    current_user: CurrentUser,
-    db: DbSession = None,
-) -> dict[str, Any]:
-    """Get detailed document information"""
-    tenant_id = _tenant_id(current_user)
-    result = await db.execute(
-        apply_tenant_filter(
-            select(ControlledDocument).where(ControlledDocument.id == document_id),
-            ControlledDocument,
-            tenant_id,
-        )
-    )
-    document = result.scalar_one_or_none()
-    if not document:
-        raise NotFoundError("Document not found")
-
-    # Get version history
-    result = await db.execute(
-        apply_tenant_filter(
-            select(ControlledDocumentVersion).where(ControlledDocumentVersion.document_id == document_id),
-            ControlledDocumentVersion,
-            tenant_id,
-        ).order_by(ControlledDocumentVersion.created_at.desc())
-    )
-    versions = result.scalars().all()
-
-    # Get distributions
-    result = await db.execute(
-        apply_tenant_filter(
-            select(DocumentDistribution).where(DocumentDistribution.document_id == document_id),
-            DocumentDistribution,
-            tenant_id,
-        )
-    )
-    distributions = result.scalars().all()
-
-    # Log access
-    log = DocumentAccessLog(
-        tenant_id=tenant_id,
-        document_id=document_id,
-        user_name=current_user.full_name,
-        action="view",
-    )
-    db.add(log)
-    document.view_count += 1
-    await db.commit()
-
-    return {
-        "id": document.id,
-        "document_number": document.document_number,
-        "title": document.title,
-        "description": document.description,
-        "document_type": document.document_type,
-        "category": document.category,
-        "subcategory": document.subcategory,
-        "current_version": document.current_version,
-        "status": document.status,
-        "department": document.department,
-        "author_name": document.author_name,
-        "owner_name": document.owner_name,
-        "approver_name": document.approver_name,
-        "approved_date": (document.approved_date.isoformat() if document.approved_date else None),
-        "effective_date": (document.effective_date.isoformat() if document.effective_date else None),
-        "expiry_date": (document.expiry_date.isoformat() if document.expiry_date else None),
-        "review_frequency_months": document.review_frequency_months,
-        "next_review_date": (document.next_review_date.isoformat() if document.next_review_date else None),
-        "last_review_date": (document.last_review_date.isoformat() if document.last_review_date else None),
-        "file_name": document.file_name,
-        "file_path": document.file_path,
-        "file_size": document.file_size,
-        "file_type": document.file_type,
-        "relevant_standards": document.relevant_standards,
-        "relevant_clauses": document.relevant_clauses,
-        "access_level": document.access_level,
-        "is_confidential": document.is_confidential,
-        "training_required": document.training_required,
-        "view_count": document.view_count,
-        "download_count": document.download_count,
-        "published_version": next(
-            (v.version_number for v in versions if v.status in ("published", "approved", "effective", "active")),
-            None,
-        ),
-        "working_version": next((v.version_number for v in versions if v.status == "draft"), None),
-        "versions": [document_version_service.serialize_controlled_version(v) for v in versions],
-        "distributions": [
-            {
-                "id": d.id,
-                "recipient_name": d.recipient_name,
-                "recipient_type": d.recipient_type,
-                "distribution_type": d.distribution_type,
-                "copy_number": d.copy_number,
-                "acknowledged": d.acknowledged,
-                "acknowledged_date": (d.acknowledged_date.isoformat() if d.acknowledged_date else None),
-            }
-            for d in distributions
-        ],
-    }
-
-
 @router.get("/{document_id}/golden-thread", response_model=dict)
 async def get_document_golden_thread(
     document_id: int,
@@ -1176,4 +1074,117 @@ async def get_document_summary(
         "obsolete": obsolete,
         "pending_acknowledgments": pending_ack,
         "by_type": {dtype: count for dtype, count in by_type},
+    }
+
+
+# ============ Single-segment catch-all — MUST stay last in this module ============
+#
+# ``GET /{document_id}`` matches any single path segment, so FastAPI's
+# declaration-order routing makes it answer every sibling literal declared below
+# it — ``/workflows`` and ``/summary`` both used to land here and get rejected
+# with a 422 ``path -> document_id`` int-parsing error while still appearing in
+# the OpenAPI document. Any new single-segment literal GET on this router must be
+# declared ABOVE this route.
+# ``tests/integration/test_route_shadowing_guard.py`` enforces this repo-wide.
+
+
+@router.get("/{document_id}", response_model=dict)
+async def get_document(
+    document_id: int,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Get detailed document information"""
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocument).where(ControlledDocument.id == document_id),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise NotFoundError("Document not found")
+
+    # Get version history
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocumentVersion).where(ControlledDocumentVersion.document_id == document_id),
+            ControlledDocumentVersion,
+            tenant_id,
+        ).order_by(ControlledDocumentVersion.created_at.desc())
+    )
+    versions = result.scalars().all()
+
+    # Get distributions
+    result = await db.execute(
+        apply_tenant_filter(
+            select(DocumentDistribution).where(DocumentDistribution.document_id == document_id),
+            DocumentDistribution,
+            tenant_id,
+        )
+    )
+    distributions = result.scalars().all()
+
+    # Log access
+    log = DocumentAccessLog(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        user_name=current_user.full_name,
+        action="view",
+    )
+    db.add(log)
+    document.view_count += 1
+    await db.commit()
+
+    return {
+        "id": document.id,
+        "document_number": document.document_number,
+        "title": document.title,
+        "description": document.description,
+        "document_type": document.document_type,
+        "category": document.category,
+        "subcategory": document.subcategory,
+        "current_version": document.current_version,
+        "status": document.status,
+        "department": document.department,
+        "author_name": document.author_name,
+        "owner_name": document.owner_name,
+        "approver_name": document.approver_name,
+        "approved_date": (document.approved_date.isoformat() if document.approved_date else None),
+        "effective_date": (document.effective_date.isoformat() if document.effective_date else None),
+        "expiry_date": (document.expiry_date.isoformat() if document.expiry_date else None),
+        "review_frequency_months": document.review_frequency_months,
+        "next_review_date": (document.next_review_date.isoformat() if document.next_review_date else None),
+        "last_review_date": (document.last_review_date.isoformat() if document.last_review_date else None),
+        "file_name": document.file_name,
+        "file_path": document.file_path,
+        "file_size": document.file_size,
+        "file_type": document.file_type,
+        "relevant_standards": document.relevant_standards,
+        "relevant_clauses": document.relevant_clauses,
+        "access_level": document.access_level,
+        "is_confidential": document.is_confidential,
+        "training_required": document.training_required,
+        "view_count": document.view_count,
+        "download_count": document.download_count,
+        "published_version": next(
+            (v.version_number for v in versions if v.status in ("published", "approved", "effective", "active")),
+            None,
+        ),
+        "working_version": next((v.version_number for v in versions if v.status == "draft"), None),
+        "versions": [document_version_service.serialize_controlled_version(v) for v in versions],
+        "distributions": [
+            {
+                "id": d.id,
+                "recipient_name": d.recipient_name,
+                "recipient_type": d.recipient_type,
+                "distribution_type": d.distribution_type,
+                "copy_number": d.copy_number,
+                "acknowledged": d.acknowledged,
+                "acknowledged_date": (d.acknowledged_date.isoformat() if d.acknowledged_date else None),
+            }
+            for d in distributions
+        ],
     }
