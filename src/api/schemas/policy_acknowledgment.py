@@ -1,7 +1,7 @@
 """Policy Acknowledgment API Schemas."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -161,8 +161,8 @@ class LogDocumentReadRequest(BaseModel):
     device_type: Optional[str] = None
 
 
-class ComplianceDashboardResponse(BaseModel):
-    """Schema for compliance dashboard."""
+class ComplianceDashboardMetrics(BaseModel):
+    """Counts that were actually read from the database."""
 
     total_assignments: int
     completed: int
@@ -170,3 +170,32 @@ class ComplianceDashboardResponse(BaseModel):
     overdue: int
     completion_rate: float
     overdue_rate: float
+
+
+class MeasuredComplianceDashboard(BaseModel):
+    """A real measurement. Every count in ``metrics`` came from a query that ran."""
+
+    measurement: Literal["measured"] = "measured"
+    metrics: ComplianceDashboardMetrics
+
+
+class UnmeasurableComplianceDashboard(BaseModel):
+    """No measurement was possible, so this variant carries no numbers at all.
+
+    ``metrics`` is absent rather than zeroed or nulled: a caller reading
+    ``body["metrics"]["completion_rate"]`` raises instead of receiving a 0 that
+    would be indistinguishable from "nobody has acknowledged anything".
+    """
+
+    measurement: Literal["unmeasurable"] = "unmeasurable"
+    reason: str
+    missing_tables: List[str]
+
+
+# Discriminated, so the two states are distinguished by the payload's shape rather
+# than by a sentinel value a consumer can coerce. There is deliberately no variant
+# that carries both a number and a "this is not a real number" flag.
+ComplianceDashboardResponse = Annotated[
+    Union[MeasuredComplianceDashboard, UnmeasurableComplianceDashboard],
+    Field(discriminator="measurement"),
+]
