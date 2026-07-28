@@ -1,7 +1,9 @@
-"""Run026 ops-park scripts: attribution columns and the schema census.
+"""Run026 ops-park scripts: attribution columns, the schema census, and which
+declared tables a real database actually has.
 
 Read-only, like every script under ``scripts/ops/``. Safety primitives are
-reused from ``scripts.ops.run021._common``.
+reused from ``scripts.ops.run021._common`` rather than copied, so there is one
+implementation of the ``--apply`` / ``--i-understand-prod`` contract.
 
 These scripts differ from the Run025 pair in one respect that is the whole
 reason they exist: they take the database side of every census from
