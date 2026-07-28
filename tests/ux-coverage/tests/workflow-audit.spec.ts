@@ -108,6 +108,31 @@ const RECOVERY_INDICATOR_SELECTORS = [
   '.alert-danger',
 ];
 
+/**
+ * Screen-reader-only live regions are announcement channels, not recovery UI.
+ *
+ * LiveAnnouncer mounts a permanent, empty `<div role="alert" class="sr-only">` on
+ * every page, and `.sr-only` here is a 1x1px clipped box — which Playwright counts
+ * as visible, because it has a non-empty bounding box. Matching it would have made
+ * `[role="alert"]` fire on every page in the application: the same class of false
+ * positive this locator was rewritten to remove. Real banners (Toast, ErrorState,
+ * FormField, SessionExpiryWarning) also carry aria-live, so aria-live cannot be
+ * used to tell them apart — but they occupy real space and they say something.
+ */
+const MIN_PERCEPTIBLE_PX = 8;
+
+async function isPerceptibleAnnouncement(
+  element: import('@playwright/test').Locator,
+): Promise<{ perceptible: boolean; text: string }> {
+  const text = ((await element.textContent().catch(() => null)) || '').trim();
+  if (!text) return { perceptible: false, text };
+  const box = await element.boundingBox().catch(() => null);
+  if (!box || box.width < MIN_PERCEPTIBLE_PX || box.height < MIN_PERCEPTIBLE_PX) {
+    return { perceptible: false, text };
+  }
+  return { perceptible: true, text };
+}
+
 /** Affordances that let a user leave a recovery state, per LOGIN_UX_CONTRACT.md. */
 const RECOVERY_AFFORDANCE_SELECTORS = [
   '[data-testid="retry-button"]',
@@ -143,12 +168,13 @@ async function findRecoveryState(
     const visible = await element.isVisible().catch(() => false);
     if (!visible) continue;
 
+    const { perceptible, text } = await isPerceptibleAnnouncement(element);
+    if (!perceptible) continue;
+
     evidence.detected = true;
     evidence.matched_selector = selector;
     evidence.detail =
-      (await element.getAttribute('data-testid').catch(() => null)) ||
-      ((await element.textContent().catch(() => null)) || '').trim().slice(0, 120) ||
-      null;
+      (await element.getAttribute('data-testid').catch(() => null)) || text.slice(0, 120);
     break;
   }
 
