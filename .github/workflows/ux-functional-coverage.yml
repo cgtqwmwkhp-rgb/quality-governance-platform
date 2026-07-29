@@ -402,6 +402,47 @@ jobs:
           echo "::error title=UX coverage gate::No verified pre-production frontend was resolved, so no audit ran. See the 'resolve-frontend' job for the hostnames tried."
           exit 1
 
+      # C-60: the four audit jobs' results were never inspected. In run
+      # 30442947763 the button audit was cancelled mid-Playwright, its upload
+      # step was skipped, and this job aggregated the three artifacts that did
+      # arrive — reporting "P0 executed: 17/17 (100%)" and a CANARY verdict. The
+      # clean run 8 minutes later, with all four artifacts, reported 27 P0
+      # entries expected. Ten P0 checks disappeared and coverage still read
+      # 100%, because `expected` is derived from the entries present in the
+      # artifacts: losing an artifact removes entries from the numerator and the
+      # denominator together.
+      #
+      # 'skipped' is treated as not-success here, deliberately. Each audit job
+      # carries the same `if:` condition as this one
+      # (check-trigger.outputs.should_run == 'true'), so if this job is running,
+      # every audit job's own condition was satisfied too. A skipped audit can
+      # therefore only mean an upstream need failed or was cancelled — no
+      # evidence was produced, which is not a pass. The result is named in the
+      # message so a skip is never mistaken for a failure or the reverse.
+      - name: Require every audit job to have succeeded
+        env:
+          PAGE_AUDIT_RESULT: ${{ needs.page-audit.result }}
+          LINK_AUDIT_RESULT: ${{ needs.link-audit.result }}
+          BUTTON_AUDIT_RESULT: ${{ needs.button-audit.result }}
+          WORKFLOW_AUDIT_RESULT: ${{ needs.workflow-audit.result }}
+        run: |
+          not_success=""
+          for entry in \
+            "page-audit=${PAGE_AUDIT_RESULT}" \
+            "link-audit=${LINK_AUDIT_RESULT}" \
+            "button-audit=${BUTTON_AUDIT_RESULT}" \
+            "workflow-audit=${WORKFLOW_AUDIT_RESULT}"; do
+            if [ "${entry#*=}" != "success" ]; then
+              not_success="${not_success} ${entry}"
+            fi
+          done
+
+          if [ -n "${not_success}" ]; then
+            echo "::error title=UX coverage gate::No verdict is published when an audit did not run:${not_success}. A cancelled or failed audit job uploads no artifact, and the aggregator's expected counts come from the artifacts, so the missing checks would vanish from both the numerator and the denominator."
+            exit 1
+          fi
+          echo "[OK] All four audit jobs succeeded"
+
       - name: Checkout code
         uses: actions/checkout@v6
 
@@ -415,13 +456,34 @@ jobs:
         with:
           path: audit-results
 
+      # C-60: each copy used to fall back to `echo '{"results":[]}'`, fabricating
+      # an empty result set for an audit that produced none. An empty artifact is
+      # not "no failures found" — it removes that audit's entries from the
+      # expected counts as well, so the report stayed at 100% coverage of a
+      # smaller run. Nothing is substituted now; a missing artifact fails here
+      # and names the file.
       - name: Prepare results directory
         run: |
           mkdir -p tests/ux-coverage/results
-          cp audit-results/page-audit-results/page_audit.json tests/ux-coverage/results/ 2>/dev/null || echo '{"results":[]}' > tests/ux-coverage/results/page_audit.json
-          cp audit-results/link-audit-results/link_audit.json tests/ux-coverage/results/ 2>/dev/null || echo '{"results":[],"dead_end_map":[]}' > tests/ux-coverage/results/link_audit.json
-          cp audit-results/button-audit-results/button_audit.json tests/ux-coverage/results/ 2>/dev/null || echo '{"results":[]}' > tests/ux-coverage/results/button_audit.json
-          cp audit-results/workflow-audit-results/workflow_audit.json tests/ux-coverage/results/ 2>/dev/null || echo '{"results":[],"dead_ends":[]}' > tests/ux-coverage/results/workflow_audit.json
+          missing=""
+          for artifact in \
+            page-audit-results/page_audit.json \
+            link-audit-results/link_audit.json \
+            button-audit-results/button_audit.json \
+            workflow-audit-results/workflow_audit.json; do
+            source_path="audit-results/${artifact}"
+            if [ ! -f "${source_path}" ]; then
+              missing="${missing} ${source_path}"
+              continue
+            fi
+            cp "${source_path}" tests/ux-coverage/results/
+          done
+
+          if [ -n "${missing}" ]; then
+            echo "::error title=UX coverage gate::Audit artifact(s) absent:${missing}. No empty result set is substituted for a missing artifact, because that deletes the audit's entries from the coverage denominator as well as the numerator."
+            exit 1
+          fi
+          echo "[OK] All four audit artifacts present"
 
       - name: Run Aggregation
         id: aggregate

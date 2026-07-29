@@ -19,51 +19,41 @@ from unittest.mock import MagicMock, patch
 class TestUATSafetyModeDetection(TestCase):
     """Tests for UAT mode configuration detection."""
 
+    # These tests read configuration out of the environment, so they must NOT use
+    # importlib.reload on src.core.config. Reloading rebinds the module-level
+    # `settings` object, while src.main and every module that did
+    # `from src.core.config import settings` keep a reference to the original —
+    # after which a later test patching `config.settings` patches an object the
+    # running app no longer reads. Constructing Settings() directly reads the same
+    # environment and leaves the shared singleton alone.
+
     def test_read_only_mode_detection(self):
         """is_uat_read_only returns True when UAT_MODE=READ_ONLY."""
         with patch.dict(os.environ, {"UAT_MODE": "READ_ONLY"}):
-            # Need to reimport to pick up new env var
-            from importlib import reload
+            from src.core.config import Settings
 
-            import src.core.config as config_module
-
-            reload(config_module)
-            self.assertTrue(config_module.settings.is_uat_read_only)
+            self.assertTrue(Settings().is_uat_read_only)
 
     def test_read_write_mode_detection(self):
         """is_uat_read_only returns False when UAT_MODE=READ_WRITE."""
         with patch.dict(os.environ, {"UAT_MODE": "READ_WRITE"}, clear=False):
-            from importlib import reload
+            from src.core.config import Settings
 
-            import src.core.config as config_module
-
-            # Clear cache and reload
-            config_module.get_settings.cache_clear()
-            reload(config_module)
-            self.assertFalse(config_module.settings.is_uat_read_only)
+            self.assertFalse(Settings().is_uat_read_only)
 
     def test_admin_user_list_parsing(self):
         """uat_admin_user_list correctly parses comma-separated list."""
         with patch.dict(os.environ, {"UAT_ADMIN_USERS": "user1,user2,user3"}):
-            from importlib import reload
+            from src.core.config import Settings
 
-            import src.core.config as config_module
-
-            config_module.get_settings.cache_clear()
-            reload(config_module)
-            admins = config_module.settings.uat_admin_user_list
-            self.assertEqual(admins, ["user1", "user2", "user3"])
+            self.assertEqual(Settings().uat_admin_user_list, ["user1", "user2", "user3"])
 
     def test_empty_admin_list(self):
         """uat_admin_user_list returns empty list when not set."""
         with patch.dict(os.environ, {"UAT_ADMIN_USERS": ""}):
-            from importlib import reload
+            from src.core.config import Settings
 
-            import src.core.config as config_module
-
-            config_module.get_settings.cache_clear()
-            reload(config_module)
-            self.assertEqual(config_module.settings.uat_admin_user_list, [])
+            self.assertEqual(Settings().uat_admin_user_list, [])
 
 
 class TestOverrideHeaderValidation(TestCase):
