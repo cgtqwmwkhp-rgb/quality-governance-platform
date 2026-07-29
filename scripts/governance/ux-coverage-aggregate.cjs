@@ -129,6 +129,13 @@ function emptyCoverage() {
  * arrive — a worker crashed, a serial suite aborted, the file was truncated —
  * the missing entries are invisible to the per-entry accounting below, because
  * there is no entry to classify. Returns a hold reason, or null.
+ *
+ * An audit that declares no count cannot be checked: `Number(undefined)` is NaN
+ * and this returns null. That is an opt-in, not a safety net. Only the workflow
+ * audit used to declare a count, so the button audit could emit 1 entry for its
+ * 22 registry buttons and the page audit 18 for its 36, and this guard passed
+ * both in silence while the report printed "P0 coverage complete". All four
+ * audits now declare it.
  */
 function completenessShortfall(audit, label) {
   if (!audit) return null;
@@ -311,8 +318,13 @@ function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = 
   // The gate may only clear if the P0 coverage was actually exercised. Zero P0
   // entries in scope means the run proved nothing, which is not a pass.
   const holdReasons = [];
+  // Every audit, including the link audit: its entries are not classified
+  // per-entry below (they carry link counts, not a P0/P1 result), so a page that
+  // never reached its artifact is invisible to the accounting above and simply
+  // contributes nothing to total_dead — which reads exactly like a clean page.
   const shortfalls = [
     completenessShortfall(pageAudit, 'page'),
+    completenessShortfall(linkAudit, 'link'),
     completenessShortfall(buttonAudit, 'button'),
     completenessShortfall(workflowAudit, 'workflow'),
   ].filter(Boolean);

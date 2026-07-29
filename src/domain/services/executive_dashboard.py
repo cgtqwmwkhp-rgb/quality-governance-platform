@@ -8,7 +8,7 @@ compatibility re-export at ``src.services.executive_dashboard``.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, cast
 
 from sqlalchemy import and_, func, or_, select
@@ -93,6 +93,18 @@ _EMPTY_SLA_SUMMARY: Dict[str, Any] = {
     "breached": 0,
     "compliance_rate": None,
 }
+_EMPTY_TRAINING_SUMMARY: Dict[str, Any] = {
+    # None (not 0) throughout: an unread matrix must not report a compliant
+    # workforce, and it must not report a wholly non-compliant one either. The
+    # counts are as unmeasured as the rate is, so none of them may be a number
+    # (C-7). ``measured_cells`` of None is what tells a caller the difference
+    # between this and a matrix that really holds no scored cells.
+    "measured_cells": None,
+    "compliant_cells": None,
+    "completion_rate": None,
+    "expiring_soon": None,
+    "overdue": None,
+}
 _EMPTY_AUDIT_SUMMARY: Dict[str, Any] = {
     "totals": 0,
     "completed": 0,
@@ -102,6 +114,34 @@ _EMPTY_AUDIT_SUMMARY: Dict[str, Any] = {
     "essential_compliance_pct": None,
     "incomplete_critical_count": 0,
 }
+# Days ahead that counts as "expiring soon" for the training headline. Matches the
+# 30-day horizon the training matrix UI uses for its amber band.
+TRAINING_EXPIRY_HORIZON_DAYS = 30
+
+
+def training_cell_is_scored(passed_on: Optional[date], expires_on: Optional[date]) -> bool:
+    """Whether a matrix cell carries enough information to be scored at all.
+
+    The denominator for every training compliance figure. A cell with neither a
+    pass date nor an expiry is an unpopulated requirement, not a failure, so
+    counting it as non-compliant would report a half-filled matrix as poor
+    training rather than as an incomplete matrix.
+    """
+    return passed_on is not None or expires_on is not None
+
+
+def training_cell_is_compliant(passed_on: Optional[date], expires_on: Optional[date], as_of: date) -> bool:
+    """Whether a scored cell is compliant at ``as_of``.
+
+    Passed, and either never expires or has not expired yet. ``expires_on ==
+    as_of`` is still compliant: the certificate is valid for the whole of its
+    expiry day.
+    """
+    if passed_on is None:
+        return False
+    return expires_on is None or expires_on >= as_of
+
+
 _TREND_SERIES = (
     "incidents_weekly",
     "complaints_weekly",
@@ -198,6 +238,7 @@ class ExecutiveDashboardService:
         )
         sla_summary = await self._safe_call(self._get_sla_summary(), dict(_EMPTY_SLA_SUMMARY))
         audit_summary = await self._safe_call(self._get_audit_summary(period_days), dict(_EMPTY_AUDIT_SUMMARY))
+        training_summary = await self._safe_call(self._get_training_summary(), dict(_EMPTY_TRAINING_SUMMARY))
 
         health_score = self._calculate_health_score(
             incident_summary,
@@ -229,6 +270,7 @@ class ExecutiveDashboardService:
             "compliance": compliance_summary,
             "sla_performance": sla_summary,
             "audits": audit_summary,
+            "training": training_summary,
             "trends": trends,
             "alerts": alerts,
             "safety_insights": safety_insights,
@@ -735,12 +777,14 @@ class ExecutiveDashboardService:
             tool_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
         return tool_compliance_weekly
 
-    async def _trend_training_compliance_weekly(
-        self, week_windows: List[tuple[datetime, datetime, str]]
-    ) -> List[Dict[str, Any]]:
-        training_compliance_weekly: List[Dict[str, Any]] = []
+    async def _load_scored_training_cells(self) -> List[TrainingMatrixCell]:
+        """Scored cells of the tenant's most recent training matrix import.
+
+        Shared by the headline summary and the weekly sparkline so the two cannot
+        drift onto different denominators and contradict each other (C-7).
+        """
         if self.tenant_id is None:
-            return training_compliance_weekly
+            return []
         latest_imp = await self.db.execute(
             select(TrainingMatrixImport.id)
             .where(TrainingMatrixImport.tenant_id == self.tenant_id)
@@ -748,29 +792,59 @@ class ExecutiveDashboardService:
             .limit(1)
         )
         import_id = latest_imp.scalar_one_or_none()
-        cells: List[TrainingMatrixCell] = []
-        if import_id is not None:
-            cell_result = await self.db.execute(
-                select(TrainingMatrixCell).where(
-                    and_(
-                        TrainingMatrixCell.tenant_id == self.tenant_id,
-                        TrainingMatrixCell.import_id == import_id,
-                    )
+        if import_id is None:
+            return []
+        cell_result = await self.db.execute(
+            select(TrainingMatrixCell).where(
+                and_(
+                    TrainingMatrixCell.tenant_id == self.tenant_id,
+                    TrainingMatrixCell.import_id == import_id,
                 )
             )
-            cells = list(cell_result.scalars().all())
-        scored = [c for c in cells if c.passed_on is not None or c.expires_on is not None]
+        )
+        return [c for c in cell_result.scalars().all() if training_cell_is_scored(c.passed_on, c.expires_on)]
+
+    async def _get_training_summary(self) -> Dict[str, Any]:
+        """Point-in-time training compliance for the tenant's latest matrix import.
+
+        Returns the all-None shape when there is nothing to measure — no import,
+        or an import with no scored cell. That is deliberately the same shape a
+        failed query produces, because both are the same fact: we cannot say what
+        training compliance is. Before this existed, ``/analytics/kpis`` served a
+        hardcoded ``completion_rate`` of 0.0 whatever the matrix held (C-7).
+        """
+        scored = await self._load_scored_training_cells()
+        if not scored:
+            return dict(_EMPTY_TRAINING_SUMMARY)
+
+        as_of = datetime.now(timezone.utc).date()
+        horizon = as_of + timedelta(days=TRAINING_EXPIRY_HORIZON_DAYS)
+        compliant = sum(1 for c in scored if training_cell_is_compliant(c.passed_on, c.expires_on, as_of))
+        # Expired, not merely un-passed: an expiry in the past is a lapsed
+        # certificate, which is a different piece of work from one never taken.
+        overdue = sum(1 for c in scored if c.expires_on is not None and c.expires_on < as_of)
+        expiring_soon = sum(1 for c in scored if c.expires_on is not None and as_of <= c.expires_on < horizon)
+        return {
+            "measured_cells": len(scored),
+            "compliant_cells": compliant,
+            "completion_rate": percentage_or_none(compliant, len(scored), digits=1),
+            "expiring_soon": expiring_soon,
+            "overdue": overdue,
+        }
+
+    async def _trend_training_compliance_weekly(
+        self, week_windows: List[tuple[datetime, datetime, str]]
+    ) -> List[Dict[str, Any]]:
+        training_compliance_weekly: List[Dict[str, Any]] = []
+        if self.tenant_id is None:
+            return training_compliance_weekly
+        scored = await self._load_scored_training_cells()
         for _ws, week_end, label in week_windows:
             as_of = week_end.date()
             if not scored:
                 training_compliance_weekly.append({"week_start": label, "count": 0, "value": None})
                 continue
-            ok = 0
-            for cell in scored:
-                if cell.passed_on is None:
-                    continue
-                if cell.expires_on is None or cell.expires_on >= as_of:
-                    ok += 1
+            ok = sum(1 for cell in scored if training_cell_is_compliant(cell.passed_on, cell.expires_on, as_of))
             pct = round(100.0 * ok / len(scored), 1)
             training_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
         return training_compliance_weekly

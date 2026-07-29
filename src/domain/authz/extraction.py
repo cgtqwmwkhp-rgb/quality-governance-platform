@@ -182,6 +182,82 @@ class RouteScanResult:
         return set(self.tokens)
 
 
+#: Method recorded for a route that declares none, i.e. a websocket.
+WEBSOCKET_METHOD = "WEBSOCKET"
+
+
+@dataclass(frozen=True)
+class MountedEndpoint:
+    """One endpoint the app serves, with every dependency callable that gates it.
+
+    ``calls`` holds the callables from the route's own dependency graph *and* any
+    attached to a router it was included under. Both are needed: FastAPI merges
+    router-level dependencies into each route's dependant when it flattens, but
+    the versions that do not flatten leave them on the include context instead,
+    reachable only from the wrapper the route hangs beneath.
+
+    ``dependencies_readable`` is ``False`` for an endpoint that has no resolved
+    dependency graph at all — a plain Starlette route added with ``add_route``,
+    such as the ones FastAPI installs for ``/docs`` and ``/openapi.json``. Those
+    are still served, so they are still counted, but ``calls`` is empty because
+    there was nothing to read rather than because nothing gates them. Keeping the
+    distinction visible matters: an endpoint reported as ungated because it *is*
+    and one reported so because the walk could not look are different facts.
+    """
+
+    methods: tuple[str, ...]
+    path: str
+    endpoint: Any
+    calls: tuple[Any, ...]
+    dependencies_readable: bool = True
+
+    @property
+    def label(self) -> str:
+        return f"{','.join(self.methods)} {self.path}"
+
+    @property
+    def endpoint_name(self) -> str:
+        module = getattr(self.endpoint, "__module__", "?")
+        name = getattr(self.endpoint, "__name__", "?")
+        return f"{module}.{name}"
+
+
+@dataclass(frozen=True)
+class RouterLevelDependency:
+    """A dependency attached to a whole router rather than to one endpoint."""
+
+    prefix: str
+    call: Any
+
+
+@dataclass
+class MountedApp:
+    """The result of one traversal of the mounted router graph.
+
+    Everything that needs to know what the app serves reads this, so the
+    knowledge of FastAPI's routing shape — the part that broke once already
+    between 0.135 and 0.140 — exists in exactly one place. A second copy would
+    drift, and a drifted copy of this walk reports a smaller app rather than an
+    error.
+    """
+
+    endpoints: list[MountedEndpoint] = field(default_factory=list)
+    router_level: list[RouterLevelDependency] = field(default_factory=list)
+
+    @property
+    def api_endpoints(self) -> list[MountedEndpoint]:
+        """Endpoints with a dependency graph, i.e. everything but raw ASGI routes.
+
+        The authorisation census wants :attr:`endpoints`, because a route serving
+        traffic counts whether or not its dependencies can be read. Permission
+        extraction wants this narrower set: a route with no dependency graph
+        cannot carry a permission dependency, so including it would inflate the
+        denominator of a count that exists to notice when the walk stops finding
+        routes at all.
+        """
+        return [endpoint for endpoint in self.endpoints if endpoint.dependencies_readable]
+
+
 # --------------------------------------------------------------------------- #
 # Resolvers for the declared dynamic sites
 # --------------------------------------------------------------------------- #
@@ -471,18 +547,8 @@ def _looks_like_an_untagged_checker(call: Any) -> bool:
     return "require_permission" in parts
 
 
-def _record_call(result: RouteScanResult, call: Any, label: str) -> None:
-    if call is None:
-        return
-    token = getattr(call, REQUIRED_PERMISSION_ATTR, None)
-    if isinstance(token, str):
-        result.tokens.setdefault(token, set()).add(label)
-    elif _looks_like_an_untagged_checker(call):
-        result.untagged_checkers.append(f"{label} -> {call.__qualname__}")
-
-
-def _record_router_level_dependencies(result: RouteScanResult, holder: Any, label: str) -> None:
-    """Record permissions attached to a whole router rather than one route.
+def _router_level_calls(holder: Any) -> tuple[Any, ...]:
+    """Dependency callables attached to a whole router rather than one route.
 
     ``APIRouter(dependencies=[...])`` and ``include_router(..., dependencies=[...])``
     gate every route beneath them. Nothing in this repo enforces a permission that
@@ -490,11 +556,18 @@ def _record_router_level_dependencies(result: RouteScanResult, holder: Any, labe
     follow" case this walk exists to catch, so it is read rather than assumed
     absent.
     """
-    for dependency in getattr(holder, "dependencies", None) or ():
-        _record_call(result, getattr(dependency, "dependency", None), f"{label} (router-level)")
+    calls = (getattr(dependency, "dependency", None) for dependency in getattr(holder, "dependencies", None) or ())
+    return tuple(call for call in calls if call is not None)
 
 
-def _visit_route_node(result: RouteScanResult, node: Any, prefix: str, seen: set[tuple[int, str]], depth: int) -> None:
+def _visit_route_node(
+    result: MountedApp,
+    node: Any,
+    prefix: str,
+    inherited: tuple[Any, ...],
+    seen: set[tuple[int, str]],
+    depth: int,
+) -> None:
     """Walk one node of the mounted router graph.
 
     The graph is traversed rather than the top-level list iterated, because
@@ -507,6 +580,11 @@ def _visit_route_node(result: RouteScanResult, node: Any, prefix: str, seen: set
     version that changes the wrapper's name still works, and a version that
     changes the *shape* trips the vacuity floor and the synthetic-app tests
     rather than quietly returning less.
+
+    ``inherited`` carries router-level dependencies down to the endpoints they
+    gate. On a version that flattens they are already in the route's own
+    dependant, so the union is idempotent; on one that does not, this is the only
+    way an endpoint knows it is gated.
     """
     if depth > MAX_ROUTER_DEPTH:
         raise RouteWalkError(
@@ -521,17 +599,22 @@ def _visit_route_node(result: RouteScanResult, node: Any, prefix: str, seen: set
     # A leaf: something with a resolved dependency graph, i.e. a real endpoint.
     dependant = getattr(node, "dependant", None)
     if dependant is not None:
-        result.route_count += 1
-        methods = getattr(node, "methods", None) or ()
-        label = f"{','.join(sorted(methods))} {prefix}{getattr(node, 'path', '<unknown>')}"
-        for dep in _iter_dependants(dependant):
-            _record_call(result, getattr(dep, "call", None), label)
+        methods = tuple(sorted(getattr(node, "methods", None) or ())) or (WEBSOCKET_METHOD,)
+        own = tuple(getattr(dep, "call", None) for dep in _iter_dependants(dependant))
+        result.endpoints.append(
+            MountedEndpoint(
+                methods=methods,
+                path=f"{prefix}{getattr(node, 'path', '<unknown>')}",
+                endpoint=getattr(node, "endpoint", None),
+                calls=tuple(call for call in own if call is not None) + inherited,
+            )
+        )
         return
 
     # A wrapper around a single route, carrying the prefix it was included under.
     original_route = getattr(node, "original_route", None)
     if original_route is not None:
-        _visit_route_node(result, original_route, prefix, seen, depth + 1)
+        _visit_route_node(result, original_route, prefix, inherited, seen, depth + 1)
         return
 
     # A wrapper around a whole included router.
@@ -539,39 +622,99 @@ def _visit_route_node(result: RouteScanResult, node: Any, prefix: str, seen: set
     if original_router is not None:
         context = getattr(node, "include_context", None)
         child_prefix = prefix + str(getattr(context, "prefix", "") or "")
-        _record_router_level_dependencies(result, context, child_prefix)
-        _visit_route_node(result, original_router, child_prefix, seen, depth + 1)
+        calls = _router_level_calls(context)
+        result.router_level.extend(RouterLevelDependency(prefix=child_prefix, call=call) for call in calls)
+        _visit_route_node(result, original_router, child_prefix, inherited + calls, seen, depth + 1)
         return
 
     # Anything holding a route list: the app, a router, a mount.
     routes = getattr(node, "routes", None)
     if routes is not None:
-        _record_router_level_dependencies(result, node, prefix)
+        calls = _router_level_calls(node)
+        result.router_level.extend(RouterLevelDependency(prefix=prefix, call=call) for call in calls)
         for child in routes:
-            _visit_route_node(result, child, prefix, seen, depth + 1)
+            _visit_route_node(result, child, prefix, inherited + calls, seen, depth + 1)
         # Routes deprioritised in matching are still served, so still counted.
         for child in getattr(node, "_low_priority_routes", None) or ():
-            _visit_route_node(result, child, prefix, seen, depth + 1)
+            _visit_route_node(result, child, prefix, inherited + calls, seen, depth + 1)
         return
 
     sub_app = getattr(node, "app", None)
     if sub_app is not None and getattr(sub_app, "routes", None) is not None:
-        _visit_route_node(result, sub_app, prefix + str(getattr(node, "path", "") or ""), seen, depth + 1)
+        _visit_route_node(result, sub_app, prefix + str(getattr(node, "path", "") or ""), inherited, seen, depth + 1)
+        return
+
+    # A served endpoint with no resolved dependency graph: a plain Starlette route
+    # added through ``add_route``, which is how FastAPI installs /docs, /redoc and
+    # /openapi.json. Counted, not skipped. Skipping was a hole in this walk: a
+    # route added that way served traffic while being invisible to the census, so
+    # nothing would have asked whether it needed authorisation.
+    path = getattr(node, "path", None)
+    if path is not None and getattr(node, "endpoint", None) is not None:
+        methods = tuple(sorted(getattr(node, "methods", None) or ())) or (WEBSOCKET_METHOD,)
+        result.endpoints.append(
+            MountedEndpoint(
+                methods=methods,
+                path=f"{prefix}{path}",
+                endpoint=node.endpoint,
+                calls=inherited,
+                dependencies_readable=False,
+            )
+        )
+        return
+
+    if path is not None:
+        raise RouteWalkError(
+            f"reached a route-like node at {prefix}{path!r} of type "
+            f"{type(node).__module__}.{type(node).__name__} that this walk cannot classify: it "
+            "has no dependency graph, no endpoint, and no routes to descend into. Teach "
+            "_visit_route_node about it rather than letting it be skipped — a skipped node is an "
+            "endpoint the authorisation census cannot see."
+        )
+
+
+def walk_mounted_app(app: Any) -> MountedApp:
+    """Traverse ``app`` once and return every endpoint it serves.
+
+    ``app`` is supplied by the caller rather than imported, to keep this module
+    free of any dependency on the API layer.
+
+    This is the single traversal. :func:`tokens_from_registered_routes` and
+    :func:`src.domain.authz.census.take_census` both read its output rather than
+    walking the graph themselves.
+    """
+    result = MountedApp()
+    _visit_route_node(result, app, "", (), set(), 0)
+    return result
 
 
 def tokens_from_registered_routes(app: Any) -> RouteScanResult:
     """Read the permissions wired into the routes ``app`` actually serves.
-
-    ``app`` is supplied by the caller rather than imported, to keep this module
-    free of any dependency on the API layer.
 
     An untagged checker is reported rather than ignored: a second
     permission-dependency factory that forgot the tag would otherwise shrink this
     result with no complaint, and a cross-check that silently stops seeing things
     is worse than none.
     """
-    result = RouteScanResult()
-    _visit_route_node(result, app, "", set(), 0)
+    mounted = walk_mounted_app(app)
+    result = RouteScanResult(route_count=len(mounted.api_endpoints))
+
+    def record(call: Any, label: str) -> None:
+        token = getattr(call, REQUIRED_PERMISSION_ATTR, None)
+        if isinstance(token, str):
+            result.tokens.setdefault(token, set()).add(label)
+        elif _looks_like_an_untagged_checker(call):
+            result.untagged_checkers.append(f"{label} -> {call.__qualname__}")
+
+    for endpoint in mounted.endpoints:
+        for call in endpoint.calls:
+            record(call, endpoint.label)
+    # Recorded separately as well as through the endpoints they gate, so a
+    # permission on a router with nothing beneath it is still visible rather
+    # than silently dropped.
+    for router_dependency in mounted.router_level:
+        record(router_dependency.call, f"{router_dependency.prefix} (router-level)")
+
     return result
 
 

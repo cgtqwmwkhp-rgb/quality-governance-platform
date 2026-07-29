@@ -330,6 +330,184 @@ test('entries that never reached the artifact hold the gate', () => {
   );
 });
 
+test('a button audit that lost entries to a skipped serial suite holds the gate', () => {
+  // The observed failure: BUTTON_REGISTRY declares 22 P0/P1 buttons, the first
+  // one fails, serial mode skips the other 21, and `total_buttons` was computed
+  // from the results array — so the 21 left the denominator instead of being
+  // counted as unrun. Every surviving number looked healthy.
+  const coverage = computeCoverage({
+    linkAudit: emptyLinkAudit(),
+    buttonAudit: {
+      expected_entries: 22,
+      results: [{
+        pageId: 'portal-home',
+        actionId: 'navigate-to-report',
+        criticality: 'P0',
+        result: 'FAIL',
+        found: false,
+        clicked: false,
+        outcome_observed: false,
+        error_message: 'P0 button not found',
+      }],
+    },
+    workflowAudit: {
+      expected_entries: 1,
+      results: [workflow('admin-login', 'PASS')],
+      dead_ends: [],
+    },
+  });
+
+  assert.equal(coverage.status, 'HOLD');
+  assert.equal(coverage.coverage_complete, false);
+  assert.match(
+    coverage.hold_reasons.join(' '),
+    /button audit produced 1 of 22 declared entries; 21 produced no result at all/
+  );
+});
+
+test('a button audit that lost entries while every entry it kept passed still holds the gate', () => {
+  // The dangerous shape: nothing failed, nothing is recorded as skipped, the
+  // score is 100 and the P0 pass rate is 100% — because the entries that would
+  // have said otherwise never reached the artifact at all. Without the declared
+  // count there is nothing left in the document to notice them by.
+  const coverage = computeCoverage({
+    linkAudit: emptyLinkAudit(),
+    buttonAudit: {
+      expected_entries: 22,
+      results: [{
+        pageId: 'portal-home',
+        actionId: 'navigate-to-report',
+        criticality: 'P0',
+        result: 'PASS',
+        found: true,
+        clicked: true,
+        outcome_observed: true,
+      }],
+    },
+  });
+
+  assert.equal(coverage.score, 100);
+  assert.equal(coverage.summary.p0_failures, 0);
+  assert.equal(coverage.p0_coverage.not_executed, 0);
+  assert.equal(coverage.p0_coverage.execution_rate_pct, 100);
+  assert.equal(coverage.p0_coverage.pass_rate_pct, 100);
+
+  // ...and it is still not a pass.
+  assert.equal(coverage.status, 'HOLD');
+  assert.equal(coverage.coverage_complete, false);
+  assert.deepEqual(coverage.readiness, { staging: false, canary: false, production: false });
+  assert.match(
+    coverage.hold_reasons.join(' '),
+    /button audit produced 1 of 22 declared entries/
+  );
+});
+
+test('a page audit whose parallel workers overwrote each other holds the gate', () => {
+  // Two workers, one module-level array each, one artifact path: the last
+  // afterAll to run wrote only its own half. 18 of 36 declared pages, all
+  // passing, is what that looks like from the outside.
+  const coverage = computeCoverage({
+    pageAudit: {
+      expected_entries: 36,
+      results: Array.from({ length: 18 }, (_, i) => page(`page-${i}`, 'PASS', i === 0 ? 'P0' : 'P1')),
+    },
+    linkAudit: emptyLinkAudit(),
+  });
+
+  assert.equal(coverage.score, 100);
+  assert.equal(coverage.summary.p0_failures, 0);
+  assert.equal(coverage.status, 'HOLD');
+  assert.equal(coverage.coverage_complete, false);
+  assert.match(
+    coverage.hold_reasons.join(' '),
+    /page audit produced 18 of 36 declared entries; 18 produced no result at all/
+  );
+});
+
+test('a link audit that lost pages holds the gate', () => {
+  // The link audit contributes only total_dead to the score, and a page that
+  // never reached the artifact contributes nothing to it — so a lost page is
+  // indistinguishable from a clean one. It was also the one audit never passed
+  // to the completeness guard at all.
+  const coverage = computeCoverage({
+    pageAudit: { expected_entries: 1, results: [page('dashboard', 'PASS')] },
+    linkAudit: {
+      expected_entries: 32,
+      total_links: 40,
+      total_valid: 40,
+      total_dead: 0,
+      total_external: 0,
+      results: [{ source_page: 'portal-home', route: '/portal', total_links: 40, valid_links: 40, dead_links: 0, external_links: 0, links: [] }],
+      dead_end_map: [],
+    },
+  });
+
+  assert.equal(coverage.summary.p1_failures, 0);
+  assert.equal(coverage.score, 100);
+  assert.equal(coverage.status, 'HOLD');
+  assert.equal(coverage.coverage_complete, false);
+  assert.match(
+    coverage.hold_reasons.join(' '),
+    /link audit produced 1 of 32 declared entries; 31 produced no result at all/
+  );
+});
+
+test('every audit that falls short is named, not just the first', () => {
+  const coverage = computeCoverage({
+    pageAudit: { expected_entries: 36, results: [page('dashboard', 'PASS')] },
+    linkAudit: { expected_entries: 32, total_dead: 0, results: [], dead_end_map: [] },
+    buttonAudit: { expected_entries: 22, results: [] },
+    workflowAudit: { expected_entries: 5, results: [], dead_ends: [] },
+  });
+
+  assert.equal(coverage.status, 'HOLD');
+  assert.equal(coverage.completeness_shortfalls.length, 4);
+  assert.deepEqual(
+    coverage.completeness_shortfalls.map(reason => reason.match(/The (\w+) audit/)[1]),
+    ['page', 'link', 'button', 'workflow']
+  );
+});
+
+test('an audit that declares its count and meets it is not held for completeness', () => {
+  // The guard must not fire on a full artifact, or it stops meaning anything.
+  const coverage = computeCoverage({
+    pageAudit: { expected_entries: 2, results: [page('dashboard', 'PASS'), page('settings', 'PASS', 'P1')] },
+    linkAudit: {
+      expected_entries: 1,
+      total_links: 1,
+      total_valid: 1,
+      total_dead: 0,
+      total_external: 0,
+      results: [{ source_page: 'dashboard', route: '/dashboard', total_links: 1, valid_links: 1, dead_links: 0, external_links: 0, links: [] }],
+      dead_end_map: [],
+    },
+    buttonAudit: {
+      expected_entries: 1,
+      results: [{ pageId: 'dashboard', actionId: 'export', criticality: 'P1', result: 'PASS', clicked: true, outcome_observed: true }],
+    },
+    workflowAudit: { expected_entries: 1, results: [workflow('admin-login', 'PASS')], dead_ends: [] },
+  });
+
+  assert.deepEqual(coverage.completeness_shortfalls, []);
+  assert.equal(coverage.status, 'GO');
+});
+
+test('more entries than declared is not a shortfall', () => {
+  // A retry that recorded twice, or a registry read after the count was taken,
+  // must not be reported as missing coverage.
+  const coverage = computeCoverage({
+    linkAudit: emptyLinkAudit(),
+    workflowAudit: {
+      expected_entries: 1,
+      results: [workflow('admin-login', 'PASS'), workflow('admin-login', 'PASS')],
+      dead_ends: [],
+    },
+  });
+
+  assert.deepEqual(coverage.completeness_shortfalls, []);
+  assert.equal(coverage.status, 'GO');
+});
+
 test('a complete artifact that meets its declared count still reports GO', () => {
   const coverage = computeCoverage({
     linkAudit: emptyLinkAudit(),

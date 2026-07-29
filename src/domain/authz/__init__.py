@@ -21,6 +21,15 @@ from src.domain.authz.catalogue import (
     is_enforced,
     is_reserved,
 )
+from src.domain.authz.census import (
+    AUTHENTICATION_KIND_ATTR,
+    AuthenticationKind,
+    Census,
+    EndpointPosture,
+    Posture,
+    take_census,
+)
+from src.domain.authz.route_declarations import AUTHENTICATED_ONLY_DEBT, DECLARED_ENDPOINTS, PUBLIC_BY_DESIGN
 from src.domain.authz.validation import (
     PermissionValidationError,
     StoredPermissionsDefect,
@@ -32,12 +41,20 @@ from src.domain.authz.validation import (
 
 __all__ = [
     "ADMIN_ROLE_PERMISSIONS",
+    "AUTHENTICATED_ONLY_DEBT",
+    "AUTHENTICATION_KIND_ATTR",
+    "DECLARED_ENDPOINTS",
     "ENFORCED_PERMISSIONS",
     "GRANTABLE_PERMISSIONS",
+    "PUBLIC_BY_DESIGN",
     "REFERENCE_NUMBER_PERMISSIONS",
     "RESERVED_PERMISSIONS",
     "VIEW_ALL_PERMISSIONS",
+    "AuthenticationKind",
+    "Census",
+    "EndpointPosture",
     "PermissionValidationError",
+    "Posture",
     "StoredPermissionsDefect",
     "canonicalise_permissions_input",
     "describe_stored_permissions",
@@ -45,4 +62,5 @@ __all__ = [
     "is_enforced",
     "is_reserved",
     "parse_permissions_like_runtime",
+    "take_census",
 ]
