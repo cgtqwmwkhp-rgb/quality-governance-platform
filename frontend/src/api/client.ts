@@ -200,6 +200,19 @@ export function classifyLoginError(error: unknown): LoginErrorCode {
 // ============ Bounded Error Classes for API Responses ============
 // Universal error classification for all API calls
 
+/**
+ * Codes meaning "a table this feature needs is not in this deployment".
+ *
+ * `MEASUREMENT_UNAVAILABLE` is the read case ("we could not look"),
+ * `FEATURE_NOT_PROVISIONED` the write case ("nothing was recorded"). Both arrive
+ * as 503 but neither clears on retry, which is why they are exempted from the
+ * "Server error:" prefix and from any copy inviting the user to try again.
+ */
+export const UNPROVISIONED_ERROR_CODES: ReadonlySet<string> = new Set([
+  'MEASUREMENT_UNAVAILABLE',
+  'FEATURE_NOT_PROVISIONED',
+])
+
 export enum ErrorClass {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   AUTH_ERROR = 'AUTH_ERROR',
@@ -728,9 +741,19 @@ api.interceptors.response.use(
       const serverMsg =
         (errorEnvelope?.['message'] as string | undefined) ||
         (data500?.['detail'] as string | undefined)
-      ;(error as ClassifiedAxiosError).classifiedMessage = serverMsg
-        ? `Server error: ${serverMsg}`
-        : 'Server error. Please try again later.'
+      const code = errorEnvelope?.['code'] as string | undefined
+      if (serverMsg && code && UNPROVISIONED_ERROR_CODES.has(code)) {
+        // Not a fault: a table this feature reads or writes is not in the
+        // deployment. Prefixing "Server error:" would frame a feature that was
+        // never built as something that broke and might come back, and the
+        // server's own wording already says which table and that retrying will
+        // not help. Passed through verbatim for that reason.
+        ;(error as ClassifiedAxiosError).classifiedMessage = serverMsg
+      } else {
+        ;(error as ClassifiedAxiosError).classifiedMessage = serverMsg
+          ? `Server error: ${serverMsg}`
+          : 'Server error. Please try again later.'
+      }
     } else if (isTimeoutOrAbortError(error)) {
       const method = error.config?.method
       const maybeCommitted =
@@ -757,6 +780,29 @@ api.interceptors.response.use(
 /** Strip Python enum reprs and other coded tokens from a server-composed message. */
 function presentServerErrorMessage(raw: string): string {
   return humaniseCodedText(raw)
+}
+
+/**
+ * Read the server's error code out of the unified envelope.
+ *
+ * Returns null when there is no envelope, so a caller can tell "the server did
+ * not name a code" from "the server named a code I do not handle".
+ */
+export function getApiErrorCode(error: unknown): string | null {
+  if (!axios.isAxiosError(error)) return null
+  const data = error.response?.data as Record<string, unknown> | undefined
+  const envelope = data?.['error']
+  if (envelope && typeof envelope === 'object') {
+    const code = (envelope as Record<string, unknown>)['code']
+    if (typeof code === 'string' && code.trim()) return code
+  }
+  return null
+}
+
+/** True when a failure is a missing table rather than something that went wrong. */
+export function isUnprovisionedError(error: unknown): boolean {
+  const code = getApiErrorCode(error)
+  return code !== null && UNPROVISIONED_ERROR_CODES.has(code)
 }
 
 /**

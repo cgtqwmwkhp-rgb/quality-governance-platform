@@ -99,6 +99,7 @@ async def create_policy(
         payload=policy_data.model_dump(mode="json"),
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=policy.tenant_id,
     )
 
     return policy
@@ -227,6 +228,7 @@ async def update_policy(
         payload=update_data,
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=policy.tenant_id,
     )
 
     return policy
@@ -274,6 +276,7 @@ async def delete_policy(
         payload={"policy_id": policy_id, "title": policy.title},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=policy.tenant_id,
     )
     await db.delete(policy)
     await db.commit()

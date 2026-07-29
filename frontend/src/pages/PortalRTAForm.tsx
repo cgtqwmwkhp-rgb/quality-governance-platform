@@ -147,6 +147,8 @@ interface FormData {
   peVehicleOther: string
   hasPassengers: boolean | null
   passengerDetails: string
+  driverInjured: boolean | null
+  driverInjuryDetails: string
   location: string
   accidentDate: string
   accidentTime: string
@@ -177,7 +179,14 @@ type Step = 1 | 2 | 3 | 4 | 5
 export function portalRtaCanProceed(step: Step, formData: FormData): boolean {
   switch (step) {
     case 1:
-      return !!formData.employeeName && !!formData.peVehicle && formData.hasPassengers !== null
+      // driverInjured is mandatory: an unanswered injury question used to be
+      // recorded as "nobody was hurt", which hides RIDDOR-reportable collisions.
+      return (
+        !!formData.employeeName &&
+        !!formData.peVehicle &&
+        formData.hasPassengers !== null &&
+        formData.driverInjured !== null
+      )
     case 2:
       return !!formData.location && !!formData.accidentType
     case 3:
@@ -218,6 +227,8 @@ export default function PortalRTAForm() {
     peVehicleOther: '',
     hasPassengers: null,
     passengerDetails: '',
+    driverInjured: null,
+    driverInjuryDetails: '',
     location: '',
     accidentDate: new Date().toISOString().split('T')[0],
     accidentTime: new Date().toTimeString().slice(0, 5),
@@ -338,7 +349,10 @@ Vehicle: ${formData.peVehicle === 'other' ? formData.peVehicleOther : formData.p
 Damage: ${formData.damageDescription}
 Weather: ${formData.weather || 'Not specified'}
 Road Conditions: ${formData.roadCondition || 'Not specified'}
-Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
+Drivable: ${formData.isDrivable ? 'Yes' : 'No'}
+Anyone injured in our vehicle: ${
+        formData.driverInjured === null ? 'Not answered' : formData.driverInjured ? 'Yes' : 'No'
+      }${formData.driverInjured && formData.driverInjuryDetails ? ` - ${formData.driverInjuryDetails}` : ''}${thirdPartiesDesc}`
 
       const reporterSubmission = {
         employee_name: formData.employeeName,
@@ -346,6 +360,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
         pe_vehicle_other: formData.peVehicleOther || null,
         has_passengers: formData.hasPassengers,
         passenger_details: formData.passengerDetails || null,
+        driver_injured: formData.driverInjured,
+        driver_injury_details: formData.driverInjuryDetails || null,
         location: formData.location,
         accident_date: formData.accidentDate,
         accident_time: formData.accidentTime,
@@ -578,6 +594,58 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
                     setFormData((prev) => ({ ...prev, passengerDetails: e.target.value }))
                   }
                   placeholder={t('portal.passenger_placeholder')}
+                />
+              </div>
+            )}
+
+            <div>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.driver_injured', 'Were you or anyone in your vehicle injured?')} *
+              </span>
+              <div className="grid grid-cols-2 gap-3">
+                {[true, false].map((val) => (
+                  <button
+                    key={String(val)}
+                    type="button"
+                    data-testid={`rta-driver-injured-${val ? 'yes' : 'no'}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, driverInjured: val }))}
+                    className={cn(
+                      'px-4 py-3 rounded-xl border-2 font-medium transition-all',
+                      formData.driverInjured === val
+                        ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
+                    )}
+                  >
+                    {val ? t('common.yes', 'Yes') : t('common.no', 'No')}
+                  </button>
+                ))}
+              </div>
+              <p className="text-muted-foreground text-xs mt-2">
+                {t(
+                  'portal.driver_injured_hint',
+                  'Include any injury, however minor, and say if anyone was seen by a medic or taken to hospital.',
+                )}
+              </p>
+            </div>
+
+            {formData.driverInjured && (
+              <div>
+                <label
+                  htmlFor="portalrtaform-field-driver-injury"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.driver_injury_details', 'Injury details')}
+                </label>
+                <Input
+                  id="portalrtaform-field-driver-injury"
+                  value={formData.driverInjuryDetails}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, driverInjuryDetails: e.target.value }))
+                  }
+                  placeholder={t(
+                    'portal.driver_injury_placeholder',
+                    'e.g. neck and lower back pain, taken to hospital by ambulance',
+                  )}
                 />
               </div>
             )}

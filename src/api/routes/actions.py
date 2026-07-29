@@ -1598,6 +1598,10 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         payload=create_payload,
         user_id=current_user.id,
         request_id=request_id,
+        # The row that was just committed. Every branch above builds it with
+        # current_user.tenant_id and the column is NOT NULL, so reaching here
+        # means the tenant is known.
+        tenant_id=action.tenant_id,
     )
     if owner_id:
         await record_action_assigned_audit(
@@ -1608,6 +1612,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             assigned_by_user_id=current_user.id,
             request_id=request_id,
             source_type=out.source_type,
+            tenant_id=action.tenant_id,
             reference_number=out.reference_number,
         )
     return out
@@ -1958,6 +1963,9 @@ async def create_action_owner_note(
         payload={"note_id": note.id},
         user_id=current_user.id,
         request_id=request_id,
+        # load_action_response_by_key scopes on tenant_id and every action table
+        # declares it NOT NULL, so a tenant-less caller 404s before this point.
+        tenant_id=note.tenant_id,
     )
     return ActionOwnerNoteRead(
         id=note.id,
@@ -2288,6 +2296,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             assigned_by_user_id=current_user.id,
             request_id=request_id,
             source_type=out.source_type,
+            tenant_id=action.tenant_id,
             reference_number=out.reference_number,
         )
 
@@ -2301,5 +2310,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         payload=action_data.model_dump(exclude_none=True),
         user_id=current_user.id,
         request_id=request_id,
+        # The row this handler loaded, already scoped to current_user.tenant_id.
+        tenant_id=action.tenant_id,
     )
     return out

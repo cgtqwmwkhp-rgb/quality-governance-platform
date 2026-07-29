@@ -22,7 +22,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.domain.exceptions import BadRequestError, NotFoundError, StateTransitionError, ValidationError
+from src.domain.exceptions import (
+    AuditNotRecordableError,
+    BadRequestError,
+    NotFoundError,
+    StateTransitionError,
+    ValidationError,
+)
 from src.domain.models.asset import AssetType, TemplateAssetType
 from src.domain.models.audit import (
     AuditFinding,
@@ -328,7 +334,8 @@ async def record_audit_event(
     request_id: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
-    tenant_id: int | None = None,
+    *,
+    tenant_id: int | None,
 ) -> AuditEvent:
     """Record a system-wide audit event and persist an immutable AuditLogEntry.
 
@@ -337,12 +344,21 @@ async def record_audit_event(
     complaint (and other) mutations. Persistence is flush-only so the caller's
     session/transaction (typically ``get_db``) owns the commit.
 
-    When no tenant can be resolved, the event remains observability-only and a
-    warning is logged — AuditLogEntry requires a non-null tenant_id.
+    ``tenant_id`` is keyword-only and required. ``AuditLogEntry.tenant_id`` is
+    NOT NULL, so an event with no tenant cannot be persisted; this used to log a
+    warning and return the unsaved event, which the caller could not distinguish
+    from a successful write. 44 of 71 call sites omitted it, including
+    ``permanent_delete`` and ``purge``, and production held zero delete rows as a
+    result. Passing None now raises :class:`AuditNotRecordableError` so the
+    caller's transaction rolls back and the mutation is refused rather than
+    performed unrecorded.
+
+    Raises:
+        AuditNotRecordableError: If ``tenant_id`` is None.
     """
     final_actor_user_id = actor_user_id if actor_user_id is not None else user_id
-    # Domain layer must not import infrastructure tenant_context (D09).
-    # Callers pass tenant_id explicitly; without it we stay observability-only.
+    # Domain layer must not import infrastructure tenant_context (D09), so the
+    # caller's value is the only source; without it the event is refused below.
     resolved_tenant_id = tenant_id
 
     event = AuditEvent(
@@ -360,22 +376,29 @@ async def record_audit_event(
     )
 
     if resolved_tenant_id is None:
-        logger.warning(
-            "audit_bridge_skipped_no_tenant event_type=%s entity_type=%s entity_id=%s action=%s",
+        logger.error(
+            "audit_not_recordable_no_tenant event_type=%s entity_type=%s entity_id=%s action=%s",
             event_type,
             entity_type,
             entity_id,
             action,
         )
+        # Named for what happened. The previous "audit_completed" fired here with
+        # persisted="false", so any dashboard counting it reported audit activity
+        # that never reached the database.
         track_business_event(
-            "audit_completed",
+            "audit_not_recorded",
             {
                 "event_type": event_type,
                 "entity_type": entity_type,
-                "persisted": "false",
+                "action": action,
+                "reason": "no_tenant",
             },
         )
-        return event
+        raise AuditNotRecordableError(
+            f"Cannot persist audit event {event_type!r} for {entity_type} {entity_id}: "
+            f"no tenant_id was resolved, and AuditLogEntry.tenant_id is NOT NULL."
+        )
 
     action_lower = (action or "").lower()
     old_values: dict[str, Any] | None = None
@@ -844,6 +867,7 @@ class AuditService:
             action="create",
             description=f"Template '{template.name}' created",
             actor_user_id=user_id,
+            tenant_id=tenant_id,
         )
         return template
 
@@ -901,6 +925,10 @@ class AuditService:
                 description=f"Purged {purged_count} expired archived template(s)",
                 actor_user_id=actor_user_id,
                 payload={"purged_templates": purged_names},
+                # The acting tenant, not the template's owner: the selection above
+                # also matches tenant-less global templates, which have no owner to
+                # attribute the removal to.
+                tenant_id=tenant_id,
             )
 
         return purged_count, purged_names
@@ -982,6 +1010,7 @@ class AuditService:
                 description=(f"Template '{template.name}' updated: " f"{', '.join(changed_fields)}"),
                 actor_user_id=actor_user_id,
                 payload={"changed_fields": changed_fields},
+                tenant_id=tenant_id,
             )
 
         return template
@@ -1039,6 +1068,7 @@ class AuditService:
             action="publish",
             description=(f"Template '{template.name}' published " f"(v{template.version}, {question_count} questions)"),
             actor_user_id=actor_user_id,
+            tenant_id=tenant_id,
         )
         return template
 
@@ -1155,6 +1185,7 @@ class AuditService:
             action="archive",
             description=(f"Template '{template.name}' archived " "(recoverable for 30 days)"),
             actor_user_id=actor_user_id,
+            tenant_id=tenant_id,
         )
         return template
 
@@ -1193,6 +1224,7 @@ class AuditService:
             action="restore",
             description=f"Template '{template.name}' restored from archive",
             actor_user_id=actor_user_id,
+            tenant_id=tenant_id,
         )
         return template
 
@@ -1230,6 +1262,7 @@ class AuditService:
             action="permanent_delete",
             description=f"Template '{template_name}' permanently deleted",
             actor_user_id=actor_user_id,
+            tenant_id=tenant_id,
         )
 
     # ==================================================================
@@ -2699,6 +2732,10 @@ class AuditService:
                 "to_status": target.value,
             },
             user_id=actor_user_id,
+            # The finding's own tenant, which is already the scope this bridge
+            # loaded and cache-invalidated against; the tenant_id parameter is
+            # optional and callers do not always supply it.
+            tenant_id=finding.tenant_id,
         )
         return result
 

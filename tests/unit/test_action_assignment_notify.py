@@ -109,6 +109,7 @@ async def test_record_action_assigned_audit_emits_unified_action_assigned() -> N
             assigned_by_user_id=9,
             request_id="req-assign",
             source_type="incident",
+            tenant_id=7,
             reference_number="INA-2026-AB12",
         )
 
@@ -124,6 +125,8 @@ async def test_record_action_assigned_audit_emits_unified_action_assigned() -> N
     }
     assert kwargs["user_id"] == 9
     assert kwargs["request_id"] == "req-assign"
+    # Without this the bridge cannot persist the row (PX-155).
+    assert kwargs["tenant_id"] == 7
 
 
 def test_actions_route_imports_assignment_service_helpers() -> None:
