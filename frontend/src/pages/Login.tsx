@@ -226,6 +226,16 @@ export default function Login({ onLogin }: LoginProps) {
             credentials: 'omit',
             signal: controller.signal,
           })
+          // Read the body even though only the status matters here. A fetch request
+          // stays IN FLIGHT until its response body is consumed or cancelled, so
+          // returning with the ReadableStream untouched leaks the response stream and
+          // holds the connection open for the lifetime of the page. The server had
+          // already sent all 92 bytes and was waiting for a reader that never came.
+          // Draining it is also what lets the clearTimeout below mean what it says:
+          // finally runs when this try block completes, so with the read in place the
+          // 8s budget covers the whole exchange, where previously it was cancelled the
+          // moment the response HEADERS arrived and could never fire on a stalled body.
+          await res.text().catch(() => undefined)
           if (res.ok) return
         } catch {
           // Network / CORS-during-503 / abort — retry quietly

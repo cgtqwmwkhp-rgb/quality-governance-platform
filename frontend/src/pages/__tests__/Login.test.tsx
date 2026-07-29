@@ -126,4 +126,61 @@ describe('Login', () => {
 
     expect(onLogin).toHaveBeenCalledWith('real-jwt-token', 'refresh-token')
   })
+
+  // The warm-up effect had no test at all, which is why a leaked response stream on the
+  // most important route in the product went unnoticed. The assertion is deliberately on
+  // `bodyUsed` rather than on which method was called: what matters is that the body is
+  // no longer undisturbed, and reading it or cancelling it both satisfy that. Asserting
+  // `text()` was called would pin the fix to one implementation and fail the next person
+  // who switches to `body.cancel()` for the same correct reason.
+  describe('backend warm-up', () => {
+    it('consumes the warm-up response body, so the request cannot stay in flight', async () => {
+      const warmUpResponse = new Response('{"status":"healthy","version":"df6cd70e"}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(warmUpResponse.bodyUsed).toBe(false)
+
+      const fetchSpy = vi.fn().mockResolvedValue(warmUpResponse)
+      vi.stubGlobal('fetch', fetchSpy)
+
+      try {
+        render(<Login onLogin={onLogin} />, { wrapper: Wrapper })
+
+        await vi.waitFor(() => {
+          expect(fetchSpy).toHaveBeenCalledWith(
+            'http://localhost:3000/api/v1/health',
+            expect.objectContaining({ method: 'GET', credentials: 'omit' }),
+          )
+        })
+
+        await vi.waitFor(() => {
+          expect(warmUpResponse.bodyUsed).toBe(true)
+        })
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
+
+    it('does not retry when the warm-up succeeds', async () => {
+      const fetchSpy = vi
+        .fn()
+        .mockImplementation(() => Promise.resolve(new Response('{}', { status: 200 })))
+      vi.stubGlobal('fetch', fetchSpy)
+
+      try {
+        render(<Login onLogin={onLogin} />, { wrapper: Wrapper })
+
+        await vi.waitFor(() => {
+          expect(fetchSpy).toHaveBeenCalled()
+        })
+
+        const healthCalls = () =>
+          fetchSpy.mock.calls.filter(([url]) => String(url).endsWith('/api/v1/health')).length
+        expect(healthCalls()).toBe(1)
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
+  })
 })
