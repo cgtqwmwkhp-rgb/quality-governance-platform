@@ -23,7 +23,13 @@ from src.api.schemas.vehicle_checklist import (
     DefectResponse,
     DefectUpdate,
 )
-from src.domain.exceptions import AuthorizationError, DomainError, NotFoundError, ValidationError
+from src.domain.exceptions import (
+    AuditNotRecordableError,
+    AuthorizationError,
+    DomainError,
+    NotFoundError,
+    ValidationError,
+)
 from src.domain.models.pams_cache import PAMSSyncLog, PAMSVanChecklistCache, PAMSVanChecklistMonthlyCache
 from src.domain.models.user import User
 from src.domain.models.vehicle_defect import VehicleDefect
@@ -508,7 +514,16 @@ async def _log_audit_trail(
     defect: VehicleDefect,
     action: str,
 ) -> None:
-    """Record an audit event for a vehicle defect operation."""
+    """Record an audit event for a vehicle defect operation.
+
+    Raises:
+        AuditNotRecordableError: If the defect has no tenant, so the event cannot
+            be persisted. ``VehicleDefect.tenant_id`` is nullable, so this is
+            reachable for a caller with no tenant membership — such a defect is
+            already invisible to every list query here, all of which filter on an
+            exact tenant match. Deliberately not swallowed with the rest: an
+            audit row that cannot be written is the defect this guard used to hide.
+    """
     try:
         priority_str = defect.priority.value if hasattr(defect.priority, "value") else str(defect.priority)
         status_str = defect.status.value if hasattr(defect.status, "value") else str(defect.status)
@@ -530,7 +545,10 @@ async def _log_audit_trail(
                 "vehicle_reg": defect.vehicle_reg,
             },
             actor_user_id=current_user.id,
+            tenant_id=defect.tenant_id,
         )
+    except AuditNotRecordableError:
+        raise
     except Exception:
         logger.warning("Failed to log audit trail for defect %s", defect.id, exc_info=True)
 

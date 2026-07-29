@@ -495,6 +495,12 @@ async def list_incidents(
         if not await svc.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
             raise AuthorizationError("You can only view your own incidents")
 
+        # Fail closed when the caller has no tenant membership. audit_log_entries
+        # .tenant_id is NOT NULL, so this access cannot be recorded without one,
+        # and an email-targeted search over other tenants' reporters is precisely
+        # what this row exists to police. Superusers skip the tenant filter
+        # below, so before this they could run one unrecorded.
+        audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
             event_type="incident.list_filtered",
@@ -510,6 +516,7 @@ async def list_incidents(
             },
             user_id=current_user.id,
             request_id=request_id,
+            tenant_id=audit_tenant_id,
         )
 
     try:
@@ -754,6 +761,7 @@ async def add_incident_running_sheet_entry(
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=incident.tenant_id,
     )
 
     await db.commit()
@@ -803,6 +811,9 @@ async def delete_incident_running_sheet_entry(
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        # The parent case, whose tenant_id is NOT NULL. The entry's own column is
+        # nullable, so the parent is the reliable owner.
+        tenant_id=incident.tenant_id,
     )
 
     await db.delete(entry)
