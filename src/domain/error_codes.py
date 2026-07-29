@@ -52,3 +52,11 @@ class ErrorCode(str, Enum):
     # because a table it needs is not in the database. Separate code so a client
     # can tell "we could not look" from "the lookup broke".
     MEASUREMENT_UNAVAILABLE = "MEASUREMENT_UNAVAILABLE"
+
+    # The write counterpart of MEASUREMENT_UNAVAILABLE, and a different fact for
+    # the user: not "we cannot tell you" but "we did not record what you just
+    # did". Both arise from the same absent table, and a client that only wants
+    # to know something went wrong can treat them alike, but calling a failed
+    # ``POST /distribute`` a "measurement" would be its own small untruth in a
+    # response whose purpose is to stop telling them.
+    FEATURE_NOT_PROVISIONED = "FEATURE_NOT_PROVISIONED"

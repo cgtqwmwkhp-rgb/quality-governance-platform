@@ -9,9 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from sqlalchemy import and_, func
-from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import MeasurementUnavailableError
@@ -22,6 +20,7 @@ from src.domain.models.policy_acknowledgment import (
     PolicyAcknowledgment,
     PolicyAcknowledgmentRequirement,
 )
+from src.domain.services.schema_presence import absent_tables as schema_absent_tables
 
 logger = logging.getLogger(__name__)
 
@@ -373,20 +372,12 @@ class PolicyAcknowledgmentService:
     async def absent_tables(self, names: Tuple[str, ...]) -> Tuple[str, ...]:
         """Which of ``names`` are not present in the database.
 
-        Asked before reading rather than inferred from a failed query: production
-        is built by Alembic while the models are the app's own idea of the schema,
-        so the two can disagree. Inspecting is also dialect-independent, whereas
-        catching the failure is not — the same absent table raises
-        ``ProgrammingError`` on PostgreSQL and ``OperationalError`` on SQLite, so
-        an ``except ProgrammingError`` guard silently covers only one of them.
+        Delegates to :func:`src.domain.services.schema_presence.absent_tables`,
+        which now carries the reasoning for asking before reading. Document
+        control needs the same question, and two implementations of "does this
+        deployment have this table" would eventually answer it differently.
         """
-
-        def _absent(sync_conn) -> Tuple[str, ...]:
-            inspector = sa_inspect(sync_conn)
-            return tuple(name for name in names if not inspector.has_table(name))
-
-        connection = await self.db.connection()
-        return await connection.run_sync(_absent)
+        return await schema_absent_tables(self.db, names)
 
     async def absent_dashboard_tables(self) -> Tuple[str, ...]:
         """Which of the tables the dashboard aggregates are not in the database."""
