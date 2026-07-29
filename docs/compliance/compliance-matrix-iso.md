@@ -16,7 +16,7 @@ This matrix maps major QGP capabilities to standard clauses and lists **evidence
 | **4.2** | Interested parties | Complaints, notifications, policy acknowledgments | `src/api/routes/complaints.py`, `src/api/routes/policy_acknowledgment.py` |
 | **4.3** | Scope of QMS | IMS description in app metadata / OpenAPI | `src/main.py`, `openapi-baseline.json` (if present) |
 | **4.4** | QMS and processes | Workflow engine, CAPA, actions | `src/services/workflow_engine.py`, `src/api/routes/actions.py`, `src/api/routes/capa.py` |
-| **5.1–5.3** | Leadership, policy, roles | Policy library, RBAC/ABAC, admin routes | `src/api/routes/policy_*.py`, `src/domain/models/permissions.py`, `src/domain/services/abac_service.py` |
+| **5.1–5.3** | Leadership, policy, roles | Policy library; role-based access control with permission tokens; admin routes. **Partial** — role assignment and permission tokens are enforced on 464 of 988 endpoints (413 of 500 writes); the other 474 (74 writes) authenticate but run no authorisation check (C-2, open), and there is no role hierarchy. ABAC is **not implemented**: `abac_service.py` is unreachable code — see `docs/security/security-baseline.md` §5 | `src/api/routes/policy_*.py`, `src/domain/models/user.py` (`Role`, `user_roles`), `src/domain/authz/catalogue.py`, `require_permission` in `src/api/dependencies/__init__.py` |
 | **6.1–6.3** | Planning, risks, resources | Risk register, audits, competence | `src/api/routes/risk_register.py`, `src/api/routes/audits.py`, `src/api/routes/auditor_competence.py` |
 | **7.1–7.5** | Support (resources, competence, awareness, documented information) | Document control, training/competence hooks, attachments | `src/api/routes/document_control.py`, `src/api/routes/auditor_competence.py` |
 | **8.1** | Operational planning and control | Incident / complaint / audit lifecycles | `src/api/routes/incidents.py`, `src/api/routes/complaints.py`, `src/api/routes/audits.py` |
@@ -38,7 +38,7 @@ This matrix maps major QGP capabilities to standard clauses and lists **evidence
 | Clause | Summary | QGP feature / module | Primary evidence (repo paths) |
 | --- | --- | --- | --- |
 | **4.1–4.2** | Context, workers / interested parties | Portal workflows, complaints, notifications | `tests/uat/`, `src/api/routes/complaints.py`, `src/api/routes/notifications.py` |
-| **5.1–5.4** | Leadership and worker participation | Policy acknowledgments, roles | `src/api/routes/policy_acknowledgment.py`, `src/domain/models/permissions.py` |
+| **5.1–5.4** | Leadership and worker participation | Policy acknowledgments; roles with permission tokens (same mechanism and same limits as ISO 9001 §5.1–5.3 above) | `src/api/routes/policy_acknowledgment.py`, `src/domain/models/user.py` (`Role`, `user_roles`), `src/domain/authz/catalogue.py` |
 | **6.1.1–6.1.4** | OH&S risks, legal requirements, planning | Risk register, compliance mapping, incidents | `src/api/routes/risk_register.py`, `src/api/routes/compliance.py`, `src/api/routes/incidents.py` |
 | **7.1–7.5** | Support (resources, competence, awareness, communication, documented information) | Documents, competence, push / in-app notifications | `src/api/routes/document_control.py`, `src/api/routes/auditor_competence.py`, `src/api/routes/push_notifications.py` |
 | **8.1** | Operational planning and control | Safe systems of work via checklists and workflows | `src/api/routes/vehicle_checklists.py`, `src/services/workflow_engine.py` |
@@ -55,7 +55,7 @@ This matrix maps major QGP capabilities to standard clauses and lists **evidence
 | Clause | Summary | QGP feature / module | Primary evidence (repo paths) |
 | --- | --- | --- | --- |
 | **4.1–4.2** | Context, compliance obligations | Compliance automation, standards linkage | `src/api/routes/compliance.py`, `src/api/routes/compliance_automation.py` |
-| **5.1–5.3** | Leadership, policy, roles | Policy library, ABAC | `src/api/routes/policy_*.py`, `src/domain/services/abac_service.py` |
+| **5.1–5.3** | Leadership, policy, roles | Policy library; roles with permission tokens (same mechanism and same limits as ISO 9001 §5.1–5.3 above). The previous ABAC citation is withdrawn — that code is unreachable and is not a control | `src/api/routes/policy_*.py`, `src/domain/models/user.py` (`Role`, `user_roles`), `src/domain/authz/catalogue.py` |
 | **6.1** | Risks and opportunities | Risk register, environmental aspects when modelled as risks | `src/api/routes/risk_register.py` |
 | **7.1–7.5** | Support | Documented information, training hooks | `src/api/routes/document_control.py` |
 | **8.1** | Operational planning and control | **PlanetMark / environmental programme** features | `src/api/routes/planet_mark.py`, `src/domain/services/planet_mark_service.py` |
@@ -91,6 +91,9 @@ This matrix maps major QGP capabilities to standard clauses and lists **evidence
 | **ISO 14001** aspects / compliance register depth | Environmental aspects inventory | Extend risk or compliance templates to tag environmental aspects; use `planet_mark` data model fields for KPIs |
 | **On-site physical security** | All | QGP is software — physical controls evidenced via hosting provider & office security programmes |
 | **Retention job implementation detail** | Records control | Implement explicit purge/archival in `cleanup_tasks.run_data_retention` with metrics and audit entries (see `docs/privacy/data-retention-policy.md`) |
+| **Authorisation coverage** (clause 5.1–5.3 / 5.1–5.4, all three standards) | Roles and responsibilities | 474 of 988 endpoints (74 of 500 writes) authenticate the caller and then run no authorisation check, so for those, role membership does not restrict what an authenticated user reaches. Tracked as defect **C-2**; the register is held in code as `AUTHENTICATED_ONLY_DEBT` (`src/domain/authz/route_declarations.py`) with a capped size and an exact-match CI gate, so the count cannot drift from the routes and cannot grow. Remediation is per-register: apply `require_permission` with catalogue tokens |
+| **Row-level tenant isolation ineffective** | Records control / segregation | 21 tables carry a `tenant_isolation` RLS policy, but the application's database role holds `rolbypassrls` so PostgreSQL never evaluates them. Application-layer `tenant_id` filtering is the only isolation in force. Tracked as defect **C-27**; plan in `docs/governance/rls-least-privilege-rollout.md` |
+| **No attribute-based access control** | Roles and responsibilities | `ABACService`, the `abac_*` tables, `field_level_permissions` and `permission_audits` exist in the schema but are unreachable code and are **not** claimed as controls anywhere. Field-level permissions and permission-denial auditing are consequently not implemented. Either wire or remove; do not cite as evidence |
 
 ---
 
@@ -98,4 +101,4 @@ This matrix maps major QGP capabilities to standard clauses and lists **evidence
 
 Review this matrix **annually** or when ISO certification scope changes.
 
-**Last updated:** 2026-04-03
+**Last updated:** 2026-07-29 (clause 5.1–5.3 / 5.1–5.4 rows for all three standards repointed from dead ABAC/`permissions.py` code to the live role and permission-token mechanism, and three access-control gaps added to §5 — C-71)

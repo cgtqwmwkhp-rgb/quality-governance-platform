@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from src.domain.models.capa import CAPASource
 
 # Stable storage kinds for action_key (globally unique with row id).
@@ -106,3 +108,27 @@ def display_status_for(raw_status: str, *, from_capa: bool) -> str:
     if s == "verified":
         return "completed"
     return s
+
+
+# Display statuses that mean "nobody owes any further work on this action".
+#
+# Expressed over the *output* of display_status_for, not raw DB status. "verified"
+# and CAPA's "closed" are absent because that function already folds both into
+# "completed"; bare "closed" is present because CAPAItem is aggregated with
+# from_capa=False, so its raw "closed" survives normalisation unchanged.
+#
+# "pending_verification" is deliberately NOT terminal: work that is done but
+# unverified is still outstanding governance work, and an executive tile that
+# counted it as finished would under-report the backlog.
+TERMINAL_DISPLAY_STATUSES: frozenset[str] = frozenset({"completed", "cancelled", "closed"})
+
+
+def pending_action_count(by_display_status: Mapping[str, int]) -> int:
+    """Count actions still owed, from a display-status histogram.
+
+    Complement of :data:`TERMINAL_DISPLAY_STATUSES` rather than an allow-list of
+    open statuses: a status this module has never seen should read as outstanding,
+    because silently dropping an unrecognised status from an executive tile
+    under-reports the backlog, while over-reporting is visible and gets queried.
+    """
+    return sum(n for status, n in by_display_status.items() if status not in TERMINAL_DISPLAY_STATUSES)

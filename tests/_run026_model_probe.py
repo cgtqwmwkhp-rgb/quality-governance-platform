@@ -7,23 +7,26 @@ Why this is not just an import
 The Run026 suites need the full declared schema, which means importing the model
 modules ``alembic/env.py`` side-effect-imports — ``rca_tools``, ``kri``,
 ``workflow_rules`` and thirteen others. Those imports cannot be done inside a
-shared pytest session. They register two different classes named ``Role`` on the
-same declarative base, so any relationship naming ``"Role"`` becomes ambiguous and
-``Base.registry`` cannot configure at all. That is present on ``main``, is not
-caused by anything in Run026, and is not this module's to fix or to hide;
-``scripts/ops/run025/_models.py`` documents another instance of the same class of
-problem (``audit_template.py`` registering a second ``AuditTemplate``).
+shared pytest session — historically because they could not be, and now because
+of what would happen if they ever could not be again.
 
-The consequence is what matters here: ``Base.registry`` is poisoned for the rest
-of the process, and the next test that instantiates *any* mapped class anywhere
-gets ``InvalidRequestError``. Importing these modules in-process cost 50 unrelated
-unit tests before this indirection existed.
-
-A second defect of the same shape was in this list until 2026-07-29:
+Two defects of one shape have been cleared. Until 2026-07-29,
 ``rta_analysis.RootCauseAnalysis`` declared a relationship against ``Incident.rtas``
-that ``Incident`` did not have. That model has been deleted, which removes one
-cause but not the need for the subprocess — the ``Role`` ambiguity alone still
-poisons the registry, measured after the deletion rather than assumed.
+that ``Incident`` did not have; that model is deleted. Two different classes named
+``Role`` then remained on the same declarative base, making any relationship naming
+``"Role"`` ambiguous; the ABAC one is now ``ABACRole``. Either was enough to stop
+``Base.registry`` configuring *at all*, and importing these modules in-process cost
+50 unrelated unit tests before this indirection existed.
+
+The consequence is why the indirection stays now that both are fixed. A single
+misconfigured mapper poisons ``Base.registry`` for the rest of the process, so the
+next test to instantiate *any* mapped class anywhere gets ``InvalidRequestError`` —
+the failure is never proportionate to its cause. A third module of the same shape
+was found after those two: ``audit_template.py`` duplicated four class names from
+``audit.py`` and was out of reach only because nothing imported it. It is deleted
+(C-70), and ``tests/unit/test_model_registry_class_names.py`` now sweeps every
+model file on disk rather than only the set imported here, so a fourth is visible
+before anyone imports it.
 
 So the import happens in a subprocess that exits immediately afterwards. The
 suites get the full declared schema and the pytest session keeps a clean

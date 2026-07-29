@@ -51506,6 +51506,11 @@
             "title": "Kri Alerts",
             "type": "integer"
           },
+          "open_cases": {
+            "description": "Open incidents plus open complaints. This is the figure `pending_actions` used to carry under a name that promised remedial work (C-66): it moves with case volume and is unaffected by closing every action in the system.",
+            "title": "Open Cases",
+            "type": "integer"
+          },
           "open_incidents": {
             "title": "Open Incidents",
             "type": "integer"
@@ -51515,13 +51520,22 @@
             "type": "integer"
           },
           "pending_actions": {
-            "title": "Pending Actions",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Actions still owed across every action store, from the same aggregate that backs /actions/summary. `null` means the aggregate could not be computed \u2014 distinct from 0, which means there are genuinely none outstanding.",
+            "title": "Pending Actions"
           }
         },
         "required": [
           "health_status",
           "open_incidents",
+          "open_cases",
           "pending_actions",
           "overdue_items",
           "kri_alerts"

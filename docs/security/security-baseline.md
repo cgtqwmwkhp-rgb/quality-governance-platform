@@ -2,7 +2,7 @@
 
 **Platform:** Quality Governance Platform (QGP)  
 **Version:** 1.0  
-**Related code:** `src/main.py`, `src/core/security.py`, `src/core/azure_auth.py`, `.github/workflows/ci.yml`, `.github/dependabot.yml`
+**Related code:** `src/main.py`, `src/core/security.py`, `src/core/azure_auth.py`, `src/domain/authz/` (permission catalogue, route census), `src/api/dependencies/__init__.py` (`require_permission`), `.github/workflows/ci.yml`, `.github/dependabot.yml`
 
 ---
 
@@ -10,7 +10,7 @@
 
 | OWASP category | Risk | Control in QGP |
 | --- | --- | --- |
-| **A01 Broken Access Control** | IDOR, privilege escalation | JWT authentication, **RBAC** (`Role`, `Permission`, `UserRole`), **ABAC** (`ABACService`, policies), tenant scoping on queries, rate limiting |
+| **A01 Broken Access Control** | IDOR, privilege escalation | **Enforced:** JWT authentication; roles (`src/domain/models/user.py`, table `roles`) carrying permission tokens from the catalogue in `src/domain/authz/catalogue.py`; per-endpoint checks via `require_permission` (`src/api/dependencies/__init__.py`); rate limiting. Measured by `src/domain/authz/census.py` over the mounted app: **464 of 988 endpoints are authorisation-checked** (435 by permission token, 29 by superuser flag), including **413 of 500 writes**. A new route that is neither checked nor declared fails CI (`tests/integration/test_route_authorisation_census.py`). **Partial — authorisation coverage:** the other **474 endpoints (74 of them writes)** authenticate the caller and then run no authorisation check, so nothing refuses the request before the handler. Recorded route by route as `AUTHENTICATED_ONLY_DEBT` in `src/domain/authz/route_declarations.py` (defect C-2, open). **Not effective — RLS tenant scoping:** services filter on `tenant_id`, and 21 tables carry a `tenant_isolation` row-level-security policy, but the application connects as a role holding `rolbypassrls`, so PostgreSQL never evaluates those policies (defect C-27, open — `docs/governance/rls-least-privilege-rollout.md`). **Not implemented:** ABAC, field-level permissions, permission-denial auditing — see §5. |
 | **A02 Cryptographic Failures** | Weak crypto, exposed secrets | bcrypt password hashing; JWT signed with configured secret; TLS in transit; production fail-fast for weak secrets (`src/core/config.py`); Azure platform encryption at rest |
 | **A03 Injection** | SQL/command injection | SQLAlchemy ORM parameterisation; input validation via Pydantic; `nh3` / sanitisation where used for HTML |
 | **A04 Insecure Design** | Missing threat modelling | Security headers middleware, idempotency for safe retries, UAT read-only mode, structured logging without secrets |
@@ -76,11 +76,20 @@ Additional related gates: **dependency-review** (PRs, high severity), **lockfile
 
 ## 5. Authorization model
 
-| Layer | Description | Code |
-| --- | --- | --- |
-| **RBAC** | Permissions aggregated into roles; user–role assignments | `src/domain/models/permissions.py` (`Role`, `Permission`, `UserRole`, `RolePermission`) |
-| **Role hierarchy** | Parent role / `hierarchy_level` on `Role` | `src/domain/models/permissions.py` |
-| **ABAC** | Attribute and policy-based checks, field-level permissions, audit of permission denials | `src/domain/services/abac_service.py` |
+| Layer | Status | Description | Code |
+| --- | --- | --- | --- |
+| **Authentication** | Enforced | Bearer JWT decoded per request; revoked access tokens rejected; inactive users rejected | `get_current_user` in `src/api/dependencies/__init__.py`, `src/core/security.py` |
+| **RBAC — roles and permission tokens** | Enforced | A user's roles are joined through `user_roles`; each role row stores a JSON list of permission tokens in `roles.permissions`; `User.has_permission` does **exact set membership** — no globbing, inheritance or wildcard expansion | `src/domain/models/user.py` (`Role`, `User`, `user_roles`) |
+| **Permission vocabulary** | Enforced | The tokens that exist, which are enforced, and which may be granted; write-time validation keeps `roles.permissions` inside the catalogue | `src/domain/authz/catalogue.py`, `src/domain/authz/validation.py` |
+| **RBAC — endpoint checks** | **Partial** | `require_permission("<token>")` returns 403 when the token is absent from the caller's roles. In force on 435 endpoints; a further 29 are gated on the superuser flag (`CurrentSuperuser`). The remaining **474 of 988** endpoints (**74 of 500 writes**) authenticate and then check nothing — defect C-2, open. Some of those enforce ownership inside the handler, so the accurate statement is that no authorisation check runs *before* the handler, not that every one is exploitable | `require_permission` in `src/api/dependencies/__init__.py`; measurement in `src/domain/authz/census.py`; per-route register in `src/domain/authz/route_declarations.py` |
+| **Coverage gate** | Enforced | Every endpoint must be either authorisation-checked or named in `PUBLIC_BY_DESIGN` / `AUTHENTICATED_ONLY_DEBT`, with exact `(method, path)` pairs and no globbing, and both registers are capped — so a new unprotected route fails the build and the debt can only shrink | `tests/integration/test_route_authorisation_census.py`, `src/domain/authz/route_declarations.py` |
+| **Role hierarchy** | **Not implemented** | The live `Role` has `name`, `description`, `permissions`, `is_system_role` and no parent or level. `parent_role_id` / `hierarchy_level` exist only on `ABACRole` (see below), which no request path reads. Privilege is flat: a role grants exactly the tokens listed on it | — |
+| **ABAC — attribute/policy checks, field-level permissions, denial auditing** | **Not implemented** | `ABACService` and the `abac_*`, `field_level_permissions` and `permission_audits` tables exist in the schema but are **unreachable**: `ABACService` is constructed in exactly one place in the repository, its own unit test (`tests/unit/test_abac_service.py`); no route, dependency or middleware builds one. `src/domain/authz/__init__.py` records the model set as dead code. Do not cite this as a control | `src/domain/services/abac_service.py`, `src/domain/models/permissions.py` (both dead) |
+| **Tenant scoping** | **Not effective** | Services filter on `tenant_id`, and 21 tables carry a `tenant_isolation` RLS policy, but the application's database role holds `rolbypassrls`, so PostgreSQL skips policy evaluation entirely — defect C-27, open | `src/infrastructure/middleware/tenant_context.py` (`TenantContextMiddleware`), `docs/governance/rls-least-privilege-rollout.md` |
+
+**On field-level permissions and denial auditing specifically**, because both were previously claimed here: no live code path masks a field by permission, and no live code path writes a permission-denial record. The only implementations are `ABACService.get_allowed_fields` / `ABACService.mask_field_value` over `FieldLevelPermission`, and `ABACService._log_permission_check` writing `PermissionAudit` — all on the unreachable service. `require_permission` raises a bare 403 and records nothing. A refused **write** does leave an entry in the API audit trail via `AuditLoggingMiddleware` carrying `status_code: 403` in its metadata, but that is an incidental byproduct of mutating-request logging, not a denial decision record — it has no decision field, and refused **reads** (400 of the 474 uncovered endpoints are `GET`) produce nothing at all.
+
+**Provenance of the endpoint figures.** The counts in this section are produced by `src/domain/authz/census.py` over the mounted non-production app, not maintained by hand; re-measure with `take_census(app)` and group by `EndpointPosture.posture`. They were measured for this revision on 2026-07-29. Defect C-2 remediation reduces the 474 as it lands, so a lower figure here is expected progress, not a discrepancy.
 
 ---
 
@@ -137,4 +146,4 @@ Additional related gates: **dependency-review** (PRs, high severity), **lockfile
 
 Review this baseline **annually** or after significant incidents, releases, or infrastructure moves.
 
-**Last updated:** 2026-03-21
+**Last updated:** 2026-07-29 (§1 A01 and §5 corrected: the authorisation evidence cited dead ABAC code and overstated RBAC coverage and tenant scoping — C-71)

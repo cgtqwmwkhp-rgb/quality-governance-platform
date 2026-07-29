@@ -890,3 +890,94 @@ describe('Actions Round 3 polish — CUJ honesty & upstream links', () => {
     )
   })
 })
+
+/**
+ * C-53 on screen. The API can now say "this register is incomplete", but the whole
+ * point of the exercise is what a user sees, and an empty register is the most
+ * dangerous screen in the product to get wrong: it reads as "nothing outstanding".
+ */
+describe('Actions partial-source honesty', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSummary.mockResolvedValue({ data: { total: 0, by_display_status: {} } })
+    mockViewCounts.mockResolvedValue({ data: { all: 0, my: 0, overdue: 0, my_overdue: 0 } })
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
+  })
+
+  it('does not claim an empty register when a source could not be read', async () => {
+    mockList.mockResolvedValue({
+      data: { items: [], total: 0, sources_complete: false, unavailable_sources: ['capa'] },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-empty-unreadable')).toBeInTheDocument()
+    expect(screen.getByText(/could not be loaded/i)).toBeInTheDocument()
+    expect(screen.getByText(/not an empty register/i)).toBeInTheDocument()
+    // The store is named, so an operator can report which register is broken.
+    expect(screen.getByText(/CAPA actions/)).toBeInTheDocument()
+  })
+
+  it('shows the ordinary empty state when the register is genuinely empty', async () => {
+    // The other half of the distinction. A warning that fires on every empty
+    // register is a warning that gets ignored.
+    mockList.mockResolvedValue({
+      data: { items: [], total: 0, sources_complete: true, unavailable_sources: [] },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(mockList).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(screen.queryByTestId('actions-empty-unreadable')).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByTestId('actions-partial-sources')).not.toBeInTheDocument()
+  })
+
+  it('warns beside the rows it did manage to read', async () => {
+    // Partial, not blank: the readable rows still render, with the incompleteness
+    // stated rather than left for the user to infer from a number that looks fine.
+    mockList.mockResolvedValue({
+      data: {
+        items: [action({ action_key: 'incident_action:1', source_type: 'incident' })],
+        total: 1,
+        sources_complete: false,
+        unavailable_sources: ['capa', 'rta'],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    const banner = await screen.findByTestId('actions-partial-sources')
+    expect(banner).toHaveTextContent(/incomplete/i)
+    expect(banner).toHaveTextContent(/CAPA actions/)
+    expect(banner).toHaveTextContent(/road traffic accident actions/)
+    expect(screen.getByTestId('actions-list')).toBeInTheDocument()
+  })
+
+  it('treats a response with no completeness field as complete', async () => {
+    // A frontend deployed ahead of the API must not paint every register as broken.
+    mockList.mockResolvedValue({ data: { items: [action({})], total: 1 } })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('actions-list')
+    expect(screen.queryByTestId('actions-partial-sources')).not.toBeInTheDocument()
+  })
+})
