@@ -13,6 +13,7 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.core.config import settings
 from src.core.security import decode_token, ensure_access_token_not_revoked
+from src.domain.authz.census import AUTHENTICATION_KIND_ATTR, AuthenticationKind
 from src.domain.authz.extraction import REQUIRED_PERMISSION_ATTR
 from src.domain.exceptions import TokenRevokedError
 from src.domain.models.tenant import Tenant, TenantUser
@@ -268,6 +269,17 @@ async def _resolve_user_tenant_context(db: AsyncSession, user: User) -> None:
         tenant.id,
         user.id,
     )
+
+
+# Tag each authentication dependency with what it establishes about the caller,
+# so src.domain.authz.census can classify a route without matching on function
+# names. A name match would silently reclassify every route beneath a renamed
+# dependency; an untagged one classifies as UNAUTHENTICATED instead, which is the
+# posture that has to be declared route by route and so cannot pass quietly.
+setattr(get_current_user, AUTHENTICATION_KIND_ATTR, AuthenticationKind.REQUIRED.value)
+setattr(get_current_active_user, AUTHENTICATION_KIND_ATTR, AuthenticationKind.REQUIRED.value)
+setattr(get_current_superuser, AUTHENTICATION_KIND_ATTR, AuthenticationKind.SUPERUSER.value)
+setattr(get_optional_current_user, AUTHENTICATION_KIND_ATTR, AuthenticationKind.OPTIONAL.value)
 
 
 # Type aliases for cleaner route signatures
