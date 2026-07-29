@@ -218,6 +218,7 @@ class ComplaintService:
             event_type="complaint.created",
             entity_type="complaint",
             entity_id=str(complaint.id),
+            entity_name=complaint.reference_number,
             action="create",
             payload=complaint_data.model_dump(mode="json"),
             user_id=user_id,
@@ -331,6 +332,7 @@ class ComplaintService:
             event_type=f"complaint.{lifecycle}",
             entity_type="complaint",
             entity_id=str(complaint.id),
+            entity_name=complaint.reference_number,
             action="update",
             payload={
                 "updates": update_data,

@@ -27,7 +27,7 @@ from src.domain.services.api_idempotency_service import (
     begin_idempotent_create,
     complete_idempotent_create,
 )
-from src.domain.services.audit_service import record_audit_event
+from src.domain.services.audit_service import NO_SINGLE_ENTITY, record_audit_event
 from src.domain.services.case_closure import (
     CASE_TYPE_INCIDENT,
     evaluate_case_closure,
@@ -369,6 +369,7 @@ async def raise_risk_from_incident(
             event_type="incident.risk_raised",
             entity_type="incident",
             entity_id=str(incident.id),
+            entity_name=incident.reference_number,
             action="create",
             description=f"Risk {risk.reference} raised from incident {incident.reference_number}",
             payload={"risk_id": risk.id, "risk_reference": risk.reference},
@@ -506,6 +507,7 @@ async def list_incidents(
             event_type="incident.list_filtered",
             entity_type="incident",
             entity_id="*",
+            entity_name=NO_SINGLE_ENTITY,
             action="list",
             description="Incident list accessed with email filter",
             payload={
@@ -756,6 +758,7 @@ async def add_incident_running_sheet_entry(
         event_type="incident.runner_sheet_entry.created",
         entity_type="incident",
         entity_id=str(incident.id),
+        entity_name=incident.reference_number,
         action="create",
         description=f"Runner-sheet entry added to incident {incident.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
@@ -806,6 +809,7 @@ async def delete_incident_running_sheet_entry(
         event_type="incident.runner_sheet_entry.deleted",
         entity_type="incident",
         entity_id=str(incident.id),
+        entity_name=incident.reference_number,
         action="delete",
         description=f"Runner-sheet entry deleted from incident {incident.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},

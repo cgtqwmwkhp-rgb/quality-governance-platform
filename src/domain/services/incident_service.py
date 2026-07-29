@@ -173,6 +173,7 @@ class IncidentService:
             event_type="incident.created",
             entity_type="incident",
             entity_id=str(incident.id),
+            entity_name=incident.reference_number,
             action="create",
             description=f"Incident {incident.reference_number} created",
             payload=incident_data.model_dump(mode="json"),
@@ -346,6 +347,7 @@ class IncidentService:
             event_type=f"incident.{lifecycle}",
             entity_type="incident",
             entity_id=str(incident.id),
+            entity_name=incident.reference_number,
             action="update",
             description=f"Incident {incident.reference_number} {lifecycle}",
             payload=update_dict,
@@ -387,6 +389,7 @@ class IncidentService:
             event_type="incident.deleted",
             entity_type="incident",
             entity_id=str(incident.id),
+            entity_name=incident.reference_number,
             action="delete",
             description=f"Incident {incident.reference_number} deleted",
             payload={

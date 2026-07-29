@@ -72,6 +72,7 @@ async def record_action_assigned_audit(
         event_type="unified_action.assigned",
         entity_type="unified_action",
         entity_id=action_key,
+        entity_name=reference_number or action_key,
         action="assign",
         description=f"Assigned unified action {reference_number or action_key}",
         payload={

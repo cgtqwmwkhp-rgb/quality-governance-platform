@@ -55,6 +55,7 @@ class AuditLogService:
         entity_name: Optional[str] = None,
         action_category: str = "data",
         user_role: Optional[str] = None,
+        changed_fields: Optional[list] = None,
         *,
         commit: bool = True,
     ) -> AuditLogEntry:
@@ -68,6 +69,12 @@ class AuditLogService:
         so domain mutations and the audit row share one transaction (e.g. via
         ``get_db`` request-end commit). Default ``commit=True`` preserves the
         historical standalone behaviour for direct AuditLogService callers.
+
+        ``changed_fields`` is derived by diffing ``old_values`` against
+        ``new_values`` when it is not supplied. That derivation needs both sides,
+        so callers that hold only one — ``record_audit_event`` sets exactly one of
+        them, which is why this column was null on every bridged row — must pass
+        the field list explicitly.
         """
         # Get the previous entry for hash chain
         result = await self.db.execute(
@@ -85,9 +92,8 @@ class AuditLogService:
             sequence = 1
             previous_hash = self.GENESIS_HASH
 
-        # Calculate changed fields
-        changed_fields = None
-        if old_values and new_values:
+        # Calculate changed fields, unless the caller already knows them.
+        if changed_fields is None and old_values and new_values:
             changed_fields = [
                 k for k in set(old_values.keys()) | set(new_values.keys()) if old_values.get(k) != new_values.get(k)
             ]
@@ -325,6 +331,25 @@ class AuditLogService:
     # Verification
     # =========================================================================
 
+    async def _hash_preceding(self, tenant_id: int, sequence: int) -> Optional[str]:
+        """Return the ``entry_hash`` of the entry immediately before *sequence*.
+
+        ``None`` means no such entry exists, which is not the same as "this is
+        the start of the chain" and must not be conflated with it — see
+        :pymeth:`verify_chain`.
+        """
+        result = await self.db.execute(
+            select(AuditLogEntry)
+            .where(
+                AuditLogEntry.tenant_id == tenant_id,
+                AuditLogEntry.sequence < sequence,
+            )
+            .order_by(desc(AuditLogEntry.sequence))
+            .limit(1)
+        )
+        predecessor = result.scalar_one_or_none()
+        return predecessor.entry_hash if predecessor is not None else None
+
     async def verify_chain(
         self,
         tenant_id: int,
@@ -336,6 +361,27 @@ class AuditLogService:
         Verify the integrity of the audit log hash chain.
 
         Detects any tampering by recomputing and comparing hashes.
+
+        The chain link of the *first* entry in range is checked against whatever
+        actually precedes it, not against the genesis hash. Seeding the walk with
+        ``GENESIS_HASH`` unconditionally meant any range not starting at sequence
+        1 accused its own first entry of a previous-hash mismatch: verifying from
+        sequence 3 compared entry 3 against ``"0" * 64`` instead of entry 2's
+        hash. Only a full-range verification was trustworthy, which is the wrong
+        way round — checking a narrow window around a contested record is the
+        verification an auditor actually reaches for.
+
+        Three cases, kept distinct on purpose:
+
+        * The range starts at the chain's beginning (sequence 1, or no
+          ``start_sequence``): the predecessor is the genesis hash.
+        * A real predecessor exists: its ``entry_hash`` seeds the walk.
+        * ``start_sequence`` is mid-chain but nothing precedes it: the link is
+          *unverifiable*, and is reported as its own ``Predecessor missing``
+          error rather than silently falling back to genesis. Falling back would
+          reintroduce exactly this defect, and in an append-only log with
+          contiguous sequences a hole below the range means rows were removed —
+          which is the thing a verifier exists to surface, not to smooth over.
         """
         stmt = select(AuditLogEntry).where(AuditLogEntry.tenant_id == tenant_id)
 
@@ -359,11 +405,27 @@ class AuditLogService:
             )
 
         invalid_entries = []
-        previous_hash = self.GENESIS_HASH
+
+        # ``None`` here means "cannot be established", which is reported below
+        # rather than being quietly downgraded to the genesis hash.
+        previous_hash: Optional[str]
+        if entries[0].sequence <= 1:
+            previous_hash = self.GENESIS_HASH
+        else:
+            previous_hash = await self._hash_preceding(tenant_id, entries[0].sequence)
 
         for entry in entries:
             # Verify hash chain link
-            if entry.previous_hash != previous_hash:
+            if previous_hash is None:
+                invalid_entries.append(
+                    {
+                        "sequence": entry.sequence,
+                        "error": "Predecessor missing",
+                        "expected": None,
+                        "actual": entry.previous_hash,
+                    }
+                )
+            elif entry.previous_hash != previous_hash:
                 invalid_entries.append(
                     {
                         "sequence": entry.sequence,

@@ -163,6 +163,7 @@ class NearMissService:
             event_type="near_miss.created",
             entity_type="near_miss",
             entity_id=str(near_miss.id),
+            entity_name=near_miss.reference_number,
             action="create",
             description=f"Near Miss {near_miss.reference_number} reported",
             payload=data.model_dump(mode="json"),
@@ -311,6 +312,7 @@ class NearMissService:
             event_type=f"near_miss.{lifecycle}",
             entity_type="near_miss",
             entity_id=str(near_miss.id),
+            entity_name=near_miss.reference_number,
             action="update",
             description=f"Near Miss {near_miss.reference_number} {lifecycle}",
             payload={
@@ -356,6 +358,7 @@ class NearMissService:
             event_type="near_miss.deleted",
             entity_type="near_miss",
             entity_id=str(near_miss.id),
+            entity_name=near_miss.reference_number,
             action="delete",
             description=f"Near Miss {near_miss.reference_number} deleted",
             payload={"reference_number": near_miss.reference_number},
