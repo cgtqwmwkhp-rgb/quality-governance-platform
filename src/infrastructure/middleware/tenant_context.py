@@ -78,6 +78,27 @@ RLS_TABLES = (
     "evidence_assets",
 )
 
+# Name of the PostgreSQL GUC every tenant_isolation policy reads.
+TENANT_GUC = "app.current_tenant_id"
+
+# The USING / WITH CHECK expression every tenant_isolation policy must carry.
+#
+# ``NULLIF(..., '')`` is load-bearing, not defensive decoration. ``set_config(name,
+# value, true)`` is transaction-local, and when that transaction ends PostgreSQL
+# restores the *session* value of the GUC. For a custom GUC that was only ever set
+# transaction-locally, that restored session value is the empty string, not "unset"
+# — verified on PostgreSQL 14 for the COMMIT, ROLLBACK and ``DISCARD ALL`` paths.
+#
+# ``''::int`` raises 22P02 (invalid_text_representation). So with the bare
+# ``current_setting(...)::int`` form, a pooled connection that has already served
+# one tenant-scoped request does not fail *closed* on the next tenant-less query —
+# it fails *loud*, erroring out and aborting the surrounding transaction. Only a
+# connection that has never bound the GUC yields NULL and returns no rows.
+#
+# This is inert while the application connects as a ``rolbypassrls`` role, because
+# the policies are never evaluated. It stops being inert the moment that changes.
+TENANT_ISOLATION_PREDICATE = f"tenant_id = NULLIF(current_setting('{TENANT_GUC}', true), '')::int"
+
 _current_tenant_id: ContextVar[Optional[int]] = ContextVar("current_tenant_id", default=None)
 
 
