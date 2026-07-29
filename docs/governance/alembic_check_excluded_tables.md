@@ -14,7 +14,6 @@ migrations (or model alignment) land.
 
 | Category | Reason |
 | --- | --- |
-| Legacy singular ISO27001 / ISMS names | Tables created by older migrations (e.g. `add_iso27001_isms`); ORM may use plural or different naming. |
 | Plural ORM names | SQLAlchemy models declare plural `__tablename__` values that are not yet migrated (or rename is pending). |
 | Junction / config without models | Tables exist in PostgreSQL but have no (or incomplete) SQLAlchemy models, so compare would invent drop/create noise. |
 | ORM vs migrated name mismatch | Model table name differs from the live migrated table (e.g. `escalation_rules` vs `escalation_rules_config`). |
@@ -32,14 +31,6 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 
 | Table name | Owner | Reason |
 | --- | --- | --- |
-| `access_control_record` | IMS / ISO27001 | Legacy singular table from ISO27001/ISMS migrations; excluded until singular↔plural rename or model alignment. |
-| `business_continuity_plan` | IMS / ISO27001 | Legacy singular BCP table; ORM/plural alignment pending. |
-| `information_asset` | IMS / ISO27001 | Legacy singular information-asset table; rename/model sync pending. |
-| `information_security_risk` | IMS / ISO27001 | Legacy singular IS risk table; rename/model sync pending. |
-| `iso27001_control` | IMS / ISO27001 | Legacy singular control table; rename/model sync pending. |
-| `security_incident` | IMS / ISO27001 | Legacy singular security-incident table; rename/model sync pending. |
-| `soa_control_entry` | IMS / ISO27001 | Legacy singular SoA entry table; rename/model sync pending. |
-| `supplier_security_assessment` | IMS / ISO27001 | Legacy singular supplier assessment table; rename/model sync pending. |
 | `access_control_records` | IMS / ISO27001 | Plural ORM name without matching migrated table (or rename pending). |
 | `business_continuity_plans` | IMS / ISO27001 | Plural ORM name; migration/rename pending. |
 | `cross_standard_mappings` | IMS / ISO27001 | Cross-standard mapping ORM table; migration coverage pending. |
@@ -74,11 +65,21 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 | `escalation_rules` | Platform / DBA | ORM table name differs from migrated `escalation_rules_config`. |
 | `root_cause_analyses` | Risk / Audit | Model retained in metadata after migration dropped the physical table. |
 
-## Scope of an exclusion: tables, not columns
+## Scope of an exclusion: intended table-level, actually total
 
-An entry here defers **table-level** autogenerate compare for that name. It is not
-a statement that anything about the table is acceptable, and in particular it does
-not cover a column a model declares that the physical table lacks.
+An entry here is *intended* to defer **table-level** autogenerate compare for that
+name. It is not a statement that anything about the table is acceptable.
+
+Mechanically, though, it is not table-level at all. `include_object` returning
+`False` removes the table from the comparison before column comparison happens, so
+`alembic check` cannot report a column a model declares that the physical table
+lacks on any excluded table. Measured: `soa_control_entries` declares four columns
+the migrated database does not have (`implementation_method`, `justification`,
+`risk_treatment_reference`, `tenant_id`), and the published drift inventory
+contains zero `AddColumnOp` — because the table is on this list, not because the
+columns are there. `scripts/validate_alembic_drift_ratchet.py --database-url ...`
+runs a second, unfiltered comparison specifically to put a number on that, and
+`scripts/ops/run026/audit_attribution_schema.py` reports it per column.
 
 Run026 found that distinction being lost. `scripts/ops/run025/verify_model_schema_parity.py`
 filters its column comparison by this frozenset, so declared-but-absent columns on
@@ -89,12 +90,40 @@ finding's exclusion status as a field instead of dropping it.
 
 See [`attribution_schema_drift.md`](./attribution_schema_drift.md).
 
+## How much is actually suppressed, and what stops it growing
+
+Two separate mutes are in play, and only one of them is this list:
+
+| Mute | Mechanism | Measured on main (2026-07-29) |
+| --- | --- | --- |
+| Operation-type filter | `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` strips seven op types in `_filter_upgrade_ops` | 1060 operations across 209 tables reduced to 0 |
+| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 33 tables carrying 216 further operations, including 4 `AddColumnOp` |
+
+The op-type filter, not this list, is what makes the gate green: the exclusion list
+removes its tables from the comparison before any operation is generated for them,
+so nothing of theirs ever reaches the filter or the published `before_filter`
+count. Both numbers are now printed by `alembic check` itself and enforced by
+`scripts/validate_alembic_drift_ratchet.py`, which fails CI when:
+
+- any `AddColumnOp` appears on a non-excluded table (zero tolerance — the count is
+  0, and one absent declared column makes a whole table unreadable to a
+  whole-entity ORM load);
+- a table acquires drift, or an operation type, or a higher count than
+  `alembic_drift_baseline.json` records;
+- an excluded table's drift grows above its baseline;
+- a name is in `_ALEMBIC_CHECK_EXCLUDED_TABLES` with no row in this document, or a
+  row here names a table that is not excluded.
+
+Drift *shrinking* is reported as a warning, not a failure, so that landing a
+migration is never punished with a red gate. Refresh the baseline in the same PR.
+
 ## Maintenance
 
-1. When adding a name to `_ALEMBIC_CHECK_EXCLUDED_TABLES`, add a row here in the same PR (owner + reason).
+1. When adding a name to `_ALEMBIC_CHECK_EXCLUDED_TABLES`, add a row here in the same PR (owner + reason). This is enforced by `scripts/validate_alembic_drift_ratchet.py`.
 2. When removing a name, delete the row and cite the migration / model PR that made compare safe.
 3. Prefer shrinking this list via migrations over widening CI op filters.
 4. Do not filter a column-level check by this list. See the section above.
+5. `alembic check` alone cannot tell you whether an entry is still needed, because an excluded table produces no operations by construction. Run `scripts/validate_alembic_drift_ratchet.py --database-url ...` against a migrated database; it lists the entries with no drift left.
 
 ## Related
 
@@ -108,4 +137,25 @@ Added `20260711_ctl_docs_create` so fresh migrate materializes `controlled_docum
 and `controlled_document_versions` (previously only TEN2/RLS migrations assumed they
 existed). Removed both names from `_ALEMBIC_CHECK_EXCLUDED_TABLES` so alembic check
 covers them. Child document-control tables remain excluded until create coverage lands.
+
+## 2026-07-29 eight stale entries removed
+
+Removed the whole "Legacy singular ISO27001 / ISMS names" group:
+`access_control_record`, `business_continuity_plan`, `information_asset`,
+`information_security_risk`, `iso27001_control`, `security_incident`,
+`soa_control_entry`, `supplier_security_assessment`.
+
+No migration was needed, because there was nothing to defer. Each of these names is
+in neither `Base.metadata` nor the migrated schema — the migrations that created the
+singular tables were superseded by the plural ones, and a name that exists on
+neither side of the comparison generates no operation whether it is excluded or not.
+Measured by running `alembic.autogenerate.produce_migrations` against a database
+built by `alembic upgrade head` with `include_object` allowing everything: all eight
+produced zero operations of any type, on both PostgreSQL 14.20 and 16.14. `alembic
+check` stays green with them gone, and `before_filter` is unchanged at 1060
+operations.
+
+The plural counterparts (`information_assets`, `security_incidents`,
+`soa_control_entries`, `supplier_security_assessments`, `iso27001_controls`,
+`access_control_records`, `business_continuity_plans`) do carry real drift and stay.
 

@@ -862,6 +862,42 @@ async def doc_control_scratch_client(doc_control_scratch):
         app.dependency_overrides.pop(get_db, None)
 
 
+# ---------------------------------------------------------------------------
+#  A database the migrations built and create_all never touched
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def alembic_only_schema():
+    """The schema a deployment actually gets, for one test session.
+
+    Session-scoped because it costs one ``alembic upgrade head``. Synchronous
+    because a session-scoped async fixture would outlive the function-scoped event
+    loop this repository configures.
+
+    See ``tests/integration/_alembic_only_schema`` for why the shared harness and
+    the ``doc_control_scratch`` harness both structurally cannot answer the
+    question this fixture exists for.
+    """
+    import sqlalchemy as sa
+
+    from tests.integration import _alembic_only_schema as harness
+
+    url = os.environ["DATABASE_URL"]
+    if not harness.is_postgres(url):
+        pytest.skip(
+            "the migration chain is PostgreSQL-only, so a SQLite run cannot build "
+            "the schema a deployment gets. Set DATABASE_URL to PostgreSQL (CI does)."
+        )
+
+    schema = harness.build(url)
+    try:
+        yield schema
+    finally:
+        schema.engine.dispose()
+        harness.drop(url, sa.engine.make_url(schema.url).database)
+
+
 @pytest.fixture
 async def ack_scratch_client(ack_scratch):
     """An authenticated client whose requests read the scratch database."""
