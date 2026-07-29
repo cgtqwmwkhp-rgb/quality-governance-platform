@@ -832,15 +832,28 @@ jobs:
           # and the real budget is --retries x ~21.6s, not --retries x --sleep:
           #   * 30 retries ≈ 648s — already ~2.1x the 310s cold start recorded above, so
           #     the old setting was not in fact losing that race.
-          #   * 45 retries ≈ 972s — ~3.1x the observed worst case, which is headroom for a
-          #     start slower than the single 310s sample anyone has actually timed.
-          # A healthy worker exits on the first pong in a couple of seconds, so this costs
-          # nothing on the happy path; the budget is only ever spent while the worker is
-          # genuinely still starting. The trade is that a worker that never comes up now
-          # takes ~16min to fail rather than ~11min (the job has no timeout-minutes, so the
-          # 360min default applies and there is no collision).
+          #   * 45 retries would be ~972s. It was briefly set to that and is being put back,
+          #     because the finding it was widened for turned out to be false.
+          #
+          # THE NUMBER STAYS AT 30. Finding C-40 claimed this step gave the worker a 300s
+          # budget against a 310s cold start and had stalled the release queue. Both halves
+          # were wrong. The budget was ~648s, as the arithmetic above shows. And the Celery
+          # ping step has NEVER failed: across every failed staging run of 27-29 July
+          # (30284286537, 30285921150, 30317596838, 30351982424, 30418614706) the count of
+          # failed Celery-named steps is zero in all five. The real 28/07 stall was run
+          # 30351982424, where Build and Deploy was SKIPPED and the release gate correctly
+          # refused to call that a success. The mistake was most likely reading this script's
+          # ordinary 'attempt 1/30, attempt 2/30' progress output as a budget running out.
+          #
+          # So there is no race here to fix, and widening is not free: it makes a genuinely
+          # dead worker take ~16min to fail instead of ~11min, delaying the signal that
+          # something needs a human. A change with a disproven justification and a real cost
+          # does not stay.
+          #
+          # A healthy worker exits on the first pong in a couple of seconds, so none of this
+          # budget is spent on the happy path.
           # Do NOT add --allow-missing: a worker that never answers must fail the deploy.
-          python3 scripts/celery/smoke_inspect_ping.py --retries 45 --sleep 10
+          python3 scripts/celery/smoke_inspect_ping.py --retries 30 --sleep 10
           echo "Celery ping step complete (fail-closed)"
 
       - name: Email config honesty smoke (Lane 1)
