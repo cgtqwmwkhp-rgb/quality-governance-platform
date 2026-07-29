@@ -42,11 +42,7 @@ from fastapi.testclient import TestClient
 
 from src.api.dependencies import get_current_user, require_permission
 from src.api.routes import documents, rtas
-from src.domain.authz.catalogue import (
-    ADMIN_ROLE_PERMISSIONS,
-    ENFORCED_PERMISSIONS,
-    RESERVED_PERMISSIONS,
-)
+from src.domain.authz.catalogue import ADMIN_ROLE_PERMISSIONS, ENFORCED_PERMISSIONS, RESERVED_PERMISSIONS
 from src.infrastructure.database import get_db
 
 REPO = Path(__file__).resolve().parents[2]
