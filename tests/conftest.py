@@ -408,19 +408,30 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     passed = len(terminalreporter.stats.get("passed", []))
     failed = len(terminalreporter.stats.get("failed", []))
     skipped = len(terminalreporter.stats.get("skipped", []))
+    errors = len(terminalreporter.stats.get("error", []))
 
-    total = passed + failed + skipped
+    total = passed + failed + skipped + errors
     pass_rate = (passed / total * 100) if total > 0 else 0
 
     terminalreporter.write_line(f"Total Tests: {total}")
     terminalreporter.write_line(f"Passed: {passed}")
     terminalreporter.write_line(f"Failed: {failed}")
+    terminalreporter.write_line(f"Errors: {errors}")
     terminalreporter.write_line(f"Skipped: {skipped}")
     terminalreporter.write_line(f"Pass Rate: {pass_rate:.1f}%")
 
-    if pass_rate >= 95:
-        terminalreporter.write_line("✅ PRODUCTION READY", green=True)
-    elif pass_rate >= 80:
-        terminalreporter.write_line("⚠️ STAGING ONLY", yellow=True)
+    # A pass rate is not a deployment verdict. A single failure or error must deny
+    # the green line however small a fraction of the run it is, a run that skipped
+    # tests is not evidence for the tests it skipped, and a run that collected
+    # nothing has established nothing.
+    if failed or errors:
+        terminalreporter.write_line(f"❌ SUITE FAILED — {failed} failed, {errors} errored", red=True)
+    elif total == 0:
+        terminalreporter.write_line("❌ NO TESTS RAN", red=True)
+    elif skipped:
+        terminalreporter.write_line(
+            f"✅ {passed} passed — but {skipped} SKIPPED, so this run is not evidence for those",
+            yellow=True,
+        )
     else:
-        terminalreporter.write_line("❌ NOT READY FOR DEPLOYMENT", red=True)
+        terminalreporter.write_line(f"✅ {passed} passed, none skipped", green=True)
