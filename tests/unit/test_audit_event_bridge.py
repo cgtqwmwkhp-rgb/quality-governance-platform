@@ -1,9 +1,30 @@
-"""CUJ-IMMU-01: record_audit_event → AuditLogEntry bridge contracts."""
+"""CUJ-IMMU-01: record_audit_event → AuditLogEntry bridge contracts.
 
+Two assertions in this module were inverted by PX-155 / C-30, deliberately and
+not to make anything green:
+
+``test_record_audit_event_skips_persist_without_tenant`` asserted that a missing
+tenant_id produced "observability only, no AuditLogService call", and called that
+honest degradation. It was not honest. The caller received an ``AuditEvent`` it
+could not distinguish from a persisted one, so 44 of the 71 call sites — among
+them ``permanent_delete`` and ``purge`` — wrote nothing and reported success.
+Production bore that out: 39 audit rows in total, none of them a delete. The
+behaviour the test pinned was the defect, so the test is now the opposite.
+
+``test_record_audit_event_requires_explicit_tenant_id`` was named for a contract
+its body did not check: it omitted tenant_id and asserted nothing was persisted.
+tenant_id is now a required keyword-only parameter, so omitting it is a
+``TypeError`` and the name is true. Its actual subject — D09, the domain layer
+not reaching into infrastructure tenant_context — is asserted directly below.
+"""
+
+import inspect
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.domain.exceptions import AuditNotRecordableError
+from src.domain.services import audit_service
 from src.domain.services.audit_service import record_audit_event
 
 
@@ -74,42 +95,49 @@ async def test_record_audit_event_delete_maps_payload_to_old_values():
 
 @pytest.mark.asyncio
 async def test_record_audit_event_skips_persist_without_tenant():
-    """Honest degradation: no tenant → observability only, no AuditLogService call."""
+    """No tenant → refuse the event. See the module docstring: this assertion is inverted."""
     db = AsyncMock()
 
     with patch("src.domain.services.audit_service.AuditLogService") as mock_cls:
-        event = await record_audit_event(
-            db=db,
-            event_type="complaint.created",
-            entity_type="complaint",
-            entity_id="1",
-            action="create",
-            payload={"title": "x"},
-            user_id=1,
-            tenant_id=None,
-        )
+        with pytest.raises(AuditNotRecordableError):
+            await record_audit_event(
+                db=db,
+                event_type="complaint.created",
+                entity_type="complaint",
+                entity_id="1",
+                action="create",
+                payload={"title": "x"},
+                user_id=1,
+                tenant_id=None,
+            )
 
     mock_cls.assert_not_called()
-    assert event.id is None
-    assert event.event_type == "complaint.created"
 
 
 @pytest.mark.asyncio
 async def test_record_audit_event_requires_explicit_tenant_id():
-    """Domain bridge does not import infrastructure tenant_context (D09)."""
+    """Omitting tenant_id is a TypeError, and the bridge still resolves no tenant itself (D09)."""
     db = AsyncMock()
 
     with patch("src.domain.services.audit_service.AuditLogService") as mock_cls:
-        event = await record_audit_event(
-            db=db,
-            event_type="incident.updated",
-            entity_type="incident",
-            entity_id="9",
-            action="update",
-            payload={"title": "y"},
-            user_id=3,
-            # tenant_id omitted on purpose
-        )
+        with pytest.raises(TypeError, match="tenant_id"):
+            await record_audit_event(
+                db=db,
+                event_type="incident.updated",
+                entity_type="incident",
+                entity_id="9",
+                action="update",
+                payload={"title": "y"},
+                user_id=3,
+                # tenant_id omitted on purpose
+            )
 
     mock_cls.assert_not_called()
-    assert event.id is None
+
+
+def test_the_bridge_does_not_reach_into_infrastructure_for_a_tenant() -> None:
+    """D09: the tenant comes from the caller, never from tenant_context."""
+    module_source = inspect.getsource(audit_service)
+
+    assert "from src.infrastructure.middleware.tenant_context import" not in module_source
+    assert "import src.infrastructure.middleware.tenant_context" not in module_source
