@@ -4,8 +4,8 @@ import enum
 from datetime import datetime, timezone
 from typing import Optional, Type
 
-from sqlalchemy import DateTime, String, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
 from sqlalchemy.types import VARCHAR, TypeDecorator
 
 
@@ -101,10 +101,36 @@ class SoftDeleteMixin:
 
 
 class AuditTrailMixin:
-    """Mixin for audit trail fields."""
+    """Mixin for audit trail fields.
 
-    created_by_id: Mapped[Optional[int]] = mapped_column(nullable=True)
-    updated_by_id: Mapped[Optional[int]] = mapped_column(nullable=True)
+    Both columns are references to ``users.id``, not bare integers. They used to
+    be bare integers, and the cost of that was 30 tables reaching production
+    where ``created_by_id`` could name a user that had never existed — the ORM
+    did not mind, the database had nothing to enforce, and ``alembic check``
+    strips ``CreateForeignKeyOp`` in CI, so nothing reported it.
+
+    ``declared_attr`` rather than a plain ``mapped_column``: a ``ForeignKey``
+    carries per-table state and cannot be shared between the tables of every
+    class that mixes this in, so each subclass needs its own instance.
+
+    Both stay ``Optional``. Rows predating id-based attribution have no user to
+    name, and the eight tables that gained these columns in 20260902_attrib_cols
+    gained them empty on every existing row; ``NOT NULL`` here could not be
+    migrated onto any database with history. A model that declares an
+    unsatisfiable constraint is the drift this replaced, not a fix for it.
+
+    A subclass that needs different behaviour — ``ondelete``, an index, a
+    different target — overrides the attribute, and the override wins. 23 models
+    already do, which is why this mixin's omission was easy to miss.
+    """
+
+    @declared_attr
+    def created_by_id(cls) -> Mapped[Optional[int]]:  # noqa: N805 - declared_attr receives the class
+        return mapped_column(ForeignKey("users.id"), nullable=True)
+
+    @declared_attr
+    def updated_by_id(cls) -> Mapped[Optional[int]]:  # noqa: N805 - declared_attr receives the class
+        return mapped_column(ForeignKey("users.id"), nullable=True)
 
 
 # ---------------------------------------------------------------------------

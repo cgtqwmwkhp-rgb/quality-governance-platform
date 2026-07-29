@@ -98,6 +98,21 @@ class BadRequestError(DomainError):
     default_code = "BAD_REQUEST"
 
 
+class AuditNotRecordableError(DomainError):
+    """An audit event could not be persisted, so the operation must not stand.
+
+    ``AuditLogEntry.tenant_id`` is NOT NULL, so an event with no resolvable
+    tenant cannot be written. Raising rather than returning lets the caller's
+    transaction roll back, which refuses the mutation instead of performing it
+    unrecorded. Carries the generic ``INTERNAL_ERROR`` code deliberately: a call
+    site that cannot resolve a tenant is our defect, not something the client
+    can correct by changing the request.
+    """
+
+    http_status = 500
+    default_code = "INTERNAL_ERROR"
+
+
 class MeasurementUnavailableError(DomainError):
     """A figure could not be measured because a table it reads is absent.
 
@@ -119,5 +134,44 @@ class MeasurementUnavailableError(DomainError):
         super().__init__(
             message,
             details={"missing_tables": list(missing_tables)},
+        )
+        self.missing_tables = tuple(missing_tables)
+
+
+class FeatureNotProvisionedError(DomainError):
+    """A write was refused because the table it records into does not exist.
+
+    The read counterpart is :class:`MeasurementUnavailableError`. Both come from
+    the same cause — a model whose create-migration never landed — but they say
+    different things to whoever is waiting: one is "we cannot tell you", the
+    other is "nothing was recorded, and your action did not happen".
+
+    Also 503, deliberately, and not 501. RFC 9110 scopes 501 to a method the
+    server does not support at all, which is not the case here — the handler
+    exists and works the moment the migration lands — and RFC 9111 makes 501
+    heuristically cacheable, so a cached 501 could outlive the fix. 503 is not
+    heuristically cacheable.
+
+    ``Retry-After`` is deliberately never set. 503 carries an implication of
+    "try later", and for an absent table that is only true after a deploy, so
+    naming a number of seconds would be a fresh guess dressed as a fact.
+    ``details["provisioning_state"]`` says which kind of absence this is instead.
+    """
+
+    http_status = 503
+    default_code = "FEATURE_NOT_PROVISIONED"
+
+    def __init__(
+        self,
+        message: str,
+        missing_tables: list[str] | tuple[str, ...],
+        provisioning_state: str = "migration_pending",
+    ) -> None:
+        super().__init__(
+            message,
+            details={
+                "missing_tables": list(missing_tables),
+                "provisioning_state": provisioning_state,
+            },
         )
         self.missing_tables = tuple(missing_tables)

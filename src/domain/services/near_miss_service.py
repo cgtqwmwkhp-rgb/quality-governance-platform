@@ -168,6 +168,7 @@ class NearMissService:
             payload=data.model_dump(mode="json"),
             user_id=user_id,
             request_id=request_id,
+            tenant_id=near_miss.tenant_id,
         )
 
         await self.db.commit()
@@ -319,6 +320,9 @@ class NearMissService:
             },
             user_id=user_id,
             request_id=request_id,
+            # The record's own tenant, not the tenant_id argument: callers pass
+            # None with skip_tenant_check=True, and the row still has an owner.
+            tenant_id=near_miss.tenant_id,
         )
 
         await self.db.commit()
@@ -357,6 +361,7 @@ class NearMissService:
             payload={"reference_number": near_miss.reference_number},
             user_id=user_id,
             request_id=request_id,
+            tenant_id=near_miss.tenant_id,
         )
 
         await self.db.delete(near_miss)

@@ -626,6 +626,7 @@ class CompetenceGapService:
             description=f"Competence gap {action}",
             payload=payload,
             actor_user_id=actor_id,
+            tenant_id=tenant_id,
         )
 
     def _build_capa_description(self, gap: CompetenceGapAction) -> str:

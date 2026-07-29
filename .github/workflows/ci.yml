@@ -1817,6 +1817,40 @@ jobs:
           alembic check
           echo "[OK] No migration drift detected"
 
+      # This job is the only place in CI holding a database built by the
+      # migrations and nothing else. The integration job applies the chain too,
+      # but tests/integration/conftest.py then runs Base.metadata.create_all over
+      # it, which supplies any table or column the migrations did not -- so a
+      # missing-column condition is invisible there by the time any test runs.
+      #
+      # It also catches what `alembic check` above cannot: that step sets
+      # ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1, which strips AddColumnOp and
+      # CreateForeignKeyOp, precisely the two operations these drifts consist of.
+      # The filter is deferral of a real backlog (see
+      # docs/governance/alembic_check_excluded_tables.md), not a muted gate, and
+      # this narrows the part of it that breaks queries back into a hard failure.
+      - name: Verify declared columns exist and attribution is constrained
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: |
+          echo "=== Attribution and declared-column census (Run026) ==="
+          # pipefail, because the census signals failure through its exit code and
+          # bash would otherwise report tee's. A gate whose result is discarded by
+          # its own plumbing is worse than no gate.
+          set -o pipefail
+          python -m scripts.ops.run026.audit_attribution_schema --json \
+            | tee attribution-schema-census.json
+          echo "[OK] no absent declared columns, no unconstrained attribution columns"
+
+      - name: Upload attribution schema census
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: attribution-schema-census
+          path: attribution-schema-census.json
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Upload Alembic drift inventory
         uses: actions/upload-artifact@v7
         if: always()

@@ -74,11 +74,27 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 | `escalation_rules` | Platform / DBA | ORM table name differs from migrated `escalation_rules_config`. |
 | `root_cause_analyses` | Risk / Audit | Model retained in metadata after migration dropped the physical table. |
 
+## Scope of an exclusion: tables, not columns
+
+An entry here defers **table-level** autogenerate compare for that name. It is not
+a statement that anything about the table is acceptable, and in particular it does
+not cover a column a model declares that the physical table lacks.
+
+Run026 found that distinction being lost. `scripts/ops/run025/verify_model_schema_parity.py`
+filters its column comparison by this frozenset, so declared-but-absent columns on
+these ~40 tables were not deferred, they were unreported — the difference between
+15 findings and 19. Tools that ask column-level questions should not filter by this
+list; `scripts/ops/run026/audit_attribution_schema.py` does not, and reports each
+finding's exclusion status as a field instead of dropping it.
+
+See [`attribution_schema_drift.md`](./attribution_schema_drift.md).
+
 ## Maintenance
 
 1. When adding a name to `_ALEMBIC_CHECK_EXCLUDED_TABLES`, add a row here in the same PR (owner + reason).
 2. When removing a name, delete the row and cite the migration / model PR that made compare safe.
 3. Prefer shrinking this list via migrations over widening CI op filters.
+4. Do not filter a column-level check by this list. See the section above.
 
 ## Related
 
