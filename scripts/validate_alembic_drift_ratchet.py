@@ -243,6 +243,7 @@ def audit_excluded_tables(database_url: str, declared: set[str]) -> dict[str, di
     application and a live database, and the rest must stay runnable without them.
     """
     import sqlalchemy as sa
+
     from alembic.autogenerate import produce_migrations
     from alembic.migration import MigrationContext
     from alembic.operations import ops as alembic_ops

@@ -23,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from validate_alembic_drift_ratchet import (  # noqa: E402
     _check_add_column_ops,
-    _check_exclusion_register,
     _check_excluded_table_ratchet,
+    _check_exclusion_register,
     _check_ratchet,
     _check_unsuppressed_drift,
     build_baseline,
