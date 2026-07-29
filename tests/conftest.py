@@ -440,9 +440,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     terminalreporter.write_line(f"Skipped: {skipped}")
     terminalreporter.write_line(f"Pass Rate: {pass_rate:.1f}%")
 
-    verdict, colour = format_suite_verdict(
-        passed=passed, failed=failed, skipped=skipped, errors=errors
-    )
+    verdict, colour = format_suite_verdict(passed=passed, failed=failed, skipped=skipped, errors=errors)
     if colour == "red":
         terminalreporter.write_line(verdict, red=True)
     elif colour == "yellow":
