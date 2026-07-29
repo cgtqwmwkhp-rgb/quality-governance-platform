@@ -163,10 +163,15 @@ test.describe('Page Load Audit', () => {
           }
         });
         
-        // Navigate and measure
+        // Navigate and measure.
+        // networkidle is flaky on SWA (analytics/keepalive can keep the network busy on a
+        // healthy SPA). The app-shell visibility assertion below is the real gate and is
+        // unchanged. Note that load_time_ms/timing_bucket are now measured to
+        // domcontentloaded rather than to network silence: they are recorded for reporting
+        // only and are not asserted against any threshold, so no check is weakened.
         const startTime = Date.now();
         const response = await page.goto(pageEntry.route, {
-          waitUntil: 'networkidle',
+          waitUntil: 'domcontentloaded',
           timeout: 30000,
         });
         const loadTime = Date.now() - startTime;

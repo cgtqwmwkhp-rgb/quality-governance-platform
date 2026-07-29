@@ -342,8 +342,10 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
           try {
             // Navigate if route specified
             if (step.route) {
+              // networkidle is flaky on SWA (analytics/keepalive keep the network busy on a
+              // healthy SPA). The app-shell wait below is the real gate and is unchanged.
               await page.goto(step.route, { 
-                waitUntil: 'networkidle', 
+                waitUntil: 'domcontentloaded', 
                 timeout: workflow.max_duration_seconds * 1000 
               });
               await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
@@ -417,8 +419,16 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
               ).catch(() => null);
             }
             
-            // Wait for any navigation or network activity to settle
-            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+            // Settle after the action. This used to be
+            //   waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+            // which swallowed its own failure, so it asserted nothing at all and simply
+            // burned up to 10s per step whenever SWA analytics/keepalive kept the network
+            // busy. Assert the app shell is still rendered instead: a real element check
+            // that can actually fail, in place of a silent timeout.
+            await page
+              .locator('#root, #app, [data-testid="app-root"]')
+              .first()
+              .waitFor({ state: 'visible', timeout: 5000 });
             
             stepResult.result = 'PASS';
             result.completed_steps++;
