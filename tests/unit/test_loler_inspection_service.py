@@ -37,12 +37,16 @@ def test_inspection_status_derives_asset_date_state(
 
 @pytest.mark.asyncio
 async def test_get_asset_history_returns_latest_status_and_certificates() -> None:
-    latest_due = NOW + timedelta(days=14)
+    # get_asset_history takes no `now`, so it reads the real clock. These fixtures
+    # must therefore be relative to that same clock: pinning them to the frozen
+    # NOW above dates the certificate, and the expected statuses expire with it.
+    now = datetime.now(timezone.utc)
+    latest_due = now + timedelta(days=14)
     latest = SimpleNamespace(
         id=22,
         reference_number="LOLER-2026-0022",
         examination_type=LOLERExaminationType.THOROUGH_EXAMINATION,
-        examination_date=NOW,
+        examination_date=now,
         next_examination_due=latest_due,
         safe_to_operate=True,
         competent_person_name="A. Examiner",
@@ -51,8 +55,8 @@ async def test_get_asset_history_returns_latest_status_and_certificates() -> Non
         id=12,
         reference_number="LOLER-2025-0012",
         examination_type=LOLERExaminationType.INSPECTION,
-        examination_date=NOW - timedelta(days=180),
-        next_examination_due=NOW - timedelta(days=1),
+        examination_date=now - timedelta(days=180),
+        next_examination_due=now - timedelta(days=1),
         safe_to_operate=True,
         competent_person_name="B. Examiner",
     )
