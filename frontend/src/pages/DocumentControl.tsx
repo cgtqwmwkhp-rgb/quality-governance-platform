@@ -12,6 +12,7 @@ import {
 import api, {
   documentControlApi,
   getApiErrorMessage,
+  isUnprovisionedError,
   type ControlledDocumentDetail,
   type ControlledDocumentGoldenThread,
   type ControlledDocumentSummary,
@@ -33,7 +34,11 @@ import {
 } from '../components/ui/Select'
 import { DocumentVersionControlBar } from '../components/DocumentVersionControlBar'
 import { cn } from '../helpers/utils'
-import { buildDocumentControlEmptyCopy } from '../components/risk/documentControlHonesty'
+import {
+  buildAccessLogUnavailableCopy,
+  buildDistributionsUnavailableCopy,
+  buildDocumentControlEmptyCopy,
+} from '../components/risk/documentControlHonesty'
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
@@ -66,6 +71,7 @@ export default function DocumentControl() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<ControlledDocumentDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [detailUnprovisioned, setDetailUnprovisioned] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -117,14 +123,22 @@ export default function DocumentControl() {
     libraryDocumentCount,
   })
 
+  const distributionsUnavailable = buildDistributionsUnavailableCopy(detail?.unavailable)
+  const accessLogUnavailable = buildAccessLogUnavailableCopy(detail?.unavailable)
+
   const loadDetail = useCallback(async (documentId: number) => {
     setDetailLoading(true)
     try {
       const response = await documentControlApi.get(documentId)
       setDetail(response.data)
+      setDetailUnprovisioned(false)
     } catch (err) {
       reportFailure(err)
       setDetail(null)
+      // "Retry by selecting the document again" is advice that can never work
+      // when the failure is a table that is not in the deployment, so the copy
+      // below has to know which kind of failure this was.
+      setDetailUnprovisioned(isUnprovisionedError(err))
     } finally {
       setDetailLoading(false)
     }
@@ -602,7 +616,32 @@ export default function DocumentControl() {
                     Distribute
                   </Button>
 
-                  {detail.distributions.length > 0 && (
+                  {distributionsUnavailable.show ? (
+                    <div
+                      className="pt-2 border-t border-border text-sm"
+                      role="status"
+                      data-testid="document-control-distributions-unavailable"
+                    >
+                      <p className="font-medium text-foreground">{distributionsUnavailable.title}</p>
+                      <p className="text-muted-foreground mt-1">{distributionsUnavailable.description}</p>
+                    </div>
+                  ) : null}
+
+                  {accessLogUnavailable.show ? (
+                    <div
+                      className="pt-2 border-t border-border text-sm"
+                      role="status"
+                      data-testid="document-control-access-log-unavailable"
+                    >
+                      <p className="font-medium text-foreground">{accessLogUnavailable.title}</p>
+                      <p className="text-muted-foreground mt-1">{accessLogUnavailable.description}</p>
+                    </div>
+                  ) : null}
+
+                  {/* Guarded on the disclosure, not just on length: the server sends
+                      an empty array when the table could not be read, so length 0
+                      alone does not mean no copies were issued. */}
+                  {!distributionsUnavailable.show && detail.distributions.length > 0 && (
                     <div className="space-y-2 pt-2 border-t border-border">
                       {detail.distributions.map((d) => (
                         <div
@@ -639,11 +678,27 @@ export default function DocumentControl() {
                 </Card>
               </div>
             ) : (
-              <EmptyState
-                icon={<FileText className="w-8 h-8 text-muted-foreground" />}
-                title="Could not load document"
-                description="Retry by selecting the document again."
-              />
+              <div
+                data-testid={
+                  detailUnprovisioned
+                    ? 'document-control-detail-unprovisioned'
+                    : 'document-control-detail-failed'
+                }
+              >
+                <EmptyState
+                  icon={<FileText className="w-8 h-8 text-muted-foreground" />}
+                  title={
+                    detailUnprovisioned
+                      ? 'This document cannot be shown in this deployment'
+                      : 'Could not load document'
+                  }
+                  description={
+                    detailUnprovisioned
+                      ? 'A database table this view needs is not present here, so retrying will not help. Report it to your administrator — it needs a migration to be deployed.'
+                      : 'Retry by selecting the document again.'
+                  }
+                />
+              </div>
             )}
           </div>
         </div>
