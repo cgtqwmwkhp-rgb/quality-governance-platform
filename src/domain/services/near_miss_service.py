@@ -368,10 +368,13 @@ class NearMissService:
             tenant_id=near_miss.tenant_id,
         )
 
+        # Capture the owner before delete/commit can expire ORM attributes. A
+        # superuser may be deleting a record owned by a different tenant.
+        cache_tenant_id = near_miss.tenant_id if near_miss.tenant_id is not None else tenant_id
         await self.db.delete(near_miss)
         await self.db.commit()
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "near_miss")
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "near_miss")
         track_metric("near_miss.mutation", 1)
 
     async def list_investigations(
