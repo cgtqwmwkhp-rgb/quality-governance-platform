@@ -5,7 +5,7 @@
 # P2 = Nice to have, can degrade gracefully
 
 version: "1.0"
-last_updated: "2026-07-09"
+last_updated: "2026-07-29"
 
 # ==============================================================================
 # PUBLIC ROUTES (No Authentication)
@@ -19,6 +19,33 @@ public_routes:
     expected_empty_state: "Login form visible"
     expected_degraded_state: null
     description: "Employee portal SSO login"
+
+  # C-61: both password-recovery routes were absent from this registry, which the
+  # link audit uses as its list of valid routes. The only dead end and the only
+  # P1 failure the gate reported was "login -> /forgot-password", flagged
+  # "Route not in registry" — a false positive: frontend/src/App.tsx declares
+  # both routes, both page components exist, and both carry en/cy strings.
+  # Registered as P1 rather than P0: /login is the P0 journey, this is the
+  # recovery path around it, and the P0 denominator is what hard-fails the gate,
+  # so raising it is the repo owner's triage call rather than a side effect of
+  # fixing a false positive.
+  - pageId: forgot-password
+    route: /forgot-password
+    auth: anon
+    criticality: P1
+    component: ForgotPassword
+    expected_empty_state: "Email entry form visible"
+    expected_degraded_state: null
+    description: "Staff password reset request (pre-auth)"
+
+  - pageId: reset-password
+    route: /reset-password
+    auth: anon
+    criticality: P1
+    component: ResetPassword
+    expected_empty_state: "Invalid-token message when no token is present in the query string"
+    expected_degraded_state: null
+    description: "Staff password reset confirmation from emailed link (pre-auth)"
 
 # ==============================================================================
 # PORTAL ROUTES (SSO Authentication - Employee Self-Service)
