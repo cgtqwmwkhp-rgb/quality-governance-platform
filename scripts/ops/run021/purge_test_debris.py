@@ -104,7 +104,10 @@ async def _apply_plan(hits: list[dict[str, Any]], *, hard_delete_fixtures: bool)
                 campaign.title = _prefix(campaign.title)
                 applied[px] = applied.get(px, 0) + 1
             elif table in {"audit_builder_templates", "audit_templates"}:
-                # Core SQL — avoid dual ORM AuditTemplate class-name collision.
+                # Core SQL: no model declares `audit_builder_templates`, so one of
+                # the two tables handled here cannot be loaded through the ORM.
+                # (The original reason, a dual `AuditTemplate` class-name
+                # collision, ended with the C-70 deletion.)
                 if hard_delete_fixtures:
                     result = await db.execute(
                         text(f"DELETE FROM {table} WHERE id = :id"),

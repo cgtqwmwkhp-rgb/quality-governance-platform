@@ -1,11 +1,15 @@
 """Load exactly the model metadata that ``alembic/env.py`` compares against.
 
 Both Run025 scripts need ``Base.metadata``, and it matters that they see the same
-set of tables Alembic does. Sweeping ``src/domain/models`` with ``pkgutil`` does
-not: it pulls in ``audit_template.py``, which registers a second class named
-``AuditTemplate`` on the same declarative ``Base`` as ``audit.py``, adding seven
-tables that no migration creates. Comparing against those produces seven
-"missing table" findings that are an artefact of the import strategy, not drift.
+set of tables Alembic does. Until C-70, sweeping ``src/domain/models`` with
+``pkgutil`` did not: it pulled in ``audit_template.py``, which registered a second
+class named ``AuditTemplate`` on the same declarative ``Base`` as ``audit.py`` and
+added seven tables that no migration creates, producing seven "missing table"
+findings that were an artefact of the import strategy rather than drift. That
+module is deleted, and it was the only model file on disk outside this list, so the
+two strategies currently agree. The list is still the right thing to follow: it is
+the set Alembic compares, and it is the set that stays correct if a dead module
+appears again.
 
 So the import list is read out of ``alembic/env.py`` rather than restated here.
 Restating it would go stale the first time someone adds a model module there, and

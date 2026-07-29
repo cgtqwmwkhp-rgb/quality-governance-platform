@@ -141,7 +141,7 @@ Full persona definitions: [`docs/user-journeys/personas-and-journeys.md`](../use
 - **Success Metrics**: Audit completion time; finding-to-CAPA conversion rate; audit programme coverage; template reuse rate.
 - **Journey Reference**: Journey 2 — Audit Lifecycle (P2)
 - **API Surface**: `src/api/routes/audits.py` — Audit runs CRUD, sections, questions, responses, findings; `src/api/routes/audit_templates.py` — Template CRUD, versioning, archiving; scoring and statistics endpoints.
-- **Data Entities**: `AuditRun`, `AuditTemplate`, `AuditSection`, `AuditQuestion`, `AuditResponse`, `AuditFinding` (`src/domain/models/audit.py`, `src/domain/models/audit_template.py`).
+- **Data Entities**: `AuditRun`, `AuditTemplate`, `AuditSection`, `AuditQuestion`, `AuditResponse`, `AuditFinding`, `TemplateVersion` — all declared in `src/domain/models/audit.py`. (A second, never-migrated set of the same names in `src/domain/models/audit_template.py` was deleted for C-70; no entity in this module was ever served from it.)
 - **Dependencies**: CAPA, Evidence Assets, Standards Library, Compliance Evidence, Digital Signatures, Audit Trail, Notifications.
 - **Status**: Active
 

@@ -108,11 +108,13 @@ def test_excluded_tables_are_read_from_alembic_env():
 
 
 def test_metadata_excludes_the_audit_template_collision_tables():
-    """pkgutil-sweeping the models package registers tables no migration creates.
+    """The seven audit-builder tables are in no metadata and no database.
 
-    ``audit_template.py`` declares a second ``AuditTemplate`` on the same Base as
-    ``audit.py``. Importing it adds seven tables that do not exist in any
-    database, which would show up as bogus "missing table" findings.
+    ``audit_template.py`` declared a second ``AuditTemplate`` on the same Base as
+    ``audit.py`` and seven tables no migration creates. It was deleted for C-70,
+    so this now guards against the names coming back rather than against an import
+    strategy: anything that puts them in the metadata again would reintroduce both
+    the class-name collision and seven bogus "missing table" findings.
     """
     tables = set(model_metadata_summary()["tables"])
     assert "audit_builder_templates" not in tables
