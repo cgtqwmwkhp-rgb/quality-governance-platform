@@ -1,8 +1,49 @@
 # `roles.permissions` for the admin role (C-1)
 
-**Status: NOT APPLIED. Awaiting approval.** Nothing in the repository executes any
-statement below — no Alembic revision, no seed, no startup hook. Applying it is a
-human decision.
+**Status: APPLIED to staging and production, 29 July 2026.** Nothing in the repository
+executes any statement below — no Alembic revision, no seed, no startup hook — so applying
+it remains a human decision, and it was taken by David Harris. Each environment needed a
+*different* statement, which is the part to read before reusing this document.
+
+| Environment | Applied | Statement used | Verified |
+|---|---|---|---|
+| Staging | 29 Jul, ~12:50 UTC | the `UPDATE` in Step 2 | `token_count = 75`, `contains_wildcard = false`, and a **non-superuser** admin then loaded `/incidents/`, `/complaints/` and `/near-misses/` |
+| Production | 29 Jul, 18:19 UTC | an **`INSERT`**, not the `UPDATE` | role `id=13`, 75 tokens, no wildcard, `is_system_role = true`, `tenant_id NULL`, **no user assigned** |
+
+**Why production needed an `INSERT`.** Step 2's `UPDATE` assumes a row already holding
+`'["*"]'`. Production's `roles` table was **completely empty** — 0 rows, and 0 in
+`user_roles` — because the eleven test-debris roles were deleted under C-10 and nothing was
+provisioned afterwards. So there was no wildcard row to correct. That emptiness was a defect
+in its own right (**C-72**): production ran entirely on the `is_superuser` flag, and because
+`User.has_permission` returns `True` for a superuser *before* it reads any role, every
+authorisation check added by C-2 would have been a no-op for superusers and a hard lockout
+for anyone else.
+
+**The grant written to production was cross-checked, not retyped.** It was derived from
+`ADMIN_ROLE_PERMISSIONS` in `src/domain/authz/catalogue.py`, asserted at 75 tokens with no
+wildcard before the write, and compared token-for-token against the value **already applied
+and proven in staging**. They matched exactly, so production received the value known to
+work rather than a fresh interpretation of this document. The insert and the C-72 user change
+ran in one transaction with each statement's affected-row count asserted at exactly 1, and
+verification ran afterwards on a fresh connection so it could not read its own uncommitted
+state.
+
+**The production role is deliberately unassigned.** `user_roles` holds 0 rows. It exists so a
+real administrator can be provisioned against a documented grant; granting it to an existing
+account was explicitly declined, because the only active non-superuser was a dormant account
+with no demonstrated need, and that account was deactivated instead.
+
+**Two tokens are absent from this grant on purpose.** `action:read` and `risk:read` are in
+`RESERVED_PERMISSIONS`, not `ENFORCED_PERMISSIONS`, and `ADMIN_ROLE_PERMISSIONS` derives from
+the latter. Promoting either is not a one-line change: it grows this grant to 77 tokens, makes
+this document stale, fails `tests/unit/test_admin_grant_statement.py`, and the new grant then
+has to be applied by hand to every environment before the corresponding endpoint can be gated.
+
+> **If you are reading this because a PR wants to gate an endpoint on a permission:** check the
+> token is in the table above *and* that the grant has been applied in the environment you are
+> shipping to. This document said "NOT APPLIED" for several hours after staging had in fact been
+> updated, and a lane correctly refused to merge on that basis. Re-run Step 3 rather than
+> trusting this header.
 
 ## Defect
 
