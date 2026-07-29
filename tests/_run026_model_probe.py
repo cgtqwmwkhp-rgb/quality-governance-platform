@@ -6,23 +6,24 @@ Why this is not just an import
 ------------------------------
 The Run026 suites need the full declared schema, which means importing the model
 modules ``alembic/env.py`` side-effect-imports — ``rca_tools``, ``kri``,
-``workflow_rules``, ``rta_analysis`` and thirteen others. Those imports cannot be
-done inside a shared pytest session. They register classes that leave
-``Base.registry`` unable to configure at all, and the failure is not this
-module's to fix or to hide:
+``workflow_rules`` and thirteen others. Those imports cannot be done inside a
+shared pytest session. They register two different classes named ``Role`` on the
+same declarative base, so any relationship naming ``"Role"`` becomes ambiguous and
+``Base.registry`` cannot configure at all. That is present on ``main``, is not
+caused by anything in Run026, and is not this module's to fix or to hide;
+``scripts/ops/run025/_models.py`` documents another instance of the same class of
+problem (``audit_template.py`` registering a second ``AuditTemplate``).
 
-* ``rta_analysis.RootCauseAnalysis`` declares a relationship against
-  ``Incident.rtas``, and ``Incident`` has no such property.
-* Two different classes named ``Role`` end up registered on the same declarative
-  base, so any relationship naming ``"Role"`` becomes ambiguous.
-
-Both are present on ``main`` and neither is caused by anything in Run026 —
-``scripts/ops/run025/_models.py`` documents a third instance of the same class of
-problem (``audit_template.py`` registering a second ``AuditTemplate``). The
-consequence is what matters here: ``Base.registry`` is poisoned for the rest of
-the process, and the next test that instantiates *any* mapped class anywhere gets
-``InvalidRequestError``. Importing these modules in-process cost 50 unrelated
+The consequence is what matters here: ``Base.registry`` is poisoned for the rest
+of the process, and the next test that instantiates *any* mapped class anywhere
+gets ``InvalidRequestError``. Importing these modules in-process cost 50 unrelated
 unit tests before this indirection existed.
+
+A second defect of the same shape was in this list until 2026-07-29:
+``rta_analysis.RootCauseAnalysis`` declared a relationship against ``Incident.rtas``
+that ``Incident`` did not have. That model has been deleted, which removes one
+cause but not the need for the subprocess — the ``Role`` ambiguity alone still
+poisons the registry, measured after the deletion rather than assumed.
 
 So the import happens in a subprocess that exits immediately afterwards. The
 suites get the full declared schema and the pytest session keeps a clean

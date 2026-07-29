@@ -32,7 +32,6 @@ for _metadata_mod in (
     "src.domain.models.permissions",
     "src.domain.models.policy_acknowledgment",
     "src.domain.models.rca_tools",
-    "src.domain.models.rta_analysis",
     "src.domain.models.token_blacklist",
     "src.domain.models.vehicle_defect",
     "src.domain.models.workflow",
@@ -109,8 +108,6 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         "risk_incident_mapping",
         # ORM table name differs from migrated table (escalation_rules_config in DB)
         "escalation_rules",
-        # Model retained after migration dropped root_cause_analyses
-        "root_cause_analyses",
     }
 )
 

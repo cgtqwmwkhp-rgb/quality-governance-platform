@@ -93,7 +93,16 @@ DEFERRED_ABSENT_COLUMNS: dict[tuple[str, str], str] = {
 # Tables whose model is retained in metadata after a migration dropped the
 # physical table. Absent columns on these are an artefact of the retained model,
 # not drift, and are reported separately.
-DROPPED_PHYSICAL_TABLES: frozenset[str] = frozenset({"root_cause_analyses"})
+#
+# Empty since 2026-07-29. Its only entry was `root_cause_analyses`, and the
+# retained model was deleted rather than kept, so the table is no longer declared
+# by anything and can never reach the loop below — which only walks tables
+# `load_metadata()` returns. The set is kept rather than removed because the
+# classification it drives (`absent_columns_on_dropped_tables`,
+# `physical_table_dropped`) is part of this report's published shape, and because
+# naming a table here that nothing declares would be a false claim that silently
+# diverts findings away from the failing bucket if a model of that name returns.
+DROPPED_PHYSICAL_TABLES: frozenset[str] = frozenset()
 
 
 def _declared_columns() -> dict[str, dict[str, bool]]:
