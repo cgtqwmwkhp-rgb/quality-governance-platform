@@ -26,6 +26,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# Real portal intake path (C-63). `/api/v1/portal/report` does not exist — probes
+# against it returned 404 and the suite treated that as "injection blocked".
+PORTAL_REPORTS_PATH = "/api/v1/portal/reports/"
+
 
 # ============================================================================
 # Auth helpers
@@ -226,14 +230,16 @@ class TestA03Injection:
 
         for payload in sql_payloads:
             response = client.post(
-                "/api/v1/portal/report",
+                PORTAL_REPORTS_PATH,
                 json={
                     "report_type": "incident",
-                    "title": payload,
-                    "description": payload,
+                    "title": payload if len(payload) >= 5 else f"SQL {payload}",
+                    "description": f"Injection probe: {payload}",
                     "severity": "low",
                 },
             )
+            # Must reach the real intake handler — a 404 means the probe is dead.
+            assert response.status_code != 404
             assert response.status_code != 500
 
     def test_command_injection(self, client, auth_headers):
@@ -252,14 +258,15 @@ class TestA03Injection:
 
         for payload in cmd_payloads:
             response = client.post(
-                "/api/v1/portal/report",
+                PORTAL_REPORTS_PATH,
                 json={
                     "report_type": "incident",
                     "title": f"Test {payload}",
-                    "description": "Test",
+                    "description": f"Command injection probe {payload}",
                     "severity": "low",
                 },
             )
+            assert response.status_code != 404
             assert response.status_code != 500
 
     def test_xss_injection(self, client):
@@ -276,14 +283,15 @@ class TestA03Injection:
 
         for payload in xss_payloads:
             response = client.post(
-                "/api/v1/portal/report",
+                PORTAL_REPORTS_PATH,
                 json={
                     "report_type": "incident",
-                    "title": payload,
-                    "description": payload,
+                    "title": payload if len(payload) >= 5 else f"XSS {payload}",
+                    "description": f"XSS probe payload: {payload}",
                     "severity": "low",
                 },
             )
+            assert response.status_code != 404
 
             if response.status_code in [200, 201]:
                 data = response.json()
@@ -495,24 +503,27 @@ class TestA08IntegrityFailures:
 
         for payload in malformed_json:
             response = client.post(
-                "/api/v1/portal/report",
+                PORTAL_REPORTS_PATH,
                 content=payload,
                 headers={"Content-Type": "application/json"},
             )
-            assert response.status_code in [404, 422]
+            # Real route: malformed JSON is a client error, never a missing path.
+            assert response.status_code != 404
+            assert response.status_code in [400, 422]
 
     def test_large_payload_rejected(self, client):
         """Excessively large payloads are rejected."""
         large_payload = {
             "report_type": "incident",
-            "title": "Test",
+            "title": "Large payload rejection probe",
             "description": "x" * (10 * 1024 * 1024),  # 10MB
             "severity": "low",
         }
 
-        response = client.post("/api/v1/portal/report", json=large_payload)
-        # Should be rejected or truncated
-        assert response.status_code in [404, 413, 422, 200, 201]
+        response = client.post(PORTAL_REPORTS_PATH, json=large_payload)
+        # Must hit the real intake path; 404 was the old silent-pass for a dead route.
+        assert response.status_code != 404
+        assert response.status_code in [400, 413, 422]
 
 
 # ============================================================================
@@ -594,12 +605,13 @@ class TestAdditionalSecurity:
     def test_content_type_validation(self, client):
         """Content-Type is validated."""
         response = client.post(
-            "/api/v1/portal/report",
+            PORTAL_REPORTS_PATH,
             content="title=test&description=test",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        # Should reject or handle properly
-        assert response.status_code in [404, 200, 201, 415, 422]
+        # Real intake expects JSON; form bodies must not 404 as a missing route.
+        assert response.status_code != 404
+        assert response.status_code in [400, 415, 422]
 
     def test_no_hardcoded_secrets_in_responses(self, client):
         """No hardcoded secrets in responses."""
