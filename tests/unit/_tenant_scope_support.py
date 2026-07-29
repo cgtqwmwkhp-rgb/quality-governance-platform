@@ -2,21 +2,29 @@
 
 ``scripts/ops/run025/_models.load_metadata()`` deliberately imports the same model
 modules ``alembic/env.py`` does, because a schema-parity tool that only looks at
-part of the schema is worse than none. That import set cannot be brought into a
-process that later configures SQLAlchemy mappers: two different classes named
-``Role`` end up registered on the same declarative base, so ``configure_mappers()``
-raises ``InvalidRequestError: Multiple classes found for path "Role"`` — and it
-raises it for *every* mapper in the registry, not just the ambiguous one.
+part of the schema is worse than none. Twice, that import set could not be brought
+into a process that later configured SQLAlchemy mappers, and both times the cost
+was the whole registry rather than the offending mapper:
 
-That whole-registry blast radius is the reason for the indirection rather than the
-particular defect causing it. A second instance of the same class of problem was
-fixed on 2026-07-29: ``src/domain/models/rta_analysis.py`` declared a relationship
-against ``Incident.rtas`` that ``Incident`` did not have, and it took 253 unrelated
-unit tests down when these tests first imported it in-process. Deleting that model
-did not make the import safe, because the ``Role`` ambiguity is independent of it.
+* ``src/domain/models/rta_analysis.py`` declared a relationship against
+  ``Incident.rtas``, which ``Incident`` did not have. It took 253 unrelated unit
+  tests down when these tests first imported it in-process. Deleted 2026-07-29.
+* two classes named ``Role`` sat on the same declarative base, making every
+  ``relationship("Role")`` ambiguous and raising
+  ``InvalidRequestError: Multiple classes found for path "Role"``. The ABAC one is
+  now ``ABACRole``.
 
-Alembic gets away with the import because it never configures mappers. Tests get
-to keep both the full metadata and a clean registry by asking a child process.
+``configure_mappers()`` therefore succeeds on the full import set today, which
+``tests/unit/test_model_registry_class_names.py`` asserts through this module so it
+cannot quietly stop being true.
+
+The child process is kept even so. It is not compensation for those two defects but
+for the shape of them: any future mapper misconfiguration would again fail every
+mapper in the registry rather than its own, and this import set deliberately
+includes modules the application itself never imports, so pulling it into the
+pytest process would change the registry that every later test in the session runs
+against. Alembic gets away with the import because it never configures mappers.
+Tests get to keep both the full metadata and a clean registry by asking a child.
 """
 
 from __future__ import annotations
@@ -63,6 +71,39 @@ print(json.dumps(types))
 """
 
 
+_CLASS_NAME_SCRIPT = r"""
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from scripts.ops.run025._models import load_metadata
+
+load_metadata()
+from src.infrastructure.database import Base
+
+names = {}
+for mapper in Base.registry.mappers:
+    cls = mapper.class_
+    names.setdefault(cls.__name__, []).append(f"{cls.__module__}.{cls.__name__} -> {cls.__tablename__}")
+print(json.dumps(names))
+"""
+
+
+_CONFIGURE_SCRIPT = r"""
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from scripts.ops.run025._models import load_metadata
+
+load_metadata()
+import sqlalchemy.orm
+
+try:
+    sqlalchemy.orm.configure_mappers()
+except Exception as exc:
+    print(json.dumps({"ok": False, "error": f"{type(exc).__name__}: {exc}"}))
+else:
+    print(json.dumps({"ok": True, "error": None}))
+"""
+
+
 def _run(script: str) -> dict:
     completed = subprocess.run(
         [sys.executable, "-c", script, str(REPO_ROOT)],
@@ -79,6 +120,26 @@ def _run(script: str) -> dict:
 def model_metadata_summary() -> dict[str, list[str]]:
     """Table names, and which of them require or permit a NULL ``tenant_id``."""
     return _run(_SCRIPT)
+
+
+@lru_cache(maxsize=1)
+def model_configure_mappers_result() -> dict:
+    """``{"ok": bool, "error": str | None}`` from configuring the full model set.
+
+    Deliberately reports the failure rather than raising it, so a test can name the
+    cause in its assertion message instead of surfacing a subprocess crash.
+    """
+    return _run(_CONFIGURE_SCRIPT)
+
+
+@lru_cache(maxsize=1)
+def model_mapped_class_names() -> dict[str, list[str]]:
+    """``{class name: ["module.Class -> table", ...]}`` for every mapped class.
+
+    Reads ``registry.mappers`` rather than configuring them, so it reports the
+    registry's contents even while some unrelated mapper is misconfigured.
+    """
+    return _run(_CLASS_NAME_SCRIPT)
 
 
 @lru_cache(maxsize=1)

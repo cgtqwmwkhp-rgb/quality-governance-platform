@@ -2457,7 +2457,10 @@ export const executiveDashboardApi = {
       health_score: number | null
       health_status: string
       open_incidents: number
-      pending_actions: number
+      /** Open incidents + open complaints. Moves with case volume, not with action closure. */
+      open_cases: number
+      /** Actions still owed. `null` means unreadable, NOT none outstanding (C-66). */
+      pending_actions: number | null
       overdue_items: number
       kri_alerts: number
     }>('/api/v1/executive-dashboard/summary'),
