@@ -5,13 +5,18 @@ Covers the world-class data integrity requirements for public portal intake:
   NearMiss has no reporter_submission column like Incident/Complaint/RTA)
 - every reporter-submitted field is promoted onto the NearMiss row
 - the reporter-submitted event date/time is honoured, not overwritten with
-  server ``utcnow``
+  server ``utcnow`` — asserted against both the key names the portal actually
+  sends (``incident_date``/``incident_time``/``preventive_action``, which come
+  from the published template) and the NearMiss domain names kept as aliases
+- when no usable event date arrives the submission still succeeds, but the
+  server-instant substitution is logged rather than applied silently
 - ``attachment_ids`` are linked to the created case, failing closed for
   missing/wrong-tenant evidence assets
 - an optional ``Idempotency-Key`` / ``idempotency_key`` prevents duplicate
   portal submissions
 """
 
+import logging
 import uuid
 
 import pytest
@@ -24,6 +29,11 @@ from src.domain.models.tenant import Tenant
 
 
 def _near_miss_payload(**overrides) -> dict:
+    """A submission using the NearMiss domain key names.
+
+    Retained because those names stay supported as aliases; it is *not* the shape
+    the portal sends. See :func:`_portal_near_miss_payload`.
+    """
     payload = {
         "report_type": "near_miss",
         "title": "Near Miss - Test Contract - Loading Bay",
@@ -59,6 +69,59 @@ def _near_miss_payload(**overrides) -> dict:
     return payload
 
 
+def _portal_near_miss_payload(**overrides) -> dict:
+    """A submission using the key names the portal actually sends.
+
+    ``PortalDynamicForm`` passes the reporter's form data through verbatim, and the
+    published ``near-miss`` template names its fields ``incident_date``,
+    ``incident_time`` and ``preventive_action`` — not the NearMiss domain names.
+    ``complaint_date`` rides along because the renderer seeds one generic set of
+    date defaults for every report type.
+    """
+    payload = _near_miss_payload()
+    submission = dict(payload["reporter_submission"])
+    submission["incident_date"] = submission.pop("event_date")
+    submission["incident_time"] = submission.pop("event_time")
+    submission["preventive_action"] = submission.pop("preventive_action_suggested")
+    submission["complaint_date"] = submission["incident_date"]
+    payload["reporter_submission"] = submission
+    payload.update(overrides)
+    return payload
+
+
+# Verbatim from the staging ``portal_submit`` audit snapshot for NM-2026-0002,
+# the submission that proved the reporter's date, time and preventive action were
+# being discarded. Kept literal so it cannot drift away from what the portal sends.
+_CAPTURED_STAGING_SUBMISSION = {
+    "incident_date": "2026-07-28",
+    "incident_time": "21:26",
+    "complaint_date": "2026-07-28",
+    "person_name": "UX Super",
+    "contract": "openreach",
+    "location": "Openreach Exchange, Ipswich - Cable chamber 4",
+    "description": (
+        "Unsecured chamber lid left open at the footway edge while the engineer returned "
+        "to the van for cones. A pedestrian stepped around it without seeing the opening."
+    ),
+    "potential_consequences": (
+        "A member of the public could have fallen into an open chamber, with a serious "
+        "lower-limb or head injury and a RIDDOR-reportable public safety event."
+    ),
+    "preventive_action": (
+        "Cones and barriers to be positioned before the lid is lifted, never after. "
+        "Add to the pre-start briefing checklist."
+    ),
+}
+
+_SUBMISSION_SHAPES = pytest.mark.parametrize(
+    "build_payload",
+    [
+        pytest.param(_near_miss_payload, id="domain-keys"),
+        pytest.param(_portal_near_miss_payload, id="portal-keys"),
+    ],
+)
+
+
 @pytest.mark.asyncio
 class TestPortalNearMissFieldPromotion:
     """Every reporter-submitted field must land on the NearMiss row."""
@@ -86,9 +149,10 @@ class TestPortalNearMissFieldPromotion:
         assert near_miss.potential_severity == "high"
         assert near_miss.was_involved is True
 
-    async def test_submitted_event_date_time_is_not_overwritten(self, client, test_session):
+    @_SUBMISSION_SHAPES
+    async def test_submitted_event_date_time_is_not_overwritten(self, client, test_session, build_payload):
         """The client-submitted event date/time must be used, never server utcnow."""
-        response = await client.post("/api/v1/portal/reports/", json=_near_miss_payload())
+        response = await client.post("/api/v1/portal/reports/", json=build_payload())
         assert response.status_code == 201, response.text
         reference_number = response.json()["reference_number"]
 
@@ -98,11 +162,52 @@ class TestPortalNearMissFieldPromotion:
         assert near_miss.event_date.date().isoformat() == "2026-02-10"
         assert near_miss.event_time == "14:30"
 
-    async def test_missing_event_date_falls_back_to_now(self, client, test_session):
-        """No client-submitted date/time should still succeed with a server fallback."""
+    @_SUBMISSION_SHAPES
+    async def test_submitted_preventive_action_is_promoted(self, client, test_session, build_payload):
+        """The suggested control is the point of a near-miss report; it must survive."""
+        response = await client.post("/api/v1/portal/reports/", json=build_payload())
+        assert response.status_code == 201, response.text
+        reference_number = response.json()["reference_number"]
+
+        result = await test_session.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
+        near_miss = result.scalar_one()
+
+        assert near_miss.preventive_action_suggested == "Install mirrors at blind junction."
+
+    async def test_missing_event_date_falls_back_to_now(self, client, test_session, caplog):
+        """No client-submitted date/time should still succeed with a server fallback.
+
+        A safety report must never be rejected over a missing timestamp, but the
+        substitution has to be observable: a silent fallback is what let a key-name
+        mismatch masquerade as working intake.
+        """
         payload = _near_miss_payload()
-        del payload["reporter_submission"]["event_date"]
-        del payload["reporter_submission"]["event_time"]
+        for key in ("event_date", "event_time", "incident_date", "incident_time"):
+            payload["reporter_submission"].pop(key, None)
+
+        with caplog.at_level(logging.WARNING, logger="src.api.routes.employee_portal"):
+            response = await client.post("/api/v1/portal/reports/", json=payload)
+        assert response.status_code == 201, response.text
+        reference_number = response.json()["reference_number"]
+
+        result = await test_session.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
+        near_miss = result.scalar_one()
+        assert near_miss.event_date is not None
+        # No date was submitted, so no time may be invented to accompany the fallback.
+        assert near_miss.event_time is None
+
+        fallback_warnings = [
+            record.getMessage() for record in caplog.records if "no usable event date" in record.getMessage()
+        ]
+        assert fallback_warnings, "The server-instant fallback must be logged, not silent"
+        assert reference_number in fallback_warnings[0]
+        # The keys that did arrive must be named so the mismatch is diagnosable.
+        assert "potential_consequences" in fallback_warnings[0]
+
+    async def test_unparseable_domain_key_does_not_beat_a_usable_portal_key(self, client, test_session):
+        """A stale/garbage value under one accepted key must not shadow a real one."""
+        payload = _portal_near_miss_payload()
+        payload["reporter_submission"]["event_date"] = "not-a-date"
 
         response = await client.post("/api/v1/portal/reports/", json=payload)
         assert response.status_code == 201, response.text
@@ -110,7 +215,114 @@ class TestPortalNearMissFieldPromotion:
 
         result = await test_session.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
         near_miss = result.scalar_one()
-        assert near_miss.event_date is not None
+        assert near_miss.event_date.date().isoformat() == "2026-02-10"
+        assert near_miss.event_time == "14:30"
+
+    async def test_over_long_time_value_is_clipped_not_a_lost_report(self, client, test_session):
+        """``event_time`` is varchar(10); an over-long value must not abort the insert."""
+        payload = _portal_near_miss_payload()
+        payload["reporter_submission"]["incident_date"] = "2026-02-10"
+        payload["reporter_submission"]["incident_time"] = "14:30:59.123456"
+
+        response = await client.post("/api/v1/portal/reports/", json=payload)
+        assert response.status_code == 201, response.text
+        reference_number = response.json()["reference_number"]
+
+        result = await test_session.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
+        near_miss = result.scalar_one()
+        assert len(near_miss.event_time) <= 10
+        # Full precision survives on the timestamp column.
+        assert near_miss.event_date.hour == 14
+        assert near_miss.event_date.minute == 30
+        assert near_miss.event_date.second == 59
+
+    async def test_conflicting_event_dates_are_logged_not_silently_resolved(self, client, test_session, caplog):
+        """When both accepted shapes carry a different date, the choice must be observable."""
+        payload = _near_miss_payload()
+        payload["reporter_submission"]["incident_date"] = "2026-03-15"
+        payload["reporter_submission"]["incident_time"] = "09:05"
+
+        with caplog.at_level(logging.WARNING, logger="src.api.routes.employee_portal"):
+            response = await client.post("/api/v1/portal/reports/", json=payload)
+        assert response.status_code == 201, response.text
+        reference_number = response.json()["reference_number"]
+
+        result = await test_session.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
+        near_miss = result.scalar_one()
+        # Documented precedence: the explicit domain key wins, and the date and time
+        # come from the same key pair — never spliced across shapes.
+        assert near_miss.event_date.date().isoformat() == "2026-02-10"
+        assert near_miss.event_time == "14:30"
+
+        conflict_warnings = [
+            record.getMessage() for record in caplog.records if "conflicting event dates" in record.getMessage()
+        ]
+        assert conflict_warnings, "A conflict between accepted date keys must be logged"
+        assert reference_number in conflict_warnings[0]
+
+
+@pytest.mark.asyncio
+class TestPortalNearMissCapturedStagingSubmission:
+    """The exact payload staging received, asserting the data loss cannot recur.
+
+    Reproduced from the immutable ``portal_submit`` audit snapshot of NM-2026-0002,
+    whose row landed with ``event_time`` NULL, ``preventive_action_suggested`` NULL
+    and ``event_date`` equal to the submission instant.
+    """
+
+    def _payload(self) -> dict:
+        return {
+            "report_type": "near_miss",
+            "title": "Near Miss Report - openreach",
+            "description": _CAPTURED_STAGING_SUBMISSION["description"],
+            "location": _CAPTURED_STAGING_SUBMISSION["location"],
+            "severity": "medium",
+            "reporter_name": "UX Super",
+            "reporter_email": f"reporter-{uuid.uuid4().hex[:8]}@example.com",
+            "department": "openreach",
+            "is_anonymous": False,
+            "reporter_submission": dict(_CAPTURED_STAGING_SUBMISSION),
+        }
+
+    async def test_entered_date_time_and_preventive_action_all_survive(self, client, test_session):
+        response = await client.post("/api/v1/portal/reports/", json=self._payload())
+        assert response.status_code == 201, response.text
+        reference_number = response.json()["reference_number"]
+
+        result = await test_session.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
+        near_miss = result.scalar_one()
+
+        assert near_miss.event_date.date().isoformat() == "2026-07-28"
+        assert near_miss.event_date.hour == 21
+        assert near_miss.event_date.minute == 26
+        assert near_miss.event_time == "21:26"
+        assert near_miss.preventive_action_suggested == _CAPTURED_STAGING_SUBMISSION["preventive_action"]
+        assert near_miss.potential_consequences == _CAPTURED_STAGING_SUBMISSION["potential_consequences"]
+
+    async def test_event_date_is_not_the_submission_instant(self, client, test_session):
+        """The precise failure mode observed on staging: created_at written as event_date."""
+        response = await client.post("/api/v1/portal/reports/", json=self._payload())
+        assert response.status_code == 201, response.text
+        reference_number = response.json()["reference_number"]
+
+        result = await test_session.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
+        near_miss = result.scalar_one()
+
+        drift = abs((near_miss.event_date - near_miss.created_at).total_seconds())
+        assert drift > 5, "event_date tracked created_at — the reporter's entry was overwritten"
+
+    async def test_stray_complaint_date_is_ignored(self, client, test_session):
+        """The renderer's generic ``complaint_date`` seed must not become the event date."""
+        payload = self._payload()
+        payload["reporter_submission"]["complaint_date"] = "2020-01-01"
+
+        response = await client.post("/api/v1/portal/reports/", json=payload)
+        assert response.status_code == 201, response.text
+        reference_number = response.json()["reference_number"]
+
+        result = await test_session.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
+        near_miss = result.scalar_one()
+        assert near_miss.event_date.date().isoformat() == "2026-07-28"
 
 
 @pytest.mark.asyncio
