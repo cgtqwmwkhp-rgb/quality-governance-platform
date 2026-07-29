@@ -100,7 +100,7 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     created_by_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     deleted_at: Mapped[Optional[datetime]] = mapped_column(
