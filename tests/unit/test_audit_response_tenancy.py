@@ -26,7 +26,7 @@ from src.api.routes.audits import create_response
 from src.api.schemas.audit import AuditResponseCreate
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.audit import AuditQuestion, AuditResponse, AuditRun, AuditStatus
-from src.domain.services.audit_service import require_run_tenant_id
+from src.domain.services.audit_service import AuditService, require_run_tenant_id
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 
@@ -184,6 +184,20 @@ class _RecordingSession:
         entity.updated_at = entity.created_at
 
 
+class _ServiceRecordingSession(_RecordingSession):
+    def __init__(self, results: list[object], question: AuditQuestion) -> None:
+        super().__init__(results)
+        self.question = question
+
+    async def get(self, model: type, entity_id: int) -> AuditQuestion:
+        assert model is AuditQuestion
+        assert entity_id == self.question.id
+        return self.question
+
+    async def flush(self) -> None:
+        return None
+
+
 def _run(*, tenant_id: int | None, template_id: int = 1) -> SimpleNamespace:
     return SimpleNamespace(
         id=11,
@@ -220,6 +234,31 @@ async def test_created_response_is_stamped_with_the_runs_tenant_not_the_callers(
     assert len(db.added) == 1
     assert db.added[0].tenant_id == RUN_TENANT
     assert db.added[0].tenant_id != CALLER_TENANT
+
+
+@pytest.mark.asyncio
+async def test_service_discards_a_caller_supplied_tenant_id_before_constructing_response() -> None:
+    """Internal callers pass dictionaries and do not benefit from schema filtering."""
+    run = _run(tenant_id=RUN_TENANT)
+    run.template = SimpleNamespace(audit_type="inspection", tags_json=[])
+    question = _question()
+    db = _ServiceRecordingSession([run, None], question)
+    supplied = {
+        "question_id": question.id,
+        "response_value": "yes",
+        "tenant_id": CALLER_TENANT,
+    }
+
+    await AuditService(db).create_audit_response(
+        run.id,
+        supplied,
+        tenant_id=RUN_TENANT,
+    )
+
+    assert len(db.added) == 1
+    assert db.added[0].tenant_id == RUN_TENANT
+    assert db.added[0].tenant_id != CALLER_TENANT
+    assert supplied["tenant_id"] == CALLER_TENANT
 
 
 @pytest.mark.asyncio

@@ -2180,6 +2180,9 @@ class AuditService:
         if not question or not question_belongs_to_run(run, question):
             raise NotFoundError(f"AuditQuestion {data['question_id']} not found")
         payload = AuditScoringService.apply_derived_scores(question, data)
+        # Service callers can pass raw dictionaries rather than the API schema,
+        # so never let caller data override the tenant established by the run.
+        payload.pop("tenant_id", None)
 
         response = AuditResponse(run_id=run_id, tenant_id=require_run_tenant_id(run), **payload)
         self.db.add(response)
