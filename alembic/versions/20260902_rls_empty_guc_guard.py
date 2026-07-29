@@ -2,7 +2,7 @@
 two tables that silently never got a policy at all.
 
 Revision ID: 20260902_rls_guc_guard
-Revises: 20260901_case_tenant_nn
+Revises: 20260902_attrib_fk
 Create Date: 2026-09-02
 
 Why this exists (C-27, part 1 of 2)
@@ -73,7 +73,12 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260902_rls_guc_guard"
-down_revision: Union[str, Sequence[str], None] = "20260901_case_tenant_nn"
+# Stacked on 20260902_attrib_fk rather than on the 20260901_case_tenant_nn that
+# both this chain and the attribution chain were originally cut from. Nothing here
+# depends on the attribution columns or their foreign keys; the sole reason is that
+# two branches off one parent make `alembic upgrade head` — which is what both
+# deploy-staging.yml and deploy-production.yml run — abort with MultipleHeads.
+down_revision: Union[str, Sequence[str], None] = "20260902_attrib_fk"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

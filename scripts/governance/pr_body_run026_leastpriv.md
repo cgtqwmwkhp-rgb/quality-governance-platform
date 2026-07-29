@@ -124,7 +124,7 @@ Two roles; only the application's identity changes.
 
 ## 9) Rollback Plan (Mandatory)
 - **Rollback trigger:** any unexpected change in application behaviour after deploy (there should be none), or `alembic check` / migration verification failing
-- **Rollback steps:** `alembic downgrade 20260901_case_tenant_nn`, which restores the previous predicates on all 21 tables, drops the 2 adopted policies, and revokes `qgp_app`'s grants and default privileges. No data is touched by either direction. `qgp_app` itself is left in place by `downgrade()` and is harmless (`NOLOGIN`, no password); drop it manually if desired. Reverting the PR alone is also safe, since the app bypasses RLS regardless.
+- **Rollback steps:** `alembic downgrade 20260902_attrib_fk`, which restores the previous predicates on all 21 tables, drops the 2 adopted policies, and revokes `qgp_app`'s grants and default privileges. No data is touched by either direction. `qgp_app` itself is left in place by `downgrade()` and is harmless (`NOLOGIN`, no password); drop it manually if desired. Reverting the PR alone is also safe, since the app bypasses RLS regardless. **Do not roll back past `20260902_attrib_fk`**: this chain now stacks on #1409, so `alembic downgrade 20260901_case_tenant_nn` would additionally drop 54 attribution foreign keys and 15 columns belonging to a change that is already in production.
 - **Owner:** Lane LEASTPRIV (RUN-026); production role change authorised separately by David
 
 ## 10) Evidence Pack (links)
