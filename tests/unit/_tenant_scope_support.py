@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -46,10 +47,26 @@ print(json.dumps({
 """
 
 
-def model_metadata_summary() -> dict[str, list[str]]:
-    """Table names, and which of them require or permit a NULL ``tenant_id``."""
+_ENUM_SCRIPT = r"""
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import sqlalchemy as sa
+from scripts.ops.run025._models import load_metadata
+
+types = {}
+for table_name, table in load_metadata().tables.items():
+    for column in table.c:
+        column_type = column.type
+        if isinstance(column_type, sa.Enum) and column_type.native_enum and column_type.name:
+            entry = types.setdefault(column_type.name, {"labels": list(column_type.enums), "columns": []})
+            entry["columns"].append(f"{table_name}.{column.name}")
+print(json.dumps(types))
+"""
+
+
+def _run(script: str) -> dict:
     completed = subprocess.run(
-        [sys.executable, "-c", _SCRIPT, str(REPO_ROOT)],
+        [sys.executable, "-c", script, str(REPO_ROOT)],
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
@@ -58,3 +75,18 @@ def model_metadata_summary() -> dict[str, list[str]]:
     if completed.returncode != 0:
         raise AssertionError(f"metadata subprocess failed:\nstdout={completed.stdout}\nstderr={completed.stderr}")
     return json.loads(completed.stdout)
+
+
+def model_metadata_summary() -> dict[str, list[str]]:
+    """Table names, and which of them require or permit a NULL ``tenant_id``."""
+    return _run(_SCRIPT)
+
+
+@lru_cache(maxsize=1)
+def model_native_enum_types() -> dict[str, dict]:
+    """``{postgres type name: {"labels": [...], "columns": [...]}}`` for native enums.
+
+    ``values_callable`` is applied before SQLAlchemy fills ``enums``, so these are
+    the strings that reach the database, not the Python member names.
+    """
+    return _run(_ENUM_SCRIPT)
