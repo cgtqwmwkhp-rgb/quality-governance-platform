@@ -41,11 +41,7 @@ def test_duck_typed_session_without_identity_sets_still_constructs():
 
 
 def _route_methods(tree: ast.AST) -> list[ast.AsyncFunctionDef | ast.FunctionDef]:
-    return [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
-    ]
+    return [node for node in ast.walk(tree) if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))]
 
 
 def _calls_executive_dashboard(node: ast.AST) -> bool:

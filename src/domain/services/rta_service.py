@@ -414,9 +414,7 @@ class RTAService:
             LookupError: If the RTA or action is not found, or action doesn't belong to RTA.
         """
         await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
-        action = await self._get_rta_action_or_raise(
-            action_id, tenant_id, skip_tenant_check=skip_tenant_check
-        )
+        action = await self._get_rta_action_or_raise(action_id, tenant_id, skip_tenant_check=skip_tenant_check)
         if action.rta_id != rta_id:
             raise LookupError(f"RTAAction {action_id} does not belong to RTA {rta_id}")
 
@@ -457,9 +455,7 @@ class RTAService:
             LookupError: If the RTA or action is not found, or action doesn't belong to RTA.
         """
         await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
-        action = await self._get_rta_action_or_raise(
-            action_id, tenant_id, skip_tenant_check=skip_tenant_check
-        )
+        action = await self._get_rta_action_or_raise(action_id, tenant_id, skip_tenant_check=skip_tenant_check)
         if action.rta_id != rta_id:
             raise LookupError(f"RTAAction {action_id} does not belong to RTA {rta_id}")
 
