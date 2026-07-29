@@ -163,6 +163,16 @@ const FALLBACK_EMERGENCY_OPTIONS = [
   { value: 'recovery', label: 'Recovery' },
 ]
 
+/** Portal submissions may store yes/no flags as strings; only real affirmatives count. */
+function submissionFlaggedInjury(value: unknown): boolean {
+  if (value === true || value === 1) return true
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase()
+    return v === 'yes' || v === 'true' || v === '1'
+  }
+  return false
+}
+
 function buildIncidentEditForm(data: Incident): IncidentUpdate {
   return {
     title: displayIncidentText(data.title),
@@ -1794,7 +1804,9 @@ export default function IncidentDetail() {
                     <div>
                       <p className="text-sm text-muted-foreground">Impact</p>
                       <p className="font-medium text-foreground">
-                        {incidentSubmission?.has_injuries ? 'Injury reported' : 'No injury flagged'}
+                        {submissionFlaggedInjury(incidentSubmission?.has_injuries)
+                          ? 'Injury reported'
+                          : 'No injury flagged'}
                       </p>
                       <p className="text-xs text-muted-foreground">{medicalAssistance}</p>
                     </div>
