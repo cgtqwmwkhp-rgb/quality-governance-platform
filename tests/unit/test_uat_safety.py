@@ -55,6 +55,25 @@ class TestUATSafetyModeDetection(TestCase):
 
             self.assertEqual(Settings().uat_admin_user_list, [])
 
+    def test_mode_detection_does_not_rebind_module_settings_singleton(self):
+        """C-55: constructing Settings() must leave the live singleton identity alone.
+
+        The previous implementation called importlib.reload(src.core.config), which
+        rebound `config.settings` while src.main (and every `from src.core.config
+        import settings` site) kept the original object. Later patches of
+        `config.settings` then missed the app — notably
+        test_readyz_returns_503_when_redis_required_and_missing, which set
+        app_env on the new object while /readyz still read the old one.
+        """
+        import src.core.config as config_module
+
+        before = config_module.settings
+        with patch.dict(os.environ, {"UAT_MODE": "READ_ONLY"}):
+            from src.core.config import Settings
+
+            self.assertTrue(Settings().is_uat_read_only)
+        self.assertIs(config_module.settings, before)
+
 
 class TestOverrideHeaderValidation(TestCase):
     """Tests for override header validation logic."""
