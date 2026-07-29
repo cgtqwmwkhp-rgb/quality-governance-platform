@@ -2,8 +2,9 @@
 
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Annotated, Any, Optional, Union, cast
+from typing import Annotated, Any, AsyncIterator, Optional, Union, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -542,10 +543,50 @@ def _capa_item_to_response(item: CAPAItem) -> ActionResponse:
     )
 
 
-async def _safe_scalar(db: "DbSession", query, source_label: str) -> int:
-    """Execute a count query, returning 0 and logging on failure."""
+@asynccontextmanager
+async def _read_savepoint(db: "DbSession") -> AsyncIterator[None]:
+    """Scope one read so its failure cannot refuse every read after it.
+
+    On PostgreSQL the first failing statement aborts the transaction and every
+    later statement raises until the transaction is unwound, so an ``except`` that
+    swallows the error without unwinding turns one broken action store into six.
+    That is the C-8 shape.
+
+    A SAVEPOINT is the unwind to use rather than ``Session.rollback()``: a full
+    rollback expires every instance in the identity map, including the
+    ``current_user`` authentication loaded on this same session, and a later lazy
+    refresh of it over an async session raises MissingGreenlet — a 500 this
+    repository has already paid for. Rolling back to a savepoint leaves clean
+    instances alone.
+
+    Sessions that cannot open a savepoint (test doubles, dialects without
+    SAVEPOINT support) run the read unscoped, exactly as before. Mirrors
+    ``_row_savepoint`` in the PAMS technician sync service.
+    """
+    begin_nested = getattr(db, "begin_nested", None)
+    if begin_nested is None:
+        yield
+        return
     try:
-        return (await db.execute(query)).scalar() or 0
+        nested = begin_nested()
+    except NotImplementedError:  # pragma: no cover - dialect without SAVEPOINT
+        yield
+        return
+    async with nested:
+        yield
+
+
+async def _safe_scalar(db: "DbSession", query, source_label: str) -> int:
+    """Execute a count query, returning 0 and logging on failure.
+
+    Savepoint-scoped so that a store whose schema has drifted costs its own count
+    and nothing else. Without it the six counts behind ``/actions/summary``,
+    ``/actions`` and ``/actions/view-counts`` all returned 0 after the first
+    failure, which reports an empty action register rather than a broken one.
+    """
+    try:
+        async with _read_savepoint(db):
+            return (await db.execute(query)).scalar() or 0
     except Exception:
         logger.warning("actions._count_for_source: %s query failed", source_label, exc_info=True)
         return 0
@@ -1645,6 +1686,18 @@ def _valid_unified_source_type(src_type: str) -> bool:
     return capa_enum_from_api_filter(sl) is not None
 
 
+# The six action stores behind /actions/summary, in the order they are read.
+# (label for the failure log, model, whether display_status maps CAPA statuses)
+_SUMMARY_ACTION_STORES: tuple[tuple[str, Any, bool], ...] = (
+    ("incident", IncidentAction, False),
+    ("rta", RTAAction, False),
+    ("complaint", ComplaintAction, False),
+    ("investigation", InvestigationAction, False),
+    ("capa", CAPAAction, True),
+    ("capa_item", CAPAItem, False),
+)
+
+
 async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) -> ActionsSummaryResponse:
     """Aggregate counts by display_status across all action stores.
 
@@ -1652,6 +1705,12 @@ async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) ->
     that backs the list endpoint and /view-counts — rather than recomputed here. The
     status histogram alone cannot answer "overdue": only CAPA persists a literal
     `overdue` status, while every surface means "open and past due_date".
+
+    Each store is read inside its own savepoint (C-53). Every store used to be
+    read in its own bare `try`, which on PostgreSQL meant the first failure
+    aborted the transaction and the remaining five plus both trailing counts were
+    refused — reporting an empty action register instead of a partially readable
+    one. The per-store warning is kept: per C-33 these logs are the only record.
     """
     by_display: dict[str, int] = {}
 
@@ -1661,65 +1720,15 @@ async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) ->
         d = display_status_for(raw, from_capa=capa)
         by_display[d] = by_display.get(d, 0) + n
 
-    try:
-        q = (
-            select(IncidentAction.status, func.count())
-            .where(IncidentAction.tenant_id == tenant_id)
-            .group_by(IncidentAction.status)
-        )
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: incident aggregate failed", exc_info=True)
-
-    try:
-        q = select(RTAAction.status, func.count()).where(RTAAction.tenant_id == tenant_id).group_by(RTAAction.status)
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: rta aggregate failed", exc_info=True)
-
-    try:
-        q = (
-            select(ComplaintAction.status, func.count())
-            .where(ComplaintAction.tenant_id == tenant_id)
-            .group_by(ComplaintAction.status)
-        )
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: complaint aggregate failed", exc_info=True)
-
-    try:
-        q = (
-            select(InvestigationAction.status, func.count())
-            .where(InvestigationAction.tenant_id == tenant_id)
-            .group_by(InvestigationAction.status)
-        )
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: investigation aggregate failed", exc_info=True)
-
-    try:
-        q = select(CAPAAction.status, func.count()).where(CAPAAction.tenant_id == tenant_id).group_by(CAPAAction.status)
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=True)
-    except Exception:
-        logger.warning("actions.summary: capa aggregate failed", exc_info=True)
-
-    try:
-        q = select(CAPAItem.status, func.count()).where(CAPAItem.tenant_id == tenant_id).group_by(CAPAItem.status)
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: capa_item aggregate failed", exc_info=True)
+    for label, model, from_capa in _SUMMARY_ACTION_STORES:
+        try:
+            async with _read_savepoint(db):
+                q = select(model.status, func.count()).where(model.tenant_id == tenant_id).group_by(model.status)
+                for st, cnt in (await db.execute(q)).all():
+                    raw = st.value if hasattr(st, "value") else str(st)
+                    _merge(raw, int(cnt), capa=from_capa)
+        except Exception:
+            logger.warning("actions.summary: %s aggregate failed", label, exc_info=True)
 
     total = await _count_for_source(db, None, None, None, None, tenant_id=tenant_id)
     overdue = await _count_for_source(db, None, None, None, None, tenant_id=tenant_id, overdue=True)

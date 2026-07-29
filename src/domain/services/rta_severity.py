@@ -51,6 +51,30 @@ def interpret_rta_injury_answer(value: Any) -> Optional[bool]:
     return True
 
 
+def interpret_rta_yes_no_answer(value: Any) -> Optional[bool]:
+    """Read a plain yes/no portal toggle as True / False / unknown.
+
+    Separate from :func:`interpret_rta_injury_answer` because the two have
+    different safe directions. An unrecognised *injury* answer must fail towards
+    injury; an unrecognised answer to "was a third party involved" has no safe
+    direction to guess in, so it stays unknown. ``bool()`` cannot be used for
+    either: the published templates post the strings ``"yes"``/``"no"`` and
+    ``bool("no")`` is True — the defect fixed on the incident path in #1412.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        answer = value.strip().lower()
+        if answer in _FALSY_ANSWERS:
+            return False
+        if answer in _TRUTHY_ANSWERS:
+            return True
+        return None
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return None
+
+
 def read_reported_bool(value: Any) -> Optional[bool]:
     """Accept only a real boolean; anything else is 'not reported'.
 

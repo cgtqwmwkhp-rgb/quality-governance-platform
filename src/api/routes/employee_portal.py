@@ -40,7 +40,12 @@ from src.domain.services.api_idempotency_service import begin_idempotent_create,
 from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.portal_triage_service import assign_and_notify_portal_intake
 from src.domain.services.reference_number import ReferenceNumberService
-from src.domain.services.rta_severity import derive_portal_rta_severity, interpret_rta_injury_answer, read_reported_bool
+from src.domain.services.rta_severity import (
+    derive_portal_rta_severity,
+    interpret_rta_injury_answer,
+    interpret_rta_yes_no_answer,
+    read_reported_bool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -694,11 +699,63 @@ def build_incident_portal_fields(
     }
 
 
+# The published complaint template asks the reporter for ``complaint_date``, and
+# ``received_date`` is the column every complaint time limit is measured from.
+# The builder never read either name, so the reporter's stated date was replaced
+# by the instant they pressed submit. Both spellings are accepted because
+# template field names live in admin-editable ``form_fields`` rows and the portal
+# deploys independently of this API, so neither shape can be assumed.
+_COMPLAINT_RECEIVED_DATE_KEYS: tuple[str, ...] = ("complaint_date", "received_date")
+
+
+def resolve_complaint_received_date(
+    reporter_submission: dict[str, Any],
+    *,
+    reference_number: Optional[str] = None,
+) -> datetime:
+    """Resolve the reporter's stated complaint date from any accepted key.
+
+    Falls back to the submission instant when no accepted key carries a
+    parseable date, because losing the complaint is worse than an imprecise
+    clock — but that substitution is logged rather than made silently, since
+    ``received_date`` is what statutory response deadlines are counted from.
+    """
+    resolved: list[tuple[str, datetime]] = []
+    for key in _COMPLAINT_RECEIVED_DATE_KEYS:
+        parsed = parse_portal_datetime(reporter_submission.get(key))
+        if parsed is not None:
+            resolved.append((key, parsed))
+
+    if not resolved:
+        logger.warning(
+            "Complaint %s carried no usable complaint date; recording the submission instant instead. "
+            "Accepted date keys: %s. Keys present in reporter_submission: %s.",
+            reference_number or "<reference not yet minted>",
+            list(_COMPLAINT_RECEIVED_DATE_KEYS),
+            sorted(reporter_submission),
+        )
+        return datetime.now(timezone.utc)
+
+    chosen_key, chosen_datetime = resolved[0]
+    conflicts = [(key, dt.isoformat()) for key, dt in resolved[1:] if dt != chosen_datetime]
+    if conflicts:
+        logger.warning(
+            "Complaint %s carried conflicting complaint dates across accepted keys; using %s=%s and ignoring %s.",
+            reference_number or "<reference not yet minted>",
+            chosen_key,
+            chosen_datetime.isoformat(),
+            conflicts,
+        )
+    return chosen_datetime
+
+
 def build_complaint_portal_fields(
     report: QuickReportCreate,
     complaint_priority: ComplaintPriority,
     reporter_submission: dict[str, Any],
     tenant_id: Optional[int] = None,
+    *,
+    reference_number: Optional[str] = None,
 ) -> dict[str, Any]:
     resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
     display_name = require_portal_display_name(report, reporter_submission)
@@ -706,7 +763,10 @@ def build_complaint_portal_fields(
         "complaint_type": ComplaintType.OTHER,
         "priority": complaint_priority,
         "status": ComplaintStatus.RECEIVED,
-        "received_date": datetime.now(timezone.utc),
+        "received_date": resolve_complaint_received_date(
+            reporter_submission,
+            reference_number=reference_number,
+        ),
         "complainant_name": display_name,
         "complainant_email": (report.reporter_email if not report.is_anonymous else None),
         "complainant_phone": (
@@ -720,10 +780,92 @@ def build_complaint_portal_fields(
     }
 
 
+# ``/report/rta`` renders the hardcoded PortalRTAForm, which posts
+# ``accident_date`` / ``accident_time`` / ``pe_vehicle`` / ``third_parties``. The
+# published 'rta' template — currently unreachable, because App.tsx routes
+# report/rta to that hardcoded form rather than to PortalDynamicForm — names the
+# same facts ``incident_date`` / ``incident_time`` / ``vehicle_reg`` /
+# ``third_party_involved``. Both shapes are accepted, live keys first, for the
+# same reason the near-miss path accepts both: 'incident-legacy' and
+# 'near-miss-static' exist because those routes were already converted from
+# hardcoded to template-driven, RTA is the last one left, and template field
+# names are admin-editable at runtime with no gate in front of them.
+#
+# Date and time are resolved as a *pair* so a value from one client shape can
+# never be spliced onto a value from another.
+_RTA_COLLISION_DATETIME_KEYS: tuple[tuple[str, str], ...] = (
+    ("accident_date", "accident_time"),
+    ("incident_date", "incident_time"),
+)
+
+_RTA_VEHICLE_REGISTRATION_KEYS: tuple[str, ...] = ("pe_vehicle", "vehicle_reg")
+
+
+def resolve_rta_collision_datetime(
+    reporter_submission: dict[str, Any],
+    *,
+    reference_number: Optional[str] = None,
+) -> tuple[datetime, Optional[str]]:
+    """Resolve the reporter-submitted collision date/time from any accepted key pair.
+
+    Returns ``(collision_datetime, raw_time_string)``. The submission instant is
+    used when no accepted key carries a parseable date — losing a collision
+    report is worse than an imprecise timestamp — but that is logged, and no time
+    is invented to go with it.
+    """
+    resolved: list[tuple[str, datetime, Any]] = []
+    for date_key, time_key in _RTA_COLLISION_DATETIME_KEYS:
+        parsed = parse_portal_datetime(reporter_submission.get(date_key), reporter_submission.get(time_key))
+        if parsed is not None:
+            resolved.append((date_key, parsed, reporter_submission.get(time_key)))
+
+    if not resolved:
+        logger.warning(
+            "RTA %s carried no usable collision date; recording the submission instant instead. "
+            "Accepted date keys: %s. Keys present in reporter_submission: %s.",
+            reference_number or "<reference not yet minted>",
+            [date_key for date_key, _ in _RTA_COLLISION_DATETIME_KEYS],
+            sorted(reporter_submission),
+        )
+        return datetime.now(timezone.utc), None
+
+    chosen_key, chosen_datetime, chosen_time = resolved[0]
+    conflicts = [(key, dt.isoformat()) for key, dt, _ in resolved[1:] if dt != chosen_datetime]
+    if conflicts:
+        logger.warning(
+            "RTA %s carried conflicting collision dates across accepted keys; using %s=%s and ignoring %s.",
+            reference_number or "<reference not yet minted>",
+            chosen_key,
+            chosen_datetime.isoformat(),
+            conflicts,
+        )
+
+    raw_time = str(chosen_time).strip() if chosen_time is not None else ""
+    return chosen_datetime, raw_time or None
+
+
+def resolve_rta_vehicle_registration(reporter_submission: dict[str, Any]) -> Any:
+    """Resolve the company vehicle registration from any accepted key.
+
+    The registration is what ties a collision to a vehicle, a driver and an
+    insurer, so a name mismatch here loses the identity of the vehicle involved.
+    """
+    for key in _RTA_VEHICLE_REGISTRATION_KEYS:
+        value = reporter_submission.get(key)
+        if value == "other":
+            # The live form's vehicle picker offers an "other" escape hatch.
+            value = reporter_submission.get("pe_vehicle_other")
+        if value:
+            return value
+    return None
+
+
 def build_rta_portal_fields(
     report: QuickReportCreate,
     reporter_submission: dict[str, Any],
     tenant_id: Optional[int] = None,
+    *,
+    reference_number: Optional[str] = None,
 ) -> dict[str, Any]:
     """Map a portal RTA submission onto RoadTrafficCollision columns.
 
@@ -733,13 +875,11 @@ def build_rta_portal_fields(
     :mod:`src.domain.services.rta_severity`.
     """
     resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
-    collision_occurred_at = parse_portal_datetime(
-        reporter_submission.get("accident_date"),
-        reporter_submission.get("accident_time"),
-    ) or datetime.now(timezone.utc)
-    vehicle_registration = reporter_submission.get("pe_vehicle")
-    if vehicle_registration == "other":
-        vehicle_registration = reporter_submission.get("pe_vehicle_other")
+    collision_occurred_at, collision_time_value = resolve_rta_collision_datetime(
+        reporter_submission,
+        reference_number=reference_number,
+    )
+    vehicle_registration = resolve_rta_vehicle_registration(reporter_submission)
     witness_details = reporter_submission.get("witness_details")
     third_party_entries = reporter_submission.get("third_parties")
     from src.domain.services.rta_injury_fields import derive_third_party_injured
@@ -755,6 +895,10 @@ def build_rta_portal_fields(
         third_parties_payload,
         explicit=interpret_rta_injury_answer(explicit_tp_injured),
     )
+    # The published template asks "Third Party Involved?" as a yes/no toggle and
+    # never asks how many, so the only typed column it can reach is the vehicle
+    # count. A detailed party record still requires the ``third_parties`` array.
+    reported_third_party_involved = interpret_rta_yes_no_answer(reporter_submission.get("third_party_involved"))
     # None = the form never asked, which is not the same as "nobody was hurt".
     driver_injured = interpret_rta_injury_answer(reporter_submission.get("driver_injured"))
     # reporter_submission is arbitrary client JSON; only a string belongs in a Text column.
@@ -780,7 +924,7 @@ def build_rta_portal_fields(
         "status": RTAStatus.REPORTED,
         "location": report.location or "Not specified",
         "collision_date": collision_occurred_at,
-        "collision_time": reporter_submission.get("accident_time"),
+        "collision_time": collision_time_value,
         "reported_date": datetime.now(timezone.utc),
         "weather_conditions": reporter_submission.get("weather"),
         "road_conditions": reporter_submission.get("road_condition"),
@@ -797,7 +941,7 @@ def build_rta_portal_fields(
         "vehicle_drivable": read_reported_bool(reporter_submission.get("is_drivable")),
         "third_parties": third_parties_payload,
         "vehicles_involved_count": max(
-            1,
+            2 if reported_third_party_involved else 1,
             int(reporter_submission.get("vehicle_count") or 0) + 1,
         ),
         "witnesses": witness_details if isinstance(witness_details, str) else None,
@@ -1593,7 +1737,13 @@ async def submit_quick_report(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_complaint_portal_fields(report, complaint_priority, reporter_submission, portal_tenant_id),
+            **build_complaint_portal_fields(
+                report,
+                complaint_priority,
+                reporter_submission,
+                portal_tenant_id,
+                reference_number=ref_number,
+            ),
         )
 
         db.add(complaint)
@@ -1637,7 +1787,12 @@ async def submit_quick_report(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_rta_portal_fields(report, reporter_submission, portal_tenant_id),
+            **build_rta_portal_fields(
+                report,
+                reporter_submission,
+                portal_tenant_id,
+                reference_number=ref_number,
+            ),
         )
 
         db.add(rta)
