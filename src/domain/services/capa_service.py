@@ -175,6 +175,7 @@ class CAPAService:
             event_type="capa.created",
             entity_type="capa",
             entity_id=str(action.id),
+            entity_name=action.reference_number,
             action="create",
             description=f"CAPA {action.reference_number} created",
             payload=data.model_dump(mode="json"),
@@ -272,6 +273,8 @@ class CAPAService:
             event_type="capa.status_changed",
             entity_type="capa",
             entity_id=str(action.id),
+            entity_name=action.reference_number,
+            changed_fields=["status"],
             action="update",
             description=f"CAPA {action.reference_number} transitioned from {current} to {new_status}",
             payload={
@@ -326,6 +329,7 @@ class CAPAService:
             event_type="capa.deleted",
             entity_type="capa",
             entity_id=str(action.id),
+            entity_name=action.reference_number,
             action="delete",
             description=f"CAPA {action.reference_number} deleted",
             payload={
@@ -476,6 +480,7 @@ class CAPAService:
             event_type="capa.created_from_investigation",
             entity_type="capa",
             entity_id=str(capa.id),
+            entity_name=ref,
             action="create",
             description=f"CAPA {ref} created from investigation {investigation.reference_number}",
             payload={

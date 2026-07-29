@@ -33,7 +33,7 @@ from src.domain.services.api_idempotency_service import (
     begin_idempotent_create,
     complete_idempotent_create,
 )
-from src.domain.services.audit_service import record_audit_event
+from src.domain.services.audit_service import NO_SINGLE_ENTITY, record_audit_event
 from src.domain.services.case_closure import (
     CASE_TYPE_RTA,
     evaluate_case_closure,
@@ -127,6 +127,7 @@ async def create_rta(
         event_type="rta.created",
         entity_type="rta",
         entity_id=str(rta.id),
+        entity_name=rta.reference_number,
         action="create",
         description=f"RTA {rta.reference_number} created",
         user_id=current_user.id,
@@ -207,6 +208,7 @@ async def list_rtas(
             event_type="rta.list_filtered",
             entity_type="rta",
             entity_id="*",  # Wildcard - listing operation
+            entity_name=NO_SINGLE_ENTITY,
             action="list",
             description="RTA list accessed with email filter",
             payload={
@@ -345,6 +347,7 @@ async def delete_rta(
         event_type="rta.deleted",
         entity_type="rta",
         entity_id=str(rta.id),
+        entity_name=rta.reference_number,
         action="delete",
         description=f"RTA {rta.reference_number} deleted",
         user_id=current_user.id,
@@ -402,6 +405,7 @@ async def create_rta_action(
         event_type="rta_action.created",
         entity_type="rta_action",
         entity_id=str(action.id),
+        entity_name=action.reference_number,
         action="create",
         description=f"RTA Action {action.reference_number} created for RTA {rta.reference_number}",
         user_id=current_user.id,
@@ -483,6 +487,7 @@ async def update_rta_action(
         event_type="rta_action.updated",
         entity_type="rta_action",
         entity_id=str(action.id),
+        entity_name=action.reference_number,
         action="update",
         description=f"RTA Action {action.reference_number} updated",
         payload=update_data,
@@ -520,6 +525,7 @@ async def delete_rta_action(
         event_type="rta_action.deleted",
         entity_type="rta_action",
         entity_id=str(action.id),
+        entity_name=action.reference_number,
         action="delete",
         description=f"RTA Action {action.reference_number} deleted",
         user_id=current_user.id,
@@ -661,6 +667,7 @@ async def add_running_sheet_entry(
         event_type="rta.runner_sheet_entry.created",
         entity_type="rta",
         entity_id=str(rta.id),
+        entity_name=rta.reference_number,
         action="create",
         description=f"Runner-sheet entry added to RTA {rta.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
@@ -706,6 +713,7 @@ async def delete_running_sheet_entry(
         event_type="rta.runner_sheet_entry.deleted",
         entity_type="rta",
         entity_id=str(rta.id),
+        entity_name=rta.reference_number,
         action="delete",
         description=f"Runner-sheet entry deleted from RTA {rta.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},

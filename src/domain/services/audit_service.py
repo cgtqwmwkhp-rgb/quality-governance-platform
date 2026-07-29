@@ -22,6 +22,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.domain.context.audit_request_context import get_audit_request_context
 from src.domain.exceptions import (
     AuditNotRecordableError,
     BadRequestError,
@@ -321,6 +322,50 @@ async def _resolve_actor_identity(
     return user.email, (user.full_name.strip() or None)
 
 
+#: ``entity_name`` for an event whose subject is a set of records rather than one.
+#:
+#: A list endpoint or a wildcard ``entity_id`` has no single record to name, and
+#: writing ``None`` there would be indistinguishable from the 71 call sites that
+#: simply never supplied a name — the defect this constant exists to keep fixed.
+#: An explicit marker says "asked and answered: there is no one record", so a
+#: reader can tell a deliberate absence from an omission, and
+#: ``test_every_call_site_names_the_record`` can require a value everywhere
+#: without pushing callers into inventing one.
+NO_SINGLE_ENTITY = "(no single record)"
+
+# Actions whose payload describes a change to an existing record, in both the
+# bare and past-participle spellings the call sites use ("update" in the case
+# services, "updated" in form_config).
+_UPDATE_ACTIONS = frozenset({"update", "updated", "edit", "edited", "patch", "patched"})
+
+
+def _changed_fields_from_payload(action: str, payload: dict[str, Any] | None) -> list[str] | None:
+    """Field names an update carried, or ``None`` when the question does not apply.
+
+    Only meaningful for updates. On a create, every field is being set rather
+    than changed and ``new_values`` already holds the whole record; on a delete,
+    ``old_values`` does. Returning ``None`` for those is a real answer, not a
+    silent gap.
+
+    This reports the fields the mutation *carried*, which is not quite the same
+    as the fields whose value actually differs — telling those apart needs the
+    old row, and this bridge is never given it. That distinction is why the
+    parameter exists: a caller holding both sides should pass its own list rather
+    than rely on this.
+    """
+    if action.lower() not in _UPDATE_ACTIONS or not isinstance(payload, dict) or not payload:
+        return None
+
+    # Several call sites nest the field map under "updates" alongside status
+    # before/after keys. Reading the top level there would report "updates" as a
+    # changed field name, which is not a field on anything.
+    nested = payload.get("updates")
+    if isinstance(nested, dict):
+        return sorted(str(k) for k in nested)
+
+    return sorted(str(k) for k in payload)
+
+
 async def record_audit_event(
     db: AsyncSession,
     event_type: str,
@@ -334,6 +379,8 @@ async def record_audit_event(
     request_id: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
+    entity_name: str | None = None,
+    changed_fields: list[str] | None = None,
     *,
     tenant_id: int | None,
 ) -> AuditEvent:
@@ -352,6 +399,26 @@ async def record_audit_event(
     result. Passing None now raises :class:`AuditNotRecordableError` so the
     caller's transaction rolls back and the mutation is refused rather than
     performed unrecorded.
+
+    ``entity_name`` and ``changed_fields`` are what make the row evidence rather
+    than a tally. An entry naming the actor, the entity *type* and the time —
+    which is all these rows carried — says "someone updated an incident" without
+    saying which incident or what about it, and that is not a defensible ISO 9001
+    / 45001 record. ``entity_name`` is the record's human-readable identifier (a
+    reference number, a title), or :data:`NO_SINGLE_ENTITY` where the event
+    genuinely covers a set. ``changed_fields`` is derived from the payload for
+    update actions when the caller does not pass it; see
+    :func:`_changed_fields_from_payload` for what that derivation can and cannot
+    know.
+
+    ``ip_address`` and ``user_agent`` are read from
+    :mod:`src.domain.context.audit_request_context` rather than accepted as
+    parameters, because they exist only on the HTTP request and this is a domain
+    function (D09). Outside a request they are absent and the columns stay null.
+
+    Both are metadata: neither a missing name nor a missing client address can
+    refuse the mutation being audited. Only an unpersistable event does that, and
+    the sole such case remains a missing tenant.
 
     Raises:
         AuditNotRecordableError: If ``tenant_id`` is None.
@@ -412,6 +479,15 @@ async def record_audit_event(
 
     actor_email, actor_name = await _resolve_actor_identity(db, final_actor_user_id)
 
+    resolved_changed_fields = (
+        changed_fields if changed_fields is not None else _changed_fields_from_payload(action, payload)
+    )
+
+    # Absent outside an HTTP request (Celery, beat, startup, CLI, unit tests),
+    # in which case both fields are None and the columns stay null rather than
+    # claiming an origin the event did not have.
+    request_context = get_audit_request_context()
+
     entry = await AuditLogService(db).log(
         tenant_id=resolved_tenant_id,
         entity_type=entity_type,
@@ -429,7 +505,13 @@ async def record_audit_event(
             "resource_type": resource_type or entity_type,
             "resource_id": resource_id or str(entity_id),
         },
-        entity_name=(description[:255] if description else None),
+        # Bounded to the column width. Previously this was the description — a
+        # sentence in a field meant to hold a record's name, and null at the 18
+        # call sites that passed no description.
+        entity_name=(entity_name[:255] if entity_name else None),
+        changed_fields=resolved_changed_fields,
+        ip_address=request_context.ip_address,
+        user_agent=request_context.user_agent,
         action_category="data",
         commit=False,
     )
@@ -864,6 +946,7 @@ class AuditService:
             event_type="audit_template.created",
             entity_type="audit_template",
             entity_id=str(template.id),
+            entity_name=template.name,
             action="create",
             description=f"Template '{template.name}' created",
             actor_user_id=user_id,
@@ -921,6 +1004,7 @@ class AuditService:
                 event_type="audit_template.purge",
                 entity_type="audit_template",
                 entity_id="batch",
+                entity_name=f"{purged_count} expired archived templates",
                 action="purge",
                 description=f"Purged {purged_count} expired archived template(s)",
                 actor_user_id=actor_user_id,
@@ -1006,6 +1090,8 @@ class AuditService:
                 event_type="audit_template.updated",
                 entity_type="audit_template",
                 entity_id=str(template.id),
+                entity_name=template.name,
+                changed_fields=changed_fields,
                 action="update",
                 description=(f"Template '{template.name}' updated: " f"{', '.join(changed_fields)}"),
                 actor_user_id=actor_user_id,
@@ -1065,6 +1151,7 @@ class AuditService:
             event_type="audit_template.published",
             entity_type="audit_template",
             entity_id=str(template.id),
+            entity_name=template.name,
             action="publish",
             description=(f"Template '{template.name}' published " f"(v{template.version}, {question_count} questions)"),
             actor_user_id=actor_user_id,
@@ -1182,6 +1269,7 @@ class AuditService:
             event_type="audit_template.archived",
             entity_type="audit_template",
             entity_id=str(template_id),
+            entity_name=template.name,
             action="archive",
             description=(f"Template '{template.name}' archived " "(recoverable for 30 days)"),
             actor_user_id=actor_user_id,
@@ -1221,6 +1309,7 @@ class AuditService:
             event_type="audit_template.restored",
             entity_type="audit_template",
             entity_id=str(template_id),
+            entity_name=template.name,
             action="restore",
             description=f"Template '{template.name}' restored from archive",
             actor_user_id=actor_user_id,
@@ -1259,6 +1348,7 @@ class AuditService:
             event_type="audit_template.permanently_deleted",
             entity_type="audit_template",
             entity_id=str(template_id),
+            entity_name=template_name,
             action="permanent_delete",
             description=f"Template '{template_name}' permanently deleted",
             actor_user_id=actor_user_id,
@@ -2512,6 +2602,7 @@ class AuditService:
             event_type="capa.created_from_finding",
             entity_type="capa",
             entity_id=str(action.id),
+            entity_name=action.reference_number,
             action="create",
             description=(
                 f"CAPA {action.reference_number} created from finding " f"{finding.reference_number or finding.id}"
@@ -2717,6 +2808,8 @@ class AuditService:
             event_type="audit.finding.capa_bridge",
             entity_type="audit_finding",
             entity_id=str(finding.id),
+            entity_name=finding.reference_number,
+            changed_fields=["status"],
             action="update",
             description=(
                 f"Finding {finding.reference_number} status bridged "

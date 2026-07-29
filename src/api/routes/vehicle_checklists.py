@@ -532,6 +532,7 @@ async def _log_audit_trail(
             event_type=f"vehicle_defect.{action}",
             entity_type="vehicle_defect",
             entity_id=str(defect.id),
+            entity_name=f"{defect.check_field} on vehicle {defect.vehicle_reg or 'unknown'}",
             action=action,
             description=(
                 f"Vehicle defect {action}: {priority_str} on {defect.check_field} "

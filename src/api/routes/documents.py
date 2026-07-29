@@ -1129,6 +1129,7 @@ async def execute_disposal_queue(
             event_type="document_library.disposed",
             entity_type="document",
             entity_id=",".join(map(str, disposed_ids)),
+            entity_name=f"{len(disposed_ids)} retention-due library document(s)",
             action="delete",
             description=f"Hard-disposed {len(disposed_ids)} retention-due library document(s)",
             payload={
