@@ -4,7 +4,7 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Annotated, Any, AsyncIterator, Optional, Union, cast
+from typing import Annotated, Any, AsyncIterator, NamedTuple, Optional, Union, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -239,6 +239,21 @@ class ActionListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+    sources_complete: bool = Field(
+        True,
+        description=(
+            "False when at least one action store could not be read, so `items` may be "
+            "missing rows and `total` is a floor rather than a total. An empty `items` "
+            "with this false is NOT a report that there are no actions (C-53)."
+        ),
+    )
+    unavailable_sources: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Action stores whose query failed, e.g. ['capa']. Named rather than counted "
+            "so an operator can see which register is broken."
+        ),
+    )
 
 
 class ActionsSummaryResponse(BaseModel):
@@ -576,20 +591,58 @@ async def _read_savepoint(db: "DbSession") -> AsyncIterator[None]:
         yield
 
 
-async def _safe_scalar(db: "DbSession", query, source_label: str) -> int:
+async def _safe_scalar(
+    db: "DbSession",
+    query,
+    source_label: str,
+    failures: Optional[list[str]] = None,
+) -> int:
     """Execute a count query, returning 0 and logging on failure.
 
     Savepoint-scoped so that a store whose schema has drifted costs its own count
     and nothing else. Without it the six counts behind ``/actions/summary``,
     ``/actions`` and ``/actions/view-counts`` all returned 0 after the first
     failure, which reports an empty action register rather than a broken one.
+
+    ``failures`` is where the 0 stops being silent. #1426 contained the blast
+    radius of a drifted store but left every caller unable to tell this 0 from a
+    real one, and the list endpoint then treated a total of 0 as licence to skip
+    querying for rows at all. A caller that passes a list gets the labels of the
+    stores it must not present as empty; one that does not is unchanged.
     """
     try:
         async with _read_savepoint(db):
             return (await db.execute(query)).scalar() or 0
     except Exception:
         logger.warning("actions._count_for_source: %s query failed", source_label, exc_info=True)
+        if failures is not None:
+            failures.append(source_label)
         return 0
+
+
+@asynccontextmanager
+async def _safe_rows(db: "DbSession", source_label: str, failures: list[str]) -> AsyncIterator[None]:
+    """Scope one row read so its failure costs only its own rows, and is recorded.
+
+    The counts got this treatment in #1426; the row reads beside them did not, and
+    they need it for the same reason. Measured on PostgreSQL with
+    ``capa_actions.tenant_id`` dropped, the CAPA row read failed and aborted the
+    transaction, and the ``capa_items`` read that follows it then failed with
+    ``InFailedSQLTransactionError`` — one drifted store costing a second, healthy
+    store its rows. Ordering decided who lost: had the drift been on
+    ``incident_actions``, which is read first, every later store would have been
+    refused and the register would have rendered empty beneath a correct total.
+
+    Recording the label matters as much as the savepoint. Without it a response
+    that says "complete" can still be missing rows, which makes the marker itself
+    a fabrication.
+    """
+    try:
+        async with _read_savepoint(db):
+            yield
+    except Exception:
+        logger.warning("list_actions: %s query failed", source_label, exc_info=True)
+        failures.append(source_label)
 
 
 # Terminal statuses excluded from overdue (matches Actions UI display_status rules).
@@ -650,6 +703,7 @@ async def _count_capa_slice(
     assigned_to_id: Optional[int] = None,
     overdue: bool = False,
     asset_id: Optional[int] = None,
+    failures: Optional[list[str]] = None,
 ) -> int:
     """Count CAPA rows for tenant with optional source slice."""
     q = select(func.count()).select_from(CAPAAction).where(CAPAAction.tenant_id == tenant_id)
@@ -676,7 +730,7 @@ async def _count_capa_slice(
         overdue=overdue,
         done_statuses=(CAPAStatus.CLOSED,),
     )
-    return await _safe_scalar(db, q, "capa")
+    return await _safe_scalar(db, q, "capa", failures)
 
 
 async def _fetch_capa_rows_for_list(
@@ -735,6 +789,7 @@ async def _count_capa_item_slice(
     source_id: Optional[int],
     assigned_to_id: Optional[int] = None,
     overdue: bool = False,
+    failures: Optional[list[str]] = None,
 ) -> int:
     """Count RCA CAPAItem rows for tenant with optional investigation slice."""
     q = select(func.count()).select_from(CAPAItem).where(CAPAItem.tenant_id == tenant_id)
@@ -751,7 +806,7 @@ async def _count_capa_item_slice(
         overdue=overdue,
         done_statuses=_CAPA_ITEM_DONE_STATUSES,
     )
-    return await _safe_scalar(db, q, "capa_item")
+    return await _safe_scalar(db, q, "capa_item", failures)
 
 
 async def _fetch_capa_item_rows_for_list(
@@ -789,6 +844,20 @@ async def _fetch_capa_item_rows_for_list(
     return list(result.scalars().all())
 
 
+class _CountOutcome(NamedTuple):
+    """A count, plus the stores that did not contribute to it.
+
+    ``total`` is a floor rather than a total when ``unavailable`` is non-empty:
+    the stores named there contributed 0 because their query failed, not because
+    they hold nothing. Returned as a pair rather than as a bare int so a caller
+    cannot use the number without the option of seeing that caveat — which is the
+    mistake the list endpoint made, and it cost users their whole register.
+    """
+
+    total: int
+    unavailable: tuple[str, ...]
+
+
 async def _count_for_source(
     db: "DbSession",
     source_type: Optional[str],
@@ -800,7 +869,41 @@ async def _count_for_source(
     overdue: bool = False,
     asset_id: Optional[int] = None,
 ) -> int:
-    """Compute total count across all applicable source tables using SQL COUNT."""
+    """Compute total count across all applicable source tables using SQL COUNT.
+
+    Kept returning a bare int for the callers that have nowhere to put a partial
+    failure: ``/actions/summary`` and ``/actions/view-counts`` publish scalars and
+    already render as "—" client-side when the whole request fails. Callers that
+    can report the caveat should use ``_count_for_source_detailed``.
+    """
+    return (
+        await _count_for_source_detailed(
+            db,
+            source_type,
+            status_filter,
+            source_id,
+            source_reference,
+            tenant_id=tenant_id,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+            asset_id=asset_id,
+        )
+    ).total
+
+
+async def _count_for_source_detailed(
+    db: "DbSession",
+    source_type: Optional[str],
+    status_filter: Optional[str],
+    source_id: Optional[int],
+    source_reference: Optional[str],
+    tenant_id: Optional[int] = None,
+    assigned_to_id: Optional[int] = None,
+    overdue: bool = False,
+    asset_id: Optional[int] = None,
+) -> _CountOutcome:
+    """Count across all applicable source tables, naming any that could not be read."""
+    failures: list[str] = []
     total = 0
     if not source_type or source_type == "incident":
         q = select(func.count()).select_from(IncidentAction).where(IncidentAction.tenant_id == tenant_id)
@@ -819,7 +922,7 @@ async def _count_for_source(
             overdue=overdue,
             done_statuses=_OPERATIONAL_DONE_STATUSES,
         )
-        total += await _safe_scalar(db, q, "incident")
+        total += await _safe_scalar(db, q, "incident", failures)
 
     if not source_type or source_type == "rta":
         q = select(func.count()).select_from(RTAAction).where(RTAAction.tenant_id == tenant_id)
@@ -840,7 +943,7 @@ async def _count_for_source(
             overdue=overdue,
             done_statuses=_OPERATIONAL_DONE_STATUSES,
         )
-        total += await _safe_scalar(db, q, "rta")
+        total += await _safe_scalar(db, q, "rta", failures)
 
     # Complaint / investigation have no asset golden thread — omit when filtering by asset
     if asset_id is None and (not source_type or source_type == "complaint"):
@@ -858,7 +961,7 @@ async def _count_for_source(
             overdue=overdue,
             done_statuses=_OPERATIONAL_DONE_STATUSES,
         )
-        total += await _safe_scalar(db, q, "complaint")
+        total += await _safe_scalar(db, q, "complaint", failures)
 
     if asset_id is None and (not source_type or source_type == "investigation"):
         q = select(func.count()).select_from(InvestigationAction).where(InvestigationAction.tenant_id == tenant_id)
@@ -875,7 +978,7 @@ async def _count_for_source(
             overdue=overdue,
             done_statuses=_OPERATIONAL_DONE_STATUSES,
         )
-        total += await _safe_scalar(db, q, "investigation")
+        total += await _safe_scalar(db, q, "investigation", failures)
 
     st = source_type.lower() if source_type else None
     if not st:
@@ -889,6 +992,7 @@ async def _count_for_source(
             assigned_to_id=assigned_to_id,
             overdue=overdue,
             asset_id=asset_id,
+            failures=failures,
         )
     elif st == "capa":
         total += await _count_capa_slice(
@@ -901,6 +1005,7 @@ async def _count_for_source(
             assigned_to_id=assigned_to_id,
             overdue=overdue,
             asset_id=asset_id,
+            failures=failures,
         )
     elif st in CAPA_ONLY_API_SOURCE_TYPES:
         ce = capa_enum_from_api_filter(st)
@@ -915,6 +1020,7 @@ async def _count_for_source(
                 assigned_to_id=assigned_to_id,
                 overdue=overdue,
                 asset_id=asset_id,
+                failures=failures,
             )
 
     if asset_id is None and (not st or st == "investigation"):
@@ -925,9 +1031,10 @@ async def _count_for_source(
             source_id=source_id if st == "investigation" else None,
             assigned_to_id=assigned_to_id,
             overdue=overdue,
+            failures=failures,
         )
 
-    return total
+    return _CountOutcome(total=total, unavailable=tuple(failures))
 
 
 @router.get("", response_model=ActionListResponse, include_in_schema=False)
@@ -958,7 +1065,7 @@ async def list_actions(
     window, then rows are merge-sorted and sliced in process.
     """
     assigned_to_id = _resolve_assigned_to_user_id(assigned_to, current_user)
-    total = await _count_for_source(
+    counted = await _count_for_source_detailed(
         db,
         source_type,
         status_filter,
@@ -969,10 +1076,34 @@ async def list_actions(
         overdue=overdue,
         asset_id=asset_id,
     )
+    total = counted.total
+    # Stores that could not be read, by count or by row query. Seeded from the
+    # counts and added to as the row reads below run.
+    unavailable: list[str] = list(counted.unavailable)
 
-    if total == 0:
-        return ActionListResponse(items=[], total=0, page=page, page_size=page_size, pages=0)
-
+    # There is deliberately no `if total == 0: return` here. That short-circuit
+    # returned an empty register without querying for a single row, so a count
+    # that failed — and `_safe_scalar` reports a failure as 0 — did not merely
+    # publish a wrong number beside a correct list, it removed the list. Measured
+    # on PostgreSQL with `capa_actions.tenant_id` dropped and two CAPA actions in
+    # the table: HTTP 200, `{"items": [], "total": 0}`, on a page that looks like
+    # it loaded. A user cannot act on an action they are not shown.
+    #
+    # Removed outright rather than guarded with `if total == 0 and not unavailable`,
+    # because measurement says it was not buying anything worth the failure mode.
+    # The six reads it skipped are all `WHERE tenant_id = ? ORDER BY created_at
+    # DESC LIMIT n`. Timed on PostgreSQL 16 with 20k rows per table held against a
+    # different tenant, so the register is empty but the tables are not, all six
+    # together cost p50 0.86ms / p95 1.06ms per request, and that is almost
+    # entirely driver round-trip: EXPLAIN (ANALYZE, BUFFERS) on the largest of them
+    # reports an index scan on ix_capa_actions_tenant_id, 2 shared buffer hits and
+    # 0.006ms execution. So the saving is under a millisecond of a request that
+    # already spends several, in exchange for a code path that has now hidden a
+    # populated register twice.
+    #
+    # A conditional would also leave the un-failed empty register on a different
+    # code path from every other case, which is the arrangement that let this go
+    # unnoticed: the common path was never exercised by the failure.
     offset = (page - 1) * page_size
     actions_list: list[ActionResponse] = []
     # When listing across all sources, cap each sub-query to avoid full table scans
@@ -980,7 +1111,7 @@ async def list_actions(
 
     _pending_incident: list = []
     if not source_type or source_type == "incident":
-        try:
+        async with _safe_rows(db, "incident", unavailable):
             q = (
                 select(IncidentAction)
                 .where(IncidentAction.tenant_id == current_user.tenant_id)
@@ -1008,13 +1139,10 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             _pending_incident = result.scalars().all()
-        except Exception:
-            _pending_incident = []
-            logger.warning("list_actions: incident query failed", exc_info=True)
 
     _pending_rta: list = []
     if not source_type or source_type == "rta":
-        try:
+        async with _safe_rows(db, "rta", unavailable):
             q = (
                 select(RTAAction)
                 .where(RTAAction.tenant_id == current_user.tenant_id)
@@ -1044,12 +1172,10 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             _pending_rta = result.scalars().all()
-        except Exception:
-            logger.warning("list_actions: rta query failed", exc_info=True)
 
     _pending_complaint: list = []
     if asset_id is None and (not source_type or source_type == "complaint"):
-        try:
+        async with _safe_rows(db, "complaint", unavailable):
             q = (
                 select(ComplaintAction)
                 .where(ComplaintAction.tenant_id == current_user.tenant_id)
@@ -1075,12 +1201,10 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             _pending_complaint = result.scalars().all()
-        except Exception:
-            logger.warning("list_actions: complaint query failed", exc_info=True)
 
     _pending_investigation: list = []
     if asset_id is None and (not source_type or source_type == "investigation"):
-        try:
+        async with _safe_rows(db, "investigation", unavailable):
             q = (
                 select(InvestigationAction)
                 .where(InvestigationAction.tenant_id == current_user.tenant_id)
@@ -1106,8 +1230,6 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             _pending_investigation = result.scalars().all()
-        except Exception:
-            logger.warning("list_actions: investigation query failed", exc_info=True)
 
     _all_owner_ids: set[int] = set()
     for _batch in (_pending_incident, _pending_rta, _pending_complaint, _pending_investigation):
@@ -1158,7 +1280,7 @@ async def list_actions(
         )
 
     _pending_capa: list[CAPAAction] = []
-    try:
+    async with _safe_rows(db, "capa", unavailable):
         stl = source_type.lower() if source_type else None
         if not stl:
             _pending_capa = await _fetch_capa_rows_for_list(
@@ -1212,12 +1334,10 @@ async def list_actions(
                 )
         for a in _pending_capa:
             actions_list.append(await _capa_to_response(db, a))
-    except Exception:
-        logger.warning("list_actions: capa query failed", exc_info=True)
 
     _pending_capa_items: list[CAPAItem] = []
     if asset_id is None:
-        try:
+        async with _safe_rows(db, "capa_item", unavailable):
             stl_items = source_type.lower() if source_type else None
             if not stl_items or stl_items == "investigation":
                 _pending_capa_items = await _fetch_capa_item_rows_for_list(
@@ -1234,8 +1354,6 @@ async def list_actions(
                 )
             for item in _pending_capa_items:
                 actions_list.append(_capa_item_to_response(item))
-        except Exception:
-            logger.warning("list_actions: capa_item query failed", exc_info=True)
 
     # When listing across ALL source types, merge-sort and slice in Python
     # (cross-table UNION ALL with heterogeneous schemas is impractical here).
@@ -1245,12 +1363,19 @@ async def list_actions(
 
     actions_list = await _hydrate_action_owner_emails(db, actions_list)
 
+    # A store that failed its count and its rows is one broken store, not two, so
+    # the labels are de-duplicated. Sorted so the field is stable to assert on and
+    # to diff between two responses.
+    unavailable_sources = sorted(set(unavailable))
+
     return ActionListResponse(
         items=actions_list,
         total=total,
         page=page,
         page_size=page_size,
         pages=(total + page_size - 1) // page_size if total > 0 else 0,
+        sources_complete=not unavailable_sources,
+        unavailable_sources=unavailable_sources,
     )
 
 

@@ -1026,6 +1026,7 @@ export interface Control {
 // ============ Action Types (extracted: actionsClient.ts) ============
 export type {
   Action,
+  ActionListResponse,
   ActionsSummary,
   ActionsViewCounts,
   ActionCreate,
@@ -1033,6 +1034,11 @@ export type {
   ActionOwnerNote,
   ActionOwnerNoteListResponse,
 } from './actionsClient'
+// `actionsAreComplete` / `describeUnavailableSources` are deliberately NOT
+// re-exported here. They are pure functions, and this module is the axios barrel
+// that page tests replace wholesale with `vi.mock('../../api/client', factory)`.
+// Anything imported from here has to be restated in every such factory or it
+// arrives as undefined at runtime. Import them from './actionsClient' directly.
 
 // ============ API Functions ============
 export const authApi = {

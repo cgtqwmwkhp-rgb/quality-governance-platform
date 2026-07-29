@@ -59,6 +59,9 @@ import {
   investigationsApi,
   notificationsApi,
 } from '../api/client'
+// Straight from the module, not via the `api/client` barrel: these are pure and
+// the barrel is what page tests stub out for network isolation.
+import { actionsAreComplete, describeUnavailableSources } from '../api/actionsClient'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
 import { toast } from '../contexts/ToastContext'
 import {
@@ -269,6 +272,12 @@ export default function Actions() {
   const [viewCountsUnavailable, setViewCountsUnavailable] = useState(false)
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [serverFilterError, setServerFilterError] = useState<string | null>(null)
+  /**
+   * Sources the server could not read on the last list call. Non-empty means the
+   * register below is incomplete by an unknown amount, so the count and the empty
+   * state both stop being trustworthy and have to say so (C-53).
+   */
+  const [unavailableSources, setUnavailableSources] = useState<string[]>([])
   const createReturnTo = useMemo(() => {
     const raw = searchParams.get('returnTo')
     return isSafeReturnTo(raw) ? raw : null
@@ -373,6 +382,7 @@ export default function Actions() {
     setLoading(true)
     setError(null)
     setServerFilterError(null)
+    setUnavailableSources([])
 
     if (actionsViewRequiresIdentity(viewMode) && currentUserId == null) {
       const msg = t(
@@ -400,6 +410,9 @@ export default function Actions() {
       )
       const transformedActions = (response.data.items ?? []).map(transformAction)
       setActions(transformedActions)
+      setUnavailableSources(
+        actionsAreComplete(response.data) ? [] : (response.data.unavailable_sources ?? []),
+      )
     } catch (err) {
       console.error('Failed to load actions:', err)
       const classified = classifyError(err)
@@ -1082,6 +1095,34 @@ export default function Actions() {
         </div>
       ) : null}
 
+      {/*
+        Only when rows came back. With an empty list the unreadable empty state
+        below carries the same message in the place the user is already looking,
+        and saying it twice trains people to skim past it.
+      */}
+      {unavailableSources.length > 0 && sortedActions.length > 0 ? (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-warning"
+          data-testid="actions-partial-sources"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            {/*
+              The source names are rendered as their own node rather than
+              interpolated into the sentence. They are data, not prose: keeping
+              them outside the translated string means they still appear if a
+              locale is missing this key or drops the placeholder.
+            */}
+            <strong className="font-semibold">{describeUnavailableSources(unavailableSources)}</strong>{' '}
+            {t(
+              'actions.partial_sources',
+              'could not be read, so this register is incomplete. Actions from those sources are missing from the list and from the counts above.',
+            )}
+          </span>
+        </div>
+      ) : null}
+
       {loading && hasLoadedOnce ? (
         <div
           className="flex items-center gap-2 text-sm text-muted-foreground"
@@ -1214,15 +1255,36 @@ export default function Actions() {
       {/* Actions List — dense single-column rows */}
       <div>
         {sortedActions.length === 0 ? (
-          <EmptyState
-            icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
-            title={t('actions.empty.title')}
-            description={
-              filterStatus !== 'all' || viewMode !== 'all'
-                ? t('actions.empty.filter_hint')
-                : t('actions.empty.subtitle')
-            }
-          />
+          /*
+           * "No actions" and "we could not read the actions" look identical to a
+           * user and mean opposite things, so when any source failed the empty
+           * state must not claim the register is clear (C-53).
+           */
+          unavailableSources.length > 0 ? (
+            // Wrapper carries the test id: EmptyState does not forward unknown
+            // props, and TS does not flag hyphenated JSX attributes, so passing
+            // data-testid to it would have compiled and rendered nothing.
+            <div data-testid="actions-empty-unreadable">
+              <EmptyState
+                icon={<AlertCircle className="w-8 h-8 text-warning" />}
+                title={t('actions.unreadable.title', 'Actions could not be loaded')}
+                description={`${describeUnavailableSources(unavailableSources)} — ${t(
+                  'actions.unreadable.subtitle',
+                  'this is not an empty register. We cannot tell you how many actions are outstanding. Please report this.',
+                )}`}
+              />
+            </div>
+          ) : (
+            <EmptyState
+              icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
+              title={t('actions.empty.title')}
+              description={
+                filterStatus !== 'all' || viewMode !== 'all'
+                  ? t('actions.empty.filter_hint')
+                  : t('actions.empty.subtitle')
+              }
+            />
+          )
         ) : (
           <div
             className="overflow-hidden rounded-xl border border-border bg-card divide-y divide-border"

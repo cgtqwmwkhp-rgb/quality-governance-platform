@@ -14,7 +14,12 @@
  */
 import { describe, it, expect } from 'vitest'
 
-import { numberOrNull, numberOrUndefined, readTrainingMetric } from '../AdvancedAnalytics'
+import {
+  numberOrNull,
+  numberOrUndefined,
+  readAuditsMetric,
+  readTrainingMetric,
+} from '../AdvancedAnalytics'
 
 describe('readTrainingMetric', () => {
   it('reads a measured block as an ok metric', () => {
@@ -78,6 +83,83 @@ describe('readTrainingMetric', () => {
 
   it('treats an unrecognised status as unmeasured rather than guessing', () => {
     const metric = readTrainingMetric({ status: 'partial', completion_rate: 50 })
+
+    expect(metric).toEqual({ status: 'unavailable' })
+  })
+})
+
+describe('readAuditsMetric', () => {
+  it('reads a measured block as an ok metric', () => {
+    const metric = readAuditsMetric({
+      status: 'measured',
+      total: 3,
+      completed: 2,
+      in_progress: 1,
+      avg_score: 90,
+      trend: null,
+    })
+
+    expect(metric).toEqual({
+      status: 'ok',
+      value: { total: 3, completed: 2, in_progress: 1, avg_score: 90, trend: undefined },
+    })
+  })
+
+  it('keeps a genuinely empty audit programme as a real zero', () => {
+    // "You have run no audits" is a measurement, and a common one. It has to stay
+    // expressible or the tile is useless for the tenants who most need to see it.
+    const metric = readAuditsMetric({
+      status: 'measured',
+      total: 0,
+      completed: 0,
+      in_progress: 0,
+      avg_score: null,
+    })
+
+    expect(metric).toEqual({
+      status: 'ok',
+      value: { total: 0, completed: 0, in_progress: 0, avg_score: null, trend: undefined },
+    })
+  })
+
+  it('does not invent a zero count for the unavailable branch', () => {
+    // The measured regression: `Number(payload?.audits?.total ?? 0)` reported
+    // "0 audits, 0 completed" while three runs sat in the table.
+    const metric = readAuditsMetric({
+      status: 'unavailable',
+      reason: 'audit_aggregate_query_failed',
+      avg_score: null,
+      pass_rate: null,
+    } as { status?: string; avg_score?: number | null })
+
+    expect(metric).toEqual({ status: 'unavailable' })
+  })
+
+  it('treats a block with no status as unmeasured', () => {
+    // This endpoint published `audits` without a `status` key until now, so an old
+    // server, or a response cached across a deploy, lands here. Reading "—" for one
+    // deploy is the safe direction; asserting a number nobody measured is not.
+    const metric = readAuditsMetric({ total: 7, completed: 4, avg_score: 88 })
+
+    expect(metric).toEqual({ status: 'unavailable' })
+  })
+
+  it('does not invent a zero when the block is missing entirely', () => {
+    expect(readAuditsMetric(undefined)).toEqual({ status: 'unavailable' })
+    expect(readAuditsMetric(null)).toEqual({ status: 'unavailable' })
+  })
+
+  it('ignores numbers that appear on the unavailable branch', () => {
+    // Defence in depth, same as readTrainingMetric: branching on status means a
+    // future server that nulls the counts instead of omitting them cannot
+    // resurrect the fabrication.
+    const metric = readAuditsMetric({
+      status: 'unavailable',
+      total: 0,
+      completed: 0,
+      in_progress: 0,
+      avg_score: 0,
+    })
 
     expect(metric).toEqual({ status: 'unavailable' })
   })

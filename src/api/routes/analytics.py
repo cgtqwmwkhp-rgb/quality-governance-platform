@@ -273,15 +273,47 @@ def _training_kpi_block(training: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _audits_kpi_block(audits: Dict[str, Any]) -> Dict[str, Any]:
+def _audits_kpi_block(audits: Dict[str, Any], *, measured: bool) -> Dict[str, Any]:
     """Project the dashboard audit aggregate onto the KPI tile's field names.
 
     ``totals`` is renamed to ``total`` because that is the name this endpoint has
     always published. ``trend`` is None rather than 0.0: no period-over-period
     audit comparison is computed anywhere, so the 0.0 the old stub supplied was a
     fabricated "no change" that rendered as a real trend indicator.
+
+    ``measured=False`` means the audit aggregate's query failed, and the counts in
+    ``audits`` are its empty default rather than anything read from the database.
+    #1420 made the *rates* honest for that case (``avg_score`` and friends were
+    already None), but left ``total``/``completed``/``in_progress`` reading 0 —
+    which is byte-identical to a tenant that genuinely ran no audits. Measured on
+    PostgreSQL with ``audit_runs.status`` dropped, the tile published
+    ``total: 0, completed: 0`` while three runs sat in the table and the
+    unfiltered ``count(*)`` that produces ``total`` had *succeeded*. The zero was
+    not an approximation of the truth, it was unrelated to it.
+
+    So the unavailable branch carries no count key at all, following the
+    discriminated union ``_training_kpi_block`` uses. Omission rather than null
+    because the web client reads ``Number(payload?.audits?.total ?? 0)``, and
+    ``null ?? 0`` is 0 — a nullable field would leave the fabrication one
+    defensive idiom away from returning. The rate keys stay present-and-None:
+    they were already honest, the client already reads them with
+    ``numberOrNull``, and removing them would break consumers for no gain.
     """
+    if not measured:
+        return {
+            "status": UNAVAILABLE,
+            "reason": "audit_aggregate_query_failed",
+            "detail": (
+                "The audit aggregate could not be read for this tenant, so no audit "
+                "count is reported. This is not a report that there are no audits."
+            ),
+            "avg_score": None,
+            "pass_rate": None,
+            "essential_compliance_pct": None,
+            "trend": None,
+        }
     return {
+        "status": MEASURED,
         "total": audits.get("totals", 0),
         "completed": audits.get("completed", 0),
         "in_progress": audits.get("in_progress", 0),
@@ -336,7 +368,13 @@ async def get_kpi_summary(
     # `get_full_dashboard` already produced removes both the stub and the bare
     # except (`_safe_call` rolls back), drops a duplicate audit query, and makes this
     # tile agree with /executive-dashboard by construction rather than by coincidence.
-    audits_summary = _audits_kpi_block(dash.get("audits") or {})
+    #
+    # `unavailable` names the aggregates whose queries failed. Asking the service
+    # which tiles are real, rather than inspecting their values for a zero, is what
+    # separates "no audits ran" from "the audit query could not run": those two
+    # produce the same numbers and only the service knows which happened.
+    unmeasurable = set(dash.get("unavailable") or ())
+    audits_summary = _audits_kpi_block(dash.get("audits") or {}, measured="audits" not in unmeasurable)
 
     return {
         "period_days": days,

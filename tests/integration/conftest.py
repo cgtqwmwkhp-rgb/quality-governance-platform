@@ -863,6 +863,71 @@ async def doc_control_scratch_client(doc_control_scratch):
 
 
 # ---------------------------------------------------------------------------
+#  A database whose schema has genuinely drifted from the models (C-7, C-53)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def drifted_scratch():
+    """A database this test owns, whose schema can be made to disagree with the ORM.
+
+    See ``tests/integration/_fabricated_zero_scratch`` for why the shared harness
+    structurally cannot host this: it runs ``create_all``, so its schema always
+    matches the models and a count can never fail.
+    """
+    import src.domain.models  # noqa: F401  — registers models on Base.metadata
+    from src.infrastructure.database import Base
+    from tests.integration._fabricated_zero_scratch import drop_drifted_database, is_postgres, make_drifted_engine
+
+    if not is_postgres(os.environ.get("DATABASE_URL", "")):
+        pytest.skip(
+            "schema drift can only be induced on PostgreSQL: SQLite's DROP COLUMN "
+            "support is version-dependent and it does not abort the transaction, "
+            "which is half of what these tests measure. Set DATABASE_URL to "
+            "PostgreSQL (CI does)."
+        )
+
+    engine, created_name = await make_drifted_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    from tests.integration._fabricated_zero_scratch import DriftedDatabase
+
+    scratch = DriftedDatabase(engine)
+    await scratch.seed_tenant_and_user()
+
+    try:
+        yield scratch
+    finally:
+        await engine.dispose()
+        await drop_drifted_database(created_name)
+
+
+@pytest.fixture
+async def drifted_scratch_client(drifted_scratch):
+    """An authenticated client whose requests read the drifted database."""
+    from src.infrastructure.database import get_db
+    from src.main import app
+    from tests.integration._fabricated_zero_scratch import TENANT_ID, USER_ID
+
+    async def _get_drifted_db():
+        async with drifted_scratch.sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _get_drifted_db
+    token = _generate_test_jwt(user_id=str(USER_ID), tenant_id=TENANT_ID, role="admin")
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+# ---------------------------------------------------------------------------
 #  A database the migrations built and create_all never touched
 # ---------------------------------------------------------------------------
 
