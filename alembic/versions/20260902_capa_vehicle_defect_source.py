@@ -1,7 +1,7 @@
 """Add CAPASource.vehicle_defect enum value.
 
 Revision ID: 20260902_capa_vd_src
-Revises: 20260901_case_tenant_nn
+Revises: 20260903_app_lp_role
 Create Date: 2026-09-02
 
 ``CAPASource.VEHICLE_DEFECT`` has been declared in ``src/domain/models/capa.py``
@@ -31,7 +31,18 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260902_capa_vd_src"
-down_revision: Union[str, Sequence[str], None] = "20260901_case_tenant_nn"
+# Re-pointed 29/07 from 20260901_case_tenant_nn to the tip of the RLS least-privilege
+# chain. This revision was written against the head that existed when the lane started,
+# and three lanes have since extended that same head: #1409 added the attribution
+# columns and foreign keys, and #1410 added the RLS GUC guard and the least-privilege
+# role. Left as it was, this revision branched from a parent two steps back and gave the
+# tree TWO heads, which makes `alembic upgrade head` — the exact command both
+# deploy-staging.yml and deploy-production.yml run — fail with MultipleHeads and abort
+# the deploy at the migration step. Nothing about this migration depends on either of
+# those chains: it only adds a label to the capasource enum, and it neither creates a
+# table that would need granting nor reads one that RLS protects, so the ordering is
+# free and linearising costs nothing.
+down_revision: Union[str, Sequence[str], None] = "20260903_app_lp_role"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
