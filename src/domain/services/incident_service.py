@@ -353,7 +353,9 @@ class IncidentService:
             payload=update_dict,
             user_id=user_id,
             request_id=request_id,
-            tenant_id=tenant_id,
+            # The record's own tenant, not the tenant_id argument: callers pass
+            # None with skip_tenant_check=True, and the row still has an owner.
+            tenant_id=incident.tenant_id,
         )
 
         if closing:
@@ -363,8 +365,11 @@ class IncidentService:
 
         await self.db.flush()
         await self.db.refresh(incident)
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "incidents")
+        # The row's tenant, not the caller's: a cross-tenant edit has to evict the
+        # register the record actually appears in.
+        cache_tenant_id = incident.tenant_id if incident.tenant_id is not None else tenant_id
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "incidents")
 
         return incident
 
@@ -383,6 +388,9 @@ class IncidentService:
             LookupError: If the incident is not found.
         """
         incident = await self.get_incident(incident_id, tenant_id, skip_tenant_check=skip_tenant_check)
+        # Capture before delete: SQLAlchemy may expire/detach the instance after.
+        record_tenant_id = incident.tenant_id
+        cache_tenant_id = record_tenant_id if record_tenant_id is not None else tenant_id
 
         await record_audit_event(
             db=self.db,
@@ -398,13 +406,13 @@ class IncidentService:
             },
             user_id=user_id,
             request_id=request_id,
-            tenant_id=tenant_id,
+            tenant_id=record_tenant_id,
         )
 
         await self.db.delete(incident)
         await self.db.flush()
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "incidents")
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "incidents")
 
     async def check_reporter_email_access(
         self,

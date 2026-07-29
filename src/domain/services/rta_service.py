@@ -280,13 +280,14 @@ class RTAService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> None:
         """Delete an RTA.
 
         Raises:
             LookupError: If not found.
         """
-        rta = await self.get_rta(rta_id, tenant_id)
+        rta = await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         await record_audit_event(
             db=self.db,
@@ -333,20 +334,24 @@ class RTAService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> RTAAction:
         """Create a new action for an RTA.
 
         Raises:
             LookupError: If the parent RTA is not found.
         """
-        rta = await self.get_rta(rta_id, tenant_id)
+        rta = await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
         ref_number = await ReferenceNumberService.generate(self.db, "rta_action", RTAAction)
 
+        # Stamp the parent RTA's tenant, not the caller's: with skip_tenant_check a
+        # cross-tenant create would otherwise orphan the action under the editor.
+        action_tenant_id = rta.tenant_id if rta.tenant_id is not None else tenant_id
         action = RTAAction(
             **action_data.model_dump(),
             rta_id=rta_id,
             reference_number=ref_number,
-            tenant_id=tenant_id,
+            tenant_id=action_tenant_id,
             created_by_id=user_id,
             updated_by_id=user_id,
         )
@@ -375,13 +380,15 @@ class RTAService:
         rta_id: int,
         tenant_id: int | None,
         params: PaginationInput,
+        *,
+        skip_tenant_check: bool = False,
     ):
         """List actions for an RTA with pagination.
 
         Raises:
             LookupError: If the parent RTA is not found.
         """
-        await self.get_rta(rta_id, tenant_id)
+        await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         query = (
             select(RTAAction)
@@ -399,14 +406,17 @@ class RTAService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> RTAAction:
         """Update an RTA action.
 
         Raises:
             LookupError: If the RTA or action is not found, or action doesn't belong to RTA.
         """
-        await self.get_rta(rta_id, tenant_id)
-        action = await self._get_rta_action_or_raise(action_id, tenant_id)
+        await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
+        action = await self._get_rta_action_or_raise(
+            action_id, tenant_id, skip_tenant_check=skip_tenant_check
+        )
         if action.rta_id != rta_id:
             raise LookupError(f"RTAAction {action_id} does not belong to RTA {rta_id}")
 
@@ -439,14 +449,17 @@ class RTAService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> None:
         """Delete an RTA action.
 
         Raises:
             LookupError: If the RTA or action is not found, or action doesn't belong to RTA.
         """
-        await self.get_rta(rta_id, tenant_id)
-        action = await self._get_rta_action_or_raise(action_id, tenant_id)
+        await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
+        action = await self._get_rta_action_or_raise(
+            action_id, tenant_id, skip_tenant_check=skip_tenant_check
+        )
         if action.rta_id != rta_id:
             raise LookupError(f"RTAAction {action_id} does not belong to RTA {rta_id}")
 
@@ -471,6 +484,8 @@ class RTAService:
         rta_id: int,
         tenant_id: int | None,
         params: PaginationInput,
+        *,
+        skip_tenant_check: bool = False,
     ):
         """List investigations for a specific RTA (paginated).
 
@@ -479,7 +494,7 @@ class RTAService:
         """
         from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-        await self.get_rta(rta_id, tenant_id)
+        await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         query = (
             select(InvestigationRun)
@@ -493,13 +508,13 @@ class RTAService:
 
     # ---- Helpers ----
 
-    async def _get_rta_action_or_raise(self, action_id: int, tenant_id: int | None) -> RTAAction:
-        result = await self.db.execute(
-            select(RTAAction).where(
-                RTAAction.id == action_id,
-                RTAAction.tenant_id == tenant_id,
-            )
-        )
+    async def _get_rta_action_or_raise(
+        self, action_id: int, tenant_id: int | None, *, skip_tenant_check: bool = False
+    ) -> RTAAction:
+        query = select(RTAAction).where(RTAAction.id == action_id)
+        if not skip_tenant_check:
+            query = query.where(RTAAction.tenant_id == tenant_id)
+        result = await self.db.execute(query)
         action = result.scalar_one_or_none()
         if action is None:
             raise LookupError(f"RTAAction with ID {action_id} not found")

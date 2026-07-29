@@ -345,13 +345,14 @@ class NearMissService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> None:
         """Delete a near miss.
 
         Raises:
             LookupError: If the near miss is not found.
         """
-        near_miss = await self.get_near_miss(near_miss_id, tenant_id)
+        near_miss = await self.get_near_miss(near_miss_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         await record_audit_event(
             db=self.db,
@@ -379,6 +380,7 @@ class NearMissService:
         *,
         tenant_id: int | None,
         params: PaginationInput,
+        skip_tenant_check: bool = False,
     ):
         """List investigations linked to a near miss.
 
@@ -387,7 +389,7 @@ class NearMissService:
         """
         from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-        await self.get_near_miss(near_miss_id, tenant_id)
+        await self.get_near_miss(near_miss_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         query = (
             select(InvestigationRun)

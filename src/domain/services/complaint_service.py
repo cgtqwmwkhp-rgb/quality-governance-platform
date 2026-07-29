@@ -341,12 +341,17 @@ class ComplaintService:
             },
             user_id=user_id,
             request_id=request_id,
-            tenant_id=tenant_id,
+            # The record's own tenant, not the tenant_id argument: callers pass
+            # None with skip_tenant_check=True, and the row still has an owner.
+            tenant_id=complaint.tenant_id,
         )
 
         await self.db.flush()
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "complaints")
+        # The row's tenant, not the caller's: a cross-tenant edit has to evict the
+        # register the record actually appears in.
+        cache_tenant_id = complaint.tenant_id if complaint.tenant_id is not None else tenant_id
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "complaints")
 
         return complaint
 

@@ -157,10 +157,31 @@ _EMPTY_TRENDS: Dict[str, Any] = {
 }
 
 
+def _assert_no_pending_writes(db: Any) -> None:
+    """Refuse construction when the shared session already holds uncommitted writes.
+
+    ``_recover_session`` rolls the session back after a failed sub-query so later
+    tiles can still run. That is only safe on a read-only path: a rollback would
+    silently discard pending writes already staged on this session.
+    """
+    pending = [
+        *(getattr(db, "new", None) or ()),
+        *(getattr(db, "dirty", None) or ()),
+        *(getattr(db, "deleted", None) or ()),
+    ]
+    if pending:
+        raise RuntimeError(
+            "ExecutiveDashboardService rolls its session back when a sub-query fails "
+            f"(_recover_session), which would silently discard {len(pending)} pending "
+            "write(s) already on this session. Construct it on a read-only path."
+        )
+
+
 class ExecutiveDashboardService:
     """Service for generating executive KPI dashboards."""
 
     def __init__(self, db: AsyncSession, *, tenant_id: Optional[int] = None):
+        _assert_no_pending_writes(db)
         self.db = db
         self.tenant_id = tenant_id
 
