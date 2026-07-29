@@ -1041,7 +1041,7 @@ async def _count_for_source_detailed(
 @router.get("/", response_model=ActionListResponse)
 async def list_actions(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("action:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),

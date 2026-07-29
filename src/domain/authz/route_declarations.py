@@ -206,15 +206,14 @@ PUBLIC_BY_DESIGN: Mapping[EndpointKey, str] = MappingProxyType(
 #: Endpoints that authenticate and then authorise nothing.
 #:
 #: Grouped by the module that serves them, sorted, and exact. This is the C-2
-#: measurement: 471 endpoints on which any authenticated user may perform the
-#: operation, down from the 474 first measured — the RTA and document register
-#: lists now check a permission. Reducing it further is the follow-up work; the
-#: ceiling below is what stops it growing while that happens.
+#: measurement: 467 endpoints on which any authenticated user may perform the
+#: operation, down from the 474 first measured — RTA, document, actions and
+#: operational-risk register lists now check a permission. Reducing it further
+#: is the follow-up work; the ceiling below is what stops it growing while that
+#: happens.
 AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
     {
         # src.api.routes.actions
-        ("GET", "/api/v1/actions"),
-        ("GET", "/api/v1/actions/"),
         ("GET", "/api/v1/actions/by-key"),
         ("GET", "/api/v1/actions/by-key/notes"),
         ("GET", "/api/v1/actions/summary"),
@@ -614,8 +613,6 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/risk-register/{risk_id}/profile"),
         ("GET", "/api/v1/risk-register/{risk_id}/upstream"),
         # src.api.routes.risks
-        ("GET", "/api/v1/risks"),
-        ("GET", "/api/v1/risks/"),
         ("DELETE", "/api/v1/risks/controls/{control_id}"),
         ("PATCH", "/api/v1/risks/controls/{control_id}"),
         ("GET", "/api/v1/risks/matrix"),
@@ -768,7 +765,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: "add my new route to the list". Lowering one is ordinary progress; raising one
 #: is a deliberate decision that a reviewer sees as a changed number in a file
 #: about unprotected endpoints.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 471
+MAX_AUTHENTICATED_ONLY_DEBT: int = 467
 MAX_PUBLIC_BY_DESIGN: int = 50
 
 #: Endpoints gated on ``CurrentSuperuser`` rather than on a named permission,

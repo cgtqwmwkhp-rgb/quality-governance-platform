@@ -1,53 +1,63 @@
-# `roles.permissions` for the admin role (C-1)
+# `roles.permissions` for the admin role (C-1 / C-2 continuation)
 
-**Status: APPLIED to staging and production, 29 July 2026.** Nothing in the repository
-executes any statement below — no Alembic revision, no seed, no startup hook — so applying
-it remains a human decision, and it was taken by David Harris. Each environment needed a
-*different* statement, which is the part to read before reusing this document.
+> **HELD — do not merge code that gates on `action:read` / `risk:read` until the
+> 77-token grant below is applied to BOTH staging and production.** Live
+> databases currently hold the 75-token grant (C-1 / C-72, 29 July 2026). That
+> grant does **not** include `action:read` or `risk:read`. Shipping the C-2
+> continuation gate first 403s every non-superuser admin out of the actions and
+> operational-risk registers.
 
-| Environment | Applied | Statement used | Verified |
+**Status of the 77-token grant: NOT APPLIED** to staging or production. Nothing
+in the repository executes any statement below — no Alembic revision, no seed, no
+startup hook — so applying it remains a human decision. The 75-token grant *was*
+applied on 29 July 2026; this document now proposes the 77-token successor.
+
+| Environment | 75-token grant | 77-token upgrade | Verified |
 |---|---|---|---|
-| Staging | 29 Jul, ~12:50 UTC | the `UPDATE` in Step 2 | `token_count = 75`, `contains_wildcard = false`, and a **non-superuser** admin then loaded `/incidents/`, `/complaints/` and `/near-misses/` |
-| Production | 29 Jul, 18:19 UTC | an **`INSERT`**, not the `UPDATE` | role `id=13`, 75 tokens, no wildcard, `is_system_role = true`, `tenant_id NULL`, **no user assigned** |
+| Staging | Applied 29 Jul 2026 (~12:50 UTC) via the `UPDATE` in Step 2 (then 75 tokens) | **NOT APPLIED** — use Step 2b | — |
+| Production | Applied 29 Jul 2026 (18:19 UTC) via `INSERT` (role `id=13`, then 75 tokens, no wildcard) | **NOT APPLIED** — use Step 2b | — |
 
-**Why production needed an `INSERT`.** Step 2's `UPDATE` assumes a row already holding
-`'["*"]'`. Production's `roles` table was **completely empty** — 0 rows, and 0 in
-`user_roles` — because the eleven test-debris roles were deleted under C-10 and nothing was
-provisioned afterwards. So there was no wildcard row to correct. That emptiness was a defect
-in its own right (**C-72**): production ran entirely on the `is_superuser` flag, and because
-`User.has_permission` returns `True` for a superuser *before* it reads any role, every
-authorisation check added by C-2 would have been a no-op for superusers and a hard lockout
-for anyone else.
+**Why production needed an `INSERT` for the original 75-token grant.** Step 2's
+`UPDATE` assumes a row already holding `'["*"]'`. Production's `roles` table was
+**completely empty** — 0 rows, and 0 in `user_roles` — because the eleven
+test-debris roles were deleted under C-10 and nothing was provisioned afterwards.
+So there was no wildcard row to correct. That emptiness was a defect in its own
+right (**C-72**): production ran entirely on the `is_superuser` flag, and because
+`User.has_permission` returns `True` for a superuser *before* it reads any role,
+every authorisation check added by C-2 would have been a no-op for superusers and
+a hard lockout for anyone else.
 
-**The grant written to production was cross-checked, not retyped.** It was derived from
-`ADMIN_ROLE_PERMISSIONS` in `src/domain/authz/catalogue.py`, asserted at 75 tokens with no
-wildcard before the write, and compared token-for-token against the value **already applied
-and proven in staging**. They matched exactly, so production received the value known to
-work rather than a fresh interpretation of this document. The insert and the C-72 user change
-ran in one transaction with each statement's affected-row count asserted at exactly 1, and
-verification ran afterwards on a fresh connection so it could not read its own uncommitted
-state.
+**The grant written to production was cross-checked, not retyped.** It was
+derived from `ADMIN_ROLE_PERMISSIONS` in `src/domain/authz/catalogue.py`, asserted
+at 75 tokens with no wildcard before the write, and compared token-for-token
+against the value **already applied and proven in staging**. They matched
+exactly. The insert and the C-72 user change ran in one transaction with each
+statement's affected-row count asserted at exactly 1, and verification ran
+afterwards on a fresh connection so it could not read its own uncommitted state.
 
-**The production role is deliberately unassigned.** `user_roles` holds 0 rows. It exists so a
-real administrator can be provisioned against a documented grant; granting it to an existing
-account was explicitly declined, because the only active non-superuser was a dormant account
-with no demonstrated need, and that account was deactivated instead.
+**The production role is deliberately unassigned.** `user_roles` holds 0 rows. It
+exists so a real administrator can be provisioned against a documented grant;
+granting it to an existing account was explicitly declined, because the only
+active non-superuser was a dormant account with no demonstrated need, and that
+account was deactivated instead.
 
-**Two tokens are absent from this grant on purpose.** `action:read` and `risk:read` are in
-`RESERVED_PERMISSIONS`, not `ENFORCED_PERMISSIONS`, and `ADMIN_ROLE_PERMISSIONS` derives from
-the latter. Promoting either is not a one-line change: it grows this grant to 77 tokens, makes
-this document stale, fails `tests/unit/test_admin_grant_statement.py`, and the new grant then
-has to be applied by hand to every environment before the corresponding endpoint can be gated.
+**What changed for 77.** `action:read` and `risk:read` were promoted from
+`RESERVED_PERMISSIONS` into `ENFORCED_PERMISSIONS`. `ADMIN_ROLE_PERMISSIONS`
+derives from the latter (every enforced token except `*:view_all` and
+`*:set_reference_number`), so the grant grows 75→77 automatically. The collection
+`GET` handlers on `/actions` and `/risks` now call `require_permission` on those
+tokens. Apply Step 2b in both environments **before** merging that gate.
 
-> **If you are reading this because a PR wants to gate an endpoint on a permission:** check the
-> token is in the table above *and* that the grant has been applied in the environment you are
-> shipping to. This document said "NOT APPLIED" for several hours after staging had in fact been
-> updated, and a lane correctly refused to merge on that basis. Re-run Step 3 rather than
+> **If you are reading this because a PR wants to gate an endpoint on a
+> permission:** check the token is in the catalogue grant *and* that the grant has
+> been applied in the environment you are shipping to. This document said
+> "NOT APPLIED" for several hours after staging had in fact been updated, and a
+> lane correctly refused to merge on that basis. Re-run Step 3 rather than
 > trusting this header.
 
 ## Defect
 
-The `admin` role's `roles.permissions` column holds the string `'["*"]'`: a JSON
+The `admin` role's `roles.permissions` column held the string `'["*"]'`: a JSON
 array containing a wildcard.
 
 `User.has_permission` (`src/domain/models/user.py`) parses that column and does
@@ -84,7 +94,12 @@ SELECT id,
          WHEN btrim(permissions) LIKE '{%}'                         THEN 'postgres_array_literal'
          ELSE                                                            'bare_comma_separated'
        END                                        AS apparent_encoding,
-       permissions LIKE '%*%'                     AS contains_wildcard
+       permissions LIKE '%*%'                     AS contains_wildcard,
+       CASE
+         WHEN btrim(permissions) LIKE '[%]'
+           THEN json_array_length(permissions::json)
+         ELSE NULL
+       END                                        AS token_count
 FROM roles
 ORDER BY id;
 ```
@@ -103,15 +118,16 @@ much harder to diagnose than one that plainly does not. For any row the diagnost
 flags, `src.domain.authz.describe_stored_permissions` explains it in the same terms
 without touching a database.
 
-## Step 2 — the statement to apply
+## Step 2 — the statement to apply (wildcard → 77)
 
 Restricted to the row actually being fixed, and to the wildcard value actually
 observed, so a re-run after someone else has corrected the row is a no-op rather
-than an overwrite:
+than an overwrite. Use this only when Step 1 still shows `'["*"]'`. Environments
+that already hold the 75-token grant must use **Step 2b** instead.
 
 ```sql
 UPDATE roles
-SET permissions = '["action:create", "action:update", "admin:manage", "analytics:create", "analytics:delete", "analytics:manage", "analytics:update", "assessment:create", "assessment:update", "asset:create", "asset:delete", "asset:update", "audit:create", "audit:delete", "audit:read", "audit:update", "capa:create", "capa:update", "complaint:create", "complaint:delete", "complaint:read", "complaint:update", "document:create", "document:read", "document:update", "driver:create", "driver:update", "engineer:create", "engineer:update", "evidence:create", "evidence:update", "form:create", "form:delete", "form:update", "incident:create", "incident:delete", "incident:read", "incident:update", "induction:create", "induction:update", "investigation:approve_customer_omit", "investigation:create", "investigation:delete", "investigation:update", "investigations:comments:read_deleted", "kri:create", "kri:delete", "kri:update", "near_miss:create", "near_miss:delete", "near_miss:read", "near_miss:update", "notifications:delete", "notifications:send", "notifications:update", "policy:create", "policy:delete", "policy:update", "rca:create", "rca:update", "risk:create", "risk:update", "rta:create", "rta:delete", "rta:read", "rta:update", "signature:create", "signature:update", "standard:create", "standard:update", "vehicle:allocate", "vehicle:update", "workflow:create", "workflow:delete", "workflow:update"]'
+SET permissions = '["action:create", "action:read", "action:update", "admin:manage", "analytics:create", "analytics:delete", "analytics:manage", "analytics:update", "assessment:create", "assessment:update", "asset:create", "asset:delete", "asset:update", "audit:create", "audit:delete", "audit:read", "audit:update", "capa:create", "capa:update", "complaint:create", "complaint:delete", "complaint:read", "complaint:update", "document:create", "document:read", "document:update", "driver:create", "driver:update", "engineer:create", "engineer:update", "evidence:create", "evidence:update", "form:create", "form:delete", "form:update", "incident:create", "incident:delete", "incident:read", "incident:update", "induction:create", "induction:update", "investigation:approve_customer_omit", "investigation:create", "investigation:delete", "investigation:update", "investigations:comments:read_deleted", "kri:create", "kri:delete", "kri:update", "near_miss:create", "near_miss:delete", "near_miss:read", "near_miss:update", "notifications:delete", "notifications:send", "notifications:update", "policy:create", "policy:delete", "policy:update", "rca:create", "rca:update", "risk:create", "risk:read", "risk:update", "rta:create", "rta:delete", "rta:read", "rta:update", "signature:create", "signature:update", "standard:create", "standard:update", "vehicle:allocate", "vehicle:update", "workflow:create", "workflow:delete", "workflow:update"]'
 WHERE name = 'admin'
   AND permissions = '["*"]';
 ```
@@ -130,13 +146,31 @@ BEGIN;
 COMMIT;   -- or ROLLBACK;
 ```
 
+## Step 2b — upgrade an existing 75-token admin row to 77
+
+**This is the statement staging and production need today.** Both already hold the
+75-token grant. Replacing that row with the 77-token value adds `action:read` and
+`risk:read`. The `WHERE` clause refuses to overwrite a row that is not still on
+the 75-token grant (so a re-run after a successful upgrade is a no-op).
+
+```sql
+UPDATE roles
+SET permissions = '["action:create", "action:read", "action:update", "admin:manage", "analytics:create", "analytics:delete", "analytics:manage", "analytics:update", "assessment:create", "assessment:update", "asset:create", "asset:delete", "asset:update", "audit:create", "audit:delete", "audit:read", "audit:update", "capa:create", "capa:update", "complaint:create", "complaint:delete", "complaint:read", "complaint:update", "document:create", "document:read", "document:update", "driver:create", "driver:update", "engineer:create", "engineer:update", "evidence:create", "evidence:update", "form:create", "form:delete", "form:update", "incident:create", "incident:delete", "incident:read", "incident:update", "induction:create", "induction:update", "investigation:approve_customer_omit", "investigation:create", "investigation:delete", "investigation:update", "investigations:comments:read_deleted", "kri:create", "kri:delete", "kri:update", "near_miss:create", "near_miss:delete", "near_miss:read", "near_miss:update", "notifications:delete", "notifications:send", "notifications:update", "policy:create", "policy:delete", "policy:update", "rca:create", "rca:update", "risk:create", "risk:read", "risk:update", "rta:create", "rta:delete", "rta:read", "rta:update", "signature:create", "signature:update", "standard:create", "standard:update", "vehicle:allocate", "vehicle:update", "workflow:create", "workflow:delete", "workflow:update"]'
+WHERE name = 'admin'
+  AND json_array_length(permissions::json) = 75
+  AND NOT (permissions::jsonb ? 'action:read')
+  AND NOT (permissions::jsonb ? 'risk:read');
+```
+
+Expect `UPDATE 1`. Then re-run Step 3 and confirm `token_count = 77`.
+
 ### What the value is, and what it deliberately omits
 
-75 tokens: every permission the code enforces, minus two families. The list is
+77 tokens: every permission the code enforces, minus two families. The list is
 `ADMIN_ROLE_PERMISSIONS` in `src/domain/authz/catalogue.py`, and
 `tests/unit/test_permission_catalogue.py::test_admin_role_permission_list_is_reviewable`
-prints it. `tests/unit/test_admin_grant_statement.py` fails if the statement above
-stops matching it, so an approved-then-stale document cannot be applied.
+prints it. `tests/unit/test_admin_grant_statement.py` fails if the statements above
+stop matching it, so an approved-then-stale document cannot be applied.
 
 Omitted on purpose (product owner decision, David Harris, Run025):
 
@@ -151,18 +185,21 @@ Omitted on purpose (product owner decision, David Harris, Run025):
 ```sql
 SELECT name,
        json_array_length(permissions::json) AS token_count,
-       permissions LIKE '%*%'               AS contains_wildcard
+       permissions LIKE '%*%'               AS contains_wildcard,
+       permissions::jsonb ? 'action:read'   AS has_action_read,
+       permissions::jsonb ? 'risk:read'     AS has_risk_read
 FROM roles
 WHERE name = 'admin';
 ```
 
-Expect `token_count = 75` and `contains_wildcard = false`.
+Expect `token_count = 77`, `contains_wildcard = false`, `has_action_read = true`,
+`has_risk_read = true`.
 
 Then confirm the defect is actually gone from the user's point of view, because the
 column being right is not the same as the registers loading: sign in as an admin
 (not a superuser — `User.has_permission` returns `True` for a superuser before it
 reads any role, so a superuser proves nothing here) and open the incident,
-complaint and near-miss registers.
+complaint, near-miss, **actions** and **risk** registers.
 
 ## Rollback
 
@@ -170,9 +207,14 @@ complaint and near-miss registers.
 UPDATE roles SET permissions = '["*"]' WHERE name = 'admin';
 ```
 
-This restores the broken state exactly. It is offered only so the change is
+This restores the broken wildcard state exactly. It is offered only so the change is
 reversible on paper; the prior value granted nothing, so rolling back reinstates
 the outage.
+
+To roll the 77-token grant back to the previously applied 75-token grant (without
+restoring the wildcard), remove `action:read` and `risk:read` and re-apply the
+75-token list from the 29 July 2026 write — only if the C-2 gate PR has not yet
+shipped.
 
 ## Other roles
 

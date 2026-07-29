@@ -39,6 +39,7 @@ from typing import Mapping
 ENFORCED_PERMISSIONS: frozenset[str] = frozenset(
     {
         "action:create",
+        "action:read",
         "action:update",
         "admin:manage",
         "analytics:create",
@@ -104,6 +105,7 @@ ENFORCED_PERMISSIONS: frozenset[str] = frozenset(
         "rca:create",
         "rca:update",
         "risk:create",
+        "risk:read",
         "risk:update",
         "rta:create",
         "rta:delete",
@@ -153,13 +155,11 @@ RESERVED_PERMISSIONS: Mapping[str, str] = MappingProxyType(
         # Reads gated by authentication only: the endpoint exists and takes
         # CurrentUser, with no permission dependency. Any authenticated user can
         # read these resources today.
-        "action:read": "GET /actions takes CurrentUser with no permission dependency",
         "assessment:read": "GET /assessments takes CurrentUser with no permission dependency",
         "capa:read": "GET /capa takes CurrentUser with no permission dependency",
         "engineer:read": "GET /engineers takes CurrentUser with no permission dependency",
         "investigation:read": "investigation reads take CurrentUser with no permission dependency",
         "policy:read": "policy reads take CurrentUser with no permission dependency",
-        "risk:read": "risk reads take CurrentUser with no permission dependency",
         "standard:read": "standard reads take CurrentUser with no permission dependency",
         # Deletes that are not permission-gated.
         "action:delete": "no DELETE endpoint exists for actions",
