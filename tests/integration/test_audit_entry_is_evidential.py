@@ -62,9 +62,7 @@ def _incident_payload(title: str) -> dict:
     }
 
 
-async def test_created_entry_names_the_record_and_its_origin(
-    client: AsyncClient, auth_headers, test_session
-):
+async def test_created_entry_names_the_record_and_its_origin(client: AsyncClient, auth_headers, test_session):
     """A create through the API records which incident, from which client."""
     response = await client.post(
         "/api/v1/incidents/",
@@ -80,8 +78,7 @@ async def test_created_entry_names_the_record_and_its_origin(
     # C-5: the specific record, not just "an incident".
     assert entry.entity_name, "entity_name is null — the entry does not say which incident"
     assert entry.entity_name == body["reference_number"], (
-        f"entity_name {entry.entity_name!r} is not the incident's reference "
-        f"{body['reference_number']!r}"
+        f"entity_name {entry.entity_name!r} is not the incident's reference " f"{body['reference_number']!r}"
     )
 
     # PX-142b: the request origin, carried out of band via ContextVar.
@@ -135,9 +132,7 @@ async def test_origin_falls_back_to_the_direct_peer_without_a_proxy_header(
     assert entry.ip_address is None or entry.ip_address != ""
 
 
-async def test_bulk_event_marks_the_absence_of_a_single_record_explicitly(
-    test_session, test_tenant, test_user
-):
+async def test_bulk_event_marks_the_absence_of_a_single_record_explicitly(test_session, test_tenant, test_user):
     """A set-valued event stores the marker, so "no one record" is not read as "we forgot"."""
     await record_audit_event(
         db=test_session,
@@ -166,9 +161,7 @@ async def test_bulk_event_marks_the_absence_of_a_single_record_explicitly(
     assert entry.entity_name is not None
 
 
-async def test_event_recorded_outside_a_request_degrades_to_absent_origin(
-    test_session, test_tenant, test_user
-):
+async def test_event_recorded_outside_a_request_degrades_to_absent_origin(test_session, test_tenant, test_user):
     """A Celery task / startup path has no request: null origin, and no refusal.
 
     The fail-closed behaviour from #1413 must not extend to metadata. This asserts
@@ -203,9 +196,7 @@ async def test_event_recorded_outside_a_request_degrades_to_absent_origin(
     assert entry.entity_name == "CAPA-BACKGROUND-1"
 
 
-async def test_an_oversized_user_agent_does_not_refuse_the_mutation(
-    test_session, test_tenant, test_user
-):
+async def test_an_oversized_user_agent_does_not_refuse_the_mutation(test_session, test_tenant, test_user):
     """A 2 KB User-Agent must be clipped, not allowed to fail the flush.
 
     ``user_agent`` is String(500). Without truncation an oversized header raises on

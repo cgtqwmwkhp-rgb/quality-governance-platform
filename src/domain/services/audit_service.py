@@ -2602,7 +2602,7 @@ class AuditService:
             event_type="capa.created_from_finding",
             entity_type="capa",
             entity_id=str(action.id),
-            entity_name=action.reference_number,
+            entity_name=str(action.reference_number),
             action="create",
             description=(
                 f"CAPA {action.reference_number} created from finding " f"{finding.reference_number or finding.id}"
