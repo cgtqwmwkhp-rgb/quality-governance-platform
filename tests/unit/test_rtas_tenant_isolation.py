@@ -172,3 +172,119 @@ async def test_delete_rta_denies_cross_tenant_target():
     sql = _sql(statements[0])
     assert "tenant_id = 66" in sql
     assert "9002" in sql
+
+
+@pytest.mark.asyncio
+async def test_delete_rta_skip_tenant_check_omits_tenant_predicate():
+    """Default remains tenant-scoped; skip_tenant_check=True is the superuser escape."""
+    statements = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return _Result(None)
+
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=execute),
+        delete=AsyncMock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+    )
+    svc = RTAService(db)
+
+    with pytest.raises(LookupError):
+        await svc.delete_rta(
+            9002,
+            user_id=8,
+            tenant_id=66,
+            request_id="req-isolation-del-skip",
+            skip_tenant_check=True,
+        )
+
+    sql = _sql(statements[0])
+    assert "9002" in sql
+    assert "tenant_id = 66" not in sql
+
+
+@pytest.mark.asyncio
+async def test_list_rta_investigations_scopes_parent_lookup_to_caller_tenant():
+    statements = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return _Result(None)
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=execute))
+    svc = RTAService(db)
+
+    with pytest.raises(LookupError):
+        await svc.list_rta_investigations(
+            501,
+            tenant_id=23,
+            params=PaginationInput(page=1, page_size=20),
+        )
+
+    sql = _sql(statements[0])
+    assert "tenant_id = 23" in sql
+    assert "501" in sql
+
+
+@pytest.mark.asyncio
+async def test_list_rta_investigations_skip_tenant_check_omits_tenant_predicate():
+    statements = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return _Result(None)
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=execute))
+    svc = RTAService(db)
+
+    with pytest.raises(LookupError):
+        await svc.list_rta_investigations(
+            501,
+            tenant_id=23,
+            params=PaginationInput(page=1, page_size=20),
+            skip_tenant_check=True,
+        )
+
+    sql = _sql(statements[0])
+    assert "501" in sql
+    assert "tenant_id = 23" not in sql
+
+
+@pytest.mark.asyncio
+async def test_create_rta_action_stamps_parent_rta_tenant_not_callers():
+    """With skip_tenant_check, the action must inherit the RTA's tenant, not the editor's."""
+    from unittest.mock import MagicMock, patch
+
+    from src.api.schemas.rta import RTAActionCreate
+
+    parent = SimpleNamespace(id=9, tenant_id=7, reference_number="RTA-2026-0009")
+    db = SimpleNamespace(
+        execute=AsyncMock(),
+        add=MagicMock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+    svc = RTAService(db)
+    svc.get_rta = AsyncMock(return_value=parent)
+
+    with (
+        patch("src.domain.services.rta_service.record_audit_event", AsyncMock()),
+        patch(
+            "src.domain.services.rta_service.ReferenceNumberService.generate",
+            AsyncMock(return_value="RTA-ACT-1"),
+        ),
+    ):
+        action = await svc.create_rta_action(
+            9,
+            RTAActionCreate(title="Install barrier", description="Temporary barrier at junction"),
+            user_id=42,
+            tenant_id=1,
+            skip_tenant_check=True,
+            request_id="req-rta-action-stamp",
+        )
+
+    assert action.tenant_id == 7
+    assert db.add.call_args.args[0].tenant_id == 7

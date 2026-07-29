@@ -68,9 +68,6 @@ SERVER_RECOMPUTED_FIELDS: dict[str, tuple[str, ...]] = {
 # Endpoints that return 2xx and silently fail to honour part of the payload.
 # These are defects, xfailed so the suite stays green while they are ticketed.
 KNOWN_RUNTIME_ECHO_GAPS: dict[str, tuple[str, ...]] = {
-    # Sent re_acknowledge_period_months=1, response carries null. The value is
-    # accepted by the schema and lost before it reaches the response.
-    "POST /api/v1/policy-acknowledgments/requirements": ("re_acknowledge_period_months",),
     # admin_email is accepted by TenantCreate and absent from TenantResponse,
     # so a client cannot confirm which address was recorded.
     "POST /api/v1/tenants/": ("admin_email",),

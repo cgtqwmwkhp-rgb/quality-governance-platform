@@ -64,6 +64,9 @@ class PolicyAcknowledgmentService:
         reminder_days_before: Optional[List[int]] = None,
         quiz_questions: Optional[List[Dict]] = None,
         quiz_passing_score: int = 80,
+        re_acknowledge_on_update: bool = True,
+        re_acknowledge_period_months: Optional[int] = None,
+        is_active: bool = True,
     ) -> PolicyAcknowledgmentRequirement:
         """Create an acknowledgment requirement for a policy."""
         requirement = PolicyAcknowledgmentRequirement(
@@ -77,7 +80,9 @@ class PolicyAcknowledgmentService:
             reminder_days_before=reminder_days_before or [7, 3, 1],
             quiz_questions=quiz_questions,
             quiz_passing_score=quiz_passing_score,
-            is_active=True,
+            re_acknowledge_on_update=re_acknowledge_on_update,
+            re_acknowledge_period_months=re_acknowledge_period_months,
+            is_active=is_active,
         )
 
         self.db.add(requirement)

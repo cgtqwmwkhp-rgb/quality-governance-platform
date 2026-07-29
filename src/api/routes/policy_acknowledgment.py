@@ -86,6 +86,9 @@ async def create_acknowledgment_requirement(
         reminder_days_before=requirement_data.reminder_days_before,
         quiz_questions=requirement_data.quiz_questions,
         quiz_passing_score=requirement_data.quiz_passing_score,
+        re_acknowledge_on_update=requirement_data.re_acknowledge_on_update,
+        re_acknowledge_period_months=requirement_data.re_acknowledge_period_months,
+        is_active=requirement_data.is_active,
     )
     return _requirement_response(requirement)
 
