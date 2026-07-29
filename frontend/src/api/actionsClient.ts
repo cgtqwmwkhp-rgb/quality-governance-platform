@@ -16,6 +16,53 @@ export interface PaginatedResponse<T> {
   total_pages?: number
 }
 
+/**
+ * Action list response, with the register's own completeness attached.
+ *
+ * The action register is a union over six source tables, and a read against any
+ * one of them can fail on its own (schema drift being the observed cause). When
+ * that happens the endpoint still returns 200 with whatever it could read, so
+ * `total` and `items` are a floor rather than a count — hence the two extra
+ * fields. `sources_complete: false` means "there are more actions than this, and
+ * we cannot tell you how many", which is a materially different statement from
+ * an empty register and must not be rendered as one (C-53).
+ *
+ * Both are optional so a frontend deployed ahead of the API still typechecks;
+ * `actionsAreComplete` below treats absent as complete, matching old behaviour.
+ */
+export interface ActionListResponse extends PaginatedResponse<Action> {
+  sources_complete?: boolean
+  unavailable_sources?: string[]
+}
+
+/**
+ * Whether an action list represents the whole register.
+ *
+ * Absent field → true, because a server that does not publish completeness is a
+ * server from before the field existed, and those never partially failed
+ * silently in a way this flag would have caught. Present and false → false.
+ */
+export function actionsAreComplete(response: {
+  sources_complete?: boolean
+}): boolean {
+  return response.sources_complete !== false
+}
+
+/** Human-readable names for the action sources, for the partial-failure banner. */
+const ACTION_SOURCE_LABELS: Record<string, string> = {
+  capa: 'CAPA actions',
+  capa_item: 'CAPA plan items',
+  incident: 'incident actions',
+  rta: 'road traffic accident actions',
+  complaint: 'complaint actions',
+  investigation: 'investigation actions',
+}
+
+export function describeUnavailableSources(sources: string[] | undefined): string {
+  if (!sources || sources.length === 0) return ''
+  return sources.map((s) => ACTION_SOURCE_LABELS[s] ?? s).join(', ')
+}
+
 // ============ Action Types ============
 export interface Action {
   id: number
@@ -140,7 +187,7 @@ export function createActionsApi(api: AxiosInstance) {
     if (source_id) params.set('source_id', String(source_id))
     if (scope?.assigned_to) params.set('assigned_to', scope.assigned_to)
     if (scope?.overdue) params.set('overdue', 'true')
-    return api.get<PaginatedResponse<Action>>(`/api/v1/actions/?${params.toString()}`)
+    return api.get<ActionListResponse>(`/api/v1/actions/?${params.toString()}`)
   },
   /** Tenant-wide totals by display_status (not limited to first page). */
   summary: () => api.get<ActionsSummary>('/api/v1/actions/summary'),

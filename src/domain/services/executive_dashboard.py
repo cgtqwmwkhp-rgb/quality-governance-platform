@@ -186,13 +186,29 @@ class ExecutiveDashboardService:
         except Exception:  # pragma: no cover - the session is already unusable
             logger.warning("Dashboard session rollback failed", exc_info=True)
 
-    async def _safe_call(self, coro, default):
-        """Run an async function, returning default on any DB error."""
+    async def _safe_call(self, coro, default, *, name: Optional[str] = None, unavailable: Optional[List[str]] = None):
+        """Run an async function, returning default on any DB error.
+
+        When ``name`` and ``unavailable`` are given, a failure records the
+        aggregate's name so the caller can tell "this could not be measured" from
+        "this measured nothing". Without that record the two are the same answer,
+        because most of the empty defaults below are legitimate values: an
+        ``audits`` default of ``totals: 0`` is exactly what a tenant with no audit
+        runs produces (C-7).
+
+        The alternative — making every count in every empty default ``None`` — was
+        rejected because it changes ``ExecutiveDashboardResponse``'s published
+        field types from ``integer`` to a nullable union, which the OpenAPI
+        compatibility gate classifies as a breaking change for existing clients.
+        A name on a list is additive and says the same thing.
+        """
         try:
             return await coro
         except Exception as e:
             logger.warning("Dashboard query failed: %s", e)
             await self._recover_session()
+            if name is not None and unavailable is not None:
+                unavailable.append(name)
             return default
 
     async def _avg_resolution_days(self, start_col: Any, end_col: Any, tf: Any) -> Optional[float]:
@@ -217,28 +233,56 @@ class ExecutiveDashboardService:
         """Get complete executive dashboard with all KPIs."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
+        # Names of the aggregates whose queries failed, so a consumer can report
+        # "unavailable" instead of publishing an empty default as a measurement.
+        # Same idea as ``_EMPTY_TRENDS["unavailable"]`` (PX-193), one level up.
+        unavailable: List[str] = []
+
         incident_summary = await self._safe_call(
             self._get_incident_summary(cutoff),
             dict(_EMPTY_INCIDENT_SUMMARY),
+            name="incidents",
+            unavailable=unavailable,
         )
         near_miss_summary = await self._safe_call(
             self._get_near_miss_summary(cutoff),
             dict(_EMPTY_NEAR_MISS_SUMMARY),
+            name="near_misses",
+            unavailable=unavailable,
         )
         complaint_summary = await self._safe_call(
             self._get_complaint_summary(cutoff),
             dict(_EMPTY_COMPLAINT_SUMMARY),
+            name="complaints",
+            unavailable=unavailable,
         )
-        rta_summary = await self._safe_call(self._get_rta_summary(cutoff), dict(_EMPTY_RTA_SUMMARY))
-        risk_summary = await self._safe_call(self._get_risk_summary(), dict(_EMPTY_RISK_SUMMARY))
-        kri_summary = await self._safe_call(self._get_kri_summary(), dict(_EMPTY_KRI_SUMMARY))
+        rta_summary = await self._safe_call(
+            self._get_rta_summary(cutoff), dict(_EMPTY_RTA_SUMMARY), name="rtas", unavailable=unavailable
+        )
+        risk_summary = await self._safe_call(
+            self._get_risk_summary(), dict(_EMPTY_RISK_SUMMARY), name="risks", unavailable=unavailable
+        )
+        kri_summary = await self._safe_call(
+            self._get_kri_summary(), dict(_EMPTY_KRI_SUMMARY), name="kris", unavailable=unavailable
+        )
         compliance_summary = await self._safe_call(
             self._get_compliance_summary(),
             dict(_EMPTY_COMPLIANCE_SUMMARY),
+            name="compliance",
+            unavailable=unavailable,
         )
-        sla_summary = await self._safe_call(self._get_sla_summary(), dict(_EMPTY_SLA_SUMMARY))
-        audit_summary = await self._safe_call(self._get_audit_summary(period_days), dict(_EMPTY_AUDIT_SUMMARY))
-        training_summary = await self._safe_call(self._get_training_summary(), dict(_EMPTY_TRAINING_SUMMARY))
+        sla_summary = await self._safe_call(
+            self._get_sla_summary(), dict(_EMPTY_SLA_SUMMARY), name="sla_performance", unavailable=unavailable
+        )
+        audit_summary = await self._safe_call(
+            self._get_audit_summary(period_days),
+            dict(_EMPTY_AUDIT_SUMMARY),
+            name="audits",
+            unavailable=unavailable,
+        )
+        training_summary = await self._safe_call(
+            self._get_training_summary(), dict(_EMPTY_TRAINING_SUMMARY), name="training", unavailable=unavailable
+        )
 
         health_score = self._calculate_health_score(
             incident_summary,
@@ -250,9 +294,13 @@ class ExecutiveDashboardService:
             sla_summary,
         )
 
-        trends = await self._safe_call(self._get_trends(period_days), dict(_EMPTY_TRENDS))
-        alerts = await self._safe_call(self._get_active_alerts(), [])
-        safety_insights = await self._safe_call(self._get_safety_insights_summary(), {})
+        trends = await self._safe_call(
+            self._get_trends(period_days), dict(_EMPTY_TRENDS), name="trends", unavailable=unavailable
+        )
+        alerts = await self._safe_call(self._get_active_alerts(), [], name="alerts", unavailable=unavailable)
+        safety_insights = await self._safe_call(
+            self._get_safety_insights_summary(), {}, name="safety_insights", unavailable=unavailable
+        )
 
         # Ensure all sparkline series keys exist even if a partial trends dict is returned.
         trends = {**dict(_EMPTY_TRENDS), **trends}
@@ -274,6 +322,7 @@ class ExecutiveDashboardService:
             "trends": trends,
             "alerts": alerts,
             "safety_insights": safety_insights,
+            "unavailable": unavailable,
         }
 
     async def _get_safety_insights_summary(self) -> Dict[str, Any]:
