@@ -11,10 +11,10 @@ if _perm_mod_key not in sys.modules:
     _fake_perm = ModuleType(_perm_mod_key)
     for _cls_name in (
         "ABACPolicy",
+        "ABACRole",
         "FieldLevelPermission",
         "Permission",
         "PermissionAudit",
-        "Role",
         "RolePermission",
     ):
         setattr(_fake_perm, _cls_name, type(_cls_name, (), {}))

@@ -18,10 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.permissions import (
     ABACPolicy,
+    ABACRole,
     FieldLevelPermission,
     Permission,
     PermissionAudit,
-    Role,
     RolePermission,
     UserRole,
 )
@@ -289,9 +289,9 @@ class ABACService:
         tenant_id: Optional[int] = None,
         permission_codes: Optional[list[str]] = None,
         **kwargs,
-    ) -> Role:
+    ) -> ABACRole:
         """Create a new role with optional permissions."""
-        role = Role(
+        role = ABACRole(
             code=code,
             name=name,
             description=description,
