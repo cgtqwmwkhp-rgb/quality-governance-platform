@@ -33,8 +33,9 @@ from src.domain.authz.catalogue import (
 
 DOCUMENT = Path(__file__).resolve().parents[2] / "docs" / "data" / "admin-role-permissions-grant.md"
 
-#: The value assigned by the UPDATE, i.e. the JSON array between the single quotes
-#: on the ``SET permissions = '...'`` line.
+#: The value assigned by each ``UPDATE``, i.e. the JSON array between the single
+#: quotes on every ``SET permissions = '...'`` line. Both the wildcard repair
+#: (Step 2) and the 75→77 upgrade (Step 2b) must write the same catalogue value.
 _SET_CLAUSE = re.compile(r"^SET permissions = '(\[.*\])'$", re.MULTILINE)
 
 
@@ -45,14 +46,26 @@ def document() -> str:
 
 
 @pytest.fixture(scope="module")
-def granted_tokens(document: str) -> list[str]:
+def granted_token_lists(document: str) -> list[list[str]]:
     matches = _SET_CLAUSE.findall(document)
-    assert len(matches) == 1, (
-        f"expected exactly one `SET permissions = '[...]'` line in {DOCUMENT.name}, found "
+    assert len(matches) >= 1, (
+        f"expected at least one `SET permissions = '[...]'` line in {DOCUMENT.name}, found "
         f"{len(matches)}. This guard reads the statement out of the document, so it cannot check "
         "a statement it cannot find."
     )
-    return json.loads(matches[0])
+    return [json.loads(match) for match in matches]
+
+
+@pytest.fixture(scope="module")
+def granted_tokens(granted_token_lists: list[list[str]]) -> list[str]:
+    """Canonical grant from the document; every SET clause must agree with it."""
+    first = granted_token_lists[0]
+    for other in granted_token_lists[1:]:
+        assert other == first, (
+            "every SET permissions value in docs/data/admin-role-permissions-grant.md must be "
+            "identical; the wildcard repair and the 75→77 upgrade write the same catalogue grant"
+        )
+    return first
 
 
 def test_the_statement_grants_exactly_the_catalogued_admin_list(granted_tokens: list[str]) -> None:
@@ -67,6 +80,17 @@ def test_the_statement_grants_exactly_the_catalogued_admin_list(granted_tokens: 
         "Regenerate the statement. An approved-but-stale statement is the one that gets pasted "
         "into production."
     )
+    assert len(granted_tokens) == 77
+    assert "action:read" in granted_tokens
+    assert "risk:read" in granted_tokens
+    assert "*" not in granted_tokens
+
+
+def test_the_document_includes_the_75_to_77_upgrade(document: str) -> None:
+    """Live DBs hold 75 tokens; the upgrade statement must be present and scoped."""
+    assert "json_array_length(permissions::json) = 75" in document
+    assert "action:read" in document
+    assert "risk:read" in document
 
 
 def test_the_statement_grants_nothing_outside_the_catalogue(granted_tokens: list[str]) -> None:
@@ -97,7 +121,7 @@ def test_the_statement_contains_no_wildcard(granted_tokens: list[str]) -> None:
 def test_the_update_is_scoped_to_the_row_and_the_value_it_was_written_for(document: str) -> None:
     """An unscoped UPDATE would rewrite every role in the table.
 
-    The ``WHERE`` clause is the difference between fixing one row and granting 75
+    The ``WHERE`` clause is the difference between fixing one row and granting 77
     permissions to every role in the database, so it is asserted rather than
     trusted to survive editing.
     """
@@ -112,7 +136,7 @@ def test_the_update_is_scoped_to_the_row_and_the_value_it_was_written_for(docume
 
 
 def test_the_document_says_it_has_not_been_applied(document: str) -> None:
-    """The hand-back has to keep saying so, or somebody will assume it was done."""
+    """The 77-token hand-back has to keep saying so, or somebody will assume it was done."""
     assert "NOT APPLIED" in document
     assert "rollback" in document.lower()
 

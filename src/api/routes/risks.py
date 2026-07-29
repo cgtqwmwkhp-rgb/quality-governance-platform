@@ -163,7 +163,7 @@ def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
 @router.get("/", response_model=RiskListResponse, deprecated=True)
 async def list_risks(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
