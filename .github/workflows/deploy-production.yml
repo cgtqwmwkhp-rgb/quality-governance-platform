@@ -1920,7 +1920,9 @@ jobs:
   notify:
     name: Notify Deployment
     runs-on: ubuntu-latest
-    needs: build-and-deploy
+    # pre-deployment-checks is needed only so the release gate below can name *why*
+    # nothing was deployed. always() means its result never blocks this job.
+    needs: [build-and-deploy, pre-deployment-checks]
     if: always() && !(github.event_name == 'workflow_dispatch' && inputs.rollback == true)
     
     steps:
@@ -1956,9 +1958,8 @@ jobs:
 
       # Without this, a run that deployed nothing looks identical in the Actions list to
       # one that shipped: the two steps above are both skipped, this job still passes, and
-      # the run goes green. The conclusion is deliberately left alone — a blocked promotion
-      # and a withheld sign-off are both legitimate outcomes, and the staging run is already
-      # red when it is the former — so say so in the summary instead.
+      # the run goes green. This step keeps the diagnosis; the release gate that follows it
+      # is what keeps the run *conclusion* honest.
       - name: Report that nothing was deployed
         if: needs.build-and-deploy.result != 'success' && needs.build-and-deploy.result != 'failure'
         run: |
@@ -1978,3 +1979,57 @@ jobs:
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=No production deployment::Production unchanged - build-and-deploy was ${{ needs.build-and-deploy.result }}"
+
+      # Release gate, ported from the step of the same name in deploy-staging.yml.
+      # The run conclusion must answer "did you deploy production?" honestly.
+      #
+      # Run 30419130586 (0e1ab69a, 2026-07-29T03:16Z) concluded SUCCESS with every job
+      # skipped except this one: staging had failed, so nothing was built and nothing was
+      # deployed, production stayed on the previous commit — and the Actions list showed a
+      # green tick. Anything reading that conclusion is told production is current when it
+      # is behind.
+      #
+      # The SKIPPING IS CORRECT and is unchanged: staging was red, so production must not
+      # promote. Only the reported conclusion changes. A deliberate non-deploy is still a
+      # non-deploy, so it is reported as a non-success run with the reason named below,
+      # rather than as a success.
+      - name: Release gate — refuse to conclude success without a real deploy
+        if: always()
+        env:
+          BUILD_RESULT: ${{ needs.build-and-deploy.result }}
+          PRE_RESULT: ${{ needs.pre-deployment-checks.result }}
+          SKIP_REASON: ${{ needs.pre-deployment-checks.outputs.skip_reason }}
+          APPROVED: ${{ needs.pre-deployment-checks.outputs.approved }}
+        run: |
+          if [[ "$BUILD_RESULT" == "success" ]]; then
+            echo "✅ Release gate: production was really built and deployed"
+            exit 0
+          fi
+          if [[ "$BUILD_RESULT" == "failure" ]]; then
+            # The deploy job itself failed, so the run conclusion is already 'failure'.
+            # It is honest as it stands — do not add a second, confusing error annotation.
+            echo "ℹ️ Release gate: build-and-deploy failed, so this run already concludes failure"
+            exit 0
+          fi
+          REASON="${SKIP_REASON:-staging did not deploy, or promotion was not approved}"
+          {
+            echo "### 🚧 Release gate: this run did not deploy production"
+            echo ""
+            echo "This run is marked **failed** because \`Build and Deploy to Production\`"
+            echo "concluded \`${BUILD_RESULT}\` — **production is unchanged**. Reporting"
+            echo "success here would claim a deployment that did not happen."
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Build and Deploy | ${BUILD_RESULT} |"
+            echo "| Pre-Deployment Checks | ${PRE_RESULT} |"
+            echo "| Promotion approved | ${APPROVED:-false} |"
+            echo "| Reason | ${REASON} |"
+            echo ""
+            echo "Not deploying was the correct decision — a red staging run must not be"
+            echo "promoted. This failure records that production was **not** updated; it is"
+            echo "not a request to force the deploy."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Production was not deployed (build-and-deploy=${BUILD_RESULT}, pre-deployment-checks=${PRE_RESULT}, reason=${REASON}) - failing this run so its conclusion does not claim a deployment that did not happen"
+          exit 1
