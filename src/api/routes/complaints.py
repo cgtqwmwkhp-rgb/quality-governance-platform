@@ -20,7 +20,7 @@ from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.models.user import User
-from src.domain.services.audit_service import record_audit_event
+from src.domain.services.audit_service import NO_SINGLE_ENTITY, record_audit_event
 from src.domain.services.case_closure import (
     CASE_TYPE_COMPLAINT,
     evaluate_case_closure,
@@ -247,6 +247,7 @@ async def list_complaints(
             event_type="complaint.list_filtered",
             entity_type="complaint",
             entity_id="*",  # Wildcard - listing operation
+            entity_name=NO_SINGLE_ENTITY,
             action="list",
             description="Complaint list accessed with email filter",
             payload={
@@ -550,6 +551,7 @@ async def add_complaint_running_sheet_entry(
         event_type="complaint.runner_sheet_entry.created",
         entity_type="complaint",
         entity_id=str(complaint.id),
+        entity_name=complaint.reference_number,
         action="create",
         description=f"Runner-sheet entry added to complaint {complaint.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
@@ -600,6 +602,7 @@ async def delete_complaint_running_sheet_entry(
         event_type="complaint.runner_sheet_entry.deleted",
         entity_type="complaint",
         entity_id=str(complaint.id),
+        entity_name=complaint.reference_number,
         action="delete",
         description=f"Runner-sheet entry deleted from complaint {complaint.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
@@ -730,6 +733,7 @@ async def raise_risk_from_complaint(
             event_type="complaint.risk_raised",
             entity_type="complaint",
             entity_id=str(complaint.id),
+            entity_name=complaint.reference_number,
             action="create",
             description=f"Risk {risk.reference} raised from complaint {complaint.reference_number}",
             payload={"risk_id": risk.id, "risk_reference": risk.reference},

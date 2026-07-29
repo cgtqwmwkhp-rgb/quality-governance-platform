@@ -622,6 +622,7 @@ class CompetenceGapService:
             event_type=action,
             entity_type="competence_gap_action",
             entity_id=str(gap.id),
+            entity_name=f"Competence gap on {gap.source_type} {gap.source_id}",
             action=action,
             description=f"Competence gap {action}",
             payload=payload,
