@@ -55,11 +55,7 @@ import os
 import pytest
 from httpx import AsyncClient
 
-from tests.integration._fabricated_zero_scratch import (
-    CAPA_ACTIONS_TENANT,
-    INCIDENT_ACTIONS_DESCRIPTION,
-    is_postgres,
-)
+from tests.integration._fabricated_zero_scratch import CAPA_ACTIONS_TENANT, INCIDENT_ACTIONS_DESCRIPTION, is_postgres
 
 ACTIONS = "/api/v1/actions/"
 

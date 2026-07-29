@@ -877,11 +877,7 @@ async def drifted_scratch():
     """
     import src.domain.models  # noqa: F401  — registers models on Base.metadata
     from src.infrastructure.database import Base
-    from tests.integration._fabricated_zero_scratch import (
-        drop_drifted_database,
-        is_postgres,
-        make_drifted_engine,
-    )
+    from tests.integration._fabricated_zero_scratch import drop_drifted_database, is_postgres, make_drifted_engine
 
     if not is_postgres(os.environ.get("DATABASE_URL", "")):
         pytest.skip(
