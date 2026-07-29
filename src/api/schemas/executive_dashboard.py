@@ -263,6 +263,21 @@ class DashboardSummaryResponse(BaseModel):
     health_score: Optional[float] = None
     health_status: str
     open_incidents: int
-    pending_actions: int
+    open_cases: int = Field(
+        ...,
+        description=(
+            "Open incidents plus open complaints. This is the figure `pending_actions` "
+            "used to carry under a name that promised remedial work (C-66): it moves with "
+            "case volume and is unaffected by closing every action in the system."
+        ),
+    )
+    pending_actions: Optional[int] = Field(
+        ...,
+        description=(
+            "Actions still owed across every action store, from the same aggregate that "
+            "backs /actions/summary. `null` means the aggregate could not be computed — "
+            "distinct from 0, which means there are genuinely none outstanding."
+        ),
+    )
     overdue_items: int
     kri_alerts: int

@@ -58,11 +58,19 @@ class Permission(Base):
         return f"<Permission {self.code}>"
 
 
-class Role(Base):
+class ABACRole(Base):
     """
     Role definition with permission collections (ABAC).
 
     Roles group permissions for easier assignment.
+
+    Named ``ABACRole`` rather than ``Role`` because ``src.domain.models.user.Role``
+    (table ``roles``) is the live RBAC role, and SQLAlchemy resolves string-form
+    relationship targets by *class name* against the registry. Two classes called
+    ``Role`` on one declarative base made every ``relationship("Role")`` ambiguous,
+    so ``configure_mappers()`` raised for every mapper in the registry, not just
+    these. ``__tablename__`` is unchanged: this is a Python name, not a schema
+    change.
     """
 
     __tablename__ = "abac_roles"
@@ -103,7 +111,7 @@ class Role(Base):
     role_permissions = relationship("RolePermission", back_populates="role", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
-        return f"<Role {self.code}>"
+        return f"<ABACRole {self.code}>"
 
 
 class RolePermission(Base):
@@ -123,7 +131,7 @@ class RolePermission(Base):
     conditions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Additional conditions for this permission
 
     # Relationships
-    role = relationship("Role", back_populates="role_permissions")
+    role = relationship("ABACRole", back_populates="role_permissions")
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
