@@ -35,11 +35,12 @@ from src.domain.models.evidence_asset import (
 )
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
-from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
+from src.domain.models.rta import RoadTrafficCollision, RTAStatus
 from src.domain.services.api_idempotency_service import begin_idempotent_create, complete_idempotent_create
 from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.portal_triage_service import assign_and_notify_portal_intake
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.rta_severity import derive_portal_rta_severity, interpret_rta_injury_answer, read_reported_bool
 
 logger = logging.getLogger(__name__)
 
@@ -721,10 +722,16 @@ def build_complaint_portal_fields(
 
 def build_rta_portal_fields(
     report: QuickReportCreate,
-    rta_severity: RTASeverity,
     reporter_submission: dict[str, Any],
     tenant_id: Optional[int] = None,
 ) -> dict[str, Any]:
+    """Map a portal RTA submission onto RoadTrafficCollision columns.
+
+    Severity is derived here rather than passed in, so there is exactly one place
+    that decides an injury outcome. ``report.severity`` is the portal's generic
+    triage word and is deliberately not consulted: see
+    :mod:`src.domain.services.rta_severity`.
+    """
     resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
     collision_occurred_at = parse_portal_datetime(
         reporter_submission.get("accident_date"),
@@ -746,8 +753,13 @@ def build_rta_portal_fields(
         explicit_tp_injured = reporter_submission.get("injured")
     third_party_injured = derive_third_party_injured(
         third_parties_payload,
-        explicit=bool(explicit_tp_injured) if explicit_tp_injured is not None else None,
+        explicit=interpret_rta_injury_answer(explicit_tp_injured),
     )
+    # None = the form never asked, which is not the same as "nobody was hurt".
+    driver_injured = interpret_rta_injury_answer(reporter_submission.get("driver_injured"))
+    # reporter_submission is arbitrary client JSON; only a string belongs in a Text column.
+    raw_injury_details = reporter_submission.get("driver_injury_details")
+    driver_injury_details = raw_injury_details.strip() or None if isinstance(raw_injury_details, str) else None
     witness_structured = None
     if isinstance(witness_details, str) and witness_details.strip():
         witness_structured = {
@@ -761,7 +773,10 @@ def build_rta_portal_fields(
 
     display_name = require_portal_display_name(report, reporter_submission)
     return {
-        "severity": rta_severity,
+        "severity": derive_portal_rta_severity(
+            driver_injured=driver_injured,
+            third_party_injured=third_party_injured,
+        ),
         "status": RTAStatus.REPORTED,
         "location": report.location or "Not specified",
         "collision_date": collision_occurred_at,
@@ -775,8 +790,11 @@ def build_rta_portal_fields(
         "reporter_email": report.reporter_email if not report.is_anonymous else None,
         "driver_name": display_name,
         "driver_email": report.reporter_email if not report.is_anonymous else None,
-        "driver_injured": bool(reporter_submission.get("driver_injured")),
+        "driver_injured": driver_injured is True,
+        "driver_injury_details": driver_injury_details,
         "third_party_injured": third_party_injured,
+        # Drivability is the operational urgency signal the triage word used to carry.
+        "vehicle_drivable": read_reported_bool(reporter_submission.get("is_drivable")),
         "third_parties": third_parties_payload,
         "vehicles_involved_count": max(
             1,
@@ -1615,20 +1633,11 @@ async def submit_quick_report(
         ref_number = await mint_portal_reference(db, "RTA")
         tracking_code = generate_tracking_code(ref_number)
 
-        # Map severity
-        rta_severity_map = {
-            "low": RTASeverity.DAMAGE_ONLY,
-            "medium": RTASeverity.MINOR_INJURY,
-            "high": RTASeverity.SERIOUS_INJURY,
-            "critical": RTASeverity.FATAL,
-        }
-        rta_severity = rta_severity_map.get(report.severity.lower(), RTASeverity.DAMAGE_ONLY)
-
         rta = RoadTrafficCollision(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_rta_portal_fields(report, rta_severity, reporter_submission, portal_tenant_id),
+            **build_rta_portal_fields(report, reporter_submission, portal_tenant_id),
         )
 
         db.add(rta)
