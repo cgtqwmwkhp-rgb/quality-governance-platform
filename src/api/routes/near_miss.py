@@ -169,6 +169,7 @@ async def create_near_miss(
         payload=data.model_dump(mode="json"),
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=near_miss.tenant_id,
     )
 
     await complete_idempotent_create(
@@ -333,6 +334,7 @@ async def delete_near_miss(
         payload={"reference_number": near_miss.reference_number},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=near_miss.tenant_id,
     )
 
     await db.delete(near_miss)
@@ -461,6 +463,7 @@ async def add_near_miss_running_sheet_entry(
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=near_miss.tenant_id,
     )
 
     await db.commit()
@@ -505,6 +508,9 @@ async def delete_near_miss_running_sheet_entry(
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        # The parent case, whose tenant_id is NOT NULL. The entry's own column is
+        # nullable, so the parent is the reliable owner.
+        tenant_id=near_miss.tenant_id,
     )
 
     await db.delete(entry)

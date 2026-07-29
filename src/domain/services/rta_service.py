@@ -127,6 +127,7 @@ class RTAService:
             description=f"RTA {rta.reference_number} created",
             user_id=user_id,
             request_id=request_id,
+            tenant_id=rta.tenant_id,
         )
 
         await self.db.commit()
@@ -255,6 +256,9 @@ class RTAService:
             payload=update_data,
             user_id=user_id,
             request_id=request_id,
+            # The record's own tenant, not the tenant_id argument: callers pass
+            # None with skip_tenant_check=True, and the row still has an owner.
+            tenant_id=rta.tenant_id,
         )
 
         await self.db.commit()
@@ -291,6 +295,7 @@ class RTAService:
             description=f"RTA {rta.reference_number} deleted",
             user_id=user_id,
             request_id=request_id,
+            tenant_id=rta.tenant_id,
         )
 
         await self.db.delete(rta)
@@ -354,6 +359,7 @@ class RTAService:
             description=f"RTA Action {action.reference_number} created for RTA {rta.reference_number}",
             user_id=user_id,
             request_id=request_id,
+            tenant_id=action.tenant_id,
         )
 
         await self.db.commit()
@@ -413,6 +419,7 @@ class RTAService:
             payload=update_data,
             user_id=user_id,
             request_id=request_id,
+            tenant_id=action.tenant_id,
         )
 
         await self.db.commit()
@@ -447,6 +454,7 @@ class RTAService:
             description=f"RTA Action {action.reference_number} deleted",
             user_id=user_id,
             request_id=request_id,
+            tenant_id=action.tenant_id,
         )
 
         await self.db.delete(action)

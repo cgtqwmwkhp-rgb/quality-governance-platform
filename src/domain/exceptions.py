@@ -98,6 +98,21 @@ class BadRequestError(DomainError):
     default_code = "BAD_REQUEST"
 
 
+class AuditNotRecordableError(DomainError):
+    """An audit event could not be persisted, so the operation must not stand.
+
+    ``AuditLogEntry.tenant_id`` is NOT NULL, so an event with no resolvable
+    tenant cannot be written. Raising rather than returning lets the caller's
+    transaction roll back, which refuses the mutation instead of performing it
+    unrecorded. Carries the generic ``INTERNAL_ERROR`` code deliberately: a call
+    site that cannot resolve a tenant is our defect, not something the client
+    can correct by changing the request.
+    """
+
+    http_status = 500
+    default_code = "INTERNAL_ERROR"
+
+
 class MeasurementUnavailableError(DomainError):
     """A figure could not be measured because a table it reads is absent.
 
