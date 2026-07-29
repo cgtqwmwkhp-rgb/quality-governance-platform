@@ -21,7 +21,6 @@ from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.routes.actions import _compute_actions_summary
 from src.domain.models.user import User
 from src.domain.services.analytics_service import analytics_service
-from src.domain.services.audit_analytics_service import AuditAnalyticsService
 from src.domain.services.executive_dashboard import ExecutiveDashboardService
 
 router = APIRouter()
@@ -234,6 +233,65 @@ async def preview_widget(
 # KPI & TRENDS ENDPOINTS
 # ============================================================================
 
+MEASURED = "measured"
+UNAVAILABLE = "unavailable"
+
+
+def _training_kpi_block(training: Dict[str, Any]) -> Dict[str, Any]:
+    """Shape the training aggregate so a stub zero is not expressible.
+
+    A discriminated union rather than nullable fields, following #1402. The
+    ``unavailable`` branch carries **no numeric field at all**: the whole defect
+    (C-7) was that a consumer could not tell a measured 0% from a never-measured
+    one, and a branch that still offered ``completion_rate: null`` would leave
+    that distinction resting on the client remembering to check for null.
+
+    ``status`` is what makes this safe against the trap #1404 documented. Merely
+    omitting fields is not enough on its own, because a client reading
+    ``training.completion_rate ?? 0`` puts the fabricated zero straight back; the
+    web client is updated in the same change to branch on ``status`` instead.
+    """
+    measured_cells = training.get("measured_cells")
+    if not isinstance(measured_cells, int) or measured_cells <= 0:
+        return {
+            "status": UNAVAILABLE,
+            "reason": "no_scored_training_matrix_cells",
+            "detail": (
+                "Training compliance needs a training matrix import with at least one "
+                "scored cell for this tenant. None was readable, so no rate is reported."
+            ),
+        }
+    return {
+        "status": MEASURED,
+        "completion_rate": training.get("completion_rate"),
+        "expiring_soon": training.get("expiring_soon"),
+        "overdue": training.get("overdue"),
+        # The denominator travels with the rate so a consumer can see what the
+        # percentage was taken over rather than trusting it blind.
+        "measured_cells": measured_cells,
+        "compliant_cells": training.get("compliant_cells"),
+    }
+
+
+def _audits_kpi_block(audits: Dict[str, Any]) -> Dict[str, Any]:
+    """Project the dashboard audit aggregate onto the KPI tile's field names.
+
+    ``totals`` is renamed to ``total`` because that is the name this endpoint has
+    always published. ``trend`` is None rather than 0.0: no period-over-period
+    audit comparison is computed anywhere, so the 0.0 the old stub supplied was a
+    fabricated "no change" that rendered as a real trend indicator.
+    """
+    return {
+        "total": audits.get("totals", 0),
+        "completed": audits.get("completed", 0),
+        "in_progress": audits.get("in_progress", 0),
+        "avg_score": audits.get("avg_score"),
+        "pass_rate": audits.get("pass_rate"),
+        "essential_compliance_pct": audits.get("essential_compliance_pct"),
+        "incomplete_critical_count": audits.get("incomplete_critical_count", 0),
+        "trend": None,
+    }
+
 
 @router.get("/kpis")
 async def get_kpi_summary(
@@ -267,23 +325,18 @@ async def get_kpi_summary(
     actions_summary = await _compute_actions_summary(db, tenant_id)
     by_display = actions_summary.by_display_status
 
-    audits_summary = dict(analytics_service.get_kpi_summary(time_range).get("audits") or {})
-    if tenant_id is not None:
-        try:
-            audit_stats = await AuditAnalyticsService(db).get_summary(tenant_id, days=days)
-            audits_summary.update(
-                {
-                    "total": audit_stats["totals"],
-                    "completed": audit_stats["completed"],
-                    "in_progress": audit_stats["in_progress"],
-                    "avg_score": audit_stats["avg_score"],
-                    "pass_rate": audit_stats["pass_rate"],
-                    "essential_compliance_pct": audit_stats["essential_compliance_pct"],
-                    "incomplete_critical_count": audit_stats["incomplete_critical_count"],
-                }
-            )
-        except Exception:  # noqa: BLE001 — KPI endpoint must degrade, not 500
-            pass
+    # Audits come from the same dashboard aggregate as every other tile, not from a
+    # second query seeded with stub zeros (C-7). The previous shape started from
+    # `analytics_service.get_kpi_summary`, an in-memory dict of hardcoded zeros, and
+    # overwrote it inside a `try/except: pass`, so a failed audit query silently
+    # published those zeros — including `avg_score: 0.0` — as though they had been
+    # measured. That `except` also did not roll back; on PostgreSQL the aborted
+    # transaction would refuse every later statement, which was harmless only
+    # because it happened to be the last query in the handler. Reading the aggregate
+    # `get_full_dashboard` already produced removes both the stub and the bare
+    # except (`_safe_call` rolls back), drops a duplicate audit query, and makes this
+    # tile agree with /executive-dashboard by construction rather than by coincidence.
+    audits_summary = _audits_kpi_block(dash.get("audits") or {})
 
     return {
         "period_days": days,
@@ -349,7 +402,7 @@ async def get_kpi_summary(
             ),
             "audit_avg_score": ("Mean score_percentage of completed audit runs created in the selected period."),
         },
-        "training": analytics_service.get_kpi_summary(time_range).get("training"),
+        "training": _training_kpi_block(dash.get("training") or {}),
         "source": "executive_dashboard",
     }
 

@@ -154,6 +154,21 @@ class AuditSummary(BaseModel):
     incomplete_critical_count: int = 0
 
 
+class TrainingSummary(BaseModel):
+    """Headline training compliance from the tenant's latest matrix import.
+
+    Every field is optional and defaults to None because "we could not measure
+    this" has to be expressible. An unpopulated or unreadable matrix is not a
+    workforce with 0% training, and it is not one with 100% either (C-7).
+    """
+
+    measured_cells: Optional[int] = None
+    compliant_cells: Optional[int] = None
+    completion_rate: Optional[float] = None
+    expiring_soon: Optional[int] = None
+    overdue: Optional[int] = None
+
+
 class TrendDataPoint(BaseModel):
     """Single trend data point.
 
@@ -217,6 +232,7 @@ class ExecutiveDashboardResponse(BaseModel):
     compliance: ComplianceSummary
     sla_performance: SLASummary
     audits: AuditSummary = Field(default_factory=AuditSummary)
+    training: TrainingSummary = Field(default_factory=TrainingSummary)
     trends: TrendData
     alerts: List[ActiveAlert]
     safety_insights: SafetyInsightsSummary = Field(default_factory=SafetyInsightsSummary)
