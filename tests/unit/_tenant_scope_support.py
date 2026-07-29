@@ -2,22 +2,21 @@
 
 ``scripts/ops/run025/_models.load_metadata()`` deliberately imports the same model
 modules ``alembic/env.py`` does, because a schema-parity tool that only looks at
-part of the schema is worse than none. One of those modules cannot be imported
-into a process that later configures SQLAlchemy mappers:
-``src/domain/models/rta_analysis.py`` declares
-``RootCauseAnalysis.incident = relationship("Incident", back_populates="rtas")``,
-but ``Incident`` has no ``rtas`` attribute — its table was dropped back in
-``20260105_220237`` (``drop_root_cause_analyses_table``) and the model was left
-behind. Importing it makes ``configure_mappers()`` raise for *every* mapper in the
-registry, which took 253 unrelated unit tests down with it when these tests first
-imported it in-process.
+part of the schema is worse than none. That import set cannot be brought into a
+process that later configures SQLAlchemy mappers: two different classes named
+``Role`` end up registered on the same declarative base, so ``configure_mappers()``
+raises ``InvalidRequestError: Multiple classes found for path "Role"`` — and it
+raises it for *every* mapper in the registry, not just the ambiguous one.
 
-Alembic gets away with it because it never configures mappers, and the app gets
-away with it because ``src/domain/models/__init__.py`` does not re-export the
-module. Tests get to keep both by asking a child process.
+That whole-registry blast radius is the reason for the indirection rather than the
+particular defect causing it. A second instance of the same class of problem was
+fixed on 2026-07-29: ``src/domain/models/rta_analysis.py`` declared a relationship
+against ``Incident.rtas`` that ``Incident`` did not have, and it took 253 unrelated
+unit tests down when these tests first imported it in-process. Deleting that model
+did not make the import safe, because the ``Role`` ambiguity is independent of it.
 
-The dead model is reported as a follow-up rather than deleted here; removing a
-model is not this change's business.
+Alembic gets away with the import because it never configures mappers. Tests get
+to keep both the full metadata and a clean registry by asking a child process.
 """
 
 from __future__ import annotations

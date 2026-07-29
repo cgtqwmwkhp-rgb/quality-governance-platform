@@ -134,10 +134,6 @@
       "DropIndexOp": 2,
       "DropTableOp": 1
     },
-    "root_cause_analyses": {
-      "CreateIndexOp": 3,
-      "CreateTableOp": 1
-    },
     "security_incidents": {
       "AlterColumnOp": 9,
       "CreateForeignKeyOp": 3,
@@ -194,7 +190,6 @@
     "risk_clause_mapping",
     "risk_control_mapping",
     "risk_incident_mapping",
-    "root_cause_analyses",
     "security_incidents",
     "soa_control_entries",
     "supplier_security_assessments",

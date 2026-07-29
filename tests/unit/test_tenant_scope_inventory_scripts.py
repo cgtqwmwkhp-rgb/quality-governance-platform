@@ -101,7 +101,9 @@ def test_side_effect_module_list_is_read_from_alembic_env():
 
 def test_excluded_tables_are_read_from_alembic_env():
     excluded = _models.alembic_check_excluded_tables()
-    assert "root_cause_analyses" in excluded
+    # `escalation_rules` is the last name in the frozenset literal, so this also
+    # shows the parse reached the end of it rather than a leading fragment.
+    assert "escalation_rules" in excluded
     assert "obsolete_document_records" in excluded
 
 

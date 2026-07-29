@@ -105,6 +105,7 @@ PORTAL_COMPLAINANT_PHONE_DB_LENGTH = 30  # complaints.complainant_phone
 PORTAL_LOCATION_MAX_LENGTH = 500  # rtas.location
 PORTAL_INCIDENT_LOCATION_DB_LENGTH = 300  # incidents.location
 PORTAL_NEAR_MISS_EVENT_TIME_DB_LENGTH = 10  # near_misses.event_time
+PORTAL_RTA_COLLISION_TIME_DB_LENGTH = 10  # road_traffic_collisions.collision_time
 
 _EMAIL_LIKE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -841,6 +842,23 @@ def resolve_rta_collision_datetime(
         )
 
     raw_time = str(chosen_time).strip() if chosen_time is not None else ""
+    if len(raw_time) > PORTAL_RTA_COLLISION_TIME_DB_LENGTH:
+        # road_traffic_collisions.collision_time is varchar(10). An over-long value
+        # raises StringDataRightTruncation, which aborts the INSERT and loses the
+        # entire collision report rather than just the time. The template declares
+        # this field as 'time' today, but field_type is a database row an
+        # administrator can retype to text, and the endpoint accepts JSON from any
+        # caller. Full precision is already on collision_date and in the reporter
+        # snapshot, so clip and say so — the same trade the near-miss path makes.
+        logger.warning(
+            "RTA %s submitted a %d-character time under %s; clipping to fit collision_time(varchar %d). "
+            "Full precision is retained on collision_date.",
+            reference_number or "<reference not yet minted>",
+            len(raw_time),
+            chosen_key,
+            PORTAL_RTA_COLLISION_TIME_DB_LENGTH,
+        )
+        raw_time = raw_time[:PORTAL_RTA_COLLISION_TIME_DB_LENGTH]
     return chosen_datetime, raw_time or None
 
 

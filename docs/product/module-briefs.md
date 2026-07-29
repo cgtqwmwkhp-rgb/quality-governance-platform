@@ -81,7 +81,7 @@ Full persona definitions: [`docs/user-journeys/personas-and-journeys.md`](../use
 - **Success Metrics**: RTA reporting latency; action closure rate; repeat collision rate per vehicle/driver.
 - **Journey Reference**: Journey 1 — Incident Reporting (P1), RTA variant
 - **API Surface**: `src/api/routes/rtas.py` — CRUD endpoints, actions (`POST /{id}/actions`), running sheet, status transitions.
-- **Data Entities**: `RoadTrafficCollision`, `RTAAction` (`src/domain/models/rta.py`); `RTAAnalysis` (`src/domain/models/rta_analysis.py`).
+- **Data Entities**: `RoadTrafficCollision`, `RTAAction` (`src/domain/models/rta.py`).
 - **Dependencies**: Evidence Assets, Employee Portal, Driver Profiles, Vehicle Registry, Notifications, Audit Trail.
 - **Status**: Active
 
