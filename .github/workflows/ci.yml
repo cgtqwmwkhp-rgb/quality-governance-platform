@@ -1815,7 +1815,45 @@ jobs:
           echo "=== Alembic Migration Drift Check ==="
           alembic upgrade head
           alembic check
-          echo "[OK] No migration drift detected"
+          echo "[OK] No migration drift SURVIVED THE FILTER."
+          echo "Read the suppression report above for what was detected and dropped;"
+          echo "the ratchet step below is what fails when that set grows."
+
+      # `alembic check` above passes with ~1060 autogenerate operations detected
+      # and filtered away, which for a long time was reported as "No migration
+      # drift detected". The deferral is deliberate and owned
+      # (docs/governance/alembic_check_excluded_tables.md); what was missing is
+      # any bound on it. This step publishes the suppressed inventory and fails
+      # when it grows: a table acquiring drift, an operation type, or a higher
+      # count than docs/governance/alembic_drift_baseline.json records.
+      #
+      # --database-url runs a second, unfiltered comparison. The table exclusion
+      # list works by dropping tables from the comparison before columns are
+      # compared at all, so drift on those 33 tables -- including the four
+      # AddColumnOp on soa_control_entries -- appears nowhere in the artifact the
+      # step above writes. Not measuring it is what let it stay unknown.
+      #
+      # if: always() so a failing `alembic check` still gets its drift reported
+      # rather than leaving the reader with only an exit code.
+      - name: Ratchet the suppressed migration drift
+        if: always()
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: |
+          echo "=== Suppressed Drift Ratchet ==="
+          python3 scripts/validate_alembic_drift_ratchet.py \
+            --inventory alembic-drift-inventory.json \
+            --database-url postgresql://postgres:testpass@localhost:5432/quality_governance_test \
+            --json alembic-drift-ratchet.json
+
+      - name: Upload drift ratchet report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: alembic-drift-ratchet
+          path: alembic-drift-ratchet.json
+          if-no-files-found: warn
+          retention-days: 30
 
       # This job is the only place in CI holding a database built by the
       # migrations and nothing else. The integration job applies the chain too,
