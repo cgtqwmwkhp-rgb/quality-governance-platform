@@ -151,7 +151,7 @@ async def create_rta(
 @router.get("/", response_model=RTAListResponse)
 async def list_rtas(
     db: DbSession,
-    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
+    current_user: Annotated[User, Depends(require_permission("rta:read"))],
     request_id: str = Depends(get_request_id),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -166,8 +166,8 @@ async def list_rtas(
 ):
     """List RTAs with deterministic ordering and pagination.
 
-    Requires authentication. Users can only filter by their own email
-    unless they have admin permissions.
+    Requires ``rta:read``. Users can only filter by their own email unless they
+    also hold ``rta:view_all``.
     """
     id_list: list[int] | None = None
     # Guard: unit tests may invoke the handler with FastAPI Query defaults unbound.
