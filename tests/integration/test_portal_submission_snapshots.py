@@ -8,7 +8,6 @@ from src.api.routes.employee_portal import (
 )
 from src.domain.models.complaint import ComplaintPriority
 from src.domain.models.incident import IncidentSeverity
-from src.domain.models.rta import RTASeverity
 
 
 def test_incident_submission_helper_preserves_snapshot_and_triage_fields():
@@ -118,7 +117,6 @@ def test_rta_submission_helper_preserves_snapshot_and_operational_brief():
 
     fields = build_rta_portal_fields(
         report,
-        RTASeverity.SERIOUS_INJURY,
         report.reporter_submission or {},
     )
 
