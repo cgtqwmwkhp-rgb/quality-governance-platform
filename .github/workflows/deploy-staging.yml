@@ -818,7 +818,29 @@ jobs:
           # cold container start: an observed redeploy left the worker unreachable for 5m10s
           # (warm shutdown 16:41:21 → "celery@... ready." 16:46:31), while a 4x5s budget gave up
           # after ~60s. Exits on the first pong, so a healthy worker costs nothing extra.
-          python3 scripts/celery/smoke_inspect_ping.py --retries 30 --sleep 10
+          #
+          # Budget arithmetic — read this before changing the numbers, because the obvious
+          # reading of it is wrong. The cost of one attempt is NOT --sleep: when no worker
+          # answers, inspect().ping() first blocks for its --timeout (default 10s) and only
+          # then sleeps. Measured from staging run 30418614706 attempt 1, where the worker
+          # was still starting:
+          #     attempt 1  03:14:44.52
+          #     attempt 2  03:15:06.14   (+21.61s)
+          #     attempt 3  03:15:27.71   (+21.61s)
+          #     pong       03:15:49.33   (+21.61s)
+          # So one attempt costs ~21.6s (10s ping timeout + 10s sleep + ~1.6s overhead),
+          # and the real budget is --retries x ~21.6s, not --retries x --sleep:
+          #   * 30 retries ≈ 648s — already ~2.1x the 310s cold start recorded above, so
+          #     the old setting was not in fact losing that race.
+          #   * 45 retries ≈ 972s — ~3.1x the observed worst case, which is headroom for a
+          #     start slower than the single 310s sample anyone has actually timed.
+          # A healthy worker exits on the first pong in a couple of seconds, so this costs
+          # nothing on the happy path; the budget is only ever spent while the worker is
+          # genuinely still starting. The trade is that a worker that never comes up now
+          # takes ~16min to fail rather than ~11min (the job has no timeout-minutes, so the
+          # 360min default applies and there is no collision).
+          # Do NOT add --allow-missing: a worker that never answers must fail the deploy.
+          python3 scripts/celery/smoke_inspect_ping.py --retries 45 --sleep 10
           echo "Celery ping step complete (fail-closed)"
 
       - name: Email config honesty smoke (Lane 1)
@@ -864,29 +886,88 @@ jobs:
 
           SLO_FAIL=0
 
-          # ── Health endpoint: must return 200 ──────────────────────────────
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$BASE_URL/healthz" || echo "000")
-          LATENCY_MS=$(curl -s -o /dev/null -w "%{time_total}" --max-time 10 "$BASE_URL/healthz" 2>/dev/null | awk '{printf "%d", $1 * 1000}' || echo "9999")
-          echo "  /healthz → HTTP $HTTP_CODE  (${LATENCY_MS}ms)"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "  ❌ FAIL: /healthz returned $HTTP_CODE (expected 200)"
-            SLO_FAIL=1
-          fi
-          if [ "$LATENCY_MS" -gt 2000 ]; then
-            echo "  ❌ FAIL: /healthz p95 latency ${LATENCY_MS}ms > 2000ms SLO"
+          # ── Warm-up tolerance — NOT a weaker SLO ─────────────────────────
+          # Six App Services share one Basic B2 plan (two cores) in this environment, so a
+          # container that is briefly not-ready right after a deploy is normal, not a defect.
+          # A single sample measured that race instead of the SLO. Run 30418614706 attempt 1
+          # (0e1ab69a) had built and deployed successfully, passed 5/5 core smoke tests and
+          # got a Celery pong, then failed the whole deploy here on one reading:
+          #     /healthz → HTTP 200  (641ms)
+          #     /readyz  → HTTP 503  (1295ms)
+          # The same endpoint answered 200 with "database": "connected" and "redis":
+          # "connected" on 3/3 manual samples shortly after, all under 1.2s. Nothing was
+          # wrong with the build: attempt 2 of the same run passed unchanged. The cost of
+          # that one 503 was that promotion was blocked and the production queue sat idle
+          # from 03:16:27 until a human re-ran it at 04:52:05 — 1h36m of dead time.
+          #
+          # The polls below tolerate "not ready yet". They do NOT tolerate "never ready":
+          #   * an endpoint that never returns 200 inside the budget still exits 1, so a
+          #     genuinely broken deploy still fails the gate and still blocks promotion;
+          #   * the latency SLO threshold is unchanged (2000ms). It is now asserted against
+          #     the sample that actually returned 200 — i.e. steady state rather than a cold
+          #     start, which is the reading the SLO is about.
+          # This removes a race condition; it does not lower a bar. Do not "tidy" it back
+          # into a single curl, and do not raise the latency threshold to make it pass.
+          POLL_ATTEMPTS=12
+          POLL_SLEEP=10          # 12 attempts x 10s = up to ~120s per endpoint
+
+          # Polls $1 until it returns HTTP 200. Prints "<code> <latency_ms> <attempt>" on
+          # stdout; returns 0 on the first 200, or 1 once the budget is exhausted.
+          poll_until_200() {
+            local url="$1"
+            local attempt sample code latency_ms
+            code="000"
+            latency_ms="9999"
+            for attempt in $(seq 1 "$POLL_ATTEMPTS"); do
+              sample=$(curl -s -o /dev/null -w "%{http_code} %{time_total}" --max-time 10 "$url" || echo "000 9.999")
+              code=$(printf '%s' "$sample" | awk '{print $1}')
+              latency_ms=$(printf '%s' "$sample" | awk '{printf "%d", $2 * 1000}')
+              if [ "$code" = "200" ]; then
+                printf '%s %s %s\n' "$code" "$latency_ms" "$attempt"
+                return 0
+              fi
+              echo "    attempt ${attempt}/${POLL_ATTEMPTS}: HTTP ${code} (${latency_ms}ms) — not ready yet" >&2
+              if [ "$attempt" -lt "$POLL_ATTEMPTS" ]; then
+                sleep "$POLL_SLEEP"
+              fi
+            done
+            printf '%s %s %s\n' "$code" "$latency_ms" "$POLL_ATTEMPTS"
+            return 1
+          }
+
+          # ── Health endpoint: must return 200 within the warm-up budget ───
+          if HEALTH_SAMPLE=$(poll_until_200 "$BASE_URL/healthz"); then
+            HTTP_CODE=$(printf '%s' "$HEALTH_SAMPLE" | awk '{print $1}')
+            LATENCY_MS=$(printf '%s' "$HEALTH_SAMPLE" | awk '{print $2}')
+            ATTEMPT_USED=$(printf '%s' "$HEALTH_SAMPLE" | awk '{print $3}')
+            echo "  /healthz → HTTP $HTTP_CODE  (${LATENCY_MS}ms, ready on attempt ${ATTEMPT_USED}/${POLL_ATTEMPTS})"
+            if [ "$LATENCY_MS" -gt 2000 ]; then
+              echo "  ❌ FAIL: /healthz p95 latency ${LATENCY_MS}ms > 2000ms SLO"
+              SLO_FAIL=1
+            fi
+          else
+            HTTP_CODE=$(printf '%s' "$HEALTH_SAMPLE" | awk '{print $1}')
+            echo "  /healthz → HTTP $HTTP_CODE  (never became healthy)"
+            echo "  ❌ FAIL: /healthz never returned 200 within ~$((POLL_ATTEMPTS * POLL_SLEEP))s (last HTTP $HTTP_CODE, expected 200)"
             SLO_FAIL=1
           fi
 
-          # ── Readiness endpoint: must return 200 ──────────────────────────
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$BASE_URL/readyz" || echo "000")
-          LATENCY_MS=$(curl -s -o /dev/null -w "%{time_total}" --max-time 10 "$BASE_URL/readyz" 2>/dev/null | awk '{printf "%d", $1 * 1000}' || echo "9999")
-          echo "  /readyz  → HTTP $HTTP_CODE  (${LATENCY_MS}ms)"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "  ❌ FAIL: /readyz returned $HTTP_CODE (expected 200)"
+          # ── Readiness endpoint: must return 200 within the warm-up budget ─
+          if READY_SAMPLE=$(poll_until_200 "$BASE_URL/readyz"); then
+            HTTP_CODE=$(printf '%s' "$READY_SAMPLE" | awk '{print $1}')
+            LATENCY_MS=$(printf '%s' "$READY_SAMPLE" | awk '{print $2}')
+            ATTEMPT_USED=$(printf '%s' "$READY_SAMPLE" | awk '{print $3}')
+            echo "  /readyz  → HTTP $HTTP_CODE  (${LATENCY_MS}ms, ready on attempt ${ATTEMPT_USED}/${POLL_ATTEMPTS})"
+          else
+            HTTP_CODE=$(printf '%s' "$READY_SAMPLE" | awk '{print $1}')
+            echo "  /readyz  → HTTP $HTTP_CODE  (never became ready)"
+            echo "  ❌ FAIL: /readyz never returned 200 within ~$((POLL_ATTEMPTS * POLL_SLEEP))s (last HTTP $HTTP_CODE, expected 200)"
             SLO_FAIL=1
           fi
 
           # ── Version endpoint: must return 200 and non-empty build_sha ────
+          # Single sample on purpose: it runs only after /healthz and /readyz have both
+          # answered 200, so the container is warm by here and there is no race to lose.
           VERSION_BODY=$(curl -s --max-time 10 "$BASE_URL/api/v1/meta/version" || echo "{}")
           BUILD_SHA=$(echo "$VERSION_BODY" | python3 -c "import sys, json; print(json.load(sys.stdin).get('build_sha',''))" 2>/dev/null || echo "")
           echo "  /api/v1/meta/version → build_sha=${BUILD_SHA:-MISSING}"

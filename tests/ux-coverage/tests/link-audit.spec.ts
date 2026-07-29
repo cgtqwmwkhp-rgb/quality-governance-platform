@@ -179,9 +179,11 @@ test.describe('Link Audit', () => {
           return;
         }
         
-        // Navigate to page
+        // Navigate to page.
+        // networkidle is flaky on SWA (analytics/keepalive keep the network busy on a
+        // healthy SPA). The app-shell wait below is the real gate and is unchanged.
         await page.goto(pageEntry.route, {
-          waitUntil: 'networkidle',
+          waitUntil: 'domcontentloaded',
           timeout: 30000,
         });
         

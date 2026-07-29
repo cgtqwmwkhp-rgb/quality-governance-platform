@@ -210,8 +210,11 @@ test.describe('Button Wiring Audit', () => {
           return;
         }
         
-        // Navigate to page
-        await page.goto(route, { waitUntil: 'networkidle', timeout: 30000 });
+        // Navigate to page.
+        // networkidle is flaky on SWA (analytics/keepalive/long-poll can keep the network
+        // busy on a perfectly healthy SPA); the app-shell wait below is the real gate and
+        // is unchanged, so this is no weaker — see frontend/tests/e2e/staging-verification.spec.ts.
+        await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
         
         // Open the containing sidebar hub for nav links (10-hub IA)

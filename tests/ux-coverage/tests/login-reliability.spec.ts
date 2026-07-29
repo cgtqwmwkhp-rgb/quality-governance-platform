@@ -36,7 +36,12 @@ test.describe('Login UX Contract (P0)', () => {
   test.beforeEach(async ({ page }) => {
     // Clear any existing session state
     await page.context().clearCookies();
-    await page.goto(`${FRONTEND_URL}/login`, { waitUntil: 'networkidle' });
+    // networkidle is flaky on SWA (analytics/keepalive can keep the network busy on a
+    // healthy page) and asserted nothing about the login form itself. Wait for the form
+    // instead: every test below immediately fills email-input, so this is the real
+    // precondition and is a stronger check than network silence ever was.
+    await page.goto(`${FRONTEND_URL}/login`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('email-input')).toBeVisible({ timeout: 15000 });
   });
 
   // ============================================================================
