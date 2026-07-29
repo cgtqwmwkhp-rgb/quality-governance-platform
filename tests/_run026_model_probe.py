@@ -21,11 +21,12 @@ that ``Incident`` did not have; that model is deleted. Two different classes nam
 The consequence is why the indirection stays now that both are fixed. A single
 misconfigured mapper poisons ``Base.registry`` for the rest of the process, so the
 next test to instantiate *any* mapped class anywhere gets ``InvalidRequestError`` —
-the failure is never proportionate to its cause. The risk is not hypothetical:
-``scripts/ops/run025/_models.py`` records that ``audit_template.py`` duplicates
-class names from ``audit.py``, and it is only out of reach because nothing imports
-it. ``tests/unit/test_model_registry_class_names.py`` asserts that the set actually
-imported here still configures cleanly.
+the failure is never proportionate to its cause. A third module of the same shape
+was found after those two: ``audit_template.py`` duplicated four class names from
+``audit.py`` and was out of reach only because nothing imported it. It is deleted
+(C-70), and ``tests/unit/test_model_registry_class_names.py`` now sweeps every
+model file on disk rather than only the set imported here, so a fourth is visible
+before anyone imports it.
 
 So the import happens in a subprocess that exits immediately afterwards. The
 suites get the full declared schema and the pytest session keeps a clean

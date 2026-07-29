@@ -104,6 +104,48 @@ else:
 """
 
 
+# Every model module on disk, not only the ones ``alembic/env.py`` reaches. A
+# collision needs both classes in one registry to hurt, so a module nothing
+# imports carries the same defect in a dormant state -- which is what
+# ``audit_template.py`` was until it was deleted for C-70. ``pkgutil`` is the
+# right instrument precisely because it does not care what imports what.
+#
+# Import failures are collected rather than raised: a module that cannot be
+# imported contributes no classes, so silently swallowing the error would make
+# the duplicate-name sweep quietly narrower than it claims to be.
+_ON_DISK_MODEL_SWEEP_SCRIPT = r"""
+import importlib, json, pkgutil, sys
+sys.path.insert(0, sys.argv[1])
+import src.domain.models as package
+
+unimportable = {}
+for module in pkgutil.iter_modules(package.__path__):
+    name = f"src.domain.models.{module.name}"
+    try:
+        importlib.import_module(name)
+    except Exception as exc:
+        unimportable[name] = f"{type(exc).__name__}: {exc}"
+
+from src.infrastructure.database import Base
+
+names = {}
+for mapper in Base.registry.mappers:
+    cls = mapper.class_
+    names.setdefault(cls.__name__, []).append(f"{cls.__module__}.{cls.__name__} -> {cls.__tablename__}")
+
+import sqlalchemy.orm
+
+try:
+    sqlalchemy.orm.configure_mappers()
+except Exception as exc:
+    configured = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+else:
+    configured = {"ok": True, "error": None}
+
+print(json.dumps({"names": names, "unimportable": unimportable, "configured": configured}))
+"""
+
+
 def _run(script: str) -> dict:
     completed = subprocess.run(
         [sys.executable, "-c", script, str(REPO_ROOT)],
@@ -140,6 +182,23 @@ def model_mapped_class_names() -> dict[str, list[str]]:
     registry's contents even while some unrelated mapper is misconfigured.
     """
     return _run(_CLASS_NAME_SCRIPT)
+
+
+@lru_cache(maxsize=1)
+def on_disk_model_sweep() -> dict:
+    """Mapped class names, import failures and mapper state for every model file.
+
+    ``{"names": {class name: ["module.Class -> table", ...]},
+       "unimportable": {module: "Error: message"},
+       "configured": {"ok": bool, "error": str | None}}``
+
+    Strictly wider than :func:`model_mapped_class_names`, which sees only the
+    modules ``alembic/env.py`` imports. The child process matters more here than
+    anywhere else in this module: this sweep deliberately imports model files the
+    application never does, so doing it in-process would put classes in the
+    registry that the rest of the session is entitled to assume are absent.
+    """
+    return _run(_ON_DISK_MODEL_SWEEP_SCRIPT)
 
 
 @lru_cache(maxsize=1)
