@@ -38,11 +38,19 @@ class AnalyticsService:
         time_range: str = "last_30_days",
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Get summary KPIs across all modules.
+        """Hardcoded KPI zeros. **Do not serve this to a reporting surface.**
 
-        Returns key metrics for dashboard overview.
-        Real implementation requires DB session injection.
+        Every number below is a literal, not a measurement: this method takes no
+        session and reads nothing. It is retained only for
+        ``generate_executive_summary``, whose ``kpis`` block has no live consumer.
+
+        ``GET /api/v1/analytics/kpis`` used to compose its training and audit
+        blocks from here, which is how the endpoint came to report 0.0% training
+        compliance on a tenant whose matrix measured 79.8% (C-7). It now reads the
+        live executive-dashboard aggregate instead, and reports an explicit
+        ``status: "unavailable"`` when a figure genuinely cannot be measured.
+        Wiring this method back into a response would reinstate that defect: a
+        zero from here is indistinguishable from a zero that was counted.
         """
         return {
             "incidents": {
