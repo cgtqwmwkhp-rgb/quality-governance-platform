@@ -72,33 +72,19 @@ def test_call_site_matches_the_signature(path: Path, call: ast.Call) -> None:
 
 @pytest.mark.parametrize("path,call", _call_sites(), ids=_ids())
 def test_call_site_passes_a_tenant(path: Path, call: ast.Call) -> None:
-    """Without a tenant the bridge logs a warning and persists nothing.
+    """Every call site must supply a tenant, with no exemption list.
 
-    That is the second half of PX-155 and the quieter one: the request succeeds,
-    the caller sees no error, and no audit row is ever written. Sites that have
-    not yet been threaded are listed below so the number can only go down.
+    That is the second half of PX-155 and the quieter one. 44 of the 71 sites
+    omitted tenant_id, including ``permanent_delete`` and ``purge``, and the
+    bridge answered by logging a warning and returning the unsaved event — so
+    the request succeeded, the caller saw no error, and no audit row was ever
+    written. ``tenant_id`` is now a required keyword-only parameter, which makes
+    ``test_call_site_matches_the_signature`` above enforce the same thing; this
+    test states the reason when it fails.
     """
-    unthreaded = {
-        "api/routes/actions.py",
-        "api/routes/complaints.py",
-        "api/routes/incidents.py",
-        "api/routes/near_miss.py",
-        "api/routes/policies.py",
-        "api/routes/rtas.py",
-        "api/routes/vehicle_checklists.py",
-        "domain/services/action_assignment_service.py",
-        "domain/services/audit_service.py",
-        "domain/services/capa_service.py",
-        "domain/services/competence_gap_service.py",
-        "domain/services/near_miss_service.py",
-        "domain/services/rta_service.py",
-    }
     rel = str(path.relative_to(SRC))
-    if rel in unthreaded:
-        pytest.xfail(f"{rel} has not been threaded with tenant_id yet (PX-155)")
-
     kwargs = {kw.arg for kw in call.keywords if kw.arg is not None}
     assert "tenant_id" in kwargs, (
         f"{rel}:{call.lineno} does not pass tenant_id, so record_audit_event() "
-        f"will log a warning and persist no audit row."
+        f"will refuse the event and raise AuditNotRecordableError."
     )

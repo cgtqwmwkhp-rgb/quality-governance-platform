@@ -131,6 +131,7 @@ async def create_rta(
         description=f"RTA {rta.reference_number} created",
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=rta.tenant_id,
     )
 
     await complete_idempotent_create(
@@ -194,6 +195,13 @@ async def list_rtas(
 
         # AUDIT: Log email filter usage for security monitoring
         # Note: We log the filter type but NOT the raw email (privacy compliance)
+        #
+        # Fail closed when the caller has no tenant membership. audit_log_entries
+        # .tenant_id is NOT NULL, so this access cannot be recorded without one,
+        # and an email-targeted search over other tenants' reporters is precisely
+        # what this row exists to police. Superusers skip the tenant filter
+        # below, so before this they could run one unrecorded.
+        audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
             event_type="rta.list_filtered",
@@ -209,6 +217,7 @@ async def list_rtas(
             },
             user_id=current_user.id,
             request_id=request_id,
+            tenant_id=audit_tenant_id,
         )
 
     try:
@@ -340,6 +349,7 @@ async def delete_rta(
         description=f"RTA {rta.reference_number} deleted",
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=rta.tenant_id,
     )
 
     await db.delete(rta)
@@ -396,6 +406,7 @@ async def create_rta_action(
         description=f"RTA Action {action.reference_number} created for RTA {rta.reference_number}",
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=tenant_id,
     )
 
     await db.commit()
@@ -477,6 +488,7 @@ async def update_rta_action(
         payload=update_data,
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=action.tenant_id,
     )
 
     await db.commit()
@@ -512,6 +524,7 @@ async def delete_rta_action(
         description=f"RTA Action {action.reference_number} deleted",
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=action.tenant_id,
     )
 
     await db.delete(action)
@@ -653,6 +666,7 @@ async def add_running_sheet_entry(
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=rta.tenant_id,
     )
 
     await db.commit()
@@ -697,6 +711,9 @@ async def delete_running_sheet_entry(
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        # The parent case, whose tenant_id is NOT NULL. The entry's own column is
+        # nullable, so the parent is the reliable owner.
+        tenant_id=rta.tenant_id,
     )
 
     await db.delete(entry)
