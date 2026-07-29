@@ -19,6 +19,9 @@ import pytest
 # Get project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
+# Real portal intake path (C-63). `/api/v1/portal/report` does not exist.
+PORTAL_REPORTS_PATH = "/api/v1/portal/reports/"
+
 
 class TestSecurityHeaders:
     """Test security headers are properly configured."""
@@ -142,16 +145,17 @@ class TestInputValidation:
         ]
 
         for payload in xss_payloads:
-            # Try to create an incident with XSS payload
+            # Try to create an incident with XSS payload on the real intake path
             response = client.post(
-                "/api/v1/portal/report",
+                PORTAL_REPORTS_PATH,
                 json={
                     "report_type": "incident",
-                    "title": payload,
-                    "description": payload,
+                    "title": payload if len(payload) >= 5 else f"XSS {payload}",
+                    "description": f"XSS probe payload: {payload}",
                     "severity": "low",
                 },
             )
+            assert response.status_code != 404
             # Should either reject or sanitize
             if response.status_code == 201:
                 data = response.json()
@@ -183,14 +187,15 @@ class TestInputValidation:
 
         for payload in cmd_payloads:
             response = client.post(
-                "/api/v1/portal/report",
+                PORTAL_REPORTS_PATH,
                 json={
                     "report_type": "incident",
                     "title": f"Test {payload}",
-                    "description": "Test description",
+                    "description": f"Command injection probe {payload}",
                     "severity": "low",
                 },
             )
+            assert response.status_code != 404
             assert response.status_code != 500
 
 
