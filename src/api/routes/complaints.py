@@ -235,6 +235,13 @@ async def list_complaints(
 
         # AUDIT: Log email filter usage for security monitoring
         # Note: We log the filter type but NOT the raw email (privacy compliance)
+        #
+        # Fail closed when the caller has no tenant membership. audit_log_entries
+        # .tenant_id is NOT NULL, so this access cannot be recorded without one,
+        # and an email-targeted search over other tenants' complainants is
+        # precisely what this row exists to police. Superusers skip the tenant
+        # filter below, so before this they could run one unrecorded.
+        audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
             event_type="complaint.list_filtered",
@@ -250,6 +257,7 @@ async def list_complaints(
             },
             user_id=current_user.id,
             request_id=request_id,
+            tenant_id=audit_tenant_id,
         )
 
     try:
@@ -547,6 +555,7 @@ async def add_complaint_running_sheet_entry(
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=complaint.tenant_id,
     )
 
     await db.commit()
@@ -596,6 +605,9 @@ async def delete_complaint_running_sheet_entry(
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        # The parent case, whose tenant_id is NOT NULL. The entry's own column is
+        # nullable, so the parent is the reliable owner.
+        tenant_id=complaint.tenant_id,
     )
 
     await db.delete(entry)

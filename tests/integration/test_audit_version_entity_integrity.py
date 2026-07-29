@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.api.routes.audits import create_run, create_template, get_template, publish_template, update_template
 from src.api.schemas.audit import AuditRunCreate, AuditTemplateCreate, AuditTemplateUpdate
 from src.domain.models.audit import AuditQuestion, AuditRun, AuditSection, AuditTemplate, TemplateVersion
+from src.domain.models.audit_log import AuditLogEntry
 from src.domain.models.user import User
 from tests.factories import UserFactory
 
@@ -24,6 +25,9 @@ async def isolated_db_session():
         await conn.run_sync(AuditRun.__table__.create)
         # publish_template persists TemplateVersion snapshots
         await conn.run_sync(TemplateVersion.__table__.create)
+        # Template create/update/publish now really write audit rows (PX-155);
+        # before that the bridge discarded them and this table was not needed.
+        await conn.run_sync(AuditLogEntry.__table__.create)
 
     async with session_factory() as session:
         yield session
