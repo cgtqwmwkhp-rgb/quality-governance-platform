@@ -133,6 +133,26 @@ async function isPerceptibleAnnouncement(
   return { perceptible: true, text };
 }
 
+/**
+ * Wait for an element to become visible, and report whether it did.
+ *
+ * `isVisible()` is an immediate check with no auto-waiting, so on its own it
+ * races the app's render and reports an element that is about to appear as one
+ * that is absent. A genuine absence still fails: the wait expires and this
+ * returns false.
+ */
+async function waitForVisible(
+  locator: import('@playwright/test').Locator,
+  timeout: number,
+): Promise<boolean> {
+  try {
+    await locator.waitFor({ state: 'visible', timeout });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Affordances that let a user leave a recovery state, per LOGIN_UX_CONTRACT.md. */
 const RECOVERY_AFFORDANCE_SELECTORS = [
   '[data-testid="retry-button"]',
@@ -391,13 +411,15 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Click element if selector specified (and not form_fields step)
             if (step.selector && !step.form_fields) {
               let element = page.locator(step.selector).first();
-              await element.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-              let visible = await element.isVisible().catch(() => false);
+              let visible = await waitForVisible(element, 5000);
               
-              // Try fallback
+              // Try fallback. This used to be a bare isVisible() with no wait of
+              // its own: an immediate check, taken at the instant the primary
+              // wait expired, which is the earliest moment a slow-rendering
+              // fallback could still be absent. Wait for it too.
               if (!visible && step.fallback_selector) {
                 element = page.locator(step.fallback_selector).first();
-                visible = await element.isVisible().catch(() => false);
+                visible = await waitForVisible(element, 5000);
               }
               
               if (visible) {
