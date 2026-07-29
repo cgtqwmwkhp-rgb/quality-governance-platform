@@ -239,12 +239,14 @@ class TestTheBacklogIsNotOverstated:
     """An earlier report read 23 absent tables off a static pass. It was wrong.
 
     The measured figure is 16, against the metadata the app actually carries.
-    ``pkgutil``-sweeping the models package inflates it by importing
-    ``audit_template.py``, which registers seven more tables on the same ``Base``:
-    no migration creates them, nothing under ``src/`` imports the module, and the
-    database holds equivalents under different names (``audit_templates`` vs
-    ``audit_builder_templates``, ``audit_sections`` vs ``audit_template_sections``).
-    That is a naming divergence behind dead code, not a migration gap.
+    Until C-70 it read 23 if you swept the models package with ``pkgutil``, because
+    that imported ``audit_template.py`` and registered seven more tables on the
+    same ``Base``: no migration created them, nothing under ``src/`` imported the
+    module, and the database held equivalents under different names
+    (``audit_templates`` vs ``audit_builder_templates``, ``audit_sections`` vs
+    ``audit_template_sections``). That was a naming divergence behind dead code,
+    not a migration gap, and the module has since been deleted — so the two import
+    strategies now agree on 16.
     """
 
     def test_the_measured_count_is_the_declared_count(self, alembic_only_schema: AlembicOnlySchema):
@@ -264,14 +266,20 @@ class TestTheBacklogIsNotOverstated:
         )
 
     def test_audit_template_models_are_not_counted_as_a_migration_gap(self):
-        """They are unreachable, not un-migrated.
+        """They were unreachable, not un-migrated, and are now absent entirely.
 
-        Settled by measurement: nothing under ``src/`` imports
-        ``src.domain.models.audit_template``, so its seven classes are never
-        registered on ``Base.metadata`` by the import path Alembic or the app uses,
-        and ``create_all`` does not create them either. They are dead code with a
-        naming divergence behind them, and adding create migrations for them would
-        build seven empty tables beside the populated ones.
+        Settled by measurement before the model was deleted for C-70: nothing under
+        ``src/`` imported ``src.domain.models.audit_template``, so its seven
+        classes were never registered on ``Base.metadata`` by the import path
+        Alembic or the app uses, and ``create_all`` did not create them either. No
+        migration creates any of the seven, and a database built by ``alembic
+        upgrade head`` does not carry them
+        (``docs/evidence/run026-local-alembic-head-absent-tables-20260728.json``).
+
+        The assertion is kept as-is now the module is gone. It is cheap, and the
+        thing it forbids — these seven names arriving in the metadata without
+        migrations — is exactly what would happen if the deleted model were
+        restored or rewritten, which is the mistake this entry exists to catch.
         """
         metadata = _metadata()
         builder_tables = {

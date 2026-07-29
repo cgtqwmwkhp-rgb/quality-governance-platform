@@ -40,8 +40,12 @@ from scripts.ops.run021._common import (
 
 
 async def _collect(*, tenant_id: Optional[int], limit: int) -> list[dict[str, Any]]:
-    # Avoid ORM AuditTemplate: audit.py and audit_template.py both register
-    # class name "AuditTemplate" on the same Base → mapper path collision.
+    # Templates are read as raw SQL below, not through the ORM. The original
+    # reason was a mapper-path collision on the class name "AuditTemplate"
+    # (audit.py and audit_template.py both declared one); that module is deleted
+    # (C-70). The reason that remains: this scan covers `audit_builder_templates`
+    # as well as `audit_templates`, and no model declares the former, so there is
+    # nothing to load it with.
     from src.domain.models.complaint import Complaint
     from src.domain.models.document_campaign import DocumentCampaign, EngineerGroup, EngineerGroupMember
     from src.domain.models.engineer import Engineer
