@@ -1156,7 +1156,7 @@ async def execute_disposal_queue(
 @router.get("/", response_model=DocumentListResponse)
 async def list_documents(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
@@ -1168,7 +1168,12 @@ async def list_documents(
     status: Optional[str] = None,
     is_indexed: Optional[bool] = None,
 ):
-    """List documents with filtering and pagination."""
+    """List documents with filtering and pagination.
+
+    Requires ``document:read``, the staff-level token of the library permission
+    model in :mod:`src.domain.services.document_library_rbac`. Per-document ACL
+    narrowing still applies below on top of it.
+    """
 
     query = select(Document).where(Document.is_active == True)
     query = _scope_stmt_to_current_tenant(query, Document.tenant_id, current_user)

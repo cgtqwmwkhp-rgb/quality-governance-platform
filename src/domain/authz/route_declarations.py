@@ -206,9 +206,10 @@ PUBLIC_BY_DESIGN: Mapping[EndpointKey, str] = MappingProxyType(
 #: Endpoints that authenticate and then authorise nothing.
 #:
 #: Grouped by the module that serves them, sorted, and exact. This is the C-2
-#: measurement: 474 endpoints on which any authenticated user may perform the
-#: operation. Reducing it is the follow-up work; the ceiling below is what stops
-#: it growing while that happens.
+#: measurement: 471 endpoints on which any authenticated user may perform the
+#: operation, down from the 474 first measured — the RTA and document register
+#: lists now check a permission. Reducing it further is the follow-up work; the
+#: ceiling below is what stops it growing while that happens.
 AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
     {
         # src.api.routes.actions
@@ -396,8 +397,6 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/document-control/{document_id}/golden-thread"),
         ("GET", "/api/v1/document-control/{document_id}/versions/{version_id}/diff"),
         # src.api.routes.documents
-        ("GET", "/api/v1/documents"),
-        ("GET", "/api/v1/documents/"),
         ("GET", "/api/v1/documents/index-jobs/{job_id}"),
         ("GET", "/api/v1/documents/search/semantic"),
         ("GET", "/api/v1/documents/stats/overview"),
@@ -628,7 +627,6 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/risks/{risk_id}/controls"),
         ("POST", "/api/v1/risks/{risk_id}/controls"),
         # src.api.routes.rtas
-        ("GET", "/api/v1/rtas/"),
         ("GET", "/api/v1/rtas/{rta_id}"),
         ("GET", "/api/v1/rtas/{rta_id}/actions"),
         ("GET", "/api/v1/rtas/{rta_id}/investigations"),
@@ -770,7 +768,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: "add my new route to the list". Lowering one is ordinary progress; raising one
 #: is a deliberate decision that a reviewer sees as a changed number in a file
 #: about unprotected endpoints.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 474
+MAX_AUTHENTICATED_ONLY_DEBT: int = 471
 MAX_PUBLIC_BY_DESIGN: int = 50
 
 #: Endpoints gated on ``CurrentSuperuser`` rather than on a named permission,
