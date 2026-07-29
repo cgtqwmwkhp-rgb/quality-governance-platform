@@ -200,7 +200,41 @@ describe('IncidentDetail', () => {
     expect(screen.getAllByText('INV-21').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Jane Witness').length).toBeGreaterThan(0)
     expect(screen.getAllByText('ambulance').length).toBeGreaterThan(0)
+    expect(screen.getByText('Injury reported')).toBeInTheDocument()
   })
+
+  it.each([
+    { has_injuries: 'no' as const, expected: 'No injury flagged' },
+    { has_injuries: 'yes' as const, expected: 'Injury reported' },
+    { has_injuries: true as const, expected: 'Injury reported' },
+  ])(
+    'Quick Info Impact treats has_injuries=$has_injuries as "$expected"',
+    async ({ has_injuries, expected }) => {
+      client.incidentsApi.get.mockResolvedValue({
+        data: {
+          ...incidentRecord,
+          is_injury: false,
+          reporter_submission: {
+            ...(incidentRecord.reporter_submission as object),
+            has_injuries,
+          },
+        },
+      })
+
+      renderPage()
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+      })
+
+      expect(screen.getByText(expected)).toBeInTheDocument()
+      if (expected === 'No injury flagged') {
+        expect(screen.queryByText('Injury reported')).not.toBeInTheDocument()
+      } else {
+        expect(screen.queryByText('No injury flagged')).not.toBeInTheDocument()
+      }
+    },
+  )
 
   it('opens the linked investigation and filtered CAPA workspace', async () => {
     renderPage()
