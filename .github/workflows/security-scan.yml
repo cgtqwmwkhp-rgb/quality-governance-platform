@@ -87,10 +87,37 @@ jobs:
           path: bandit-report.json
         if: always()
 
+  # C-58: this job declared no database, so tests/security ran against no DSN at
+  # all. The suite authenticates by performing a real POST /api/v1/auth/login
+  # through TestClient; with nothing to log in to, ten tests called
+  # pytest.skip("Auth required") and the job reported success on
+  # "45 passed, 12 skipped, Failed: 0". The OWASP suite had never exercised its
+  # subject. Shape copied from the integration-tests job in ci.yml.
+  #
+  # The database is a throwaway of this job's own, and its name says so:
+  # tests/security/conftest.py refuses to run unless the DSN it resolves is both
+  # local and named as a test database, because this suite deliberately sends SQL
+  # injection, command injection, mass-assignment and path-traversal payloads at
+  # whatever database it is given.
   security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
-    
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: quality_governance_security_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -108,9 +135,35 @@ jobs:
           pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
+      - name: Run Alembic migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_security_test
+        run: |
+          alembic upgrade head
+          echo "[OK] Migrations applied to the disposable security-test database"
+
+      # SECURITY_TEST_DATABASE_URL, not DATABASE_URL: the suite's conftest reads
+      # only this variable and then overwrites DATABASE_URL with it, so an
+      # ambient DSN can never be inherited by tests that attempt injection.
       - name: Run Security Tests
+        env:
+          SECURITY_TEST_DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_security_test
         run: |
           pytest tests/security/ -v --tb=short --junit-xml=security-tests.xml
+
+      # The ratchet C-58 asks for: a skipped security test no longer counts as a
+      # pass. All ten of the previously-skipping OWASP tests pass against a
+      # seeded disposable database, so there is no longer a legitimate reason for
+      # them to skip.
+      #
+      # One documented exception: test_rate_limiting_on_login sends 15 failed
+      # logins, the login limiter answers 429, and that suite's own helper treats
+      # 429 as "auth backend unavailable" and skips — the skip is the rate
+      # limiter working. That is the only skip reason accepted here, and it is
+      # still printed.
+      - name: Refuse a skipped security test
+        if: always()
+        run: python3 scripts/governance/assert_security_tests_executed.py security-tests.xml
 
       - name: Upload Security Test Results
         uses: actions/upload-artifact@v7
