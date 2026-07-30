@@ -15,11 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from validate_write_schema_extra_forbid_ratchet import (  # noqa: E402
-    build_baseline,
-    check_ratchet,
-    main,
-)
+from validate_write_schema_extra_forbid_ratchet import build_baseline, check_ratchet, main  # noqa: E402
 
 
 def inventory(
