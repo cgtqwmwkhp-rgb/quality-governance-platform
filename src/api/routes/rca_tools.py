@@ -23,6 +23,14 @@ router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
 
 
 class CreateFiveWhysRequest(BaseModel):
+    """Create a 5-Whys analysis.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the analysis being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     problem_statement: str
     entity_type: Optional[str] = None
     entity_id: Optional[int] = None
@@ -53,6 +61,14 @@ class CompleteAnalysisRequest(BaseModel):
 
 
 class CreateFishboneRequest(BaseModel):
+    """Create a Fishbone diagram.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the diagram being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     effect_statement: str
     entity_type: Optional[str] = None
     entity_id: Optional[int] = None
