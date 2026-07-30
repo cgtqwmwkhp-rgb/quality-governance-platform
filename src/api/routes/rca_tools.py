@@ -57,6 +57,14 @@ class SetRootCauseRequest(BaseModel):
 
 
 class CompleteAnalysisRequest(BaseModel):
+    """Mark an RCA analysis/diagram complete.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of completion succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     proposed_actions: Optional[List[Dict[str, Any]]] = None
 
 
@@ -99,6 +107,14 @@ class SetFishboneRootCauseRequest(BaseModel):
 
 
 class CreateCAPARequest(BaseModel):
+    """Create a CAPA item from RCA tools.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the CAPA being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     action_type: str = Field(..., description="corrective or preventive")
     title: str
     description: str
