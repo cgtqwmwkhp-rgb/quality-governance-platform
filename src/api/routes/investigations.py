@@ -64,6 +64,36 @@ class ClosureReasonCode:
     MISSING_CONCLUSION = "MISSING_CONCLUSION"
 
 
+async def _validate_investigation_user_ref(
+    db: AsyncSession,
+    user_id: int,
+    tenant_id: int | None,
+    *,
+    field_name: str,
+) -> User:
+    """Ensure an investigation assignee/reviewer id is an active user in-tenant (PX-168b).
+
+    PATCH previously ``setattr`` the id with no existence or tenancy check — the same
+    hole actions closed for ``owner_id``. Clearing the field (``None``) is allowed by
+    the caller and never reaches this helper.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise BadRequestError(
+            f"No active user found with id {user_id}",
+            code="INVESTIGATION_USER_NOT_FOUND",
+            details={"field": field_name, "user_id": user_id},
+        )
+    if tenant_id is not None and user.tenant_id != tenant_id:
+        raise BadRequestError(
+            f"User {user_id} is not in this tenant",
+            code="INVESTIGATION_USER_WRONG_TENANT",
+            details={"field": field_name, "user_id": user_id, "tenant_id": tenant_id},
+        )
+    return user
+
+
 def _missing_items_to_payload(validation: Any) -> list[dict]:
     """Serialize named closure blockers, tolerating older result shapes."""
     payload: list[dict] = []
@@ -1155,9 +1185,24 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
     # Get existing investigation. The tenant gate runs before anything is read
     # off the record or written to it, so a refused edit leaves it untouched.
     investigation = await _load_investigation_or_404(investigation_id, db)
-    _assert_investigation_tenant(investigation, current_user)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
 
     update_data = investigation_data.model_dump(exclude_unset=True)
+
+    # PX-168b: refuse lead/reviewer ids that do not resolve to an active tenant user.
+    for field_name in ("assigned_to_user_id", "reviewer_user_id"):
+        if field_name not in update_data:
+            continue
+        candidate = update_data[field_name]
+        if candidate is None:
+            continue
+        await _validate_investigation_user_ref(
+            db,
+            int(candidate),
+            tenant_id,
+            field_name=field_name,
+        )
+
     override_meta: dict | None = None
     new_status = update_data.get("status")
     if new_status in {"completed", "closed"}:
@@ -1268,7 +1313,6 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
     await db.commit()
     await db.refresh(investigation)
 
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     return await _investigation_to_response(db, investigation, tenant_id=tenant_id)
 
 
@@ -1840,14 +1884,14 @@ async def approve_investigation(
     """Approve or reject an investigation.
 
     Moves investigation to COMPLETED (approved) or back to IN_PROGRESS (rejected).
+    Approval uses the same completion readiness gate as PATCH status=completed
+    (PX-133): lead + start (and remaining checklist) must already be satisfied.
     """
     from src.domain.services.investigation_service import InvestigationService
 
-    request_id = "N/A"
-
     # Get investigation
     investigation = await _load_investigation_or_404(investigation_id, db)
-    _assert_investigation_tenant(investigation, current_user)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
 
     # Check status allows approval
     if investigation.status not in (
@@ -1855,6 +1899,16 @@ async def approve_investigation(
         InvestigationStatus.IN_PROGRESS,
     ):
         raise BadRequestError(f"Cannot approve investigation in status {investigation.status.value}")
+
+    if approved:
+        # Same gate as PATCH → completed so approve cannot bypass lead/start checks.
+        await _ensure_investigation_ready_for_status(
+            db,
+            investigation=investigation,
+            investigation_id=investigation_id,
+            current_user=current_user,
+            gate="complete",
+        )
 
     old_status = investigation.status
 
@@ -1881,7 +1935,7 @@ async def approve_investigation(
         investigation.status.value if hasattr(investigation.status, "value") else str(investigation.status)
     )
 
-    # Create revision event
+    # Create revision event (PX-141 — approval/rejection timeline coverage)
     await InvestigationService.create_revision_event(
         db=db,
         investigation=investigation,
@@ -1895,7 +1949,7 @@ async def approve_investigation(
     await db.commit()
     await db.refresh(investigation)
 
-    return investigation
+    return await _investigation_to_response(db, investigation, tenant_id=tenant_id)
 
 
 @router.post(
