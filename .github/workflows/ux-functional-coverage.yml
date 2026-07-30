@@ -388,10 +388,66 @@ jobs:
           path: tests/ux-coverage/results/workflow_audit.json
           retention-days: 30
 
+  # Accessibility Audit (axe-core) — C-50: was a standalone Playwright suite that
+  # never ran in this gate and was never required by the aggregator.
+  a11y-audit:
+    runs-on: ubuntu-latest
+    needs: [check-trigger, resolve-frontend, acquire-tokens]
+    if: needs.check-trigger.outputs.should_run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tests/ux-coverage/package.json
+
+      - name: Install dependencies
+        working-directory: tests/ux-coverage
+        run: |
+          npm install
+          npx playwright install chromium --with-deps
+
+      - name: Download auth tokens
+        if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: auth-tokens
+          path: .
+        continue-on-error: true
+
+      - name: Load and mask tokens
+        run: |
+          if [ -f "tokens.env" ]; then
+            . "tokens.env"
+            echo "::add-mask::${ADMIN_TEST_TOKEN}"
+            echo "::add-mask::${PORTAL_TEST_TOKEN}"
+            echo "ADMIN_TEST_TOKEN=${ADMIN_TEST_TOKEN}" >> "$GITHUB_ENV"
+            echo "PORTAL_TEST_TOKEN=${PORTAL_TEST_TOKEN}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run Accessibility Audit
+        working-directory: tests/ux-coverage
+        env:
+          FRONTEND_URL: ${{ needs.resolve-frontend.outputs.frontend_url }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
+        run: npx playwright test tests/a11y-audit.spec.ts --reporter=list
+        continue-on-error: true
+
+      - name: Upload Accessibility Audit Results
+        uses: actions/upload-artifact@v7
+        with:
+          name: a11y-audit-results
+          path: tests/ux-coverage/results/a11y_audit.json
+          retention-days: 30
+
   # Aggregate Results and Enforce Gate
   aggregate-and-gate:
     runs-on: ubuntu-latest
-    needs: [check-trigger, resolve-frontend, acquire-tokens, page-audit, link-audit, button-audit, workflow-audit]
+    needs: [check-trigger, resolve-frontend, acquire-tokens, page-audit, link-audit, button-audit, workflow-audit, a11y-audit]
     if: always() && needs.check-trigger.outputs.should_run == 'true'
     steps:
       # Without a verified target the audits never ran, so there is nothing to
@@ -402,7 +458,7 @@ jobs:
           echo "::error title=UX coverage gate::No verified pre-production frontend was resolved, so no audit ran. See the 'resolve-frontend' job for the hostnames tried."
           exit 1
 
-      # C-60: the four audit jobs' results were never inspected. In run
+      # C-60: the audit jobs' results were never inspected. In run
       # 30442947763 the button audit was cancelled mid-Playwright, its upload
       # step was skipped, and this job aggregated the three artifacts that did
       # arrive — reporting "P0 executed: 17/17 (100%)" and a CANARY verdict. The
@@ -419,19 +475,23 @@ jobs:
       # therefore only mean an upstream need failed or was cancelled — no
       # evidence was produced, which is not a pass. The result is named in the
       # message so a skip is never mistaken for a failure or the reverse.
+      #
+      # C-50: a11y-audit is now one of the required audits (five total).
       - name: Require every audit job to have succeeded
         env:
           PAGE_AUDIT_RESULT: ${{ needs.page-audit.result }}
           LINK_AUDIT_RESULT: ${{ needs.link-audit.result }}
           BUTTON_AUDIT_RESULT: ${{ needs.button-audit.result }}
           WORKFLOW_AUDIT_RESULT: ${{ needs.workflow-audit.result }}
+          A11Y_AUDIT_RESULT: ${{ needs.a11y-audit.result }}
         run: |
           not_success=""
           for entry in \
             "page-audit=${PAGE_AUDIT_RESULT}" \
             "link-audit=${LINK_AUDIT_RESULT}" \
             "button-audit=${BUTTON_AUDIT_RESULT}" \
-            "workflow-audit=${WORKFLOW_AUDIT_RESULT}"; do
+            "workflow-audit=${WORKFLOW_AUDIT_RESULT}" \
+            "a11y-audit=${A11Y_AUDIT_RESULT}"; do
             if [ "${entry#*=}" != "success" ]; then
               not_success="${not_success} ${entry}"
             fi
@@ -441,7 +501,7 @@ jobs:
             echo "::error title=UX coverage gate::No verdict is published when an audit did not run:${not_success}. A cancelled or failed audit job uploads no artifact, and the aggregator's expected counts come from the artifacts, so the missing checks would vanish from both the numerator and the denominator."
             exit 1
           fi
-          echo "[OK] All four audit jobs succeeded"
+          echo "[OK] All five audit jobs succeeded"
 
       - name: Checkout code
         uses: actions/checkout@v6
@@ -461,7 +521,7 @@ jobs:
       # not "no failures found" — it removes that audit's entries from the
       # expected counts as well, so the report stayed at 100% coverage of a
       # smaller run. Nothing is substituted now; a missing artifact fails here
-      # and names the file.
+      # and names the file. C-50: a11y_audit.json is required with the same rule.
       - name: Prepare results directory
         run: |
           mkdir -p tests/ux-coverage/results
@@ -470,7 +530,8 @@ jobs:
             page-audit-results/page_audit.json \
             link-audit-results/link_audit.json \
             button-audit-results/button_audit.json \
-            workflow-audit-results/workflow_audit.json; do
+            workflow-audit-results/workflow_audit.json \
+            a11y-audit-results/a11y_audit.json; do
             source_path="audit-results/${artifact}"
             if [ ! -f "${source_path}" ]; then
               missing="${missing} ${source_path}"
@@ -483,7 +544,7 @@ jobs:
             echo "::error title=UX coverage gate::Audit artifact(s) absent:${missing}. No empty result set is substituted for a missing artifact, because that deletes the audit's entries from the coverage denominator as well as the numerator."
             exit 1
           fi
-          echo "[OK] All four audit artifacts present"
+          echo "[OK] All five audit artifacts present"
 
       - name: Run Aggregation
         id: aggregate

@@ -8,6 +8,7 @@
  * - link_audit.json
  * - button_audit.json
  * - workflow_audit.json
+ * - a11y_audit.json
  *
  * Outputs:
  * - ux_coverage.json (machine-readable)
@@ -175,7 +176,7 @@ function summariseCriticality(tally) {
  * coverage document plus the hold reasons that decided the verdict. No IO, so
  * it can be unit tested directly.
  */
-function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = {}) {
+function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit, a11yAudit } = {}) {
   let p0Fails = 0;
   let p1Fails = 0;
   let p2Fails = 0;
@@ -305,6 +306,21 @@ function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = 
     }
   }
 
+  // Process a11y audit (C-50)
+  if (a11yAudit) {
+    entriesOf(a11yAudit).forEach(r => {
+      record(r, 'a11y', entry => ({
+        id: entry.pageId,
+        route: entry.route,
+        error: entry.error_message || (
+          entry.result === 'FAIL'
+            ? `${entry.violations_critical || 0} critical, ${entry.violations_serious || 0} serious`
+            : undefined
+        ),
+      }));
+    });
+  }
+
   // Calculate score
   let score = SCORE_START;
   score -= p1Fails * P1_PENALTY;
@@ -327,6 +343,7 @@ function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = 
     completenessShortfall(linkAudit, 'link'),
     completenessShortfall(buttonAudit, 'button'),
     completenessShortfall(workflowAudit, 'workflow'),
+    completenessShortfall(a11yAudit, 'a11y'),
   ].filter(Boolean);
   holdReasons.push(...shortfalls);
 
@@ -425,6 +442,11 @@ function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = 
         skipped: workflowAudit.skipped,
         dead_ends: workflowAudit.dead_ends?.length || 0,
       } : null,
+      a11y: a11yAudit ? {
+        passed: a11yAudit.passed,
+        failed: a11yAudit.failed,
+        skipped: a11yAudit.skipped,
+      } : null,
     },
     failures: failureDetails,
     not_executed: notExecuted,
@@ -443,6 +465,7 @@ function aggregate() {
     linkAudit: loadJson('link_audit.json'),
     buttonAudit: loadJson('button_audit.json'),
     workflowAudit: loadJson('workflow_audit.json'),
+    a11yAudit: loadJson('a11y_audit.json'),
   });
 
   const p0 = coverage.p0_coverage;
@@ -628,6 +651,16 @@ function generateMarkdown(coverage) {
     lines.push(`- Failed: ${coverage.audits.workflow.failed}`);
     lines.push(`- Skipped: ${coverage.audits.workflow.skipped}`);
     lines.push(`- Dead Ends: ${coverage.audits.workflow.dead_ends}`);
+    lines.push('');
+  }
+
+  // A11y audit
+  if (coverage.audits.a11y) {
+    lines.push('### Accessibility Audit (axe-core)');
+    lines.push('');
+    lines.push(`- Passed: ${coverage.audits.a11y.passed}`);
+    lines.push(`- Failed: ${coverage.audits.a11y.failed}`);
+    lines.push(`- Skipped: ${coverage.audits.a11y.skipped}`);
     lines.push('');
   }
 

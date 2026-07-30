@@ -1,16 +1,21 @@
 /**
  * Accessibility Audit for UX Functional Coverage Gate
  *
- * Runs axe-core on P0 pages from PAGE_REGISTRY.yml.
+ * Runs axe-core on P0/P1 pages from PAGE_REGISTRY.yml.
  * Fails on critical or serious violations.
- * Results written to a11y-audit-results.json for aggregation.
+ * Results written to results/a11y_audit.json for aggregation (C-50).
+ *
+ * Parallel workers write per-page entry files; afterAll merges them. Serial
+ * mode was dropped (C-51 residual): a mid-suite failure used to skip the rest
+ * and shrink the artifact denominator.
  */
 
-import { test, Page } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { a11yAuditStore, inDeclarationOrder } from '../utils/audit-entries';
 
 interface PageEntry {
   pageId: string;
@@ -33,10 +38,7 @@ interface A11yResult {
   error_message?: string;
 }
 
-const APP_URL = process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:3000';
-const results: A11yResult[] = [];
-
-function loadP0Pages(): PageEntry[] {
+function loadPages(): PageEntry[] {
   const registryPath = path.join(__dirname, '../../../docs/ops/PAGE_REGISTRY.yml');
   const content = fs.readFileSync(registryPath, 'utf-8');
   const registry = yaml.load(content) as any;
@@ -54,51 +56,78 @@ function loadP0Pages(): PageEntry[] {
   );
 }
 
-async function setupAuth(page: Page, authType: string): Promise<void> {
-  if (authType === 'anon' || authType === 'none') return;
+function recordResult(result: A11yResult): void {
+  a11yAuditStore.write(result.pageId, result);
+}
+
+async function setupAuth(page: Page, authType: string): Promise<boolean> {
+  if (authType === 'anon' || authType === 'none') return true;
+
+  const token =
+    authType === 'portal_sso'
+      ? process.env.PORTAL_TEST_TOKEN
+      : authType === 'jwt_admin'
+        ? process.env.ADMIN_TEST_TOKEN
+        : undefined;
+
+  if (!token) return false;
 
   if (authType === 'portal_sso') {
-    const token = process.env.PORTAL_TEST_TOKEN;
-    if (token) {
-      await page.addInitScript((t: string) => {
-        sessionStorage.setItem('platform_access_token', t);
-        localStorage.setItem('portal_user', JSON.stringify({
-          id: 'test-user-001', email: 'test@example.com',
-          name: 'Test User', firstName: 'Test', lastName: 'User',
-          isDemoUser: false,
-        }));
-        localStorage.setItem('portal_session_time', Date.now().toString());
-      }, token);
-    }
-    return;
-  }
-
-  if (authType === 'jwt_admin') {
-    const token = process.env.ADMIN_TEST_TOKEN ||
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJhZG1pbkB0ZXN0LmNvbSIsInJvbGUiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OX0.test';
+    await page.addInitScript((t: string) => {
+      sessionStorage.setItem('platform_access_token', t);
+      localStorage.setItem('portal_user', JSON.stringify({
+        id: 'test-user-001', email: 'test@example.com',
+        name: 'Test User', firstName: 'Test', lastName: 'User',
+        isDemoUser: false,
+      }));
+      localStorage.setItem('portal_session_time', Date.now().toString());
+    }, token);
+  } else {
     await page.addInitScript((t: string) => {
       sessionStorage.setItem('platform_access_token', t);
     }, token);
-    return;
   }
+
+  return true;
 }
 
-test.describe.configure({ mode: 'serial' });
+const pages = loadPages();
 
 test.describe('Accessibility Audit (axe-core)', () => {
-  const pages = loadP0Pages();
+  // Parallel by default (C-51): serial aborted the rest of the suite on the
+  // first failure and left those pages out of the artifact entirely.
+  test.describe.configure({ mode: 'parallel' });
 
   for (const entry of pages) {
     test(`a11y: ${entry.pageId} (${entry.route})`, async ({ page }) => {
+      const result: A11yResult = {
+        pageId: entry.pageId,
+        route: entry.route,
+        criticality: entry.criticality,
+        result: 'SKIP',
+        violations_critical: 0,
+        violations_serious: 0,
+        violations_moderate: 0,
+        violations_minor: 0,
+      };
+
       try {
-        await setupAuth(page, entry.auth);
+        const authReady = await setupAuth(page, entry.auth);
+        if (!authReady && entry.auth !== 'anon' && entry.auth !== 'none') {
+          result.error_message = `Auth type ${entry.auth} not configured`;
+          recordResult(result);
+          test.skip(true, result.error_message);
+          return;
+        }
 
-        const url = entry.route.startsWith('http')
-          ? entry.route
-          : `${APP_URL}${entry.route}`;
+        await page.goto(entry.route, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        await page.waitForTimeout(2000);
+        // Wait for route content, not merely the empty #root shell (same marker
+        // as the link audit — C-56).
+        await page.locator('[data-ux-route-content]').first().waitFor({
+          state: 'attached',
+          timeout: 15000,
+        });
 
         const axeResults = await new AxeBuilder({ page })
           .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -109,37 +138,39 @@ test.describe('Accessibility Audit (axe-core)', () => {
         const moderate = axeResults.violations.filter((v) => v.impact === 'moderate').length;
         const minor = axeResults.violations.filter((v) => v.impact === 'minor').length;
 
-        const hasCriticalFailures = critical > 0 || serious > 0;
-
-        results.push({
-          pageId: entry.pageId,
-          route: entry.route,
-          criticality: entry.criticality,
-          result: hasCriticalFailures ? 'FAIL' : 'PASS',
-          violations_critical: critical,
-          violations_serious: serious,
-          violations_moderate: moderate,
-          violations_minor: minor,
-        });
+        result.violations_critical = critical;
+        result.violations_serious = serious;
+        result.violations_moderate = moderate;
+        result.violations_minor = minor;
+        result.result = critical > 0 || serious > 0 ? 'FAIL' : 'PASS';
       } catch (err: any) {
-        results.push({
-          pageId: entry.pageId,
-          route: entry.route,
-          criticality: entry.criticality,
-          result: 'SKIP',
-          violations_critical: 0,
-          violations_serious: 0,
-          violations_moderate: 0,
-          violations_minor: 0,
-          error_message: err.message?.substring(0, 200),
-        });
+        result.result = 'SKIP';
+        result.error_message = err.message?.substring(0, 200);
       }
+
+      recordResult(result);
+      expect(result.result).toBe('PASS');
     });
   }
+});
 
-  test.afterAll(() => {
-    const outputPath = path.join(__dirname, '../a11y-audit-results.json');
-    fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
-    console.log(`[A11y Audit] Wrote ${results.length} results to ${outputPath}`);
-  });
+test.afterAll(async () => {
+  fs.mkdirSync(path.dirname(a11yAuditStore.outputPath), { recursive: true });
+
+  const results = inDeclarationOrder(
+    a11yAuditStore.readAll<A11yResult>(),
+    pages.map((p) => p.pageId),
+    (r) => r.pageId,
+  );
+
+  fs.writeFileSync(a11yAuditStore.outputPath, JSON.stringify({
+    audit_type: 'a11y',
+    timestamp: new Date().toISOString(),
+    expected_entries: pages.length,
+    total_pages: results.length,
+    passed: results.filter((r) => r.result === 'PASS').length,
+    failed: results.filter((r) => r.result === 'FAIL').length,
+    skipped: results.filter((r) => r.result === 'SKIP').length,
+    results,
+  }, null, 2));
 });
