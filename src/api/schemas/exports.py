@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 ExportModuleId = Literal[
     "incidents",
@@ -51,7 +51,13 @@ class ExportCatalogResponse(BaseModel):
 
 
 class CreateExportRequest(BaseModel):
-    """POST /exports body — sync stream only this wave (no async job create)."""
+    """POST /exports body — sync stream only this wave (no async job create).
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the export proceeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     module: ExportModuleId
     format: ExportFormat = "csv"

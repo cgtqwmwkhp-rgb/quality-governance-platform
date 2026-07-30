@@ -32,7 +32,8 @@ from __future__ import annotations
 # ``ActionUpdate`` already declare ``extra="forbid"``; they remain listed only
 # until a dedicated backlog cleanup removes already-strict schemas. This PR
 # converts ``ActionOwnerNoteCreate``, ``AddWhyRequest``, ``AcknowledgementCreate``,
-# ``AcknowledgementAction``, ``AddCertificationRequest``, and ``AddTrainingRequest``
+# ``AcknowledgementAction``, ``AddCertificationRequest``, ``AddTrainingRequest``,
+# ``CreateExportRequest``, and ``CreateFindingCapaRequest``
 # and removes those from the set so Guard 2 / round-trip start enforcing them.
 KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
     {
@@ -114,8 +115,6 @@ KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
         "CostRecord",
         "CreateCAPARequest",
         "CreateCapaRequest",
-        "CreateExportRequest",
-        "CreateFindingCapaRequest",
         "CreateFishboneRequest",
         "CreateFiveWhysRequest",
         "CreateFromRecordRequest",
