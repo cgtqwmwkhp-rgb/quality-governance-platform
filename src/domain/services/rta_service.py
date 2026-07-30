@@ -302,10 +302,13 @@ class RTAService:
             tenant_id=rta.tenant_id,
         )
 
+        # Capture the owner before delete/commit can expire ORM attributes. A
+        # superuser may be deleting a record owned by a different tenant.
+        cache_tenant_id = rta.tenant_id if rta.tenant_id is not None else tenant_id
         await self.db.delete(rta)
         await self.db.commit()
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "rtas")
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "rtas")
         track_metric("rta.mutation", 1)
 
     # ---- Email access check ----

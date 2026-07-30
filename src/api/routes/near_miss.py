@@ -323,24 +323,20 @@ async def delete_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
-    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
-
-    await record_audit_event(
-        db=db,
-        event_type="near_miss.deleted",
-        entity_type="near_miss",
-        entity_id=str(near_miss.id),
-        entity_name=near_miss.reference_number,
-        action="delete",
-        description=f"Near Miss {near_miss.reference_number} deleted",
-        payload={"reference_number": near_miss.reference_number},
-        user_id=current_user.id,
-        request_id=request_id,
-        tenant_id=near_miss.tenant_id,
-    )
-
-    await db.delete(near_miss)
-    await db.commit()
+    service = NearMissService(db)
+    try:
+        await service.delete_near_miss(
+            near_miss_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Near Miss with ID {near_miss_id} not found"),
+        )
 
 
 @router.get("/{near_miss_id}/closure-validation", response_model=CaseClosureValidationResponse)

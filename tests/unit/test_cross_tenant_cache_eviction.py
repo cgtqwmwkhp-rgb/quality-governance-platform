@@ -13,10 +13,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.api.routes.near_miss import delete_near_miss as delete_near_miss_route
+from src.api.routes.rtas import delete_rta as delete_rta_route
 from src.api.schemas.complaint import ComplaintUpdate
 from src.api.schemas.incident import IncidentUpdate
 from src.domain.services.complaint_service import ComplaintService
 from src.domain.services.incident_service import IncidentService
+from src.domain.services.near_miss_service import NearMissService
+from src.domain.services.rta_service import RTAService
 
 
 def _incident(**overrides):
@@ -56,6 +60,26 @@ def _complaint(**overrides):
         "response_sla_hours": None,
         "response_due_at": None,
         "first_response_at": None,
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def _near_miss(**overrides):
+    defaults = {
+        "id": 1,
+        "tenant_id": 7,
+        "reference_number": "NM-2026-0001",
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def _rta(**overrides):
+    defaults = {
+        "id": 1,
+        "tenant_id": 7,
+        "reference_number": "RTA-2026-0001",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -114,6 +138,100 @@ async def test_incident_delete_evicts_and_audits_the_records_tenant():
 
     assert evict.await_args.args[0] == 7
     assert audit.await_args.kwargs["tenant_id"] == 7
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("caller_tenant_id", [1, None])
+async def test_near_miss_delete_evicts_and_audits_the_records_tenant(caller_tenant_id):
+    near_miss = _near_miss(tenant_id=7)
+    db = _db()
+    svc = NearMissService(db)
+    svc.get_near_miss = AsyncMock(return_value=near_miss)
+
+    with (
+        patch("src.domain.services.near_miss_service.record_audit_event", AsyncMock()) as audit,
+        patch("src.domain.services.near_miss_service.invalidate_tenant_cache", AsyncMock()) as evict,
+    ):
+        await svc.delete_near_miss(
+            1,
+            user_id=42,
+            tenant_id=caller_tenant_id,
+            skip_tenant_check=True,
+            request_id="req-b6-nm-del",
+        )
+
+    db.delete.assert_awaited_once_with(near_miss)
+    db.commit.assert_awaited_once()
+    evict.assert_awaited_once_with(7, "near_miss")
+    assert audit.await_args.kwargs["tenant_id"] == 7
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("caller_tenant_id", [1, None])
+async def test_rta_delete_evicts_and_audits_the_records_tenant(caller_tenant_id):
+    rta = _rta(tenant_id=7)
+    db = _db()
+    svc = RTAService(db)
+    svc.get_rta = AsyncMock(return_value=rta)
+
+    with (
+        patch("src.domain.services.rta_service.record_audit_event", AsyncMock()) as audit,
+        patch("src.domain.services.rta_service.invalidate_tenant_cache", AsyncMock()) as evict,
+    ):
+        await svc.delete_rta(
+            1,
+            user_id=42,
+            tenant_id=caller_tenant_id,
+            skip_tenant_check=True,
+            request_id="req-b6-rta-del",
+        )
+
+    db.delete.assert_awaited_once_with(rta)
+    db.commit.assert_awaited_once()
+    evict.assert_awaited_once_with(7, "rtas")
+    assert audit.await_args.kwargs["tenant_id"] == 7
+
+
+@pytest.mark.asyncio
+async def test_near_miss_delete_route_delegates_to_tenant_aware_service():
+    db = _db()
+    user = SimpleNamespace(id=42, tenant_id=1, is_superuser=True)
+
+    with patch("src.api.routes.near_miss.NearMissService") as service_class:
+        delete = AsyncMock()
+        service_class.return_value.delete_near_miss = delete
+
+        await delete_near_miss_route(7, db, user, "req-route-nm-del")
+
+    service_class.assert_called_once_with(db)
+    delete.assert_awaited_once_with(
+        7,
+        user_id=42,
+        tenant_id=1,
+        request_id="req-route-nm-del",
+        skip_tenant_check=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_rta_delete_route_delegates_to_tenant_aware_service():
+    db = _db()
+    user = SimpleNamespace(id=42, tenant_id=1, is_superuser=True)
+
+    with patch("src.api.routes.rtas.RTAService") as service_class:
+        delete = AsyncMock()
+        service_class.return_value.delete_rta = delete
+
+        await delete_rta_route(7, db, user, "req-route-rta-del")
+
+    service_class.assert_called_once_with(db)
+    delete.assert_awaited_once_with(
+        7,
+        user_id=42,
+        tenant_id=1,
+        request_id="req-route-rta-del",
+        skip_tenant_check=True,
+    )
 
 
 @pytest.mark.asyncio

@@ -340,23 +340,20 @@ async def delete_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
-    rta = await _get_rta_or_404(db, rta_id, current_user)
-
-    await record_audit_event(
-        db=db,
-        event_type="rta.deleted",
-        entity_type="rta",
-        entity_id=str(rta.id),
-        entity_name=rta.reference_number,
-        action="delete",
-        description=f"RTA {rta.reference_number} deleted",
-        user_id=current_user.id,
-        request_id=request_id,
-        tenant_id=rta.tenant_id,
-    )
-
-    await db.delete(rta)
-    await db.commit()
+    service = RTAService(db)
+    try:
+        await service.delete_rta(
+            rta_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"RTA with id {rta_id} not found"),
+        )
 
 
 # RTA Actions endpoints
