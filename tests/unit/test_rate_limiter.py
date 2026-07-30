@@ -77,9 +77,7 @@ class TestRateLimitConfig:
 class TestLoadtestRateLimitProfile:
     """C-59: loadtest profile must pay limiter cost (not skip middleware)."""
 
-    def test_loadtest_profile_does_not_bypass_even_with_testing(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_loadtest_profile_does_not_bypass_even_with_testing(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("TESTING", "1")
         monkeypatch.setenv("RATE_LIMIT_PROFILE", "loadtest")
         monkeypatch.delenv("RATE_LIMIT_BYPASS", raising=False)
@@ -94,9 +92,7 @@ class TestLoadtestRateLimitProfile:
 
         assert should_bypass_rate_limiting() is True
 
-    def test_explicit_bypass_flag_skips_even_under_loadtest(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_explicit_bypass_flag_skips_even_under_loadtest(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("RATE_LIMIT_PROFILE", "loadtest")
         monkeypatch.setenv("RATE_LIMIT_BYPASS", "1")
         monkeypatch.delenv("TESTING", raising=False)
@@ -110,9 +106,7 @@ class TestLoadtestRateLimitProfile:
         assert config.requests_per_minute >= 10_000
 
     @pytest.mark.asyncio
-    async def test_loadtest_profile_does_not_skip_middleware_entirely(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    async def test_loadtest_profile_does_not_skip_middleware_entirely(self, monkeypatch: pytest.MonkeyPatch):
         """Even with TESTING=1, loadtest profile must call limiter.is_allowed."""
         monkeypatch.setenv("TESTING", "1")
         monkeypatch.setenv("RATE_LIMIT_PROFILE", "loadtest")
