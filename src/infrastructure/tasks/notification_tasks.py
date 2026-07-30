@@ -58,7 +58,7 @@ def send_push_notification(self, user_id: int, title: str, body: str, data: Opti
     failed = 0
 
     try:
-        from src.api.routes.push_notifications import PushSubscription
+        from src.domain.models.push_notification import PushSubscription
 
         with SessionLocal() as session:
             subs = (

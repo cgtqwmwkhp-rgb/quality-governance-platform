@@ -28,6 +28,7 @@ for _metadata_mod in (
     "src.domain.models.kri",
     "src.domain.models.near_miss",
     "src.domain.models.notification",
+    "src.domain.models.push_notification",
     "src.domain.models.pams_cache",
     "src.domain.models.permissions",
     "src.domain.models.policy_acknowledgment",
