@@ -2144,6 +2144,11 @@ jobs:
       - name: Ratchet write-schema extra=forbid inventory (B-10)
         run: python3 scripts/validate_write_schema_extra_forbid_ratchet.py
 
+      # Board w1-px155 / PX-155: pin audit-trail write coverage (wired vs silent
+      # record_audit_event sites, log_auth callers, product-module coverage).
+      - name: Ratchet audit-trail coverage inventory (w1-px155)
+        run: python3 scripts/validate_audit_trail_coverage_ratchet.py
+
   error-code-coverage:
     name: Error Code Test Coverage Gate (D14)
     runs-on: ubuntu-latest
