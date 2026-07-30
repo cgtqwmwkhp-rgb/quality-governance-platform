@@ -28,14 +28,14 @@ from __future__ import annotations
 #
 # Pydantic defaults to ``extra="ignore"``, so a client that posts a field the
 # model does not declare gets 201 and no indication the value was dropped.
-# PX-168 is the visible symptom of this on ``ActionCreate``. Open PR #1383
-# adds ``extra="forbid"`` there; when it lands, remove ActionCreate from
-# this set.
+# PX-168 is the visible symptom of this on ``ActionCreate``. ``ActionCreate`` /
+# ``ActionUpdate`` already declare ``extra="forbid"``; they remain listed only
+# until a dedicated backlog cleanup removes already-strict schemas. This PR
+# converts ``AcknowledgementCreate`` and ``AcknowledgementAction`` and removes
+# those two from the set so Guard 2 / round-trip start enforcing them.
 KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
     {
         "AccessControlCreate",
-        "AcknowledgementAction",
-        "AcknowledgementCreate",
         "AcknowledgmentRequirementCreate",
         "ActionCreate",
         "ActionImportConfirm",

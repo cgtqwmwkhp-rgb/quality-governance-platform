@@ -10,36 +10,36 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 2 |
-| Open / lax (unknown fields ignored) | 294 |
+| `extra="forbid"` (strict) | 4 |
+| Open / lax (unknown fields ignored) | 292 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 2 |
-| `max_open_count` | 294 |
+| `min_forbid_count` | 4 |
+| `max_open_count` | 292 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Strict schemas (`extra="forbid"`)
 
+- `AcknowledgementAction` — `POST /api/v1/drivers/acknowledgements/{ack_id}/respond`
+- `AcknowledgementCreate` — `POST /api/v1/drivers/{driver_id}/acknowledgements`
 - `ActionCreate` — `POST /api/v1/actions/`
 - `ActionUpdate` — `PATCH /api/v1/actions/{action_id}`
 
 ## Open schemas (unknown fields silently ignored)
 
-294 schemas. Full list is the remediation backlog;
+292 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
 <summary>Open schema names</summary>
 
 - `AccessControlCreate`
-- `AcknowledgementAction`
-- `AcknowledgementCreate`
 - `AcknowledgmentRequirementCreate`
 - `ActionImportConfirm`
 - `ActionOwnerNoteCreate`

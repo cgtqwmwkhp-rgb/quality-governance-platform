@@ -62,11 +62,27 @@ class DriverAcknowledgementResponse(BaseModel):
 
 
 class AcknowledgementCreate(BaseModel):
+    """Create a driver acknowledgement request.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the request being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     entity_type: str = Field(..., description="vehicle_defect | vehicle_assignment")
     entity_id: int
     notes: Optional[str] = None
 
 
 class AcknowledgementAction(BaseModel):
+    """Driver response to an acknowledgement request (acknowledge or refuse).
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the response being recorded while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     action: str = Field(..., description="acknowledge | refuse")
     notes: Optional[str] = None
