@@ -18,6 +18,8 @@ LAYOUT_NAV_ROUTES = (
     "/analytics/safety-insights",
     "/knowledge-exceptions",
     "/document-control",
+    # Linked from HsPerformance + Layout admin nav; last dead end on tip 375f078a.
+    "/admin/hs-reporting-hours",
 )
 
 
