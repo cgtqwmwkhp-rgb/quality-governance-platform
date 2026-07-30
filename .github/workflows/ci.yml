@@ -2137,6 +2137,13 @@ jobs:
       - name: Forbid new owned nullable tenant_id (WCS C-01 Phase 1)
         run: python3 scripts/validate_tenant_id_not_null.py
 
+      # Board B-10 / w4-extra-forbid: pin write-schema extra="forbid" coverage.
+      # Guard 2's KNOWN_LAX allowlist blocks unrecorded new open schemas; this
+      # ratchet additionally fails when the forbid floor falls or the open
+      # ceiling rises above docs/governance/write_schema_extra_forbid_baseline.json.
+      - name: Ratchet write-schema extra=forbid inventory (B-10)
+        run: python3 scripts/validate_write_schema_extra_forbid_ratchet.py
+
   error-code-coverage:
     name: Error Code Test Coverage Gate (D14)
     runs-on: ubuntu-latest
