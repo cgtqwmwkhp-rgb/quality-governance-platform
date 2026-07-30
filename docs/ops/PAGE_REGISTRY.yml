@@ -5,7 +5,7 @@
 # P2 = Nice to have, can degrade gracefully
 
 version: "1.0"
-last_updated: "2026-07-29"
+last_updated: "2026-07-30"
 
 # ==============================================================================
 # PUBLIC ROUTES (No Authentication)
@@ -550,6 +550,85 @@ admin_routes:
     expected_degraded_state: null
     description: "Form configuration list"
 
+  # C-61 (continued): eight staff nav routes declared in frontend/src/App.tsx and linked
+  # from Layout.tsx were absent from this registry, which the link audit uses as its
+  # allowlist. UX gate run 30523733146 reported 17 "Route not in registry" dead ends
+  # (× P1 penalty → score 0 HOLD) despite P0 37/37 and clean a11y after #1443/#1445.
+  # Each route has a page component and nav/tests; registered as P1 rather than P0 to
+  # keep the P0 denominator stable — important staff workflows, not core login/incident
+  # journeys.
+  - pageId: safety-assets
+    route: /safety-assets
+    auth: jwt_admin
+    criticality: P1
+    component: SafetyAssetRegister
+    expected_empty_state: "Asset register board with empty or zero-count hero bands"
+    expected_degraded_state: null
+    description: "Safety asset register and compliance board"
+
+  - pageId: customer-audits
+    route: /customer-audits
+    auth: jwt_admin
+    criticality: P1
+    component: CustomerAudits
+    expected_empty_state: "Customer audit programme list or empty state"
+    expected_degraded_state: null
+    description: "Customer audit programme hub"
+
+  - pageId: my-reading
+    route: /my-reading
+    auth: jwt_admin
+    criticality: P1
+    component: MyReading
+    expected_empty_state: "Reading queue with no assigned documents"
+    expected_degraded_state: null
+    description: "Staff document reading and acknowledgement queue"
+
+  - pageId: my-compliance
+    route: /my-compliance
+    auth: jwt_admin
+    criticality: P1
+    component: MyCompliancePassport
+    expected_empty_state: "Compliance passport sections with no assignments"
+    expected_degraded_state: null
+    description: "Staff compliance passport summary"
+
+  - pageId: analytics-hs-performance
+    route: /analytics/hs-performance
+    auth: jwt_admin
+    criticality: P1
+    component: HsPerformance
+    expected_empty_state: "H&S KPI summary with zero or placeholder metrics"
+    expected_degraded_state: null
+    description: "Health and safety performance KPI dashboard"
+
+  - pageId: analytics-safety-insights
+    route: /analytics/safety-insights
+    auth: jwt_admin
+    criticality: P1
+    component: SafetyInsightsAnalyst
+    expected_empty_state: "Safety insights analyst with no runs yet"
+    expected_degraded_state: "AI features unavailable banner when clustering is disabled"
+    description: "Safety insights analyst workspace"
+
+  - pageId: knowledge-exceptions
+    route: /knowledge-exceptions
+    auth: jwt_admin
+    criticality: P1
+    component: KnowledgeExceptions
+    expected_empty_state: "AI knowledge exceptions inbox with no items"
+    expected_degraded_state: null
+    description: "Knowledge bank exception review inbox"
+
+  - pageId: document-control
+    route: /document-control
+    auth: jwt_admin
+    criticality: P1
+    component: DocumentControl
+    expected_empty_state: "Controlled document library empty state"
+    expected_degraded_state: "Unprovisioned-module disclosure when backend tables are absent"
+    description: "Advanced document control library and workflows"
+
   - pageId: admin-contracts
     route: /admin/contracts
     auth: jwt_admin
@@ -572,7 +651,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 58
+  total_routes: 66
   p0_routes: 12
-  p1_routes: 24
+  p1_routes: 32
   p2_routes: 22
