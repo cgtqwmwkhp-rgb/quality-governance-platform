@@ -256,6 +256,8 @@ export default function AuditTrail() {
             <select
               value={selectedAction}
               onChange={(e) => setSelectedAction(e.target.value)}
+              aria-label="Filter by action"
+              data-testid="audit-trail-filter-action"
               className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[150px]"
             >
               <option value="all">All Actions</option>
@@ -273,6 +275,8 @@ export default function AuditTrail() {
             <select
               value={selectedModule}
               onChange={(e) => setSelectedModule(e.target.value)}
+              aria-label="Filter by module"
+              data-testid="audit-trail-filter-module"
               className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[150px]"
             >
               <option value="all">All Modules</option>
