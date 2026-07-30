@@ -21,6 +21,7 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
 from src.core.config import settings
+from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.auth_service import AuthService
 from src.infrastructure.monitoring.azure_monitor import record_auth_logout, track_metric
 from src.infrastructure.websocket.connection_manager import connection_manager
@@ -28,6 +29,37 @@ from src.infrastructure.websocket.connection_manager import connection_manager
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _record_auth_audit(db: DbSession, user: object, action: str) -> None:
+    """Persist an auth action to the hash-chained Admin Audit Trail.
+
+    ``AuditLoggingMiddleware`` deliberately skips ``/api/v1/auth/login`` so
+    passwords never land in request-body logs. That also meant successful
+    logins wrote nothing to ``audit_log_entries`` — ``log_auth`` existed with
+    zero callers (PX-155 / w1-px155). This helper is the intentional auth
+    trail: action + actor only, no credentials.
+    """
+    tenant_id = getattr(user, "tenant_id", None)
+    user_id = getattr(user, "id", None)
+    if tenant_id is None:
+        logger.warning(
+            "auth_audit_skipped_no_tenant action=%s user_id=%s",
+            action,
+            user_id,
+        )
+        return
+    email = getattr(user, "email", None)
+    full_name = getattr(user, "full_name", None)
+    await AuditLogService(db).log_auth(
+        tenant_id=int(tenant_id),
+        action=action,
+        user_id=int(user_id) if user_id is not None else None,
+        user_email=email,
+        user_name=full_name,
+        entity_name=email or (str(user_id) if user_id is not None else "anonymous"),
+        commit=True,
+    )
 
 
 def _local_password_login_allowed() -> bool:
@@ -105,6 +137,8 @@ async def exchange_azure_token(
     except PermissionError as exc:
         raise _auth_http_error(status.HTTP_403_FORBIDDEN, ErrorCode.ACCOUNT_LOCKED, str(exc)) from exc
 
+    await _record_auth_audit(db, user, "login")
+
     return AzureTokenExchangeResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -138,6 +172,7 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
         track_metric("auth.failures")
         raise _auth_http_error(status.HTTP_401_UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, str(exc)) from exc
 
+    await _record_auth_audit(db, _user, "login")
     track_metric("auth.login")
 
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
@@ -223,6 +258,7 @@ async def logout(
 
     await connection_manager.disconnect_user(current_user.id)
 
+    await _record_auth_audit(db, current_user, "logout")
     record_auth_logout()
     logger.info("User %s (id=%s) logged out", current_user.email, current_user.id)
     return {"message": "Logged out successfully"}
@@ -243,6 +279,7 @@ async def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=api_error(ErrorCode.INVALID_CREDENTIALS, str(exc)),
         ) from exc
+    await _record_auth_audit(db, current_user, "password_change")
     return {"message": "Password changed successfully"}
 
 
