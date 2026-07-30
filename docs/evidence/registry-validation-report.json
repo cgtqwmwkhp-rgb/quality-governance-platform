@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-26",
+  "generated": "2026-07-30",
   "registries_checked": 3,
   "total_violations": 0,
   "max_stale_days": 120,
@@ -13,7 +13,7 @@
     {
       "registry": "PAGE_REGISTRY.yml",
       "path": "docs/ops/PAGE_REGISTRY.yml",
-      "last_updated": "2026-07-09",
+      "last_updated": "2026-07-30",
       "violations": []
     },
     {
