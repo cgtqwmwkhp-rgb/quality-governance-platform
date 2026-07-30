@@ -164,7 +164,12 @@ def test_committed_baseline_shape() -> None:
     assert baseline.is_file()
     assert inventory_md.is_file()
     payload = json.loads(baseline.read_text(encoding="utf-8"))
-    assert payload["min_forbid_count"] == 2
-    assert payload["max_open_count"] == 294
+    assert payload["min_forbid_count"] == 4
+    assert payload["max_open_count"] == 292
     assert payload["total_write_schemas"] == 296
-    assert payload["forbid_schemas"] == ["ActionCreate", "ActionUpdate"]
+    assert payload["forbid_schemas"] == [
+        "ActionCreate",
+        "ActionOwnerNoteCreate",
+        "ActionUpdate",
+        "AddWhyRequest",
+    ]
