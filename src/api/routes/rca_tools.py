@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
@@ -30,6 +30,14 @@ class CreateFiveWhysRequest(BaseModel):
 
 
 class AddWhyRequest(BaseModel):
+    """Append one Why step to a 5-Whys analysis.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the step being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     why_question: str
     answer: str
     evidence: Optional[str] = None

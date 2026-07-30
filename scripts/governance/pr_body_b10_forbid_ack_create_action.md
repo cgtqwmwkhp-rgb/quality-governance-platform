@@ -3,8 +3,8 @@
 ## 1) Summary
 - **Feature / Change name:** Board B-10 (`w4-extra-forbid`) — convert two safe write schemas to `extra="forbid"`
 - **User goal (1–2 lines):** Stop `AcknowledgementCreate` and `AcknowledgementAction` from silently ignoring unknown body fields (PX-168 class), with unit regression locks and a tightened inventory ratchet.
-- **In scope:** `ConfigDict(extra="forbid")` on those two schemas; remove them from `KNOWN_LAX_WRITE_SCHEMAS`; refresh B-10 baseline/inventory (forbid floor 2→4, open ceiling 294→292); unit tests for unknown-field rejection
-- **Out of scope:** Mass conversion of remaining 292 open schemas; conveyor/merge allowlist edits; schemas already targeted by open #1454 (`ActionOwnerNoteCreate`, `AddWhyRequest`); C-8 savepoint expansion; w2-enum-contract (`severity_levels` is not a clean 1:1 enum pairing — known gaps for `negligible` on complaint/near-miss); gate weakening
+- **In scope:** `ConfigDict(extra="forbid")` on those two schemas; remove them from `KNOWN_LAX_WRITE_SCHEMAS`; refresh B-10 baseline/inventory (forbid floor 4→6, open ceiling 292→290; stacked on #1454); unit tests for unknown-field rejection
+- **Out of scope:** Mass conversion of remaining 290 open schemas; conveyor/merge allowlist edits; schemas already targeted by open #1454 (`ActionOwnerNoteCreate`, `AddWhyRequest`); C-8 savepoint expansion; w2-enum-contract (`severity_levels` is not a clean 1:1 enum pairing — known gaps for `negligible` on complaint/near-miss); gate weakening
 - **Feature flag / kill switch:** N/A — request-body validation only
 
 ## 2) Impact Map (what changed)
@@ -28,7 +28,7 @@
 - [x] AC-01: `AcknowledgementCreate` declares `extra="forbid"` and rejects an unknown field in unit tests
 - [x] AC-02: `AcknowledgementAction` declares `extra="forbid"` and rejects an unknown field in unit tests
 - [x] AC-03: Both schemas removed from `KNOWN_LAX_WRITE_SCHEMAS` so Guard 2 / round-trip enforce them
-- [x] AC-04: B-10 ratchet baseline refreshed — **forbid ≥ 4**, **open ≤ 292**, forbid set includes the two new schemas
+- [x] AC-04: B-10 ratchet baseline refreshed — **forbid ≥ 6**, **open ≤ 290**, forbid set includes the two new schemas
 - [x] AC-05: Conveyor/merge allowlist untouched; no gate weakening; no mass conversion; no overlap with #1454 schemas
 
 ## 5) Testing Evidence (link to runs)
@@ -79,10 +79,10 @@
 | Metric | Before | After |
 | --- | ---: | ---: |
 | `extra="forbid"` write schemas | 2 | **4** |
-| Open (non-forbid) write schemas | 294 | **292** |
+| Open (non-forbid) write schemas | 292 | **290** |
 | Converted this PR | — | `AcknowledgementCreate`, `AcknowledgementAction` |
 
 ## Why this residual (selection notes)
-- **#1454 still open** (`ActionOwnerNoteCreate`, `AddWhyRequest`) — this PR deliberately avoids those schemas and avoids `actions.py` / `rca_tools.py` to reduce merge conflict surface. Baseline/inventory will need a rebase bump (4→6 / 292→290) whichever of #1454 or this lands second.
+- **#1454 MERGED** (`ActionOwnerNoteCreate`, `AddWhyRequest`) — this PR rebased onto tip; ratchet floors bumped 4→6 / 292→290.
 - **w2-enum-contract thin expansion:** scaffolding exists for `complaint_types` / `incident_types` only. Next candidate `severity_levels` is **not** a clean 1:1 enum contract (feeds incident severity, complaint priority, and near-miss potential_severity with known `negligible` gaps) — needs a business decision, skipped.
 - **B-10:** inventory ratchet already on main (#1452); these two schemas are tiny (3 + 2 fields), low blast radius, and have no in-repo FE client posting extra keys.

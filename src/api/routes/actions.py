@@ -282,7 +282,14 @@ class ActionsViewCountsResponse(BaseModel):
 
 
 class ActionOwnerNoteCreate(BaseModel):
-    """Request body for appending owner commentary."""
+    """Request body for appending owner commentary.
+
+    ``extra="forbid"`` matches ``ActionCreate`` / ``ActionUpdate``: the frontend
+    only sends ``key`` and ``body``, and an unrecognised field must 422 rather
+    than be discarded while the note still saves (B-10 / PX-168 class).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     key: str = Field(
         ...,

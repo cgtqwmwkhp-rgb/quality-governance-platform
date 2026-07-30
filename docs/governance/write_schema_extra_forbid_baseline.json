@@ -4,10 +4,12 @@
     "AcknowledgementAction",
     "AcknowledgementCreate",
     "ActionCreate",
-    "ActionUpdate"
+    "ActionOwnerNoteCreate",
+    "ActionUpdate",
+    "AddWhyRequest"
   ],
-  "max_open_count": 292,
-  "min_forbid_count": 4,
+  "max_open_count": 290,
+  "min_forbid_count": 6,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
