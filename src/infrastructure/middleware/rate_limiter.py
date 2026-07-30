@@ -220,9 +220,42 @@ ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     "/api/v1/telemetry/": RateLimitConfig(requests_per_minute=300, burst_limit=100),
 }
 
+# Locust / capacity CI: still execute Redis (or in-memory) checks, but use ceilings
+# high enough that the run is not refused by 429s. Not production limits.
+LOADTEST_RATE_LIMIT = RateLimitConfig(
+    requests_per_minute=100_000,
+    requests_per_hour=1_000_000,
+    burst_limit=10_000,
+    authenticated_multiplier=1.0,
+)
+
+
+def is_loadtest_rate_limit_profile() -> bool:
+    """True when RATE_LIMIT_PROFILE=loadtest (raised limits, middleware still runs)."""
+    return os.environ.get("RATE_LIMIT_PROFILE", "").strip().lower() == "loadtest"
+
+
+def should_bypass_rate_limiting() -> bool:
+    """
+    Whether rate-limit middleware should skip entirely (no Redis/in-memory cost).
+
+    Prefer RATE_LIMIT_BYPASS=1 for an explicit skip (pytest helpers that do not
+    want to exercise the limiter). TESTING=1 remains a legacy skip for
+    integration harnesses, but RATE_LIMIT_PROFILE=loadtest overrides that so
+    Locust soft-gate still pays limiter cost while TESTING=1 keeps other
+    test-mode behaviour (e.g. skip PAMS init).
+    """
+    if os.environ.get("RATE_LIMIT_BYPASS") == "1":
+        return True
+    if is_loadtest_rate_limit_profile():
+        return False
+    return os.environ.get("TESTING") == "1"
+
 
 def get_limit_config(path: str) -> RateLimitConfig:
     """Get rate limit configuration for a path."""
+    if is_loadtest_rate_limit_profile():
+        return LOADTEST_RATE_LIMIT
     for pattern, config in ENDPOINT_LIMITS.items():
         if pattern != "default" and path.startswith(pattern):
             return config
@@ -238,8 +271,9 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     - X-RateLimit-Remaining: Requests remaining in window
     - X-RateLimit-Reset: Unix timestamp when limit resets
     """
-    # Pytest and headless Locust hit many concurrent logins; skip limits when TESTING=1 (CI).
-    if os.environ.get("TESTING") == "1":
+    # Explicit bypass (RATE_LIMIT_BYPASS) or legacy TESTING=1 — unless loadtest
+    # profile is active, which must still hit the limiter (C-59).
+    if should_bypass_rate_limiting():
         return await call_next(request)
 
     # Skip rate limiting for health checks and public privacy disclosure

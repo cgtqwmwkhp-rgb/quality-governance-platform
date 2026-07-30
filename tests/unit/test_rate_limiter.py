@@ -1,15 +1,21 @@
 """Unit tests for rate limiting middleware."""
 
-import asyncio
 import time
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from starlette.responses import Response
 
 from src.infrastructure.middleware.rate_limiter import (
     ENDPOINT_LIMITS,
+    LOADTEST_RATE_LIMIT,
     InMemoryRateLimiter,
     RateLimitConfig,
     get_limit_config,
+    is_loadtest_rate_limit_profile,
+    rate_limit_middleware,
+    should_bypass_rate_limiting,
 )
 
 
@@ -66,6 +72,67 @@ class TestRateLimitConfig:
         """Verify get_limit_config returns default for unknown endpoints."""
         config = get_limit_config("/api/v1/unknown/endpoint")
         assert config.requests_per_minute == 60
+
+
+class TestLoadtestRateLimitProfile:
+    """C-59: loadtest profile must pay limiter cost (not skip middleware)."""
+
+    def test_loadtest_profile_does_not_bypass_even_with_testing(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("TESTING", "1")
+        monkeypatch.setenv("RATE_LIMIT_PROFILE", "loadtest")
+        monkeypatch.delenv("RATE_LIMIT_BYPASS", raising=False)
+
+        assert is_loadtest_rate_limit_profile() is True
+        assert should_bypass_rate_limiting() is False
+
+    def test_testing_alone_still_bypasses(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("TESTING", "1")
+        monkeypatch.delenv("RATE_LIMIT_PROFILE", raising=False)
+        monkeypatch.delenv("RATE_LIMIT_BYPASS", raising=False)
+
+        assert should_bypass_rate_limiting() is True
+
+    def test_explicit_bypass_flag_skips_even_under_loadtest(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("RATE_LIMIT_PROFILE", "loadtest")
+        monkeypatch.setenv("RATE_LIMIT_BYPASS", "1")
+        monkeypatch.delenv("TESTING", raising=False)
+
+        assert should_bypass_rate_limiting() is True
+
+    def test_loadtest_profile_uses_raised_limits(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("RATE_LIMIT_PROFILE", "loadtest")
+        config = get_limit_config("/api/v1/auth/login")
+        assert config is LOADTEST_RATE_LIMIT
+        assert config.requests_per_minute >= 10_000
+
+    @pytest.mark.asyncio
+    async def test_loadtest_profile_does_not_skip_middleware_entirely(self, monkeypatch: pytest.MonkeyPatch):
+        """Even with TESTING=1, loadtest profile must call limiter.is_allowed."""
+        monkeypatch.setenv("TESTING", "1")
+        monkeypatch.setenv("RATE_LIMIT_PROFILE", "loadtest")
+        monkeypatch.delenv("RATE_LIMIT_BYPASS", raising=False)
+
+        limiter = MagicMock()
+        limiter.is_allowed = AsyncMock(return_value=(True, 99999, int(time.time()) + 60))
+        monkeypatch.setattr(
+            "src.infrastructure.middleware.rate_limiter.get_rate_limiter",
+            lambda: limiter,
+        )
+
+        request = MagicMock()
+        request.url.path = "/api/v1/incidents"
+        request.method = "GET"
+        request.headers = {}
+        request.client = SimpleNamespace(host="127.0.0.1")
+
+        downstream = AsyncMock(return_value=Response(content=b"ok", status_code=200))
+
+        response = await rate_limit_middleware(request, downstream)
+
+        limiter.is_allowed.assert_awaited_once()
+        downstream.assert_awaited_once()
+        assert response.status_code == 200
+        assert "X-RateLimit-Limit" in response.headers
 
 
 class TestInMemoryRateLimiter:
