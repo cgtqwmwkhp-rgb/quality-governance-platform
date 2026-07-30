@@ -417,6 +417,14 @@ class QuestionInboxResponse(BaseModel):
 
 
 class AskAssignmentQuestionRequest(BaseModel):
+    """Request to ask a question on a document-campaign assignment.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the question being accepted while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     title: Optional[str] = None
     body: str = Field(..., min_length=1)
 
@@ -431,6 +439,14 @@ class QuestionThreadResponse(BaseModel):
 
 
 class QuestionReplyRequest(BaseModel):
+    """Request to reply on a document-campaign question thread.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the reply being accepted while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     body: str = Field(..., min_length=1)
 
 
