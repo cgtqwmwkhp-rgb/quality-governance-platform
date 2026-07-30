@@ -56,6 +56,20 @@ describe('AuditTrail honesty (PX-006)', () => {
     })
   })
 
+  it('exposes accessible names on filter selects (select-name)', async () => {
+    render(<AuditTrail />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('audit-trail-empty')).toBeInTheDocument()
+    })
+
+    expect(screen.getByLabelText('Filter by action')).toBeInTheDocument()
+    expect(screen.getByLabelText('Filter by module')).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('Date range (display only — not yet wired to server)'),
+    ).toBeInTheDocument()
+  })
+
   it('shows filter-empty copy when filters hide all rows', async () => {
     mockList.mockResolvedValue({
       data: {
