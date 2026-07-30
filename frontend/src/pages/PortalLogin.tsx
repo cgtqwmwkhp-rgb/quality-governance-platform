@@ -34,7 +34,7 @@ export default function PortalLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-4 relative">
+    <div data-ux-route-content="" className="min-h-screen bg-surface flex items-center justify-center p-4 relative">
       {/* Theme Toggle */}
       <div className="absolute top-4 right-4">
         <ThemeToggle />

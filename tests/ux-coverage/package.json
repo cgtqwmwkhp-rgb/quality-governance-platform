@@ -8,6 +8,7 @@
     "test:link-audit": "playwright test tests/link-audit.spec.ts",
     "test:button-audit": "playwright test tests/button-audit.spec.ts",
     "test:workflow-audit": "playwright test tests/workflow-audit.spec.ts",
+    "test:a11y-audit": "playwright test tests/a11y-audit.spec.ts",
     "test:all": "playwright test",
     "report": "playwright show-report",
     "install-browsers": "playwright install chromium"
