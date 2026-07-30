@@ -10,22 +10,24 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 6 |
-| Open / lax (unknown fields ignored) | 290 |
+| `extra="forbid"` (strict) | 8 |
+| Open / lax (unknown fields ignored) | 288 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 6 |
-| `max_open_count` | 290 |
+| `min_forbid_count` | 8 |
+| `max_open_count` | 288 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Strict schemas (`extra="forbid"`)
 
+- `AcknowledgementAction` — `POST /api/v1/drivers/acknowledgements/{ack_id}/respond`
+- `AcknowledgementCreate` — `POST /api/v1/drivers/{driver_id}/acknowledgements`
 - `ActionCreate` — `POST /api/v1/actions/`
 - `ActionOwnerNoteCreate` — `POST /api/v1/actions/by-key/notes`
 - `ActionUpdate` — `PATCH /api/v1/actions/{action_id}`
@@ -35,15 +37,13 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-290 schemas. Full list is the remediation backlog;
+288 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
 <summary>Open schema names</summary>
 
 - `AccessControlCreate`
-- `AcknowledgementAction`
-- `AcknowledgementCreate`
 - `AcknowledgmentRequirementCreate`
 - `ActionImportConfirm`
 - `ActionStatusUpdate`

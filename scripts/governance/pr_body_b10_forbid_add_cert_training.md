@@ -3,7 +3,7 @@
 ## 1) Summary
 - **Feature / Change name:** Board B-10 (`w4-extra-forbid`) — convert two safe write schemas to `extra="forbid"`
 - **User goal (1–2 lines):** Stop `AddCertificationRequest` and `AddTrainingRequest` from silently ignoring unknown body fields (PX-168 class), with unit regression locks and a tightened inventory ratchet.
-- **In scope:** `ConfigDict(extra="forbid")` on those two schemas; remove them from `KNOWN_LAX_WRITE_SCHEMAS`; refresh B-10 baseline/inventory (forbid floor 4→6, open ceiling 292→290); unit tests for unknown-field rejection
+- **In scope:** `ConfigDict(extra="forbid")` on those two schemas; remove them from `KNOWN_LAX_WRITE_SCHEMAS`; refresh B-10 baseline/inventory (forbid floor 6→8, open ceiling 290→288); unit tests for unknown-field rejection
 - **Out of scope:** Mass conversion of remaining 290 open schemas; conveyor/merge allowlist edits; schemas already targeted by open #1455 (`AcknowledgementCreate`, `AcknowledgementAction`); C-8 savepoint expansion; w2-enum-contract (`severity_levels` is not a clean 1:1 enum pairing — known gaps for `negligible` on complaint/near-miss); gate weakening
 - **Feature flag / kill switch:** N/A — request-body validation only
 
@@ -28,7 +28,7 @@
 - [x] AC-01: `AddCertificationRequest` declares `extra="forbid"` and rejects an unknown field in unit tests
 - [x] AC-02: `AddTrainingRequest` declares `extra="forbid"` and rejects an unknown field in unit tests
 - [x] AC-03: Both schemas removed from `KNOWN_LAX_WRITE_SCHEMAS` so Guard 2 / round-trip enforce them
-- [x] AC-04: B-10 ratchet baseline refreshed — **forbid ≥ 6**, **open ≤ 290**, forbid set includes the two new schemas
+- [x] AC-04: B-10 ratchet baseline refreshed — **forbid ≥ 8**, **open ≤ 288**, forbid set includes the two new schemas
 - [x] AC-05: Conveyor/merge allowlist untouched; no gate weakening; no mass conversion; no overlap with #1455 schemas
 
 ## 5) Testing Evidence (link to runs)
@@ -79,7 +79,7 @@
 | Metric | Before | After |
 | --- | ---: | ---: |
 | `extra="forbid"` write schemas | 4 | **6** |
-| Open (non-forbid) write schemas | 292 | **290** |
+| Open (non-forbid) write schemas | 290 | **288** |
 | Converted this PR | — | `AddCertificationRequest`, `AddTrainingRequest` |
 
 ## Why this residual (selection notes)
