@@ -42,6 +42,7 @@ from src.domain.models.form_config import Contract, FormField, FormStep, FormTem
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.form_config_service import FormConfigService
+from src.domain.services.lookup_enum_contract import ensure_enum_backed_code
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -927,6 +928,7 @@ async def create_lookup_option(
     """Create a new lookup option."""
     # Path category is authoritative (body category may be omitted by Admin UI).
     data.category = category
+    ensure_enum_backed_code(category, data.code)
 
     option = LookupOption(
         category=category,
@@ -969,6 +971,8 @@ async def update_lookup_option(
         raise NotFoundError(f"Lookup option {option_id} not found in category '{category}'")
 
     update_data = data.model_dump(exclude_unset=True)
+    if isinstance(update_data.get("code"), str):
+        ensure_enum_backed_code(category, update_data["code"])
     for field, value in update_data.items():
         setattr(option, field, value)
 

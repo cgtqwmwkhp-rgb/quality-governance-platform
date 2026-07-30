@@ -239,15 +239,15 @@ class TestUnknownFieldRejection:
 class TestLookupEnumAgreement:
     """Every option a seeded lookup offers must be accepted by the field it fills.
 
-    PX-281/282 reported this as "the complaint form offers only ``workmanship``
-    and it 422s". The seed data on ``main`` now offers ten complaint types, so
-    the reported symptom has moved, but the underlying disagreement has not:
-    seven of those ten are still absent from ``ComplaintType``.
+    PX-281/282 was ``complaint_types`` offering only ``workmanship``, which
+    ``ComplaintType`` has never contained. #1385 realigned that taxonomy (and
+    ``incident_types``) to the enums; the active gate below holds the seed and
+    the schema together so the drift cannot return unrecorded.
 
-    An earlier tester checked ``incident_type: "injury"`` and all severity
-    levels, found them accepted, and concluded the problem did not generalise.
-    It does — ``injury`` and the severities happen to be the members the two
-    sides agree on. See the module docstring of the baseline for counts.
+    ``severity_levels`` still has a residual: it feeds three fields and
+    ``negligible`` is accepted by incident severity but not by complaint
+    priority or near-miss potential severity — recorded in
+    ``KNOWN_LOOKUP_ENUM_GAPS`` until a product decision lands.
     """
 
     @pytest.mark.parametrize("binding", LOOKUP_PARAMS)
@@ -389,4 +389,24 @@ class TestDiscoveryIsNotVacuous:
         assert not unaccounted, (
             f"Lookup category/categories {format_gap_list(unaccounted)} are seeded but not checked against "
             "any API field. Add a LOOKUP_BINDINGS entry (with UI evidence) or list them as unbound."
+        )
+
+    def test_enum_backed_categories_have_no_recorded_gaps(self) -> None:
+        """1:1 enum-backed lookups must stay out of KNOWN_LOOKUP_ENUM_GAPS.
+
+        Those categories are held by ``lookup_enum_contract`` (seed + admin write
+        + integration probe). Recording a gap here would re-xfail a defect the
+        durable contract already forbids.
+        """
+        from src.domain.services.lookup_enum_contract import ENUM_BACKED_CATEGORIES
+        from tests.contract._write_contract_baseline import KNOWN_LOOKUP_ENUM_GAPS
+
+        leaked = sorted(
+            f"{category}->{model}.{field}"
+            for (category, model, field), codes in KNOWN_LOOKUP_ENUM_GAPS.items()
+            if category in ENUM_BACKED_CATEGORIES and codes
+        )
+        assert not leaked, (
+            f"Enum-backed lookup gap(s) recorded in the write-contract baseline: "
+            f"{format_gap_list(leaked)}. Clear them — the durable contract owns these."
         )

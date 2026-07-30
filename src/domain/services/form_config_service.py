@@ -25,6 +25,7 @@ from src.domain.services.form_publish_validation import (
     validate_form_template_publishable,
 )
 from src.domain.services.lookup_defaults_seed import count_active_lookup_options
+from src.domain.services.lookup_enum_contract import ensure_enum_backed_code
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -713,6 +714,8 @@ class FormConfigService:
         # Path category is authoritative (body may omit category).
         data.category = category  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
 
+        ensure_enum_backed_code(category, str(data.code))
+
         # tenant_id is not optional decoration: list_lookup_options filters on
         # ``LookupOption.tenant_id == tenant_id`` and ``NULL = 1`` is never true
         # in SQL, so an option written without it can never be read back.
@@ -751,6 +754,11 @@ class FormConfigService:
         option = result.scalar_one_or_none()
         if not option:
             raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+        if hasattr(data, "model_dump"):
+            incoming_code = data.model_dump(exclude_unset=True).get("code")
+            if isinstance(incoming_code, str):
+                ensure_enum_backed_code(category, incoming_code)
 
         apply_updates(option, data, set_updated_at=False)
 

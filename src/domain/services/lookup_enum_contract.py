@@ -13,8 +13,14 @@ contained, so ``POST /api/v1/complaints/`` rejected the only value the form
 could produce and no complaint could be submitted through the UI at all.
 ``incident_types`` (R22-01) carried five more codes with the same problem.
 
-Naming the pairings here gives the seed data, the repair migration and the
-contract test one definition to agree with instead of three restatements of it.
+Naming the pairings here gives the seed data, the repair migration, the
+admin write guard and the contract test one definition to agree with instead of
+four restatements of it.
+
+``severity_levels`` is deliberately *not* registered here: one lookup category
+feeds three differently-shaped fields (incident ``severity``, complaint
+``priority``, near-miss ``potential_severity``) with known ``negligible``
+mismatches. That needs a product decision before it can be a 1:1 enum contract.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ import enum
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from src.domain.exceptions import ValidationError
 from src.domain.models.complaint import ComplaintType
 from src.domain.models.incident import IncidentType
 
@@ -86,3 +93,30 @@ def rejected_codes(category: str, codes: Iterable[str]) -> tuple[str, ...]:
         return ()
     permitted = {code.lower() for code in lookup.allowed_codes}
     return tuple(sorted({code for code in codes if code.strip().lower() not in permitted}))
+
+
+def ensure_enum_backed_code(category: str, code: str) -> None:
+    """Reject an admin-authored code the paired API field would 422 on (R22-03).
+
+    Free-form categories are unconstrained and pass through. Enum-backed ones
+    raise ``ValidationError`` (HTTP 422) naming the allowed values, so the
+    dropdown cannot drift back into the PX-281/282 shape via the admin UI.
+    """
+    lookup = lookup_for_category(category)
+    if lookup is None:
+        return
+    if not rejected_codes(category, (code,)):
+        return
+    allowed = ", ".join(lookup.allowed_codes)
+    raise ValidationError(
+        f"Lookup category '{category}' feeds '{lookup.request_field}' "
+        f"({lookup.enum_class.__name__}); '{code}' is not an allowed value. "
+        f"Allowed: {allowed}.",
+        details={
+            "category": category,
+            "code": code,
+            "request_field": lookup.request_field,
+            "allowed": list(lookup.allowed_codes),
+            "ticket": lookup.ticket,
+        },
+    )

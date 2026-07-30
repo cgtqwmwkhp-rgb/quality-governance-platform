@@ -287,3 +287,28 @@ class TestTheContractTestHasTeeth:
     def test_a_free_form_category_constrains_nothing(self):
         """Only registered categories are contracts; customers stays free-form."""
         assert rejected_codes("customers", ["thames_water", "anything"]) == ()
+
+    async def test_admin_cannot_create_a_rogue_enum_backed_code(
+        self,
+        superuser_client: AsyncClient,
+        seeded_lookups,
+    ):
+        """R22-03 — admin write path must refuse the PX-281 shape before it lands.
+
+        Uses ``superuser_client`` so auth clears ``form:create`` and the
+        assertion measures the enum guard (422), not RBAC (403).
+        """
+        response = await superuser_client.post(
+            LOOKUP_ENDPOINT.format(category="complaint_types"),
+            json={
+                "code": "workmanship",
+                "label": "Workmanship / repair defect",
+                "is_active": True,
+                "display_order": 99,
+            },
+        )
+        assert response.status_code == 422, response.text
+        assert "workmanship" in response.text
+
+        codes = await _active_codes(superuser_client, "complaint_types")
+        assert "workmanship" not in codes
