@@ -204,43 +204,30 @@ test.describe('Link Audit', () => {
         
         // Navigate to page.
         // networkidle is flaky on SWA (analytics/keepalive keep the network busy on a
-        // healthy SPA), so it is deliberately not used here.
+        // healthy SPA), so it is deliberately not used here. Do not restore it.
         await page.goto(pageEntry.route, {
           waitUntil: 'domcontentloaded',
           timeout: 30000,
         });
-        
-        // Wait for the app to render something into the shell.
+
+        // C-56: wait for the route-content marker, not the empty shell.
         //
-        // frontend/index.html:24 ships `<div id="root"></div>` empty, so waiting for
-        // `#root` proves only that React painted *something*. Require it to have put
-        // an element there too, so a page on which React never mounts at all is
-        // reported as a failure rather than as a page that happens to contain no
-        // links. This does not make the link snapshot below complete — see the note
-        // there.
-        await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
-        await page
-          .locator('#root > *, #app > *, [data-testid="app-root"] > *')
-          .first()
-          .waitFor({ state: 'attached', timeout: 5000 });
-        
-        // Extract all anchor tags.
-        //
-        // KNOWN GAP, not fixed here (see PR body): this is an immediate snapshot
-        // with no retry, taken as soon as the shell has painted, so it enumerates
-        // the shell rather than the route. Measured against a local fake SPA whose
-        // shell paints at once and whose route content mounts 1.5s later: 0 links
-        // recorded across all 32 pages, reported as 0 dead links and a pass. The
-        // same fake with content mounted synchronously recorded 256.
-        //
-        // Two obvious repairs do not work. Requiring at least one anchor fails the
-        // portal pages, which navigate with buttons and legitimately have none.
-        // Waiting for the anchor count to settle is worse than useless: a count of
-        // zero is stable from the first poll, so it returns before the content
-        // mounts — verified, still 0 of 256. A real fix needs an app-emitted
-        // "route content rendered" marker (`<main>` is the shell's own element on
-        // admin routes, so it is not one), which is a frontend change and out of
-        // scope for this PR.
+        // frontend/index.html ships `<div id="root"></div>` empty. Waiting for
+        // `#root > *` only proves React painted the shell (Layout / auth loader).
+        // Measured against a fake SPA whose shell paints immediately and whose
+        // route content mounts 1.5s later: that empty-shell snapshot recorded 0
+        // links on every page and reported a pass. The app now emits
+        // `[data-ux-route-content]` from AnimatedOutlet / PortalLayout / auth
+        // pages once the route body mounts. An empty shell never carries that
+        // attribute, so the wait times out and the page is recorded as a dead
+        // link (failure), not as 0 dead links (fabricated pass). Portal pages
+        // that legitimately have zero anchors still pass after the marker
+        // appears — requiring ≥1 anchor is not the honesty rule.
+        await page.locator('[data-ux-route-content]').first().waitFor({
+          state: 'attached',
+          timeout: 15000,
+        });
+
         const links = await page.locator('a[href]').all();
         
         for (const link of links) {

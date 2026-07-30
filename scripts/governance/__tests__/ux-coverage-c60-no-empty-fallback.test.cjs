@@ -50,4 +50,7 @@ test('ux-functional-coverage.yml does not fabricate empty results for missing au
   // Fail-closed copy path must remain: missing files exit 1 with an error.
   assert.match(body, /Audit artifact\(s\) absent/);
   assert.match(active, /exit 1/);
+
+  // C-50: a11y is part of the required set; still no empty invent for it.
+  assert.match(active, /a11y-audit-results\/a11y_audit\.json/);
 });
