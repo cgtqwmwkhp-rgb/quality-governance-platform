@@ -28,5 +28,11 @@ export default function PortalLayout() {
     return null // Will redirect to login
   }
 
-  return <Outlet />
+  // Marker for UX coverage audits: proves authenticated portal route content
+  // mounted (not the auth-loading shell). See tests/ux-coverage link-audit.
+  return (
+    <div data-ux-route-content="">
+      <Outlet />
+    </div>
+  )
 }

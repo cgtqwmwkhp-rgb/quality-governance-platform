@@ -88,12 +88,14 @@ export const pageAuditStore = createAuditEntryStore('page-audit', 'page_audit.js
 export const linkAuditStore = createAuditEntryStore('link-audit', 'link_audit.json');
 export const buttonAuditStore = createAuditEntryStore('button-audit', 'button_audit.json');
 export const workflowAuditStore = createAuditEntryStore('workflow-audit', 'workflow_audit.json');
+export const a11yAuditStore = createAuditEntryStore('a11y-audit', 'a11y_audit.json');
 
 export const ALL_AUDIT_STORES: AuditEntryStore[] = [
   pageAuditStore,
   linkAuditStore,
   buttonAuditStore,
   workflowAuditStore,
+  a11yAuditStore,
 ];
 
 /**
