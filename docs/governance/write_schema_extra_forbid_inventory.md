@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 22 |
-| Open / lax (unknown fields ignored) | 274 |
+| `extra="forbid"` (strict) | 24 |
+| Open / lax (unknown fields ignored) | 272 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 22 |
-| `max_open_count` | 274 |
+| `min_forbid_count` | 24 |
+| `max_open_count` | 272 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -38,10 +38,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AllocationRequest` — `POST /api/v1/vehicles/allocate`
 - `AssessCompetencyRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/assess`
 - `AssignAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/requirements/{requirement_id}/assign`
-- `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete` (also fishbone complete)
+- `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/complete`, `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete`
+- `CompleteAssignmentRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/complete`
 - `CompleteTrainingRequest` — `POST /api/v1/auditor-competence/training/{training_id}/complete`
 - `CreateCAPARequest` — `POST /api/v1/rca-tools/capa`
-- `CreateExportRequest` — `POST /api/v1/exports`
+- `CreateCapaRequest` — `POST /api/v1/workforce/competence-gaps/{gap_id}/create-capa`
+- `CreateExportRequest` — `POST /api/v1/exports`, `POST /api/v1/exports/`
 - `CreateFindingCapaRequest` — `POST /api/v1/audits/findings/{finding_id}/capa`
 - `CreateFishboneRequest` — `POST /api/v1/rca-tools/fishbone`
 - `CreateFiveWhysRequest` — `POST /api/v1/rca-tools/five-whys`
@@ -51,7 +53,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-274 schemas. Full list is the remediation backlog;
+272 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -120,12 +122,10 @@ converting them is out of scope for the inventory lock PR.
 - `CompetencyRequirementUpdate`
 - `ComplaintCreate`
 - `ComplaintUpdate`
-- `CompleteAssignmentRequest`
 - `ContractCreate`
 - `ContractUpdate`
 - `ConvertToAssessmentRequest`
 - `CostRecord`
-- `CreateCapaRequest`
 - `CreateFromRecordRequest`
 - `CustomerPackOmitApproveRequest`
 - `CustomerPackOmitRequest`
