@@ -68,7 +68,6 @@ def test_the_migration_names_exactly_the_columns_the_model_declares(table: str):
     would report on the next PR.
     """
     import src.domain.models.push_notification  # noqa: F401 — registers both tables
-
     from src.domain.models.base import Base
 
     model_columns = sorted(column.name for column in Base.metadata.tables[table].columns)

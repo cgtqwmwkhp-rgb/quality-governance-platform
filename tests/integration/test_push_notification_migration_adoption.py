@@ -93,7 +93,6 @@ class ScratchDatabase:
     def create_from_models(self, *tables: str) -> None:
         """Reproduce what ``create_all`` left in production, from the same metadata."""
         import src.domain.models.push_notification  # noqa: F401 — registers both tables
-
         from src.domain.models.base import Base
 
         for table in tables:
