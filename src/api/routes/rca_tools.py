@@ -60,6 +60,14 @@ class CreateFishboneRequest(BaseModel):
 
 
 class AddCauseRequest(BaseModel):
+    """Add a cause to a fishbone diagram.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the cause being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     category: str = Field(
         ...,
         description="manpower, method, machine, material, measurement, mother_nature",
