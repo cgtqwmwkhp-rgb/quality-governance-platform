@@ -629,6 +629,18 @@ admin_routes:
     expected_degraded_state: "Unprovisioned-module disclosure when backend tables are absent"
     description: "Advanced document control library and workflows"
 
+  # Residual after #1446: HsPerformance links to /admin/hs-reporting-hours (also in Layout
+  # admin nav and AdminDashboard). App.tsx mounts HsReportingHours; gate run 30532211043
+  # scored 90 CANARY with this single remaining "Route not in registry" dead end.
+  - pageId: admin-hs-reporting-hours
+    route: /admin/hs-reporting-hours
+    auth: jwt_admin
+    criticality: P1
+    component: HsReportingHours
+    expected_empty_state: "H&S reporting hours table with default or empty period rows"
+    expected_degraded_state: null
+    description: "Admin editor for H&S reporting-period hours used by KPI rates"
+
   - pageId: admin-contracts
     route: /admin/contracts
     auth: jwt_admin
@@ -651,7 +663,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 66
+  total_routes: 67
   p0_routes: 12
-  p1_routes: 32
+  p1_routes: 33
   p2_routes: 22
