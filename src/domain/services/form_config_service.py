@@ -714,7 +714,7 @@ class FormConfigService:
         # Path category is authoritative (body may omit category).
         data.category = category  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
 
-        ensure_enum_backed_code(category, data.code)  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+        ensure_enum_backed_code(category, str(data.code))
 
         # tenant_id is not optional decoration: list_lookup_options filters on
         # ``LookupOption.tenant_id == tenant_id`` and ``NULL = 1`` is never true
