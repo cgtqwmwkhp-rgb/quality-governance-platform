@@ -30,10 +30,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AcknowledgementCreate` — `POST /api/v1/drivers/{driver_id}/acknowledgements`
 - `ActionCreate` — `POST /api/v1/actions/`
 - `ActionOwnerNoteCreate` — `POST /api/v1/actions/by-key/notes`
-- `ActionUpdate` — `PATCH /api/v1/actions/{action_id}` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/add-cause`
+- `ActionUpdate` — `PATCH /api/v1/actions/{action_id}`
+- `AddCauseRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/add-cause`
 - `AddCertificationRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/certifications`
 - `AddTrainingRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/training`
-- `AddWhyRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/add-why` — `POST /api/v1/vehicles/allocate`
+- `AddWhyRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/add-why`
+- `AllocationRequest` — `POST /api/v1/vehicles/allocate`
 
 ## Open schemas (unknown fields silently ignored)
 
