@@ -9,7 +9,7 @@ import logging
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
@@ -35,6 +35,14 @@ class LinkRequest(BaseModel):
 
 
 class CreateCapaRequest(BaseModel):
+    """Request to create a CAPA from a competence gap.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the CAPA being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     owner_id: Optional[int] = None
     owner_email: Optional[str] = None
     due_date: Optional[str] = None
