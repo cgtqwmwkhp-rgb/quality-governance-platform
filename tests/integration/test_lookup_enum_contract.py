@@ -287,3 +287,24 @@ class TestTheContractTestHasTeeth:
     def test_a_free_form_category_constrains_nothing(self):
         """Only registered categories are contracts; customers stays free-form."""
         assert rejected_codes("customers", ["thames_water", "anything"]) == ()
+
+    async def test_admin_cannot_create_a_rogue_enum_backed_code(
+        self,
+        admin_client: AsyncClient,
+        seeded_lookups,
+    ):
+        """R22-03 — admin write path must refuse the PX-281 shape before it lands."""
+        response = await admin_client.post(
+            LOOKUP_ENDPOINT.format(category="complaint_types"),
+            json={
+                "code": "workmanship",
+                "label": "Workmanship / repair defect",
+                "is_active": True,
+                "display_order": 99,
+            },
+        )
+        assert response.status_code == 422, response.text
+        assert "workmanship" in response.text
+
+        codes = await _active_codes(admin_client, "complaint_types")
+        assert "workmanship" not in codes
