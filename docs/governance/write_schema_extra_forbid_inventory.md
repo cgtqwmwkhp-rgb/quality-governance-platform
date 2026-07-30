@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 14 |
-| Open / lax (unknown fields ignored) | 282 |
+| `extra="forbid"` (strict) | 16 |
+| Open / lax (unknown fields ignored) | 280 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 14 |
-| `max_open_count` | 282 |
+| `min_forbid_count` | 16 |
+| `max_open_count` | 280 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -36,14 +36,16 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AddTrainingRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/training`
 - `AddWhyRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/add-why`
 - `AllocationRequest` — `POST /api/v1/vehicles/allocate`
+- `CompleteTrainingRequest` — `POST /api/v1/auditor-competence/training/{training_id}/complete`
 - `CreateExportRequest` — `POST /api/v1/exports`
 - `CreateFindingCapaRequest` — `POST /api/v1/audits/findings/{finding_id}/capa`
 - `CreateFishboneRequest` — `POST /api/v1/rca-tools/fishbone`
 - `CreateFiveWhysRequest` — `POST /api/v1/rca-tools/five-whys`
+- `CreateProfileRequest` — `POST /api/v1/auditor-competence/profiles`
 
 ## Open schemas (unknown fields silently ignored)
 
-282 schemas. Full list is the remediation backlog;
+280 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -116,7 +118,6 @@ converting them is out of scope for the inventory lock PR.
 - `ComplaintUpdate`
 - `CompleteAnalysisRequest`
 - `CompleteAssignmentRequest`
-- `CompleteTrainingRequest`
 - `ContractCreate`
 - `ContractUpdate`
 - `ConvertToAssessmentRequest`
@@ -124,7 +125,6 @@ converting them is out of scope for the inventory lock PR.
 - `CreateCAPARequest`
 - `CreateCapaRequest`
 - `CreateFromRecordRequest`
-- `CreateProfileRequest`
 - `CreateWatchActionRequest`
 - `CustomerPackOmitApproveRequest`
 - `CustomerPackOmitRequest`

@@ -27,6 +27,14 @@ router = APIRouter(prefix="/auditor-competence", tags=["Auditor Competence"])
 
 
 class CreateProfileRequest(BaseModel):
+    """Create an auditor competence profile.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the profile being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     user_id: int
     job_title: Optional[str] = None
     department: Optional[str] = None
@@ -78,6 +86,14 @@ class AddTrainingRequest(BaseModel):
 
 
 class CompleteTrainingRequest(BaseModel):
+    """Mark auditor training as completed.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of completion being recorded while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     completion_date: datetime
     assessment_passed: Optional[bool] = None
     assessment_score: Optional[float] = None
