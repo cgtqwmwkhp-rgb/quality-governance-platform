@@ -35,7 +35,36 @@ interface A11yResult {
   violations_serious: number;
   violations_moderate: number;
   violations_minor: number;
+  violation_rules_critical?: string[];
+  violation_rules_serious?: string[];
   error_message?: string;
+}
+
+/** Unique axe rule ids for a given impact, capped for artifact size. */
+function topViolationRuleIds(
+  violations: Array<{ id: string; impact?: string | null }>,
+  impact: 'critical' | 'serious',
+  limit = 5,
+): string[] {
+  return [
+    ...new Set(violations.filter((v) => v.impact === impact).map((v) => v.id)),
+  ].slice(0, limit);
+}
+
+function formatFailMessage(
+  critical: number,
+  serious: number,
+  criticalRules: string[],
+  seriousRules: string[],
+): string {
+  const parts: string[] = [];
+  if (critical > 0) {
+    parts.push(`critical rules: ${criticalRules.length ? criticalRules.join(', ') : 'unknown'}`);
+  }
+  if (serious > 0) {
+    parts.push(`serious rules: ${seriousRules.length ? seriousRules.join(', ') : 'unknown'}`);
+  }
+  return `${critical} critical, ${serious} serious (${parts.join('; ')})`;
 }
 
 function loadPages(): PageEntry[] {
@@ -142,7 +171,17 @@ test.describe('Accessibility Audit (axe-core)', () => {
         result.violations_serious = serious;
         result.violations_moderate = moderate;
         result.violations_minor = minor;
-        result.result = critical > 0 || serious > 0 ? 'FAIL' : 'PASS';
+
+        if (critical > 0 || serious > 0) {
+          const criticalRules = topViolationRuleIds(axeResults.violations, 'critical');
+          const seriousRules = topViolationRuleIds(axeResults.violations, 'serious');
+          result.violation_rules_critical = criticalRules;
+          result.violation_rules_serious = seriousRules;
+          result.error_message = formatFailMessage(critical, serious, criticalRules, seriousRules);
+          result.result = 'FAIL';
+        } else {
+          result.result = 'PASS';
+        }
       } catch (err: any) {
         result.result = 'SKIP';
         result.error_message = err.message?.substring(0, 200);
