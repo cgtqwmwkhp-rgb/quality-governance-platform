@@ -167,7 +167,8 @@ def test_committed_baseline_shape() -> None:
     assert payload["min_forbid_count"] == 12
     assert payload["max_open_count"] == 284
     assert payload["total_write_schemas"] == 296
-    assert payload["forbid_schemas"] == [        "AcknowledgementAction",
+    assert payload["forbid_schemas"] == [
+        "AcknowledgementAction",
         "AcknowledgementCreate",
         "ActionCreate",
         "ActionOwnerNoteCreate",
