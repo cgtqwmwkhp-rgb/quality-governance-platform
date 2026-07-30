@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AcknowledgmentRequirementBase(BaseModel):
@@ -101,7 +101,13 @@ class PolicyAcknowledgmentListResponse(BaseModel):
 
 
 class RecordAcknowledgmentRequest(BaseModel):
-    """Request to record an acknowledgment."""
+    """Request to record an acknowledgment.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the acknowledgment being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     quiz_score: Optional[int] = None
     acceptance_statement: Optional[str] = None
@@ -109,7 +115,13 @@ class RecordAcknowledgmentRequest(BaseModel):
 
 
 class AssignAcknowledgmentRequest(BaseModel):
-    """Request to assign acknowledgments to users."""
+    """Request to assign acknowledgments to users.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of assignments proceeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     user_ids: List[int]
     policy_version: Optional[str] = None
