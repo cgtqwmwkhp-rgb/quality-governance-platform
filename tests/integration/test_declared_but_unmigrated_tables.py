@@ -32,15 +32,13 @@ table:
 
 Two of the sixteen were found by this module rather than pinned by it
 -------------------------------------------------------------------
-``push_subscriptions`` and ``notification_logs`` are declared inside
-``src/api/routes/push_notifications.py``. ``alembic/env.py`` builds its comparison
-metadata from ``src/domain/models`` plus a fixed module list, so neither table is
-in it: they are absent from the migrated schema, absent from the exclusion
-register, and absent from every drift report ever published. The router is mounted
-at ``/api/v1/notifications/push`` and ``POST /subscribe`` writes
-``push_subscriptions``, so unlike the dormant IMS models this pair is reachable.
-Recorded here, not fixed here -- the migration and the endpoint's behaviour on an
-absent table are a separate change with a separate owner.
+``push_subscriptions`` and ``notification_logs`` were declared inside
+``src/api/routes/push_notifications.py``. ``alembic/env.py`` built its comparison
+metadata from ``src/domain/models`` plus a fixed module list, so neither table was
+in it: they were absent from the migrated schema, absent from the exclusion
+register, and absent from every drift report. That pair is closed by C-67
+(models moved to domain + create migration ``20260903_push_notif``). The remaining
+entries below are still declared-but-unmigrated.
 
 READ THIS BEFORE "FIXING" A FAILURE HERE
 ----------------------------------------
@@ -303,10 +301,9 @@ class TestTheBacklogIsNotOverstated:
         """The inference that produced the wrong number, closed off.
 
         The published drift inventory contains zero ``CreateTableOp``, which reads
-        as "no table is missing". It is not: 14 of these 16 are removed from the
-        comparison by ``include_object``, and the other two are declared in a module
-        ``alembic/env.py`` never imports. Both make ``CreateTableOp`` zero without
-        making a single table exist.
+        as "no table is missing". It is not: every remaining declared-but-unmigrated
+        table is removed from the comparison by ``include_object``. Both make
+        ``CreateTableOp`` zero without making a single table exist.
         """
         from scripts.ops.run025._models import alembic_check_excluded_tables
 
@@ -325,15 +322,21 @@ class TestTheBacklogIsNotOverstated:
 
 
 class TestSomeTablesAreOutsideTheDriftGateEntirely:
-    """The worst case is not a deferred table, it is an invisible one.
+    """Regression lock: route-declared models must not reappear outside env.py.
 
-    ``alembic/env.py`` builds its comparison metadata from ``src/domain/models``
-    plus a hard-coded list of modules. ``push_subscriptions`` and
-    ``notification_logs`` are declared in ``src/api/routes/push_notifications.py``,
-    so they are in neither. They are absent from the migrated schema, absent from
-    the exclusion register, and absent from every drift report -- and the router
-    that writes them is mounted.
+    C-67 moved ``push_subscriptions`` / ``notification_logs`` into domain models
+    and added a create migration, so ``OUTSIDE_ALEMBIC_METADATA`` is empty. These
+    tests parametrize over that tuple; zero cases means the hole is closed. If a
+    future change reintroduces a route-only table, the cases reappear and fail
+    until it is migrated or deliberately deferred.
     """
+
+    def test_no_tables_remain_outside_alembic_metadata(self):
+        assert OUTSIDE_ALEMBIC_METADATA == (), (
+            "route-declared tables are invisible to the drift gate again: "
+            f"{[e.table for e in OUTSIDE_ALEMBIC_METADATA]}. Move the models into "
+            "src/domain/models and add a create migration (C-67 pattern)."
+        )
 
     @pytest.mark.parametrize("entry", OUTSIDE_ALEMBIC_METADATA, ids=_ids(OUTSIDE_ALEMBIC_METADATA))
     def test_the_table_is_not_on_the_exclusion_register(self, entry: UnmigratedTable):

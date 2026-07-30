@@ -15,9 +15,10 @@ from every deployment.
 
 The consequence is not that tests fail dishonestly. It is worse: they pass
 honestly, and their passing carries no information about production. A reachability
-test for an endpoint over an unmigrated table is green either way. Sixteen tables
-are in that position on the current main, and endpoints over seven of them returned
-500s in production while every gate was green.
+test for an endpoint over an unmigrated table is green either way. Fourteen tables
+remain in that position on the current main (down from sixteen after C-67 migrated
+the push-notification pair), and endpoints over seven of them returned 500s in
+production while every gate was green.
 
 The only way to say something true about production from CI is to hold a database
 the migrations built and ``create_all`` never touched, which is what this module
@@ -88,8 +89,9 @@ class UnmigratedTable:
 #: set into a live app process registers a second class named ``Role`` and breaks
 #: SQLAlchemy mapper configuration for the rest of the session.
 #:
-#: Measured against `alembic upgrade head` on PostgreSQL 14.20 and 16.14: 230
-#: declared, 240 built, these 16 declared and not built.
+#: Measured against `alembic upgrade head` on PostgreSQL 14.20 and 16.14: app
+#: declares these 14 tables that the migration chain does not create. (The push
+#: notification pair that used to sit here was migrated in C-67 / 20260903_push_notif.)
 DECLARED_BUT_UNMIGRATED: tuple[UnmigratedTable, ...] = (
     # Document control: seven tables behind a shipped menu item, no create
     # migration. The endpoints over them now degrade explicitly rather than
@@ -123,29 +125,16 @@ DECLARED_BUT_UNMIGRATED: tuple[UnmigratedTable, ...] = (
     UnmigratedTable("management_reviews", "IMS / ISO27001", "src/domain/models/ims_unification.py"),
     UnmigratedTable("management_review_inputs", "IMS / ISO27001", "src/domain/models/ims_unification.py"),
     UnmigratedTable("unified_audit_plans", "Risk / Audit", "src/domain/models/ims_unification.py"),
-    # Declared in a route module, so alembic check has never seen them and the
-    # exclusion register does not mention them. The router is mounted at
-    # /api/v1/notifications/push, and POST /subscribe writes push_subscriptions,
-    # so this pair is not dormant like the IMS models above. Recorded here, not
-    # fixed here -- the migration and the endpoint behaviour are a separate change.
-    UnmigratedTable(
-        "push_subscriptions",
-        "Platform / Notifications",
-        "src/api/routes/push_notifications.py",
-        in_alembic_metadata=False,
-    ),
-    UnmigratedTable(
-        "notification_logs",
-        "Platform / Notifications",
-        "src/api/routes/push_notifications.py",
-        in_alembic_metadata=False,
-    ),
 )
 
 #: Tables the drift gate is structurally unable to report on, because the module
 #: declaring them is not on ``alembic/env.py``'s import list. Distinct from the
 #: exclusion register: an excluded table is a recorded decision with an owner,
 #: whereas these were never a decision at all.
+#:
+#: Empty after C-67 moved ``push_subscriptions`` / ``notification_logs`` into
+#: ``src/domain/models/push_notification.py``. Kept as a derived tuple so a future
+#: route-declared model reintroduces the failure mode visibly.
 OUTSIDE_ALEMBIC_METADATA: tuple[UnmigratedTable, ...] = tuple(
     entry for entry in DECLARED_BUT_UNMIGRATED if not entry.in_alembic_metadata
 )
