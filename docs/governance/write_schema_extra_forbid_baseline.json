@@ -6,12 +6,14 @@
     "ActionCreate",
     "ActionOwnerNoteCreate",
     "ActionUpdate",
+    "AddCauseRequest",
     "AddCertificationRequest",
     "AddTrainingRequest",
-    "AddWhyRequest"
+    "AddWhyRequest",
+    "AllocationRequest"
   ],
-  "max_open_count": 288,
-  "min_forbid_count": 8,
+  "max_open_count": 286,
+  "min_forbid_count": 10,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
