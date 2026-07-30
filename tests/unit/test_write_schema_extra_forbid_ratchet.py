@@ -1,6 +1,6 @@
 """The write-schema extra=forbid ratchet must fail on the regressions it exists for.
 
-Board B-10 / w4-extra-forbid: 286 of 296 write request bodies still accept unknown
+Board B-10 / w4-extra-forbid: 284 of 296 write request bodies still accept unknown
 fields. The inventory lock does not convert them; it stops the forbid set from
 shrinking and the open set from growing. Every failure path is driven from a
 synthetic inventory so the committed main baseline is not required for these
@@ -164,8 +164,8 @@ def test_committed_baseline_shape() -> None:
     assert baseline.is_file()
     assert inventory_md.is_file()
     payload = json.loads(baseline.read_text(encoding="utf-8"))
-    assert payload["min_forbid_count"] == 10
-    assert payload["max_open_count"] == 286
+    assert payload["min_forbid_count"] == 12
+    assert payload["max_open_count"] == 284
     assert payload["total_write_schemas"] == 296
     assert payload["forbid_schemas"] == [
         "AcknowledgementAction",
@@ -178,4 +178,6 @@ def test_committed_baseline_shape() -> None:
         "AddTrainingRequest",
         "AddWhyRequest",
         "AllocationRequest",
+        "CreateExportRequest",
+        "CreateFindingCapaRequest",
     ]
