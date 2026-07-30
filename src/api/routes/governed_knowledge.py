@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -163,6 +163,14 @@ class RegulatoryImpactResponse(BaseModel):
 
 
 class CreateWatchActionRequest(BaseModel):
+    """Create an Action (CAPA) from a regulatory watch impact.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the action being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     owner_email: Optional[str] = None
     owner_id: Optional[int] = None
     due_date: Optional[str] = None

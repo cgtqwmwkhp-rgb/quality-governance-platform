@@ -101,6 +101,14 @@ class CompleteTrainingRequest(BaseModel):
 
 
 class AssessCompetencyRequest(BaseModel):
+    """Record a competency assessment for an auditor.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the assessment being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     competency_area_id: int
     current_level: int = Field(..., ge=1, le=5)
     assessment_method: str = "supervisor"
