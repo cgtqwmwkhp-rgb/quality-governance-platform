@@ -528,23 +528,62 @@ jobs:
           fi
           echo "  ✅ Staging healthy (HTTP $STAGING_HEALTH) — proceeding with production deploy"
 
+      # Capture the live production image BEFORE overwriting it. Auto-rollback has no
+      # deployment slots on Basic tier (IT handover item 1), so PREVIOUS_IMAGE is the only
+      # automatic recovery path. Measured failures (e.g. 30528881486, 30526435273): migrate
+      # failed after the new image was already live, then auto-rollback exited 1 with
+      # "no staging slot and no previous_image" because this step queried the wrong Azure
+      # property and always wrote an empty output.
+      #
+      # `az webapp config container show` returns a LIST of {name,value} app settings
+      # (DOCKER_CUSTOM_IMAGE_NAME, …), not an object with linuxFxVersion. Querying
+      # linuxFxVersion on that list is always empty. Prefer DOCKER_CUSTOM_IMAGE_NAME,
+      # then siteConfig.linuxFxVersion (DOCKER|…), then the app setting of the same name.
       - name: Capture previous production image
         id: capture_previous_image
         run: |
           set -euo pipefail
-          RAW=$(az webapp config container show \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --query "linuxFxVersion" -o tsv 2>/dev/null || echo "")
-          PREV="${RAW#DOCKER|}"
-          if [ -z "$PREV" ] || [ "$PREV" = "None" ]; then
-            echo "::warning::Unable to capture previous production image before deploy"
-            echo "previous_image=" >> "$GITHUB_OUTPUT"
-          else
-            echo "Previous production image: $PREV"
-            echo "previous_image=$PREV" >> "$GITHUB_OUTPUT"
-            echo "PREVIOUS_IMAGE=$PREV" >> "$GITHUB_ENV"
+          RG="${{ env.AZURE_RESOURCE_GROUP }}"
+          APP="${{ env.AZURE_WEBAPP_NAME }}"
+          PREV=""
+
+          PREV=$(az webapp config container show \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --query "[?name=='DOCKER_CUSTOM_IMAGE_NAME'].value | [0]" -o tsv 2>/dev/null || true)
+          PREV="${PREV:-}"
+
+          if [ -z "$PREV" ] || [ "$PREV" = "None" ] || [ "$PREV" = "null" ]; then
+            RAW=$(az webapp show \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --query "siteConfig.linuxFxVersion" -o tsv 2>/dev/null || true)
+            RAW="${RAW:-}"
+            case "$RAW" in
+              DOCKER\|*) PREV="${RAW#DOCKER|}" ;;
+              *) PREV="$RAW" ;;
+            esac
           fi
+
+          if [ -z "$PREV" ] || [ "$PREV" = "None" ] || [ "$PREV" = "null" ]; then
+            PREV=$(az webapp config appsettings list \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --query "[?name=='DOCKER_CUSTOM_IMAGE_NAME'].value | [0]" -o tsv 2>/dev/null || true)
+            PREV="${PREV:-}"
+          fi
+
+          if [ -z "$PREV" ] || [ "$PREV" = "None" ] || [ "$PREV" = "null" ]; then
+            echo "::error::Unable to capture previous production image before deploy — refusing to overwrite production without a rollback target"
+            echo "Auto-rollback has no deployment slots on the current Basic tier; PREVIOUS_IMAGE is the only automatic recovery path."
+            echo "Fix Azure container config readability, or use workflow Emergency Rollback - Production with a known-good image SHA."
+            echo "previous_image=" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "Previous production image: $PREV"
+          echo "previous_image=$PREV" >> "$GITHUB_OUTPUT"
+          echo "PREVIOUS_IMAGE=$PREV" >> "$GITHUB_ENV"
 
       - name: Deploy to Azure Web App
         run: |
@@ -1471,7 +1510,7 @@ jobs:
           echo ""
           # Phase 5: Container Image Provenance Verification (Deploy Proof v3)
           # Primary verification: identity (build_sha) + ACR digest provenance
-          # Secondary (informational): Azure linuxFxVersion (unreliable, may return empty)
+          # Secondary (informational): Azure running image (DOCKER_CUSTOM_IMAGE_NAME / siteConfig)
           echo "### Phase 5: Container Image Provenance Verification"
           
           # Check if we have valid digest provenance from build step
@@ -1484,34 +1523,42 @@ jobs:
             PROVENANCE_RESULT="MISSING"
           fi
           
-          # Attempt Azure linuxFxVersion check (informational only)
-          RUNNING_IMAGE_RAW=$(az webapp config container show \
+          # Attempt Azure running-image check (informational only).
+          # Prefer DOCKER_CUSTOM_IMAGE_NAME from container settings — linuxFxVersion is not
+          # a field on `az webapp config container show` (that command returns a name/value list).
+          RUNNING_IMAGE=$(az webapp config container show \
             --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "linuxFxVersion" -o tsv 2>/dev/null || echo "")
-          RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
+            --query "[?name=='DOCKER_CUSTOM_IMAGE_NAME'].value | [0]" -o tsv 2>/dev/null || echo "")
+          if [ -z "$RUNNING_IMAGE" ] || [ "$RUNNING_IMAGE" = "None" ] || [ "$RUNNING_IMAGE" = "null" ]; then
+            RUNNING_IMAGE_RAW=$(az webapp show \
+              --name "${{ env.AZURE_WEBAPP_NAME }}" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "siteConfig.linuxFxVersion" -o tsv 2>/dev/null || echo "")
+            RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
+          fi
           RUNNING_IMAGE_SAFE="${RUNNING_IMAGE#*/}"
           AZURE_CHECK="UNKNOWN"
           
           if [ -z "$RUNNING_IMAGE" ]; then
-            echo "ℹ️ Azure linuxFxVersion: not reported (informational)"
+            echo "ℹ️ Azure running image: not reported (informational)"
             AZURE_CHECK="NOT_REPORTED"
           elif echo "$RUNNING_IMAGE" | grep -q "@sha256:"; then
             RUNNING_DIGEST="${RUNNING_IMAGE##*@}"
             if [ "$RUNNING_DIGEST" = "$EXPECTED_DIGEST" ]; then
-              echo "✅ Azure linuxFxVersion: digest matches (bonus verification)"
+              echo "✅ Azure running image: digest matches (bonus verification)"
               AZURE_CHECK="MATCH"
             else
-              echo "ℹ️ Azure linuxFxVersion: digest differs (may be stale, informational)"
+              echo "ℹ️ Azure running image: digest differs (may be stale, informational)"
               AZURE_CHECK="STALE"
             fi
           elif echo "$RUNNING_IMAGE" | grep -q ":"; then
             RUNNING_TAG=$(echo "$RUNNING_IMAGE_SAFE" | awk -F: '{print $NF}')
             if [ "$RUNNING_TAG" = "$EXPECTED_SHA" ]; then
-              echo "✅ Azure linuxFxVersion: tag matches"
+              echo "✅ Azure running image: tag matches"
               AZURE_CHECK="MATCH"
             else
-              echo "ℹ️ Azure linuxFxVersion: tag differs (may be stale, informational)"
+              echo "ℹ️ Azure running image: tag differs (may be stale, informational)"
               AZURE_CHECK="STALE"
             fi
           fi
@@ -1870,7 +1917,14 @@ jobs:
             echo "❌ PROD_AZURE_WEBAPP_NAME / AZURE_WEBAPP_NAME is empty — cannot rollback"
             exit 1
           fi
-          echo "🔄 Auto-rollback targeting ${APP} in ${RG}"
+          # RG is intentionally rg-qgp-staging: production App Services live in the shared
+          # resource group (ADR-0019). Targeting that RG is not a mis-route to staging.
+          echo "🔄 Auto-rollback targeting ${APP} in ${RG} (shared prod/staging RG)"
+          if [ -n "${PREVIOUS_IMAGE:-}" ]; then
+            echo "previous_image captured before deploy: ${PREVIOUS_IMAGE}"
+          else
+            echo "previous_image captured before deploy: (empty)"
+          fi
 
           SLOTS=$(az webapp deployment slot list \
             --name "$APP" \
