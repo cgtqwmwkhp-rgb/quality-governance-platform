@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # =============================================================================
 # Engineer Groups
@@ -276,6 +276,14 @@ class QuizSubmitResponse(BaseModel):
 
 
 class CompleteAssignmentRequest(BaseModel):
+    """Request to complete a document-campaign assignment.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of completion succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     acceptance_statement: str = Field(..., min_length=1)
     signature_data: Optional[str] = None
     signature_disposition: Optional[str] = None
