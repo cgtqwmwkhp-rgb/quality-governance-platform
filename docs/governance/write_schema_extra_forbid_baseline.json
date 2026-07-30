@@ -11,6 +11,7 @@
     "AddTrainingRequest",
     "AddWhyRequest",
     "AllocationRequest",
+    "AskAssignmentQuestionRequest",
     "AssessCompetencyRequest",
     "AssignAcknowledgmentRequest",
     "CompleteAnalysisRequest",
@@ -24,10 +25,11 @@
     "CreateFiveWhysRequest",
     "CreateProfileRequest",
     "CreateWatchActionRequest",
+    "QuestionReplyRequest",
     "RecordAcknowledgmentRequest"
   ],
-  "max_open_count": 272,
-  "min_forbid_count": 24,
+  "max_open_count": 270,
+  "min_forbid_count": 26,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
