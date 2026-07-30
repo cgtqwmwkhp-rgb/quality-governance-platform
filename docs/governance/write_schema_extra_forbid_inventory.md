@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 24 |
-| Open / lax (unknown fields ignored) | 272 |
+| `extra="forbid"` (strict) | 26 |
+| Open / lax (unknown fields ignored) | 270 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 24 |
-| `max_open_count` | 272 |
+| `min_forbid_count` | 26 |
+| `max_open_count` | 270 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -36,6 +36,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AddTrainingRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/training`
 - `AddWhyRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/add-why`
 - `AllocationRequest` — `POST /api/v1/vehicles/allocate`
+- `AskAssignmentQuestionRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/questions`
 - `AssessCompetencyRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/assess`
 - `AssignAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/requirements/{requirement_id}/assign`
 - `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/complete`, `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete`
@@ -49,11 +50,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `CreateFiveWhysRequest` — `POST /api/v1/rca-tools/five-whys`
 - `CreateProfileRequest` — `POST /api/v1/auditor-competence/profiles`
 - `CreateWatchActionRequest` — `POST /api/v1/knowledge-bank/regulatory-watch/impacts/{impact_id}/create-action`
+- `QuestionReplyRequest` — `POST /api/v1/document-campaigns/questions/{thread_id}/reply`
 - `RecordAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/{acknowledgment_id}/acknowledge`
 
 ## Open schemas (unknown fields silently ignored)
 
-272 schemas. Full list is the remediation backlog;
+270 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -68,7 +70,6 @@ converting them is out of scope for the inventory lock PR.
 - `ApplyImportRequest`
 - `ApprovalActionRequest`
 - `ApprovalResponse`
-- `AskAssignmentQuestionRequest`
 - `AssessEntityRequest`
 - `AssessmentResponseCreate`
 - `AssessmentResponseUpdate`
@@ -226,7 +227,6 @@ converting them is out of scope for the inventory lock PR.
 - `PromptTemplateRequest`
 - `PushSubscriptionCreate`
 - `QuestionGenerationRequest`
-- `QuestionReplyRequest`
 - `QuickReportCreate`
 - `QuizSubmitRequest`
 - `ROIInvestmentCreate`
