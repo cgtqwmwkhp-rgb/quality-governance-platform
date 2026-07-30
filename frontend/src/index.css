@@ -9,16 +9,16 @@
 
 @layer base {
   :root {
-    /* === Brand Core - Electric Lime === */
-    --primary: 82 85% 45%;
-    --primary-hover: 82 80% 38%;
+    /* === Brand Core - Electric Lime (light: WCAG AA text on white) === */
+    --primary: 82 85% 25%;
+    --primary-hover: 82 80% 20%;
     --primary-light: 82 50% 95%;
-    --primary-foreground: 0 0% 5%;
+    --primary-foreground: 0 0% 100%;
 
     /* === Text Hierarchy === */
     --foreground: 220 15% 10%;
     --foreground-secondary: 220 10% 35%;
-    --muted-foreground: 220 8% 50%;
+    --muted-foreground: 220 8% 42%;
 
     /* === Backgrounds === */
     --background: 220 20% 99%;
@@ -32,14 +32,14 @@
     --border: 220 15% 90%;
     --border-strong: 220 15% 82%;
     --input: 220 15% 92%;
-    --ring: 82 85% 45%;
+    --ring: 82 85% 25%;
 
     /* === Secondary & Muted === */
     --secondary: 220 15% 95%;
     --secondary-foreground: 220 15% 20%;
     --muted: 220 15% 95%;
     --accent: 82 50% 95%;
-    --accent-foreground: 82 85% 30%;
+    --accent-foreground: 82 85% 25%;
 
     /* === Semantic Colors === */
     --success: 160 85% 35%;
@@ -62,10 +62,10 @@
     --shadow-sm: 0 1px 2px hsl(220 20% 10% / 0.04);
     --shadow-md: 0 4px 12px hsl(220 20% 10% / 0.08);
     --shadow-lg: 0 12px 40px hsl(220 20% 10% / 0.12);
-    --shadow-glow: 0 0 40px hsl(82 85% 45% / 0.2);
+    --shadow-glow: 0 0 40px hsl(82 85% 25% / 0.2);
 
     /* === Chart Colors === */
-    --chart-1: 82 85% 45%;
+    --chart-1: 82 85% 25%;
     --chart-2: 160 85% 40%;
     --chart-3: 210 100% 50%;
     --chart-4: 45 95% 50%;
