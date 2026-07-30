@@ -440,35 +440,30 @@ This document tracks security vulnerabilities that have been reviewed and accept
 
 ---
 
-### GHSA-6v7p-g79w-8964 (msgpack 1.1.2)
+### GHSA-6v7p-g79w-8964 (msgpack 1.1.2) — CLOSED 30/07/2026
 
-**Package**: `msgpack` (transitive dependency)
+**Package**: `msgpack` (was flagged via **pip's vendored copy**, not the application lockfile)
 
 **Vulnerability**: Unpacker reuse after error may crash the process (DoS).
 
-**Severity**: Medium
+**Severity**: Medium / Trivy HIGH on container scan
 
-**Status**: **ACCEPTED WITH MITIGATION**
+**Status**: **CLOSED — remediated**
 
-**Rationale**:
-1. Application code does not expose a public msgpack unpack endpoint for untrusted payloads.
-2. No patched release is confirmed in-tree yet for all consumers.
-3. Process isolation in App Service limits blast radius of a worker crash.
-
-**Mitigation**:
-- Avoid unpacking untrusted msgpack in request handlers.
-- Upgrade when a fixed `msgpack` is available via lockfile refresh.
-
-**Alternative Considered**:
-- Vendoring a fork is unnecessary for a transitive DoS advisory.
+**Resolution**:
+1. Measured on tip `12b4d42c`: `requirements.lock` does **not** install `msgpack`;
+   Trivy was matching `pip/_vendor/msgpack` (`vendor.txt` pins `msgpack==1.1.2`) and
+   the same file's `setuptools==70.3.0` (CVE-2025-47273) inside the runtime image.
+2. Dockerfile now uninstalls pip from the builder venv and from the production system
+   Python after dependency install / setuptools upgrade. Runtime no longer ships pip.
+3. Application still does not depend on msgpack; no lockfile pin was required.
 
 **Owner**: Security Team
 
-**Review Date**: 2026-07-09
+**Review Date**: 2026-07-30
 
-**Expiry Date**: 2026-10-07 (90 days)
-
-**Action Required**: Upgrade `msgpack` when patched, then remove this waiver.
+**Action Required**: None — keep the Dockerfile guard
+   (`tests/unit/test_dockerfile_runtime_excludes_pip.py`) green.
 
 ---
 

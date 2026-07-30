@@ -20,7 +20,15 @@ RUN pip install --no-cache-dir --upgrade pip 'setuptools>=83.0.0' && \
       pip install --no-cache-dir -r requirements.lock; \
     else \
       pip install --no-cache-dir -r requirements.txt; \
-    fi
+    fi && \
+    # Runtime images must not ship pip: Trivy flags pip's vendored msgpack 1.1.2
+    # (GHSA-6v7p-g79w-8964) and setuptools 70.3.0 (CVE-2025-47273) via vendor.txt
+    # even when the application lockfile does not install either package.
+    # pip is build-only; uninstall it from the venv before the production COPY.
+    pip uninstall -y pip && \
+    rm -rf /opt/venv/lib/python3.11/site-packages/pip \
+           /opt/venv/lib/python3.11/site-packages/pip-*.dist-info \
+           /opt/venv/bin/pip /opt/venv/bin/pip3 /opt/venv/bin/pip3.11
 
 # Production stage
 FROM python:3.11-slim-bookworm@sha256:420310dd2ff7895895f0f1f9d15cae5a95dabceb8f1d6b9a23ef33c2c1c542c3 AS production
@@ -34,13 +42,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade system setuptools and wheel to resolve vendored CVEs (PYSEC-2026-3447)
-RUN pip install --no-cache-dir --upgrade 'setuptools>=83.0.0' wheel
+# Upgrade system setuptools and wheel to resolve vendored CVEs (PYSEC-2026-3447),
+# then remove system pip for the same Trivy vendor.txt reason as the builder venv.
+RUN pip install --no-cache-dir --upgrade 'setuptools>=83.0.0' wheel && \
+    pip uninstall -y pip && \
+    rm -rf /usr/local/lib/python3.11/site-packages/pip \
+           /usr/local/lib/python3.11/site-packages/pip-*.dist-info \
+           /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.11
 
 # Create non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
-# Copy virtual environment from builder
+# Copy virtual environment from builder (already pip-free)
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
