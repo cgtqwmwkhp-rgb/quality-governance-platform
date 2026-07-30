@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 18 |
-| Open / lax (unknown fields ignored) | 278 |
+| `extra="forbid"` (strict) | 20 |
+| Open / lax (unknown fields ignored) | 276 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 18 |
-| `max_open_count` | 278 |
+| `min_forbid_count` | 20 |
+| `max_open_count` | 276 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -37,7 +37,9 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AddWhyRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/add-why`
 - `AllocationRequest` — `POST /api/v1/vehicles/allocate`
 - `AssessCompetencyRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/assess`
+- `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete` (also fishbone complete)
 - `CompleteTrainingRequest` — `POST /api/v1/auditor-competence/training/{training_id}/complete`
+- `CreateCAPARequest` — `POST /api/v1/rca-tools/capa`
 - `CreateExportRequest` — `POST /api/v1/exports`
 - `CreateFindingCapaRequest` — `POST /api/v1/audits/findings/{finding_id}/capa`
 - `CreateFishboneRequest` — `POST /api/v1/rca-tools/fishbone`
@@ -47,7 +49,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-278 schemas. Full list is the remediation backlog;
+276 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -117,13 +119,11 @@ converting them is out of scope for the inventory lock PR.
 - `CompetencyRequirementUpdate`
 - `ComplaintCreate`
 - `ComplaintUpdate`
-- `CompleteAnalysisRequest`
 - `CompleteAssignmentRequest`
 - `ContractCreate`
 - `ContractUpdate`
 - `ConvertToAssessmentRequest`
 - `CostRecord`
-- `CreateCAPARequest`
 - `CreateCapaRequest`
 - `CreateFromRecordRequest`
 - `CustomerPackOmitApproveRequest`

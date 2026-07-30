@@ -12,7 +12,9 @@
     "AddWhyRequest",
     "AllocationRequest",
     "AssessCompetencyRequest",
+    "CompleteAnalysisRequest",
     "CompleteTrainingRequest",
+    "CreateCAPARequest",
     "CreateExportRequest",
     "CreateFindingCapaRequest",
     "CreateFishboneRequest",
@@ -20,8 +22,8 @@
     "CreateProfileRequest",
     "CreateWatchActionRequest"
   ],
-  "max_open_count": 278,
-  "min_forbid_count": 18,
+  "max_open_count": 276,
+  "min_forbid_count": 20,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
