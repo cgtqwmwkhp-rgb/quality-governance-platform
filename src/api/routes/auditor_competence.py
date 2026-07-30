@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +44,14 @@ class UpdateProfileRequest(BaseModel):
 
 
 class AddCertificationRequest(BaseModel):
+    """Add a certification to an auditor competence profile.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the certification being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     certification_name: str
     certification_body: str
     issued_date: datetime
@@ -54,6 +62,14 @@ class AddCertificationRequest(BaseModel):
 
 
 class AddTrainingRequest(BaseModel):
+    """Add a training record to an auditor competence profile.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the training being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     training_name: str
     start_date: datetime
     training_type: str = "course"
