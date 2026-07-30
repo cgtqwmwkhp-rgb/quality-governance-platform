@@ -12,6 +12,10 @@ entirely for the same record and the same caller:
   on PATCH, because the route's read helper exempted superusers from the tenant
   filter and the service's read did not.
 
+Incidents share the same closure gate and the same ``resolve_case_tenant_id`` /
+``assert_case_can_close`` pairing as RTAs. Covering that register here locks
+w2-closure-parity so an incident-route drift cannot reintroduce the B-1 split.
+
 These tests drive the real route functions rather than the services alone: both
 defects lived in what the route chose to pass, so a test that calls the services
 directly would have missed them.
@@ -25,10 +29,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.api.routes.incidents import get_incident_closure_validation
+from src.api.routes.incidents import update_incident as update_incident_route
 from src.api.routes.near_miss import get_near_miss as get_near_miss_route
 from src.api.routes.near_miss import update_near_miss as update_near_miss_route
 from src.api.routes.rtas import get_rta_closure_validation
 from src.api.routes.rtas import update_rta as update_rta_route
+from src.api.schemas.incident import IncidentUpdate
 from src.api.schemas.near_miss import NearMissUpdate
 from src.api.schemas.rta import RTAUpdate
 from src.domain.exceptions import StateTransitionError
@@ -90,6 +97,32 @@ def _near_miss(**overrides):
     return SimpleNamespace(**defaults)
 
 
+def _incident(**overrides):
+    defaults = {
+        "id": 1,
+        "tenant_id": 1,
+        "reference_number": "INC-2026-0001",
+        "title": "Slip on wet loading bay",
+        "status": "under_investigation",
+        "lessons_learnt": None,
+        "closed_at": None,
+        "closed_by_id": None,
+        "owner_id": None,
+        "updated_at": None,
+        "updated_by_id": None,
+        "contract_id": None,
+        "medical_assistance": None,
+        "emergency_services": None,
+        "first_aid_given": None,
+        "emergency_services_called": None,
+        "created_at": datetime(2026, 1, 7, tzinfo=timezone.utc),
+        "reported_date": datetime(2026, 1, 7, tzinfo=timezone.utc),
+        "severity": "medium",
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
 def _db_returning(row):
     """Session whose every query yields ``row`` (or nothing when ``row`` is None)."""
     result = MagicMock()
@@ -110,14 +143,14 @@ def _no_open_work():
     )
 
 
-def _one_open_action():
+def _one_open_action(*, kind: str = "rta_action", reference_number: str = "RTA-ACT-3", title: str = "Recover vehicle"):
     item = CaseOpenWorkItem(
-        kind="rta_action",
+        kind=kind,
         id=3,
-        reference_number="RTA-ACT-3",
-        title="Recover vehicle",
+        reference_number=reference_number,
+        title=title,
         status="in_progress",
-        action_key="rta_action:3",
+        action_key=f"{kind}:3",
     )
     return patch(
         "src.domain.services.case_closure.fetch_open_work_for_case",
@@ -142,6 +175,14 @@ def _quiet_near_miss_side_effects():
     )
 
 
+def _quiet_incident_side_effects():
+    return (
+        patch("src.domain.services.incident_service.record_audit_event", AsyncMock()),
+        patch("src.domain.services.incident_service.invalidate_tenant_cache", AsyncMock()),
+        patch("src.api.routes.incidents._trigger_operational_standards_assess", AsyncMock()),
+    )
+
+
 async def _validation_outcome(rta, user, db):
     """``GET /rtas/{id}/closure-validation`` as an outcome we can compare."""
     try:
@@ -160,6 +201,30 @@ async def _close_outcome(rta, user, db, *, lessons):
             db,
             user,
             request_id="req-agreement",
+        )
+    except StateTransitionError as exc:
+        return ("refused", exc.code)
+    return ("closed", ())
+
+
+async def _incident_validation_outcome(incident, user, db):
+    """``GET /incidents/{id}/closure-validation`` as an outcome we can compare."""
+    try:
+        payload = await get_incident_closure_validation(incident.id, db, user)
+    except StateTransitionError as exc:
+        return ("refused", exc.code)
+    return ("ok", tuple(payload["reasons"]))
+
+
+async def _incident_close_outcome(incident, user, db, *, lessons):
+    """``PATCH /incidents/{id}`` with a closing payload, as a comparable outcome."""
+    try:
+        await update_incident_route(
+            incident.id,
+            IncidentUpdate(status="closed", lessons_learnt=lessons),
+            db,
+            user,
+            request_id="req-incident-agreement",
         )
     except StateTransitionError as exc:
         return ("refused", exc.code)
@@ -262,6 +327,111 @@ class TestValidationAndCloseAgree:
             patch("src.api.routes.rtas._trigger_operational_standards_assess", AsyncMock()),
         ):
             await _close_outcome(_rta(tenant_id=7), user, _db_returning(_rta(tenant_id=7)), lessons=LESSONS)
+
+        assert evict.await_args.args[0] == 7
+
+
+class TestIncidentValidationAndCloseAgree:
+    """w2-closure-parity: incidents must keep the same read/write closure contract as RTAs."""
+
+    @pytest.mark.asyncio
+    async def test_tenantless_case_is_refused_identically_by_both_paths(self):
+        user = _user(tenant_id=1, is_superuser=True)
+        patches = _quiet_incident_side_effects()
+
+        with _no_open_work(), patches[0], patches[1], patches[2]:
+            validation = await _incident_validation_outcome(
+                _incident(tenant_id=None), user, _db_returning(_incident(tenant_id=None))
+            )
+            close = await _incident_close_outcome(
+                _incident(tenant_id=None),
+                user,
+                _db_returning(_incident(tenant_id=None)),
+                lessons=LESSONS,
+            )
+
+        assert validation == close
+        assert validation == ("refused", CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED)
+
+    @pytest.mark.asyncio
+    async def test_tenantless_case_never_blames_open_actions(self):
+        user = _user(tenant_id=1, is_superuser=True)
+        patches = _quiet_incident_side_effects()
+
+        with _no_open_work(), patches[0], patches[1], patches[2]:
+            _status, code = await _incident_close_outcome(
+                _incident(tenant_id=None),
+                user,
+                _db_returning(_incident(tenant_id=None)),
+                lessons=LESSONS,
+            )
+
+        assert code != CLOSURE_REASON_OPEN_ACTIONS_REMAIN
+
+    @pytest.mark.asyncio
+    async def test_missing_lessons_is_reported_and_enforced_consistently(self):
+        user = _user(tenant_id=1, is_superuser=True)
+        patches = _quiet_incident_side_effects()
+
+        with _no_open_work(), patches[0], patches[1], patches[2]:
+            validation = await _incident_validation_outcome(_incident(), user, _db_returning(_incident()))
+            refused = await _incident_close_outcome(_incident(), user, _db_returning(_incident()), lessons=None)
+            accepted = await _incident_close_outcome(_incident(), user, _db_returning(_incident()), lessons=LESSONS)
+
+        assert validation == ("ok", (CLOSURE_REASON_MISSING_LESSONS_LEARNT,))
+        assert refused == ("refused", CLOSURE_REASON_MISSING_LESSONS_LEARNT)
+        assert accepted == ("closed", ())
+
+    @pytest.mark.asyncio
+    async def test_open_work_is_reported_and_enforced_consistently(self):
+        user = _user(tenant_id=1, is_superuser=True)
+        stored = {"lessons_learnt": LESSONS}
+        patches = _quiet_incident_side_effects()
+
+        with (
+            _one_open_action(kind="incident_action", reference_number="INC-ACT-3", title="Repair bay lighting"),
+            patches[0],
+            patches[1],
+            patches[2],
+        ):
+            validation = await _incident_validation_outcome(
+                _incident(**stored), user, _db_returning(_incident(**stored))
+            )
+            close = await _incident_close_outcome(
+                _incident(**stored), user, _db_returning(_incident(**stored)), lessons=LESSONS
+            )
+
+        assert validation == ("ok", (CLOSURE_REASON_OPEN_ACTIONS_REMAIN,))
+        assert close == ("refused", CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
+
+    @pytest.mark.asyncio
+    async def test_both_paths_probe_the_cases_tenant_not_the_callers(self):
+        user = _user(tenant_id=1, is_superuser=True)
+        patches = _quiet_incident_side_effects()
+
+        with _no_open_work() as probe, patches[0], patches[1], patches[2]:
+            await _incident_validation_outcome(_incident(tenant_id=7), user, _db_returning(_incident(tenant_id=7)))
+            await _incident_close_outcome(
+                _incident(tenant_id=7), user, _db_returning(_incident(tenant_id=7)), lessons=LESSONS
+            )
+
+            probed_tenants = {call.kwargs["tenant_id"] for call in probe.call_args_list}
+
+        assert probed_tenants == {7}
+
+    @pytest.mark.asyncio
+    async def test_cross_tenant_close_evicts_the_records_register_not_the_callers(self):
+        user = _user(tenant_id=1, is_superuser=True)
+
+        with (
+            _no_open_work(),
+            patch("src.domain.services.incident_service.record_audit_event", AsyncMock()),
+            patch("src.domain.services.incident_service.invalidate_tenant_cache", AsyncMock()) as evict,
+            patch("src.api.routes.incidents._trigger_operational_standards_assess", AsyncMock()),
+        ):
+            await _incident_close_outcome(
+                _incident(tenant_id=7), user, _db_returning(_incident(tenant_id=7)), lessons=LESSONS
+            )
 
         assert evict.await_args.args[0] == 7
 
