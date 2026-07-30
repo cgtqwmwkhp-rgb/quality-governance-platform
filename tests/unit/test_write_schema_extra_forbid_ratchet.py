@@ -154,16 +154,7 @@ class TestCli:
         payload = json.loads(baseline_path.read_text(encoding="utf-8"))
         assert payload["min_forbid_count"] == 2
         assert payload["max_open_count"] == 1
-        assert payload["forbid_schemas"] == [
-        "AcknowledgementAction",
-        "AcknowledgementCreate",
-        "ActionCreate",
-        "ActionOwnerNoteCreate",
-        "ActionUpdate",
-        "AddCertificationRequest",
-        "AddTrainingRequest",
-        "AddWhyRequest",
-    ]
+        assert payload["forbid_schemas"] == ["ActionCreate", "ActionUpdate"]
 
 
 def test_committed_baseline_shape() -> None:
