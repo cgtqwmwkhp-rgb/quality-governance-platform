@@ -143,3 +143,64 @@ async def test_revision_events_carry_request_id_for_correlation():
         "request_id": "req-123",
         "source": "investigation_patch",
     }
+
+
+@pytest.mark.asyncio
+async def test_close_emits_status_changed_event():
+    """PX-141 / w4-px141: close via PATCH must write a STATUS_CHANGED revision event."""
+    spy = await _patch(
+        _investigation(status=InvestigationStatus.COMPLETED, completed_at=datetime(2026, 7, 2)),
+        {"status": "closed"},
+    )
+
+    assert spy.await_count == 1
+    kwargs = spy.await_args.kwargs
+    assert kwargs["event_type"] == "STATUS_CHANGED"
+    assert kwargs["field_path"] == "status"
+    assert kwargs["old_value"] == "completed"
+    assert kwargs["new_value"] == "closed"
+
+
+@pytest.mark.asyncio
+async def test_approve_emits_approved_revision_event():
+    """PX-141 / w4-px141: POST /approve must emit an APPROVED timeline event."""
+    from src.api.routes.investigations import approve_investigation
+
+    inv = _investigation(
+        status=InvestigationStatus.UNDER_REVIEW,
+        assigned_to_user_id=42,
+        data={"findings": "ok", "conclusion": "ok", "lead_investigator": "pat@example.com"},
+    )
+    # approve path needs started_at for the complete gate
+    inv.started_at = datetime(2026, 7, 1)
+    inv.level = "medium"
+    inv.approved_at = None
+    inv.approved_by_id = None
+    inv.rejection_reason = None
+
+    db = _db(inv)
+
+    with (
+        patch(
+            "src.api.routes.investigations._ensure_investigation_ready_for_status",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "src.domain.services.investigation_service.resolve_assigned_entity_reference",
+            new=AsyncMock(return_value="INC-99"),
+        ),
+        patch.object(InvestigationService, "create_revision_event", new=AsyncMock()) as spy,
+    ):
+        await approve_investigation(
+            investigation_id=42,
+            db=db,
+            current_user=SimpleNamespace(id=11, tenant_id=7, is_superuser=False),
+            approved=True,
+        )
+
+    assert spy.await_count == 1
+    kwargs = spy.await_args.kwargs
+    assert kwargs["event_type"] == "APPROVED"
+    assert kwargs["old_value"] == {"status": "under_review"}
+    assert kwargs["new_value"] == {"status": "completed"}
+    assert kwargs["actor_id"] == 11
