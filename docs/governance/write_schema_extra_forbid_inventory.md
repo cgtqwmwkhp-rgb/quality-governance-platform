@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 20 |
-| Open / lax (unknown fields ignored) | 276 |
+| `extra="forbid"` (strict) | 22 |
+| Open / lax (unknown fields ignored) | 274 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 20 |
-| `max_open_count` | 276 |
+| `min_forbid_count` | 22 |
+| `max_open_count` | 274 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -37,6 +37,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AddWhyRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/add-why`
 - `AllocationRequest` — `POST /api/v1/vehicles/allocate`
 - `AssessCompetencyRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/assess`
+- `AssignAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/requirements/{requirement_id}/assign`
 - `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete` (also fishbone complete)
 - `CompleteTrainingRequest` — `POST /api/v1/auditor-competence/training/{training_id}/complete`
 - `CreateCAPARequest` — `POST /api/v1/rca-tools/capa`
@@ -46,10 +47,11 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `CreateFiveWhysRequest` — `POST /api/v1/rca-tools/five-whys`
 - `CreateProfileRequest` — `POST /api/v1/auditor-competence/profiles`
 - `CreateWatchActionRequest` — `POST /api/v1/knowledge-bank/regulatory-watch/impacts/{impact_id}/create-action`
+- `RecordAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/{acknowledgment_id}/acknowledge`
 
 ## Open schemas (unknown fields silently ignored)
 
-276 schemas. Full list is the remediation backlog;
+274 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -73,7 +75,6 @@ converting them is out of scope for the inventory lock PR.
 - `AssessorGuidanceRequest`
 - `AssetTypeCreate`
 - `AssetTypeUpdate`
-- `AssignAcknowledgmentRequest`
 - `AuditCreate`
 - `AuditFindingCreate`
 - `AuditFindingUpdate`
@@ -234,7 +235,6 @@ converting them is out of scope for the inventory lock PR.
 - `RTACreate`
 - `RTAUpdate`
 - `RecommendationRequest`
-- `RecordAcknowledgmentRequest`
 - `RefreshTokenRequest`
 - `ReminderDefaultsUpdateRequest`
 - `ReportRequest`
