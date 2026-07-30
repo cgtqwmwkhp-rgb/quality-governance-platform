@@ -31,7 +31,7 @@ from __future__ import annotations
 # PX-168 is the visible symptom of this on ``ActionCreate``. ``ActionCreate`` /
 # ``ActionUpdate`` already declare ``extra="forbid"``; they remain listed only
 # until a dedicated backlog cleanup removes already-strict schemas. This PR
-# converts B-10 pairs through ``AddCauseRequest`` / ``AllocationRequest`` and
+# converts B-10 pairs through ``CreateFiveWhysRequest`` / ``CreateFishboneRequest`` and
 # removes those from the set so Guard 2 / round-trip start enforcing them.
 KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
     {
@@ -113,8 +113,6 @@ KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
         "CreateCapaRequest",
         "CreateExportRequest",
         "CreateFindingCapaRequest",
-        "CreateFishboneRequest",
-        "CreateFiveWhysRequest",
         "CreateFromRecordRequest",
         "CreateProfileRequest",
         "CreateWatchActionRequest",
