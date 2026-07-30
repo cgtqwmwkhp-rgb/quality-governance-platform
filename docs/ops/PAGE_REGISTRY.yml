@@ -641,6 +641,96 @@ admin_routes:
     expected_degraded_state: null
     description: "Admin editor for H&S reporting-period hours used by KPI rates"
 
+
+  # C-61 residual after #1446/#1448: Layout admin nav, AdminDashboard tiles, and
+  # hub deep-links still target real App.tsx routes that PAGE_REGISTRY omitted.
+  # Census (tip faff5a38): each route below is declared in frontend/src/App.tsx with
+  # an existing page component and is linked from Layout and/or AdminDashboard /
+  # Complaints / SafetyAssetRegister / asset-health tiles. Registered as P1 (not P0)
+  # so the P0 denominator stays stable. Skipped: /admin/campaign-compliance and
+  # /admin/hsec-inbox (Navigate aliases only); /portal/tools|/van|/work (linked but
+  # no matching App.tsx route — real dead ends, not registry false positives).
+  - pageId: admin-users
+    route: /admin/users
+    auth: jwt_admin
+    criticality: P1
+    component: AdminUserManagement
+    expected_empty_state: "User management table with no users or empty search"
+    expected_degraded_state: "Feature-disabled message when admin user management flag is off"
+    description: "Admin user and role management"
+
+  - pageId: admin-lookups
+    route: /admin/lookups
+    auth: jwt_admin
+    criticality: P1
+    component: LookupTables
+    expected_empty_state: "Lookup category list with no options in the selected category"
+    expected_degraded_state: null
+    description: "Admin lookup tables for intake and register dropdowns"
+
+  - pageId: admin-hseq-inbox
+    route: /admin/hseq-inbox
+    auth: jwt_admin
+    criticality: P1
+    component: HsecQuestionInbox
+    expected_empty_state: "HSEQ question inbox with no pending engineer questions"
+    expected_degraded_state: null
+    description: "HSEQ inbox for answering engineer questions on assigned reads"
+
+  - pageId: admin-notifications
+    route: /admin/notifications
+    auth: jwt_admin
+    criticality: P1
+    component: NotificationSettings
+    expected_empty_state: "Notification settings form with defaults"
+    expected_degraded_state: null
+    description: "Admin email and alert notification settings"
+
+  - pageId: admin-partner-webhooks
+    route: /admin/partner-webhooks
+    auth: jwt_admin
+    criticality: P1
+    component: PartnerWebhooks
+    expected_empty_state: "Partner webhook subscriptions list empty"
+    expected_degraded_state: null
+    description: "Partner event webhook subscription management"
+
+  - pageId: admin-library-roles
+    route: /admin/library-roles
+    auth: jwt_admin
+    criticality: P1
+    component: LibraryRoles
+    expected_empty_state: "Library role facets with defaults"
+    expected_degraded_state: null
+    description: "Document library role facets and restricted category gates"
+
+  - pageId: admin-engineer-groups
+    route: /admin/engineer-groups
+    auth: jwt_admin
+    criticality: P1
+    component: EngineerGroups
+    expected_empty_state: "Engineer campaign audience groups empty"
+    expected_degraded_state: null
+    description: "Campaign audience engineer groups for HSEQ launches"
+
+  - pageId: workforce-competence-gaps
+    route: /workforce/competence-gaps
+    auth: jwt_admin
+    criticality: P1
+    component: CompetenceGaps
+    expected_empty_state: "Competence gaps board with no outstanding gaps"
+    expected_degraded_state: null
+    description: "Workforce competence gap analysis"
+
+  - pageId: safety-assets-analytics
+    route: /safety-assets/analytics
+    auth: jwt_admin
+    criticality: P1
+    component: AssetHealthAnalytics
+    expected_empty_state: "Asset health analytics with zero-series charts"
+    expected_degraded_state: null
+    description: "Safety asset health analytics deep-link from hub tiles"
+
   - pageId: admin-contracts
     route: /admin/contracts
     auth: jwt_admin
@@ -663,7 +753,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 67
+  total_routes: 78
   p0_routes: 12
-  p1_routes: 33
+  p1_routes: 44
   p2_routes: 22
