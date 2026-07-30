@@ -112,6 +112,9 @@ test('C-50: a11y suite is parallel (no serial mode) and writes expected_entries'
   assert.match(body, /mode:\s*['"]parallel['"]/);
   assert.match(body, /expected_entries:\s*pages\.length/);
   assert.match(body, /a11yAuditStore/);
+  assert.match(body, /violation_rules_critical/);
+  assert.match(body, /violation_rules_serious/);
+  assert.match(body, /formatFailMessage/);
 });
 
 test('C-56: link audit waits for route-content marker; empty shell cannot pass', () => {
