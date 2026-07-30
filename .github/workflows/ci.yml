@@ -1574,7 +1574,10 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key-minimum16chars
           JWT_SECRET_KEY: test-jwt-secret-min16chars
+          # TESTING=1 for test-mode startup; RATE_LIMIT_PROFILE=loadtest keeps
+          # rate-limit middleware on (raised ceilings) so Locust pays Redis cost (C-59).
           TESTING: "1"
+          RATE_LIMIT_PROFILE: loadtest
           APP_ENV: development
           DEFAULT_TENANT_ID: "1"
         run: |
