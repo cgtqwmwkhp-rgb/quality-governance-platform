@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 12 |
-| Open / lax (unknown fields ignored) | 284 |
+| `extra="forbid"` (strict) | 14 |
+| Open / lax (unknown fields ignored) | 282 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 12 |
-| `max_open_count` | 284 |
+| `min_forbid_count` | 14 |
+| `max_open_count` | 282 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -36,12 +36,14 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AddTrainingRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/training`
 - `AddWhyRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/add-why`
 - `AllocationRequest` — `POST /api/v1/vehicles/allocate`
+- `CreateExportRequest` — `POST /api/v1/exports`
+- `CreateFindingCapaRequest` — `POST /api/v1/audits/findings/{finding_id}/capa`
 - `CreateFishboneRequest` — `POST /api/v1/rca-tools/fishbone`
 - `CreateFiveWhysRequest` — `POST /api/v1/rca-tools/five-whys`
 
 ## Open schemas (unknown fields silently ignored)
 
-284 schemas. Full list is the remediation backlog;
+282 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -121,8 +123,6 @@ converting them is out of scope for the inventory lock PR.
 - `CostRecord`
 - `CreateCAPARequest`
 - `CreateCapaRequest`
-- `CreateExportRequest`
-- `CreateFindingCapaRequest`
 - `CreateFromRecordRequest`
 - `CreateProfileRequest`
 - `CreateWatchActionRequest`

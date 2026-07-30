@@ -738,7 +738,13 @@ class FlagFindingRiskRequest(BaseModel):
 
 
 class CreateFindingCapaRequest(BaseModel):
-    """Optional overrides when creating a CAPA from an audit finding."""
+    """Optional overrides when creating a CAPA from an audit finding.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the CAPA being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = None
