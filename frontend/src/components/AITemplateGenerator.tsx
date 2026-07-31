@@ -131,9 +131,38 @@ interface SimilarMatch {
  */
 const AI_GENERATE_TIMEOUT_MS = 210000
 
-async function postJson<T>(url: string, body: unknown, timeoutMs?: number): Promise<T> {
-  const { data } = await api.post<T>(url, body, timeoutMs ? { timeout: timeoutMs } : undefined)
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  options?: { timeoutMs?: number; suppressErrorToast?: boolean },
+): Promise<T> {
+  const { data } = await api.post<T>(url, body, {
+    ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
+    ...(options?.suppressErrorToast ? { suppressErrorToast: true } : {}),
+  })
   return data
+}
+
+/** True only for client/gateway timeouts — not bodyful 503 "unavailable" responses. */
+export function isGenerateTimeoutError(err: unknown): boolean {
+  const axiosErr = err as {
+    code?: string
+    message?: string
+    response?: { status?: number; data?: { detail?: unknown } }
+  }
+  if (axiosErr?.code === 'ECONNABORTED') return true
+  const msg = String(axiosErr?.message || '').toLowerCase()
+  if (msg.includes('timeout')) return true
+  // Bodyful HTTP responses (incl. 503 unavailable) are not timeouts.
+  if (axiosErr?.response) return false
+  // Network Error without response/detail — often Azure aborting without CORS headers.
+  return msg.includes('network error')
+}
+
+export function generateErrorDetail(err: unknown): string | null {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail.trim()
+  return null
 }
 
 async function summariseUpload(file: File, assetHint: string): Promise<string> {
@@ -374,7 +403,7 @@ export default function AITemplateGenerator({
           similar_template_id: selectedSimilarId,
           similar_gate_reason: gateReason,
         },
-        AI_GENERATE_TIMEOUT_MS,
+        { timeoutMs: AI_GENERATE_TIMEOUT_MS, suppressErrorToast: true },
       )
       if (data.action === 'use_existing' && data.template_id && onUseExistingTemplate) {
         onUseExistingTemplate(data.template_id)
@@ -395,26 +424,19 @@ export default function AITemplateGenerator({
       )
       setStep('preview')
     } catch (err) {
-      const axiosErr = err as {
-        code?: string
-        message?: string
-        response?: { status?: number }
-      }
-      const msg = String(axiosErr?.message || '').toLowerCase()
-      const status = axiosErr?.response?.status
-      // Gateway 503 often has no CORS headers → axios "Network Error" with no status.
-      const timedOut =
-        axiosErr?.code === 'ECONNABORTED' ||
-        status === 503 ||
-        msg.includes('timeout') ||
-        msg.includes('network error')
+      // Prefer backend detail for bodyful failures (e.g. 503 unavailable).
+      // Do not misclassify those as browser/gateway timeouts.
+      const detail = generateErrorDetail(err)
+      const timedOut = isGenerateTimeoutError(err)
       setError(
-        timedOut
-          ? t('auditBuilder.errors.generateTimeout', {
-              defaultValue:
-                'Generation hit the platform time limit. Try Generate again with a shorter brief, or retry in a moment.',
-            })
-          : t('auditBuilder.errors.generate'),
+        detail
+          ? detail
+          : timedOut
+            ? t('auditBuilder.errors.generateTimeout', {
+                defaultValue:
+                  'Generation is still running on the server but the browser timed out. Wait a moment and try Generate again, or shorten the brief.',
+              })
+            : t('auditBuilder.errors.generate'),
       )
       trackError(err, { component: 'AITemplateGenerator', action: 'generate' })
     } finally {

@@ -239,6 +239,25 @@ async def from_document(
     )
 
 
+def _gemini_configured_or_503() -> GeminiAIService:
+    """Fail closed early when Gemini is disabled / unkeyed; log ops-safe reason."""
+    service = GeminiAIService()
+    if service.is_configured():
+        return service
+    key_present = bool((os.environ.get("GOOGLE_GEMINI_API_KEY") or "").strip())
+    use_genai = os.environ.get("USE_GOOGLE_GENAI", "1").strip().lower() not in {"0", "false", "no", "off"}
+    logger.error(
+        "GeminiAIService not configured for AI templates "
+        "(USE_GOOGLE_GENAI_enabled=%s, GOOGLE_GEMINI_API_KEY_present=%s)",
+        use_genai,
+        key_present,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=AI_TEMPLATE_UNAVAILABLE_DETAIL,
+    )
+
+
 @router.post("/generate-template")
 async def generate_template(
     request: PromptTemplateRequest,
@@ -246,12 +265,19 @@ async def generate_template(
     user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> list[dict]:
     """Generate template sections from a freeform prompt."""
-    service = GeminiAIService()
+    service = _gemini_configured_or_503()
     try:
         return await service.prompt_to_template(request.prompt)
+    except HTTPException:
+        raise
     except Exception as exc:
         # Upstream SDK/provider errors can contain operational details. Keep the
         # user-facing response actionable without exposing those internals.
+        logger.exception(
+            "generate-template failed: %s: %s",
+            type(exc).__name__,
+            str(exc)[:500],
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=AI_TEMPLATE_UNAVAILABLE_DETAIL,
@@ -551,6 +577,10 @@ async def generate_from_brief(
             },
         }
 
+    # Fail early with a clear ops log when Gemini is not usable — before prompt
+    # composition / Assist Map work burns time on a doomed request.
+    _gemini_configured_or_503()
+
     orch = AuditBuilderOrchestrator(db)
     prompt = orch.compose_generation_prompt(request.brief)
     from src.domain.services.audit_builder_generation_pipeline import AuditBuilderGenerationPipeline
@@ -561,7 +591,14 @@ async def generate_from_brief(
             brief=request.brief,
         )
         sections = pipeline_result["sections"]
+    except HTTPException:
+        raise
     except Exception as exc:
+        logger.exception(
+            "generate-from-brief failed: %s: %s",
+            type(exc).__name__,
+            str(exc)[:500],
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=AI_TEMPLATE_UNAVAILABLE_DETAIL,
