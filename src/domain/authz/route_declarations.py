@@ -219,7 +219,6 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/actions/summary"),
         ("GET", "/api/v1/actions/view-counts"),
         ("GET", "/api/v1/actions/{action_id}"),
-        ("DELETE", "/api/v1/actions/{action_id}"),
         # src.api.routes.ai_intelligence
         ("GET", "/api/v1/ai/anomalies/frequency"),
         ("GET", "/api/v1/ai/anomalies/patterns"),
@@ -329,7 +328,6 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/competency-requirements/"),
         ("GET", "/api/v1/competency-requirements/{requirement_id}"),
         # src.api.routes.complaints
-        ("DELETE", "/api/v1/complaints/{complaint_id}"),
         ("POST", "/api/v1/complaints/{complaint_id}/running-sheet"),
         ("DELETE", "/api/v1/complaints/{complaint_id}/running-sheet/{entry_id}"),
         # src.api.routes.compliance
@@ -480,7 +478,6 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         # src.api.routes.ims_dashboard
         ("GET", "/api/v1/ims/dashboard"),
         # src.api.routes.incidents
-        ("DELETE", "/api/v1/incidents/{incident_id}"),
         ("POST", "/api/v1/incidents/{incident_id}/running-sheet"),
         ("DELETE", "/api/v1/incidents/{incident_id}/running-sheet/{entry_id}"),
         # src.api.routes.inductions
