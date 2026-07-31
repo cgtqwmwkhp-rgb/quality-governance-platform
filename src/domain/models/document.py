@@ -8,7 +8,8 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
@@ -195,8 +196,16 @@ class DocumentChunk(Base, TimestampMixin):
     """Document chunk for vector search and RAG."""
 
     __tablename__ = "document_chunks"
+    __table_args__ = (
+        Index("ix_document_chunks_tenant_document", "tenant_id", "document_id"),
+        Index(
+            "ix_document_chunks_search_vector",
+            "search_vector",
+            postgresql_using="gin",
+        ),
+    )
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
 
@@ -218,6 +227,13 @@ class DocumentChunk(Base, TimestampMixin):
     # Vector info
     vector_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Pinecone vector ID
     embedding_model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # Postgres FTS (maintained by trigger); Text variant keeps SQLite create_all working in tests
+    search_vector: Mapped[Optional[str]] = mapped_column(
+        TSVECTOR().with_variant(Text(), "sqlite"),
+        nullable=True,
+        deferred=True,
+    )
 
     # Relationships
     document: Mapped["Document"] = relationship("Document", back_populates="chunks")
