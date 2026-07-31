@@ -253,22 +253,49 @@ class CopilotService:
 
         return session
 
-    async def get_session(self, session_id: int) -> Optional[CopilotSession]:
-        """Get a session by ID."""
-        result = await self.db.execute(select(CopilotSession).where(CopilotSession.id == session_id))
+    async def get_session(
+        self,
+        session_id: int,
+        *,
+        user_id: int,
+        tenant_id: int,
+    ) -> Optional[CopilotSession]:
+        """Get a session by ID scoped to the owning user and tenant."""
+        result = await self.db.execute(
+            select(CopilotSession).where(
+                CopilotSession.id == session_id,
+                CopilotSession.user_id == user_id,
+                CopilotSession.tenant_id == tenant_id,
+            )
+        )
         return result.scalars().first()
 
-    async def get_active_session(self, user_id: int) -> Optional[CopilotSession]:
-        """Get the user's active session."""
+    async def get_active_session(self, user_id: int, tenant_id: int) -> Optional[CopilotSession]:
+        """Get the user's active session within a tenant."""
         result = await self.db.execute(
             select(CopilotSession)
-            .where(CopilotSession.user_id == user_id, CopilotSession.is_active == True)
+            .where(
+                CopilotSession.user_id == user_id,
+                CopilotSession.tenant_id == tenant_id,
+                CopilotSession.is_active == True,
+            )
             .order_by(CopilotSession.updated_at.desc())
         )
         return result.scalars().first()
 
-    async def get_session_messages(self, session_id: int, limit: int = 50) -> list[CopilotMessage]:
-        """Get messages for a session."""
+    async def get_session_messages(
+        self,
+        session_id: int,
+        *,
+        user_id: int,
+        tenant_id: int,
+        limit: int = 50,
+    ) -> list[CopilotMessage]:
+        """Get messages for a session owned by the caller."""
+        session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
         result = await self.db.execute(
             select(CopilotMessage)
             .where(CopilotMessage.session_id == session_id)
@@ -277,13 +304,21 @@ class CopilotService:
         )
         return list(result.scalars().all())
 
-    async def close_session(self, session_id: int) -> CopilotSession:
-        """Close a session."""
-        session = await self.get_session(session_id)
-        if session:
-            session.is_active = False
-            await self.db.commit()
-            await self.db.refresh(session)
+    async def close_session(
+        self,
+        session_id: int,
+        *,
+        user_id: int,
+        tenant_id: int,
+    ) -> CopilotSession:
+        """Close a session owned by the caller."""
+        session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        session.is_active = False
+        await self.db.commit()
+        await self.db.refresh(session)
         return session
 
     # =========================================================================
@@ -294,7 +329,9 @@ class CopilotService:
         self,
         session_id: int,
         content: str,
+        *,
         user_id: int,
+        tenant_id: int,
     ) -> CopilotMessage:
         """
         Send a message and get AI response.
@@ -304,7 +341,7 @@ class CopilotService:
         if not copilot_is_enabled():
             raise CopilotDisabledError("AI Copilot is disabled; simulated responses must not be served.")
 
-        session = await self.get_session(session_id)
+        session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
@@ -318,7 +355,7 @@ class CopilotService:
         await self.db.commit()
 
         # Get conversation history
-        history = await self.get_session_messages(session_id, limit=20)
+        history = await self.get_session_messages(session_id, user_id=user_id, tenant_id=tenant_id, limit=20)
 
         # Build context
         context = self._build_context(session)
@@ -578,7 +615,15 @@ class CopilotService:
         feedback_text: Optional[str] = None,
     ) -> CopilotFeedback:
         """Submit feedback on a copilot response."""
-        result = await self.db.execute(select(CopilotMessage).where(CopilotMessage.id == message_id))
+        result = await self.db.execute(
+            select(CopilotMessage)
+            .join(CopilotSession, CopilotMessage.session_id == CopilotSession.id)
+            .where(
+                CopilotMessage.id == message_id,
+                CopilotSession.user_id == user_id,
+                CopilotSession.tenant_id == tenant_id,
+            )
+        )
         message = result.scalars().first()
 
         if not message:
