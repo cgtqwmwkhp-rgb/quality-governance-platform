@@ -405,8 +405,9 @@ const AICopilot: React.FC<AICopilotProps> = ({
         data-testid="ai-copilot-demo-banner"
         className="px-4 py-2 bg-warning/15 border-b border-warning/40 text-xs text-foreground"
       >
-        <strong>Demonstration only.</strong> Live-data questions are refused. Writes are never
-        performed. Do not quote this surface as organisational truth.
+        <strong>Demonstration only — no AI model is involved.</strong> Replies are fixed keyword
+        responses. Live-data questions are refused. Writes are never performed. Do not quote this
+        surface as organisational truth.
       </div>
 
       {unavailable && (

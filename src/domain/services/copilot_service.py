@@ -36,10 +36,12 @@ class CopilotDisabledError(RuntimeError):
 def copilot_is_enabled() -> bool:
     """Single source of truth for whether simulated copilot output may be served (PX-248).
 
-    Fails closed like the frontend gate: production is never eligible, and every other
-    environment needs an explicit opt-in.
+    Fails closed like the frontend gate: no environment is eligible without an explicit
+    opt-in, and the shipped default is off. Production is eligible on the same terms as
+    every other environment — the operator setting AI_COPILOT_ENABLED is accepting that
+    the replies are keyword simulations, which the UI states before the first exchange.
     """
-    return settings.ai_copilot_enabled and not settings.is_production
+    return settings.ai_copilot_enabled
 
 
 # ============================================================================

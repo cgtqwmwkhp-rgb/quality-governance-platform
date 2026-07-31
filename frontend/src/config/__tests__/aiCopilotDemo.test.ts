@@ -1,61 +1,63 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const detectEnvironment = vi.fn()
-
+// The gate deliberately holds no environment condition any more: a production bake is
+// opted in exactly like any other. Nothing here mocks an environment, so if one is
+// reintroduced via detectEnvironment this mock makes it fail loudly rather than
+// silently reinstating the old production block.
 vi.mock('../apiBase', () => ({
-  detectEnvironment: () => detectEnvironment(),
+  detectEnvironment: () => {
+    throw new Error('the copilot demo gate must not depend on the detected environment')
+  },
 }))
 
 describe('isAICopilotDemoEnabled', () => {
   afterEach(() => {
     vi.resetModules()
     vi.unstubAllEnvs()
-    detectEnvironment.mockReset()
   })
 
-  async function loadGate() {
+  async function loadGate(flag?: string) {
+    if (flag !== undefined) {
+      vi.stubEnv('VITE_ENABLE_AI_COPILOT_DEMO', flag)
+    }
     const mod = await import('../aiCopilotDemo')
     return mod.isAICopilotDemoEnabled
   }
 
-  it('defaults to off when the flag is absent, in every environment', async () => {
-    for (const environment of ['development', 'staging', 'production']) {
-      detectEnvironment.mockReturnValue(environment)
+  it('defaults to off when the flag is absent', async () => {
+    const isAICopilotDemoEnabled = await loadGate()
+    expect(isAICopilotDemoEnabled()).toBe(false)
+  })
 
-      const isAICopilotDemoEnabled = await loadGate()
+  it.each(['', ' ', 'false', '0', 'no', 'maybe'])(
+    'stays off for the unrecognised flag value %j',
+    async (value) => {
+      const isAICopilotDemoEnabled = await loadGate(value)
       expect(isAICopilotDemoEnabled()).toBe(false)
-    }
-  })
+    },
+  )
 
-  it('returns false in production even when the explicit flag is set', async () => {
-    detectEnvironment.mockReturnValue('production')
-    vi.stubEnv('VITE_ENABLE_AI_COPILOT_DEMO', 'true')
+  it.each(['true', 'TRUE', ' true ', '1', 'yes'])(
+    'is on for the truthy flag value %j the deploy workflows bake',
+    async (value) => {
+      const isAICopilotDemoEnabled = await loadGate(value)
+      expect(isAICopilotDemoEnabled()).toBe(true)
+    },
+  )
 
-    const isAICopilotDemoEnabled = await loadGate()
-    expect(isAICopilotDemoEnabled()).toBe(false)
-  })
+  it('honours the flag in a production bake', async () => {
+    vi.stubEnv('VITE_ENVIRONMENT', 'production')
+    vi.stubEnv('VITE_API_URL', 'https://app-qgp-prod.azurewebsites.net')
 
-  it('returns false in non-production when the explicit flag is false', async () => {
-    detectEnvironment.mockReturnValue('staging')
-    vi.stubEnv('VITE_ENABLE_AI_COPILOT_DEMO', 'false')
-
-    const isAICopilotDemoEnabled = await loadGate()
-    expect(isAICopilotDemoEnabled()).toBe(false)
-  })
-
-  it('returns true only when non-production and explicit flag is true', async () => {
-    detectEnvironment.mockReturnValue('development')
-    vi.stubEnv('VITE_ENABLE_AI_COPILOT_DEMO', 'true')
-
-    const isAICopilotDemoEnabled = await loadGate()
+    const isAICopilotDemoEnabled = await loadGate('true')
     expect(isAICopilotDemoEnabled()).toBe(true)
   })
 
-  it('accepts staging + flag=1 as enabled', async () => {
-    detectEnvironment.mockReturnValue('staging')
-    vi.stubEnv('VITE_ENABLE_AI_COPILOT_DEMO', '1')
+  it('stays off in a production bake when the flag is not set', async () => {
+    vi.stubEnv('VITE_ENVIRONMENT', 'production')
+    vi.stubEnv('VITE_API_URL', 'https://app-qgp-prod.azurewebsites.net')
 
     const isAICopilotDemoEnabled = await loadGate()
-    expect(isAICopilotDemoEnabled()).toBe(true)
+    expect(isAICopilotDemoEnabled()).toBe(false)
   })
 })

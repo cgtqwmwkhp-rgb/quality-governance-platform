@@ -27,9 +27,9 @@ vi.mock('../services/errorTracker', () => ({
   trackComponentError: vi.fn(),
 }))
 
-// detectEnvironment is reached via Layout -> aiCopilotDemo. Without it the
-// authenticated tree throws into the ErrorBoundary and every assertion below
-// would pass against an error screen rather than the real app.
+// The authenticated tree reaches apiBase. Without this mock it throws into the
+// ErrorBoundary and every assertion below would pass against an error screen
+// rather than the real app.
 vi.mock('../config/apiBase', () => ({
   API_BASE_URL: 'http://localhost:3000',
   detectEnvironment: () => 'production',

@@ -662,6 +662,7 @@ jobs:
               ANTHROPIC_MODEL="claude-sonnet-4-5" \
               OPENAI_API_KEY="${OPENAI_API_KEY_VAL}" \
               AI_PROVIDER="anthropic" \
+              AI_COPILOT_ENABLED="${{ vars.AI_COPILOT_ENABLED || 'false' }}" \
               AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
               AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
               AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
