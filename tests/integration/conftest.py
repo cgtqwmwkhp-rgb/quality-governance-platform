@@ -142,6 +142,7 @@ _ADMIN_PERMS = ",".join(
         "action:create",
         "action:read",
         "action:update",
+        "action:delete",
         "capa:create",
         "capa:update",
         "investigation:create",

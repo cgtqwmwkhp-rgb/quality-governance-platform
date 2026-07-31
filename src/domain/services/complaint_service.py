@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
-from src.domain.models.complaint import Complaint, ComplaintStatus
+from src.domain.models.complaint import Complaint, ComplaintAction, ComplaintStatus
 from src.domain.models.form_config import Contract
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
@@ -241,7 +241,10 @@ class ComplaintService:
         Raises:
             LookupError: If not found.
         """
-        query = select(Complaint).where(Complaint.id == complaint_id)
+        query = select(Complaint).where(
+            Complaint.id == complaint_id,
+            Complaint.deleted_at.is_(None),
+        )
         if not skip_tenant_check:
             query = query.where(Complaint.tenant_id == tenant_id)
         result = await self.db.execute(query)
@@ -259,7 +262,11 @@ class ComplaintService:
         complainant_email: Optional[str] = None,
     ):
         """List complaints with pagination and optional filters."""
-        query = select(Complaint).options(selectinload(Complaint.actions)).where(Complaint.tenant_id == tenant_id)
+        query = (
+            select(Complaint)
+            .options(selectinload(Complaint.actions))
+            .where(Complaint.tenant_id == tenant_id, Complaint.deleted_at.is_(None))
+        )
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -354,6 +361,62 @@ class ComplaintService:
             await invalidate_tenant_cache(cache_tenant_id, "complaints")
 
         return complaint
+
+    async def delete_complaint(
+        self,
+        complaint_id: int,
+        *,
+        user_id: int,
+        tenant_id: int | None,
+        request_id: str | None = None,
+        skip_tenant_check: bool = False,
+    ) -> None:
+        """Soft-delete a complaint (PX-177).
+
+        Sets ``deleted_at`` / ``deleted_by_id`` and cascades soft-delete to child
+        complaint actions. List and get exclude deleted rows.
+
+        Raises:
+            LookupError: If the complaint is not found (or already deleted).
+        """
+        complaint = await self.get_complaint(complaint_id, tenant_id, skip_tenant_check=skip_tenant_check)
+        record_tenant_id = complaint.tenant_id
+        cache_tenant_id = record_tenant_id if record_tenant_id is not None else tenant_id
+        now = datetime.now(timezone.utc)
+
+        await record_audit_event(
+            db=self.db,
+            event_type="complaint.deleted",
+            entity_type="complaint",
+            entity_id=str(complaint.id),
+            entity_name=complaint.reference_number,
+            action="delete",
+            description=f"Complaint {complaint.reference_number} soft-deleted",
+            payload={
+                "complaint_id": complaint_id,
+                "reference_number": complaint.reference_number,
+                "soft_delete": True,
+            },
+            user_id=user_id,
+            request_id=request_id,
+            tenant_id=record_tenant_id,
+        )
+
+        complaint.deleted_at = now
+        complaint.deleted_by_id = user_id
+
+        child_q = select(ComplaintAction).where(
+            ComplaintAction.complaint_id == complaint.id,
+            ComplaintAction.deleted_at.is_(None),
+        )
+        child_result = await self.db.execute(child_q)
+        for action in child_result.scalars().all():
+            action.deleted_at = now
+            action.deleted_by_id = user_id
+
+        await self.db.flush()
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "complaints")
 
     def check_complainant_email_access(
         self,

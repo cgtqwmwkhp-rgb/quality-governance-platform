@@ -402,6 +402,41 @@ class TestResponseSla:
         assert complaint.first_response_at == original
 
 
+class TestDeleteComplaint:
+    @pytest.mark.asyncio
+    @patch("src.domain.services.complaint_service.invalidate_tenant_cache", new_callable=AsyncMock)
+    @patch("src.domain.services.complaint_service.record_audit_event", new_callable=AsyncMock)
+    async def test_delete_complaint_soft_deletes(self, mock_audit, mock_cache):
+        complaint = _fake_complaint(deleted_at=None, deleted_by_id=None)
+        db = AsyncMock()
+        get_result = MagicMock()
+        get_result.scalar_one_or_none.return_value = complaint
+        empty_children = MagicMock()
+        empty_children.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(side_effect=[get_result, empty_children])
+
+        svc = _make_service(db)
+        await svc.delete_complaint(1, user_id=5, tenant_id=10, request_id="r1")
+
+        assert complaint.deleted_at is not None
+        assert complaint.deleted_by_id == 5
+        db.delete.assert_not_called()
+        db.flush.assert_awaited()
+        mock_audit.assert_awaited_once()
+        mock_cache.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_complaint_not_found(self):
+        db = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = None
+        db.execute.return_value = result_mock
+
+        svc = _make_service(db)
+        with pytest.raises(LookupError):
+            await svc.delete_complaint(999, user_id=5, tenant_id=10)
+
+
 class TestCheckComplainantEmailAccess:
     def test_superuser_can_access_any(self):
         svc = _make_service()

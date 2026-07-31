@@ -214,6 +214,9 @@ export function createActionsApi(api: AxiosInstance) {
       `/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}`,
       data,
     ),
+  /** Soft-delete incident/complaint actions — PX-177. Requires action:delete. */
+  delete: (id: number, source_type: 'incident' | 'complaint') =>
+    api.delete(`/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}`),
   /** Owner commentary for an action; newest first. */
   listOwnerNotes: (actionKey: string, limit = 100) =>
     api.get<ActionOwnerNoteListResponse>(

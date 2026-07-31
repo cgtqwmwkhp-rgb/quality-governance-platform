@@ -171,6 +171,8 @@ export function createIncidentsApi(api: AxiosInstance) {
       api.post<RaiseRiskFromIncidentResponse>(`/api/v1/incidents/${id}/raise-risk`, data || {}),
     update: (id: number, data: IncidentUpdate) =>
       api.patch<Incident>(`/api/v1/incidents/${id}`, data),
+    /** Soft-delete (archive) an incident — PX-177. Requires incident:delete. */
+    delete: (id: number) => api.delete(`/api/v1/incidents/${id}`),
     listInvestigations: (id: number, page = 1, pageSize = 10) =>
       api.get<PaginatedResponse<Investigation>>(
         `/api/v1/incidents/${id}/investigations?page=${page}&page_size=${pageSize}`,

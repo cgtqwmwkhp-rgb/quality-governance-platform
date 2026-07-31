@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
-from src.domain.models.incident import Incident, IncidentStatus
+from src.domain.models.incident import Incident, IncidentAction, IncidentStatus
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.case_closure import (
     CASE_TYPE_INCIDENT,
@@ -207,7 +207,10 @@ class IncidentService:
         Raises:
             LookupError: If the incident is not found.
         """
-        query = select(Incident).where(Incident.id == incident_id)
+        query = select(Incident).where(
+            Incident.id == incident_id,
+            Incident.deleted_at.is_(None),
+        )
         if not skip_tenant_check:
             query = query.where(Incident.tenant_id == tenant_id)
         result = await self.db.execute(query)
@@ -231,7 +234,7 @@ class IncidentService:
         """List incidents with pagination and optional filters."""
         # Do not selectinload actions here — list response does not include them, and a
         # poison action row must not take down the entire incidents index.
-        query = select(Incident)
+        query = select(Incident).where(Incident.deleted_at.is_(None))
 
         if not skip_tenant_check:
             query = query.where(Incident.tenant_id == tenant_id)
@@ -382,15 +385,19 @@ class IncidentService:
         request_id: str | None = None,
         skip_tenant_check: bool = False,
     ) -> None:
-        """Delete an incident.
+        """Soft-delete an incident (PX-177).
+
+        Sets ``deleted_at`` / ``deleted_by_id`` and cascades soft-delete to child
+        incident actions. Rows remain for audit / reference uniqueness; list and
+        get exclude them. Prefer soft-delete over hard delete (FK safety).
 
         Raises:
-            LookupError: If the incident is not found.
+            LookupError: If the incident is not found (or already deleted).
         """
         incident = await self.get_incident(incident_id, tenant_id, skip_tenant_check=skip_tenant_check)
-        # Capture before delete: SQLAlchemy may expire/detach the instance after.
         record_tenant_id = incident.tenant_id
         cache_tenant_id = record_tenant_id if record_tenant_id is not None else tenant_id
+        now = datetime.now(timezone.utc)
 
         await record_audit_event(
             db=self.db,
@@ -399,17 +406,30 @@ class IncidentService:
             entity_id=str(incident.id),
             entity_name=incident.reference_number,
             action="delete",
-            description=f"Incident {incident.reference_number} deleted",
+            description=f"Incident {incident.reference_number} soft-deleted",
             payload={
                 "incident_id": incident_id,
                 "reference_number": incident.reference_number,
+                "soft_delete": True,
             },
             user_id=user_id,
             request_id=request_id,
             tenant_id=record_tenant_id,
         )
 
-        await self.db.delete(incident)
+        incident.deleted_at = now
+        incident.deleted_by_id = user_id
+
+        # Cascade soft-delete to live child actions so orphan INA rows leave the register.
+        child_q = select(IncidentAction).where(
+            IncidentAction.incident_id == incident.id,
+            IncidentAction.deleted_at.is_(None),
+        )
+        child_result = await self.db.execute(child_q)
+        for action in child_result.scalars().all():
+            action.deleted_at = now
+            action.deleted_by_id = user_id
+
         await self.db.flush()
         if cache_tenant_id is not None:
             await invalidate_tenant_cache(cache_tenant_id, "incidents")

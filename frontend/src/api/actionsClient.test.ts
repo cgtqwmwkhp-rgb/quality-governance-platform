@@ -49,6 +49,7 @@ describe('createActionsApi', () => {
     actions.get(3, 'capa')
     actions.getByKey('capa:3')
     actions.update(3, 'capa', { status: 'completed' })
+    actions.delete(7, 'incident')
     actions.listOwnerNotes('capa:3', 50)
     actions.appendOwnerNote('capa:3', 'done')
     expect(api.get).toHaveBeenCalledWith('/api/v1/actions/3?source_type=capa')
@@ -56,6 +57,7 @@ describe('createActionsApi', () => {
     expect(api.patch).toHaveBeenCalledWith('/api/v1/actions/3?source_type=capa', {
       status: 'completed',
     })
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/actions/7?source_type=incident')
     expect(api.get).toHaveBeenCalledWith('/api/v1/actions/by-key/notes?key=capa%3A3&limit=50')
     expect(api.post).toHaveBeenCalledWith('/api/v1/actions/by-key/notes', {
       key: 'capa:3',

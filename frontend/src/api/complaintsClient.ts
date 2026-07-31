@@ -164,6 +164,8 @@ export function createComplaintsApi(api: AxiosInstance) {
     get: (id: number) => api.get<Complaint>(`/api/v1/complaints/${id}`),
     update: (id: number, data: ComplaintUpdate) =>
       api.patch<Complaint>(`/api/v1/complaints/${id}`, data),
+    /** Soft-delete (archive) a complaint — PX-177. Requires complaint:delete. */
+    delete: (id: number) => api.delete(`/api/v1/complaints/${id}`),
     listInvestigations: (id: number, page = 1, pageSize = 10) =>
       api.get<PaginatedResponse<Investigation>>(
         `/api/v1/complaints/${id}/investigations?page=${page}&page_size=${pageSize}`,
