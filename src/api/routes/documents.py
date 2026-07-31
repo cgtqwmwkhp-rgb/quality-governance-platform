@@ -1694,6 +1694,59 @@ async def spawn_reack_campaign(
 # =============================================================================
 
 
+@router.get("/search/content", response_model=SearchResponse)
+async def search_document_content(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+    q: str = Query(..., min_length=1, max_length=200),
+    top_k: int = Query(10, ge=1, le=50),
+):
+    """Full-text search over document chunk body text (RBAC-scoped)."""
+    import time
+
+    from src.domain.services.search_service import SearchService
+
+    start_time = time.time()
+    service = SearchService(db)
+    hits = await service._search_document_content(q, current_user, request_id=None)
+    if top_k < len(hits):
+        hits = hits[:top_k]
+
+    results = [
+        SearchResult(
+            document_id=int(item.entity_id or 0),
+            reference_number=item.id,
+            title=item.title,
+            score=float(item.relevance) / 100.0,
+            chunk_preview=item.description,
+            page_number=None,
+            heading=None,
+        )
+        for item in hits
+        if item.entity_id is not None
+    ]
+    latency_ms = int((time.time() - start_time) * 1000)
+
+    log = DocumentSearchLog(
+        query=q,
+        query_type="content_fts",
+        result_count=len(results),
+        result_document_ids=[r.document_id for r in results],
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        latency_ms=latency_ms,
+    )
+    db.add(log)
+    await db.commit()
+
+    return SearchResponse(
+        query=q,
+        results=results,
+        total=len(results),
+        latency_ms=latency_ms,
+    )
+
+
 @router.get("/search/semantic", response_model=SearchResponse)
 async def semantic_search(
     db: DbSession,
