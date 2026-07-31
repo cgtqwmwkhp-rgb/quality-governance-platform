@@ -2,13 +2,15 @@
  * AI Copilot Component
  *
  * Demo-only conversational shell. Default-off via isAICopilotDemoEnabled().
- * Honesty rules (Run021 residual):
+ * Honesty rules (Run021 residual) live on the backend `/api/v1/copilot` routes:
  * - Never invent tenant compliance / risk figures or named records (PX-248)
  * - Never claim a write completed when nothing was written (PX-250)
  * - Render markdown in replies instead of raw markers (PX-249)
+ *
+ * This UI calls the API; it must not fall back to client-side canned answers.
  */
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Bot,
   Send,
@@ -26,6 +28,12 @@ import { Button } from '../ui/Button'
 import { cn } from '../../helpers/utils'
 import { isAICopilotDemoEnabled } from '../../config/aiCopilotDemo'
 import { CopilotMarkdown } from './CopilotMarkdown'
+import {
+  copilotApi,
+  isCopilotUnavailableError,
+  type CopilotMessage as ApiCopilotMessage,
+} from '../../api/copilot'
+import { getApiErrorMessage } from '../../api/client'
 
 interface Message {
   id: number
@@ -57,19 +65,46 @@ interface AICopilotProps {
   contextData?: Record<string, unknown>
 }
 
-const LIVE_DATA_REFUSAL =
-  'I cannot answer from live organisation data. This demo is not connected to your registers, so I will not invent counts, percentages, named risks, or reference numbers. Open the relevant module for real figures.'
+const WELCOME_CONTENT = `This is a demonstration of a planned AI assistant. It is not connected to any AI model or to your organisation's records.\n\nI will **refuse** live-data questions (compliance status, risk summaries) and will **not** claim to create incidents or actions. Concept explanations (for example CAPA or RIDDOR) are general guidance only.\n\nTry "what is CAPA" for a concept preview, or open Compliance / Risk Register for real figures.`
 
-const WRITE_REFUSAL =
-  'I cannot create or update records from this demo. Nothing was written. Use the Incidents register (New) to log a real safety event.'
+const UNAVAILABLE_MESSAGE =
+  'AI Copilot is not enabled in this environment. No simulated answers are available.'
+
+function mapApiMessage(msg: ApiCopilotMessage): Message {
+  const contentType =
+    msg.content_type === 'action' || msg.content_type === 'error'
+      ? msg.content_type
+      : 'text'
+  const actionStatus =
+    msg.action_status === 'pending' ||
+    msg.action_status === 'completed' ||
+    msg.action_status === 'not_performed' ||
+    msg.action_status === 'failed'
+      ? msg.action_status
+      : undefined
+  const role =
+    msg.role === 'user' || msg.role === 'system' ? msg.role : 'assistant'
+
+  return {
+    id: msg.id,
+    role,
+    content: msg.content,
+    contentType,
+    actionType: msg.action_type ?? undefined,
+    actionData: msg.action_data ?? undefined,
+    actionResult: msg.action_result ?? undefined,
+    actionStatus,
+    createdAt: new Date(msg.created_at),
+  }
+}
 
 const AICopilot: React.FC<AICopilotProps> = ({
   isOpen,
   onClose,
   currentPage,
   contextType,
-  contextId: _contextId,
-  contextData: _contextData,
+  contextId,
+  contextData,
 }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -78,38 +113,15 @@ const AICopilot: React.FC<AICopilotProps> = ({
   const [isListening, setIsListening] = useState(false)
   const [suggestions, setSuggestions] = useState<SuggestedAction[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [sessionId, setSessionId] = useState<number | null>(null)
+  const [sessionReady, setSessionReady] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
+  const [sessionError, setSessionError] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Initialize session and welcome message
-  useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      const welcomeMessage: Message = {
-        id: Date.now(),
-        role: 'assistant',
-        content: `This is a demonstration of a planned AI assistant. It is not connected to any AI model or to your organisation's records.\n\nI will **refuse** live-data questions (compliance status, risk summaries) and will **not** claim to create incidents or actions. Concept explanations (for example CAPA or RIDDOR) are general guidance only.\n\nTry "what is CAPA" for a concept preview, or open Compliance / Risk Register for real figures.`,
-        contentType: 'text',
-        createdAt: new Date(),
-      }
-      setMessages([welcomeMessage])
-
-      fetchSuggestions()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  useEffect(() => {
-    if (isOpen && !isMinimized) {
-      inputRef.current?.focus()
-    }
-  }, [isOpen, isMinimized])
-
-  const fetchSuggestions = async () => {
+  const fetchSuggestions = useCallback(() => {
     const contextSuggestions: SuggestedAction[] = []
 
     if (contextType === 'incident') {
@@ -141,47 +153,124 @@ const AICopilot: React.FC<AICopilotProps> = ({
     )
 
     setSuggestions(contextSuggestions)
-  }
+  }, [contextType, currentPage])
+
+  // Initialize backend session when the demo surface opens (context captured at open).
+  useEffect(() => {
+    if (!isOpen || !isAICopilotDemoEnabled()) {
+      setSessionId(null)
+      setSessionReady(false)
+      setUnavailable(false)
+      setSessionError(null)
+      setMessages([])
+      setInput('')
+      setIsMinimized(false)
+      setSuggestions([])
+      return
+    }
+
+    let cancelled = false
+
+    const initSession = async () => {
+      setUnavailable(false)
+      setSessionError(null)
+      setSessionReady(false)
+
+      try {
+        const { data: session } = await copilotApi.createSession({
+          context_type: contextType ?? null,
+          context_id: contextId ?? null,
+          context_data: contextData ?? null,
+          current_page: currentPage ?? null,
+        })
+
+        if (cancelled) return
+
+        setSessionId(session.id)
+        setSessionReady(true)
+        setMessages([
+          {
+            id: 0,
+            role: 'assistant',
+            content: WELCOME_CONTENT,
+            contentType: 'text',
+            createdAt: new Date(),
+          },
+        ])
+        fetchSuggestions()
+      } catch (err) {
+        if (cancelled) return
+        if (isCopilotUnavailableError(err)) {
+          setUnavailable(true)
+          setMessages([])
+          setSessionId(null)
+          setSessionReady(false)
+          return
+        }
+        setSessionError(
+          getApiErrorMessage(err, 'Could not start AI Copilot session. Please try again.'),
+        )
+        setSessionReady(false)
+      }
+    }
+
+    void initSession()
+
+    return () => {
+      cancelled = true
+    }
+    // Intentionally only re-init when the panel opens/closes — not on every context prop change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  useEffect(() => {
+    if (isOpen && !isMinimized && !unavailable) {
+      inputRef.current?.focus()
+    }
+  }, [isOpen, isMinimized, unavailable])
 
   const sendMessage = async () => {
-    if (!input.trim() || isLoading) return
+    if (!input.trim() || isLoading || unavailable || !sessionId) return
 
+    const prompt = input.trim()
     const userMessage: Message = {
       id: Date.now(),
       role: 'user',
-      content: input.trim(),
+      content: prompt,
       contentType: 'text',
       createdAt: new Date(),
     }
 
     setMessages((prev) => [...prev, userMessage])
-    const prompt = input.trim()
     setInput('')
     setIsLoading(true)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 300))
-
-      const response = generateResponse(prompt)
-
-      const assistantMessage: Message = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: response.content,
-        contentType: response.actionType ? 'action' : 'text',
-        actionType: response.actionType,
-        actionData: response.actionData,
-        actionStatus: response.actionStatus,
-        actionResult: response.actionResult,
-        createdAt: new Date(),
+      const { data } = await copilotApi.sendMessage(sessionId, prompt)
+      setMessages((prev) => [...prev, mapApiMessage(data)])
+    } catch (err) {
+      if (isCopilotUnavailableError(err)) {
+        setUnavailable(true)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: 'assistant',
+            content: UNAVAILABLE_MESSAGE,
+            contentType: 'error',
+            createdAt: new Date(),
+          },
+        ])
+        return
       }
-
-      setMessages((prev) => [...prev, assistantMessage])
-    } catch {
       const errorMessage: Message = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: getApiErrorMessage(err, 'Sorry, I encountered an error. Please try again.'),
         contentType: 'error',
         createdAt: new Date(),
       }
@@ -191,96 +280,19 @@ const AICopilot: React.FC<AICopilotProps> = ({
     }
   }
 
-  const generateResponse = (
-    rawInput: string,
-  ): {
-    content: string
-    actionType?: string
-    actionData?: Record<string, unknown>
-    actionStatus?: Message['actionStatus']
-    actionResult?: Record<string, unknown>
-  } => {
-    const inputLower = rawInput.toLowerCase()
-
-    // PX-250: never ask "Shall I proceed?" and then claim completion. Refuse writes.
-    if (inputLower.includes('create') && inputLower.includes('incident')) {
-      return {
-        content: WRITE_REFUSAL,
-        actionType: 'create_incident',
-        actionData: { title: rawInput },
-        actionStatus: 'not_performed',
-        actionResult: { performed: false, reason: 'demo_cannot_write' },
-      }
-    }
-
-    // PX-248: refuse fabricated compliance / risk tenant data.
-    if (inputLower.includes('compliance') || inputLower.includes('iso')) {
-      const mentionsIsoStandard =
-        /iso\s*(9001|14001|45001|27001)/i.test(rawInput) ||
-        inputLower.includes('compliance')
-      if (mentionsIsoStandard && !inputLower.startsWith('what is') && !inputLower.startsWith('explain')) {
-        return {
-          content: `${LIVE_DATA_REFUSAL}\n\nFor ISO clause scores, open **Compliance** in the main navigation.`,
-          actionType: 'get_compliance_status',
-          actionStatus: 'not_performed',
-          actionResult: { performed: false, reason: 'no_live_data' },
-        }
-      }
-    }
-
-    if (
-      inputLower.includes('risk summary') ||
-      inputLower.includes('risk register') ||
-      (inputLower.includes('risk') &&
-        (inputLower.includes('summary') ||
-          inputLower.includes('status') ||
-          inputLower.includes('how many') ||
-          inputLower.includes('critical')))
-    ) {
-      return {
-        content: `${LIVE_DATA_REFUSAL}\n\nOpen the **Risk Register** for the live register.`,
-        actionType: 'get_risk_summary',
-        actionStatus: 'not_performed',
-        actionResult: { performed: false, reason: 'no_live_data' },
-      }
-    }
-
-    // Generic "risk" still refused — any invented named risk is the PX-248 failure mode.
-    if (/\brisks?\b/.test(inputLower) && !inputLower.startsWith('what is') && !inputLower.startsWith('explain')) {
-      return {
-        content: `${LIVE_DATA_REFUSAL}\n\nOpen the **Risk Register** for the live register.`,
-        actionType: 'get_risk_summary',
-        actionStatus: 'not_performed',
-        actionResult: { performed: false, reason: 'no_live_data' },
-      }
-    }
-
-    if (inputLower.includes('what is') || inputLower.includes('explain')) {
-      const topic = rawInput.replace(/what is|explain/gi, '').trim()
-
-      const explanations: Record<string, string> = {
-        capa: `**CAPA (Corrective and Preventive Action)**\n\nA systematic approach to:\n1. **Corrective Action** - Fix immediate problems and root causes\n2. **Preventive Action** - Prevent similar issues from occurring\n\nRequired by ISO 9001 (Clause 10.2)\nEssential for continuous improvement\nMust be documented and verified\n\n_General guidance only — not your organisation's CAPA register._`,
-        riddor: `**RIDDOR**\n\n**Reporting of Injuries, Diseases and Dangerous Occurrences Regulations 2013**\n\nUK employers must report:\n• Deaths and specified injuries\n• Over-7-day incapacitation\n• Occupational diseases\n• Dangerous occurrences\n\nReport within 10-15 days to HSE\n\n_General guidance only — not a filing status for your cases._`,
-        'iso 45001': `**ISO 45001** is the international standard for Occupational Health & Safety Management Systems.\n\nKey elements:\n• Leadership commitment\n• Worker participation\n• Hazard identification\n• Legal compliance\n• Continual improvement\n\n_General guidance only — not your compliance score._`,
-      }
-
-      const key = topic.toLowerCase()
-      return {
-        content:
-          explanations[key] ||
-          `**${topic}**\n\nI can only offer general QHSE definitions in this demo. I cannot look up your organisation's records.`,
-      }
-    }
-
-    return {
-      content: `I understand you're asking about: "${rawInput}"\n\nIn this demo I can:\n• Explain QHSE concepts (try "what is CAPA")\n• Honestly refuse live-data questions (compliance / risk figures)\n• Honestly refuse writes (creating incidents)\n\nI will not invent register data. Open the relevant module for real figures.`,
-    }
-  }
-
   const submitFeedback = async (messageId: number, rating: number) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, feedbackRating: rating } : m)),
     )
+    if (messageId <= 0 || unavailable) return
+    try {
+      await copilotApi.submitFeedback(messageId, {
+        rating,
+        feedback_type: rating >= 4 ? 'helpful' : 'inaccurate',
+      })
+    } catch {
+      // Feedback is best-effort; local UI state already updated.
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -349,6 +361,8 @@ const AICopilot: React.FC<AICopilotProps> = ({
     )
   }
 
+  const inputDisabled = unavailable || !sessionReady || isLoading
+
   return (
     <div className="fixed bottom-4 right-4 w-[420px] h-[600px] bg-card rounded-2xl shadow-lg border border-border flex flex-col z-50 overflow-hidden">
       <div className="gradient-brand px-4 py-3 flex items-center justify-between">
@@ -395,7 +409,35 @@ const AICopilot: React.FC<AICopilotProps> = ({
         performed. Do not quote this surface as organisational truth.
       </div>
 
+      {unavailable && (
+        <div
+          role="alert"
+          data-testid="ai-copilot-unavailable"
+          className="px-4 py-3 bg-destructive/10 border-b border-destructive/20 text-sm text-destructive"
+        >
+          {UNAVAILABLE_MESSAGE}
+        </div>
+      )}
+
+      {sessionError && !unavailable && (
+        <div
+          role="alert"
+          data-testid="ai-copilot-session-error"
+          className="px-4 py-3 bg-destructive/10 border-b border-destructive/20 text-sm text-destructive"
+        >
+          {sessionError}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {!sessionReady && !unavailable && !sessionError && (
+          <div className="flex justify-start">
+            <div className="bg-surface rounded-2xl px-4 py-3 border border-border">
+              <span className="text-sm text-muted-foreground">Connecting…</span>
+            </div>
+          </div>
+        )}
+
         {messages.map((message) => (
           <div
             key={message.id}
@@ -500,7 +542,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {suggestions.length > 0 && messages.length <= 2 && (
+      {suggestions.length > 0 && messages.length <= 2 && !unavailable && (
         <div className="px-4 pb-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <Sparkles className="w-3 h-3" />
@@ -529,22 +571,26 @@ const AICopilot: React.FC<AICopilotProps> = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask me anything..."
+              placeholder={unavailable ? 'Copilot unavailable' : 'Ask me anything...'}
               rows={1}
+              disabled={inputDisabled}
               className={cn(
                 'w-full bg-surface text-foreground rounded-xl px-4 py-3 pr-10 resize-none',
                 'focus:outline-none focus:ring-2 focus:ring-primary/50 border border-border',
                 'placeholder:text-muted-foreground',
+                inputDisabled && 'opacity-60 cursor-not-allowed',
               )}
               style={{ maxHeight: '100px' }}
             />
             <button
               onClick={toggleVoiceInput}
+              disabled={inputDisabled}
               className={cn(
                 'absolute right-2 bottom-2.5 p-1.5 rounded-lg transition-colors',
                 isListening
                   ? 'bg-destructive text-destructive-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-surface',
+                inputDisabled && 'pointer-events-none opacity-50',
               )}
             >
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -552,7 +598,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
           </div>
           <Button
             onClick={() => void sendMessage()}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || inputDisabled}
             size="icon"
             aria-label="Send"
           >
