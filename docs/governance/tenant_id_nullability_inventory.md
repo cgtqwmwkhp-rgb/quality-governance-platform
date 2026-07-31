@@ -58,6 +58,7 @@ This phase lands:
 | `obsolete_document_records` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 | `document_access_logs` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 | `document_annotations` | Done (fail-safe) | Child of `documents` via `document_id`; NOT NULL only when residual NULLs=0. |
+| `document_chunks` | **Done (incremental)** | Child of `documents` via `document_id`; guarded NOT NULL + FTS `search_vector` (`20260905_doc_chunk_fts`). ORM `nullable=False`. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -80,6 +81,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `compliance_evidence_links` | `ComplianceEvidenceLink` |
 | `copilot_feedback` | `CopilotFeedback` |
 | `copilot_sessions` | `CopilotSession` |
+| `document_chunks` | `DocumentChunk` |
 | `external_audit_import_drafts` | `ExternalAuditDraft` |
 | `external_audit_import_jobs` | `ExternalAuditImportJob` |
 | `incident_actions` | `IncidentAction` |
@@ -125,7 +127,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `document_approval_actions` | `DocumentApprovalAction` |
 | `document_approval_instances` | `DocumentApprovalInstance` |
 | `document_approval_workflows` | `DocumentApprovalWorkflow` |
-| `document_chunks` | `DocumentChunk` |
 | `document_distributions` | `DocumentDistribution` |
 | `document_search_logs` | `DocumentSearchLog` |
 | `document_training_links` | `DocumentTrainingLink` |
