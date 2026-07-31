@@ -74,6 +74,7 @@ async def global_search(
     result = await service.search(
         query=q,
         tenant_id=current_user.tenant_id,
+        user=current_user,
         module=module,
         status_filter=status,
         date_from=date_from,

@@ -6,16 +6,26 @@ Extracts multi-entity search logic from the global_search route module.
 import logging
 from typing import Any, Optional
 
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.services.document_library_rbac import (
+    PERM_ADMIN_MANAGE,
+    PERM_DOCUMENT_READ,
+    PERM_DOCUMENT_UPDATE,
+    RESTRICTED_TAXONOMY_PERMISSIONS,
+    user_can_read_library_document,
+)
 from src.domain.services.search_paths import build_search_path
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
 _SHORT_QUERY_THRESHOLD = 3
+_CONTENT_SNIPPET_MAX_CHARS = 280
+_SNIPPET_SUPPRESSED_SENSITIVITY = frozenset({"confidential", "restricted"})
+_CONTENT_SEARCH_LIMIT = 10
 
 
 class SearchResultItem:
@@ -89,6 +99,7 @@ class SearchService:
         *,
         query: str,
         tenant_id: int | None,
+        user: Any | None = None,
         module: Optional[str] = None,
         status_filter: Optional[str] = None,
         date_from: Optional[str] = None,
@@ -113,7 +124,8 @@ class SearchService:
         all_results.extend(await self._search_risks(query, tenant_id, request_id))
         all_results.extend(await self._search_audits(query, tenant_id, request_id))
         all_results.extend(await self._search_actions(query, tenant_id, request_id))
-        all_results.extend(await self._search_documents(query, tenant_id, request_id))
+        all_results.extend(await self._search_documents(query, tenant_id, request_id, user=user))
+        all_results.extend(await self._search_document_content(query, user, request_id))
 
         if module:
             all_results = [r for r in all_results if r.module.lower() == module.lower()]
@@ -193,6 +205,87 @@ class SearchService:
         bonus += min(20, sum(value.count(normalized_query) for value in lowered_values) * 5)
         bonus += min(15, len(SearchService._highlight_words(query, *values)) * 5)
         return min(95.0, 55.0 + bonus)
+
+    @staticmethod
+    def _user_has(user: Any, permission: str) -> bool:
+        if getattr(user, "is_superuser", False):
+            return True
+        checker = getattr(user, "has_permission", None)
+        if callable(checker):
+            return bool(checker(permission))
+        return False
+
+    def _dialect_name(self) -> str | None:
+        """Best-effort dialect name; None when unknown (treat as non-Postgres)."""
+        candidates = []
+        get_bind = getattr(self.db, "get_bind", None)
+        if callable(get_bind):
+            try:
+                candidates.append(get_bind())
+            except Exception:
+                pass
+        candidates.append(getattr(self.db, "bind", None))
+        sync = getattr(self.db, "sync_session", None)
+        if sync is not None:
+            sync_get_bind = getattr(sync, "get_bind", None)
+            if callable(sync_get_bind):
+                try:
+                    candidates.append(sync_get_bind())
+                except Exception:
+                    pass
+            candidates.append(getattr(sync, "bind", None))
+        for bind in candidates:
+            name = getattr(getattr(bind, "dialect", None), "name", None)
+            if name:
+                return str(name)
+        return None
+
+    def _supports_chunk_fts(self) -> bool:
+        return self._dialect_name() == "postgresql"
+
+    @staticmethod
+    def _sensitivity_value(document: Any) -> str | None:
+        sens = getattr(document, "sensitivity", None)
+        if sens is None:
+            return None
+        return str(sens.value if hasattr(sens, "value") else sens).lower()
+
+    @staticmethod
+    def _snippet_suppressed_for(document: Any) -> bool:
+        return SearchService._sensitivity_value(document) in _SNIPPET_SUPPRESSED_SENSITIVITY
+
+    @classmethod
+    def _library_acl_sql_predicate(cls, user: Any, Document: Any, DocumentCategory: Any):
+        """SQL-side ACL prefilter mirroring library read rules (fail-closed)."""
+        if getattr(user, "is_superuser", False):
+            return True
+
+        staff_ok = or_(
+            Document.access_level.is_(None),
+            Document.access_level == "all_staff",
+            Document.access_level == "",
+        )
+        clauses = [staff_ok]
+
+        can_managers = cls._user_has(user, PERM_DOCUMENT_UPDATE) or cls._user_has(user, PERM_ADMIN_MANAGE)
+        if can_managers:
+            clauses.append(Document.access_level == "managers")
+
+        if cls._user_has(user, PERM_ADMIN_MANAGE):
+            clauses.append(Document.access_level == "restricted")
+        else:
+            allowed_taxes = [
+                tax_id for tax_id, perm in RESTRICTED_TAXONOMY_PERMISSIONS.items() if cls._user_has(user, perm)
+            ]
+            if allowed_taxes:
+                clauses.append(
+                    and_(
+                        Document.access_level == "restricted",
+                        DocumentCategory.taxonomy_id.in_(allowed_taxes),
+                    )
+                )
+
+        return or_(*clauses)
 
     # ------------------------------------------------------------------
     # Per-entity search helpers
@@ -613,11 +706,19 @@ class SearchService:
         return results
 
     async def _search_documents(
-        self, query: str, tenant_id: int | None, request_id: str | None
+        self,
+        query: str,
+        tenant_id: int | None,
+        request_id: str | None,
+        *,
+        user: Any | None = None,
     ) -> list[SearchResultItem]:
         results: list[SearchResultItem] = []
+        if user is None or tenant_id is None:
+            return results
         try:
             from src.domain.models.document import Document
+            from src.domain.models.document_library import DocumentCategory
 
             search_filter = f"%{query}%"
             stmt = (
@@ -634,7 +735,26 @@ class SearchService:
                 .limit(10)
             )
             db_result = await self.db.execute(stmt)
-            for document in db_result.scalars().all():
+            documents = list(db_result.scalars().all())
+
+            restricted_cat_ids = {
+                d.category_id
+                for d in documents
+                if d.category_id is not None and (getattr(d, "access_level", None) or "") == "restricted"
+            }
+            taxonomy_by_cat: dict[int, str] = {}
+            if restricted_cat_ids:
+                cat_rows = await self.db.execute(
+                    select(DocumentCategory.id, DocumentCategory.taxonomy_id).where(
+                        DocumentCategory.id.in_(restricted_cat_ids)
+                    )
+                )
+                taxonomy_by_cat = {row[0]: row[1] for row in cat_rows.all()}
+
+            for document in documents:
+                tax = taxonomy_by_cat.get(document.category_id) if document.category_id else None
+                if not user_can_read_library_document(document, user, taxonomy_id=tax):
+                    continue
                 results.append(
                     SearchResultItem(
                         id=document.reference_number or f"DOC-{document.id}",
@@ -666,6 +786,111 @@ class SearchService:
         except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: document query failed [request_id=%s]: %s",
+                request_id,
+                type(e).__name__,
+                exc_info=True,
+            )
+        return results
+
+    async def _search_document_content(
+        self,
+        query: str,
+        user: Any | None,
+        request_id: str | None,
+    ) -> list[SearchResultItem]:
+        """FTS over document_chunks with fail-closed library RBAC."""
+        results: list[SearchResultItem] = []
+        if user is None:
+            return results
+        if not self._user_has(user, PERM_DOCUMENT_READ):
+            return results
+        tenant_id = getattr(user, "tenant_id", None)
+        if tenant_id is None:
+            return results
+        if not self._supports_chunk_fts():
+            return results
+
+        try:
+            from src.domain.models.document import Document, DocumentChunk
+            from src.domain.models.document_library import DocumentCategory
+
+            tsquery = self._ts_query(query)
+            rank = self._ts_rank(DocumentChunk.search_vector, query)
+            headline = func.ts_headline(
+                "english",
+                DocumentChunk.content,
+                tsquery,
+                "MaxWords=35, MinWords=12, MaxFragments=1",
+            ).label("snippet")
+
+            stmt = (
+                select(
+                    DocumentChunk,
+                    Document,
+                    DocumentCategory.taxonomy_id,
+                    headline,
+                    rank.label("score"),
+                )
+                .join(Document, DocumentChunk.document_id == Document.id)
+                .outerjoin(DocumentCategory, Document.category_id == DocumentCategory.id)
+                .where(DocumentChunk.tenant_id == tenant_id)
+                .where(Document.tenant_id == tenant_id)
+                .where(Document.is_active.is_(True))
+                .where(DocumentChunk.search_vector.op("@@")(tsquery))
+                .where(self._library_acl_sql_predicate(user, Document, DocumentCategory))
+                .order_by(rank.desc())
+                .limit(_CONTENT_SEARCH_LIMIT)
+            )
+
+            db_result = await self.db.execute(stmt)
+            rows = db_result.all()
+            for chunk, document, taxonomy_id, snippet, score in rows:
+                if not user_can_read_library_document(document, user, taxonomy_id=taxonomy_id):
+                    logger.warning(
+                        "Search: document_content ACL drop after SQL prefilter " "[request_id=%s doc_id=%s]",
+                        request_id,
+                        getattr(document, "id", None),
+                    )
+                    track_metric("search.document_content.acl_drop", 1)
+                    continue
+
+                suppress = self._snippet_suppressed_for(document)
+                if suppress:
+                    description = ""
+                    highlights = ["snippet_suppressed"]
+                else:
+                    raw_snippet = (snippet or "")[:_CONTENT_SNIPPET_MAX_CHARS]
+                    description = raw_snippet
+                    highlights = self._highlight_words(query, raw_snippet, chunk.content)
+
+                relevance = min(100.0, 60 + float(score or 0) * 40)
+                results.append(
+                    SearchResultItem(
+                        id=document.reference_number or f"DOC-{document.id}",
+                        type="document_content",
+                        title=document.title or "Untitled Document",
+                        description=description,
+                        module="Document Content",
+                        status=str(
+                            document.status.value
+                            if hasattr(document.status, "value")
+                            else document.status or "Available"
+                        ),
+                        date=str(document.created_at or ""),
+                        relevance=relevance,
+                        highlights=highlights,
+                        entity_id=document.id,
+                        path=build_search_path(
+                            "document_content",
+                            document.id,
+                            chunk_id=chunk.id,
+                            page_number=chunk.page_number,
+                        ),
+                    )
+                )
+        except (AttributeError, SQLAlchemyError, ValueError, TypeError) as e:
+            logger.warning(
+                "Search: document content query failed [request_id=%s]: %s",
                 request_id,
                 type(e).__name__,
                 exc_info=True,
