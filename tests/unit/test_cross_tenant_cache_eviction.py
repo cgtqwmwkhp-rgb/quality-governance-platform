@@ -9,7 +9,7 @@ sees the audit entry.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -86,8 +86,10 @@ def _rta(**overrides):
 
 
 def _db():
+    empty_result = MagicMock()
+    empty_result.scalars.return_value.all.return_value = []
     return SimpleNamespace(
-        execute=AsyncMock(),
+        execute=AsyncMock(return_value=empty_result),
         flush=AsyncMock(),
         refresh=AsyncMock(),
         delete=AsyncMock(),

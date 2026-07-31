@@ -913,7 +913,11 @@ async def _count_for_source_detailed(
     failures: list[str] = []
     total = 0
     if not source_type or source_type == "incident":
-        q = select(func.count()).select_from(IncidentAction).where(IncidentAction.tenant_id == tenant_id)
+        q = (
+            select(func.count())
+            .select_from(IncidentAction)
+            .where(IncidentAction.tenant_id == tenant_id, IncidentAction.deleted_at.is_(None))
+        )
         if status_filter:
             q = q.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
@@ -954,7 +958,11 @@ async def _count_for_source_detailed(
 
     # Complaint / investigation have no asset golden thread — omit when filtering by asset
     if asset_id is None and (not source_type or source_type == "complaint"):
-        q = select(func.count()).select_from(ComplaintAction).where(ComplaintAction.tenant_id == tenant_id)
+        q = (
+            select(func.count())
+            .select_from(ComplaintAction)
+            .where(ComplaintAction.tenant_id == tenant_id, ComplaintAction.deleted_at.is_(None))
+        )
         if status_filter:
             q = q.where(ComplaintAction.status == status_filter)
         if source_type == "complaint" and source_id:
@@ -1121,7 +1129,7 @@ async def list_actions(
         async with _safe_rows(db, "incident", unavailable):
             q = (
                 select(IncidentAction)
-                .where(IncidentAction.tenant_id == current_user.tenant_id)
+                .where(IncidentAction.tenant_id == current_user.tenant_id, IncidentAction.deleted_at.is_(None))
                 .options(selectinload(IncidentAction.incident))
                 .order_by(IncidentAction.created_at.desc())
             )
@@ -1185,7 +1193,7 @@ async def list_actions(
         async with _safe_rows(db, "complaint", unavailable):
             q = (
                 select(ComplaintAction)
-                .where(ComplaintAction.tenant_id == current_user.tenant_id)
+                .where(ComplaintAction.tenant_id == current_user.tenant_id, ComplaintAction.deleted_at.is_(None))
                 .options(selectinload(ComplaintAction.complaint))
                 .order_by(ComplaintAction.created_at.desc())
             )
@@ -2139,7 +2147,9 @@ async def get_action(
     if src_type == "incident":
         result = await db.execute(
             select(IncidentAction).where(
-                IncidentAction.id == action_id, IncidentAction.tenant_id == current_user.tenant_id
+                IncidentAction.id == action_id,
+                IncidentAction.tenant_id == current_user.tenant_id,
+                IncidentAction.deleted_at.is_(None),
             )
         )
         incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())
@@ -2163,7 +2173,9 @@ async def get_action(
     elif src_type == "complaint":
         result = await db.execute(
             select(ComplaintAction).where(
-                ComplaintAction.id == action_id, ComplaintAction.tenant_id == current_user.tenant_id
+                ComplaintAction.id == action_id,
+                ComplaintAction.tenant_id == current_user.tenant_id,
+                ComplaintAction.deleted_at.is_(None),
             )
         )
         complaint_action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
@@ -2249,7 +2261,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if src_type == "incident":
         result = await db.execute(
             select(IncidentAction).where(
-                IncidentAction.id == action_id, IncidentAction.tenant_id == current_user.tenant_id
+                IncidentAction.id == action_id,
+                IncidentAction.tenant_id == current_user.tenant_id,
+                IncidentAction.deleted_at.is_(None),
             )
         )
         action = cast(Optional[IncidentAction], result.scalar_one_or_none())
@@ -2265,7 +2279,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     elif src_type == "complaint":
         result = await db.execute(
             select(ComplaintAction).where(
-                ComplaintAction.id == action_id, ComplaintAction.tenant_id == current_user.tenant_id
+                ComplaintAction.id == action_id,
+                ComplaintAction.tenant_id == current_user.tenant_id,
+                ComplaintAction.deleted_at.is_(None),
             )
         )
         action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
@@ -2458,3 +2474,78 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         tenant_id=action.tenant_id,
     )
     return out
+
+
+@router.delete("/{action_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_action(
+    action_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("action:delete"))],
+    request_id: str = Depends(get_request_id),
+    source_type: str = Query(
+        ...,
+        description="Source discriminator: incident or complaint (PX-177 soft-delete)",
+    ),
+) -> None:
+    """Soft-delete an incident or complaint action (PX-177).
+
+    Sets deleted_at; list/get exclude the row. Other source_types are not
+    supported in this slice (near-miss/RTA/investigation remain follow-ups).
+    """
+    src_type = source_type.lower()
+    if src_type not in ("incident", "complaint"):
+        raise BadRequestError("Soft-delete currently supports source_type=incident|complaint only")
+
+    now = datetime.now(timezone.utc)
+    if src_type == "incident":
+        result = await db.execute(
+            select(IncidentAction).where(
+                IncidentAction.id == action_id,
+                IncidentAction.tenant_id == current_user.tenant_id,
+                IncidentAction.deleted_at.is_(None),
+            )
+        )
+        action = cast(Optional[IncidentAction], result.scalar_one_or_none())
+        if action is None:
+            raise NotFoundError("Action not found")
+        entity_name = action.reference_number
+        parent_id = action.incident_id
+        storage_kind = STORAGE_INCIDENT_ACTION
+    else:
+        result = await db.execute(
+            select(ComplaintAction).where(
+                ComplaintAction.id == action_id,
+                ComplaintAction.tenant_id == current_user.tenant_id,
+                ComplaintAction.deleted_at.is_(None),
+            )
+        )
+        action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
+        if action is None:
+            raise NotFoundError("Action not found")
+        entity_name = action.reference_number
+        parent_id = action.complaint_id
+        storage_kind = STORAGE_COMPLAINT_ACTION
+
+    action_key = action_key_for(storage_kind, action.id)
+    action.deleted_at = now
+    action.deleted_by_id = current_user.id
+
+    await record_audit_event(
+        db=db,
+        event_type="unified_action.deleted",
+        entity_type="unified_action",
+        entity_id=action_key,
+        entity_name=entity_name,
+        action="delete",
+        description=f"Soft-deleted {src_type} action {entity_name}",
+        payload={
+            "action_id": action_id,
+            "source_type": src_type,
+            "source_id": parent_id,
+            "soft_delete": True,
+        },
+        user_id=current_user.id,
+        request_id=request_id,
+        tenant_id=action.tenant_id,
+    )
+    await db.flush()

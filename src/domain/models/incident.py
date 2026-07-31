@@ -204,12 +204,21 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     precursor_events: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of precursor indicators
     control_failures: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of failed controls
 
+    # Soft delete (PX-177) — EvidenceAsset-style; list/get exclude deleted rows.
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     # Relationships
     actions: Mapped[List["IncidentAction"]] = relationship(
         "IncidentAction",
         back_populates="incident",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def is_deleted(self) -> bool:
+        """True when this incident has been soft-deleted."""
+        return self.deleted_at is not None
 
     def __repr__(self) -> str:
         return f"<Incident(id={self.id}, ref='{self.reference_number}', type='{self.incident_type}')>"
@@ -251,8 +260,17 @@ class IncidentAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin
     effectiveness_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_effective: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
+    # Soft delete (PX-177)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     # Relationships
     incident: Mapped["Incident"] = relationship("Incident", back_populates="actions")
+
+    @property
+    def is_deleted(self) -> bool:
+        """True when this action has been soft-deleted."""
+        return self.deleted_at is not None
 
     def __repr__(self) -> str:
         return f"<IncidentAction(id={self.id}, ref='{self.reference_number}', status='{self.status}')>"

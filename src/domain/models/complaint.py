@@ -183,12 +183,21 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     lessons_learnt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Soft delete (PX-177) — EvidenceAsset-style; list/get exclude deleted rows.
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     # Relationships
     actions: Mapped[List["ComplaintAction"]] = relationship(
         "ComplaintAction",
         back_populates="complaint",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def is_deleted(self) -> bool:
+        """True when this complaint has been soft-deleted."""
+        return self.deleted_at is not None
 
     def __repr__(self) -> str:
         return f"<Complaint(id={self.id}, ref='{self.reference_number}', type='{self.complaint_type}')>"
@@ -225,8 +234,17 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
     completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Soft delete (PX-177)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     # Relationships
     complaint: Mapped["Complaint"] = relationship("Complaint", back_populates="actions")
+
+    @property
+    def is_deleted(self) -> bool:
+        """True when this action has been soft-deleted."""
+        return self.deleted_at is not None
 
     def __repr__(self) -> str:
         return f"<ComplaintAction(id={self.id}, ref='{self.reference_number}', status='{self.status}')>"

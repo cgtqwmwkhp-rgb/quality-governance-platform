@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "186 kB",
+    "limit": "187 kB",
     "gzip": true,
-    "name": "index: 185.5→186 kB — closure-gate parity: the transition-blocked strings must live in en.json and cy.json (the i18n key check is blocking and both locales are statically imported into the shell), which measures +190 B on top of main's 185.44 kB. Note main had ~60 B headroom, not the ~300 B the previous note claimed. Now 185.63 kB with ~370 B headroom; the dialog itself stays on route chunks."
+    "name": "index: 186→187 kB — PX-177 soft-delete clients (incidents/complaints/actions delete helpers) are imported via the shell API surface and measure ~25–350 B gzip on top of the prior 186 kB closure-gate budget; dialogs stay on route chunks."
   },
   {
     "path": "dist/assets/vendor-*.js",

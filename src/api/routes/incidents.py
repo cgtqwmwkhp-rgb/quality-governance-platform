@@ -897,9 +897,9 @@ async def delete_incident(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """
-    Delete an incident.
+    Soft-delete an incident (PX-177).
 
-    Requires authentication.
+    Sets deleted_at; list/get exclude the row. Requires incident:delete.
     """
     svc = IncidentService(db)
     try:

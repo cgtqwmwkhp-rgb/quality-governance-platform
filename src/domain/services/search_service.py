@@ -221,6 +221,7 @@ class SearchService:
             stmt = (
                 select(Incident, score.label("score"))
                 .where(Incident.tenant_id == tenant_id)
+                .where(Incident.deleted_at.is_(None))
                 .where(filter_clause)
                 .order_by(score.desc())
                 .limit(10)
@@ -395,6 +396,7 @@ class SearchService:
             stmt = (
                 select(Complaint, score.label("score"))
                 .where(Complaint.tenant_id == tenant_id)
+                .where(Complaint.deleted_at.is_(None))
                 .where(filter_clause)
                 .order_by(score.desc())
                 .limit(10)

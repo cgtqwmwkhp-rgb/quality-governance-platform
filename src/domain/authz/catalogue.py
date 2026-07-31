@@ -39,6 +39,7 @@ from typing import Mapping
 ENFORCED_PERMISSIONS: frozenset[str] = frozenset(
     {
         "action:create",
+        "action:delete",
         "action:read",
         "action:update",
         "admin:manage",
@@ -162,7 +163,6 @@ RESERVED_PERMISSIONS: Mapping[str, str] = MappingProxyType(
         "policy:read": "policy reads take CurrentUser with no permission dependency",
         "standard:read": "standard reads take CurrentUser with no permission dependency",
         # Deletes that are not permission-gated.
-        "action:delete": "no DELETE endpoint exists for actions",
         "capa:delete": "DELETE /capa/{id} is gated on CurrentSuperuser, not a permission",
     }
 )

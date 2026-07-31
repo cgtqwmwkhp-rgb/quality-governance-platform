@@ -35,7 +35,7 @@ DOCUMENT = Path(__file__).resolve().parents[2] / "docs" / "data" / "admin-role-p
 
 #: The value assigned by each ``UPDATE``, i.e. the JSON array between the single
 #: quotes on every ``SET permissions = '...'`` line. Both the wildcard repair
-#: (Step 2) and the 75→77 upgrade (Step 2b) must write the same catalogue value.
+#: (Step 2) and the 75→78 upgrade (Step 2b) must write the same catalogue value.
 _SET_CLAUSE = re.compile(r"^SET permissions = '(\[.*\])'$", re.MULTILINE)
 
 
@@ -63,7 +63,7 @@ def granted_tokens(granted_token_lists: list[list[str]]) -> list[str]:
     for other in granted_token_lists[1:]:
         assert other == first, (
             "every SET permissions value in docs/data/admin-role-permissions-grant.md must be "
-            "identical; the wildcard repair and the 75→77 upgrade write the same catalogue grant"
+            "identical; the wildcard repair and the 75→78 upgrade write the same catalogue grant"
         )
     return first
 
@@ -80,15 +80,17 @@ def test_the_statement_grants_exactly_the_catalogued_admin_list(granted_tokens: 
         "Regenerate the statement. An approved-but-stale statement is the one that gets pasted "
         "into production."
     )
-    assert len(granted_tokens) == 77
+    assert len(granted_tokens) == 78
+    assert "action:delete" in granted_tokens
     assert "action:read" in granted_tokens
     assert "risk:read" in granted_tokens
     assert "*" not in granted_tokens
 
 
-def test_the_document_includes_the_75_to_77_upgrade(document: str) -> None:
+def test_the_document_includes_the_75_to_78_upgrade(document: str) -> None:
     """Live DBs hold 75 tokens; the upgrade statement must be present and scoped."""
     assert "json_array_length(permissions::json) = 75" in document
+    assert "action:delete" in document
     assert "action:read" in document
     assert "risk:read" in document
 
@@ -121,7 +123,7 @@ def test_the_statement_contains_no_wildcard(granted_tokens: list[str]) -> None:
 def test_the_update_is_scoped_to_the_row_and_the_value_it_was_written_for(document: str) -> None:
     """An unscoped UPDATE would rewrite every role in the table.
 
-    The ``WHERE`` clause is the difference between fixing one row and granting 77
+    The ``WHERE`` clause is the difference between fixing one row and granting 78
     permissions to every role in the database, so it is asserted rather than
     trusted to survive editing.
     """
@@ -136,7 +138,7 @@ def test_the_update_is_scoped_to_the_row_and_the_value_it_was_written_for(docume
 
 
 def test_the_document_says_it_has_not_been_applied(document: str) -> None:
-    """The 77-token hand-back has to keep saying so, or somebody will assume it was done."""
+    """The 78-token hand-back has to keep saying so, or somebody will assume it was done."""
     assert "NOT APPLIED" in document
     assert "rollback" in document.lower()
 

@@ -106,11 +106,16 @@ class TestIncidentService:
     @patch("src.domain.services.incident_service.record_audit_event", new_callable=AsyncMock)
     @patch("src.domain.services.incident_service.invalidate_tenant_cache", new_callable=AsyncMock)
     async def test_delete_incident_happy_path(self, _cache, _audit, service):
-        incident = MagicMock(id=1, reference_number="INC-001", tenant_id=1)
+        incident = MagicMock(id=1, reference_number="INC-001", tenant_id=1, deleted_at=None)
         service.get_incident = AsyncMock(return_value=incident)
+        empty = MagicMock()
+        empty.scalars.return_value.all.return_value = []
+        service.db.execute = AsyncMock(return_value=empty)
 
         await service.delete_incident(1, user_id=1, tenant_id=1, request_id="r1")
-        service.db.delete.assert_called_once_with(incident)
+        assert incident.deleted_at is not None
+        assert incident.deleted_by_id == 1
+        service.db.delete.assert_not_called()
         service.db.flush.assert_awaited()
 
     @pytest.mark.asyncio

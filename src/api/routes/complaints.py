@@ -390,6 +390,30 @@ async def update_complaint(
         raise NotFoundError(f"Complaint {complaint_id} not found")
 
 
+@router.delete("/{complaint_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_complaint(
+    complaint_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("complaint:delete"))],
+    request_id: str = Depends(get_request_id),
+) -> None:
+    """Soft-delete a complaint (PX-177).
+
+    Sets deleted_at; list/get exclude the row. Requires complaint:delete.
+    """
+    svc = ComplaintService(db)
+    try:
+        await svc.delete_complaint(
+            complaint_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Complaint {complaint_id} not found")
+
+
 @router.get("/{complaint_id}/closure-validation", response_model=CaseClosureValidationResponse)
 async def get_complaint_closure_validation(
     complaint_id: int,

@@ -186,10 +186,21 @@ class ExecutiveDashboardService:
         self.tenant_id = tenant_id
 
     def _tenant_filter(self, model: Any) -> Any:
-        """Return a tenant_id filter clause if tenant_id is set."""
+        """Return tenant scope, excluding soft-deleted rows when the model has them.
+
+        Register lists filter ``deleted_at IS NULL``; dashboard aggregates must use
+        the same population or register_total / open counts drift (PX-177).
+        """
+        clauses: list[Any] = []
         if self.tenant_id is not None:
-            return model.tenant_id == self.tenant_id
-        return True  # noqa: E712  — SQLAlchemy literal
+            clauses.append(model.tenant_id == self.tenant_id)
+        if hasattr(model, "deleted_at"):
+            clauses.append(model.deleted_at.is_(None))
+        if not clauses:
+            return True  # noqa: E712  — SQLAlchemy literal
+        if len(clauses) == 1:
+            return clauses[0]
+        return and_(*clauses)
 
     async def _recover_session(self) -> None:
         """Roll back after a failed sub-query so later ones can still run.
