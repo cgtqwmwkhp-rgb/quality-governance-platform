@@ -355,9 +355,7 @@ class CopilotService:
         await self.db.commit()
 
         # Get conversation history
-        history = await self.get_session_messages(
-            session_id, user_id=user_id, tenant_id=tenant_id, limit=20
-        )
+        history = await self.get_session_messages(session_id, user_id=user_id, tenant_id=tenant_id, limit=20)
 
         # Build context
         context = self._build_context(session)
