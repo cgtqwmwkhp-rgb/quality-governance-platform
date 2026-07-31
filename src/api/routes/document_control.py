@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -198,6 +198,14 @@ class WorkflowCreate(BaseModel):
 
 
 class ApprovalActionRequest(BaseModel):
+    """Approval workflow action body.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the action succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     action: str = Field(..., description="approved, rejected, returned, delegated")
     comments: Optional[str] = None
     conditions: Optional[str] = None
@@ -215,6 +223,14 @@ class DistributionCreate(BaseModel):
 
 
 class ObsoleteRequest(BaseModel):
+    """Mark-document-obsolete body.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of obsolescence succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     obsolete_reason: str = Field(..., min_length=10)
     superseded_by_id: Optional[int] = None
 
