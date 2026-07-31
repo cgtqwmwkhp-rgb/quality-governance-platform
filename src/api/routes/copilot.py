@@ -19,7 +19,7 @@ from src.infrastructure.database import async_session_maker
 
 # PX-248: copilot answers are hardcoded simulations, not inference over tenant data.
 # Serving them would present fabricated figures as fact, so the surface is closed
-# unless an operator explicitly opts a non-production environment in.
+# in every environment unless an operator explicitly opts that environment in.
 COPILOT_DISABLED_DETAIL = "AI Copilot is not enabled in this environment."
 
 

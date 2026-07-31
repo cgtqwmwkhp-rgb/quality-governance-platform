@@ -155,6 +155,14 @@ env:
   STAGING_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
   PRODUCTION_API_URL: https://app-qgp-prod.azurewebsites.net
 
+  # --- AI Copilot demo surface (PX-248) ------------------------------------
+  # The copilot replies with fixed keyword responses, not inference, so the surface is
+  # baked out unless someone opts in. The repository variable AI_COPILOT_ENABLED is the
+  # single switch: deploy-staging.yml and deploy-production.yml read the same variable
+  # for the API's AI_COPILOT_ENABLED app setting, so the UI gate and the API guard
+  # cannot drift apart. Unset means 'false' — the bake fails closed.
+  ENABLE_AI_COPILOT_DEMO: ${{ vars.AI_COPILOT_ENABLED || 'false' }}
+
 jobs:
   # For PRs: build-only (no deployment) to satisfy branch protection.
   # PX-178: despite the legacy job name, this job contains no deploy step and
@@ -177,6 +185,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_URL: ${{ env.STAGING_API_URL }}
+          VITE_ENABLE_AI_COPILOT_DEMO: ${{ env.ENABLE_AI_COPILOT_DEMO }}
           VITE_BUILD_SHA: ${{ github.sha }}
           VITE_BUILD_TIME: ${{ github.event.pull_request.updated_at }}
         run: npm run build
@@ -244,6 +253,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_URL: ${{ env.STAGING_API_URL }}
+          VITE_ENABLE_AI_COPILOT_DEMO: ${{ env.ENABLE_AI_COPILOT_DEMO }}
           VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
           VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
           VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}
@@ -1007,6 +1017,7 @@ jobs:
         env:
           VITE_API_URL: ${{ env.PRODUCTION_API_URL }}
           VITE_ENVIRONMENT: production
+          VITE_ENABLE_AI_COPILOT_DEMO: ${{ env.ENABLE_AI_COPILOT_DEMO }}
           VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
           VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
           VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}
@@ -1146,6 +1157,7 @@ jobs:
         env:
           VITE_API_URL: ${{ env.PRODUCTION_API_URL }}
           VITE_ENVIRONMENT: production
+          VITE_ENABLE_AI_COPILOT_DEMO: ${{ env.ENABLE_AI_COPILOT_DEMO }}
           VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
           VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
           VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}

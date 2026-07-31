@@ -38,10 +38,15 @@ def copilot_disabled(monkeypatch):
     monkeypatch.setattr(settings, "ai_copilot_enabled", False)
 
 
-@pytest.fixture
-def copilot_enabled(monkeypatch):
+@pytest.fixture(params=["development", "staging", "production"])
+def copilot_enabled(request, monkeypatch):
+    """Enabled means enabled everywhere: the opt-in is the only gate, production included.
+
+    Parametrised over the deployable environments so the published contract is asserted
+    in the state each one actually ships in, rather than only in development.
+    """
     monkeypatch.setattr(settings, "ai_copilot_enabled", True)
-    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "app_env", request.param)
 
 
 def _copilot_paths(schema: dict[str, Any]) -> list[str]:

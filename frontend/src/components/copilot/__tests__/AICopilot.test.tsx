@@ -112,14 +112,18 @@ describe('AICopilot', () => {
     expect(createSessionMock).toHaveBeenCalledTimes(1)
   })
 
-  it('labels the enabled surface as a non-production demo', async () => {
+  it('states before any exchange that no model is involved and nothing is written', async () => {
+    // The surface now ships to production too, so the standing banner — not the welcome
+    // bubble, which scrolls away — has to carry the whole disclosure.
     isAICopilotDemoEnabledMock.mockReturnValue(true)
 
     await renderCopilot()
 
     const banner = await screen.findByTestId('ai-copilot-demo-banner')
     expect(banner).toHaveTextContent(/demonstration only/i)
+    expect(banner).toHaveTextContent(/no AI model is involved/i)
     expect(banner).toHaveTextContent(/refused/i)
+    expect(banner).toHaveTextContent(/writes are never performed/i)
     expect(screen.getByRole('heading', { name: 'AI Copilot (Demo)' })).toBeInTheDocument()
   })
 
