@@ -218,4 +218,4 @@ async def test_service_refuses_to_generate_when_disabled(monkeypatch):
     service = copilot_service_module.CopilotService(db=None)
 
     with pytest.raises(copilot_service_module.CopilotDisabledError):
-        await service.send_message(session_id=1, content="what is our risk summary?", user_id=1)
+        await service.send_message(session_id=1, content="what is our risk summary?", user_id=1, tenant_id=1)

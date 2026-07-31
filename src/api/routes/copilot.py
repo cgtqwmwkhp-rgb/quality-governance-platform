@@ -142,9 +142,12 @@ async def get_active_session(
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
 
-    session = await service.get_active_session(current_user.id)
+    session = await service.get_active_session(current_user.id, current_user.tenant_id)
     return session
 
 
@@ -153,10 +156,17 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
 
-    service = CopilotService(db)
-    session = await service.get_session(session_id)
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
 
-    if not session or session.user_id != current_user.id:
+    service = CopilotService(db)
+    session = await service.get_session(
+        session_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
+
+    if not session:
         raise NotFoundError("Session not found")
 
     return session
@@ -167,11 +177,19 @@ async def close_session(session_id: int, db: DbSession, current_user: CurrentUse
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
-    session = await service.get_session(session_id)
-    if not session or session.user_id != current_user.id:
-        raise NotFoundError("Session not found")
-    await service.close_session(session_id)
+
+    try:
+        await service.close_session(
+            session_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+        )
+    except ValueError as e:
+        raise NotFoundError(str(e))
 
     return {"status": "closed"}
 
@@ -186,9 +204,15 @@ async def list_sessions(
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     result = await db.execute(
         select(CopilotSession)
-        .where(CopilotSession.user_id == current_user.id)
+        .where(
+            CopilotSession.user_id == current_user.id,
+            CopilotSession.tenant_id == current_user.tenant_id,
+        )
         .order_by(CopilotSession.updated_at.desc())
         .offset(offset)
         .limit(limit)
@@ -213,6 +237,9 @@ async def send_message(
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
 
     try:
@@ -220,6 +247,7 @@ async def send_message(
             session_id=session_id,
             content=data.content,
             user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
         )
         return message
     except ValueError as e:
@@ -236,11 +264,20 @@ async def get_messages(
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
-    session = await service.get_session(session_id)
-    if not session or session.user_id != current_user.id:
-        raise NotFoundError("Session not found")
-    messages = await service.get_session_messages(session_id, limit=limit)
+
+    try:
+        messages = await service.get_session_messages(
+            session_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            limit=limit,
+        )
+    except ValueError as e:
+        raise NotFoundError(str(e))
 
     return messages
 
@@ -487,7 +524,6 @@ manager = ConnectionManager()
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: int):
     """WebSocket endpoint for real-time chat. Requires token in query params."""
-    from src.domain.models.ai_copilot import CopilotSession
     from src.domain.models.user import User
     from src.domain.services.copilot_service import CopilotService, copilot_is_enabled
 
@@ -525,22 +561,21 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
             await websocket.close(code=4001, reason="Invalid token")
             return
 
-        session_result = await db.execute(
-            select(CopilotSession).where(
-                CopilotSession.id == session_id,
-                CopilotSession.user_id == user.id,
-            )
-        )
-        session_obj = session_result.scalar_one_or_none()
-        if not session_obj:
-            await websocket.close(code=4003, reason="Session not found or access denied")
-            return
-
         user_id = user.id
         try:
             tenant_id = require_tenant_id(user.tenant_id)
         except HTTPException:
             await websocket.close(code=4003, reason="Tenant access denied")
+            return
+
+        service = CopilotService(db)
+        session_obj = await service.get_session(
+            session_id,
+            user_id=user_id,
+            tenant_id=tenant_id,
+        )
+        if not session_obj:
+            await websocket.close(code=4003, reason="Session not found or access denied")
             return
 
     await manager.connect(websocket, session_id)
@@ -558,6 +593,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                         session_id=session_id,
                         content=data["content"],
                         user_id=user_id,
+                        tenant_id=tenant_id,
                     )
 
                     await manager.send_message(
