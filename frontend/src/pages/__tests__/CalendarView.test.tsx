@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 const mockGetFeed = vi.fn()
+
+/** Freeze calendar "today" so month cursor stays aligned with July 2026 feed fixtures. */
+const FIXED_NOW = new Date('2026-07-16T12:00:00.000Z')
 
 const { t } = vi.hoisted(() => ({
   t: (key: string, options?: string | Record<string, unknown>) => {
@@ -38,6 +41,8 @@ vi.mock('../../contexts/ToastContext', () => ({
 
 describe('CalendarView', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(FIXED_NOW)
     vi.clearAllMocks()
     mockGetFeed.mockResolvedValue({
       data: {
@@ -71,6 +76,10 @@ describe('CalendarView', () => {
         sources_failed: [],
       },
     })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('loads live feed, KPI counts, and add-event chooser (audit / action)', async () => {
