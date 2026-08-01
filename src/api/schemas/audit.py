@@ -254,9 +254,13 @@ class AuditSectionCreate(AuditSectionBase):
 
 
 class AuditSectionUpdate(BaseModel):
-    """Schema for updating an Audit Section."""
+    """Schema for updating an Audit Section.
 
-    model_config = ConfigDict(populate_by_name=True)
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the section being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -332,9 +336,13 @@ class AuditTemplateBase(BaseModel):
 
 
 class AuditTemplateCreate(AuditTemplateBase):
-    """Schema for creating an Audit Template."""
+    """Schema for creating an Audit Template.
 
-    pass
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the template being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class AuditTemplateUpdate(BaseModel):

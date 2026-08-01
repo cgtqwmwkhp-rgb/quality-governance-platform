@@ -39,8 +39,6 @@ KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
     {
         "ActionCreate",
         "ActionUpdate",
-        "AuditSectionUpdate",
-        "AuditTemplateCreate",
         "AuditTemplateUpdate",
         "AuditUpdate",
         "AutoTagRequest",
