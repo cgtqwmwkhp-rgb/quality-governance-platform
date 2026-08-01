@@ -12,9 +12,11 @@
     "ActionUpdate",
     "AddCauseRequest",
     "AddCertificationRequest",
+    "AddCommentRequest",
     "AddTrainingRequest",
     "AddWhyRequest",
     "AllocationRequest",
+    "AnnotationCreate",
     "ApprovalActionRequest",
     "AskAssignmentQuestionRequest",
     "AssessCompetencyRequest",
@@ -40,8 +42,8 @@
     "UpdateCAPAStatusRequest",
     "VerifyCAPARequest"
   ],
-  "max_open_count": 258,
-  "min_forbid_count": 38,
+  "max_open_count": 256,
+  "min_forbid_count": 40,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
