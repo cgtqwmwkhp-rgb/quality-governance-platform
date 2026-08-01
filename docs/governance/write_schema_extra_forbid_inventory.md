@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 28 |
-| Open / lax (unknown fields ignored) | 268 |
+| `extra="forbid"` (strict) | 30 |
+| Open / lax (unknown fields ignored) | 266 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 28 |
-| `max_open_count` | 268 |
+| `min_forbid_count` | 30 |
+| `max_open_count` | 266 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -54,10 +54,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `ObsoleteRequest` — `POST /api/v1/document-control/{document_id}/obsolete`
 - `QuestionReplyRequest` — `POST /api/v1/document-campaigns/questions/{thread_id}/reply`
 - `RecordAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/{acknowledgment_id}/acknowledge`
+- `SetFishboneRootCauseRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/set-root-cause`
+- `SetRootCauseRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/set-root-cause`
 
 ## Open schemas (unknown fields silently ignored)
 
-268 schemas. Full list is the remediation backlog;
+266 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -263,8 +265,6 @@ converting them is out of scope for the inventory lock PR.
 - `SecurityIncidentCreate`
 - `SecurityRiskCreate`
 - `SendNotificationRequest`
-- `SetFishboneRootCauseRequest`
-- `SetRootCauseRequest`
 - `SignAssignmentRequest`
 - `SignInput`
 - `SignatureRequestCreate`
