@@ -5,16 +5,17 @@ Interactive conversational AI assistant for QHSE management.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.core.security import decode_token
 from src.domain.exceptions import NotFoundError
+from src.domain.models.user import User
 from src.infrastructure.database import async_session_maker
 
 # PX-248: copilot answers are hardcoded simulations, not inference over tenant data.
@@ -23,11 +24,29 @@ from src.infrastructure.database import async_session_maker
 COPILOT_DISABLED_DETAIL = "AI Copilot is not enabled in this environment."
 
 
-def require_copilot_enabled() -> None:
-    """Reject every copilot HTTP request unless the feature is explicitly opted in."""
+async def copilot_is_open() -> bool:
+    """Whether the copilot may answer right now: configuration, then the kill switch.
+
+    The order is the guarantee. ``copilot_is_enabled()`` is checked first and short
+    circuits, so a copilot that configuration has not opened performs no database read
+    and no database state can open it. Only once configuration says yes does the runtime
+    switch get a say, and all it can do is say no.
+
+    The session comes from ``async_session_maker`` rather than the request's own, so a
+    failing read cannot leave the caller's transaction unusable. It is opened only when
+    the cached verdict has expired, not on every request.
+    """
+    from src.domain.services.copilot_kill_switch import copilot_kill_switch_engaged
     from src.domain.services.copilot_service import copilot_is_enabled
 
     if not copilot_is_enabled():
+        return False
+    return not await copilot_kill_switch_engaged(async_session_maker)
+
+
+async def require_copilot_enabled() -> None:
+    """Reject every copilot HTTP request unless the feature is explicitly opted in."""
+    if not await copilot_is_open():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=COPILOT_DISABLED_DETAIL)
 
 
@@ -475,11 +494,17 @@ async def add_knowledge(
     title: str,
     content: str,
     category: str,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("admin:manage"))],
     db: DbSession,
     tags: Optional[list[str]] = None,
 ):
-    """Add to the knowledge base."""
+    """Add to the knowledge base — tenant admins only.
+
+    What lands here is retrieved by ``/knowledge/search`` and read back to every user in
+    the tenant with the copilot's voice behind it, so authoring it is a publishing act
+    rather than an ordinary write. Until now any authenticated user could perform it,
+    which made the knowledge base a route for putting words in the assistant's mouth.
+    """
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
@@ -524,10 +549,9 @@ manager = ConnectionManager()
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: int):
     """WebSocket endpoint for real-time chat. Requires token in query params."""
-    from src.domain.models.user import User
-    from src.domain.services.copilot_service import CopilotService, copilot_is_enabled
+    from src.domain.services.copilot_service import CopilotService
 
-    if not copilot_is_enabled():
+    if not await copilot_is_open():
         await websocket.close(code=4004, reason=COPILOT_DISABLED_DETAIL)
         return
 
