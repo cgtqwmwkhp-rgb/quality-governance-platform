@@ -244,9 +244,13 @@ class AuditSectionBase(BaseModel):
 
 
 class AuditSectionCreate(AuditSectionBase):
-    """Schema for creating an Audit Section."""
+    """Schema for creating an Audit Section.
 
-    pass
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the section being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class AuditSectionUpdate(BaseModel):
@@ -528,7 +532,13 @@ class AuditRunCreate(AuditRunBase):
 
 
 class AuditRunUpdate(BaseModel):
-    """Schema for updating an Audit Run."""
+    """Schema for updating an Audit Run.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the run being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(None, max_length=300)
     location: Optional[str] = None
