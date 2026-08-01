@@ -2312,7 +2312,16 @@ export const evidenceAssetsApi = {
 
 export interface GlobalSearchResultRecord {
   id: string
-  type: 'incident' | 'rta' | 'complaint' | 'near_miss' | 'risk' | 'audit' | 'action' | 'document'
+  type:
+    | 'incident'
+    | 'rta'
+    | 'complaint'
+    | 'near_miss'
+    | 'risk'
+    | 'audit'
+    | 'action'
+    | 'document'
+    | 'document_content'
   title: string
   description: string
   module: string
@@ -2322,6 +2331,10 @@ export interface GlobalSearchResultRecord {
   highlights: string[]
   entity_id?: number | null
   path?: string | null
+  /** Chunk section heading when the API provides it */
+  heading?: string | null
+  /** Chunk page when the API provides it (else FE may parse from path) */
+  page_number?: number | null
 }
 
 export interface GlobalSearchResponse {
