@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -39,7 +39,13 @@ ALLOWED_IMPORT_DIR = os.environ.get("XML_IMPORT_DIR", os.path.join(tempfile.gett
 
 
 class BatchImportRequest(BaseModel):
-    """Request body for batch import from server directory."""
+    """Request body for batch import from server directory.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     directory_path: str = Field(
         ...,

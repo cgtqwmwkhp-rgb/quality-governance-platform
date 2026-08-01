@@ -51,6 +51,8 @@
     "BCPUpdate",
     "BatchFindingRequest",
     "BatchGateRequest",
+    "BatchImportRequest",
+    "BowTieElementCreate",
     "CAPAStatusTransition",
     "CompleteAnalysisRequest",
     "CompleteAssignmentRequest",
@@ -72,8 +74,8 @@
     "UpdateCAPAStatusRequest",
     "VerifyCAPARequest"
   ],
-  "max_open_count": 226,
-  "min_forbid_count": 70,
+  "max_open_count": 224,
+  "min_forbid_count": 72,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
