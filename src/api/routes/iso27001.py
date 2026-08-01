@@ -1151,6 +1151,14 @@ async def create_access_control(
 
 
 class BCPCreate(BaseModel):
+    """Create a business continuity plan.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(..., min_length=3, max_length=255)
     description: str = Field(..., min_length=10)
     scope: str = Field(..., min_length=5)
@@ -1173,6 +1181,14 @@ class BCPCreate(BaseModel):
 
 
 class BCPUpdate(BaseModel):
+    """Partial update for a business continuity plan.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = Field(None, min_length=3, max_length=255)
     description: Optional[str] = None
     scope: Optional[str] = None

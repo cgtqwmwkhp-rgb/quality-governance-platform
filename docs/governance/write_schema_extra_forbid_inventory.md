@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 66 |
-| Open / lax (unknown fields ignored) | 230 |
+| `extra="forbid"` (strict) | 68 |
+| Open / lax (unknown fields ignored) | 228 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 66 |
-| `max_open_count` | 230 |
+| `min_forbid_count` | 68 |
+| `max_open_count` | 228 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -72,6 +72,8 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AuditUpdate` — `PUT /api/v1/uvdb/audits/{audit_id}`
 - `AutoTagRequest` — `POST /api/v1/compliance/analyze`, `POST /api/v1/compliance/auto-tag`
 - `AzureTokenExchangeRequest` — `POST /api/v1/auth/token-exchange`
+- `BCPCreate` — `POST /api/v1/iso27001/business-continuity`
+- `BCPUpdate` — `PUT /api/v1/iso27001/business-continuity/{plan_id}`
 - `CAPAStatusTransition` — `POST /api/v1/capa/{capa_id}/transition`
 - `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/complete`, `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete`
 - `CompleteAssignmentRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/complete`
@@ -95,14 +97,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-230 schemas. Full list is the remediation backlog;
+228 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
 <summary>Open schema names</summary>
 
-- `BCPCreate`
-- `BCPUpdate`
 - `BatchFindingRequest`
 - `BatchGateRequest`
 - `BatchImportRequest`

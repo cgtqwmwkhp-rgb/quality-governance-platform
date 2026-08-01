@@ -164,8 +164,8 @@ def test_committed_baseline_shape() -> None:
     assert baseline.is_file()
     assert inventory_md.is_file()
     payload = json.loads(baseline.read_text(encoding="utf-8"))
-    assert payload["min_forbid_count"] == 66
-    assert payload["max_open_count"] == 230
+    assert payload["min_forbid_count"] == 68
+    assert payload["max_open_count"] == 228
     assert payload["total_write_schemas"] == 296
     assert payload["forbid_schemas"] == [
         "AccessControlCreate",
@@ -214,6 +214,8 @@ def test_committed_baseline_shape() -> None:
         "AuditUpdate",
         "AutoTagRequest",
         "AzureTokenExchangeRequest",
+        "BCPCreate",
+        "BCPUpdate",
         "CAPAStatusTransition",
         "CompleteAnalysisRequest",
         "CompleteAssignmentRequest",

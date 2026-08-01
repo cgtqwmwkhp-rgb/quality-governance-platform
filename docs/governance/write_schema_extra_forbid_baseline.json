@@ -47,6 +47,8 @@
     "AuditUpdate",
     "AutoTagRequest",
     "AzureTokenExchangeRequest",
+    "BCPCreate",
+    "BCPUpdate",
     "CAPAStatusTransition",
     "CompleteAnalysisRequest",
     "CompleteAssignmentRequest",
@@ -68,8 +70,8 @@
     "UpdateCAPAStatusRequest",
     "VerifyCAPARequest"
   ],
-  "max_open_count": 230,
-  "min_forbid_count": 66,
+  "max_open_count": 228,
+  "min_forbid_count": 68,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
