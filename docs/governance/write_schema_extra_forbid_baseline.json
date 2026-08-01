@@ -28,10 +28,14 @@
     "CreateWatchActionRequest",
     "ObsoleteRequest",
     "QuestionReplyRequest",
-    "RecordAcknowledgmentRequest"
+    "RecordAcknowledgmentRequest",
+    "SetFishboneRootCauseRequest",
+    "SetRootCauseRequest",
+    "UpdateCAPAStatusRequest",
+    "VerifyCAPARequest"
   ],
-  "max_open_count": 268,
-  "min_forbid_count": 28,
+  "max_open_count": 264,
+  "min_forbid_count": 32,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
