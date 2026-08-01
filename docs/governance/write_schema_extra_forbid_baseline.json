@@ -45,6 +45,8 @@
     "AuditTemplateCreate",
     "AuditTemplateUpdate",
     "AuditUpdate",
+    "AutoTagRequest",
+    "AzureTokenExchangeRequest",
     "CAPAStatusTransition",
     "CompleteAnalysisRequest",
     "CompleteAssignmentRequest",
@@ -66,8 +68,8 @@
     "UpdateCAPAStatusRequest",
     "VerifyCAPARequest"
   ],
-  "max_open_count": 232,
-  "min_forbid_count": 64,
+  "max_open_count": 230,
+  "min_forbid_count": 66,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }

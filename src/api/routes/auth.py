@@ -6,7 +6,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.dependencies import CurrentUser, DbSession, security
 from src.api.schemas.auth import (
@@ -96,7 +96,13 @@ class LogoutRequest(BaseModel):
 
 
 class AzureTokenExchangeRequest(BaseModel):
-    """Request to exchange Azure AD token for platform token."""
+    """Request to exchange Azure AD token for platform token.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the exchange proceeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     id_token: str
 
