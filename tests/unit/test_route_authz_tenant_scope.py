@@ -394,15 +394,21 @@ async def test_rtas_list_requires_tenant_for_non_superuser():
 
 
 # ---------------------------------------------------------------------------
-# Superuser twins of the three list endpoints above (B-13 siblings)
+# Superuser twins of the list endpoints above (B-13 siblings)
 #
-# `list_near_misses`, `list_rtas` and `list_complaints` each guarded the tenant
-# filter with an inline `if not current_user.is_superuser:`, which is the same
-# defect B-13 fixed on the incident register expressed a different way: the
-# register spanned every tenant while the executive dashboard tile beside it
-# (`complaints.register_total`, `rtas.total`) stayed scoped to the caller's own,
-# so the two surfaces described different populations. Access to a single
-# cross-tenant record by id is untouched — only the enumeration is withdrawn.
+# `list_near_misses`, `list_rtas`, `list_complaints` and `list_risks` each
+# guarded the tenant filter with an inline `if not current_user.is_superuser:`,
+# which is the same defect B-13 fixed on the incident register expressed a
+# different way: the register spanned every tenant while the executive
+# dashboard tile beside it (`complaints.register_total`, `rtas.total`) stayed
+# scoped to the caller's own, so the two surfaces described different
+# populations. `list_risks` has no dashboard twin to contradict, but `risks`
+# is a FORCE-RLS table of C3-confidential rows whose policies are inert under
+# the application's `rolbypassrls` connection, so the route predicate is the
+# only thing scoping the read at all.
+#
+# Access to a single cross-tenant record by id is untouched on every one of
+# them — only the enumeration is withdrawn.
 # ---------------------------------------------------------------------------
 
 
@@ -586,6 +592,99 @@ async def test_complaints_list_requires_tenant_for_a_superuser():
     assert not statements, "a tenantless caller must not reach the database"
 
 
+def _capturing_db_with_scalar() -> tuple[SimpleNamespace, list]:
+    """`list_risks` counts through `db.scalar` and pages through `db.execute`."""
+    statements: list = []
+
+    async def scalar(statement):
+        statements.append(statement)
+        return 0
+
+    async def execute(statement):
+        statements.append(statement)
+        return _CountThenRowsResult()
+
+    return (
+        SimpleNamespace(scalar=AsyncMock(side_effect=scalar), execute=AsyncMock(side_effect=execute)),
+        statements,
+    )
+
+
+@pytest.mark.asyncio
+async def test_risks_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    await risks_routes.list_risks(
+        db=db,
+        current_user=_superuser(77),
+        page=1,
+        page_size=20,
+        search=None,
+        category=None,
+        status_filter=None,
+        risk_level=None,
+        owner_id=None,
+    )
+
+    assert len(statements) == 2, "expected the count query and the page query"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_risks_list_requires_tenant_for_a_superuser():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    with pytest.raises(HTTPException) as exc:
+        await risks_routes.list_risks(
+            db=db,
+            current_user=_superuser(None),
+            page=1,
+            page_size=20,
+            search=None,
+            category=None,
+            status_filter=None,
+            risk_level=None,
+            owner_id=None,
+        )
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_risks_list_ignores_a_superuser_flag_on_every_other_filter():
+    """The other query parameters must not reopen the bypass.
+
+    `search`, `category`, `status`, `risk_level` and `owner_id` each append a
+    predicate after the tenant filter. Exercising them together pins that none
+    of them rebuilds the statement from an unscoped `select(Risk)` — a plausible
+    way for the leak to return once the conditional is gone.
+    """
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    await risks_routes.list_risks(
+        db=db,
+        current_user=_superuser(77),
+        page=1,
+        page_size=20,
+        search="pump",
+        category="operational",
+        status_filter="open",
+        risk_level="high",
+        owner_id=5,
+    )
+
+    assert len(statements) == 2
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
 def test_apply_tenant_filter_pattern_on_models():
     """Sanity: shared helper exact-match SQL for models used by fixed routes."""
     for model, tid in ((AuditTemplate, 1), (AuditRun, 2), (AuditFinding, 3), (Risk, 4), (IncidentRunningSheetEntry, 5)):
@@ -639,7 +738,7 @@ def test_route_source_guards_drop_null_inclusive_list_patterns():
 
 
 def test_list_route_tenant_filters_are_never_reached_conditionally():
-    """`apply_tenant_filter` must sit at the top level of these three handlers.
+    """`apply_tenant_filter` must sit at the top level of these four handlers.
 
     A behavioural guard alone would let the bypass come back spelled another
     way, so the shape is asserted too. Written against the AST rather than the
@@ -651,10 +750,14 @@ def test_list_route_tenant_filters_are_never_reached_conditionally():
     complaint handlers legitimately call that a second time inside the
     `reporter_email` / `complainant_email` branch, to fail closed before writing
     the audit row for an email-targeted search.
-    """
-    from src.api.routes import complaints, near_miss, rtas
 
-    for handler in (near_miss.list_near_misses, rtas.list_rtas, complaints.list_complaints):
+    `risks.list_risks` is pinned here rather than in its own test so that the
+    set of registers under this rule is one list: a fifth one added later is a
+    one-line change here, and forgetting it is visible in the diff.
+    """
+    from src.api.routes import complaints, near_miss, risks, rtas
+
+    for handler in (near_miss.list_near_misses, rtas.list_rtas, complaints.list_complaints, risks.list_risks):
         tree = ast.parse(inspect.getsource(handler))
         conditional = [node for node in ast.walk(tree) if isinstance(node, ast.If)]
         assert not any(
