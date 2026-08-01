@@ -25,9 +25,13 @@ class AcknowledgmentRequirementBase(BaseModel):
 
 
 class AcknowledgmentRequirementCreate(AcknowledgmentRequirementBase):
-    """Schema for creating an acknowledgment requirement."""
+    """Schema for creating an acknowledgment requirement.
 
-    pass
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the requirement being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AcknowledgmentRequirementResponse(BaseModel):
