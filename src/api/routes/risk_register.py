@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -186,6 +186,14 @@ class KRIValueUpdate(BaseModel):
 
 
 class BowTieElementCreate(BaseModel):
+    """Create a bow-tie element on a risk.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     element_type: str = Field(..., description="cause, consequence, prevention, mitigation")
     title: str = Field(..., min_length=3, max_length=255)
     description: Optional[str] = None
