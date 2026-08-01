@@ -229,15 +229,22 @@ class IncidentService:
         asset_id: Optional[int] = None,
         ids: Optional[list[int]] = None,
         search: Optional[str] = None,
-        skip_tenant_check: bool = False,
     ):
-        """List incidents with pagination and optional filters."""
+        """List incidents with pagination and optional filters.
+
+        There is deliberately no ``skip_tenant_check`` here, unlike ``get_incident``
+        and the mutators. The register list is the population the executive
+        dashboard's ``register_total`` counts, and that aggregate is always scoped
+        to the caller's tenant, so a superuser-wide list reported a total the
+        dashboard could not reconcile with. Opening one cross-tenant record by id
+        stays available; enumerating every tenant's register does not.
+        """
         # Do not selectinload actions here — list response does not include them, and a
         # poison action row must not take down the entire incidents index.
-        query = select(Incident).where(Incident.deleted_at.is_(None))
-
-        if not skip_tenant_check:
-            query = query.where(Incident.tenant_id == tenant_id)
+        query = select(Incident).where(
+            Incident.deleted_at.is_(None),
+            Incident.tenant_id == tenant_id,
+        )
 
         if reporter_email:
             query = query.where(Incident.reporter_email == reporter_email)

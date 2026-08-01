@@ -8,10 +8,11 @@ tenant's incident id — continuing Preferred S9 after the risks slice (#816).
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.api.routes.incidents import list_incidents as list_incidents_route
 from src.api.schemas.incident import IncidentUpdate
 from src.core.pagination import PaginationInput
 from src.domain.models.incident import Incident
@@ -110,6 +111,45 @@ async def test_list_incidents_uses_exact_tenant_scope():
         assert "tenant_id = 41" in sql
         compact = " ".join(sql.split())
         assert "tenant_id is null" not in compact
+
+
+@pytest.mark.asyncio
+async def test_list_route_scopes_a_superuser_to_their_own_tenant():
+    """The register list carries no superuser bypass, unlike get/update/delete.
+
+    The route used to pass ``skip_tenant_check=is_superuser``, which made the
+    list span tenants while the executive dashboard's ``register_total`` stayed
+    tenant-scoped, so the two surfaces reported different numbers for the same
+    register.
+    """
+    page = SimpleNamespace(items=[], total=0, page=1, page_size=50, pages=0)
+    service = SimpleNamespace(
+        check_reporter_email_access=AsyncMock(return_value=True),
+        list_incidents=AsyncMock(return_value=page),
+    )
+    current_user = SimpleNamespace(
+        id=3,
+        tenant_id=41,
+        email="root@test.example.com",
+        is_superuser=True,
+        has_permission=lambda permission: True,
+    )
+
+    with patch("src.api.routes.incidents.IncidentService", return_value=service):
+        result = await list_incidents_route(
+            db=SimpleNamespace(),
+            current_user=current_user,
+            request_id="req-superuser-list",
+            reporter_email=None,
+            owner=None,
+            page=1,
+            page_size=50,
+        )
+
+    assert result.total == 0
+    kwargs = service.list_incidents.await_args.kwargs
+    assert kwargs["tenant_id"] == 41
+    assert "skip_tenant_check" not in kwargs, "the list must not offer a tenant bypass"
 
 
 @pytest.mark.asyncio

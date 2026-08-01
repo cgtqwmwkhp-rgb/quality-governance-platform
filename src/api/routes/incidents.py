@@ -498,9 +498,8 @@ async def list_incidents(
 
         # Fail closed when the caller has no tenant membership. audit_log_entries
         # .tenant_id is NOT NULL, so this access cannot be recorded without one,
-        # and an email-targeted search over other tenants' reporters is precisely
-        # what this row exists to police. Superusers skip the tenant filter
-        # below, so before this they could run one unrecorded.
+        # and an email-targeted search across reporters is precisely what this row
+        # exists to police.
         audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
@@ -530,7 +529,6 @@ async def list_incidents(
             asset_id=asset_id,
             ids=id_list,
             search=search if isinstance(search, str) else None,
-            skip_tenant_check=current_user.is_superuser,
         )
         items: list[IncidentResponse] = []
         skipped = 0
