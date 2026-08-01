@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 56 |
-| Open / lax (unknown fields ignored) | 240 |
+| `extra="forbid"` (strict) | 58 |
+| Open / lax (unknown fields ignored) | 238 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 56 |
-| `max_open_count` | 240 |
+| `min_forbid_count` | 58 |
+| `max_open_count` | 238 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -62,6 +62,8 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AuditQuestionCreate` — `POST /api/v1/audit-templates/{template_id}/questions`, `POST /api/v1/audits/templates/{template_id}/questions`
 - `AuditQuestionUpdate` — `PATCH /api/v1/audit-templates/questions/{question_id}`, `PATCH /api/v1/audits/questions/{question_id}`
 - `AuditResponseCreate` — `POST /api/v1/audits/runs/{run_id}/responses`
+- `AuditResponseUpdate` — `PATCH /api/v1/audits/responses/{response_id}`
+- `AuditRunCreate` — `POST /api/v1/audits/runs`
 - `CAPAStatusTransition` — `POST /api/v1/capa/{capa_id}/transition`
 - `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/complete`, `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete`
 - `CompleteAssignmentRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/complete`
@@ -85,14 +87,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-240 schemas. Full list is the remediation backlog;
+238 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
 <summary>Open schema names</summary>
 
-- `AuditResponseUpdate`
-- `AuditRunCreate`
 - `AuditRunUpdate`
 - `AuditSectionCreate`
 - `AuditSectionUpdate`
