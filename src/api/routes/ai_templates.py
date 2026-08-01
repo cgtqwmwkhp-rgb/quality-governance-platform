@@ -14,7 +14,7 @@ import os
 from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
@@ -56,7 +56,13 @@ class ConvertToAssessmentRequest(BaseModel):
 
 
 class AssessorGuidanceRequest(BaseModel):
-    """Request for assessor guidance generation."""
+    """Request for assessor guidance generation.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the guidance being generated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     question_text: str = Field(..., min_length=1, max_length=2000)
     asset_type: Optional[str] = Field(None, max_length=200)
