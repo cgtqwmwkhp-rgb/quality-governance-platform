@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 38 |
-| Open / lax (unknown fields ignored) | 258 |
+| `extra="forbid"` (strict) | 40 |
+| Open / lax (unknown fields ignored) | 256 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 38 |
-| `max_open_count` | 258 |
+| `min_forbid_count` | 40 |
+| `max_open_count` | 256 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -37,9 +37,11 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `ActionUpdate` — `PATCH /api/v1/actions/{action_id}`
 - `AddCauseRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/add-cause`
 - `AddCertificationRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/certifications`
+- `AddCommentRequest` — `POST /api/v1/investigations/{investigation_id}/comments`
 - `AddTrainingRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/training`
 - `AddWhyRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/add-why`
 - `AllocationRequest` — `POST /api/v1/vehicles/allocate`
+- `AnnotationCreate` — `POST /api/v1/documents/{document_id}/annotations`
 - `ApprovalActionRequest` — `POST /api/v1/document-control/approvals/{instance_id}/action`
 - `AskAssignmentQuestionRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/questions`
 - `AssessCompetencyRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/assess`
@@ -67,14 +69,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-258 schemas. Full list is the remediation backlog;
+256 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
 <summary>Open schema names</summary>
 
-- `AddCommentRequest`
-- `AnnotationCreate`
 - `ApplyImportRequest`
 - `ApprovalResponse`
 - `AssessEntityRequest`

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1762,7 +1762,13 @@ async def autosave_investigation(
 
 
 class AddCommentRequest(BaseModel):
-    """Request body for adding a comment to an investigation."""
+    """Request body for adding a comment to an investigation.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the comment being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     content: str = Field(..., min_length=1, max_length=10000)
     body: Optional[str] = Field(None, exclude=True)

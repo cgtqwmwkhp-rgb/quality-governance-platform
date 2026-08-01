@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -340,7 +340,13 @@ class SearchResponse(BaseModel):
 
 
 class AnnotationCreate(BaseModel):
-    """Create annotation request."""
+    """Create annotation request.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the annotation being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     page_number: Optional[int] = None
     section_id: Optional[str] = None
