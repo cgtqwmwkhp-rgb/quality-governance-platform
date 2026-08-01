@@ -113,7 +113,13 @@ class AuditQuestionBase(BaseModel):
 
 
 class AuditQuestionCreate(AuditQuestionBase):
-    """Schema for creating an Audit Question."""
+    """Schema for creating an Audit Question.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the question being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     section_id: Optional[int] = None
 
@@ -717,9 +723,13 @@ class AuditFindingCreate(AuditFindingBase):
 
 
 class AuditFindingUpdate(BaseModel):
-    """Schema for updating an Audit Finding."""
+    """Schema for updating an Audit Finding.
 
-    model_config = ConfigDict(populate_by_name=True)
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the finding being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
