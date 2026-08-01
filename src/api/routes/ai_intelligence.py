@@ -49,6 +49,9 @@ class RecommendationRequest(BaseModel):
 
 
 class FiveWhysRequest(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
     incident_id: int
     answers: list[str] = Field(..., min_length=1, max_length=7)
 

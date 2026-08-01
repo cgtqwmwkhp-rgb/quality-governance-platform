@@ -195,6 +195,8 @@ class SkillsMatrixResponse(BaseModel):
 class CompetencyRequirementCreate(BaseModel):
     """Create a competency requirement (frequency + allocation filters)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     asset_type_id: int
     template_id: int
     name: str = Field(..., max_length=200)
@@ -207,6 +209,8 @@ class CompetencyRequirementCreate(BaseModel):
 
 class CompetencyRequirementUpdate(BaseModel):
     """Partial update for a competency requirement."""
+
+    model_config = ConfigDict(extra="forbid")
 
     asset_type_id: Optional[int] = None
     template_id: Optional[int] = None
@@ -249,6 +253,8 @@ class CompetencyRequirementListResponse(BaseModel):
 
 class CompetencyRequirementAllocateRequest(BaseModel):
     """Allocate a requirement to engineers (explicit ids and/or site/role filters)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     engineer_ids: Optional[List[int]] = None
     match_site: bool = True
