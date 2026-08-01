@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 import {
   AlertTriangle,
+  AlignLeft,
   ArrowRight,
   Calendar,
   Car,
@@ -28,6 +29,15 @@ import { Input } from '../ui/Input'
 import { ErrorState } from '../ui/async'
 import { cn } from '../../helpers/utils'
 import { getSuggestedSearches } from './suggestedSearches'
+import {
+  buildHighlightedSegments,
+  DOCUMENT_CONTENT_MODULE,
+  getSearchLocationMeta,
+  isDocumentContentResult,
+  isSnippetSuppressed,
+  MODULE_FILTER_OPTIONS,
+  moduleDisplayLabel,
+} from './searchResultDisplay'
 import type { useGlobalSearch } from './useGlobalSearch'
 
 type SearchController = ReturnType<typeof useGlobalSearch>
@@ -47,6 +57,7 @@ const moduleIcons: Record<string, ReactNode> = {
   Audits: <ClipboardCheck className="w-5 h-5" />,
   Actions: <Zap className="w-5 h-5" />,
   Documents: <FileText className="w-5 h-5" />,
+  [DOCUMENT_CONTENT_MODULE]: <AlignLeft className="w-5 h-5" />,
 }
 
 const moduleColors: Record<string, string> = {
@@ -57,6 +68,64 @@ const moduleColors: Record<string, string> = {
   Audits: 'text-success bg-success/20',
   Actions: 'text-info bg-info/20',
   Documents: 'text-info bg-info/20',
+  [DOCUMENT_CONTENT_MODULE]: 'text-info bg-info/20',
+}
+
+function SearchResultBody({ result }: { result: GlobalSearchResultRecord }) {
+  const { t } = useTranslation()
+  const contentHit = isDocumentContentResult(result)
+  const suppressed = isSnippetSuppressed(result.highlights)
+  const location = contentHit ? getSearchLocationMeta(result) : null
+
+  return (
+    <>
+      {location && (location.heading || location.page != null) ? (
+        <p
+          className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5"
+          data-testid="search-result-location"
+        >
+          {location.heading ? (
+            <span data-testid="search-result-heading">{location.heading}</span>
+          ) : null}
+          {location.heading && location.page != null ? <span aria-hidden>·</span> : null}
+          {location.page != null ? (
+            <span data-testid="search-result-page">
+              {t('search.page_n', 'Page {{page}}', { page: location.page })}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
+
+      {contentHit && suppressed ? (
+        <p
+          className="text-muted-foreground mt-1 text-sm italic"
+          data-testid="search-snippet-suppressed"
+        >
+          {t(
+            'search.snippet_suppressed',
+            'Snippet hidden for confidential or restricted content.',
+          )}
+        </p>
+      ) : contentHit && result.description ? (
+        <p className="text-muted-foreground mt-1 text-sm line-clamp-2" data-testid="search-snippet">
+          {buildHighlightedSegments(result.description, result.highlights).map((segment, index) =>
+            segment.highlighted ? (
+              <mark
+                key={`${segment.text}-${index}`}
+                className="bg-primary/20 text-foreground rounded-sm px-0.5"
+              >
+                {segment.text}
+              </mark>
+            ) : (
+              <span key={`${segment.text}-${index}`}>{segment.text}</span>
+            ),
+          )}
+        </p>
+      ) : result.description ? (
+        <p className="text-muted-foreground mt-1 text-sm line-clamp-2">{result.description}</p>
+      ) : null}
+    </>
+  )
 }
 
 const statusVariants: Record<
@@ -188,19 +257,21 @@ export default function GlobalSearchPanel({
                     <Tag className="w-4 h-4" /> {t('search.modules', 'Modules')}
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {Object.keys(moduleIcons).map((module) => (
+                    {MODULE_FILTER_OPTIONS.map((module) => (
                       <button
-                        key={module}
+                        key={module.value}
                         type="button"
-                        onClick={() => applyFilter('modules', module)}
+                        onClick={() => applyFilter('modules', module.value)}
                         className={cn(
                           'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
-                          filters.modules.includes(module)
+                          filters.modules.includes(module.value)
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted text-muted-foreground hover:text-foreground',
                         )}
                       >
-                        {module}
+                        {module.value === DOCUMENT_CONTENT_MODULE
+                          ? t('search.document_body', 'Document body')
+                          : module.label}
                       </button>
                     ))}
                   </div>
@@ -339,8 +410,13 @@ export default function GlobalSearchPanel({
               >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <div className={cn('p-2 rounded-xl', moduleColors[result.module])}>
-                      {moduleIcons[result.module]}
+                    <div
+                      className={cn(
+                        'p-2 rounded-xl',
+                        moduleColors[result.module] || 'text-muted-foreground bg-muted',
+                      )}
+                    >
+                      {moduleIcons[result.module] || <Search className="w-5 h-5" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">
@@ -359,9 +435,13 @@ export default function GlobalSearchPanel({
                           </span>
                         </div>
                       </div>
-                      <p className="text-muted-foreground mt-1 text-sm line-clamp-2">{result.description}</p>
+                      <SearchResultBody result={result} />
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span>{result.module}</span>
+                        <span>
+                          {result.module === DOCUMENT_CONTENT_MODULE
+                            ? t('search.document_body', 'Document body')
+                            : moduleDisplayLabel(result.module)}
+                        </span>
                         <span className="ml-auto">{Math.round(result.relevance)}% match</span>
                       </div>
                     </div>
