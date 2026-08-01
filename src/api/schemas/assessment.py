@@ -9,7 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AssessmentRunCreate(BaseModel):
-    """Schema for creating an assessment run."""
+    """Schema for creating an assessment run.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the run being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     template_id: int
     engineer_id: int
@@ -96,7 +102,13 @@ class AssessmentResponseCreate(BaseModel):
 
 
 class AssessmentResponseUpdate(BaseModel):
-    """Schema for updating an assessment response."""
+    """Schema for updating an assessment response.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the response being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     verdict: Optional[str] = Field(None, pattern="^(competent|not_competent|na)$")
     feedback: Optional[str] = None

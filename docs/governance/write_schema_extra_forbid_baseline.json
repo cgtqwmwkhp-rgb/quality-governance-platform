@@ -24,6 +24,8 @@
     "AssessCompetencyRequest",
     "AssessEntityRequest",
     "AssessmentResponseCreate",
+    "AssessmentResponseUpdate",
+    "AssessmentRunCreate",
     "AssignAcknowledgmentRequest",
     "CAPAStatusTransition",
     "CompleteAnalysisRequest",
@@ -46,8 +48,8 @@
     "UpdateCAPAStatusRequest",
     "VerifyCAPARequest"
   ],
-  "max_open_count": 252,
-  "min_forbid_count": 44,
+  "max_open_count": 250,
+  "min_forbid_count": 46,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
