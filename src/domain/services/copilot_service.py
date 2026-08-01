@@ -9,12 +9,10 @@ Provides conversational AI assistance with:
 - Multi-turn conversations
 """
 
-import json
-import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +46,25 @@ def copilot_is_enabled() -> bool:
     the surface and unable to open it.
     """
     return settings.ai_copilot_enabled
+
+
+def copilot_inference_is_enabled() -> bool:
+    """Whether grounded inference (PR3b) may run.
+
+    Requires the surface gate (``AI_COPILOT_ENABLED``) *and* the inference gate
+    (``AI_COPILOT_INFERENCE_ENABLED``, default off). When PR3a (#1481) has landed,
+    also respects the subtract-only kill switch's last known verdict without doing
+    I/O here — same posture as ``send_message`` on that branch.
+    """
+    if not copilot_is_enabled():
+        return False
+    if not settings.ai_copilot_inference_enabled:
+        return False
+    try:
+        from src.domain.services.copilot_kill_switch import copilot_kill_switch_last_known
+    except ImportError:
+        return True
+    return not copilot_kill_switch_last_known()
 
 
 # ============================================================================
@@ -378,7 +395,12 @@ class CopilotService:
 
         # Generate AI response
         start_time = time.time()
-        response_content, action_data = await self._generate_response(content, history, context)
+        response_content, action_data, model_used = await self._generate_response(
+            content,
+            history,
+            context,
+            tenant_id=tenant_id,
+        )
         latency_ms = int((time.time() - start_time) * 1000)
 
         # Save assistant message
@@ -390,7 +412,7 @@ class CopilotService:
             action_type=action_data.get("action") if action_data else None,
             action_data=action_data.get("parameters") if action_data else None,
             action_status="pending" if action_data else None,
-            model_used="simulated-keyword-match",
+            model_used=model_used,
             latency_ms=latency_ms,
         )
         self.db.add(assistant_message)
@@ -415,32 +437,32 @@ class CopilotService:
         user_message: str,
         history: list[CopilotMessage],
         context: dict,
-    ) -> tuple[str, Optional[dict]]:
-        """Generate AI response using the configured AI provider."""
+        *,
+        tenant_id: int,
+    ) -> tuple[str, Optional[dict], str]:
+        """Generate AI response — grounded when the inference flag is on and the
+        question matches a closed intent; otherwise the honesty simulator.
+        """
+        if copilot_inference_is_enabled():
+            from src.domain.services.copilot_grounding import CopilotGroundingService
 
-        # Build messages for AI
-        messages = [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT.format(
-                    actions=json.dumps(list(COPILOT_ACTIONS.keys()), indent=2),
-                    context=json.dumps(context, indent=2),
-                ),
-            }
-        ]
+            outcome = await CopilotGroundingService(self.db).try_answer(
+                user_message,
+                tenant_id=tenant_id,
+            )
+            if outcome.kind == "answered" and outcome.content is not None:
+                return outcome.content, None, outcome.model_used or "grounded-facts"
+            if outcome.kind == "refused":
+                refusal = (
+                    "I cannot answer from live organisation data. This demo is not connected to "
+                    "your registers, so I will not invent counts, percentages, named risks, or "
+                    "reference numbers. Open the relevant module for real figures."
+                )
+                # Prefer the same refusal string the simulator uses for live-data asks.
+                return refusal, None, "grounded-citation-refused"
 
-        # Add history
-        for msg in history[-10:]:  # Last 10 messages
-            messages.append({"role": msg.role, "content": msg.content})
-
-        # Add current message
-        messages.append({"role": "user", "content": user_message})
-
-        # In production, this would call the actual AI API
-        # For now, we'll use pattern matching for demo
         response_content, action_data = self._simulate_ai_response(user_message, context)
-
-        return response_content, action_data
+        return response_content, action_data, "simulated-keyword-match"
 
     def _simulate_ai_response(
         self,
