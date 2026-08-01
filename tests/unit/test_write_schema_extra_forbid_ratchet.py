@@ -164,8 +164,8 @@ def test_committed_baseline_shape() -> None:
     assert baseline.is_file()
     assert inventory_md.is_file()
     payload = json.loads(baseline.read_text(encoding="utf-8"))
-    assert payload["min_forbid_count"] == 28
-    assert payload["max_open_count"] == 268
+    assert payload["min_forbid_count"] == 30
+    assert payload["max_open_count"] == 266
     assert payload["total_write_schemas"] == 296
     assert payload["forbid_schemas"] == [
         "AcknowledgementAction",
@@ -196,4 +196,6 @@ def test_committed_baseline_shape() -> None:
         "ObsoleteRequest",
         "QuestionReplyRequest",
         "RecordAcknowledgmentRequest",
+        "SetFishboneRootCauseRequest",
+        "SetRootCauseRequest",
     ]

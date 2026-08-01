@@ -52,6 +52,14 @@ class AddWhyRequest(BaseModel):
 
 
 class SetRootCauseRequest(BaseModel):
+    """Set the primary root cause on a 5-Whys analysis.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the root cause being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     primary_root_cause: str
     contributing_factors: Optional[List[str]] = None
 
@@ -101,6 +109,14 @@ class AddCauseRequest(BaseModel):
 
 
 class SetFishboneRootCauseRequest(BaseModel):
+    """Set the root cause on a fishbone diagram.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the root cause being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     root_cause: str
     root_cause_category: str
     primary_causes: Optional[List[str]] = None
