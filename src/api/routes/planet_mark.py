@@ -17,7 +17,7 @@ from typing import Annotated, Any, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.functional_validators import AfterValidator
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import DataError, OperationalError, ProgrammingError
@@ -253,6 +253,14 @@ class ImprovementActionCreate(BaseModel):
 
 
 class ActionStatusUpdate(BaseModel):
+    """Update Planet Mark action status / progress.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the status update succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     status: str
     progress_percent: int = Field(ge=0, le=100)
     actual_completion_date: Optional[NaiveUtcDatetime] = None
@@ -2078,6 +2086,14 @@ class ActionImportPreview(BaseModel):
 
 
 class ActionImportConfirm(BaseModel):
+    """Confirm a Planet Mark action import session.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the import confirming while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     session_id: str
     selected_indices: Optional[list[int]] = None  # None = import all
 

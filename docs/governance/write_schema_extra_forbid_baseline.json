@@ -6,7 +6,9 @@
     "AcknowledgementCreate",
     "AcknowledgmentRequirementCreate",
     "ActionCreate",
+    "ActionImportConfirm",
     "ActionOwnerNoteCreate",
+    "ActionStatusUpdate",
     "ActionUpdate",
     "AddCauseRequest",
     "AddCertificationRequest",
@@ -38,8 +40,8 @@
     "UpdateCAPAStatusRequest",
     "VerifyCAPARequest"
   ],
-  "max_open_count": 260,
-  "min_forbid_count": 36,
+  "max_open_count": 258,
+  "min_forbid_count": 38,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }

@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 36 |
-| Open / lax (unknown fields ignored) | 260 |
+| `extra="forbid"` (strict) | 38 |
+| Open / lax (unknown fields ignored) | 258 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 36 |
-| `max_open_count` | 260 |
+| `min_forbid_count` | 38 |
+| `max_open_count` | 258 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -31,7 +31,9 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AcknowledgementCreate` — `POST /api/v1/drivers/{driver_id}/acknowledgements`
 - `AcknowledgmentRequirementCreate` — `POST /api/v1/policy-acknowledgments/requirements`
 - `ActionCreate` — `POST /api/v1/actions/`
+- `ActionImportConfirm` — `POST /api/v1/planet-mark/years/{year_id}/actions/import/confirm`
 - `ActionOwnerNoteCreate` — `POST /api/v1/actions/by-key/notes`
+- `ActionStatusUpdate` — `PUT /api/v1/planet-mark/years/{year_id}/actions/{action_id}`
 - `ActionUpdate` — `PATCH /api/v1/actions/{action_id}`
 - `AddCauseRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/add-cause`
 - `AddCertificationRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/certifications`
@@ -65,14 +67,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-260 schemas. Full list is the remediation backlog;
+258 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
 <summary>Open schema names</summary>
 
-- `ActionImportConfirm`
-- `ActionStatusUpdate`
 - `AddCommentRequest`
 - `AnnotationCreate`
 - `ApplyImportRequest`
