@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -392,6 +393,199 @@ async def test_rtas_list_requires_tenant_for_non_superuser():
     assert exc.value.status_code == 403
 
 
+# ---------------------------------------------------------------------------
+# Superuser twins of the three list endpoints above (B-13 siblings)
+#
+# `list_near_misses`, `list_rtas` and `list_complaints` each guarded the tenant
+# filter with an inline `if not current_user.is_superuser:`, which is the same
+# defect B-13 fixed on the incident register expressed a different way: the
+# register spanned every tenant while the executive dashboard tile beside it
+# (`complaints.register_total`, `rtas.total`) stayed scoped to the caller's own,
+# so the two surfaces described different populations. Access to a single
+# cross-tenant record by id is untouched — only the enumeration is withdrawn.
+# ---------------------------------------------------------------------------
+
+
+def _superuser(tenant_id: int | None) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=2,
+        email="root@test.example.com",
+        is_superuser=True,
+        tenant_id=tenant_id,
+        has_permission=lambda *_: True,
+    )
+
+
+class _CountThenRowsResult:
+    """One result object that answers both the count query and the page query."""
+
+    def __init__(self, count: int = 0):
+        self._count = count
+
+    def scalar(self):
+        return self._count
+
+    def scalar_one(self):
+        return self._count
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return []
+
+
+def _capturing_db() -> tuple[SimpleNamespace, list]:
+    statements: list = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return _CountThenRowsResult()
+
+    return SimpleNamespace(execute=AsyncMock(side_effect=execute)), statements
+
+
+@pytest.mark.asyncio
+async def test_near_miss_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import near_miss as near_miss_routes
+
+    db, statements = _capturing_db()
+
+    await near_miss_routes.list_near_misses(
+        db=db,
+        current_user=_superuser(77),
+        page=1,
+        page_size=20,
+        status_filter=None,
+        priority=None,
+        contract=None,
+        reporter_email=None,
+        asset_id=None,
+        ids=None,
+    )
+
+    assert statements, "expected count + page queries"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_near_miss_list_requires_tenant_for_a_superuser():
+    from src.api.routes import near_miss as near_miss_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await near_miss_routes.list_near_misses(
+            db=db,
+            current_user=_superuser(None),
+            page=1,
+            page_size=20,
+            status_filter=None,
+            priority=None,
+            contract=None,
+            reporter_email=None,
+            asset_id=None,
+            ids=None,
+        )
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_rtas_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import rtas as rtas_routes
+
+    db, statements = _capturing_db()
+
+    await rtas_routes.list_rtas(
+        db=db,
+        current_user=_superuser(77),
+        request_id="req-superuser-rta-list",
+        page=1,
+        page_size=10,
+        severity=None,
+        status_filter=None,
+        reporter_email=None,
+        asset_id=None,
+        ids=None,
+    )
+
+    assert statements, "expected count + page queries"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_rtas_list_requires_tenant_for_a_superuser():
+    from src.api.routes import rtas as rtas_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await rtas_routes.list_rtas(
+            db=db,
+            current_user=_superuser(None),
+            request_id="req-superuser-rta-list",
+            page=1,
+            page_size=10,
+            severity=None,
+            status_filter=None,
+            reporter_email=None,
+            asset_id=None,
+            ids=None,
+        )
+    # 403 must survive the broad `except Exception` that turns query faults into
+    # 500/503 in this handler, so assert the code rather than just the raise.
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_complaints_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import complaints as complaints_routes
+
+    db, statements = _capturing_db()
+
+    await complaints_routes.list_complaints(
+        db=db,
+        current_user=_superuser(77),
+        request_id="req-superuser-complaint-list",
+        page=1,
+        page_size=20,
+        status_filter=None,
+        complainant_email=None,
+        owner=None,
+        ids=None,
+    )
+
+    assert statements, "expected count + page queries"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_complaints_list_requires_tenant_for_a_superuser():
+    from src.api.routes import complaints as complaints_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await complaints_routes.list_complaints(
+            db=db,
+            current_user=_superuser(None),
+            request_id="req-superuser-complaint-list",
+            page=1,
+            page_size=20,
+            status_filter=None,
+            complainant_email=None,
+            owner=None,
+            ids=None,
+        )
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
 def test_apply_tenant_filter_pattern_on_models():
     """Sanity: shared helper exact-match SQL for models used by fixed routes."""
     for model, tid in ((AuditTemplate, 1), (AuditRun, 2), (AuditFinding, 3), (Risk, 4), (IncidentRunningSheetEntry, 5)):
@@ -442,6 +636,31 @@ def test_route_source_guards_drop_null_inclusive_list_patterns():
     assert "require_tenant_id" in src
     assert "apply_tenant_filter" in src
     assert "tenant_id.is_(None)" not in src
+
+
+def test_list_route_tenant_filters_are_never_reached_conditionally():
+    """`apply_tenant_filter` must sit at the top level of these three handlers.
+
+    A behavioural guard alone would let the bypass come back spelled another
+    way, so the shape is asserted too. Written against the AST rather than the
+    source text because these routes already expressed the same bypass two ways
+    (`current_user.is_superuser` and `getattr(current_user, "is_superuser", ...)`),
+    and a third spelling would slip past a substring check.
+
+    Only the filter call is pinned, not `require_tenant_id`: the RTA and
+    complaint handlers legitimately call that a second time inside the
+    `reporter_email` / `complainant_email` branch, to fail closed before writing
+    the audit row for an email-targeted search.
+    """
+    from src.api.routes import complaints, near_miss, rtas
+
+    for handler in (near_miss.list_near_misses, rtas.list_rtas, complaints.list_complaints):
+        tree = ast.parse(inspect.getsource(handler))
+        conditional = [node for node in ast.walk(tree) if isinstance(node, ast.If)]
+        assert not any(
+            "apply_tenant_filter" in ast.dump(node) for node in conditional
+        ), f"{handler.__name__} filters by tenant inside a conditional; the register must be scoped for every caller"
+        assert "apply_tenant_filter" in ast.dump(tree), f"{handler.__name__} no longer filters by tenant at all"
 
 
 def test_require_tenant_id_still_403():

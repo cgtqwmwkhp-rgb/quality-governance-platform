@@ -222,9 +222,13 @@ async def list_near_misses(
 
     query = select(NearMiss)
 
-    if not current_user.is_superuser:
-        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-        query = apply_tenant_filter(query, NearMiss, tenant_id)
+    # No superuser bypass on the register list (B-13). The dashboard aggregates
+    # that count near misses are tenant-scoped for every caller, so a list that
+    # spanned tenants for a superuser described a different population from the
+    # numbers shown beside it. Opening, updating or deleting one cross-tenant
+    # record by id is still available; enumerating the estate is not.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    query = apply_tenant_filter(query, NearMiss, tenant_id)
 
     # Apply filters — non-admin users can only filter by their own email
     if reporter_email:
@@ -288,8 +292,10 @@ async def update_near_miss(
     """Update a near miss.
 
     Superusers are exempted from the tenant filter here for the same reason they
-    are on the read path: a register that lists and opens a record must also be
-    able to save it, or the Close dialog offers a close that returns 404.
+    are on ``_get_near_miss_or_404``: a screen that opens a record must also be
+    able to save it, or the Close dialog offers a close that returns 404. The
+    register list no longer carries that exemption (B-13), so the record has to
+    be reached by id rather than found by browsing.
 
     StateTransitionError propagates to the global domain handler so the closure
     gate codes reach the client instead of collapsing into a bare 409 string.

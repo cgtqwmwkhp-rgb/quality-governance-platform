@@ -199,9 +199,8 @@ async def list_rtas(
         #
         # Fail closed when the caller has no tenant membership. audit_log_entries
         # .tenant_id is NOT NULL, so this access cannot be recorded without one,
-        # and an email-targeted search over other tenants' reporters is precisely
-        # what this row exists to police. Superusers skip the tenant filter
-        # below, so before this they could run one unrecorded.
+        # and an email-targeted search across reporters is precisely what this row
+        # exists to police.
         audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
@@ -225,9 +224,13 @@ async def list_rtas(
     try:
         query = select(RoadTrafficCollision)
 
-        if not getattr(current_user, "is_superuser", False):
-            tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-            query = apply_tenant_filter(query, RoadTrafficCollision, tenant_id)
+        # No superuser bypass on the register list (B-13). The executive
+        # dashboard's RTA `total` is tenant-scoped for every caller, so a list
+        # that spanned tenants for a superuser could not be reconciled with the
+        # tile beside it. Reading, updating or deleting one cross-tenant RTA by
+        # id is still available; enumerating the estate is not.
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        query = apply_tenant_filter(query, RoadTrafficCollision, tenant_id)
 
         if severity:
             query = query.where(RoadTrafficCollision.severity == severity)
