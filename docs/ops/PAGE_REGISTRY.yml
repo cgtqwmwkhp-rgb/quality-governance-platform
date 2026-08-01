@@ -5,7 +5,7 @@
 # P2 = Nice to have, can degrade gracefully
 
 version: "1.0"
-last_updated: "2026-07-30"
+last_updated: "2026-08-01"
 
 # ==============================================================================
 # PUBLIC ROUTES (No Authentication)
@@ -113,6 +113,54 @@ portal_routes:
     expected_empty_state: "Search box and empty results message"
     expected_degraded_state: null
     description: "Track submitted reports"
+
+  - pageId: portal-track-detail
+    route: /portal/track/:referenceNumber
+    auth: portal_sso
+    criticality: P1
+    component: PortalTrack
+    expected_empty_state: null
+    expected_degraded_state: "Not found messaging if reference missing"
+    description: "Track a specific report by reference number"
+
+  # C-61 (continued): nested /portal children were misread as absent from App.tsx in
+  # #1451 residuals (flat scrape). They are mounted under path="/portal" with real
+  # page components and are linked from Portal home, Dashboard, and My Day.
+  - pageId: portal-work
+    route: /portal/work
+    auth: portal_sso
+    criticality: P1
+    component: PortalWork
+    expected_empty_state: "Work / training tiles with empty assignments"
+    expected_degraded_state: null
+    description: "Employee portal work and training surface"
+
+  - pageId: portal-reading
+    route: /portal/reading
+    auth: portal_sso
+    criticality: P1
+    component: PortalReading
+    expected_empty_state: "No reading assignments message"
+    expected_degraded_state: null
+    description: "Employee portal campaign reading assignments"
+
+  - pageId: portal-tools
+    route: /portal/tools
+    auth: portal_sso
+    criticality: P1
+    component: PortalMyTools
+    expected_empty_state: "My tools compliance empty state"
+    expected_degraded_state: null
+    description: "Employee portal personal tool compliance"
+
+  - pageId: portal-van
+    route: /portal/van
+    auth: portal_sso
+    criticality: P1
+    component: PortalMyVan
+    expected_empty_state: "My van checks empty state"
+    expected_degraded_state: null
+    description: "Employee portal personal van checks"
 
   - pageId: portal-help
     route: /portal/help
@@ -753,7 +801,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 78
+  total_routes: 83
   p0_routes: 12
-  p1_routes: 44
+  p1_routes: 49
   p2_routes: 22
