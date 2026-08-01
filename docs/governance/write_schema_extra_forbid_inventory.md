@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 64 |
-| Open / lax (unknown fields ignored) | 232 |
+| `extra="forbid"` (strict) | 66 |
+| Open / lax (unknown fields ignored) | 230 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 64 |
-| `max_open_count` | 232 |
+| `min_forbid_count` | 66 |
+| `max_open_count` | 230 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -70,6 +70,8 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AuditTemplateCreate` — `POST /api/v1/audit-templates/`, `POST /api/v1/audits/templates`
 - `AuditTemplateUpdate` — `PATCH /api/v1/audit-templates/{template_id}`, `PATCH /api/v1/audits/templates/{template_id}`
 - `AuditUpdate` — `PUT /api/v1/uvdb/audits/{audit_id}`
+- `AutoTagRequest` — `POST /api/v1/compliance/analyze`, `POST /api/v1/compliance/auto-tag`
+- `AzureTokenExchangeRequest` — `POST /api/v1/auth/token-exchange`
 - `CAPAStatusTransition` — `POST /api/v1/capa/{capa_id}/transition`
 - `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/complete`, `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete`
 - `CompleteAssignmentRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/complete`
@@ -93,14 +95,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-232 schemas. Full list is the remediation backlog;
+230 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
 <summary>Open schema names</summary>
 
-- `AutoTagRequest`
-- `AzureTokenExchangeRequest`
 - `BCPCreate`
 - `BCPUpdate`
 - `BatchFindingRequest`

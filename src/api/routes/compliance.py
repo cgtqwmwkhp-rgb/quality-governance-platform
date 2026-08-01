@@ -17,7 +17,7 @@ from typing import Annotated, Any, List, Optional
 import sqlalchemy
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -88,6 +88,14 @@ _STANDARD_DEFAULTS: dict[ISOStandard, dict[str, str]] = {
 
 
 class AutoTagRequest(BaseModel):
+    """Auto-tag content against compliance clauses.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of tagging while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     content: str
     min_confidence: float = 30.0
     use_ai: bool = False
