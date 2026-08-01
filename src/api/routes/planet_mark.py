@@ -2756,7 +2756,13 @@ async def ingest_ms_xlsx_year_totals(
 
 
 class ApplyImportRequest(BaseModel):
-    """Request body for POST /planet-mark/apply-import."""
+    """Request body for POST /planet-mark/apply-import.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the import applying while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     import_job_id: int = Field(..., description="ID of a completed Planet Mark import job to sync from")
     reporting_year_id: Optional[int] = Field(
