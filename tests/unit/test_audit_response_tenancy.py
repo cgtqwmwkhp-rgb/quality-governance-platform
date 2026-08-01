@@ -60,10 +60,18 @@ def test_declaring_the_column_does_not_change_the_api_contract() -> None:
     assert "tenant_id" not in _Create.model_fields
 
 
-def test_a_client_supplied_tenant_id_is_discarded_before_it_reaches_the_model() -> None:
-    """Otherwise the write path could be steered by request body alone."""
-    payload = AuditResponseCreate.model_validate({"question_id": 1, "tenant_id": 999})
-    assert "tenant_id" not in payload.model_dump()
+def test_a_client_supplied_tenant_id_is_rejected_by_the_write_schema() -> None:
+    """B-10: unknown fields (including tenant_id) are forbidden, not ignored.
+
+    Previously Pydantic dropped ``tenant_id`` under ``extra="ignore"``. With
+    ``extra="forbid"`` the request fails validation instead — still preventing
+    a client from steering tenancy via the body, and failing loudly.
+    """
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as exc_info:
+        AuditResponseCreate.model_validate({"question_id": 1, "tenant_id": 999})
+    assert "tenant_id" in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
