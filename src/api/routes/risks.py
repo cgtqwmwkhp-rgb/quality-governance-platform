@@ -172,12 +172,22 @@ async def list_risks(
     risk_level: Optional[str] = None,
     owner_id: Optional[int] = None,
 ) -> RiskListResponse:
-    """List all risks with pagination and filtering."""
+    """List all risks with pagination and filtering.
+
+    Scoped to the caller's own tenant for every caller, superuser included.
+    ``get_risk`` keeps its superuser exemption, so one named cross-tenant risk
+    can still be opened by id; only enumerating the estate is withdrawn.
+    """
     query = select(Risk).where(Risk.is_active == True)
 
-    if not current_user.is_superuser:
-        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-        query = apply_tenant_filter(query, Risk, tenant_id)
+    # No superuser bypass on the register list (B-13). ``risks`` is a FORCE-RLS
+    # table of C3-confidential rows whose policies are inert while the app
+    # connects as a rolbypassrls role, so this predicate is the only thing
+    # scoping the read. ``/risks/statistics`` and ``/risks/matrix`` still count
+    # every tenant for a superuser; that divergence is real and deliberately
+    # left for its own change rather than widened here.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    query = apply_tenant_filter(query, Risk, tenant_id)
 
     if search:
         search_filter = f"%{search}%"
