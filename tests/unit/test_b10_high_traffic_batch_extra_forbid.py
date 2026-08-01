@@ -15,12 +15,7 @@ from src.api.routes.ai_templates import (
 from src.api.routes.capa import CAPACreate, CAPAUpdate
 from src.api.routes.governed_knowledge import BulkConfirmRequest
 from src.api.routes.planet_mark import BulkStatusUpdate
-from src.api.schemas.auth import (
-    LoginRequest,
-    PasswordChangeRequest,
-    PasswordResetConfirm,
-    PasswordResetRequest,
-)
+from src.api.schemas.auth import LoginRequest, PasswordChangeRequest, PasswordResetConfirm, PasswordResetRequest
 from src.api.schemas.engineer import (
     CompetencyRequirementAllocateRequest,
     CompetencyRequirementCreate,
