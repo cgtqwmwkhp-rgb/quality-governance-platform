@@ -45,9 +45,7 @@ def test_login_request_forbid() -> None:
 def test_password_change_forbid() -> None:
     m = PasswordChangeRequest(current_password="old-secret", new_password="new-secret1")
     assert m.new_password.startswith("new")
-    _assert_rejects_unknown(
-        PasswordChangeRequest, current_password="old-secret", new_password="new-secret1"
-    )
+    _assert_rejects_unknown(PasswordChangeRequest, current_password="old-secret", new_password="new-secret1")
 
 
 def test_password_reset_request_forbid() -> None:
@@ -107,9 +105,7 @@ def test_five_whys_forbid() -> None:
 def test_competency_requirement_create_forbid() -> None:
     m = CompetencyRequirementCreate(asset_type_id=1, template_id=2, name="Working at height")
     assert m.name.startswith("Working")
-    _assert_rejects_unknown(
-        CompetencyRequirementCreate, asset_type_id=1, template_id=2, name="Working at height"
-    )
+    _assert_rejects_unknown(CompetencyRequirementCreate, asset_type_id=1, template_id=2, name="Working at height")
 
 
 def test_competency_requirement_update_forbid() -> None:
