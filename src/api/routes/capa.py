@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsResponse
@@ -86,6 +86,14 @@ class CAPAUpdate(BaseModel):
 
 
 class CAPAStatusTransition(BaseModel):
+    """Transition a CAPA action to a new status.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the transition succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     status: CAPAStatus
     comment: str | None = None
 

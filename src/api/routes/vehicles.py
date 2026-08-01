@@ -356,6 +356,14 @@ async def update_vehicle(
 
 
 class DefectCAPARequest(BaseModel):
+    """Create a CAPA from a vehicle defect.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the CAPA being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     defect_id: int
 
 
