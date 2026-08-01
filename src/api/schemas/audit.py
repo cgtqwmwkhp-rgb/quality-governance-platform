@@ -497,7 +497,13 @@ class AuditRunBase(BaseModel):
 
 
 class AuditRunCreate(AuditRunBase):
-    """Schema for creating an Audit Run."""
+    """Schema for creating an Audit Run.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the run being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     template_id: int
     assigned_to_id: Optional[int] = None
@@ -661,7 +667,13 @@ class AuditResponseCreate(AuditResponseBase):
 
 
 class AuditResponseUpdate(BaseModel):
-    """Schema for updating an Audit Response."""
+    """Schema for updating an Audit Response.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the response being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     response_value: Optional[str] = None
     response_text: Optional[str] = None
