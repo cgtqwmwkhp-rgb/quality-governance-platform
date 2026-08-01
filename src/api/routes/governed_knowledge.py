@@ -119,6 +119,14 @@ class ScanKbRequest(BaseModel):
 
 
 class AssessEntityRequest(BaseModel):
+    """Assess an operational entity against governed knowledge.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the assessment running while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     content: Optional[str] = Field(
         None,
         description="Optional override text; when omitted the live entity record is loaded",
