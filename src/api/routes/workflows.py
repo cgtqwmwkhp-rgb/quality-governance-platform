@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.api.dependencies import CurrentUser, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
@@ -39,7 +39,13 @@ class WorkflowStartRequest(BaseModel):
 
 
 class ApprovalResponse(BaseModel):
-    """Approval/Rejection response"""
+    """Approval/Rejection response.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the approval succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     notes: Optional[str] = None
     reason: Optional[str] = None
