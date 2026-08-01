@@ -868,14 +868,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-<<<<<<< HEAD
-  total_routes: 85
-  p0_routes: 12
-  p1_routes: 44
-  p2_routes: 29
-=======
-  total_routes: 83
+  total_routes: 90
   p0_routes: 12
   p1_routes: 49
-  p2_routes: 22
->>>>>>> origin/main
+  p2_routes: 29
