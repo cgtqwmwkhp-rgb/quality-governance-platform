@@ -144,11 +144,27 @@ class CreateCAPARequest(BaseModel):
 
 
 class UpdateCAPAStatusRequest(BaseModel):
+    """Update RCA-tools CAPA status.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the status changing while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     status: str
     notes: Optional[str] = None
 
 
 class VerifyCAPARequest(BaseModel):
+    """Verify an RCA-tools CAPA is effective.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of verification succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     verification_notes: Optional[str] = None
     is_effective: bool = True
 
