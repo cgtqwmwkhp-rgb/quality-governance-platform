@@ -127,6 +127,14 @@ class AuditCreate(BaseModel):
 
 
 class AuditUpdate(BaseModel):
+    """Update a UVDB audit.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the audit being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     status: Optional[str] = None
     total_score: Optional[float] = None
     audit_notes: Optional[str] = None

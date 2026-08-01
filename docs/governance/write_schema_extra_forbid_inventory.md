@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 62 |
-| Open / lax (unknown fields ignored) | 234 |
+| `extra="forbid"` (strict) | 64 |
+| Open / lax (unknown fields ignored) | 232 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 62 |
-| `max_open_count` | 234 |
+| `min_forbid_count` | 64 |
+| `max_open_count` | 232 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -68,6 +68,8 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AuditSectionCreate` — `POST /api/v1/audit-templates/{template_id}/sections`, `POST /api/v1/audits/templates/{template_id}/sections`
 - `AuditSectionUpdate` — `PATCH /api/v1/audit-templates/sections/{section_id}`, `PATCH /api/v1/audits/sections/{section_id}`
 - `AuditTemplateCreate` — `POST /api/v1/audit-templates/`, `POST /api/v1/audits/templates`
+- `AuditTemplateUpdate` — `PATCH /api/v1/audit-templates/{template_id}`, `PATCH /api/v1/audits/templates/{template_id}`
+- `AuditUpdate` — `PUT /api/v1/uvdb/audits/{audit_id}`
 - `CAPAStatusTransition` — `POST /api/v1/capa/{capa_id}/transition`
 - `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/complete`, `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete`
 - `CompleteAssignmentRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/complete`
@@ -91,14 +93,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-234 schemas. Full list is the remediation backlog;
+232 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
 <summary>Open schema names</summary>
 
-- `AuditTemplateUpdate`
-- `AuditUpdate`
 - `AutoTagRequest`
 - `AzureTokenExchangeRequest`
 - `BCPCreate`
