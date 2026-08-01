@@ -67,7 +67,14 @@ export function getSearchLocationMeta(result: {
 
 /** Strip Postgres ts_headline `<b>` wrappers (and any other tags) for safe text. */
 export function stripHeadlineMarkup(text: string): string {
-  return text.replace(/<\/?b>/gi, '').replace(/<[^>]+>/g, '')
+  // Loop until stable so nested/partial tags cannot reconstitute markup (CodeQL).
+  let result = text
+  let previous = ''
+  while (result !== previous) {
+    previous = result
+    result = result.replace(/<[^>]*>/g, '')
+  }
+  return result
 }
 
 function termsFromHeadlineMarkup(description: string): string[] {

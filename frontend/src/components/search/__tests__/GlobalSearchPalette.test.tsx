@@ -20,7 +20,29 @@ vi.mock('../../../contexts/ToastContext', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, fallback?: string) => fallback ?? _key,
+    t: (
+      key: string,
+      fallbackOrOpts?: string | Record<string, unknown>,
+      maybeOpts?: Record<string, unknown>,
+    ) => {
+      const opts =
+        typeof fallbackOrOpts === 'object' && fallbackOrOpts !== null
+          ? fallbackOrOpts
+          : maybeOpts
+      let template =
+        typeof fallbackOrOpts === 'string'
+          ? fallbackOrOpts
+          : typeof opts?.defaultValue === 'string'
+            ? opts.defaultValue
+            : key
+      if (opts) {
+        for (const [name, value] of Object.entries(opts)) {
+          if (name === 'defaultValue') continue
+          template = template.replaceAll(`{{${name}}}`, String(value))
+        }
+      }
+      return template
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },

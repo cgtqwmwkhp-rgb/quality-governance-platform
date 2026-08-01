@@ -90,7 +90,7 @@ function SearchResultBody({ result }: { result: GlobalSearchResultRecord }) {
           {location.heading && location.page != null ? <span aria-hidden>·</span> : null}
           {location.page != null ? (
             <span data-testid="search-result-page">
-              {t('search.page_n', `Page ${location.page}`)}
+              {t('search.page_n', 'Page {{page}}', { page: location.page })}
             </span>
           ) : null}
         </p>
@@ -269,7 +269,9 @@ export default function GlobalSearchPanel({
                             : 'bg-muted text-muted-foreground hover:text-foreground',
                         )}
                       >
-                        {module.label}
+                        {module.value === DOCUMENT_CONTENT_MODULE
+                          ? t('search.document_body', 'Document body')
+                          : module.label}
                       </button>
                     ))}
                   </div>
@@ -435,7 +437,11 @@ export default function GlobalSearchPanel({
                       </div>
                       <SearchResultBody result={result} />
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span>{moduleDisplayLabel(result.module)}</span>
+                        <span>
+                          {result.module === DOCUMENT_CONTENT_MODULE
+                            ? t('search.document_body', 'Document body')
+                            : moduleDisplayLabel(result.module)}
+                        </span>
                         <span className="ml-auto">{Math.round(result.relevance)}% match</span>
                       </div>
                     </div>
