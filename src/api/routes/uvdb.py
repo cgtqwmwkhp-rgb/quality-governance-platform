@@ -15,7 +15,7 @@ from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
@@ -110,6 +110,14 @@ def _apply_breakdown_policy(
 
 
 class AuditCreate(BaseModel):
+    """Create a UVDB audit.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the audit being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     company_name: str = Field(..., min_length=3, max_length=255)
     company_id: Optional[str] = None
     audit_type: str = Field(default="B2")

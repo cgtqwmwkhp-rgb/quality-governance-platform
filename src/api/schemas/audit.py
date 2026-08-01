@@ -705,7 +705,13 @@ class AuditFindingBase(BaseModel):
 
 
 class AuditFindingCreate(AuditFindingBase):
-    """Schema for creating an Audit Finding."""
+    """Schema for creating an Audit Finding.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the finding being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     question_id: Optional[int] = None
 
