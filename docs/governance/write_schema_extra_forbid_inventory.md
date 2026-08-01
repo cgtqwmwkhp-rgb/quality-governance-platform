@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 30 |
-| Open / lax (unknown fields ignored) | 266 |
+| `extra="forbid"` (strict) | 32 |
+| Open / lax (unknown fields ignored) | 264 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 30 |
-| `max_open_count` | 266 |
+| `min_forbid_count` | 32 |
+| `max_open_count` | 264 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -56,10 +56,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `RecordAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/{acknowledgment_id}/acknowledge`
 - `SetFishboneRootCauseRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/set-root-cause`
 - `SetRootCauseRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/set-root-cause`
+- `UpdateCAPAStatusRequest` — `PATCH /api/v1/rca-tools/capa/{capa_id}/status`
+- `VerifyCAPARequest` — `POST /api/v1/rca-tools/capa/{capa_id}/verify`
 
 ## Open schemas (unknown fields silently ignored)
 
-266 schemas. Full list is the remediation backlog;
+264 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -296,13 +298,11 @@ converting them is out of scope for the inventory lock PR.
 - `TrainingMatrixRequirementUpdate`
 - `TrainingTicketCreate`
 - `TrainingTicketUpdate`
-- `UpdateCAPAStatusRequest`
 - `UpdateProfileRequest`
 - `UserCreate`
 - `UserUpdate`
 - `UtilityReadingCreate`
 - `VehicleRegistryUpdate`
-- `VerifyCAPARequest`
 - `VersionCreate`
 - `WebEnrichRequest`
 - `WebVitalsPayload`
