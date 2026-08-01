@@ -35,6 +35,8 @@
     "AuditFindingCreate",
     "AuditFindingUpdate",
     "AuditQuestionCreate",
+    "AuditQuestionUpdate",
+    "AuditResponseCreate",
     "CAPAStatusTransition",
     "CompleteAnalysisRequest",
     "CompleteAssignmentRequest",
@@ -56,8 +58,8 @@
     "UpdateCAPAStatusRequest",
     "VerifyCAPARequest"
   ],
-  "max_open_count": 242,
-  "min_forbid_count": 54,
+  "max_open_count": 240,
+  "min_forbid_count": 56,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }
