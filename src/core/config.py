@@ -327,7 +327,9 @@ class Settings(BaseSettings):
     # OpenAI (tertiary AI provider)
     openai_api_key: str = ""
 
-    ai_copilot_enabled: bool = False  # PX-248: copilot replies are simulated — closed until real inference exists
+    ai_copilot_enabled: bool = False  # PX-248: copilot surface gate — closed until explicitly opted in
+    # PR3b: grounded register answers. Default off; ANDed with ai_copilot_enabled at the gate.
+    ai_copilot_inference_enabled: bool = False
 
     # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
     library_horizon_provider: str = "stub"

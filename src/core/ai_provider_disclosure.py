@@ -153,6 +153,7 @@ AI_PROVIDERS: tuple[AIProvider, ...] = (
             "src/domain/services/audit_challenge_pipeline.py",
             "src/domain/services/audit_builder_generation_pipeline.py",
             "src/domain/services/iso_compliance_service.py",
+            "src/domain/services/copilot_grounding.py",
         ),
     ),
     AIProvider(
@@ -164,6 +165,7 @@ AI_PROVIDERS: tuple[AIProvider, ...] = (
             "src/domain/services/ai_models.py",
             "src/domain/services/document_ai_service.py",
             "src/domain/services/governed_knowledge_service.py",
+            "src/domain/services/copilot_grounding.py",
         ),
     ),
     AIProvider(
