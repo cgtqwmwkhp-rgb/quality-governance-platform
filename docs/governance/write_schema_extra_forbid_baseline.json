@@ -28,6 +28,8 @@
     "AssessmentRunCreate",
     "AssessmentRunUpdate",
     "AssessorGuidanceRequest",
+    "AssetTypeCreate",
+    "AssetTypeUpdate",
     "AssignAcknowledgmentRequest",
     "CAPAStatusTransition",
     "CompleteAnalysisRequest",
@@ -50,8 +52,8 @@
     "UpdateCAPAStatusRequest",
     "VerifyCAPARequest"
   ],
-  "max_open_count": 248,
-  "min_forbid_count": 48,
+  "max_open_count": 246,
+  "min_forbid_count": 50,
   "total_write_schemas": 296,
   "write_operation_count": 314
 }

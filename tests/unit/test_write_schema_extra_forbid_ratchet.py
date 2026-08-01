@@ -164,8 +164,8 @@ def test_committed_baseline_shape() -> None:
     assert baseline.is_file()
     assert inventory_md.is_file()
     payload = json.loads(baseline.read_text(encoding="utf-8"))
-    assert payload["min_forbid_count"] == 48
-    assert payload["max_open_count"] == 248
+    assert payload["min_forbid_count"] == 50
+    assert payload["max_open_count"] == 246
     assert payload["total_write_schemas"] == 296
     assert payload["forbid_schemas"] == [
         "AccessControlCreate",
@@ -195,6 +195,8 @@ def test_committed_baseline_shape() -> None:
         "AssessmentRunCreate",
         "AssessmentRunUpdate",
         "AssessorGuidanceRequest",
+        "AssetTypeCreate",
+        "AssetTypeUpdate",
         "AssignAcknowledgmentRequest",
         "CAPAStatusTransition",
         "CompleteAnalysisRequest",

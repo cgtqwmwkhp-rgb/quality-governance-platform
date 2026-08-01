@@ -73,13 +73,25 @@ class AssetTypeBase(BaseModel):
 
 
 class AssetTypeCreate(AssetTypeBase):
-    """Schema for creating an Asset Type."""
+    """Schema for creating an Asset Type.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the asset type being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     force: bool = False
 
 
 class AssetTypeUpdate(BaseModel):
-    """Schema for updating an Asset Type."""
+    """Schema for updating an Asset Type.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the asset type being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     category: Optional[str] = None
     name: Optional[str] = Field(None, min_length=1, max_length=200)
