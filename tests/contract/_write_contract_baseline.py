@@ -33,14 +33,12 @@ from __future__ import annotations
 # PX-168 is the visible symptom of this on ``ActionCreate``. ``ActionCreate`` /
 # ``ActionUpdate`` already declare ``extra="forbid"``; they remain listed only
 # until a dedicated backlog cleanup removes already-strict schemas. This PR
-# converts ``AssessmentRunUpdate`` and ``AssessorGuidanceRequest`` (after ``AssessmentResponseUpdate`` / ``AssessmentRunCreate``) and removes
+# converts ``AssetTypeCreate`` and ``AssetTypeUpdate`` (after ``AssessmentRunUpdate`` / ``AssessorGuidanceRequest``) and removes
 # those two from the set so Guard 2 / round-trip start enforcing them.
 KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
     {
         "ActionCreate",
         "ActionUpdate",
-        "AssetTypeCreate",
-        "AssetTypeUpdate",
         "AuditCreate",
         "AuditFindingCreate",
         "AuditFindingUpdate",
