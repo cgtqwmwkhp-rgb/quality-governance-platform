@@ -37,7 +37,7 @@ from __future__ import annotations
 # those two from the set so Guard 2 / round-trip start enforcing them.
 KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
     {
-                        "ActionCreate",
+        "ActionCreate",
         "ActionImportConfirm",
         "ActionStatusUpdate",
         "ActionUpdate",
