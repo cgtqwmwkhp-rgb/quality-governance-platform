@@ -50,6 +50,19 @@ PORTAL_LINKED_ROUTES = (
     "/portal/track/:referenceNumber",
 )
 
+# App.tsx <Navigate replace> legacy staff aliases (golden-thread UAT). Canonical
+# targets are already registered; these P2 entries keep bookmark/compat paths off
+# the "Route not in registry" dead-end list. Parallel to #1484 (portal pages).
+NAVIGATE_ALIAS_ROUTES = (
+    "/capa",
+    "/my-work",
+    "/evidence",
+    "/knowledge-bank",
+    "/exceptions",
+    "/admin/campaign-compliance",
+    "/admin/hsec-inbox",
+)
+
 
 def _load_registry() -> dict:
     return yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
@@ -103,6 +116,21 @@ def test_portal_linked_routes_registered_as_portal_sso_p1() -> None:
         entry = by_route[route]
         assert entry["auth"] == "portal_sso", route
         assert entry["criticality"] == "P1", route
+
+
+def test_navigate_alias_routes_registered_in_page_registry() -> None:
+    by_route = _admin_routes_by_path()
+    missing = [route for route in NAVIGATE_ALIAS_ROUTES if route not in by_route]
+    assert not missing, f"Missing PAGE_REGISTRY admin_routes alias entries: {missing}"
+
+
+def test_navigate_alias_routes_registered_as_staff_p2() -> None:
+    by_route = _admin_routes_by_path()
+    for route in NAVIGATE_ALIAS_ROUTES:
+        entry = by_route[route]
+        assert entry["auth"] == "jwt_admin", route
+        assert entry["criticality"] == "P2", route
+        assert entry["component"] == "Navigate", route
 
 
 def test_page_registry_summary_matches_measured_counts() -> None:
