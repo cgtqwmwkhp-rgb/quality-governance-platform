@@ -453,6 +453,14 @@ async def allocate_vehicle(
 
 
 class BatchGateRequest(BaseModel):
+    """Batch vehicle compliance-gate check.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     vehicle_regs: list[str]
 
 

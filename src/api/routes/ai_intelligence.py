@@ -12,7 +12,7 @@ Provides endpoints for:
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, require_permission
@@ -69,6 +69,14 @@ class FindingClassificationRequest(BaseModel):
 
 
 class BatchFindingRequest(BaseModel):
+    """Batch finding analysis request.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     findings: list[str] = Field(..., min_length=1, max_length=50)
 
 
