@@ -171,6 +171,27 @@ portal_routes:
     expected_degraded_state: null
     description: "Portal help and FAQ"
 
+  # C-61 residual: legacy portal report forms still mounted under /portal for
+  # compat. Registered P2 (David TRIAGE remainder) so link audit does not treat
+  # them as missing; keep-vs-remove remains a separate product call.
+  - pageId: portal-report-incident-legacy
+    route: /portal/report/incident-legacy
+    auth: portal_sso
+    criticality: P2
+    component: PortalIncidentForm
+    expected_empty_state: "Legacy incident report form visible"
+    expected_degraded_state: null
+    description: "Legacy portal incident report form (compat)"
+
+  - pageId: portal-report-near-miss-static
+    route: /portal/report/near-miss-static
+    auth: portal_sso
+    criticality: P2
+    component: PortalNearMissForm
+    expected_empty_state: "Legacy near-miss report form visible"
+    expected_degraded_state: null
+    description: "Legacy portal near-miss report form (compat)"
+
 # ==============================================================================
 # ADMIN ROUTES (JWT Authentication - Staff/Admin)
 # ==============================================================================
@@ -864,11 +885,222 @@ admin_routes:
     expected_degraded_state: null
     description: "Legacy alias → /admin/hseq-inbox"
 
+  # C-61 residual after #1484/#1486 (tip 129f5715): detail / execute / builder
+  # App.tsx routes still absent from PAGE_REGISTRY. David TRIAGE 29/07: admin /
+  # safety-critical surfaces at P1, remainder at P2; P0 denominator unchanged.
+  # Catch-alls (/, /*, /portal/*, /risks/*) deliberately omitted.
+  - pageId: safety-asset-detail
+    route: /safety-assets/:id
+    auth: jwt_admin
+    criticality: P1
+    component: SafetyAssetDetail
+    expected_empty_state: "Asset not found messaging"
+    expected_degraded_state: null
+    description: "Safety asset detail"
+
+  - pageId: audit-execute
+    route: /audits/:auditId/execute
+    auth: jwt_admin
+    criticality: P1
+    component: AuditExecution
+    expected_empty_state: "Audit run load failure messaging"
+    expected_degraded_state: null
+    description: "Staff audit execution"
+
+  - pageId: audit-mobile
+    route: /audits/:auditId/mobile
+    auth: jwt_admin
+    criticality: P1
+    component: AuditExecution
+    expected_empty_state: "Audit run load failure messaging"
+    expected_degraded_state: null
+    description: "Mobile audit execution"
+
+  - pageId: audit-import-review
+    route: /audits/:auditId/import-review
+    auth: jwt_admin
+    criticality: P1
+    component: AuditImportReview
+    expected_empty_state: "No imported findings to review"
+    expected_degraded_state: null
+    description: "Audit import review"
+
+  - pageId: admin-forms-new
+    route: /admin/forms/new
+    auth: jwt_admin
+    criticality: P1
+    component: FormBuilder
+    expected_empty_state: "Empty form builder canvas"
+    expected_degraded_state: null
+    description: "Create admin dynamic form template"
+
+  - pageId: admin-forms-edit
+    route: /admin/forms/:templateId
+    auth: jwt_admin
+    criticality: P1
+    component: FormBuilder
+    expected_empty_state: "Form template not found messaging"
+    expected_degraded_state: null
+    description: "Edit admin dynamic form template"
+
+  - pageId: workforce-assessment-new
+    route: /workforce/assessments/new
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceAssessmentCreate
+    expected_empty_state: "New assessment setup form"
+    expected_degraded_state: null
+    description: "Create workforce assessment"
+
+  - pageId: workforce-assessment-execute
+    route: /workforce/assessments/:id/execute
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceAssessmentExecution
+    expected_empty_state: "Assessment not found messaging"
+    expected_degraded_state: null
+    description: "Execute workforce assessment"
+
+  - pageId: workforce-training-new
+    route: /workforce/training/new
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceInductionCreate
+    expected_empty_state: "New training setup form"
+    expected_degraded_state: null
+    description: "Create workforce training record"
+
+  - pageId: workforce-training-execute
+    route: /workforce/training/:id/execute
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceTrainingExecution
+    expected_empty_state: "Training not found messaging"
+    expected_degraded_state: null
+    description: "Execute workforce training"
+
+  - pageId: workforce-engineer-detail
+    route: /workforce/engineers/:id
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceEngineerProfile
+    expected_empty_state: "Engineer not found messaging"
+    expected_degraded_state: null
+    description: "Workforce engineer detail"
+
+  - pageId: risk-register-profile
+    route: /risk-register/:riskId
+    auth: jwt_admin
+    criticality: P1
+    component: RiskProfile
+    expected_empty_state: "Risk not found messaging"
+    expected_degraded_state: null
+    description: "Enterprise risk profile"
+
+  - pageId: action-detail
+    route: /actions/:id
+    auth: jwt_admin
+    criticality: P2
+    component: ActionDetail
+    expected_empty_state: "Action not found messaging"
+    expected_degraded_state: null
+    description: "Action detail"
+
+  - pageId: actions-item-legacy
+    route: /actions/item
+    auth: jwt_admin
+    criticality: P2
+    component: LegacyActionItemRedirect
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy action item redirect"
+
+  - pageId: document-detail
+    route: /documents/:id
+    auth: jwt_admin
+    criticality: P2
+    component: DocumentDetail
+    expected_empty_state: "Document not found messaging"
+    expected_degraded_state: null
+    description: "Document detail"
+
+  - pageId: investigation-detail
+    route: /investigations/:id
+    auth: jwt_admin
+    criticality: P2
+    component: InvestigationDetail
+    expected_empty_state: "Investigation not found messaging"
+    expected_degraded_state: null
+    description: "Investigation detail"
+
+  - pageId: investigation-template-builder
+    route: /investigations/templates/builder
+    auth: jwt_admin
+    criticality: P2
+    component: InvestigationTemplateBuilder
+    expected_empty_state: "Investigation template builder canvas"
+    expected_degraded_state: null
+    description: "Investigation template builder hub"
+
+  - pageId: investigation-template-builder-new
+    route: /investigations/templates/builder/new
+    auth: jwt_admin
+    criticality: P2
+    component: InvestigationTemplateBuilder
+    expected_empty_state: "Empty investigation template builder"
+    expected_degraded_state: null
+    description: "Create investigation template"
+
+  - pageId: investigation-template-builder-edit
+    route: /investigations/templates/builder/:templateId/edit
+    auth: jwt_admin
+    criticality: P2
+    component: InvestigationTemplateBuilder
+    expected_empty_state: "Investigation template not found messaging"
+    expected_degraded_state: null
+    description: "Edit investigation template"
+
+  - pageId: audit-template-new
+    route: /audit-templates/new
+    auth: jwt_admin
+    criticality: P2
+    component: AuditTemplateBuilder
+    expected_empty_state: "Empty audit template builder"
+    expected_degraded_state: null
+    description: "Create audit template"
+
+  - pageId: audit-template-edit
+    route: /audit-templates/:templateId/edit
+    auth: jwt_admin
+    criticality: P2
+    component: AuditTemplateBuilder
+    expected_empty_state: "Audit template not found messaging"
+    expected_degraded_state: null
+    description: "Edit audit template"
+
+  - pageId: audits-analytics
+    route: /audits/analytics
+    auth: jwt_admin
+    criticality: P2
+    component: AuditAnalytics
+    expected_empty_state: "Audit analytics with zero scores"
+    expected_degraded_state: null
+    description: "Audit analytics"
+
+  - pageId: staff-help
+    route: /help
+    auth: jwt_admin
+    criticality: P2
+    component: StaffHelp
+    expected_empty_state: "Staff help content visible"
+    expected_degraded_state: null
+    description: "Staff help (distinct from /portal/help)"
+
 # ==============================================================================
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 90
+  total_routes: 115
   p0_routes: 12
-  p1_routes: 49
-  p2_routes: 29
+  p1_routes: 61
+  p2_routes: 42

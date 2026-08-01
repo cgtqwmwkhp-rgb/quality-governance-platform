@@ -63,6 +63,42 @@ NAVIGATE_ALIAS_ROUTES = (
     "/admin/hsec-inbox",
 )
 
+# C-61 residual after #1484/#1486 — detail/execute/builder App.tsx routes under
+# David TRIAGE (admin/safety P1, remainder P2). Catch-alls stay unregistered.
+RESIDUAL_P1_ROUTES = (
+    "/safety-assets/:id",
+    "/audits/:auditId/execute",
+    "/audits/:auditId/mobile",
+    "/audits/:auditId/import-review",
+    "/admin/forms/new",
+    "/admin/forms/:templateId",
+    "/workforce/assessments/new",
+    "/workforce/assessments/:id/execute",
+    "/workforce/training/new",
+    "/workforce/training/:id/execute",
+    "/workforce/engineers/:id",
+    "/risk-register/:riskId",
+)
+
+RESIDUAL_P2_ADMIN_ROUTES = (
+    "/actions/:id",
+    "/actions/item",
+    "/documents/:id",
+    "/investigations/:id",
+    "/investigations/templates/builder",
+    "/investigations/templates/builder/new",
+    "/investigations/templates/builder/:templateId/edit",
+    "/audit-templates/new",
+    "/audit-templates/:templateId/edit",
+    "/audits/analytics",
+    "/help",
+)
+
+RESIDUAL_P2_PORTAL_ROUTES = (
+    "/portal/report/incident-legacy",
+    "/portal/report/near-miss-static",
+)
+
 
 def _load_registry() -> dict:
     return yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
@@ -131,6 +167,48 @@ def test_navigate_alias_routes_registered_as_staff_p2() -> None:
         assert entry["auth"] == "jwt_admin", route
         assert entry["criticality"] == "P2", route
         assert entry["component"] == "Navigate", route
+
+
+def test_residual_p1_routes_registered_in_page_registry() -> None:
+    by_route = _admin_routes_by_path()
+    missing = [route for route in RESIDUAL_P1_ROUTES if route not in by_route]
+    assert not missing, f"Missing PAGE_REGISTRY residual P1 entries: {missing}"
+
+
+def test_residual_p1_routes_registered_as_staff_p1() -> None:
+    by_route = _admin_routes_by_path()
+    for route in RESIDUAL_P1_ROUTES:
+        entry = by_route[route]
+        assert entry["auth"] == "jwt_admin", route
+        assert entry["criticality"] == "P1", route
+
+
+def test_residual_p2_admin_routes_registered_in_page_registry() -> None:
+    by_route = _admin_routes_by_path()
+    missing = [route for route in RESIDUAL_P2_ADMIN_ROUTES if route not in by_route]
+    assert not missing, f"Missing PAGE_REGISTRY residual P2 admin entries: {missing}"
+
+
+def test_residual_p2_admin_routes_registered_as_staff_p2() -> None:
+    by_route = _admin_routes_by_path()
+    for route in RESIDUAL_P2_ADMIN_ROUTES:
+        entry = by_route[route]
+        assert entry["auth"] == "jwt_admin", route
+        assert entry["criticality"] == "P2", route
+
+
+def test_residual_p2_portal_routes_registered_in_page_registry() -> None:
+    by_route = _portal_routes_by_path()
+    missing = [route for route in RESIDUAL_P2_PORTAL_ROUTES if route not in by_route]
+    assert not missing, f"Missing PAGE_REGISTRY residual P2 portal entries: {missing}"
+
+
+def test_residual_p2_portal_routes_registered_as_portal_sso_p2() -> None:
+    by_route = _portal_routes_by_path()
+    for route in RESIDUAL_P2_PORTAL_ROUTES:
+        entry = by_route[route]
+        assert entry["auth"] == "portal_sso", route
+        assert entry["criticality"] == "P2", route
 
 
 def test_page_registry_summary_matches_measured_counts() -> None:
