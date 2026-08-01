@@ -28,7 +28,13 @@ class AssessmentRunCreate(BaseModel):
 
 
 class AssessmentRunUpdate(BaseModel):
-    """Schema for updating an assessment run."""
+    """Schema for updating an assessment run.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the run being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(None, max_length=300)
     location: Optional[str] = Field(None, max_length=200)
