@@ -376,21 +376,20 @@ async def test_dashboard_incident_register_total_matches_incident_register(admin
 
 
 @pytest.mark.asyncio
-async def test_superuser_incident_list_scope_differs_from_dashboard_scope(
+async def test_superuser_incident_register_total_matches_incident_register(
     superuser_client: AsyncClient,
 ) -> None:
-    """Characterises the open defect behind the reported 59 vs 60 gap.
+    """The superuser twin of the test above; closes the reported 59 vs 60 gap.
 
-    `GET /api/v1/incidents/` passes ``skip_tenant_check=is_superuser``, so for a
-    superuser the register lists every tenant's rows, while the executive
-    dashboard is always scoped to the caller's tenant. Nothing is excluded from
-    the aggregate — the register is over-reporting.
+    `GET /api/v1/incidents/` used to pass ``skip_tenant_check=is_superuser``, so
+    for a superuser the register listed every tenant's rows while the executive
+    dashboard stayed scoped to the caller's tenant. Nothing was excluded from the
+    aggregate — the register was over-reporting by exactly the other tenants.
 
-    The fix belongs in ``src/api/routes/incidents.py`` / ``IncidentService``,
-    which this change does not own. This test exists so that whoever tightens
-    that scope is forced to come back and fold the superuser path into
-    ``test_dashboard_incident_register_total_matches_incident_register`` above,
-    rather than the divergence quietly persisting.
+    Both surfaces are now the same population for every caller, superuser or not,
+    so the equality is asserted here rather than the divergence. Reading one
+    cross-tenant incident by id is still allowed; enumerating the whole estate
+    from the register is not.
     """
     before_dash = await _dashboard_incident_total(superuser_client)
     before_list = await _incident_list_total(superuser_client)
@@ -401,9 +400,9 @@ async def test_superuser_incident_list_scope_differs_from_dashboard_scope(
     dash_total = await _dashboard_incident_total(superuser_client)
     list_total = await _incident_list_total(superuser_client)
 
+    assert dash_total == list_total, "a superuser's register must reconcile with their dashboard"
     assert dash_total - before_dash == 5, "dashboard stays tenant-scoped"
-    assert list_total - before_list == 6, "register list currently spans tenants for superusers"
-    assert list_total > dash_total, "the gap is a wider list, not a narrower aggregate"
+    assert list_total - before_list == 5, "the other tenant's incident must be in neither number"
 
 
 # ---------------------------------------------------------------------------
