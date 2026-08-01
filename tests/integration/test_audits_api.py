@@ -52,7 +52,7 @@ class TestAuditsAPI:
             "audit_type": "inspection",
             "scoring_method": "percentage",
             "passing_score": 80.0,
-            "is_active": True,
+            # is_active is update-only; AuditTemplateCreate forbids unknown fields (B-10)
         }
 
         response = await client.post(
