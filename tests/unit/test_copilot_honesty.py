@@ -14,6 +14,15 @@ def service():
     return CopilotService(db=SimpleNamespace())
 
 
+def test_simulate_explains_capa_without_live_register_claim(service: CopilotService):
+    """Demo prompt "what is CAPA" must return general CAPA guidance (no live register)."""
+    content, action = service._simulate_ai_response("what is CAPA", {})
+    assert action is None
+    assert "Corrective and Preventive Action" in content
+    assert "General guidance only" in content
+    assert "CAPA-" not in content  # no fabricated reference numbers
+
+
 def test_simulate_refuses_fabricated_compliance_percentage(service: CopilotService):
     content, action = service._simulate_ai_response("Compliance Status", {})
     assert "92%" not in content

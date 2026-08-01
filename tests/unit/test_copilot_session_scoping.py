@@ -187,6 +187,34 @@ async def test_send_message_refuses_without_ownership(session_factory, copilot_e
 
 
 @pytest.mark.asyncio
+async def test_send_message_capa_persists_naive_last_message_at(session_factory, copilot_enabled):
+    """Regression: aware last_message_at caused asyncpg DataError on Postgres (prod 500)."""
+    async with session_factory() as db:
+        service = CopilotService(db)
+        owned = await _seed_owned_session(db, tenant_id=TENANT_A, user_id=USER_OWNER)
+        await db.commit()
+
+        reply = await service.send_message(
+            owned.id,
+            "what is CAPA",
+            user_id=USER_OWNER,
+            tenant_id=TENANT_A,
+        )
+        assert reply.role == "assistant"
+        assert "Corrective and Preventive Action" in reply.content
+
+        refreshed = await service.get_session(
+            owned.id,
+            user_id=USER_OWNER,
+            tenant_id=TENANT_A,
+        )
+        assert refreshed is not None
+        assert refreshed.last_message_at is not None
+        assert refreshed.last_message_at.tzinfo is None
+        assert refreshed.title == "what is CAPA"
+
+
+@pytest.mark.asyncio
 async def test_submit_feedback_refuses_without_session_ownership(session_factory):
     async with session_factory() as db:
         service = CopilotService(db)
