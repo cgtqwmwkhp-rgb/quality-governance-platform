@@ -5,7 +5,7 @@
 # P2 = Nice to have, can degrade gracefully
 
 version: "1.0"
-last_updated: "2026-07-30"
+last_updated: "2026-08-01"
 
 # ==============================================================================
 # PUBLIC ROUTES (No Authentication)
@@ -647,9 +647,8 @@ admin_routes:
   # Census (tip faff5a38): each route below is declared in frontend/src/App.tsx with
   # an existing page component and is linked from Layout and/or AdminDashboard /
   # Complaints / SafetyAssetRegister / asset-health tiles. Registered as P1 (not P0)
-  # so the P0 denominator stays stable. Skipped: /admin/campaign-compliance and
-  # /admin/hsec-inbox (Navigate aliases only); /portal/tools|/van|/work (linked but
-  # no matching App.tsx route — real dead ends, not registry false positives).
+  # so the P0 denominator stays stable. Navigate-only aliases are registered as P2
+  # further below (not skipped). Nested /portal children are handled separately (#1484).
   - pageId: admin-users
     route: /admin/users
     auth: jwt_admin
@@ -749,11 +748,79 @@ admin_routes:
     expected_degraded_state: null
     description: "System settings"
 
+  # C-61 Navigate-only aliases (tip 60442106 / #1481): App.tsx mounts honest
+  # <Navigate replace> redirects for golden-thread UAT legacy staff URLs. Register
+  # as P2 so the UX link audit does not treat bookmark/compat paths as missing
+  # registry entries. Canonical targets already registered above. Does not overlap
+  # #1484 nested portal page components.
+  - pageId: alias-capa
+    route: /capa
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /actions?sourceType=capa"
+
+  - pageId: alias-my-work
+    route: /my-work
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /actions?view=mine"
+
+  - pageId: alias-evidence
+    route: /evidence
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /compliance"
+
+  - pageId: alias-knowledge-bank
+    route: /knowledge-bank
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /documents"
+
+  - pageId: alias-exceptions
+    route: /exceptions
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /knowledge-exceptions"
+
+  - pageId: alias-admin-campaign-compliance
+    route: /admin/campaign-compliance
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /documents/campaigns"
+
+  - pageId: alias-admin-hsec-inbox
+    route: /admin/hsec-inbox
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /admin/hseq-inbox"
+
 # ==============================================================================
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 78
+  total_routes: 85
   p0_routes: 12
   p1_routes: 44
-  p2_routes: 22
+  p2_routes: 29
