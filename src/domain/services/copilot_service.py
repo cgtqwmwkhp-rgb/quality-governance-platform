@@ -27,6 +27,7 @@ from src.domain.models.ai_copilot import (
     CopilotMessage,
     CopilotSession,
 )
+from src.domain.services.copilot_kill_switch import copilot_kill_switch_last_known
 
 
 class CopilotDisabledError(RuntimeError):
@@ -34,12 +35,17 @@ class CopilotDisabledError(RuntimeError):
 
 
 def copilot_is_enabled() -> bool:
-    """Single source of truth for whether simulated copilot output may be served (PX-248).
+    """Whether configuration permits copilot output to be served (PX-248).
 
     Fails closed like the frontend gate: no environment is eligible without an explicit
     opt-in, and the shipped default is off. Production is eligible on the same terms as
     every other environment — the operator setting AI_COPILOT_ENABLED is accepting that
     the replies are keyword simulations, which the UI states before the first exchange.
+
+    This is the configuration gate only. It is also the *first* gate: the runtime kill
+    switch in :mod:`src.domain.services.copilot_kill_switch` is consulted after this
+    returns ``True``, never instead of it, which is what keeps the database able to close
+    the surface and unable to open it.
     """
     return settings.ai_copilot_enabled
 
@@ -342,6 +348,14 @@ class CopilotService:
         # The API layer already returns 404, but this closes non-HTTP callers too.
         if not copilot_is_enabled():
             raise CopilotDisabledError("AI Copilot is disabled; simulated responses must not be served.")
+
+        # Second line behind the API guards, which are the ones that refresh the switch.
+        # Deliberately does not read the database: this method runs on a caller's session
+        # and a failed read would leave that session unusable for the caller's own work.
+        # A process that has never refreshed therefore sees no kill here — see
+        # copilot_kill_switch_last_known.
+        if copilot_kill_switch_last_known():
+            raise CopilotDisabledError("AI Copilot has been closed by the runtime kill switch.")
 
         session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
         if not session:
