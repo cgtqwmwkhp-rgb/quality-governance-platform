@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 72 |
-| Open / lax (unknown fields ignored) | 224 |
+| `extra="forbid"` (strict) | 88 |
+| Open / lax (unknown fields ignored) | 208 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 72 |
-| `max_open_count` | 224 |
+| `min_forbid_count` | 88 |
+| `max_open_count` | 208 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -78,10 +78,21 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `BatchGateRequest` — `POST /api/v1/vehicles/compliance/batch`
 - `BatchImportRequest` — `POST /api/v1/xml-import/batch`, `POST /api/v1/xml-import/batch-import`
 - `BowTieElementCreate` — `POST /api/v1/risk-register/{risk_id}/bowtie/elements`
+- `BulkConfirmRequest` — `POST /api/v1/knowledge-bank/evidence/bulk-confirm`
+- `BulkStatusUpdate` — `POST /api/v1/planet-mark/years/{year_id}/actions/bulk-status`
+- `CAPACreate` — `POST /api/v1/capa`
 - `CAPAStatusTransition` — `POST /api/v1/capa/{capa_id}/transition`
+- `CAPAUpdate` — `PATCH /api/v1/capa/{capa_id}`
+- `ChallengeDecideRequest` — `POST /api/v1/ai-templates/challenge/sessions/{session_id}/proposals/{proposal_id}/decide`
+- `ChallengeMessageRequest` — `POST /api/v1/ai-templates/challenge/sessions/{session_id}/messages`
+- `ChallengeSessionCreateRequest` — `POST /api/v1/ai-templates/challenge/sessions`
+- `CompetencyRequirementAllocateRequest` — `POST /api/v1/competency-requirements/{requirement_id}/allocate`
+- `CompetencyRequirementCreate` — `POST /api/v1/competency-requirements/`
+- `CompetencyRequirementUpdate` — `PATCH /api/v1/competency-requirements/{requirement_id}`
 - `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/complete`, `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete`
 - `CompleteAssignmentRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/complete`
 - `CompleteTrainingRequest` — `POST /api/v1/auditor-competence/training/{training_id}/complete`
+- `ConvertToAssessmentRequest` — `POST /api/v1/ai-templates/convert-to-assessment`
 - `CreateCAPARequest` — `POST /api/v1/rca-tools/capa`
 - `CreateCapaRequest` — `POST /api/v1/workforce/competence-gaps/{gap_id}/create-capa`
 - `CreateExportRequest` — `POST /api/v1/exports`, `POST /api/v1/exports/`
@@ -91,7 +102,12 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `CreateProfileRequest` — `POST /api/v1/auditor-competence/profiles`
 - `CreateWatchActionRequest` — `POST /api/v1/knowledge-bank/regulatory-watch/impacts/{impact_id}/create-action`
 - `DefectCAPARequest` — `POST /api/v1/vehicles/defects/create-capa`
+- `FiveWhysRequest` — `POST /api/v1/ai/root-cause/5-whys`
+- `LoginRequest` — `POST /api/v1/auth/login`
 - `ObsoleteRequest` — `POST /api/v1/document-control/{document_id}/obsolete`
+- `PasswordChangeRequest` — `POST /api/v1/auth/change-password`
+- `PasswordResetConfirm` — `POST /api/v1/auth/password-reset/confirm`
+- `PasswordResetRequest` — `POST /api/v1/auth/password-reset/request`
 - `QuestionReplyRequest` — `POST /api/v1/document-campaigns/questions/{thread_id}/reply`
 - `RecordAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/{acknowledgment_id}/acknowledge`
 - `SetFishboneRootCauseRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/set-root-cause`
@@ -101,7 +117,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-224 schemas. Full list is the remediation backlog;
+208 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -110,28 +126,17 @@ converting them is out of scope for the inventory lock PR.
 - `BuilderBriefRequest`
 - `BuilderQaRequest`
 - `BulkApprovalRequest`
-- `BulkConfirmRequest`
 - `BulkReprocessRequest`
-- `BulkStatusUpdate`
-- `CAPACreate`
-- `CAPAUpdate`
 - `CampaignCreateRequestFE`
 - `CampaignUpdateRequest`
 - `CertificationStatusPatch`
-- `ChallengeDecideRequest`
-- `ChallengeMessageRequest`
-- `ChallengeSessionCreateRequest`
 - `ChecklistRequest`
 - `ClauseCreate`
 - `ClauseUpdate`
-- `CompetencyRequirementAllocateRequest`
-- `CompetencyRequirementCreate`
-- `CompetencyRequirementUpdate`
 - `ComplaintCreate`
 - `ComplaintUpdate`
 - `ContractCreate`
 - `ContractUpdate`
-- `ConvertToAssessmentRequest`
 - `CostRecord`
 - `CreateFromRecordRequest`
 - `CustomerPackOmitApproveRequest`
@@ -170,7 +175,6 @@ converting them is out of scope for the inventory lock PR.
 - `FeatureFlagEvaluateRequest`
 - `FeatureFlagUpdate`
 - `FindingClassificationRequest`
-- `FiveWhysRequest`
 - `FlagFindingRiskRequest`
 - `FleetRecordCreate`
 - `ForecastRequest`
@@ -207,7 +211,6 @@ converting them is out of scope for the inventory lock PR.
 - `LocationCreate`
 - `LocationUpdate`
 - `LogDocumentReadRequest`
-- `LoginRequest`
 - `LookupOptionCreate`
 - `LookupOptionUpdate`
 - `ManualTimelineEntryRequest`
@@ -223,9 +226,6 @@ converting them is out of scope for the inventory lock PR.
 - `OfferCampaignRequest`
 - `OpenPackRequest`
 - `PartnerApiTokenCreate`
-- `PasswordChangeRequest`
-- `PasswordResetConfirm`
-- `PasswordResetRequest`
 - `PolicyCreate`
 - `PolicyUpdate`
 - `PromptTemplateRequest`

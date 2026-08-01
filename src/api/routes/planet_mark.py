@@ -880,6 +880,9 @@ VALID_ACTION_STATUSES = {"not_started", "planned", "in_progress", "on_hold", "co
 
 
 class BulkStatusUpdate(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
     action_ids: list[int] = Field(..., min_length=1)
     status: str
 

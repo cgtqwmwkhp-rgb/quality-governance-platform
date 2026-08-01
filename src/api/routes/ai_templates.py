@@ -52,6 +52,8 @@ class WebEnrichRequest(BaseModel):
 class ConvertToAssessmentRequest(BaseModel):
     """Request body containing template data to convert."""
 
+    model_config = ConfigDict(extra="forbid")
+
     template: dict = Field(..., description="Compliance template to convert to assessment")
 
 
@@ -188,6 +190,8 @@ class ResearchRequest(BaseModel):
 class ChallengeSessionCreateRequest(BaseModel):
     """Start a Check & Challenge coach session over a template snapshot."""
 
+    model_config = ConfigDict(extra="forbid")
+
     sections: list[dict[str, Any]] = Field(..., min_length=1, max_length=200)
     brief: Optional[dict[str, Any]] = None
     chip_id: Optional[str] = Field(None, max_length=80)
@@ -198,11 +202,16 @@ class ChallengeSessionCreateRequest(BaseModel):
 class ChallengeMessageRequest(BaseModel):
     """Follow-up chat turn on an existing session."""
 
+    model_config = ConfigDict(extra="forbid")
+
     message: str = Field(..., min_length=1, max_length=4000)
     chip_id: Optional[str] = Field(None, max_length=80)
 
 
 class ChallengeDecideRequest(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
     decision: Literal["accept", "reject", "edit", "pending"]
     edited_after: Optional[dict[str, Any]] = None
 

@@ -64,6 +64,9 @@ class RejectEvidenceRequest(BaseModel):
 
 
 class BulkConfirmRequest(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
     link_ids: list[int] = Field(..., min_length=1)
 
 

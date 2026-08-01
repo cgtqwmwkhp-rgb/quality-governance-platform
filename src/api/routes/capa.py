@@ -26,6 +26,9 @@ router = APIRouter()
 
 
 class CAPACreate(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     capa_type: CAPAType
@@ -59,6 +62,9 @@ class CAPACreate(BaseModel):
 
 
 class CAPAUpdate(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
     title: str | None = None
     description: str | None = None
     priority: CAPAPriority | None = None
