@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func, select, text
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -209,6 +209,14 @@ class SupplierAssessmentCreate(BaseModel):
 
 
 class AccessControlCreate(BaseModel):
+    """Create an ISO 27001 access-control record.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the record being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     user_id: int
     user_name: str = Field(..., min_length=1, max_length=255)
     user_email: Optional[str] = None
