@@ -75,13 +75,24 @@ class TestAuditTemplateCRUD:
         await test_session.commit()
         await test_session.refresh(template)
 
+        # B-10: undeclared fields fail loudly instead of being silently dropped.
+        unknown_field_response = await client.patch(
+            f"/api/v1/audits/templates/{template.id}",
+            json={
+                "name": "Safe Update",
+                "version": 99,
+            },
+            headers=superuser_auth_headers,
+        )
+        assert unknown_field_response.status_code == 422
+
+        # Declared fields that the service treats as protected still cannot flip state.
         response = await client.patch(
             f"/api/v1/audits/templates/{template.id}",
             json={
                 "name": "Safe Update",
                 "is_published": True,
                 "is_active": False,
-                "version": 99,
             },
             headers=superuser_auth_headers,
         )

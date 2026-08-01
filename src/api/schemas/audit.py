@@ -346,9 +346,13 @@ class AuditTemplateCreate(AuditTemplateBase):
 
 
 class AuditTemplateUpdate(BaseModel):
-    """Schema for updating an Audit Template."""
+    """Schema for updating an Audit Template.
 
-    model_config = ConfigDict(populate_by_name=True)
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the template being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
