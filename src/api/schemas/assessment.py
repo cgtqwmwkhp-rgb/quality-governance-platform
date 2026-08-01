@@ -81,7 +81,13 @@ class AssessmentRunListResponse(BaseModel):
 
 
 class AssessmentResponseCreate(BaseModel):
-    """Schema for creating an assessment response."""
+    """Schema for creating an assessment response.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the response being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     question_id: int
     verdict: Optional[str] = Field(None, pattern="^(competent|not_competent|na)$")
