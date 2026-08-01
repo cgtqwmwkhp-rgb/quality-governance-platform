@@ -154,42 +154,7 @@ class TestCli:
         payload = json.loads(baseline_path.read_text(encoding="utf-8"))
         assert payload["min_forbid_count"] == 2
         assert payload["max_open_count"] == 1
-        assert payload["forbid_schemas"] == [
-            "AcknowledgementAction",
-            "AcknowledgementCreate",
-            "ActionCreate",
-            "ActionOwnerNoteCreate",
-            "ActionUpdate",
-            "AddCauseRequest",
-            "AddCertificationRequest",
-            "AddTrainingRequest",
-            "AddWhyRequest",
-            "AllocationRequest",
-            "ApprovalActionRequest",
-            "AskAssignmentQuestionRequest",
-            "AssessCompetencyRequest",
-            "AssignAcknowledgmentRequest",
-            "CAPAStatusTransition",
-            "CompleteAnalysisRequest",
-            "CompleteAssignmentRequest",
-            "CompleteTrainingRequest",
-            "CreateCAPARequest",
-            "CreateCapaRequest",
-            "CreateExportRequest",
-            "CreateFindingCapaRequest",
-            "CreateFishboneRequest",
-            "CreateFiveWhysRequest",
-            "CreateProfileRequest",
-            "CreateWatchActionRequest",
-            "DefectCAPARequest",
-            "ObsoleteRequest",
-            "QuestionReplyRequest",
-            "RecordAcknowledgmentRequest",
-            "SetFishboneRootCauseRequest",
-            "SetRootCauseRequest",
-            "UpdateCAPAStatusRequest",
-            "VerifyCAPARequest",
-        ]
+        assert payload["forbid_schemas"] == ["ActionCreate", "ActionUpdate"]
 
 
 def test_committed_baseline_shape() -> None:
@@ -217,6 +182,7 @@ def test_committed_baseline_shape() -> None:
         "AskAssignmentQuestionRequest",
         "AssessCompetencyRequest",
         "AssignAcknowledgmentRequest",
+        "CAPAStatusTransition",
         "CompleteAnalysisRequest",
         "CompleteAssignmentRequest",
         "CompleteTrainingRequest",
@@ -228,6 +194,7 @@ def test_committed_baseline_shape() -> None:
         "CreateFiveWhysRequest",
         "CreateProfileRequest",
         "CreateWatchActionRequest",
+        "DefectCAPARequest",
         "ObsoleteRequest",
         "QuestionReplyRequest",
         "RecordAcknowledgmentRequest",
