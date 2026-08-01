@@ -238,9 +238,8 @@ async def list_complaints(
         #
         # Fail closed when the caller has no tenant membership. audit_log_entries
         # .tenant_id is NOT NULL, so this access cannot be recorded without one,
-        # and an email-targeted search over other tenants' complainants is
-        # precisely what this row exists to police. Superusers skip the tenant
-        # filter below, so before this they could run one unrecorded.
+        # and an email-targeted search across complainants is precisely what this
+        # row exists to police.
         audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
@@ -264,9 +263,14 @@ async def list_complaints(
     try:
         query = select(Complaint)
 
-        if not current_user.is_superuser:
-            tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-            query = apply_tenant_filter(query, Complaint, tenant_id)
+        # No superuser bypass on the register list (B-13). The executive
+        # dashboard's complaint `register_total` is tenant-scoped for every
+        # caller, so a list that spanned tenants for a superuser reported a
+        # total the tile beside it could not reconcile with. Reading, updating
+        # or deleting one cross-tenant complaint by id is still available;
+        # enumerating the estate is not.
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        query = apply_tenant_filter(query, Complaint, tenant_id)
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
