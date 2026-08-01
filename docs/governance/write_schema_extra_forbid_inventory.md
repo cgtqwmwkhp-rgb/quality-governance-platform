@@ -10,16 +10,16 @@ JSON request body model. `additionalProperties: false` means
 | Metric | Count |
 | --- | ---: |
 | Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 32 |
-| Open / lax (unknown fields ignored) | 264 |
+| `extra="forbid"` (strict) | 34 |
+| Open / lax (unknown fields ignored) | 262 |
 | Write operations (POST/PUT/PATCH) | 314 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 32 |
-| `max_open_count` | 264 |
+| `min_forbid_count` | 34 |
+| `max_open_count` | 262 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -40,6 +40,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AskAssignmentQuestionRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/questions`
 - `AssessCompetencyRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/assess`
 - `AssignAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/requirements/{requirement_id}/assign`
+- `CAPAStatusTransition` — `POST /api/v1/capa/{capa_id}/transition`
 - `CompleteAnalysisRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/complete`, `POST /api/v1/rca-tools/five-whys/{analysis_id}/complete`
 - `CompleteAssignmentRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/complete`
 - `CompleteTrainingRequest` — `POST /api/v1/auditor-competence/training/{training_id}/complete`
@@ -51,6 +52,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `CreateFiveWhysRequest` — `POST /api/v1/rca-tools/five-whys`
 - `CreateProfileRequest` — `POST /api/v1/auditor-competence/profiles`
 - `CreateWatchActionRequest` — `POST /api/v1/knowledge-bank/regulatory-watch/impacts/{impact_id}/create-action`
+- `DefectCAPARequest` — `POST /api/v1/vehicles/defects/create-capa`
 - `ObsoleteRequest` — `POST /api/v1/document-control/{document_id}/obsolete`
 - `QuestionReplyRequest` — `POST /api/v1/document-campaigns/questions/{thread_id}/reply`
 - `RecordAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/{acknowledgment_id}/acknowledge`
@@ -61,7 +63,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-264 schemas. Full list is the remediation backlog;
+262 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -112,7 +114,6 @@ converting them is out of scope for the inventory lock PR.
 - `BulkReprocessRequest`
 - `BulkStatusUpdate`
 - `CAPACreate`
-- `CAPAStatusTransition`
 - `CAPAUpdate`
 - `CampaignCreateRequestFE`
 - `CampaignUpdateRequest`
@@ -141,7 +142,6 @@ converting them is out of scope for the inventory lock PR.
 - `DeclineInput`
 - `DeepRunCreate`
 - `DefectActionCreate`
-- `DefectCAPARequest`
 - `DefectCreate`
 - `DefectUpdate`
 - `DelegationRequest`

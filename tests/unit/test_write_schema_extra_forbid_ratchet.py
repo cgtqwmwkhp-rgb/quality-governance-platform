@@ -164,8 +164,8 @@ def test_committed_baseline_shape() -> None:
     assert baseline.is_file()
     assert inventory_md.is_file()
     payload = json.loads(baseline.read_text(encoding="utf-8"))
-    assert payload["min_forbid_count"] == 32
-    assert payload["max_open_count"] == 264
+    assert payload["min_forbid_count"] == 34
+    assert payload["max_open_count"] == 262
     assert payload["total_write_schemas"] == 296
     assert payload["forbid_schemas"] == [
         "AcknowledgementAction",
@@ -182,6 +182,7 @@ def test_committed_baseline_shape() -> None:
         "AskAssignmentQuestionRequest",
         "AssessCompetencyRequest",
         "AssignAcknowledgmentRequest",
+        "CAPAStatusTransition",
         "CompleteAnalysisRequest",
         "CompleteAssignmentRequest",
         "CompleteTrainingRequest",
@@ -193,6 +194,7 @@ def test_committed_baseline_shape() -> None:
         "CreateFiveWhysRequest",
         "CreateProfileRequest",
         "CreateWatchActionRequest",
+        "DefectCAPARequest",
         "ObsoleteRequest",
         "QuestionReplyRequest",
         "RecordAcknowledgmentRequest",
