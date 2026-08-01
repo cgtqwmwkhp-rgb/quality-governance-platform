@@ -36,8 +36,8 @@
 - [x] AC-04: Summary counts corrected to measured totals (83 / 12 / 49 / 22); unit tests lock the five portal paths + summary arithmetic
 
 ## 5) Testing Evidence (link to runs)
-- [x] Local: `pytest tests/unit/test_page_registry_nav_routes.py` — pending on author machine
-- [x] Local: `python scripts/validate_registries.py` — pending on author machine
+- [x] Local: `python3.11 -m pytest tests/unit/test_page_registry_nav_routes.py` → **7 passed**
+- [x] Local: `python3 scripts/validate_registries.py` → all 3 registries OK
 - [ ] PR CI: pending on this PR
 - [ ] Post-merge: UX Functional Coverage Gate dead-end count for these paths
 
