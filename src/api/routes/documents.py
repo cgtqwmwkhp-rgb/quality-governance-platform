@@ -1796,12 +1796,20 @@ async def search_document_content(
 @router.get("/search/semantic", response_model=SearchResponse)
 async def semantic_search(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
     q: str = Query(..., min_length=3),
     top_k: int = Query(10, ge=1, le=50),
     document_type: Optional[str] = None,
 ):
     """Semantic search across documents using AI embeddings.
+
+    Gated on ``document:read``, the token ``list_documents`` and
+    ``search_document_content`` already require. It was left on bare
+    authentication, so a caller with no library permission at all could reach
+    the whole non-restricted library of their tenant by phrase — the two
+    sibling surfaces refuse that, and the per-hit ACL below does not stand in
+    for it: ``user_can_read_library_document`` returns True for an ``all_staff``
+    document without consulting any permission.
 
     Scoped to the caller's own tenant for every caller, superuser included
     (B-13). This is an enumeration surface like ``list_documents``: the caller

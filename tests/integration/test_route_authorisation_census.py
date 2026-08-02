@@ -28,7 +28,7 @@ relies on is pinned in ``tests/unit/test_permission_route_walk.py``.
 
 A green run here does not prove authorisation *works*
 -----------------------------------------------------
-It proves every endpoint's posture is accounted for. 471 of them are accounted for
+It proves every endpoint's posture is accounted for. 465 of them are accounted for
 as having no authorisation check at all. The UX coverage gate has the same
 limitation for a different reason: its ``PORTAL_TEST_TOKEN`` is an admin token, so
 a permission failure would not necessarily surface there either.
