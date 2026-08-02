@@ -15,11 +15,11 @@ from every deployment.
 
 The consequence is not that tests fail dishonestly. It is worse: they pass
 honestly, and their passing carries no information about production. A reachability
-test for an endpoint over an unmigrated table is green either way. Seven tables
-remain in that position on the current main -- sixteen before C-67 migrated the
-push-notification pair and C-24 the document-control children -- and endpoints
-over the seven document-control tables returned 500s in production while every
-gate was green.
+test for an endpoint over an unmigrated table is green either way. Sixteen tables
+were in that position when this module was written, and endpoints over seven of
+them returned 500s in production while every gate was green. None remain: C-67
+migrated the push-notification pair, and C-24 the document-control children
+followed by the IMS unification seven.
 
 The only way to say something true about production from CI is to hold a database
 the migrations built and ``create_all`` never touched, which is what this module
@@ -90,27 +90,18 @@ class UnmigratedTable:
 #: set into a live app process registers a second class named ``Role`` and breaks
 #: SQLAlchemy mapper configuration for the rest of the session.
 #:
-#: Measured against `alembic upgrade head` on PostgreSQL 14.20 and 16.14: app
-#: declares these 7 tables that the migration chain does not create. (The push
-#: notification pair that used to sit here was migrated in C-67 / 20260903_push_notif,
-#: and the seven document-control children in C-24 / 20260906_doc_ctl_children.)
-DECLARED_BUT_UNMIGRATED: tuple[UnmigratedTable, ...] = (
-    # The seven document-control child tables that used to head this tuple were
-    # migrated on 2026-09-06 by `20260906_doc_ctl_children` (C-24) and removed
-    # from the exclusion register in the same PR, so `alembic check` now compares
-    # them and this module has nothing left to say about them.
-    #
-    # IMS unification: seven models with no migration and, as measured, no reader
-    # anywhere in src/ either. Nothing is breaking; they are recorded so that
-    # wiring a route to one of them is a visible decision rather than a 500.
-    UnmigratedTable("ims_controls", "IMS / ISO27001", "src/domain/models/ims_unification.py"),
-    UnmigratedTable("ims_control_requirement_mappings", "IMS / ISO27001", "src/domain/models/ims_unification.py"),
-    UnmigratedTable("ims_objectives", "IMS / ISO27001", "src/domain/models/ims_unification.py"),
-    UnmigratedTable("ims_process_maps", "IMS / ISO27001", "src/domain/models/ims_unification.py"),
-    UnmigratedTable("management_reviews", "IMS / ISO27001", "src/domain/models/ims_unification.py"),
-    UnmigratedTable("management_review_inputs", "IMS / ISO27001", "src/domain/models/ims_unification.py"),
-    UnmigratedTable("unified_audit_plans", "Risk / Audit", "src/domain/models/ims_unification.py"),
-)
+#: Measured against `alembic upgrade head` on PostgreSQL 14.20 and 16.14: the app
+#: declares no table the migration chain fails to create. The tuple is empty, and
+#: an empty register is the condition this module was written to reach, not the
+#: check being switched off -- ``TestTheBacklogIsNotOverstated`` compares the app's
+#: whole metadata against the migrated schema and fails the moment a name has to
+#: come back.
+#:
+#: The three groups that emptied it: the push-notification pair in C-67
+#: (20260903_push_notif), the seven document-control children in C-24
+#: (20260906_doc_ctl_children), and the seven IMS unification tables in C-24
+#: (20260907_ims_unification).
+DECLARED_BUT_UNMIGRATED: tuple[UnmigratedTable, ...] = ()
 
 #: Tables the drift gate is structurally unable to report on, because the module
 #: declaring them is not on ``alembic/env.py``'s import list. Distinct from the

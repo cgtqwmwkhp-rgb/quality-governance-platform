@@ -43,22 +43,6 @@
       "DropIndexOp": 1,
       "DropTableOp": 1
     },
-    "ims_control_requirement_mappings": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
-    "ims_controls": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
-    "ims_objectives": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
-    "ims_process_maps": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
     "ims_requirements": {
       "AlterColumnOp": 1
     },
@@ -81,14 +65,6 @@
       "DropColumnOp": 10,
       "DropConstraintOp": 2,
       "DropIndexOp": 2
-    },
-    "management_review_inputs": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
-    "management_reviews": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
     },
     "risk_audit_mapping": {
       "DropIndexOp": 2,
@@ -127,10 +103,6 @@
       "DropColumnOp": 12,
       "DropConstraintOp": 1,
       "DropIndexOp": 2
-    },
-    "unified_audit_plans": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
     }
   },
   "excluded_tables": [
@@ -141,24 +113,17 @@
     "cross_standard_mappings",
     "escalation_rules",
     "escalation_rules_config",
-    "ims_control_requirement_mappings",
-    "ims_controls",
-    "ims_objectives",
-    "ims_process_maps",
     "ims_requirements",
     "information_assets",
     "information_security_risks",
     "iso27001_controls",
-    "management_review_inputs",
-    "management_reviews",
     "risk_audit_mapping",
     "risk_clause_mapping",
     "risk_control_mapping",
     "risk_incident_mapping",
     "security_incidents",
     "soa_control_entries",
-    "supplier_security_assessments",
-    "unified_audit_plans"
+    "supplier_security_assessments"
   ],
   "tables": {
     "abac_policies": {

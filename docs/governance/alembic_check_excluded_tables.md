@@ -39,20 +39,13 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 | `access_control_records` | IMS / ISO27001 | Plural ORM name without matching migrated table (or rename pending). |
 | `business_continuity_plans` | IMS / ISO27001 | Plural ORM name; migration/rename pending. |
 | `cross_standard_mappings` | IMS / ISO27001 | Cross-standard mapping ORM table; migration coverage pending. |
-| `ims_control_requirement_mappings` | IMS / ISO27001 | IMS control↔requirement mapping ORM; migration coverage pending. |
-| `ims_controls` | IMS / ISO27001 | IMS controls ORM; migration coverage pending. |
-| `ims_objectives` | IMS / ISO27001 | IMS objectives ORM; migration coverage pending. |
-| `ims_process_maps` | IMS / ISO27001 | IMS process-map ORM; migration coverage pending. |
 | `ims_requirements` | IMS / ISO27001 | IMS requirements ORM; migration coverage pending. |
 | `information_assets` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `information_security_risks` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `iso27001_controls` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
-| `management_review_inputs` | IMS / ISO27001 | Management-review input ORM; migration coverage pending. |
-| `management_reviews` | IMS / ISO27001 | Management-review ORM; migration coverage pending. |
 | `security_incidents` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `soa_control_entries` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `supplier_security_assessments` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
-| `unified_audit_plans` | Risk / Audit | Unified audit-plan ORM; migration coverage pending. |
 | `audit_finding_clause_mapping` | Risk / Audit mappings | Junction table present in DB without a complete SQLAlchemy model surface for compare. |
 | `audit_section_clause_mapping` | Risk / Audit mappings | Junction table present in DB without a complete SQLAlchemy model surface for compare. |
 | `escalation_rules_config` | Platform / DBA | Config table in DB; ORM uses a different name (`escalation_rules`). |
@@ -222,4 +215,60 @@ that is not registered there and on a registration with no policy. Two of the
 seven (`document_access_logs`, `obsolete_document_records`) declare `tenant_id`
 `NOT NULL` and so meet the TEN2 precondition the expand waves used; they are the
 obvious next candidates, and creating them here does not decide it.
+
+## 2026-09-07 the IMS unification tables migrated and unfiltered (C-24)
+
+Removed seven more: `ims_controls`, `ims_control_requirement_mappings`,
+`ims_objectives`, `ims_process_maps`, `management_reviews`,
+`management_review_inputs`, and `unified_audit_plans`.
+
+These were the seven names on this register whose deferred drift was a whole
+`CreateTableOp` — the table did not exist, so nothing else about it could be
+compared. `20260907_ims_unification` creates all seven, shaped from
+`alembic.autogenerate` against a database at the previous head.
+`ims_requirements` and `cross_standard_mappings`, declared in the same model
+file, already had a create migration (`f6e5d4c3b2a1`, 2026-04-07) and stay on
+this register for column drift, which is a different problem with a different
+fix.
+
+`unified_audit_plans` is included despite its Risk / Audit owner because its
+deferred drift was the identical shape — one `CreateTableOp`, one
+`CreateIndexOp`, no reader, foreign keys only to `tenants` and `users` — and it
+is declared in `src/domain/models/ims_unification.py` alongside the other six.
+Splitting it out would have left one table absent for no reason other than the
+owner column.
+
+Measured on PostgreSQL 14.20 against a database built by `alembic upgrade head`:
+`before_filter` is unchanged at 1058 operations across 209 tables — the seven
+tables joined the comparison and contributed zero operations, and no other
+table's per-table counts moved either — and the drift hidden by `include_object`
+falls from 196 operations across 25 tables to 182 across 18. `alembic check`
+stays green with the seven names gone from the frozenset, and the ratchet
+reports `exclusions with no drift left (removable): []`.
+
+As on 2026-09-06, the entries were deleted from `excluded_table_drift` and
+`excluded_tables` in `alembic_drift_baseline.json` rather than the whole file
+being regenerated, for the same reason: a full `--write-baseline` would also
+tighten `complaints` and `incidents` from 4 `DropColumnOp` to 3, which this work
+did not cause and did not measure on the PostgreSQL 16 that CI runs.
+
+Not attempted here: the eight IMS / ISO27001 entries that remain, carrying 155 of
+the 182 hidden operations between them. Those tables exist in the migrated schema
+and disagree with their models about columns — `soa_control_entries` declares four
+the database does not have, and seven of the eight have columns the database has
+and the model does not, which autogenerate renders as `DropColumnOp` over live
+compliance data. Settling them needs a domain decision about which side is
+authoritative, not a create migration, so they are deferred with their
+measurements to issue #1526 rather than guessed at here.
+
+What this closes beyond the register: `DECLARED_BUT_UNMIGRATED` in
+`tests/integration/_alembic_only_schema.py` is now empty, so the migration chain
+builds every table the application declares. The assertion that pins it is
+`test_the_measured_count_is_the_declared_count`, which compares the whole of
+`Base.metadata` against an Alembic-built database and no longer has a list of
+permitted absences to subtract first.
+
+Row-level security was again deliberately not extended. All seven declare
+`tenant_id` nullable, so unlike two of the document-control children they do not
+even meet the TEN2 precondition the expand waves used.
 

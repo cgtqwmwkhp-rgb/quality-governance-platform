@@ -80,20 +80,15 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         "cross_standard_mappings",
         # The seven document-control child tables were unfiltered on 2026-09-06:
         # 20260906_doc_ctl_children creates them, so compare has both sides.
-        "ims_control_requirement_mappings",
-        "ims_controls",
-        "ims_objectives",
-        "ims_process_maps",
+        # The seven IMS unification tables were unfiltered on 2026-09-07 for the
+        # same reason: 20260907_ims_unification creates them.
         "ims_requirements",
         "information_assets",
         "information_security_risks",
         "iso27001_controls",
-        "management_review_inputs",
-        "management_reviews",
         "security_incidents",
         "soa_control_entries",
         "supplier_security_assessments",
-        "unified_audit_plans",
         # Junction / config tables present in DB without SQLAlchemy models
         "audit_finding_clause_mapping",
         "audit_section_clause_mapping",
