@@ -25,6 +25,7 @@ This runbook covers residual **data / ops** work that honesty banners already di
 |--------|----|--------------|
 | `inventory_test_debris.py` | 125, 192, 197, 239, 221, 266, 275 | Read-only inventory of UAT/CUJ/smoke debris |
 | `purge_test_debris.py` | same | Dry-run purge plan; `--apply` soft-closes / deactivates / archives |
+| `soft_delete_walkaway_debris.py` | 125 / 177 / residue | PX-177 soft-delete for `[PURGED-RUN021]` titles + walk-away residue refs (COMP-0007/0018, INA-45D06064, INC-0058/59/60) |
 | `remint_hex_references.py` | 126 | Hex `PREFIX-YYYY-XXXXXXXX` → sequential `PREFIX-YYYY-NNNN` mapping (+ ledger) |
 | `verify_reseed_portal_templates.py` | 306 | Verify published portal slugs; dry-run / minimal re-seed |
 | `library_to_doc_control_drafts.py` | 263 | Library policy docs → Document Control **drafts** |
@@ -35,6 +36,7 @@ Invoke from repo root with `DATABASE_URL` set (read-only credentials are enough 
 ```bash
 python -m scripts.ops.run021.inventory_test_debris --json
 python -m scripts.ops.run021.purge_test_debris            # dry-run
+python -m scripts.ops.run021.soft_delete_walkaway_debris  # PX-177 soft-delete dry-run
 python -m scripts.ops.run021.remint_hex_references
 python -m scripts.ops.run021.verify_reseed_portal_templates
 python -m scripts.ops.run021.library_to_doc_control_drafts
@@ -45,8 +47,12 @@ Apply example (**staging first**, after named approval):
 
 ```bash
 python -m scripts.ops.run021.purge_test_debris --apply
+python -m scripts.ops.run021.soft_delete_walkaway_debris --apply \
+  --manifest /tmp/walkaway-stg.json --actor-email david.harris@plantexpand.com
 # production only after backup + written approval:
 python -m scripts.ops.run021.purge_test_debris --apply --i-understand-prod
+python -m scripts.ops.run021.soft_delete_walkaway_debris --apply --i-understand-prod \
+  --manifest /tmp/walkaway-prod.json --actor-email david.harris@plantexpand.com
 ```
 
 ---
