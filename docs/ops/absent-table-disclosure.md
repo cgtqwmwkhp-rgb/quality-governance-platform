@@ -5,6 +5,16 @@
 **Audience:** Testers, on-call, auditors, anyone deciding whether a failing screen is a defect
 **Status:** Honesty lock — disclosure only. No feature in this document has been built.
 
+> **Superseded in part, 2026-09-06 (C-24).** The seven document-control tables —
+> every table in this document that has a reader — are now created by
+> `alembic/versions/20260906_create_document_control_children.py`, so on any
+> deployment at or past that revision they are present and the surfaces in §3
+> answer normally. The disclosure code was not removed: it is what makes the
+> absence legible on a deployment that has not run the migration yet, and it is
+> the guard that stopped these endpoints returning 500. Everything below is the
+> record of the condition as measured on 2026-07-28, and the counts are of that
+> date. Nine of the sixteen remain absent; none of them has a reader.
+
 Sixteen tables the SQLAlchemy models declare are not in the database, seven of
 them confirmed absent in production. This document records which they are, how
 each was measured and where, which user-facing surfaces read them, and what each

@@ -213,6 +213,14 @@ class TestTheEndpointIsGreenOnTheHarnessAnyway:
     the absent-table disclosure work made them check first. Both facts are true at
     once, and recording the 200 next to the ``undefined_table`` above is the only
     way the pair is legible to the next reader.
+
+    ``WITH_READER`` is empty since C-24 migrated the document-control children,
+    which were the only unmigrated tables anything read, so this parametrization
+    contributes zero cases. That is the condition being green, not the check being
+    switched off: a reader over an unmigrated table is the defect this module was
+    written for, and one reappearing brings the case back with it. It is not
+    asserted empty, because the register exists precisely so that such an entry
+    can be recorded with an owner rather than hidden.
     """
 
     @pytest.mark.parametrize("entry", WITH_READER, ids=_ids(WITH_READER))
