@@ -1025,3 +1025,182 @@ def test_documents_tenant_scope_helper_never_branches_on_a_superuser():
     assert "is_superuser" in lenient
     by_id = inspect.getsource(documents._get_document_or_404)
     assert "_scope_stmt_to_tenant_unless_superuser" in by_id
+
+
+# ---------------------------------------------------------------------------
+# Semantic search (the third documents surface, follow-up to the two above)
+#
+# `GET /api/v1/documents/search/semantic` spanned every tenant for a superuser
+# on two layers at once, which is why it was left out of the list/stats change:
+#
+#   1. the Pinecone metadata filter skipped `tenant_id` entirely for a
+#      superuser, so another tenant's chunk text came back as `content_preview`;
+#   2. the per-hit `_get_document_or_404` took the by-id exemption, which is
+#      right for a document the caller named and wrong for a set of ids the
+#      index chose.
+#
+# Both are closed here. The by-id exemption itself is untouched — it is opted
+# out of at this one call site, and `test_documents_by_id_lookup_keeps_the_
+# superuser_exemption` above still pins the default.
+# ---------------------------------------------------------------------------
+
+
+def _semantic_search_db() -> tuple[SimpleNamespace, list]:
+    """A db that records the per-hit lookup statements and finds no row.
+
+    Returning nothing models the cross-tenant hit: once the lookup is scoped,
+    the row a foreign vector names is not visible, and the handler must drop the
+    hit rather than 404 the whole response.
+    """
+    statements: list = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return SimpleNamespace(scalar_one_or_none=lambda: None)
+
+    return (
+        SimpleNamespace(execute=AsyncMock(side_effect=execute), add=MagicMock(), commit=AsyncMock()),
+        statements,
+    )
+
+
+def _fake_vector_service(monkeypatch, matches: list[dict]) -> list:
+    """Patch VectorSearchService and capture the metadata filter it is given."""
+    from src.api.routes import documents as documents_routes
+
+    filters: list = []
+
+    async def search(query, top_k=10, filter_dict=None):
+        filters.append(filter_dict)
+        return matches
+
+    monkeypatch.setattr(
+        documents_routes,
+        "VectorSearchService",
+        lambda: SimpleNamespace(search=AsyncMock(side_effect=search)),
+    )
+    return filters
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_scopes_the_vector_filter_for_a_superuser(monkeypatch):
+    """Layer 1: the tenant key must be on the Pinecone filter for every caller.
+
+    This is the layer no SQL predicate can stand in for — `content_preview` and
+    `heading` are read straight off the vector metadata, so an unfiltered query
+    puts another tenant's document text in the response body whether or not the
+    row behind it is ever loaded.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, _ = _semantic_search_db()
+    filters = _fake_vector_service(monkeypatch, [])
+
+    await documents_routes.semantic_search(
+        db=db, current_user=_superuser(77), q="pump maintenance", top_k=10, document_type=None
+    )
+
+    assert filters == [{"tenant_id": {"$eq": 77}}]
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_keeps_the_document_type_filter_alongside_the_tenant_filter(monkeypatch):
+    """The optional filter must be added to the tenant filter, not replace it.
+
+    The original built `filter_dict` from `document_type` first and then merged
+    the tenant key in, so the merge order is worth pinning: a rewrite that
+    assigns rather than adds is how the tenant key goes missing again.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, _ = _semantic_search_db()
+    filters = _fake_vector_service(monkeypatch, [])
+
+    await documents_routes.semantic_search(
+        db=db, current_user=_superuser(77), q="pump maintenance", top_k=10, document_type="policy"
+    )
+
+    assert filters == [{"tenant_id": {"$eq": 77}, "document_type": {"$eq": "policy"}}]
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_scopes_the_per_hit_lookup_for_a_superuser(monkeypatch):
+    """Layer 2: the hit lookup is scoped even though the by-id lookup is not.
+
+    A vector's `tenant_id` metadata can disagree with the row it names —
+    reassigning a document's tenant does not re-upsert its vectors — so the
+    filter above is not on its own sufficient. The hit is dropped, not 404'd:
+    the orphan-tolerance the endpoint already had must survive the scoping.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _semantic_search_db()
+    _fake_vector_service(monkeypatch, [{"metadata": {"document_id": 5, "content_preview": "foreign"}, "score": 0.9}])
+
+    response = await documents_routes.semantic_search(
+        db=db, current_user=_superuser(77), q="pump maintenance", top_k=10, document_type=None
+    )
+
+    assert statements, "the hit must be resolved against the database"
+    _assert_exact_tenant_sql(_sql(statements[0]), 77)
+    assert response.total == 0
+    assert response.results == []
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_requires_tenant_for_a_superuser(monkeypatch):
+    """A tenantless superuser gets the same 403 the library list gives them.
+
+    Asserted before the vector call as well as before the database, because the
+    embedding request is billed and nothing downstream of it could be scoped.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _semantic_search_db()
+    filters = _fake_vector_service(monkeypatch, [])
+
+    with pytest.raises(HTTPException) as exc:
+        await documents_routes.semantic_search(
+            db=db, current_user=_superuser(None), q="pump maintenance", top_k=10, document_type=None
+        )
+
+    assert exc.value.status_code == 403
+    assert not filters, "a tenantless caller must not reach the vector store"
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+def test_semantic_search_demands_a_tenant_outside_the_orphan_handler():
+    """The 403 must be raised where the handler cannot swallow it.
+
+    The per-hit loop catches `HTTPException` so an orphaned vector cannot fail
+    the whole response. That makes placement load-bearing rather than stylistic:
+    if `require_tenant_id` were only reached through the lookup inside the loop,
+    a tenantless caller's 403 would be caught there and downgraded to an empty
+    200 — a fail-open dressed as no results.
+    """
+    from src.api.routes import documents as documents_routes
+
+    tree = ast.parse(inspect.getsource(documents_routes.semantic_search))
+    handlers = [node for node in ast.walk(tree) if isinstance(node, (ast.Try, ast.If, ast.For))]
+    assert not any(
+        "require_tenant_id" in ast.dump(node) for node in handlers
+    ), "require_tenant_id must be reached unconditionally, outside the loop that swallows HTTPException"
+    assert "require_tenant_id" in ast.dump(tree), "semantic_search no longer demands a tenant at all"
+
+
+def test_semantic_search_never_branches_on_a_superuser():
+    """Pin the shape: neither layer may consult the flag again.
+
+    Both leaks were spelled as `if not current_user.is_superuser`, one guarding
+    the filter and one implied by the default the lookup was called with, so the
+    opt-out is asserted positively as well.
+    """
+    from src.api.routes import documents as documents_routes
+
+    source = inspect.getsource(documents_routes.semantic_search)
+    assert (
+        "is_superuser" not in source
+    ), "semantic_search reads is_superuser; the vector filter must be applied for every caller"
+    assert (
+        "allow_superuser_cross_tenant=False" in source
+    ), "the per-hit lookup must opt out of the by-id exemption; ids from the index are not ids the caller named"
