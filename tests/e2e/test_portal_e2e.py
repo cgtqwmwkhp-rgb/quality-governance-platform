@@ -74,8 +74,8 @@ class TestIncidentReporting:
         assert "reference_number" in data
         assert "tracking_code" in data
 
-    def test_submit_anonymous_incident(self, client):
-        """Submit anonymous incident."""
+    def test_submit_anonymous_incident_rejected(self, client):
+        """PX-312: anonymous incident submissions are not available."""
         response = client.post(
             "/api/v1/portal/reports/",
             json={
@@ -86,9 +86,14 @@ class TestIncidentReporting:
                 "is_anonymous": True,
             },
         )
-        assert response.status_code in [200, 201]
-        data = response.json()
-        assert "reference_number" in data
+        assert response.status_code == 422
+        body = response.json()
+        error = body.get("error") or body.get("detail") or {}
+        if isinstance(error, dict):
+            message = error.get("message") or str(error)
+        else:
+            message = str(error)
+        assert "anonymous" in message.lower()
 
     def test_incident_validation_errors(self, client):
         """Submit incident with validation errors."""

@@ -264,20 +264,16 @@ class QGPUser(HttpUser):
     @task(4)
     def submit_quick_report(self):
         """Submit a quick report via portal."""
-        # A named submission must carry a name: portal intake refuses a
-        # non-anonymous report with no reporter_name / complainant_name with 422
-        # (ACT-025), and complaints and near misses store that name in a NOT NULL
-        # column. Anonymous submissions deliberately send no name.
-        is_anonymous = random.choice([True, False])
+        # PX-312: anonymous portal submissions are hard-off. Named submissions
+        # must carry reporter_name / complainant_name (ACT-025).
         report_data = {
             "report_type": random.choice(["incident", "complaint"]),
             "title": f"Test Report {random_string(8)}",
             "description": "This is a test report submitted during load testing.",
             "severity": random.choice(["low", "medium", "high"]),
-            "is_anonymous": is_anonymous,
+            "is_anonymous": False,
+            "reporter_name": f"Load Test Reporter {random.randint(1, 100)}",
         }
-        if not is_anonymous:
-            report_data["reporter_name"] = f"Load Test Reporter {random.randint(1, 100)}"
         with self.client.post(
             "/api/v1/portal/reports/",
             json=report_data,

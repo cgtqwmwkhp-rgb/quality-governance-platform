@@ -53,15 +53,15 @@ class TestEmployeePortalWorkflows:
         assert data["reference_number"].startswith("COMP-")
 
     @pytest.mark.asyncio
-    async def test_uat_003_submit_anonymous_report(self, client, anonymous_report):
-        """UAT-003: Employee can submit an anonymous report."""
+    async def test_uat_003_submit_anonymous_report_rejected(self, client, anonymous_report):
+        """UAT-003 / PX-312: anonymous portal submissions are not available."""
         response = await client.post("/api/v1/portal/reports/", json=anonymous_report)
 
-        assert response.status_code == 201
-        data = response.json()
-        assert data["success"] is True
-        # Anonymous reports still get tracking codes
-        assert "tracking_code" in data
+        assert response.status_code == 422
+        body = response.json()
+        error = body.get("error") or body.get("detail") or {}
+        message = error.get("message", "") if isinstance(error, dict) else str(error)
+        assert "anonymous" in message.lower()
 
     @pytest.mark.asyncio
     async def test_uat_004_track_report_by_reference(self, client, valid_incident_report):

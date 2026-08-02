@@ -24,8 +24,8 @@ from tests.performance.locustfile import PortalUser, QGPUser  # noqa: E402
 
 PORTAL_REPORTS_PATH = "/api/v1/portal/reports/"
 
-# Enough repeats to reach every random branch of the tasks (report_type ×
-# is_anonymous). The consumer de-duplicates, so this only has to be generous.
+# Enough repeats to reach every random branch of the tasks (report_type).
+# PX-312 removed the is_anonymous branch. The consumer de-duplicates.
 TASK_REPEATS = 60
 TASK_SEED = 20260728
 

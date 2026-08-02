@@ -143,11 +143,9 @@ class TestMultiStepEntityWorkflows:
         TestResult.record("SUAT-002", "WORKING")
 
     @pytest.mark.asyncio
-    async def test_suat_003_anonymous_report_cannot_reveal_identity(self, client):
+    async def test_suat_003_anonymous_report_is_rejected(self, client):
         """
-        SUAT-003: Anonymous reports should not expose reporter identity.
-
-        This is a security/privacy test.
+        SUAT-003 / PX-312: Anonymous portal submissions are not available.
         """
         anonymous_report = {
             "report_type": "incident",
@@ -158,23 +156,13 @@ class TestMultiStepEntityWorkflows:
         }
 
         submit_response = await client.post("/api/v1/portal/reports/", json=anonymous_report)
-        assert submit_response.status_code == 201
-        submit_data = submit_response.json()
-        ref_number = submit_data["reference_number"]
-        tracking_code = submit_data["tracking_code"]
+        assert submit_response.status_code == 422
+        body = submit_response.json()
+        error = body.get("error") or body.get("detail") or {}
+        message = error.get("message", "") if isinstance(error, dict) else str(error)
+        assert "anonymous" in message.lower()
 
-        # Track the report
-        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/?tracking_code={tracking_code}")
-        assert track_response.status_code == 200
-
-        data = track_response.json()
-
-        # Verify no PII is exposed
-        track_str = str(data).lower()
-        assert "reporter_name" not in track_str or "anonymous" in track_str.lower()
-        assert "reporter_email" not in track_str or data.get("reporter_email") is None
-
-        TestResult.record("SUAT-003", "WORKING", "Anonymous privacy maintained")
+        TestResult.record("SUAT-003", "WORKING", "Anonymous submit hard-off (PX-312)")
 
     @pytest.mark.asyncio
     async def test_suat_004_qr_code_generation_after_submission(self, client):
@@ -222,7 +210,8 @@ class TestMultiStepEntityWorkflows:
                 "title": f"SUAT-005: Multi-report test #{i + 1}",
                 "description": f"Testing multiple report submission - report {i + 1}",
                 "severity": "low",
-                "is_anonymous": True,
+                "is_anonymous": False,
+                "reporter_name": f"UAT Multi Reporter {i + 1}",
             }
 
             response = await client.post("/api/v1/portal/reports/", json=report)
@@ -258,7 +247,8 @@ class TestConcurrentOperations:
                 "title": f"SUAT-006: Concurrent test #{index}",
                 "description": f"Concurrent submission test report {index}",
                 "severity": "low",
-                "is_anonymous": True,
+                "is_anonymous": False,
+                "reporter_name": f"UAT Concurrent Reporter {index}",
             }
             response = await client.post("/api/v1/portal/reports/", json=report)
             return response.status_code, response.json().get("reference_number")
@@ -310,7 +300,8 @@ class TestConcurrentOperations:
             "title": "SUAT-008: Concurrent tracking test",
             "description": "Testing concurrent tracking requests",
             "severity": "medium",
-            "is_anonymous": True,
+            "is_anonymous": False,
+            "reporter_name": "UAT Tracking Tester",
         }
         submit_response = await client.post("/api/v1/portal/reports/", json=report)
         if submit_response.status_code == 429:
@@ -359,7 +350,8 @@ class TestErrorHandlingEdgeCases:
             "title": "SUAT-009: Long description test",
             "description": long_description,
             "severity": "low",
-            "is_anonymous": True,
+            "is_anonymous": False,
+            "reporter_name": "UAT Long Desc Tester",
         }
 
         response = await client.post("/api/v1/portal/reports/", json=report)
@@ -396,7 +388,8 @@ class TestErrorHandlingEdgeCases:
             "title": special_title,
             "description": "Testing XSS and special character handling",
             "severity": "low",
-            "is_anonymous": True,
+            "is_anonymous": False,
+            "reporter_name": "UAT Special Char Tester",
         }
 
         response = await client.post("/api/v1/portal/reports/", json=report)
@@ -648,13 +641,16 @@ class TestAPIContractVerification:
             "title": "SUAT-020: DateTime format test",
             "description": "Testing datetime field format",
             "severity": "low",
-            "is_anonymous": True,
+            "is_anonymous": False,
+            "reporter_name": "UAT DateTime Tester",
         }
 
         submit = await client.post("/api/v1/portal/reports/", json=report)
+        assert submit.status_code == 201, submit.text
         ref = submit.json()["reference_number"]
+        tracking_code = submit.json()["tracking_code"]
 
-        track = await client.get(f"/api/v1/portal/reports/{ref}/")
+        track = await client.get(f"/api/v1/portal/reports/{ref}/?tracking_code={tracking_code}")
         data = track.json()
 
         # Check datetime fields

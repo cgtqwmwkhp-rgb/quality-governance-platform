@@ -383,7 +383,7 @@ class TestPortalEndpoints:
 
     def test_submit_report(self, client):
         """POST /api/portal/report or /api/portal/reports/ submits report."""
-        # Try actual endpoint first
+        # Try actual endpoint first (identified — anonymous is hard-off, PX-312)
         response = client.post(
             "/api/v1/portal/reports/",
             json={
@@ -391,7 +391,8 @@ class TestPortalEndpoints:
                 "title": "Integration Test Portal Report",
                 "description": "Created by integration test",
                 "severity": "low",
-                "is_anonymous": True,
+                "is_anonymous": False,
+                "reporter_name": "Integration Tester",
             },
         )
         # Accept success, validation failure, or explicit configuration failure.
@@ -403,7 +404,8 @@ class TestPortalEndpoints:
                     "title": "Integration Test Portal Report",
                     "description": "Created by integration test",
                     "severity": "low",
-                    "is_anonymous": True,
+                    "is_anonymous": False,
+                    "reporter_name": "Integration Tester",
                 },
             )
         assert response.status_code in [200, 201, 404, 422, 503]

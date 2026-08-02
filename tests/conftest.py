@@ -336,7 +336,7 @@ def portal_report_data():
             "title": title,
             "description": kwargs.get("description", "Test report description"),
             "severity": kwargs.get("severity", "low"),
-            "is_anonymous": kwargs.get("is_anonymous", True),
+            "is_anonymous": kwargs.get("is_anonymous", False),
             **kwargs,
         }
 

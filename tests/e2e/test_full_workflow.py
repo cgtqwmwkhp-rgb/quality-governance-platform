@@ -408,7 +408,7 @@ class TestEmployeePortalFlow:
         """
         E2E: Login → View Options → Submit Report → Track → View Status
         """
-        # Step 1: Submit incident report
+        # Step 1: Submit incident report (identified — anonymous is hard-off, PX-312)
         report_response = client.post(
             "/api/v1/portal/reports/",
             json={
@@ -417,7 +417,8 @@ class TestEmployeePortalFlow:
                 "description": "Forklift nearly struck pedestrian in aisle 5",
                 "severity": "medium",
                 "location": "Warehouse Aisle 5",
-                "is_anonymous": True,
+                "is_anonymous": False,
+                "reporter_name": "Portal E2E Tester",
             },
         )
         assert report_response.status_code in [200, 201]
