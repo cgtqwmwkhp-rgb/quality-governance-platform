@@ -336,11 +336,16 @@ async def get_kpi_summary(
 
     # Read every attribute we need off `current_user` before delegating the session.
     # `get_current_user` loads the User on *this* request's session, and the services
-    # below roll that session back when a sub-query fails, so that one failed
-    # statement cannot poison the rest of the request (#1388). A rollback expires
+    # below recover that session when a sub-query fails, so that one failed
+    # statement cannot poison the rest of the request (#1388). A full rollback expires
     # every instance in the session, so reading `current_user.tenant_id` afterwards
     # makes SQLAlchemy issue a lazy refresh — synchronous IO on an async session,
     # which raises MissingGreenlet and 500s the endpoint. A plain int cannot expire.
+    #
+    # Since C-8 that recovery unwinds to a SAVEPOINT and leaves the identity map
+    # alone, so this read is no longer the only thing standing between a drifted
+    # column and a 500. It stays because the full rollback survives as the fallback
+    # for a session that cannot open a savepoint, and because a local int is free.
     tenant_id = current_user.tenant_id
 
     service = ExecutiveDashboardService(db, tenant_id=tenant_id)
@@ -366,7 +371,7 @@ async def get_kpi_summary(
     # transaction would refuse every later statement, which was harmless only
     # because it happened to be the last query in the handler. Reading the aggregate
     # `get_full_dashboard` already produced removes both the stub and the bare
-    # except (`_safe_call` rolls back), drops a duplicate audit query, and makes this
+    # except (`_safe_call` recovers the session), drops a duplicate audit query, and makes this
     # tile agree with /executive-dashboard by construction rather than by coincidence.
     #
     # `unavailable` names the aggregates whose queries failed. Asking the service

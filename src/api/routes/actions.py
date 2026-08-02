@@ -47,11 +47,18 @@ from src.domain.models.user import User
 from src.domain.services.action_assignment_service import notify_action_assignment, record_action_assigned_audit
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_service import parse_roster_assignee_marker
+from src.domain.services.session_savepoint import read_savepoint
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Kept under its original name: this module's call sites and the C-53 regression
+# suite import it from here. The implementation moved to the domain layer so the
+# executive dashboard can share it — a domain module importing this route would
+# be the domain → api dependency `scripts/check_import_boundaries.py` forbids (C-8).
+_read_savepoint = read_savepoint
 
 
 async def _resolve_assignee_id_or_raise(
@@ -563,39 +570,6 @@ def _capa_item_to_response(item: CAPAItem) -> ActionResponse:
         owner_email=None,
         created_at=item.created_at.isoformat() if item.created_at else "",
     )
-
-
-@asynccontextmanager
-async def _read_savepoint(db: "DbSession") -> AsyncIterator[None]:
-    """Scope one read so its failure cannot refuse every read after it.
-
-    On PostgreSQL the first failing statement aborts the transaction and every
-    later statement raises until the transaction is unwound, so an ``except`` that
-    swallows the error without unwinding turns one broken action store into six.
-    That is the C-8 shape.
-
-    A SAVEPOINT is the unwind to use rather than ``Session.rollback()``: a full
-    rollback expires every instance in the identity map, including the
-    ``current_user`` authentication loaded on this same session, and a later lazy
-    refresh of it over an async session raises MissingGreenlet — a 500 this
-    repository has already paid for. Rolling back to a savepoint leaves clean
-    instances alone.
-
-    Sessions that cannot open a savepoint (test doubles, dialects without
-    SAVEPOINT support) run the read unscoped, exactly as before. Mirrors
-    ``_row_savepoint`` in the PAMS technician sync service.
-    """
-    begin_nested = getattr(db, "begin_nested", None)
-    if begin_nested is None:
-        yield
-        return
-    try:
-        nested = begin_nested()
-    except NotImplementedError:  # pragma: no cover - dialect without SAVEPOINT
-        yield
-        return
-    async with nested:
-        yield
 
 
 async def _safe_scalar(

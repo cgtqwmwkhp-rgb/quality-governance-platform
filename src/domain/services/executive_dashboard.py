@@ -28,6 +28,7 @@ from src.domain.models.training_matrix import TrainingMatrixCell, TrainingMatrix
 from src.domain.models.workflow_rules import SLATracking
 from src.domain.services.asset_health_analytics_service import AssetHealthRow, aggregate_asset_health_kpis
 from src.domain.services.risk_service import register_active_clause, register_visibility_clause
+from src.domain.services.session_savepoint import SavepointScope, read_savepoint
 
 logger = logging.getLogger(__name__)
 
@@ -160,9 +161,13 @@ _EMPTY_TRENDS: Dict[str, Any] = {
 def _assert_no_pending_writes(db: Any) -> None:
     """Refuse construction when the shared session already holds uncommitted writes.
 
-    ``_recover_session`` rolls the session back after a failed sub-query so later
-    tiles can still run. That is only safe on a read-only path: a rollback would
-    silently discard pending writes already staged on this session.
+    The service recovers from a failed sub-query so later tiles can still run.
+    Since C-8 that recovery is a savepoint unwind, which leaves writes staged
+    before the savepoint alone — but it still falls back to a full
+    ``Session.rollback()`` when the session cannot open a savepoint or the unwind
+    itself fails, and that would silently discard them. The fence stays: this is a
+    read-only path, so there is nothing here worth betting on the fallback never
+    firing.
     """
     pending = [
         *(getattr(db, "new", None) or ()),
@@ -202,24 +207,45 @@ class ExecutiveDashboardService:
             return clauses[0]
         return and_(*clauses)
 
-    async def _recover_session(self) -> None:
-        """Roll back after a failed sub-query so later ones can still run.
+    async def _recover_session(self, scope: Optional[SavepointScope] = None) -> None:
+        """Put the transaction back into a usable state after a failed sub-query.
 
         PostgreSQL aborts the whole transaction on the first failing statement
         and refuses everything after it until the transaction ends. Swallowing
-        the error without rolling back therefore turns one broken aggregate into
+        the error without unwinding therefore turns one broken aggregate into
         a dashboard of zeros — every later tile reports "query failed" and falls
         back to its empty default, which is indistinguishable from real data.
-        Every caller of this service is a read-only GET, so there is nothing to
-        lose by rolling back.
+
+        The unwind is a savepoint, not ``Session.rollback()`` (C-8). A full
+        rollback ends the request's whole transaction and expires every instance
+        in its identity map, including the ``current_user`` this service shares a
+        session with; reading an attribute off it afterwards emits a lazy refresh,
+        which over an async session raises MissingGreenlet. That is a 500 this
+        repository has already paid for — ``analytics.py`` still carries a
+        defensive ``tenant_id`` read from when it happened. Unwinding to the
+        savepoint ``_safe_call`` opened costs the failed aggregate and nothing
+        else. Same recovery as ``actions.py`` ``_read_savepoint`` (C-53).
+
+        The rollback survives as the fallback, for the two shapes where no
+        savepoint stands between the failure and the rest of the request: a
+        session that cannot open one, and an unwind that failed. Leaving those
+        unrecovered would trade a rare expired identity map for the guaranteed
+        page of zeros #1388 removed. ``_assert_no_pending_writes`` is what keeps
+        the fallback safe to take.
         """
+        if scope is not None and scope.recovered:
+            return
         try:
             await self.db.rollback()
         except Exception:  # pragma: no cover - the session is already unusable
             logger.warning("Dashboard session rollback failed", exc_info=True)
 
     async def _safe_call(self, coro, default, *, name: Optional[str] = None, unavailable: Optional[List[str]] = None):
-        """Run an async function, returning default on any DB error.
+        """Run an async function inside a savepoint, returning default on any DB error.
+
+        The savepoint has to be opened before the statement that fails, so it is
+        taken here rather than inside ``_recover_session``: recovery cannot roll
+        back to a savepoint nobody took.
 
         When ``name`` and ``unavailable`` are given, a failure records the
         aggregate's name so the caller can tell "this could not be measured" from
@@ -234,14 +260,23 @@ class ExecutiveDashboardService:
         compatibility gate classifies as a breaking change for existing clients.
         A name on a list is additive and says the same thing.
         """
+        scope: Optional[SavepointScope] = None
         try:
-            return await coro
+            async with read_savepoint(self.db) as scope:
+                return await coro
         except Exception as e:
             logger.warning("Dashboard query failed: %s", e)
-            await self._recover_session()
+            await self._recover_session(scope)
             if name is not None and unavailable is not None:
                 unavailable.append(name)
             return default
+        finally:
+            # Opening the savepoint can itself raise, in which case ``coro`` was
+            # never awaited and would otherwise warn on collection. Closing a
+            # coroutine that already ran is a no-op.
+            close = getattr(coro, "close", None)
+            if close is not None:
+                close()
 
     async def _avg_resolution_days(self, start_col: Any, end_col: Any, tf: Any) -> Optional[float]:
         """Mean days from event to closure over closed records with both timestamps.
@@ -774,13 +809,19 @@ class ExecutiveDashboardService:
         unavailable: List[str],
         build: Callable[[], Awaitable[List[Dict[str, Any]]]],
     ) -> List[Dict[str, Any]]:
-        """Run one trend builder; on failure record the series and return []."""
+        """Run one trend builder; on failure record the series and return [].
+
+        Savepoint-scoped for the same reason as ``_safe_call``: five more series
+        run after this one and each is several statements (C-8).
+        """
+        scope: Optional[SavepointScope] = None
         try:
-            return await build()
+            async with read_savepoint(self.db) as scope:
+                return await build()
         except Exception:
             logger.exception("%s trend failed", name)
             unavailable.append(name)
-            await self._recover_session()
+            await self._recover_session(scope)
             return []
 
     async def _trend_count_in_window(
