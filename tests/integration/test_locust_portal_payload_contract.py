@@ -25,11 +25,10 @@ PORTAL_REPORTS_PATH = "/api/v1/portal/reports/"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # (report_type, is_anonymous) combinations each task is expected to generate.
+# PX-312: anonymous variants are gone — API hard-rejects is_anonymous=true.
 _EXPECTED_VARIANTS: dict[str, set[tuple[str, bool]]] = {
     "QGPUser.submit_quick_report": {
-        ("incident", True),
         ("incident", False),
-        ("complaint", True),
         ("complaint", False),
     },
     "PortalUser.submit_incident": {("incident", False)},

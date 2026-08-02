@@ -1,9 +1,11 @@
 """Employee Self-Service Portal API routes.
 
 Provides simplified, mobile-first endpoints for:
-- Anonymous incident/complaint reporting
+- Identified incident/complaint/near-miss/RTA reporting
 - Report tracking by reference number
 - QR code generation for quick access
+
+Anonymous portal submissions are intentionally disabled (PX-312).
 """
 
 import hashlib
@@ -174,8 +176,8 @@ class QuickReportCreate(BaseModel):
     reporter_phone: Optional[str] = Field(None, max_length=PORTAL_REPORTER_PHONE_MAX_LENGTH)
     department: Optional[str] = Field(None, max_length=100)
 
-    # Anonymous flag
-    is_anonymous: bool = Field(default=False, description="Submit anonymously")
+    # Anonymous flag — accepted on the wire but hard-rejected in submit_quick_report (PX-312)
+    is_anonymous: bool = Field(default=False, description="Must be false; anonymous portal submit is not available")
 
     # Optional photo/attachment reference
     attachment_ids: Optional[list[str]] = None
@@ -1645,7 +1647,7 @@ async def upload_portal_attachment(
     response_model=QuickReportResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Submit a Quick Report",
-    description="Submit an incident or complaint report. Can be anonymous.",
+    description="Submit an identified incident, complaint, near-miss, or RTA report.",
 )
 async def submit_quick_report(
     report: QuickReportCreate,
@@ -1657,13 +1659,25 @@ async def submit_quick_report(
     Submit a quick report (incident or complaint).
 
     This endpoint is public and doesn't require authentication.
-    Anonymous reports can be tracked using the returned tracking_code.
-    Authenticated staff receive a golden-thread staff_href when role allows.
+    Anonymous submissions are not available (PX-312) and are rejected with 422
+    before any persistence. Authenticated staff receive a golden-thread
+    staff_href when role allows.
 
     Optional ``Idempotency-Key`` header (or ``idempotency_key`` body field, for
     clients that cannot set custom headers): retries with the same key return
     the original 201 response instead of creating a duplicate case (PX-001).
     """
+    # PX-312: anonymous portal reporting stays off — refuse before any DB write.
+    if report.is_anonymous:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Anonymous portal submissions are not available",
+                details={"fields": ["is_anonymous"]},
+            ),
+        )
+
     incident_severity, complaint_priority = map_severity(report.severity)
     reporter_submission = report.reporter_submission or {}
     portal_tenant_id = get_default_portal_tenant_id()

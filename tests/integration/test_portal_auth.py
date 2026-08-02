@@ -71,7 +71,7 @@ class TestPortalAuth:
 
     @pytest.mark.asyncio
     async def test_portal_reports_still_public(self, client):
-        """Portal report submission should still be public."""
+        """Portal report submission should still be public (identified, not anonymous)."""
         response = await client.post(
             "/api/v1/portal/reports/",
             json={
@@ -79,11 +79,36 @@ class TestPortalAuth:
                 "title": "Test incident for auth verification",
                 "description": "This is a test incident to verify auth works",
                 "severity": "low",
-                "is_anonymous": True,
+                "is_anonymous": False,
+                "reporter_name": "Portal Auth Tester",
             },
         )
         # Portal submission is public
         assert response.status_code == 201
+
+    @pytest.mark.asyncio
+    async def test_portal_anonymous_submit_rejected(self, client):
+        """PX-312: anonymous portal submissions are hard-off."""
+        response = await client.post(
+            "/api/v1/portal/reports/",
+            json={
+                "report_type": "incident",
+                "title": "Anonymous must be rejected",
+                "description": "This must not create a case",
+                "severity": "low",
+                "is_anonymous": True,
+            },
+        )
+        assert response.status_code == 422
+        body = response.json()
+        error = body.get("error") or body.get("detail") or {}
+        if isinstance(error, dict):
+            code = error.get("code") or (error.get("detail") or {}).get("code")
+            message = error.get("message") or str(error)
+        else:
+            code, message = None, str(error)
+        assert code == "VALIDATION_ERROR"
+        assert "anonymous" in message.lower()
 
     @pytest.mark.asyncio
     async def test_incidents_list_requires_auth(self, client):
@@ -222,27 +247,23 @@ class TestReadYourWritesGuarantee:
         )
 
     @pytest.mark.asyncio
-    async def test_anonymous_report_not_in_my_reports(self, client, test_user_with_token):
-        """Anonymous reports should NOT appear in My Reports (no identity linkage)."""
+    async def test_anonymous_report_rejected_not_in_my_reports(self, client, test_user_with_token):
+        """PX-312: anonymous submit is refused; nothing appears in My Reports."""
         user, token = test_user_with_token
 
-        # Create anonymous incident
         create_response = await client.post(
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Anonymous test incident",
-                "description": "This should NOT appear in My Reports",
+                "description": "This should NOT create a report or appear in My Reports",
                 "severity": "low",
                 "is_anonymous": True,
             },
         )
 
-        assert create_response.status_code == 201
-        created = create_response.json()
-        reference_number = created["reference_number"]
+        assert create_response.status_code == 422
 
-        # Fetch My Reports
         my_reports_response = await client.get(
             "/api/v1/portal/my-reports/",
             headers={"Authorization": f"Bearer {token}"},
@@ -252,12 +273,8 @@ class TestReadYourWritesGuarantee:
             pytest.skip(f"My Reports token contract currently rejects test token: {my_reports_response.text}")
         assert my_reports_response.status_code == 200
         my_reports = my_reports_response.json()
-
-        # Verify anonymous report does NOT appear (correct behavior)
-        reference_numbers = [r["reference_number"] for r in my_reports["items"]]
-        assert (
-            reference_number not in reference_numbers
-        ), f"Anonymous report {reference_number} should NOT appear in My Reports"
+        titles = [r.get("title") for r in my_reports["items"]]
+        assert "Anonymous test incident" not in titles
 
     @pytest.mark.asyncio
     async def test_other_user_cannot_see_my_reports(self, client, test_user_with_token):
