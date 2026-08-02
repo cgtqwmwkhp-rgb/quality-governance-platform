@@ -219,7 +219,7 @@ async def test_semantic_search_skips_orphaned_vector_hits_and_returns_200(
     assert response.total == 1
     assert len(response.results) == 1
     assert response.results[0].document_id == 5
-    # Non-superuser tenant filter uses Pinecone's explicit $eq operator form.
+    # Tenant filter uses Pinecone's explicit $eq operator form.
     assert search_calls[0] == {"tenant_id": {"$eq": 3}}
 
 
@@ -252,6 +252,14 @@ async def test_semantic_search_skips_non_numeric_document_id_metadata(monkeypatc
 
 @pytest.mark.asyncio
 async def test_semantic_search_document_type_filter_uses_eq_operator(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The document_type filter keeps its $eq form and sits alongside the tenant filter.
+
+    This asserted ``{"document_type": ...}`` alone, which was only true because
+    the caller is a superuser and the tenant key was skipped for one. The
+    absence of the tenant key was never this test's subject — it belonged to the
+    B-13 leak the endpoint carried — so the expectation gains that key rather
+    than losing the assertion.
+    """
     db = _FakeSearchDb()
     current_user = SimpleNamespace(id=1, tenant_id=3, is_superuser=True)
     search_calls: list[dict] = []
@@ -272,7 +280,7 @@ async def test_semantic_search_document_type_filter_uses_eq_operator(monkeypatch
         document_type="policy",
     )
 
-    assert search_calls[0] == {"document_type": {"$eq": "policy"}}
+    assert search_calls[0] == {"tenant_id": {"$eq": 3}, "document_type": {"$eq": "policy"}}
 
 
 # =============================================================================

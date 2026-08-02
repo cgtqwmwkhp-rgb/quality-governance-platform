@@ -550,16 +550,26 @@ async def _get_document_or_404(
     current_user: CurrentUser,
     *,
     enforce_acl: bool = True,
+    allow_superuser_cross_tenant: bool = True,
 ) -> Document:
     """Load a document visible to the current user or raise 404.
 
-    A superuser may reach one named document in any tenant here — the by-id
-    exemption B-13 keeps for every register. ``semantic_search`` is the one
-    caller that reaches this in a loop, and its own cross-tenant leak is at the
-    vector-filter layer above; see the note there.
+    A superuser may reach one named document in any tenant by default — the
+    by-id exemption B-13 keeps for every register, and what opening, editing and
+    approving a single cross-tenant record depends on.
+
+    ``allow_superuser_cross_tenant=False`` withdraws that for the one caller
+    that reaches this in a loop over hits it did not name: ``semantic_search``.
+    Resolving a set of ids the caller never chose is enumeration wearing a by-id
+    lookup's clothes, so it takes the strict helper instead. Callers that pass
+    ``False`` must have already reached ``require_tenant_id`` themselves — see
+    the note in ``semantic_search`` about the 403 being swallowed otherwise.
     """
     query = select(Document).where(Document.id == document_id)
-    query = _scope_stmt_to_tenant_unless_superuser(query, Document.tenant_id, current_user)
+    if allow_superuser_cross_tenant:
+        query = _scope_stmt_to_tenant_unless_superuser(query, Document.tenant_id, current_user)
+    else:
+        query = _scope_stmt_to_current_tenant(query, Document.tenant_id, current_user)
     result = await db.execute(query)
     document = result.scalar_one_or_none()
     if not document:
@@ -1793,24 +1803,41 @@ async def semantic_search(
 ):
     """Semantic search across documents using AI embeddings.
 
-    Still spans every tenant for a superuser. Unlike the list and stats above,
-    the scoping here is a Pinecone metadata filter rather than a SQL predicate,
-    so removing the bypass needs the vector layer covered too; that is left for
-    its own change rather than half-done here.
+    Scoped to the caller's own tenant for every caller, superuser included
+    (B-13). This is an enumeration surface like ``list_documents``: the caller
+    supplies a phrase, not an id, so the same withdrawal applies. ``get_document``
+    keeps its superuser exemption, so one named cross-tenant document can still
+    be opened by id.
+
+    Two layers scope it, and both are load-bearing. The Pinecone metadata filter
+    below is what stops another tenant's chunk text reaching the response as a
+    ``content_preview``, and it is the only thing that can — the vector store is
+    the source of those strings, not the database. The SQL predicate on the
+    per-hit lookup is what catches a hit whose ``tenant_id`` metadata is stale
+    against the row it names, which is reachable today: reassigning a document's
+    tenant does not re-upsert its vectors.
     """
 
     import time
 
     start_time = time.time()
 
+    # No superuser bypass on the vector filter (B-13). Resolved before the
+    # embedding call so a tenantless caller gets the 403 the library list
+    # already gives them rather than paying for a query no filter can scope.
+    #
+    # This call also has to happen out here rather than only inside the loop
+    # below: the loop swallows HTTPException to skip orphaned hits, so a 403
+    # raised per-hit would be caught and downgraded to an empty 200.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+
     vector_service = VectorSearchService()
 
-    # Build filter
-    filter_dict: Optional[dict[str, Any]] = None
+    # Build filter. Indexing writes tenant_id as an int (index_job_service
+    # upserts `document.tenant_id or 0`), so the $eq operand is an int too.
+    filter_dict: dict[str, Any] = {"tenant_id": {"$eq": tenant_id}}
     if document_type:
-        filter_dict = {"document_type": {"$eq": document_type}}
-    if not current_user.is_superuser:
-        filter_dict = {**(filter_dict or {}), "tenant_id": {"$eq": current_user.tenant_id}}
+        filter_dict["document_type"] = {"$eq": document_type}
 
     # Search vectors
     matches = await vector_service.search(q, top_k=top_k, filter_dict=filter_dict)
@@ -1832,8 +1859,13 @@ async def semantic_search(
             # Get document info. Vectors can outlive their SQL row (hard delete,
             # tenant reassignment, ACL change) — orphaned hits must be skipped,
             # never allowed to 404/500 the whole search response.
+            #
+            # allow_superuser_cross_tenant=False: these ids come from the index,
+            # not from the caller, so the by-id exemption would hand a superuser
+            # back exactly the cross-tenant enumeration the vector filter above
+            # just withdrew, on any hit whose metadata disagrees with its row.
             try:
-                doc = await _get_document_or_404(db, doc_id, current_user)
+                doc = await _get_document_or_404(db, doc_id, current_user, allow_superuser_cross_tenant=False)
             except (NotFoundError, HTTPException):
                 doc = None
 
