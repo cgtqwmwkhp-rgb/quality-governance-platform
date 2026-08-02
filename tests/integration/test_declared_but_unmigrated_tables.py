@@ -37,8 +37,21 @@ Two of the sixteen were found by this module rather than pinned by it
 metadata from ``src/domain/models`` plus a fixed module list, so neither table was
 in it: they were absent from the migrated schema, absent from the exclusion
 register, and absent from every drift report. That pair is closed by C-67
-(models moved to domain + create migration ``20260903_push_notif``). The remaining
-entries below are still declared-but-unmigrated.
+(models moved to domain + create migration ``20260903_push_notif``).
+
+The register is empty as of 2026-09-07
+--------------------------------------
+All sixteen have create migrations now: the push pair in C-67, the seven
+document-control children in ``20260906_doc_ctl_children``, the seven IMS
+unification tables in ``20260907_ims_unification``, and ``root_cause_analyses``
+closed in C-14 by deleting the model instead. So (a), (b) and (c) parametrize
+over nothing and this module's weight rests on
+``TestTheBacklogIsNotOverstated.test_the_measured_count_is_the_declared_count``,
+which does not parametrize: it compares the app's entire metadata against the
+Alembic-built schema and fails on any table that is declared and not built. That
+assertion is strictly stronger with the register empty than it was with sixteen
+names in it, because there is no longer a list of absences it is allowed to
+tolerate.
 
 READ THIS BEFORE "FIXING" A FAILURE HERE
 ----------------------------------------
@@ -124,6 +137,11 @@ class TestTheTwoSchemasReallyDiffer:
 
         Read through the suite's own session rather than a fresh engine, so it is
         the database the endpoint tests use that is being described.
+
+        Both sides are empty since ``20260907_ims_unification``, so this asserts
+        nothing today. Kept because it is the statement that has to be re-derived
+        if a name ever goes back on the register, and rewriting it then is how the
+        wrong premise gets assumed rather than checked.
         """
         connection = await test_session.connection()
         harness_tables = await connection.run_sync(lambda sync_conn: set(sa.inspect(sync_conn).get_table_names()))
@@ -215,12 +233,14 @@ class TestTheEndpointIsGreenOnTheHarnessAnyway:
     way the pair is legible to the next reader.
 
     ``WITH_READER`` is empty since C-24 migrated the document-control children,
-    which were the only unmigrated tables anything read, so this parametrization
-    contributes zero cases. That is the condition being green, not the check being
-    switched off: a reader over an unmigrated table is the defect this module was
-    written for, and one reappearing brings the case back with it. It is not
-    asserted empty, because the register exists precisely so that such an entry
-    can be recorded with an owner rather than hidden.
+    which were the only unmigrated tables anything read, and
+    ``DECLARED_BUT_UNMIGRATED`` is empty since C-24 migrated the IMS unification
+    seven, so this parametrization contributes zero cases. That is the condition
+    being green, not the check being switched off: a reader over an unmigrated
+    table is the defect this module was written for, and one reappearing brings
+    the case back with it. It is not asserted empty, because the register exists
+    precisely so that such an entry can be recorded with an owner rather than
+    hidden.
     """
 
     @pytest.mark.parametrize("entry", WITH_READER, ids=_ids(WITH_READER))
@@ -260,6 +280,12 @@ class TestTheBacklogIsNotOverstated:
 
         The direction that matters: an unlisted absence is a table nobody knows is
         missing, which is the condition this whole module exists to end.
+
+        ``recorded`` is empty as of ``20260907_ims_unification``, so what this now
+        asserts is that the migration chain builds every table the application
+        declares -- all 230 of them, with no exemptions. It is the one assertion
+        here that got stronger as the register emptied, and it is what pins the
+        two C-24 migrations and the C-67 one from regressing.
         """
         metadata = _metadata()
         absent = {name for name in metadata.tables if not alembic_only_schema.has_table(name)}
@@ -309,9 +335,16 @@ class TestTheBacklogIsNotOverstated:
         """The inference that produced the wrong number, closed off.
 
         The published drift inventory contains zero ``CreateTableOp``, which reads
-        as "no table is missing". It is not: every remaining declared-but-unmigrated
-        table is removed from the comparison by ``include_object``. Both make
-        ``CreateTableOp`` zero without making a single table exist.
+        as "no table is missing". It was not: every declared-but-unmigrated table
+        was removed from the comparison by ``include_object``, so the zero was a
+        property of the filter rather than of the schema.
+
+        As of ``20260907_ims_unification`` the zero is finally the schema's:
+        ``recorded`` is empty, so this subtraction is empty too and the assertion
+        holds trivially. The inference it forbids -- reading "no absent tables"
+        off a zero ``CreateTableOp`` -- is still wrong for the same reason, which
+        is why the accounting stays here rather than being deleted along with the
+        entries that motivated it.
         """
         from scripts.ops.run025._models import alembic_check_excluded_tables
 

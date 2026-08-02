@@ -13,7 +13,21 @@
 > absence legible on a deployment that has not run the migration yet, and it is
 > the guard that stopped these endpoints returning 500. Everything below is the
 > record of the condition as measured on 2026-07-28, and the counts are of that
-> date. Nine of the sixteen remain absent; none of them has a reader.
+> date.
+>
+> **Extended, 2026-09-07 (C-24).** The seven IMS unification tables in §2 —
+> `ims_controls`, `ims_control_requirement_mappings`, `ims_objectives`,
+> `ims_process_maps`, `management_reviews`, `management_review_inputs` and
+> `unified_audit_plans` — are created by
+> `alembic/versions/20260907_create_ims_unification_tables.py`. Nothing read
+> them, so no disclosure existed for them and none was needed; what changes is
+> that they are now inside `alembic check` rather than deferred on the exclusion
+> register. Of the sixteen, `root_cause_analyses` was closed in C-14 by deleting
+> the model rather than building the table, and `escalation_rules` is an ORM name
+> for the migrated `escalation_rules_config` and was never a missing table. So no
+> table the application declares is absent from an Alembic-built schema any
+> more — see `DECLARED_BUT_UNMIGRATED` in
+> `tests/integration/_alembic_only_schema.py`, which is now empty.
 
 Sixteen tables the SQLAlchemy models declare are not in the database, seven of
 them confirmed absent in production. This document records which they are, how
