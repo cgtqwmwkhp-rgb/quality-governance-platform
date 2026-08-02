@@ -228,20 +228,30 @@ azure-core==1.41.0 \
     --hash=sha256:522b4011e8180b1a3dcd2024396a4e7fe9ac37fb8597db47163d230b5efe892d \
     --hash=sha256:f46ff5dfcd230f25cf1c19e8a34b8dc08a337b2503e268bb600a16c00db8ad5a
     # via
+    #   azure-core-tracing-opentelemetry
     #   azure-identity
+    #   azure-monitor-opentelemetry
     #   azure-monitor-opentelemetry-exporter
     #   azure-storage-blob
     #   msrest
+azure-core-tracing-opentelemetry==1.0.0b13 \
+    --hash=sha256:4dacd3a9f117f11f98e89305e161c951b8df85b984f3b56130614de9cd9887f9 \
+    --hash=sha256:6cb2f8dfd5dee6c11843db0205fc92e2434e1a272c169c953afe92483aafc7eb
+    # via azure-monitor-opentelemetry
 azure-identity==1.25.3 \
     --hash=sha256:ab23c0d63015f50b630ef6c6cf395e7262f439ce06e5d07a64e874c724f8d9e6 \
     --hash=sha256:f4d0b956a8146f30333e071374171f3cfa7bdb8073adb8c3814b65567aa7447c
     # via
     #   -r requirements.txt
     #   azure-monitor-opentelemetry-exporter
+azure-monitor-opentelemetry==1.8.2 \
+    --hash=sha256:efd9ac523a1bba06770a02ea2f98a383efd7035ff1d47c28e31e6cc73c99aa6a \
+    --hash=sha256:f7da4de1320486ce69a9e804fc5e5a5431643888afb1b7ded55d1fb80c89c9c0
+    # via -r requirements.txt
 azure-monitor-opentelemetry-exporter==1.0.0b45 \
     --hash=sha256:10d6363ac971fb4530511df464898fe69c0499e85841febad800572d1e8e8ec6 \
     --hash=sha256:b2d495b318710c521d6611cfb9cb4b36d990e3d613cf10ebdaa957099ddbe351
-    # via -r requirements.txt
+    # via azure-monitor-opentelemetry
 azure-storage-blob==12.19.0 \
     --hash=sha256:26c0a4320a34a3c2a1b74528ba6812ebcb632a04cd67b1c7377232c4b01a5897 \
     --hash=sha256:7bbc2c9c16678f7a420367fef6b172ba8730a7e66df7f4d7a55d5b3c8216615b
@@ -1382,12 +1392,21 @@ opentelemetry-api==1.44.0 \
     --hash=sha256:94b98c893a91b88657eaac1e3ba89618cdb85be6918196705354f34728b2cdef
     # via
     #   -r requirements.txt
+    #   azure-core-tracing-opentelemetry
     #   azure-monitor-opentelemetry-exporter
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-asgi
+    #   opentelemetry-instrumentation-dbapi
+    #   opentelemetry-instrumentation-django
     #   opentelemetry-instrumentation-fastapi
+    #   opentelemetry-instrumentation-flask
+    #   opentelemetry-instrumentation-psycopg2
     #   opentelemetry-instrumentation-redis
+    #   opentelemetry-instrumentation-requests
     #   opentelemetry-instrumentation-sqlalchemy
+    #   opentelemetry-instrumentation-urllib
+    #   opentelemetry-instrumentation-urllib3
+    #   opentelemetry-instrumentation-wsgi
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
 opentelemetry-instrumentation==0.65b0 \
@@ -1395,53 +1414,117 @@ opentelemetry-instrumentation==0.65b0 \
     --hash=sha256:ea967a72b9939b5fcfdad572753b4306c59dcb99e3f382d95dae04286805e137
     # via
     #   opentelemetry-instrumentation-asgi
+    #   opentelemetry-instrumentation-dbapi
+    #   opentelemetry-instrumentation-django
     #   opentelemetry-instrumentation-fastapi
+    #   opentelemetry-instrumentation-flask
+    #   opentelemetry-instrumentation-psycopg2
     #   opentelemetry-instrumentation-redis
+    #   opentelemetry-instrumentation-requests
     #   opentelemetry-instrumentation-sqlalchemy
+    #   opentelemetry-instrumentation-urllib
+    #   opentelemetry-instrumentation-urllib3
+    #   opentelemetry-instrumentation-wsgi
 opentelemetry-instrumentation-asgi==0.65b0 \
     --hash=sha256:3a845a8ebd1c4ef0d8263401e6545f5b219b2feee612090d50f578a87e71fd65 \
     --hash=sha256:892bca67c56522ffa85a8a83cf934d7b50b3be2132e45cbee705825f0a5ba426
     # via opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-dbapi==0.65b0 \
+    --hash=sha256:50b662578a6903b028e09b73f604de687752f5f904aa0ca032969157b29d60f2 \
+    --hash=sha256:da048bb683347ddad2f47344bacfe1e111bf7bfb2e5a39796b1083679ad4f0f3
+    # via opentelemetry-instrumentation-psycopg2
+opentelemetry-instrumentation-django==0.65b0 \
+    --hash=sha256:915117536c421c3e61e34dadbd373fc404447c7a786303e02f732bc8860e3ba0 \
+    --hash=sha256:f79914e03ccf7f34a4dfd257ea9fa1236a6568cd1756e5f969dc026252fad6e9
+    # via azure-monitor-opentelemetry
 opentelemetry-instrumentation-fastapi==0.65b0 \
     --hash=sha256:10a3a95486036230413a58fe4fdf4a83fa6bba46918407e527476994bd92bd97 \
     --hash=sha256:cda2610a0ec1b22d19886f33e4d861e9f5dbb886aeaa3a1263b47aff82c36943
-    # via -r requirements.txt
+    # via
+    #   -r requirements.txt
+    #   azure-monitor-opentelemetry
+opentelemetry-instrumentation-flask==0.65b0 \
+    --hash=sha256:887de3a97c09953da09ae713fbb777172900f33b2924d85dad314a033156ef66 \
+    --hash=sha256:d5337dac3b2af7f658fbc11c879667c9978910e38744b9706508f0b9908f7841
+    # via azure-monitor-opentelemetry
+opentelemetry-instrumentation-psycopg2==0.65b0 \
+    --hash=sha256:4eba60bef5f25d163a098109c2960773f3753e0b7e39824b9f398ba49ffab783 \
+    --hash=sha256:91880c7dbcd2b9cc62694894abed7f69fdad4bae472d1d3664a82650294f9836
+    # via azure-monitor-opentelemetry
 opentelemetry-instrumentation-redis==0.65b0 \
     --hash=sha256:7d135f61db9d72416e1f382012fbc13de6f5e726491bebd0344a9c42a60e6769 \
     --hash=sha256:f16409f189092984ff922f26939e7be79509365f5c9d202308c13fddf1368147
     # via -r requirements.txt
+opentelemetry-instrumentation-requests==0.65b0 \
+    --hash=sha256:1d601548f89236d5ab373c7208a2e1e162a8d6462b5b972f9ad8fb0ed82d7438 \
+    --hash=sha256:91688ec0d4d1fed75ea8d026ef2c66274ed9868c22b6be211ef85d832d16f957
+    # via azure-monitor-opentelemetry
 opentelemetry-instrumentation-sqlalchemy==0.65b0 \
     --hash=sha256:4d8a2e5afc7b505a48d05cb1fb6db5f8b31681814c1d7767bd6d4b5bdd3a3047 \
     --hash=sha256:8ec2e79f1e00808c5dc639ab5b2cfcdf9dcdef55efd6442c6019707fe2894028
     # via -r requirements.txt
+opentelemetry-instrumentation-urllib==0.65b0 \
+    --hash=sha256:8e7d1ada475296136815763bdabe683460969d09d93752c4f11ef0175598151c \
+    --hash=sha256:df1b79e50d6d59f4248acc659bbed0ada8ccc8a028ee915d3fdeaf9140672b87
+    # via azure-monitor-opentelemetry
+opentelemetry-instrumentation-urllib3==0.65b0 \
+    --hash=sha256:6345f5c38785801e1a112895967eabec4e1076e30ecc7e9bd2af87dffc541bf9 \
+    --hash=sha256:696f3a59f153f23771dfadc826b03c548a2a308984987da9a094aeae23d609ca
+    # via azure-monitor-opentelemetry
+opentelemetry-instrumentation-wsgi==0.65b0 \
+    --hash=sha256:af23e6686c7cd2abcd7d14ac03fb7e3b438273eb2d54a8f8dc401dc71bc52a9f \
+    --hash=sha256:d4a62ae98667ddfe04fe538c3c54abad538feb8c9c7a407ba19f016e1ce4a89a
+    # via
+    #   opentelemetry-instrumentation-django
+    #   opentelemetry-instrumentation-flask
+opentelemetry-resource-detector-azure==0.1.5 \
+    --hash=sha256:4dcc5d54ab5c3b11226af39509bc98979a8b9e0f8a24c1b888783755d3bf00eb \
+    --hash=sha256:e0ba658a87c69eebc806e75398cd0e9f68a8898ea62de99bc1b7083136403710
+    # via azure-monitor-opentelemetry
 opentelemetry-sdk==1.44.0 \
     --hash=sha256:cebe7f65dc12f26ead75c6064de12fd2a9052e5060c0272d402cfa203aae123b \
     --hash=sha256:df081c4c6bcfdb1211e3e86140376792643128a25f8d72d1d27675936e7e96ad
     # via
     #   -r requirements.txt
+    #   azure-monitor-opentelemetry
     #   azure-monitor-opentelemetry-exporter
+    #   opentelemetry-resource-detector-azure
 opentelemetry-semantic-conventions==0.65b0 \
     --hash=sha256:1cacde7b0ad306f84c5ef08c3dbe1bbaf20165bba6f8bff43b670e555a086bcb \
     --hash=sha256:f9b2b81e9d5b64f11bc952075e7e9c7fb0aab075c7fd1c46d597f1b919852d60
     # via
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-asgi
+    #   opentelemetry-instrumentation-dbapi
+    #   opentelemetry-instrumentation-django
     #   opentelemetry-instrumentation-fastapi
+    #   opentelemetry-instrumentation-flask
     #   opentelemetry-instrumentation-redis
+    #   opentelemetry-instrumentation-requests
     #   opentelemetry-instrumentation-sqlalchemy
+    #   opentelemetry-instrumentation-urllib
+    #   opentelemetry-instrumentation-urllib3
+    #   opentelemetry-instrumentation-wsgi
     #   opentelemetry-sdk
 opentelemetry-util-http==0.65b0 \
     --hash=sha256:7553b606f963097cb190536dc30556cce85090692e471a422fff30ca29b04348 \
     --hash=sha256:84f82d826978bba416ab453460ff6a7391cdc3534c93a786595e4068680016b7
     # via
     #   opentelemetry-instrumentation-asgi
+    #   opentelemetry-instrumentation-django
     #   opentelemetry-instrumentation-fastapi
+    #   opentelemetry-instrumentation-flask
+    #   opentelemetry-instrumentation-requests
+    #   opentelemetry-instrumentation-urllib
+    #   opentelemetry-instrumentation-urllib3
+    #   opentelemetry-instrumentation-wsgi
 packaging==26.2 \
     --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
     --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661
     # via
     #   kombu
     #   opentelemetry-instrumentation
+    #   opentelemetry-instrumentation-flask
     #   opentelemetry-instrumentation-sqlalchemy
     #   wheel
 passlib[bcrypt]==1.7.4 \
@@ -2592,8 +2675,10 @@ wrapt==2.2.2 \
     --hash=sha256:fb18fc51e813df0d9c98049e3bf2298a5495a648602040e21fa3c7329371159e
     # via
     #   opentelemetry-instrumentation
+    #   opentelemetry-instrumentation-dbapi
     #   opentelemetry-instrumentation-redis
     #   opentelemetry-instrumentation-sqlalchemy
+    #   opentelemetry-instrumentation-urllib3
 yarl==1.24.5 \
     --hash=sha256:0055afc45e864b92729ac7600e2d102c17bef060647e74bca75fa84d66b9ff36 \
     --hash=sha256:0465ec8cedc2349b97a6b595ace64084a50c6e839eca40aa0626f38b8350e331 \
