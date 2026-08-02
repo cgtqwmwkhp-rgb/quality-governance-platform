@@ -39,12 +39,6 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 | `access_control_records` | IMS / ISO27001 | Plural ORM name without matching migrated table (or rename pending). |
 | `business_continuity_plans` | IMS / ISO27001 | Plural ORM name; migration/rename pending. |
 | `cross_standard_mappings` | IMS / ISO27001 | Cross-standard mapping ORM table; migration coverage pending. |
-| `document_access_logs` | Documents | Document access-log ORM table; migration coverage pending. |
-| `document_approval_actions` | Documents | Approval-action ORM table; migration coverage pending. |
-| `document_approval_instances` | Documents | Approval-instance ORM table; migration coverage pending. |
-| `document_approval_workflows` | Documents | Approval-workflow ORM table; migration coverage pending. |
-| `document_distributions` | Documents | Distribution ORM table; migration coverage pending. |
-| `document_training_links` | Documents | Training-link ORM table; migration coverage pending. |
 | `ims_control_requirement_mappings` | IMS / ISO27001 | IMS control↔requirement mapping ORM; migration coverage pending. |
 | `ims_controls` | IMS / ISO27001 | IMS controls ORM; migration coverage pending. |
 | `ims_objectives` | IMS / ISO27001 | IMS objectives ORM; migration coverage pending. |
@@ -55,7 +49,6 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 | `iso27001_controls` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `management_review_inputs` | IMS / ISO27001 | Management-review input ORM; migration coverage pending. |
 | `management_reviews` | IMS / ISO27001 | Management-review ORM; migration coverage pending. |
-| `obsolete_document_records` | Documents | Obsolete-document ORM; migration coverage pending. |
 | `security_incidents` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `soa_control_entries` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `supplier_security_assessments` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
@@ -100,8 +93,8 @@ Two separate mutes are in play, and only one of them is this list:
 
 | Mute | Mechanism | Measured on main (2026-07-29) |
 | --- | --- | --- |
-| Operation-type filter | `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` strips seven op types in `_filter_upgrade_ops` | 1060 operations across 209 tables reduced to 0 |
-| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 32 tables carrying 212 further operations, including 4 `AddColumnOp` |
+| Operation-type filter | `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` strips seven op types in `_filter_upgrade_ops` | 1058 operations across 209 tables reduced to 0 |
+| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 25 tables carrying 196 further operations, including 4 `AddColumnOp` |
 
 The op-type filter, not this list, is what makes the gate green: the exclusion list
 removes its tables from the comparison before any operation is generated for them,
@@ -187,4 +180,46 @@ across 33 tables to 212 across 32 — the 4 removed being the
 `docs/governance/alembic_drift_baseline.json` was regenerated with
 `scripts/validate_alembic_drift_ratchet.py --write-baseline --database-url ...`;
 the only change is the removal of those two `root_cause_analyses` entries.
+
+## 2026-09-06 the Documents cluster migrated and unfiltered (C-24)
+
+Removed the whole "Documents" owner group in one PR: `document_access_logs`,
+`document_approval_actions`, `document_approval_instances`,
+`document_approval_workflows`, `document_distributions`,
+`document_training_links`, `obsolete_document_records`.
+
+Unlike the eight names removed on 2026-07-29, these were not stale. Each one was
+declared by `src/domain/models/document_control.py`, absent from every
+Alembic-built schema, and — for six of the seven — read by
+`src/api/routes/document_control.py`, which is why the endpoints above them had
+to be taught to disclose the absence
+([`docs/ops/absent-table-disclosure.md`](../ops/absent-table-disclosure.md)). The
+deferral was real, so removing it needed a migration:
+`20260906_doc_ctl_children` creates all seven, shaped from
+`alembic.autogenerate` against a database at the previous head so that compare
+produces nothing for them.
+
+Measured on PostgreSQL 14.20 against a database built by `alembic upgrade head`:
+`before_filter` is unchanged at 1058 operations across 209 tables — the seven
+tables joined the comparison and contributed zero operations, which is the point
+— and the drift hidden by `include_object` falls from 212 operations across 32
+tables to 196 across 25. `alembic check` stays green with the seven names gone
+from the frozenset.
+
+The entries were deleted from `excluded_table_drift` and `excluded_tables` in
+`alembic_drift_baseline.json` rather than the whole file being regenerated. A
+full `--write-baseline` would also have tightened `complaints` and `incidents`
+from 4 `DropColumnOp` to 3, which this work did not cause and did not measure on
+the PostgreSQL 16 that CI runs; that pre-existing staleness is still reported as
+a warning on every run, on main as well as here.
+
+Row-level security was deliberately not extended to these tables. The three
+document tables under FORCE RLS got there through a dedicated expand migration
+plus a matching entry in `RLS_TABLES`
+(`src/infrastructure/middleware/tenant_context.py`), and
+`tests/integration/test_run026_rls_least_privilege_postgres.py` fails on a policy
+that is not registered there and on a registration with no policy. Two of the
+seven (`document_access_logs`, `obsolete_document_records`) declare `tenant_id`
+`NOT NULL` and so meet the TEN2 precondition the expand waves used; they are the
+obvious next candidates, and creating them here does not decide it.
 

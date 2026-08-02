@@ -15,10 +15,11 @@ from every deployment.
 
 The consequence is not that tests fail dishonestly. It is worse: they pass
 honestly, and their passing carries no information about production. A reachability
-test for an endpoint over an unmigrated table is green either way. Fourteen tables
-remain in that position on the current main (down from sixteen after C-67 migrated
-the push-notification pair), and endpoints over seven of them returned 500s in
-production while every gate was green.
+test for an endpoint over an unmigrated table is green either way. Seven tables
+remain in that position on the current main -- sixteen before C-67 migrated the
+push-notification pair and C-24 the document-control children -- and endpoints
+over the seven document-control tables returned 500s in production while every
+gate was green.
 
 The only way to say something true about production from CI is to hold a database
 the migrations built and ``create_all`` never touched, which is what this module
@@ -90,31 +91,15 @@ class UnmigratedTable:
 #: SQLAlchemy mapper configuration for the rest of the session.
 #:
 #: Measured against `alembic upgrade head` on PostgreSQL 14.20 and 16.14: app
-#: declares these 14 tables that the migration chain does not create. (The push
-#: notification pair that used to sit here was migrated in C-67 / 20260903_push_notif.)
+#: declares these 7 tables that the migration chain does not create. (The push
+#: notification pair that used to sit here was migrated in C-67 / 20260903_push_notif,
+#: and the seven document-control children in C-24 / 20260906_doc_ctl_children.)
 DECLARED_BUT_UNMIGRATED: tuple[UnmigratedTable, ...] = (
-    # Document control: seven tables behind a shipped menu item, no create
-    # migration. The endpoints over them now degrade explicitly rather than
-    # answering 500 (PR #1402 and the absent-table disclosure work), which is why
-    # `summary` and `workflows` still answer 200 -- but the tables are still not
-    # there, and a fresh deployment still cannot record a distribution.
-    UnmigratedTable(
-        "document_distributions",
-        "Documents",
-        "src/domain/models/document_control.py",
-        "/api/v1/document-control/summary",
-    ),
-    UnmigratedTable(
-        "document_approval_workflows",
-        "Documents",
-        "src/domain/models/document_control.py",
-        "/api/v1/document-control/workflows",
-    ),
-    UnmigratedTable("document_approval_instances", "Documents", "src/domain/models/document_control.py"),
-    UnmigratedTable("document_approval_actions", "Documents", "src/domain/models/document_control.py"),
-    UnmigratedTable("document_access_logs", "Documents", "src/domain/models/document_control.py"),
-    UnmigratedTable("document_training_links", "Documents", "src/domain/models/document_control.py"),
-    UnmigratedTable("obsolete_document_records", "Documents", "src/domain/models/document_control.py"),
+    # The seven document-control child tables that used to head this tuple were
+    # migrated on 2026-09-06 by `20260906_doc_ctl_children` (C-24) and removed
+    # from the exclusion register in the same PR, so `alembic check` now compares
+    # them and this module has nothing left to say about them.
+    #
     # IMS unification: seven models with no migration and, as measured, no reader
     # anywhere in src/ either. Nothing is breaking; they are recorded so that
     # wiring a route to one of them is a visible decision rather than a 500.

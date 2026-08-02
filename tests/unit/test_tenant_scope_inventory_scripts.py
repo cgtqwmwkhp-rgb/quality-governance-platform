@@ -104,7 +104,10 @@ def test_excluded_tables_are_read_from_alembic_env():
     # `escalation_rules` is the last name in the frozenset literal, so this also
     # shows the parse reached the end of it rather than a leading fragment.
     assert "escalation_rules" in excluded
-    assert "obsolete_document_records" in excluded
+    # A mid-set name, so a parse that stopped early is caught as well as one that
+    # never started. `obsolete_document_records` held this role until C-24
+    # migrated it off the register.
+    assert "information_assets" in excluded
 
 
 def test_metadata_excludes_the_audit_template_collision_tables():

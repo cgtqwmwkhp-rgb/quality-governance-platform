@@ -78,12 +78,8 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         # controlled_documents / controlled_document_versions: unfiltered — covered by
         # document_control tenancy migrations (20260710+) + TEN2 NOT NULL wave.
         "cross_standard_mappings",
-        "document_access_logs",
-        "document_approval_actions",
-        "document_approval_instances",
-        "document_approval_workflows",
-        "document_distributions",
-        "document_training_links",
+        # The seven document-control child tables were unfiltered on 2026-09-06:
+        # 20260906_doc_ctl_children creates them, so compare has both sides.
         "ims_control_requirement_mappings",
         "ims_controls",
         "ims_objectives",
@@ -94,7 +90,6 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         "iso27001_controls",
         "management_review_inputs",
         "management_reviews",
-        "obsolete_document_records",
         "security_incidents",
         "soa_control_entries",
         "supplier_security_assessments",

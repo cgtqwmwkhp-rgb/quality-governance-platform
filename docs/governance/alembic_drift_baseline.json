@@ -35,30 +35,6 @@
       "AlterColumnOp": 1,
       "DropIndexOp": 2
     },
-    "document_access_logs": {
-      "CreateIndexOp": 3,
-      "CreateTableOp": 1
-    },
-    "document_approval_actions": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
-    "document_approval_instances": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
-    "document_approval_workflows": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
-    "document_distributions": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
-    "document_training_links": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
     "escalation_rules": {
       "CreateIndexOp": 2,
       "CreateTableOp": 1
@@ -114,10 +90,6 @@
       "CreateIndexOp": 1,
       "CreateTableOp": 1
     },
-    "obsolete_document_records": {
-      "CreateIndexOp": 1,
-      "CreateTableOp": 1
-    },
     "risk_audit_mapping": {
       "DropIndexOp": 2,
       "DropTableOp": 1
@@ -167,12 +139,6 @@
     "audit_section_clause_mapping",
     "business_continuity_plans",
     "cross_standard_mappings",
-    "document_access_logs",
-    "document_approval_actions",
-    "document_approval_instances",
-    "document_approval_workflows",
-    "document_distributions",
-    "document_training_links",
     "escalation_rules",
     "escalation_rules_config",
     "ims_control_requirement_mappings",
@@ -185,7 +151,6 @@
     "iso27001_controls",
     "management_review_inputs",
     "management_reviews",
-    "obsolete_document_records",
     "risk_audit_mapping",
     "risk_clause_mapping",
     "risk_control_mapping",
