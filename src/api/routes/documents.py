@@ -507,11 +507,30 @@ class ExtractedDocumentContent:
 
 
 def _scope_stmt_to_current_tenant(stmt, tenant_column, current_user: CurrentUser):
-    """Apply tenant scoping unless the caller is a superuser; require tenant for others."""
-    if current_user.is_superuser:
-        return stmt
+    """Scope a statement to the caller's own tenant — every caller, superuser included.
+
+    This is the helper the surfaces that enumerate or aggregate the library use
+    (``list_documents``, ``get_document_stats``). It deliberately never reads the
+    superuser flag: a tenantless caller gets the same 403 a tenantless
+    non-superuser already got rather than the whole estate.
+
+    Single-record administration keeps its exemption through
+    :func:`_scope_stmt_to_tenant_unless_superuser`.
+    """
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     return stmt.where(tenant_column == tenant_id)
+
+
+def _scope_stmt_to_tenant_unless_superuser(stmt, tenant_column, current_user: CurrentUser):
+    """Scope a single-record lookup, letting a superuser reach one row in any tenant.
+
+    Only ``_get_document_or_404`` uses this. Opening, editing and approving one
+    named document across tenants is the administrative capability B-13 keeps;
+    listing and counting the estate is not.
+    """
+    if bool(getattr(current_user, "is_superuser", False)):
+        return stmt
+    return _scope_stmt_to_current_tenant(stmt, tenant_column, current_user)
 
 
 async def _taxonomy_id_for_document(db: DbSession, document: Document) -> str | None:
@@ -532,9 +551,15 @@ async def _get_document_or_404(
     *,
     enforce_acl: bool = True,
 ) -> Document:
-    """Load a document visible to the current user or raise 404."""
+    """Load a document visible to the current user or raise 404.
+
+    A superuser may reach one named document in any tenant here — the by-id
+    exemption B-13 keeps for every register. ``semantic_search`` is the one
+    caller that reaches this in a loop, and its own cross-tenant leak is at the
+    vector-filter layer above; see the note there.
+    """
     query = select(Document).where(Document.id == document_id)
-    query = _scope_stmt_to_current_tenant(query, Document.tenant_id, current_user)
+    query = _scope_stmt_to_tenant_unless_superuser(query, Document.tenant_id, current_user)
     result = await db.execute(query)
     document = result.scalar_one_or_none()
     if not document:
@@ -1179,6 +1204,11 @@ async def list_documents(
     Requires ``document:read``, the staff-level token of the library permission
     model in :mod:`src.domain.services.document_library_rbac`. Per-document ACL
     narrowing still applies below on top of it.
+
+    Scoped to the caller's own tenant for every caller, superuser included
+    (B-13). ``get_document`` keeps its superuser exemption, so one named
+    cross-tenant document can still be opened by id; only enumerating the
+    library is withdrawn.
     """
 
     query = select(Document).where(Document.is_active == True)
@@ -1761,7 +1791,13 @@ async def semantic_search(
     top_k: int = Query(10, ge=1, le=50),
     document_type: Optional[str] = None,
 ):
-    """Semantic search across documents using AI embeddings."""
+    """Semantic search across documents using AI embeddings.
+
+    Still spans every tenant for a superuser. Unlike the list and stats above,
+    the scoping here is a Pinecone metadata filter rather than a SQL predicate,
+    so removing the bypass needs the vector layer covered too; that is left for
+    its own change rather than half-done here.
+    """
 
     import time
 
@@ -1914,7 +1950,11 @@ async def get_document_stats(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get document library statistics."""
+    """Get document library statistics.
+
+    Scoped to the caller's own tenant for every caller, superuser included, so
+    these totals describe the same population ``list_documents`` pages through.
+    """
 
     # Total documents
     total_query = _scope_stmt_to_current_tenant(select(func.count(Document.id)), Document.tenant_id, current_user)

@@ -814,6 +814,11 @@ def test_route_source_guards_drop_null_inclusive_list_patterns():
 
     src = inspect.getsource(documents._scope_stmt_to_current_tenant)
     assert "require_tenant_id" in src
+    # This assertion is the one the B-13 documents fix added: the helper used to
+    # demand a tenant *and* return the statement unscoped for a superuser, so
+    # the `require_tenant_id` check above passed while the library list and the
+    # stats panel spanned every tenant.
+    assert "is_superuser" not in src
 
     src = inspect.getsource(complaints.list_complaints)
     assert "require_tenant_id" in src
@@ -865,3 +870,158 @@ def test_require_tenant_id_still_403():
     with pytest.raises(HTTPException) as exc:
         require_tenant_id(None)
     assert exc.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# The document library (B-13 sibling of the registers above)
+#
+# `documents._scope_stmt_to_current_tenant` returned the statement unscoped for
+# a superuser, so `GET /api/v1/documents/` and `GET /api/v1/documents/stats/
+# overview` spanned every tenant — the same defect as the registers, hidden one
+# level down in a shared helper rather than written inline in the handler.
+#
+# The helper now scopes unconditionally and a second, separately named helper
+# carries the by-id exemption, so the two capabilities cannot be confused: the
+# strict one is what every enumerating and aggregating surface reaches, and the
+# lenient one has exactly one caller.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_documents_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    await documents_routes.list_documents(db=db, current_user=_superuser(77), page=1, page_size=20)
+
+    assert len(statements) == 2, "expected the count query and the page query"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_documents_list_requires_tenant_for_a_superuser():
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    with pytest.raises(HTTPException) as exc:
+        await documents_routes.list_documents(db=db, current_user=_superuser(None), page=1, page_size=20)
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_documents_list_ignores_a_superuser_flag_on_every_filter():
+    """The query parameters must not reopen the bypass.
+
+    Each filter appends a predicate after the tenant filter, and `search` adds
+    an `OR` group of its own. Exercising them together pins that none of them
+    rebuilds the statement from an unscoped `select(Document)`.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    await documents_routes.list_documents(
+        db=db,
+        current_user=_superuser(77),
+        page=1,
+        page_size=20,
+        search="pump",
+        document_type="policy",
+        category="safety",
+        category_id=3,
+        site_location_id=4,
+        department="hseq",
+        status="approved",
+        is_indexed=True,
+    )
+
+    assert len(statements) == 2
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_document_stats_scope_a_superuser_to_their_own_tenant():
+    """Every sub-query is asserted, not a nominated one.
+
+    The overview builds five statements across two tables (`documents` and
+    `document_chunks`); a sixth added later without the helper is the way this
+    leak returns.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db()
+
+    await documents_routes.get_document_stats(db=db, current_user=_superuser(77))
+
+    assert len(statements) == 5, "every stats sub-query must be accounted for"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_document_stats_require_tenant_for_a_superuser():
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await documents_routes.get_document_stats(db=db, current_user=_superuser(None))
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_documents_by_id_lookup_keeps_the_superuser_exemption():
+    """The capability this change must NOT take away.
+
+    Withdrawing enumeration while leaving single-record administration intact is
+    the whole shape of B-13. Without this test a later tidy-up that pointed
+    `_get_document_or_404` at the strict helper would look like an improvement.
+    """
+    from src.api.routes import documents as documents_routes
+
+    statements: list = []
+    document = SimpleNamespace(id=5, tenant_id=999, access_level=None, category_id=None)
+
+    async def execute(statement):
+        statements.append(statement)
+        return SimpleNamespace(scalar_one_or_none=lambda: document)
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=execute))
+
+    loaded = await documents_routes._get_document_or_404(db, 5, _superuser(77))
+
+    assert loaded is document
+    # The selected column list names TENANT_ID on every row, so only the
+    # predicate is examined.
+    where = " ".join(_sql(statements[0]).split()).split(" WHERE ", 1)[1]
+    assert "TENANT_ID" not in where, "a superuser must still reach one document in any tenant by id"
+
+
+def test_documents_tenant_scope_helper_never_branches_on_a_superuser():
+    """Pin the shape as well as the behaviour.
+
+    The bypass lived in this helper for every caller at once, so a conditional
+    reappearing here is worth catching directly rather than only through the
+    handlers that happen to be exercised above. Asserted two ways because the
+    flag is read as an attribute in some routes and through a `getattr` string
+    in others, and only one of those is an attribute node.
+    """
+    from src.api.routes import documents
+
+    source = inspect.getsource(documents._scope_stmt_to_current_tenant)
+    assert "is_superuser" not in source
+    tree = ast.parse(source)
+    assert not [node for node in ast.walk(tree) if isinstance(node, ast.If)]
+    assert "require_tenant_id" in ast.dump(tree)
+
+    # The exemption is allowed to exist, but only where it is named as one.
+    lenient = inspect.getsource(documents._scope_stmt_to_tenant_unless_superuser)
+    assert "is_superuser" in lenient
+    by_id = inspect.getsource(documents._get_document_or_404)
+    assert "_scope_stmt_to_tenant_unless_superuser" in by_id
