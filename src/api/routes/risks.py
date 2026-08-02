@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import ColumnElement, and_, func, select, true
+from sqlalchemy import ColumnElement, and_, func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -183,9 +183,8 @@ async def list_risks(
     # No superuser bypass on the register list (B-13). ``risks`` is a FORCE-RLS
     # table of C3-confidential rows whose policies are inert while the app
     # connects as a rolbypassrls role, so this predicate is the only thing
-    # scoping the read. ``/risks/statistics`` and ``/risks/matrix`` still count
-    # every tenant for a superuser; that divergence is real and deliberately
-    # left for its own change rather than widened here.
+    # scoping the read. ``/risks/statistics`` and ``/risks/matrix`` are scoped
+    # the same way, so the aggregates and this page describe one population.
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     query = apply_tenant_filter(query, Risk, tenant_id)
 
@@ -286,12 +285,17 @@ async def get_risk_statistics(
     db: DbSession,
     current_user: CurrentUser,
 ) -> RiskStatistics:
-    """Get risk register statistics."""
-    if current_user.is_superuser:
-        tf: ColumnElement[bool] = true()
-    else:
-        tid = require_tenant_id(getattr(current_user, "tenant_id", None))
-        tf = Risk.tenant_id == tid
+    """Get risk register statistics.
+
+    Scoped to the caller's own tenant for every caller, superuser included, so
+    these aggregates describe the same population ``list_risks`` pages through.
+    """
+    # No superuser bypass on the aggregates (B-13). #1513 scoped the register
+    # list unconditionally and left this divergence open: a tenant-bound
+    # superuser read their own risks in the list and every tenant's in the
+    # statistics beside it, so the two surfaces disagreed about one question.
+    tid = require_tenant_id(getattr(current_user, "tenant_id", None))
+    tf: ColumnElement[bool] = Risk.tenant_id == tid
 
     # Total and active risks
     total_result = await db.execute(select(func.count()).select_from(Risk).where(tf))
@@ -361,12 +365,13 @@ async def get_risk_matrix(
     db: DbSession,
     current_user: CurrentUser,
 ) -> RiskMatrixResponse:
-    """Get the risk matrix with risk counts per cell."""
-    if current_user.is_superuser:
-        tf: ColumnElement[bool] = true()
-    else:
-        tid = require_tenant_id(getattr(current_user, "tenant_id", None))
-        tf = Risk.tenant_id == tid
+    """Get the risk matrix with risk counts per cell.
+
+    Scoped to the caller's own tenant for every caller, superuser included, for
+    the same reason as ``get_risk_statistics``.
+    """
+    tid = require_tenant_id(getattr(current_user, "tenant_id", None))
+    tf: ColumnElement[bool] = Risk.tenant_id == tid
     # Get risk counts by likelihood and impact
     result = await db.execute(
         select(Risk.likelihood, Risk.impact, func.count())

@@ -685,6 +685,101 @@ async def test_risks_list_ignores_a_superuser_flag_on_every_other_filter():
         _assert_exact_tenant_sql(_sql(stmt), 77)
 
 
+# ---------------------------------------------------------------------------
+# The aggregates beside the register (B-13 follow-up to #1513)
+#
+# `get_risk_statistics` and `get_risk_matrix` kept the bypass #1513 removed from
+# `list_risks`, spelled `tf = true()` rather than as a skipped filter call. A
+# tenant-bound superuser therefore paged a scoped register and read every
+# tenant's totals in the statistics and matrix beside it, so the two surfaces
+# answered the same question differently.
+#
+# Both handlers thread one predicate through several statements, so every
+# statement they execute is asserted rather than a nominated one: an eighth
+# sub-query added later without the predicate is the way this leak returns.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_risk_statistics_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db()
+
+    await risks_routes.get_risk_statistics(db=db, current_user=_superuser(77))
+
+    assert len(statements) == 7, "every statistics sub-query must be accounted for"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_risk_statistics_requires_tenant_for_a_superuser():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await risks_routes.get_risk_statistics(db=db, current_user=_superuser(None))
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_risk_matrix_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db()
+
+    await risks_routes.get_risk_matrix(db=db, current_user=_superuser(77))
+
+    assert len(statements) == 1
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_risk_matrix_requires_tenant_for_a_superuser():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await risks_routes.get_risk_matrix(db=db, current_user=_superuser(None))
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+def test_risk_aggregate_routes_never_branch_on_superuser():
+    """Neither aggregate may read `is_superuser` at all.
+
+    The behavioural tests above pin what the current statements do; this pins
+    the shape, because the bypass was originally written as `tf = true()` and
+    would be just as easy to reintroduce as an unfiltered `select` guarded by a
+    fresh conditional. `list_risks` is pinned by
+    `test_list_route_tenant_filters_are_never_reached_conditionally` instead —
+    it applies the shared helper, which these two cannot, because one predicate
+    is reused across several differently-shaped aggregate statements.
+    """
+    from src.api.routes import risks
+
+    for handler in (risks.get_risk_statistics, risks.get_risk_matrix):
+        source = inspect.getsource(handler)
+        # Substring rather than AST here: the flag was read two ways across
+        # these routes (`current_user.is_superuser` and a `getattr` string),
+        # and only one of those is an attribute node.
+        assert "is_superuser" not in source, (
+            f"{handler.__name__} reads is_superuser; the aggregates must describe "
+            "the same population as the register list for every caller"
+        )
+        tree = ast.parse(source)
+        conditional = [node for node in ast.walk(tree) if isinstance(node, ast.If)]
+        assert not any(
+            "require_tenant_id" in ast.dump(node) for node in conditional
+        ), f"{handler.__name__} demands a tenant only on some path"
+        assert "require_tenant_id" in ast.dump(tree), f"{handler.__name__} no longer demands a tenant at all"
+
+
 def test_apply_tenant_filter_pattern_on_models():
     """Sanity: shared helper exact-match SQL for models used by fixed routes."""
     for model, tid in ((AuditTemplate, 1), (AuditRun, 2), (AuditFinding, 3), (Risk, 4), (IncidentRunningSheetEntry, 5)):
