@@ -10,6 +10,12 @@ page of zeros that is indistinguishable from real data.
 This was found in CI rather than in review: `legacy_key_risk_indicators` is
 missing `created_by_id` on a migrated PostgreSQL database, and that one drifted
 column was enough to zero every tile and every trend series that ran after it.
+
+Scope note (C-8): the session double here has no ``begin_nested``, so what these
+two tests now pin is the *fallback* — the full rollback the service keeps for a
+session that cannot open a savepoint. Production sessions can, and that path is
+covered by ``test_executive_dashboard_savepoint_isolation.py``. Both must hold:
+this file says recovery happens at all, that one says it stays scoped.
 """
 
 from typing import Any, List
