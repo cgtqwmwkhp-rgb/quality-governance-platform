@@ -206,11 +206,11 @@ PUBLIC_BY_DESIGN: Mapping[EndpointKey, str] = MappingProxyType(
 #: Endpoints that authenticate and then authorise nothing.
 #:
 #: Grouped by the module that serves them, sorted, and exact. This is the C-2
-#: measurement: 466 endpoints on which any authenticated user may perform the
+#: measurement: 465 endpoints on which any authenticated user may perform the
 #: operation, down from the 474 first measured — RTA, document, actions and
-#: operational-risk register lists, and copilot knowledge authoring, now check a
-#: permission. Reducing it further is the follow-up work; the ceiling below is
-#: what stops it growing while that happens.
+#: operational-risk register lists, copilot knowledge authoring, and semantic
+#: document search, now check a permission. Reducing it further is the follow-up
+#: work; the ceiling below is what stops it growing while that happens.
 AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
     {
         # src.api.routes.actions
@@ -396,7 +396,6 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/document-control/{document_id}/versions/{version_id}/diff"),
         # src.api.routes.documents
         ("GET", "/api/v1/documents/index-jobs/{job_id}"),
-        ("GET", "/api/v1/documents/search/semantic"),
         ("GET", "/api/v1/documents/stats/overview"),
         ("GET", "/api/v1/documents/{document_id}"),
         ("GET", "/api/v1/documents/{document_id}/annotations"),
@@ -764,7 +763,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: "add my new route to the list". Lowering one is ordinary progress; raising one
 #: is a deliberate decision that a reviewer sees as a changed number in a file
 #: about unprotected endpoints.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 466
+MAX_AUTHENTICATED_ONLY_DEBT: int = 465
 MAX_PUBLIC_BY_DESIGN: int = 50
 
 #: Endpoints gated on ``CurrentSuperuser`` rather than on a named permission,
