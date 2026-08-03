@@ -26,6 +26,8 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
+import sqlalchemy as sa
+from sqlalchemy import create_engine
 
 from src.api.schemas.complaint import ComplaintCreate
 from src.api.schemas.near_miss import SHARED_SEVERITY_PATTERN, NearMissCreate, NearMissUpdate
@@ -185,3 +187,105 @@ class TestNearMissPriorityProjection:
     def test_every_shared_value_projects_onto_the_priority_constraint(self):
         allowed = _check_constraint_values(NearMiss, "ck_near_misses_priority")
         assert {near_miss_priority_for_severity(value) for value in EXPECTED} <= allowed
+
+
+# ---------------------------------------------------------------------------
+# Constraint half — known alias remap, then refuse unknown
+# ---------------------------------------------------------------------------
+
+
+def _constraint_scratch():
+    """Minimal tables for the CHECK-constraint half of ``20260911_shared_severity``."""
+    engine = create_engine("sqlite://")
+    connection = engine.connect()
+    connection.exec_driver_sql("CREATE TABLE complaints (id INTEGER PRIMARY KEY, priority TEXT)")
+    connection.exec_driver_sql("CREATE TABLE near_misses (id INTEGER PRIMARY KEY, potential_severity TEXT)")
+    return connection
+
+
+def _wire_op(module: ModuleType, connection, monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    """Point the migration's ``op`` at ``connection``; capture constraint creates."""
+    created: list[tuple] = []
+
+    monkeypatch.setattr(module.op, "get_bind", lambda: connection)
+    monkeypatch.setattr(module, "_has_table", lambda table: True)
+    monkeypatch.setattr(module, "_has_constraint", lambda table, name: False)
+    monkeypatch.setattr(module.op, "drop_constraint", lambda *args, **kwargs: None, raising=False)
+    monkeypatch.setattr(
+        module.op,
+        "create_check_constraint",
+        lambda name, table, predicate: created.append((name, table, predicate)),
+        raising=False,
+    )
+    return created
+
+
+class TestKnownSeverityAliasRemap:
+    """Prod blocker: one ``near_misses`` row held ``extreme``; remap then constrain."""
+
+    def test_the_alias_map_is_only_the_locked_decision(self):
+        assert _load_migration().KNOWN_SEVERITY_ALIASES == {"extreme": "critical"}
+
+    @pytest.mark.parametrize("stored", ["extreme", "EXTREME", "Extreme"])
+    def test_extreme_remaps_then_the_constraint_applies(self, stored: str, monkeypatch: pytest.MonkeyPatch):
+        module = _load_migration()
+        with _constraint_scratch() as connection:
+            connection.execute(
+                sa.text("INSERT INTO near_misses (id, potential_severity) VALUES (1, :v)"),
+                {"v": stored},
+            )
+            created = _wire_op(module, connection, monkeypatch)
+
+            module._widen_check_constraints()
+
+            value = connection.execute(sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")).scalar_one()
+            assert value == "critical"
+            assert ("ck_nm_severity_values", "near_misses") == (
+                created[-1][0],
+                created[-1][1],
+            )
+            assert {name for name, _table, _pred in created} == {
+                "ck_complaints_priority",
+                "ck_nm_severity_values",
+            }
+
+    def test_extreme_on_complaints_priority_is_remapped_too(self, monkeypatch: pytest.MonkeyPatch):
+        module = _load_migration()
+        with _constraint_scratch() as connection:
+            connection.execute(sa.text("INSERT INTO complaints (id, priority) VALUES (1, 'EXTREME')"))
+            _wire_op(module, connection, monkeypatch)
+
+            module._widen_check_constraints()
+
+            assert (
+                connection.execute(sa.text("SELECT priority FROM complaints WHERE id = 1")).scalar_one() == "critical"
+            )
+
+    def test_urgent_still_raises_unconstrainable(self, monkeypatch: pytest.MonkeyPatch):
+        """Unknown values are not guessed — same refuse path as the original migration."""
+        module = _load_migration()
+        with _constraint_scratch() as connection:
+            connection.execute(sa.text("INSERT INTO near_misses (id, potential_severity) VALUES (1, 'urgent')"))
+            _wire_op(module, connection, monkeypatch)
+
+            with pytest.raises(module.UnconstrainableSeverityValuesError, match="urgent"):
+                module._widen_check_constraints()
+
+            assert (
+                connection.execute(sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")).scalar_one()
+                == "urgent"
+            )
+
+    def test_shared_values_are_left_alone(self, monkeypatch: pytest.MonkeyPatch):
+        module = _load_migration()
+        with _constraint_scratch() as connection:
+            connection.execute(sa.text("INSERT INTO near_misses (id, potential_severity) VALUES (1, 'high')"))
+            created = _wire_op(module, connection, monkeypatch)
+
+            module._widen_check_constraints()
+
+            assert (
+                connection.execute(sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")).scalar_one()
+                == "high"
+            )
+            assert len(created) == 2
