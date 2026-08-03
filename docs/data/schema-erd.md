@@ -570,7 +570,7 @@ These tables are children of the main entities above:
 | `workflow_instances` | `workflow_templates.id` | Running workflow instances |
 | `workflow_steps` | `workflow_instances.id` | Step execution records |
 | `approval_requests` | `workflow_steps.id` | Individual approval tasks |
-| `escalation_rules` | `workflow_templates.id` | Auto-escalation config |
+| `escalation_rules_config` | `workflow_templates.id` | Auto-escalation config |
 | `escalation_logs` | `workflow_instances.id` | Escalation event records |
 | `mentions` | `users.id` | @mention tracking |
 | `assignments` | `users.id` | Entity assignment tracking |
