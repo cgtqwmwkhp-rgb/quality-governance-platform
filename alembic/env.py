@@ -82,12 +82,14 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         # 20260906_doc_ctl_children creates them, so compare has both sides.
         # The seven IMS unification tables were unfiltered on 2026-09-07 for the
         # same reason: 20260907_ims_unification creates them.
+        # soa_control_entries was unfiltered on 2026-09-08: 20260908_soa_align
+        # adds the four columns the model declared and the model absorbed the six
+        # the database had, so the table now compares to zero operations.
         "ims_requirements",
         "information_assets",
         "information_security_risks",
         "iso27001_controls",
         "security_incidents",
-        "soa_control_entries",
         "supplier_security_assessments",
         # Junction / config tables present in DB without SQLAlchemy models
         "audit_finding_clause_mapping",

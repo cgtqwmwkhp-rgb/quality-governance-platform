@@ -89,14 +89,6 @@
       "DropConstraintOp": 1,
       "DropIndexOp": 3
     },
-    "soa_control_entries": {
-      "AddColumnOp": 4,
-      "AlterColumnOp": 1,
-      "CreateForeignKeyOp": 2,
-      "CreateIndexOp": 1,
-      "DropColumnOp": 6,
-      "DropConstraintOp": 1
-    },
     "supplier_security_assessments": {
       "AlterColumnOp": 8,
       "CreateForeignKeyOp": 1,
@@ -122,7 +114,6 @@
     "risk_control_mapping",
     "risk_incident_mapping",
     "security_incidents",
-    "soa_control_entries",
     "supplier_security_assessments"
   ],
   "tables": {

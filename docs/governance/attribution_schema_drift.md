@@ -55,9 +55,13 @@ database.
 | `workflow_rules` | `updated_by_id` | `GET`/`PATCH /workflow/rules/*`, escalation engine | fixed |
 | `sla_configurations` | `created_by_id`, `updated_by_id` | `GET`/`PATCH /workflow/sla-configs/*` | fixed |
 | `barrier_analyses` | `created_by_id`, `updated_by_id` | none — imported by `rca_tools` service but never queried | fixed anyway |
-| `soa_control_entries` | `justification`, `implementation_method`, `risk_treatment_reference`, `tenant_id` | none — `SoAControlEntry` is never queried; the dead import in `iso27001.py` is not a read path | **deferred** |
+| `soa_control_entries` | `justification`, `implementation_method`, `risk_treatment_reference`, `tenant_id` | none — `SoAControlEntry` is never queried; the dead import in `iso27001.py` is not a read path | deferred in Run026, **fixed 2026-09-08** |
 
-Fixed by `alembic/versions/20260902_attribution_columns_add.py`.
+The first eight were fixed by `alembic/versions/20260902_attribution_columns_add.py`.
+`soa_control_entries` was deferred to the IMS owner and settled later by
+`alembic/versions/20260908_soa_align.py` — see below. Nothing is deferred now:
+`DEFERRED_ABSENT_COLUMNS` is empty and `tests/unit/test_run026_deferral_register.py`
+pins it there.
 
 ### Why the model was right, for the 15
 
@@ -80,15 +84,15 @@ depending on which code wrote it. #1398 settled the principle. The new columns
 are NULL on every existing row and `created_by` is retained as the only
 attribution those rows have.
 
-### Why `soa_control_entries` is deferred, not fixed
+### Why `soa_control_entries` was deferred, and how it was settled (2026-09-08)
 
 Owner: **IMS / ISO27001**.
 
-This is not a table missing four columns. The physical table is a rename of the
-legacy singular `soa_control_entry` (its sequence, primary key and foreign keys
-still carry the singular name) and it holds a different design:
+This was never a table missing four columns. The physical table is a rename of
+the legacy singular `soa_control_entry` (its sequence, primary key and foreign
+keys still carry the singular name) and it holds a different design:
 
-| Model declares | Database has |
+| Model declared | Database had |
 | --- | --- |
 | `justification` | `inclusion_justification`, `exclusion_justification` |
 | `implementation_method` | `implementation_description` |
@@ -98,14 +102,38 @@ still carry the singular name) and it holds a different design:
 
 Which of the two justifications the model's single `justification` means is an
 IMS domain question, not a schema question, and guessing it would silently
-mis-file compliance evidence. Nothing is breaking while the owner decides:
-`SoAControlEntry` has no live read path. The deferral is registered in
-`DEFERRED_ABSENT_COLUMNS` in `audit_attribution_schema.py`, so the census reports
-it every run instead of hiding it, and the gate fails if anything is added to it
-without a decision.
+mis-file compliance evidence. Nothing was breaking while the owner decided:
+`SoAControlEntry` has no live read path.
 
-`soa_control_entries.tenant_id` is additionally a tenancy/RLS question and
-belongs with the `tenant_id` programme, not here.
+The decision, taken under #1526, is that **the database is authoritative for the
+live compliance columns**. So the convergence is additive on both sides and drops
+nothing. `20260908_soa_align` adds the four columns the model declared;
+`SoAControlEntry` absorbs the six the database had. Both designs now stand in
+both places.
+
+That deliberately leaves `justification` empty beside `inclusion_justification`
+and `exclusion_justification`, and `implementation_method` empty beside
+`implementation_description`. The IMS question is not answered here, it is
+made harmless: no evidence is copied from a column that means one thing into a
+column that may mean another. Deciding whether the two justification columns
+should ever collapse into one, and migrating the rows if so, is a separate data
+exercise for the same owner. The alternative autogenerate offered — six
+`DropColumnOp` — would have answered it by deleting the evidence.
+
+Two smaller alignments came with it: `implementation_status` was widened from
+`varchar(30)` to the model's `varchar(50)`, because widening a `varchar` in
+PostgreSQL is catalogue-only and cannot lose or reject a value where narrowing
+the model could; and the model now declares the `ON DELETE CASCADE` that the
+physical `control_id` foreign key has always had, rather than the migration
+dropping and recreating a live constraint so the metadata could look tidier.
+
+`tenant_id` arrives nullable, as the model declares it, and is **not**
+backfilled — there is no parent row to derive a tenant from that is not itself
+untenanted. Row-level security is unchanged: a nullable `tenant_id` does not meet
+the TEN2 precondition the RLS expand waves used, and a table under FORCE RLS
+needs its own migration plus an entry in `RLS_TABLES`. The tenancy question is
+still the `tenant_id` programme's, not this document's; what changed is only that
+the column now exists in both places.
 
 ## Drift 2: attribution columns with no foreign key
 
@@ -206,15 +234,19 @@ groups:
 | `supplier_security_assessments` | 12 |
 | `iso27001_controls` | 10 |
 | `security_incidents` | 7 |
-| `access_control_records`, `soa_control_entries` | 6 each |
+| `access_control_records` | 6 |
+| `soa_control_entries` | 6 at Run026; **0** since 2026-09-08 — all six absorbed into the model |
 | `complaints`, `incidents`, `statement_of_applicability` | 4 each |
 | `risks`, `users` | 3 each |
 | the 8 tables in drift 1 | `created_by`, `updated_by` |
 | `audit_questions`, `audit_responses`, `audit_sections` | `tenant_id` |
 
-Out of scope for Run026 and not fixed. The IMS/ISO27001 group is the same
+Out of scope for Run026 and not fixed there. The IMS/ISO27001 group is the same
 model-versus-migrated-design mismatch as `soa_control_entries` and belongs to
-that owner. The `audit_*.tenant_id` group is the blind spot already documented in
+that owner; `soa_control_entries` is the first of them to be settled, and the
+treatment it received — absorb the undeclared columns into the model, add the
+declared ones to the database, drop nothing — is the template for the rest under
+#1526. The `audit_*.tenant_id` group is the blind spot already documented in
 `tests/integration/_run025_prodsim.py`.
 
 ## Deliberately left alone
