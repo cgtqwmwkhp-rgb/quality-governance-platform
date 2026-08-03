@@ -13439,7 +13439,8 @@
           "critical",
           "high",
           "medium",
-          "low"
+          "low",
+          "negligible"
         ],
         "title": "ComplaintPriority",
         "type": "string"
@@ -30364,7 +30365,7 @@
           "potential_severity": {
             "anyOf": [
               {
-                "pattern": "^(low|medium|high|critical)$",
+                "pattern": "^(critical|high|medium|low|negligible)$",
                 "type": "string"
               },
               {
@@ -31034,7 +31035,7 @@
           "potential_severity": {
             "anyOf": [
               {
-                "pattern": "^(low|medium|high|critical)$",
+                "pattern": "^(critical|high|medium|low|negligible)$",
                 "type": "string"
               },
               {
@@ -31091,7 +31092,7 @@
           "status": {
             "anyOf": [
               {
-                "pattern": "^(reported|under_investigation|pending_actions|actions_in_progress|pending_review|closed)$",
+                "pattern": "^(REPORTED|UNDER_REVIEW|ACTION_REQUIRED|IN_PROGRESS|CLOSED)$",
                 "type": "string"
               },
               {
@@ -34215,7 +34216,7 @@
           },
           "severity": {
             "default": "medium",
-            "description": "Severity: low, medium, high, critical",
+            "description": "Severity: negligible, low, medium, high, critical",
             "title": "Severity",
             "type": "string"
           },

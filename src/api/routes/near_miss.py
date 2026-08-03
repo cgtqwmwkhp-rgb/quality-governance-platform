@@ -149,7 +149,7 @@ async def create_near_miss(
     near_miss = NearMiss(
         **payload,
         reference_number=reference_number,
-        status="reported",
+        status="REPORTED",
         priority="MEDIUM",
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
@@ -598,6 +598,7 @@ async def raise_risk_from_near_miss(
         )
 
     severity_impact = {
+        "negligible": 1,
         "low": 2,
         "medium": 3,
         "high": 4,

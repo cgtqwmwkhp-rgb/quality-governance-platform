@@ -38,6 +38,11 @@ def test_near_miss_update_rejects_invalid_potential_severity():
         NearMissUpdate(potential_severity="extreme")
 
 
+def test_near_miss_update_accepts_the_shared_negligible_severity():
+    """B-9 — the severity_levels dropdown offers it, so the field has to take it."""
+    assert NearMissUpdate(potential_severity="negligible").potential_severity == "negligible"
+
+
 def test_near_miss_update_rejects_empty_body():
     with pytest.raises(ValidationError, match="At least one field"):
         NearMissUpdate()
