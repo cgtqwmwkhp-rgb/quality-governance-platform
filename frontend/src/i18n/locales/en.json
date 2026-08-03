@@ -2776,6 +2776,7 @@
   "priority.high": "High",
   "priority.low": "Low",
   "priority.medium": "Medium",
+  "priority.negligible": "Negligible",
   "profile": "Profile",
   "refresh": "Refresh",
   "register.column.complainant": "Complainant",

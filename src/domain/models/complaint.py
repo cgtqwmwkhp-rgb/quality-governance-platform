@@ -32,6 +32,11 @@ class ComplaintType(str, enum.Enum):
     OTHER = "other"
 
 
+# One of the three fields the ``severity_levels`` lookup fills, so its members are
+# the shared severity set defined by IncidentSeverity (B-9). ``negligible`` was the
+# odd one out until then: the dropdown offered it, this enum did not have it, and
+# picking it returned 422. The docstring stays one line because FastAPI publishes it
+# as the OpenAPI description for the enum.
 class ComplaintPriority(str, enum.Enum):
     """Priority of complaint."""
 
@@ -39,6 +44,7 @@ class ComplaintPriority(str, enum.Enum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
+    NEGLIGIBLE = "negligible"
 
 
 class ComplaintStatus(str, enum.Enum):
@@ -67,7 +73,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
             name="ck_complaint_source_type",
         ),
         CheckConstraint(
-            "priority IN ('critical', 'high', 'medium', 'low')",
+            "priority IN ('critical', 'high', 'medium', 'low', 'negligible')",
             name="ck_complaints_priority",
         ),
         CheckConstraint(

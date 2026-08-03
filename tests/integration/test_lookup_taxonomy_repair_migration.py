@@ -30,7 +30,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from src.domain.services.lookup_enum_contract import ENUM_BACKED_LOOKUPS, lookup_for_category
+from src.domain.services.lookup_enum_contract import lookup_for_category
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20260831_realign_enum_lookups_and_dedupe_customers.py"
@@ -194,11 +194,22 @@ def _insert_lookup_options(tenant_id: int | None, rows, is_active: bool):
     return _apply
 
 
-CATEGORY_IDS = [lookup.category for lookup in ENUM_BACKED_LOOKUPS]
+# The categories *this* migration repairs. Not every enum-backed category is one:
+# ``severity_levels`` is realigned by 20260911_shared_severity instead, and is
+# covered by tests/integration/test_shared_severity_lookup_migration.py.
+CATEGORY_IDS = sorted(migration.ENUM_LOOKUP_DEFAULTS)
 
 
 class TestEnumRealignment:
     """PX-281/282, R22-01 — the dropdown ends up equal to the enum."""
+
+    def test_every_repaired_category_is_enum_backed(self):
+        """A category this migration reseeds must have an enum to be reseeded to."""
+        unregistered = [category for category in CATEGORY_IDS if lookup_for_category(category) is None]
+        assert not unregistered, (
+            f"{unregistered} are realigned by this migration but are not in ENUM_BACKED_LOOKUPS, "
+            "so nothing says what the codes below are supposed to be"
+        )
 
     @pytest.mark.parametrize("category", CATEGORY_IDS)
     async def test_dropdown_becomes_exactly_the_enum(self, scratch: ScratchDb, category: str):

@@ -48,6 +48,11 @@ from src.domain.services.rta_severity import (
     interpret_rta_yes_no_answer,
     read_reported_bool,
 )
+from src.domain.services.shared_severity import (
+    map_portal_severity,
+    near_miss_priority_for_severity,
+    normalize_portal_severity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +167,7 @@ class QuickReportCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=200, description="Brief title")
     description: str = Field(..., min_length=10, description="What happened?")
     location: Optional[str] = Field(None, max_length=PORTAL_LOCATION_MAX_LENGTH, description="Where did it occur?")
-    severity: str = Field(default="medium", description="Severity: low, medium, high, critical")
+    severity: str = Field(default="medium", description="Severity: negligible, low, medium, high, critical")
 
     # Reporter info (optional for anonymous). complainant_name is accepted as an alias
     # for complaint intake clients that use the staff-schema field name.
@@ -564,25 +569,15 @@ def staff_golden_thread_fields(
     }
 
 
-def map_severity(severity: str) -> tuple:
-    """Map simplified severity to model enums."""
-    severity_map = {
-        "low": (IncidentSeverity.LOW, ComplaintPriority.LOW),
-        "medium": (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM),
-        "high": (IncidentSeverity.HIGH, ComplaintPriority.HIGH),
-        "critical": (IncidentSeverity.CRITICAL, ComplaintPriority.CRITICAL),
-    }
-    return severity_map.get(severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM))
+def map_severity(severity: str) -> tuple[IncidentSeverity, ComplaintPriority]:
+    """Map the portal severity word onto the incident and complaint enums."""
+    return map_portal_severity(severity)
 
 
 _STATUS_LABELS = {
     "reported": "📋 Submitted",
     "open": "📋 Open",
     "under_investigation": "🔍 Under Investigation",
-    # Reachable on a near miss as well as an incident since N-2 aligned the two
-    # lifecycles; without these the track page falls back to the raw key.
-    "pending_actions": "📌 Pending Actions",
-    "actions_in_progress": "⚙️ Actions In Progress",
     "in_progress": "⚙️ In Progress",
     "pending_review": "👀 Pending Review",
     "resolved": "✅ Resolved",
@@ -591,6 +586,7 @@ _STATUS_LABELS = {
 }
 
 _PRIORITY_LABELS = {
+    "negligible": "⚪ Negligible",
     "low": "🟢 Low",
     "medium": "🟡 Medium",
     "high": "🟠 High",
@@ -1155,9 +1151,9 @@ def build_near_miss_portal_fields(
         "asset_number": reporter_submission.get("asset_number"),
         "asset_type": reporter_submission.get("asset_type"),
         "risk_category": reporter_submission.get("risk_category"),
-        "potential_severity": report.severity.lower(),
+        "potential_severity": normalize_portal_severity(report.severity),
         "is_hipo": is_hipo,
-        "status": "reported",
+        "status": "REPORTED",
         "priority": priority,
         "source_form_id": "portal_near_miss_v1",
         "tenant_id": resolved_tenant_id,
@@ -1868,14 +1864,7 @@ async def submit_quick_report(
         ref_number = await mint_portal_reference(db, "NM")
         tracking_code = generate_tracking_code(ref_number)
 
-        # Map severity to priority
-        priority_map = {
-            "low": "LOW",
-            "medium": "MEDIUM",
-            "high": "HIGH",
-            "critical": "CRITICAL",
-        }
-        priority = priority_map.get(report.severity.lower(), "MEDIUM")
+        priority = near_miss_priority_for_severity(report.severity)
 
         near_miss = NearMiss(
             reference_number=ref_number,
@@ -2261,6 +2250,12 @@ async def get_report_types():
             },
         ],
         "severity_levels": [
+            {
+                "id": "negligible",
+                "label": "Negligible",
+                "description": "No harm or loss, recorded for the trend",
+                "color": "#94a3b8",
+            },
             {
                 "id": "low",
                 "label": "Low",

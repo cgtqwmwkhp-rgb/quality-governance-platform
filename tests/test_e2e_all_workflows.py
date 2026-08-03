@@ -20,8 +20,11 @@ from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.schemas.near_miss import NearMissUpdate
+from src.domain.models.incident import IncidentSeverity
 from src.main import app
 
 # Create transport for ASGI app testing
@@ -283,16 +286,14 @@ class TestNearMissWorkflow:
     @pytest.mark.asyncio
     async def test_near_miss_status_workflow(self, auth_headers):
         """Test near miss status transitions."""
-        # The incident lifecycle, value for value, since N-2 aligned the two.
         valid_statuses = [
-            "reported",
-            "under_investigation",
-            "pending_actions",
-            "actions_in_progress",
-            "pending_review",
-            "closed",
+            "REPORTED",
+            "UNDER_REVIEW",
+            "ACTION_REQUIRED",
+            "IN_PROGRESS",
+            "CLOSED",
         ]
-        assert len(valid_statuses) == 6
+        assert len(valid_statuses) == 5
 
     @pytest.mark.asyncio
     async def test_near_miss_risk_categories(self, auth_headers):
@@ -307,11 +308,21 @@ class TestNearMissWorkflow:
         ]
         assert len(valid_categories) >= 6
 
-    @pytest.mark.asyncio
-    async def test_near_miss_severity_levels(self, auth_headers):
-        """Validate near miss severity levels."""
-        valid_severities = ["low", "medium", "high", "critical"]
-        assert len(valid_severities) == 4
+    def test_near_miss_severity_levels(self):
+        """Near-miss potential severity is the shared five-value set (B-9).
+
+        Asserted against the request schema rather than a literal list, because a
+        literal list agrees with itself no matter what the API does — which is how
+        ``negligible`` stayed unsubmittable here while the dropdown offered it.
+        """
+        shared = [member.value for member in IncidentSeverity]
+        assert sorted(shared) == sorted(["negligible", "low", "medium", "high", "critical"])
+
+        for severity in shared:
+            assert NearMissUpdate(potential_severity=severity).potential_severity == severity
+
+        with pytest.raises(ValidationError):
+            NearMissUpdate(potential_severity="extreme")
 
 
 class TestFormConfigWorkflow:

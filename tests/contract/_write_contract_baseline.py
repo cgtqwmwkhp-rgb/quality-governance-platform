@@ -19,9 +19,8 @@ Counts at the time of writing (build 5b18b60; Guard 3 refreshed after #1385):
   * unknown-field rejection ....... 296 of 296 write schemas do not reject
   * response/request symmetry ..... 37 of 61 readable resources, 185 fields
   * write-only request fields ..... 16 operations, 31 fields
-  * lookup/enum disagreement ...... 2 of 8 UI bindings, 2 unusable options
-    (``severity_levels`` → complaint priority / near-miss potential_severity:
-    ``negligible`` only; complaint_types / incident_types cleared)
+  * lookup/enum disagreement ...... 0 of 8 UI bindings (cleared: complaint_types
+    / incident_types in #1385, ``severity_levels`` in B-9)
 """
 
 from __future__ import annotations
@@ -481,12 +480,11 @@ KNOWN_UNREADABLE_REQUEST_FIELDS: dict[str, tuple[str, ...]] = {
 # codes a freshly seeded tenant offers in its form that the backend enum does
 # not contain, so choosing them is an unavoidable 422.
 #
-# ``complaint_types`` / ``incident_types`` were repaired in #1385 (PX-281/282,
-# R22-01) and are held by ``lookup_enum_contract`` + admin write guards — they
-# must not reappear here. Residual: ``severity_levels`` feeds three fields and
-# still offers ``negligible`` where complaint priority / near-miss potential
-# severity do not accept it (product decision pending).
-KNOWN_LOOKUP_ENUM_GAPS: dict[tuple[str, str, str], tuple[str, ...]] = {
-    ("severity_levels", "ComplaintCreate", "priority"): ("negligible",),
-    ("severity_levels", "NearMissCreate", "potential_severity"): ("negligible",),
-}
+# This backlog is empty, and there is machinery to keep it that way. All three
+# categories a UI binding points at — ``complaint_types`` / ``incident_types``
+# (repaired in #1385, PX-281/282, R22-01) and ``severity_levels`` (B-9, the
+# shared five-value severity set) — are registered in ``lookup_enum_contract``
+# and held by the seed test, the admin write guard and the integration probe.
+# ``test_enum_backed_categories_have_no_recorded_gaps`` fails if one is recorded
+# here again, so a regression has to be fixed rather than re-xfailed.
+KNOWN_LOOKUP_ENUM_GAPS: dict[tuple[str, str, str], tuple[str, ...]] = {}

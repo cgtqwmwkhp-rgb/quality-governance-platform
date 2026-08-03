@@ -718,6 +718,7 @@ async def raise_risk_from_complaint(
         raise NotFoundError(f"Complaint {complaint_id} not found")
 
     priority_impact = {
+        "negligible": 1,
         "low": 2,
         "medium": 3,
         "high": 4,

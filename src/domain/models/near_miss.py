@@ -14,16 +14,16 @@ class NearMiss(Base):
 
     __tablename__ = "near_misses"
     __table_args__ = (
+        # potential_severity is fed by the shared ``severity_levels`` lookup, so it
+        # carries the same five values as Incident.severity / Complaint.priority (B-9).
+        # ``priority`` below is a separate workflow scale and stays at four.
         CheckConstraint(
-            "potential_severity IN ('low', 'medium', 'high', 'critical') OR potential_severity IS NULL",
+            "potential_severity IN ('low', 'medium', 'high', 'critical', 'negligible') "
+            "OR potential_severity IS NULL",
             name="ck_nm_severity_values",
         ),
-        # The incident lifecycle, value for value (N-2). Enforced on deployed
-        # databases from 20260910_nm_status_align, which is also the migration
-        # that rewrote the legacy uppercase labels.
         CheckConstraint(
-            "status IN ('reported', 'under_investigation', 'pending_actions', "
-            "'actions_in_progress', 'pending_review', 'closed')",
+            "status IN ('REPORTED', 'UNDER_REVIEW', 'ACTION_REQUIRED', 'IN_PROGRESS', 'CLOSED')",
             name="ck_near_misses_status",
         ),
         CheckConstraint(
@@ -88,7 +88,8 @@ class NearMiss(Base):
     risk_category: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True
     )  # environmental, safety, equipment, etc.
-    potential_severity: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # low, medium, high, critical
+    # Shared severity set (see ck_nm_severity_values): negligible, low, medium, high, critical
+    potential_severity: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     # High Potential near miss — Excel "HiPo Near Miss?"; near-miss analogue of Incident.is_psif
     is_hipo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     linked_risk_ids: Mapped[Optional[str]] = mapped_column(
@@ -102,11 +103,8 @@ class NearMiss(Base):
     source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_near_miss_v1
 
     # Status workflow
-    status: Mapped[str] = mapped_column(String(50), default="reported", nullable=False, index=True)
-    # reported -> under_investigation -> pending_actions -> actions_in_progress
-    #          -> pending_review -> closed, with closed -> pending_review as the
-    # single reopen edge. Held as a string rather than an enum, but the values
-    # are IncidentStatus's; NEAR_MISS_TRANSITIONS is derived from the incident map.
+    status: Mapped[str] = mapped_column(String(50), default="REPORTED", nullable=False, index=True)
+    # REPORTED -> UNDER_REVIEW -> ACTION_REQUIRED -> IN_PROGRESS -> CLOSED
 
     priority: Mapped[str] = mapped_column(String(20), default="MEDIUM", nullable=False)
 
