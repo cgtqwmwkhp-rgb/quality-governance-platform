@@ -1,11 +1,10 @@
 # N-1: closed cases that predate the closure gate
 
-Owner: **Business** (QHSE / operations). Platform holds the measurement and the
-code, not the decision.
+Owner: **Jamie Uncle** (QHSE / operations). Platform holds the measurement and the
+code; the business decision is recorded below.
 
-Tracking: PX-333 in `docs/uat/QGP-Run021-Defect-Log.csv`, handed to the business
-under GitHub issue #1522 (walk-away definition B). Status on the register is
-**handed off**, which is not the same as fixed — see the bottom of this note.
+Tracking: PX-333 in `docs/uat/QGP-Run021-Defect-Log.csv`, under GitHub issue #1522
+(walk-away definition B).
 
 ## The gate that now exists
 
@@ -77,22 +76,19 @@ it back — and that they must then write the lessons learnt for an event that m
 be a year old, from whatever record survives. Anyone reopening a pre-gate case
 should expect to do that, or should not reopen it.
 
-## What would close N-1
+## Decision locked (2026-08-03)
 
-The business owns the choice, and there are only three honest endings:
+**Accept the estate as it stands.** David Harris directed that **all** historic
+closed cases below the current gate are grandfathered — keep every one as
+historical; do not remediate en masse and do not invent lessons learnt.
 
-- **Accept the estate as it stands.** Record the acceptance — who accepted it,
-  when, on what count — and this note becomes the permanent answer to an
-  auditor's question. Nothing is written to the records.
-- **Remediate case by case.** Someone with knowledge of each event writes the
-  lessons learnt and completes or cancels the three sets of outstanding actions.
-  Slow, and the only route that produces real evidence.
-- **Build an explicit grandfathering state.** A recorded, attributed,
-  per-case marker meaning "closed before the standard, accepted by X on date Y",
-  distinguishable in reporting from a case that meets the gate. This is the only
-  option that requires code, and it must not be implemented as a blanket
-  back-fill of `lessons_learnt`, which would erase the distinction it exists to
-  preserve.
+| Field | Value |
+| --- | --- |
+| Who | David Harris (programme) |
+| When | 2026-08-03 |
+| Count at measurement | 84 closed without lessons learnt; 3 incidents closed with incomplete actions (prod 2026-07-28) |
+| Written rule owner | Jamie Uncle — keep this note as the auditor-facing answer |
+| Code change | None — no back-fill, no force-close, no fabricated evidence |
 
 **What must not happen** is a bulk `UPDATE` that puts placeholder text into
 `lessons_learnt`, or a migration that marks the three incidents' actions
@@ -100,11 +96,5 @@ complete. Either one converts "we know these 84 records predate the standard"
 into "these 84 records meet the standard", which is a false statement in a
 compliance system, and it is unrecoverable — the original state is gone.
 
-## Handed off is not fixed
-
-`docs/uat/MASTER_DEFECT_REGISTER_STATUS_SYNC_2026-08-02.md` records the
-convention this note inherits: handing a programme item to the business closes
-the *programme* item, and the underlying condition may still be true in the
-data. It is, here. The 84 cases and the 3 incidents are as they were on
-2026-07-28 unless someone has since worked them, and this note makes no claim
-that anyone has. Re-measure before citing the numbers.
+The 84 cases and the 3 incidents remain as they were on 2026-07-28 unless
+someone has since worked them case-by-case. Re-measure before citing the numbers.
