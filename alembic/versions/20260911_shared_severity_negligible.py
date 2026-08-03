@@ -414,8 +414,7 @@ def _remap_known_severity_aliases(table: str, column: str) -> None:
     for alias, canonical in KNOWN_SEVERITY_ALIASES.items():
         result = bind.execute(
             sa.text(
-                f"UPDATE {table} SET {column} = :canonical "
-                f"WHERE {column} IS NOT NULL AND lower({column}) = :alias"
+                f"UPDATE {table} SET {column} = :canonical " f"WHERE {column} IS NOT NULL AND lower({column}) = :alias"
             ),
             {"canonical": canonical, "alias": alias},
         )

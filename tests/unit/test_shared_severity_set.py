@@ -198,12 +198,8 @@ def _constraint_scratch():
     """Minimal tables for the CHECK-constraint half of ``20260911_shared_severity``."""
     engine = create_engine("sqlite://")
     connection = engine.connect()
-    connection.exec_driver_sql(
-        "CREATE TABLE complaints (id INTEGER PRIMARY KEY, priority TEXT)"
-    )
-    connection.exec_driver_sql(
-        "CREATE TABLE near_misses (id INTEGER PRIMARY KEY, potential_severity TEXT)"
-    )
+    connection.exec_driver_sql("CREATE TABLE complaints (id INTEGER PRIMARY KEY, priority TEXT)")
+    connection.exec_driver_sql("CREATE TABLE near_misses (id INTEGER PRIMARY KEY, potential_severity TEXT)")
     return connection
 
 
@@ -242,9 +238,7 @@ class TestKnownSeverityAliasRemap:
 
             module._widen_check_constraints()
 
-            value = connection.execute(
-                sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")
-            ).scalar_one()
+            value = connection.execute(sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")).scalar_one()
             assert value == "critical"
             assert ("ck_nm_severity_values", "near_misses") == (
                 created[-1][0],
@@ -264,43 +258,34 @@ class TestKnownSeverityAliasRemap:
             module._widen_check_constraints()
 
             assert (
-                connection.execute(sa.text("SELECT priority FROM complaints WHERE id = 1")).scalar_one()
-                == "critical"
+                connection.execute(sa.text("SELECT priority FROM complaints WHERE id = 1")).scalar_one() == "critical"
             )
 
     def test_urgent_still_raises_unconstrainable(self, monkeypatch: pytest.MonkeyPatch):
         """Unknown values are not guessed — same refuse path as the original migration."""
         module = _load_migration()
         with _constraint_scratch() as connection:
-            connection.execute(
-                sa.text("INSERT INTO near_misses (id, potential_severity) VALUES (1, 'urgent')")
-            )
+            connection.execute(sa.text("INSERT INTO near_misses (id, potential_severity) VALUES (1, 'urgent')"))
             _wire_op(module, connection, monkeypatch)
 
             with pytest.raises(module.UnconstrainableSeverityValuesError, match="urgent"):
                 module._widen_check_constraints()
 
             assert (
-                connection.execute(
-                    sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")
-                ).scalar_one()
+                connection.execute(sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")).scalar_one()
                 == "urgent"
             )
 
     def test_shared_values_are_left_alone(self, monkeypatch: pytest.MonkeyPatch):
         module = _load_migration()
         with _constraint_scratch() as connection:
-            connection.execute(
-                sa.text("INSERT INTO near_misses (id, potential_severity) VALUES (1, 'high')")
-            )
+            connection.execute(sa.text("INSERT INTO near_misses (id, potential_severity) VALUES (1, 'high')"))
             created = _wire_op(module, connection, monkeypatch)
 
             module._widen_check_constraints()
 
             assert (
-                connection.execute(
-                    sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")
-                ).scalar_one()
+                connection.execute(sa.text("SELECT potential_severity FROM near_misses WHERE id = 1")).scalar_one()
                 == "high"
             )
             assert len(created) == 2
