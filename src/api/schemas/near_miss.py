@@ -83,7 +83,9 @@ class NearMissUpdate(BaseModel):
     potential_consequences: Optional[str] = None
     preventive_action_suggested: Optional[str] = None
 
-    status: Optional[str] = Field(None, pattern="^(reported|under_investigation|pending_actions|actions_in_progress|pending_review|closed)$")
+    status: Optional[str] = Field(
+        None, pattern="^(reported|under_investigation|pending_actions|actions_in_progress|pending_review|closed)$"
+    )
     priority: Optional[str] = Field(None, pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$")
 
     assigned_to_id: Optional[int] = None
