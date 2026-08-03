@@ -1,4 +1,4 @@
-"""What the 23 tenant_isolation policies actually do once the connection stops
+"""What the 25 tenant_isolation policies actually do once the connection stops
 bypassing them (C-27), against real PostgreSQL.
 
 Why this cannot be a unit test
@@ -33,10 +33,16 @@ them can see. It also never alters the RLS configuration of ``public`` — it as
 against whatever the chain actually deployed.
 
 ``session_replication_role = replica`` is used while seeding so one row per table
-can be inserted without satisfying 23 tables' worth of foreign keys. It was
+can be inserted without satisfying 25 tables' worth of foreign keys. It was
 verified on PostgreSQL 14 that this does **not** relax row-level security, and it
 is reset to ``origin`` before any assertion is made, so no result here depends on
 it.
+
+CHECK constraints are still enforced under ``replica``, which is deliberate — a row
+that violates one is not a row this suite should be reading back. Where a CHECK
+spans two columns and the generic row builder cannot satisfy it, the value is
+stated explicitly in ``SEED_OVERRIDES`` rather than the table being dropped from
+coverage.
 """
 
 from __future__ import annotations
@@ -69,6 +75,25 @@ REQUIRED_PRIVILEGES: tuple[str, ...] = ("SELECT", "INSERT", "UPDATE", "DELETE")
 FORBIDDEN_PRIVILEGES: tuple[str, ...] = ("TRUNCATE", "REFERENCES", "TRIGGER")
 
 _LITERAL_RE = re.compile(r"'([^']+)'")
+
+#: Column values the generic row builder cannot derive, applied on top of what it
+#: produces. Keyed by table, then by column.
+#:
+#: ``compliance_requirements`` carries
+#: ``CHECK (frequency_months IS NOT NULL OR frequency_days IS NOT NULL)``. Both
+#: columns are nullable, so ``_insert_row`` — which populates only NOT NULL columns
+#: without a default — leaves both NULL and PostgreSQL rejects the row with 23514.
+#: Nothing generic can satisfy a constraint spanning two columns: inferring it
+#: would turn this builder into a CHECK-expression solver, and a wrong inference
+#: would quietly seed a row that proves less than it appears to.
+#:
+#: An entry that goes stale fails loudly rather than silently: the INSERT names the
+#: column, so a renamed or dropped one makes the table unseedable, and
+#: ``test_cross_tenant_rows_are_invisible_under_the_app_role`` fails on the
+#: ``unseedable`` report rather than quietly narrowing its coverage.
+SEED_OVERRIDES: dict[str, dict[str, Any]] = {
+    "compliance_requirements": {"frequency_months": 12},
+}
 
 
 def _database_url() -> str:
@@ -193,9 +218,9 @@ def _placeholder_value(data_type: str, seq: int) -> Any:
 async def _insert_row(conn, table: str, tenant_id: int) -> None:
     """Insert one row into ``table`` owned by ``tenant_id``.
 
-    Only NOT NULL columns without a default are populated; everything else is left
-    to the database. Raises on failure — a table that cannot be seeded must not be
-    silently dropped from coverage.
+    Only NOT NULL columns without a default are populated, plus anything named in
+    ``SEED_OVERRIDES``; everything else is left to the database. Raises on failure —
+    a table that cannot be seeded must not be silently dropped from coverage.
     """
     columns = (
         await conn.execute(
@@ -234,6 +259,15 @@ async def _insert_row(conn, table: str, tenant_id: int) -> None:
             literals[name] = "now()"
             params.pop(name, None)
 
+    # Applied last so an override wins over both the generic filler and the
+    # timestamp literals, and so it can name a nullable column the loop above never
+    # considered.
+    for name, value in SEED_OVERRIDES.get(table, {}).items():
+        if name not in names:
+            names.append(name)
+        literals.pop(name, None)
+        params[name] = value
+
     rendered = ", ".join(literals.get(name, f":{name}") for name in names)
     await conn.execute(sa.text(f"INSERT INTO {table} ({', '.join(names)}) VALUES ({rendered})"), params)
 
@@ -251,7 +285,7 @@ async def seeded_two_tenants(pg_engine, deployed_policies):
         try:
             # Transaction-local so it cannot leak, and reset before any assertion.
             # This is a superuser-only GUC on PostgreSQL 14; without it the foreign
-            # keys of 23 tables would have to be satisfied, so skip rather than
+            # keys of 25 tables would have to be satisfied, so skip rather than
             # report a pass that proved nothing.
             try:
                 await conn.execute(sa.text("SET LOCAL session_replication_role = replica"))

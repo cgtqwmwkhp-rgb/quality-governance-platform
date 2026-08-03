@@ -37,7 +37,10 @@ def test_expand_adds_three_ten2_document_tables():
 
 
 def test_middleware_rls_tables_include_docs_expansion():
-    assert len(RLS_TABLES) == 23
+    # 23 up to 20260719_rls_gt_exp, plus the two Compliance Schedule tables
+    # hardened by 20260913_cs_wave0. See test_rls_force_expand_actions.py for why
+    # the bare count is kept.
+    assert len(RLS_TABLES) == 25
     for table in (
         "document_versions",
         "controlled_documents",

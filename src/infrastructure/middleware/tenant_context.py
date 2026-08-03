@@ -51,7 +51,15 @@ SKIP_PATHS = frozenset(
 # (incident_actions, complaint_actions, rta_actions), and
 # 20260711_rls_force_expand_docs (document_versions, controlled_documents,
 # controlled_document_versions), and 20260719_rls_gt_exp (risks_v2,
-# evidence_assets).
+# evidence_assets), and 20260913_cs_wave0 (compliance_requirements,
+# compliance_records).
+#
+# Every name here must be hardened by a migration registered in
+# HARDENING_MIGRATIONS (tests/unit/test_run026_rls_least_privilege.py), and must
+# really carry the policy in a migrated database
+# (tests/integration/test_run026_rls_least_privilege_postgres.py). Adding a name
+# without the policy DDL is how two of these tables spent three months
+# unprotected while every count agreed.
 RLS_TABLES = (
     "incidents",
     "complaints",

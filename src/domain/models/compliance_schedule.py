@@ -12,17 +12,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import (
-    Boolean,
-    CheckConstraint,
-    Date,
-    DateTime,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-)
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
@@ -79,9 +69,7 @@ class ComplianceRequirementTemplate(Base, TimestampMixin):
     __data_classification__ = DataClassification.C2_INTERNAL
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     template_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -249,9 +237,7 @@ class ComplianceRecord(Base, TimestampMixin, AuditTrailMixin):
     )
     filing_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    requirement: Mapped["ComplianceRequirement"] = relationship(
-        "ComplianceRequirement", back_populates="records"
-    )
+    requirement: Mapped["ComplianceRequirement"] = relationship("ComplianceRequirement", back_populates="records")
     library_document: Mapped[Optional["Document"]] = relationship("Document")
 
     def __repr__(self) -> str:
