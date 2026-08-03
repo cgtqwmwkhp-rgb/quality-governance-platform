@@ -82,7 +82,7 @@ Failures are returned as `StateTransitionError` (**409**) with the specific code
 | `TENANT_SCOPE_UNRESOLVED` | 409 | The case row carries no `tenant_id`, so the open-work probes have no scope. Every register declares the column NOT NULL, so this means the row is corrupt. Both `…/closure-validation` and the close itself refuse, rather than probing the caller's tenant and closing the case over work nobody can see. | “This record has no tenant. An administrator must repair it before it can be closed.” | Do not retry; escalate to an administrator to backfill `tenant_id`. Logged server-side as `closure_tenant_scope_unresolved` with the reference number. |
 | `INVALID_STATE_TRANSITION` | 409 | The status move is not on the register's transition map. Reopen is the single reverse edge out of closed. | “This status change isn’t allowed from here.” | Refresh the case and follow `details.allowed`. |
 
-**Reopen edges** (the only way back out of closed): incident → `pending_review`, complaint → `under_investigation`, near miss → `UNDER_REVIEW`, RTA → `under_investigation`, investigation → `under_review`. Reopening clears `closed_at` and `closed_by_id`.
+**Reopen edges** (the only way back out of closed): incident → `pending_review`, complaint → `under_investigation`, near miss → `pending_review`, RTA → `under_investigation`, investigation → `under_review`. Reopening clears `closed_at` and `closed_by_id`.
 
 Readiness can be inspected before attempting a close via `GET /api/v1/{incidents|complaints|near-misses|rtas}/{id}/closure-validation`, which returns `{ can_close, reasons[], open_work[], lessons_present, summary }` using the same codes. Investigations keep their own richer gate and return `CLOSURE_VALIDATION_FAILED` (**400**) with `details.reasons`.
 

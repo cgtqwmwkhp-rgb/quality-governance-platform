@@ -180,7 +180,7 @@ class TestEvaluateCaseClosure:
         validation = await evaluate_case_closure(
             db,
             case_type=CASE_TYPE_NEAR_MISS,
-            case=_case(status="UNDER_REVIEW"),
+            case=_case(status="under_investigation"),
             tenant_id=1,
         )
 
@@ -194,7 +194,7 @@ class TestEvaluateCaseClosure:
         validation = await evaluate_case_closure(
             db,
             case_type=CASE_TYPE_NEAR_MISS,
-            case=_case(status="UNDER_REVIEW"),
+            case=_case(status="under_investigation"),
             tenant_id=1,
         )
 
@@ -322,14 +322,17 @@ class TestCloseStamps:
 
 class TestStatusHelpers:
     def test_near_miss_closed_status_is_case_insensitive(self):
-        assert is_closed_status(CASE_TYPE_NEAR_MISS, "CLOSED") is True
+        """A legacy row from a database that has not run 20260909 still reads closed."""
         assert is_closed_status(CASE_TYPE_NEAR_MISS, "closed") is True
+        assert is_closed_status(CASE_TYPE_NEAR_MISS, "CLOSED") is True
+        assert is_closed_status(CASE_TYPE_NEAR_MISS, "under_investigation") is False
         assert is_closed_status(CASE_TYPE_NEAR_MISS, "UNDER_REVIEW") is False
 
     def test_reopen_targets_match_the_locked_decisions(self):
         assert reopen_status_for(CASE_TYPE_INCIDENT) == "pending_review"
         assert reopen_status_for("complaint") == "under_investigation"
-        assert reopen_status_for(CASE_TYPE_NEAR_MISS) == "UNDER_REVIEW"
+        # N-2: the near miss reopens exactly where an incident does.
+        assert reopen_status_for(CASE_TYPE_NEAR_MISS) == "pending_review"
         assert reopen_status_for(CASE_TYPE_RTA) == "under_investigation"
 
 

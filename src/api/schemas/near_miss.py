@@ -76,7 +76,13 @@ class NearMissUpdate(BaseModel):
     potential_consequences: Optional[str] = None
     preventive_action_suggested: Optional[str] = None
 
-    status: Optional[str] = Field(None, pattern="^(REPORTED|UNDER_REVIEW|ACTION_REQUIRED|IN_PROGRESS|CLOSED)$")
+    # The IncidentStatus values (N-2). A legacy uppercase label is refused here,
+    # at the boundary, rather than reaching a transition map that would report it
+    # as a dead-end status.
+    status: Optional[str] = Field(
+        None,
+        pattern="^(reported|under_investigation|pending_actions|actions_in_progress|pending_review|closed)$",
+    )
     priority: Optional[str] = Field(None, pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$")
 
     assigned_to_id: Optional[int] = None
