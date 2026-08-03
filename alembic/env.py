@@ -72,12 +72,8 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         # with or without the exclusion. Measured on PostgreSQL 14.20 and 16.14 --
         # see docs/governance/alembic_check_excluded_tables.md.
         #
-        # Plural ORM names (no matching table yet or rename pending)
-        "access_control_records",
-        "business_continuity_plans",
         # controlled_documents / controlled_document_versions: unfiltered — covered by
         # document_control tenancy migrations (20260710+) + TEN2 NOT NULL wave.
-        "cross_standard_mappings",
         # The seven document-control child tables were unfiltered on 2026-09-06:
         # 20260906_doc_ctl_children creates them, so compare has both sides.
         # The seven IMS unification tables were unfiltered on 2026-09-07 for the
@@ -85,12 +81,14 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         # soa_control_entries was unfiltered on 2026-09-08: 20260908_soa_align
         # adds the four columns the model declared and the model absorbed the six
         # the database had, so the table now compares to zero operations.
-        "ims_requirements",
-        "information_assets",
-        "information_security_risks",
-        "iso27001_controls",
-        "security_incidents",
-        "supplier_security_assessments",
+        # The last nine IMS / ISO27001 names went on 2026-09-09 (20260909_iso_absorb):
+        # access_control_records, business_continuity_plans, cross_standard_mappings,
+        # ims_requirements, information_assets, information_security_risks,
+        # iso27001_controls, security_incidents, supplier_security_assessments. The
+        # models absorbed the 50 columns the database had, the database widened 16
+        # varchars and gained the 7 foreign keys the models declared, and all nine
+        # now compare to zero operations.
+        #
         # Junction / config tables present in DB without SQLAlchemy models
         "audit_finding_clause_mapping",
         "audit_section_clause_mapping",
