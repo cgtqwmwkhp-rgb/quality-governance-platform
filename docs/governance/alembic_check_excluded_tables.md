@@ -44,7 +44,6 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 | `information_security_risks` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `iso27001_controls` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `security_incidents` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
-| `soa_control_entries` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `supplier_security_assessments` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `audit_finding_clause_mapping` | Risk / Audit mappings | Junction table present in DB without a complete SQLAlchemy model surface for compare. |
 | `audit_section_clause_mapping` | Risk / Audit mappings | Junction table present in DB without a complete SQLAlchemy model surface for compare. |
@@ -63,12 +62,14 @@ name. It is not a statement that anything about the table is acceptable.
 Mechanically, though, it is not table-level at all. `include_object` returning
 `False` removes the table from the comparison before column comparison happens, so
 `alembic check` cannot report a column a model declares that the physical table
-lacks on any excluded table. Measured: `soa_control_entries` declares four columns
-the migrated database does not have (`implementation_method`, `justification`,
-`risk_treatment_reference`, `tenant_id`), and the published drift inventory
-contains zero `AddColumnOp` — because the table is on this list, not because the
-columns are there. `scripts/validate_alembic_drift_ratchet.py --database-url ...`
-runs a second, unfiltered comparison specifically to put a number on that, and
+lacks on any excluded table. Measured, on the register as it stood until
+2026-09-08: `soa_control_entries` declared four columns the migrated database did
+not have (`implementation_method`, `justification`, `risk_treatment_reference`,
+`tenant_id`), and the published drift inventory contained zero `AddColumnOp` —
+because the table was on this list, not because the columns were there. That case
+is closed (see the dated section below); the mechanism it demonstrates is not, and
+is why `scripts/validate_alembic_drift_ratchet.py --database-url ...` runs a
+second, unfiltered comparison to put a number on what this list hides, and why
 `scripts/ops/run026/audit_attribution_schema.py` reports it per column.
 
 Run026 found that distinction being lost. `scripts/ops/run025/verify_model_schema_parity.py`
@@ -84,10 +85,10 @@ See [`attribution_schema_drift.md`](./attribution_schema_drift.md).
 
 Two separate mutes are in play, and only one of them is this list:
 
-| Mute | Mechanism | Measured on main (2026-07-29) |
-| --- | --- | --- |
-| Operation-type filter | `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` strips seven op types in `_filter_upgrade_ops` | 1058 operations across 209 tables reduced to 0 |
-| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 25 tables carrying 196 further operations, including 4 `AddColumnOp` |
+| Mute | Mechanism | Measured on main (2026-07-29) | After 2026-09-08 |
+| --- | --- | --- | --- |
+| Operation-type filter | `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` strips seven op types in `_filter_upgrade_ops` | 1058 operations across 209 tables reduced to 0 | unchanged |
+| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 25 tables carrying 196 further operations, including 4 `AddColumnOp` | 17 tables carrying 167 operations, **0** `AddColumnOp` |
 
 The op-type filter, not this list, is what makes the gate green: the exclusion list
 removes its tables from the comparison before any operation is generated for them,
@@ -271,4 +272,80 @@ permitted absences to subtract first.
 Row-level security was again deliberately not extended. All seven declare
 `tenant_id` nullable, so unlike two of the document-control children they do not
 even meet the TEN2 precondition the expand waves used.
+
+## 2026-09-08 `soa_control_entries` converged and unfiltered (C-24, #1526)
+
+Removed one name, and it is the one this document has been using as its worked
+example of what a table-level exclusion hides. `soa_control_entries` was the
+only table on the register — and, per the ratchet, the only table anywhere —
+carrying `AddColumnOp`: the model declared `tenant_id`, `justification`,
+`implementation_method` and `risk_treatment_reference`, and the migrated table
+had none of them, so `select(SoAControlEntry)` raised `UndefinedColumn`. No gate
+said so, because `include_object` had already dropped the table.
+
+Unlike 2026-09-06 and 2026-09-07, this was not a create. The table exists and
+holds a different design from the model, which is why 2026-09-07 handed it to
+#1526 instead of guessing. The model's single `justification` faced the
+database's `inclusion_justification` plus `exclusion_justification`; the model's
+`implementation_method` faced the database's `implementation_description`; the
+model additionally declared `risk_treatment_reference` and `tenant_id`, which the
+database did not have; and the database additionally held `responsible_party`,
+`target_completion_date` and `updated_at`, which the model did not declare. The
+side-by-side table is in
+[`attribution_schema_drift.md`](./attribution_schema_drift.md) — it is not
+repeated here, because this file is parsed for its inventory rows and a
+two-column table of backticked names reads as four more exclusions.
+
+The decision recorded here is that **the database is authoritative for the live
+compliance columns**, so the convergence is additive in both directions and
+drops nothing: `20260908_soa_align` adds the four columns the model declared,
+and `SoAControlEntry` absorbs the six the database had. `justification` and
+`implementation_method` therefore arrive empty *beside* the columns they might
+have meant. That is the point — which of the two justifications the single model
+column means is an IMS decision about real certification evidence, and copying
+either one into it would file an exclusion rationale as an inclusion rationale
+or the reverse. Autogenerate would have rendered the same disagreement as six
+`DropColumnOp` over that evidence.
+
+Two smaller alignments were needed to reach zero: `implementation_status` is
+widened from `varchar(30)` to the model's `varchar(50)` (a catalogue-only change
+in PostgreSQL that cannot lose or reject a value, where narrowing the model
+could), and the model now declares the `ON DELETE CASCADE` that the physical
+`control_id` foreign key has always had, rather than the migration dropping and
+recreating a live constraint to match a model that never described it.
+
+Measured on PostgreSQL 16.14 against a database built by `alembic upgrade head`:
+`before_filter` is unchanged at **1058 operations across 209 tables** — the table
+joined the comparison and contributed zero, which is the point — and the drift
+hidden by `include_object` falls from **182 operations across 18 tables to 167
+across 17**, with `AddColumnOp` going from 4 to **0** across the whole
+repository, excluded tables included. `alembic check` stays green with the name
+gone from the frozenset, and the ratchet reports `exclusions with no drift left
+(removable): []`.
+
+As before, the entries were deleted from `excluded_table_drift` and
+`excluded_tables` in `alembic_drift_baseline.json` rather than the whole file
+being regenerated, for the same reason: a full `--write-baseline` would also
+tighten `complaints` and `incidents` from 4 `DropColumnOp` to 3, which this work
+did not cause. (That pre-existing staleness is now confirmed to be a
+PostgreSQL 16 result, since this measurement was taken on 16.14 and reproduces
+it; it is still not this PR's to fix.)
+
+What this closes beyond the register: `DEFERRED_ABSENT_COLUMNS` in
+`scripts/ops/run026/audit_attribution_schema.py` is now empty, so no
+declared-but-absent column anywhere is deferred, and
+`tests/unit/test_run026_deferral_register.py` pins the register at empty.
+
+Row-level security was again deliberately not extended, and again the
+precondition is not met: `tenant_id` arrives nullable because that is what the
+model declares. It is also not backfilled — there is no parent row to derive a
+tenant from that is not itself untenanted.
+
+Still not attempted: the nine remaining IMS / ISO27001 entries, which carry 144
+of the 167 hidden operations between them (the eight junction / config entries
+hold the other 23). None of the nine is query-breaking any more — their column
+drift is entirely the reverse direction, 50 `DropColumnOp` for columns the
+database has and the model does not, plus 49 `AlterColumnOp` for shapes that
+disagree. The same absorb-into-the-model treatment applies, one owner decision
+per table. #1526.
 

@@ -227,7 +227,19 @@ class StatementOfApplicability(Base):
 
 
 class SoAControlEntry(Base):
-    """Individual control entries in the Statement of Applicability"""
+    """Individual control entries in the Statement of Applicability
+
+    Two designs live side by side here, and that is deliberate. The physical
+    table began as the singular ``soa_control_entry`` created by
+    ``20260120_add_iso27001_isms`` with a separate inclusion and exclusion
+    rationale; the model was written later with a single ``justification``.
+    ``20260908_soa_align`` added the model's columns to the database rather than
+    choosing between them, because which of the two rationales the single column
+    means is an IMS decision about live certification evidence and copying either
+    one into it would mis-file that evidence. The same applies to
+    ``implementation_method`` beside ``implementation_description``. See
+    ``docs/governance/attribution_schema_drift.md``.
+    """
 
     __tablename__ = "soa_control_entries"
 
@@ -235,21 +247,31 @@ class SoAControlEntry(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     soa_id: Mapped[int] = mapped_column(ForeignKey("statement_of_applicability.id", ondelete="CASCADE"), nullable=False)
-    control_id: Mapped[int] = mapped_column(ForeignKey("iso27001_controls.id"), nullable=False)
+    control_id: Mapped[int] = mapped_column(ForeignKey("iso27001_controls.id", ondelete="CASCADE"), nullable=False)
 
     # Applicability
     is_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
     justification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    inclusion_justification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    exclusion_justification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Implementation
     implementation_status: Mapped[str] = mapped_column(String(50), default="not_implemented")
     implementation_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    implementation_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    responsible_party: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    target_completion_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Risk treatment
     risk_treatment_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 

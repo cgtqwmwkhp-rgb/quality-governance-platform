@@ -6,9 +6,9 @@ the obvious place for a future absent column to be parked instead of fixed, whic
 is the failure mode this whole area exists to correct — so it gets a guard.
 
 The register is not the same thing as ``_ALEMBIC_CHECK_EXCLUDED_TABLES``. That one
-is a table-level compare-noise list with 41 entries and its own maintained
-inventory. This one is column-level, currently holds four entries on a single
-table, and every entry has to name an owner and be documented.
+is a table-level compare-noise list with its own maintained inventory. This one is
+column-level, is **empty** as of 2026-09-08, and every entry it ever gains has to
+name an owner and be documented.
 """
 
 from __future__ import annotations
@@ -20,16 +20,15 @@ from scripts.ops.run026.audit_attribution_schema import DEFERRED_ABSENT_COLUMNS
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOVERNANCE_DOC = REPO_ROOT / "docs" / "governance" / "attribution_schema_drift.md"
 
-#: The only deferral Run026 granted, and why: the physical soa_control_entries
-#: table carries a different design from the model rather than fewer columns, and
-#: which of inclusion_justification / exclusion_justification the model's single
-#: justification means is an IMS decision. Nothing queries the table.
-EXPECTED_DEFERRALS = {
-    ("soa_control_entries", "implementation_method"),
-    ("soa_control_entries", "justification"),
-    ("soa_control_entries", "risk_treatment_reference"),
-    ("soa_control_entries", "tenant_id"),
-}
+#: No declared-but-absent column is deferred anywhere. The only four this register
+#: ever held were the soa_control_entries columns Run026 handed to the IMS owner;
+#: 20260908_soa_align added them to the database and absorbed the six columns the
+#: database already had into the model, so neither design lost anything and the
+#: deferral had nothing left to defer.
+#:
+#: Empty is the strongest this assertion has ever been: with no expected entries,
+#: any deferral at all now fails it.
+EXPECTED_DEFERRALS: set[tuple[str, str]] = set()
 
 
 def test_the_deferral_register_has_not_grown():

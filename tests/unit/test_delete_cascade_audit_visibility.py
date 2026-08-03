@@ -13,7 +13,7 @@ issues the per-row DELETE, which requires a mapped relationship whose cascade
 includes ``delete`` and which does not set ``passive_deletes=True``. Every pair
 below fails that test, so the removal happens with no Python event:
 
-* 72 pairs have no relationship mapped from the parent at all.
+* 73 pairs have no relationship mapped from the parent at all.
 * 5 have a relationship without ``delete`` in its cascade — SQLAlchemy will try
   to de-associate the children instead of deleting them, so still no per-child
   delete event (and on a NOT NULL foreign key that attempt errors).
@@ -89,6 +89,12 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("investigation_runs", "barrier_analyses"),
         ("investigation_runs", "fishbone_diagrams"),
         ("investigation_runs", "five_whys_analyses"),
+        # Not a new cascade, a newly visible one. The physical constraint
+        # soa_control_entry_control_id_fkey has been ON DELETE CASCADE since
+        # 20260120_add_iso27001_isms; SoAControlEntry simply did not declare it,
+        # so this census could not see it. 20260908_soa_align made the model say
+        # what the database has always done, which is what surfaced the pair.
+        ("iso27001_controls", "soa_control_entries"),
         ("management_reviews", "management_review_inputs"),
         ("near_misses", "near_miss_running_sheet_entries"),
         ("policies", "policy_acknowledgment_requirements"),

@@ -73,22 +73,22 @@ ATTRIBUTION_TARGET = "users"
 # Declared-but-absent columns that are deliberately not being added, with the
 # owner who holds the decision. Everything else in that list fails this check.
 #
-# soa_control_entries is not a case of "the database is missing four columns".
-# The physical table is a rename of the legacy singular `soa_control_entry` and
-# carries a different design: `inclusion_justification` + `exclusion_justification`
-# where the model has one `justification`, `implementation_description` where the
-# model has `implementation_method`, plus `responsible_party` and
-# `target_completion_date` that the model does not declare at all. Which of the
-# two justifications the model's single column means is an IMS domain question,
-# not a schema question, and guessing it would silently mis-file compliance
-# evidence. `SoAControlEntry` is queried by no live code path, so nothing is
-# breaking while the owner decides.
-DEFERRED_ABSENT_COLUMNS: dict[tuple[str, str], str] = {
-    ("soa_control_entries", "implementation_method"): "IMS / ISO27001",
-    ("soa_control_entries", "justification"): "IMS / ISO27001",
-    ("soa_control_entries", "risk_treatment_reference"): "IMS / ISO27001",
-    ("soa_control_entries", "tenant_id"): "IMS / ISO27001",
-}
+# Empty since 2026-09-08. Its only four entries were the `soa_control_entries`
+# columns `implementation_method`, `justification`, `risk_treatment_reference`
+# and `tenant_id`, deferred because the physical table is a rename of the legacy
+# singular `soa_control_entry` carrying a different design rather than fewer
+# columns, and because which of `inclusion_justification` /
+# `exclusion_justification` the model's single `justification` meant was an IMS
+# domain question. `20260908_soa_align` settled it without answering it: the four
+# columns were added to the database and the six the database already had were
+# absorbed into the model, so both designs stand and no compliance evidence was
+# moved between them. See docs/governance/attribution_schema_drift.md.
+#
+# The dict is kept rather than removed because it is the only sanctioned way to
+# defer a declared-but-absent column, and the reporting path below classifies
+# against it. Adding to it needs a named owner, a row in that document, and a
+# matching edit to tests/unit/test_run026_deferral_register.py.
+DEFERRED_ABSENT_COLUMNS: dict[tuple[str, str], str] = {}
 
 # Tables whose model is retained in metadata after a migration dropped the
 # physical table. Absent columns on these are an artefact of the retained model,
