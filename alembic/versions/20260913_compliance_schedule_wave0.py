@@ -15,6 +15,27 @@ Wave 0 foundations:
    deliberately not RLS'd: NULL ``tenant_id`` rows would be invisible under the
    standard predicate.
 4. Seed templates idempotently from ``specs/compliance-schedule/catalogue.json``.
+
+Why the policy DDL is here and not in the hardening migration (C-27)
+-------------------------------------------------------------------
+``20260902_rls_guc_guard`` is where the ``NULLIF`` empty-GUC guard was introduced,
+and it names the 23 tables that existed at that revision. It cannot be the place
+these two are hardened, for two independent reasons: it is already applied in
+staging and production, so editing its table tuples changes nothing there; and
+every table it names has to exist at *its* point in the chain or its own
+``_tables_with_tenant_id`` filter skips the name without protecting anything.
+These tables are created eleven revisions later, here.
+
+So a table created after 20260902 has to be brought under the hardened predicate
+by the revision that creates it, and registered in ``HARDENING_MIGRATIONS`` in
+``tests/unit/test_run026_rls_least_privilege.py``. That registry is what keeps
+``RLS_TABLES`` from claiming protection nothing supplies. The conventions it
+enforces — a ``HARDENED_PREDICATE`` literal identical to
+``TENANT_ISOLATION_PREDICATE``, ENABLE + FORCE, USING *and* WITH CHECK, no
+swallowed failures, and a re-read of ``pg_policy`` that raises rather than
+reporting a success it did not achieve — are followed below for the same reason
+20260902 follows them: an ``IF EXISTS`` guard plus a swallowed exception is
+exactly how ``controlled_documents`` went three months with no policy.
 """
 
 from __future__ import annotations
@@ -32,11 +53,23 @@ depends_on: Union[str, Sequence[str], None] = None
 
 logger = logging.getLogger("alembic.runtime.migration")
 
-# Predicate matches ``TENANT_ISOLATION_PREDICATE`` in tenant_context.py
-# (NULLIF empty-GUC guard).
-_POLICY_PREDICATE = "tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::int"
+# Kept as a literal rather than imported from
+# src.infrastructure.middleware.tenant_context.TENANT_ISOLATION_PREDICATE, for the
+# same reason 20260902_rls_guc_guard keeps its own copy: a migration must describe
+# the database as it was at this revision and must not change meaning when
+# application code is edited later. A unit test asserts the two stay identical.
+HARDENED_PREDICATE = "tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::int"
 
-RLS_TABLES = (
+# The tables this revision brings under tenant_isolation: they are created here,
+# so they need ENABLE + FORCE as well as the policy. Named to match the
+# ``ADOPT_TABLES`` vocabulary of 20260902_rls_guc_guard, which is the constant the
+# coverage registry in tests/unit/test_run026_rls_least_privilege.py reads.
+#
+# compliance_requirement_templates is deliberately absent: its tenant_id is always
+# NULL by design, and the tenant_isolation predicate is unsatisfiable for a NULL
+# tenant_id, so a policy would make the global catalogue invisible to every tenant
+# rather than isolating anything.
+ADOPT_TABLES: tuple[str, ...] = (
     "compliance_requirements",
     "compliance_records",
 )
@@ -112,6 +145,13 @@ def _create_templates() -> None:
         "compliance_requirement_templates",
         ["is_active"],
     )
+    # TimestampMixin declares created_at with index=True; the other two tables
+    # already carry theirs. Omitting it here was drift the ratchet caught.
+    op.create_index(
+        "ix_compliance_requirement_templates_created_at",
+        "compliance_requirement_templates",
+        ["created_at"],
+    )
 
 
 def _create_requirements() -> None:
@@ -164,7 +204,6 @@ def _create_requirements() -> None:
             "reference_number",
             name="uq_compliance_requirements_tenant_reference",
         ),
-        sa.UniqueConstraint("external_id"),
     )
     op.create_index("ix_compliance_requirements_tenant_id", "compliance_requirements", ["tenant_id"])
     op.create_index(
@@ -172,7 +211,17 @@ def _create_requirements() -> None:
         "compliance_requirements",
         ["reference_number"],
     )
-    op.create_index("ix_compliance_requirements_external_id", "compliance_requirements", ["external_id"])
+    # unique=True, not a separate UniqueConstraint: the ORM declares external_id
+    # with unique=True *and* index=True, which SQLAlchemy renders as one unique
+    # index named ix_<table>_<column>. A UniqueConstraint plus a plain index is a
+    # different schema and shows up as drift (drop constraint, drop index, create
+    # unique index) even though it enforces the same thing.
+    op.create_index(
+        "ix_compliance_requirements_external_id",
+        "compliance_requirements",
+        ["external_id"],
+        unique=True,
+    )
     op.create_index("ix_compliance_requirements_template_id", "compliance_requirements", ["template_id"])
     op.create_index("ix_compliance_requirements_location_id", "compliance_requirements", ["location_id"])
     op.create_index("ix_compliance_requirements_taxonomy_id", "compliance_requirements", ["taxonomy_id"])
@@ -237,11 +286,11 @@ def _create_records() -> None:
             "due_date",
             name="uq_compliance_records_tenant_requirement_due",
         ),
-        sa.UniqueConstraint("external_id"),
     )
     op.create_index("ix_compliance_records_tenant_id", "compliance_records", ["tenant_id"])
     op.create_index("ix_compliance_records_reference_number", "compliance_records", ["reference_number"])
-    op.create_index("ix_compliance_records_external_id", "compliance_records", ["external_id"])
+    # unique=True for the same reason as ix_compliance_requirements_external_id.
+    op.create_index("ix_compliance_records_external_id", "compliance_records", ["external_id"], unique=True)
     op.create_index("ix_compliance_records_requirement_id", "compliance_records", ["requirement_id"])
     op.create_index("ix_compliance_records_due_date", "compliance_records", ["due_date"])
     op.create_index(
@@ -253,6 +302,13 @@ def _create_records() -> None:
 
 
 def _enable_rls(table: str) -> None:
+    """ENABLE + FORCE row-level security on ``table`` and install the policy.
+
+    ENABLE alone exempts the table owner, which is every identity the migrations
+    run as, so FORCE is what makes the policy bind. WITH CHECK carries the same
+    predicate as USING so a write cannot land in a tenant the caller is not
+    serving; a policy with only USING filters reads and permits any INSERT.
+    """
     conn = op.get_bind()
     if conn.dialect.name != "postgresql":
         return
@@ -262,9 +318,58 @@ def _enable_rls(table: str) -> None:
     op.execute(
         sa.text(
             f"CREATE POLICY tenant_isolation ON {table} "
-            f"USING ({_POLICY_PREDICATE}) WITH CHECK ({_POLICY_PREDICATE})"
+            f"USING ({HARDENED_PREDICATE}) WITH CHECK ({HARDENED_PREDICATE})"
         )
     )
+
+
+def _assert_policies_match(tables: Sequence[str], expected_fragment: str) -> None:
+    """Re-read pg_policy and raise unless every table really carries the predicate.
+
+    ``expected_fragment`` is matched against the normalised expression PostgreSQL
+    stores, not against the SQL sent above, so a statement that parsed without
+    taking effect cannot satisfy this. Copied in shape from
+    20260902_rls_guc_guard: a migration that can report a policy state it did not
+    reach is how ``controlled_documents`` spent three months unprotected while its
+    migration logged success.
+    """
+    bind = op.get_bind()
+    rows = bind.execute(
+        sa.text("""
+            SELECT c.relname AS table_name,
+                   c.relrowsecurity AS enabled,
+                   c.relforcerowsecurity AS forced,
+                   pg_get_expr(p.polqual, p.polrelid) AS using_expr,
+                   pg_get_expr(p.polwithcheck, p.polrelid) AS check_expr
+            FROM pg_class AS c
+            JOIN pg_namespace AS n ON n.oid = c.relnamespace
+            LEFT JOIN pg_policy AS p ON p.polrelid = c.oid AND p.polname = 'tenant_isolation'
+            WHERE n.nspname = current_schema() AND c.relname = ANY(:tables)
+            """),
+        {"tables": list(tables)},
+    ).mappings()
+    state = {row["table_name"]: row for row in rows}
+
+    problems: list[str] = []
+    for table in tables:
+        row = state.get(table)
+        if row is None:
+            problems.append(f"{table}: relation not visible in current_schema()")
+            continue
+        if not row["enabled"] or not row["forced"]:
+            problems.append(f"{table}: enabled={row['enabled']} forced={row['forced']} (both must be true)")
+        for label in ("using_expr", "check_expr"):
+            expr = row[label]
+            if expr is None:
+                problems.append(f"{table}: tenant_isolation has no {label}")
+            elif expected_fragment not in expr:
+                problems.append(f"{table}: {label} is {expr!r}, expected it to contain {expected_fragment!r}")
+
+    if problems:
+        raise RuntimeError(
+            f"{revision} did not achieve the policy state it reported. "
+            "Refusing to record this revision as applied.\n  " + "\n  ".join(problems)
+        )
 
 
 def _seed_templates() -> None:
@@ -292,9 +397,15 @@ def upgrade() -> None:
     else:
         logger.info("%s: compliance_records already present — skipping create", revision)
 
-    for table in RLS_TABLES:
-        if _table_exists(table):
-            _enable_rls(table)
+    protected = [table for table in ADOPT_TABLES if _table_exists(table)]
+    for table in protected:
+        _enable_rls(table)
+
+    if protected and op.get_bind().dialect.name == "postgresql":
+        # "NULLIF" is the part that distinguishes the hardened predicate from the
+        # legacy one, and it survives PostgreSQL's normalisation of the expression.
+        _assert_policies_match(protected, "NULLIF")
+        logger.info("%s: tenant_isolation enabled and forced on %s", revision, ", ".join(protected))
 
     if _table_exists("compliance_requirement_templates"):
         _seed_templates()
@@ -303,7 +414,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     conn = op.get_bind()
     if conn.dialect.name == "postgresql":
-        for table in reversed(RLS_TABLES):
+        for table in reversed(ADOPT_TABLES):
             if _table_exists(table):
                 op.execute(sa.text(f"DROP POLICY IF EXISTS tenant_isolation ON {table}"))
                 op.execute(sa.text(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY"))
