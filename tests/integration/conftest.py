@@ -167,6 +167,9 @@ _ADMIN_PERMS = ",".join(
         "near_miss:create",
         "near_miss:read",
         "near_miss:update",
+        "compliance_schedule:read",
+        "compliance_schedule:create",
+        "compliance_schedule:update",
     ]
 )
 

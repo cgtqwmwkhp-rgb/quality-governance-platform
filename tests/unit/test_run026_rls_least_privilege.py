@@ -1,8 +1,10 @@
 """Guards for the C-27 least-privilege work that do not need a database.
 
-These cover the three things that can silently rot without PostgreSQL noticing:
+These cover the four things that can silently rot without PostgreSQL noticing:
 
-* the hardened predicate drifting apart from the copy inside the migration,
+* the hardened predicate drifting apart from the copy inside a migration,
+* a table joining ``RLS_TABLES`` with no migration hardening it, which is the
+  registry claiming a protection nothing supplies,
 * a future RLS migration reintroducing the ``EXCEPTION WHEN OTHERS ... RAISE
   NOTICE`` pattern that lost ``controlled_documents`` its policy for three months,
 * the role migration quietly acquiring a credential or a dangerous privilege.
@@ -27,6 +29,29 @@ REPO = Path(__file__).resolve().parents[2]
 VERSIONS = REPO / "alembic" / "versions"
 GUC_GUARD_MIGRATION = VERSIONS / "20260902_rls_empty_guc_guard.py"
 ROLE_MIGRATION = VERSIONS / "20260903_app_least_privilege_role.py"
+
+#: Every migration that puts a table under the hardened ``tenant_isolation``
+#: policy, with the module constants naming the tables it covers.
+#:
+#: ``20260902_rls_guc_guard`` is where the ``NULLIF`` guard was introduced and it
+#: names the 23 tables that existed then. It is not extensible, for two
+#: independent reasons: it is applied in staging and production, so editing its
+#: tuples changes no deployed policy; and its own ``_tables_with_tenant_id``
+#: filter skips any name that does not exist at *its* point in the chain, so a
+#: table created later would be listed and not protected — the precise failure
+#: mode that cost ``controlled_documents`` its policy for three months.
+#:
+#: A table created after that revision is therefore hardened by the revision that
+#: creates it, and registered here. Every entry is held to the same conventions as
+#: the original: a ``HARDENED_PREDICATE`` literal identical to
+#: ``TENANT_ISOLATION_PREDICATE``, ENABLE + FORCE, USING *and* WITH CHECK, no
+#: swallowed failures, and a re-read of ``pg_policy`` that raises. Adding a name
+#: to ``RLS_TABLES`` without a migration in this registry fails
+#: ``test_migration_covers_every_registered_rls_table``.
+HARDENING_MIGRATIONS: tuple[tuple[Path, tuple[str, ...]], ...] = (
+    (GUC_GUARD_MIGRATION, ("REWRITE_TABLES", "ADOPT_TABLES")),
+    (VERSIONS / "20260913_compliance_schedule_wave0.py", ("ADOPT_TABLES",)),
+)
 
 
 def _module_constants(path: Path) -> dict[str, Any]:
@@ -81,9 +106,37 @@ def _executable_source(path: Path) -> str:
     return ast.unparse(tree)
 
 
+def _hardening_coverage() -> dict[str, str]:
+    """Table -> the migration that hardens it, across the whole registry.
+
+    Raises rather than asserts on an overlap: two migrations naming one table is a
+    registry defect, not a property of ``RLS_TABLES``, and every test here would
+    otherwise report it as something else.
+    """
+    covered: dict[str, str] = {}
+    for path, constant_names in HARDENING_MIGRATIONS:
+        constants = _module_constants(path)
+        for constant_name in constant_names:
+            assert constant_name in constants, f"{path.name} has no module-level {constant_name}"
+            for table in constants[constant_name]:
+                if table in covered and covered[table] != path.name:
+                    raise AssertionError(
+                        f"{table!r} is hardened by both {covered[table]} and {path.name}. "
+                        "One revision owns a table's policy; listing it twice means one of "
+                        "them is describing a database state it does not produce."
+                    )
+                covered[table] = path.name
+    return covered
+
+
 @pytest.fixture(scope="module")
 def guc_guard() -> dict[str, Any]:
     return _module_constants(GUC_GUARD_MIGRATION)
+
+
+@pytest.fixture(params=[path for path, _ in HARDENING_MIGRATIONS], ids=lambda path: path.stem)
+def hardening_migration(request) -> Path:
+    return request.param
 
 
 @pytest.fixture(scope="module")
@@ -103,11 +156,16 @@ def test_canonical_predicate_guards_the_empty_guc():
     assert TENANT_ISOLATION_PREDICATE.startswith("tenant_id = ")
 
 
-def test_migration_predicate_matches_the_canonical_one(guc_guard):
-    """The migration deliberately keeps its own copy so it cannot change meaning when
-    application code is edited. This test is what makes that duplication safe."""
-    assert guc_guard["HARDENED_PREDICATE"] == TENANT_ISOLATION_PREDICATE, (
-        "The predicate inside 20260902_rls_guc_guard has drifted from "
+def test_migration_predicate_matches_the_canonical_one(hardening_migration):
+    """Every hardening migration deliberately keeps its own copy of the predicate so
+    it cannot change meaning when application code is edited. This test is what
+    makes that duplication safe, and it applies to all of them: a later migration
+    that installs a policy with the *unguarded* predicate would reintroduce the
+    22P02 defect on the tables it creates while every structural check still
+    reported 25 policies."""
+    constants = _module_constants(hardening_migration)
+    assert constants.get("HARDENED_PREDICATE") == TENANT_ISOLATION_PREDICATE, (
+        f"The predicate inside {hardening_migration.name} has drifted from "
         "TENANT_ISOLATION_PREDICATE. Whichever is wrong, they must agree, or the "
         "readiness check will compare deployed policies against the wrong expectation."
     )
@@ -119,13 +177,18 @@ def test_legacy_predicate_is_the_unguarded_form(guc_guard):
     assert guc_guard["LEGACY_PREDICATE"] == f"tenant_id = current_setting('{TENANT_GUC}', true)::int"
 
 
-def test_migration_covers_every_registered_rls_table(guc_guard):
-    """Any table in the registry that the migration skips keeps the broken predicate."""
-    covered = set(guc_guard["REWRITE_TABLES"]) | set(guc_guard["ADOPT_TABLES"])
-    missing = sorted(set(RLS_TABLES) - covered)
-    assert not missing, f"RLS_TABLES entries the hardening migration does not touch: {missing}"
-    extra = sorted(covered - set(RLS_TABLES))
-    assert not extra, f"Migration hardens tables absent from RLS_TABLES: {extra}"
+def test_migration_covers_every_registered_rls_table():
+    """A table in the registry that no hardening migration touches has no policy at
+    all, or keeps the broken predicate — and either way ``RLS_TABLES`` is claiming
+    protection nothing supplies."""
+    covered = _hardening_coverage()
+    missing = sorted(set(RLS_TABLES) - set(covered))
+    assert not missing, (
+        f"RLS_TABLES entries no hardening migration touches: {missing}. Harden them in the "
+        "revision that creates them and add that revision to HARDENING_MIGRATIONS."
+    )
+    extra = sorted(set(covered) - set(RLS_TABLES))
+    assert not extra, f"Migrations harden tables absent from RLS_TABLES: {extra}"
 
 
 def test_the_two_previously_unprotected_tables_are_adopted(guc_guard):
@@ -135,23 +198,40 @@ def test_the_two_previously_unprotected_tables_are_adopted(guc_guard):
     assert not set(guc_guard["ADOPT_TABLES"]) & set(guc_guard["REWRITE_TABLES"])
 
 
-def test_hardening_migration_does_not_swallow_failures():
+def test_hardening_migration_does_not_swallow_failures(hardening_migration):
     """The mistake that cost two tables their policy must not be reintroduced.
 
     ``EXCEPTION WHEN OTHERS THEN RAISE NOTICE`` around a conditional DDL block turns
-    "this did not happen" into a log line nobody reads. This migration verifies its
-    own outcome against pg_policy and raises instead.
+    "this did not happen" into a log line nobody reads. Every hardening migration
+    verifies its own outcome against pg_policy and raises instead.
 
     Checked against the docstring-stripped source, so the explanation of the original
-    defect in this migration's own docstring cannot mask a reintroduction of it.
+    defect in a migration's own docstring cannot mask a reintroduction of it.
     """
-    code = _executable_source(GUC_GUARD_MIGRATION)
+    code = _executable_source(hardening_migration)
     assert "EXCEPTION WHEN OTHERS" not in code.upper(), (
-        "This migration must not swallow errors: silently skipping a table is exactly how "
-        "controlled_documents ended up with no policy."
+        f"{hardening_migration.name} must not swallow errors: silently skipping a table is exactly "
+        "how controlled_documents ended up with no policy."
     )
-    assert "_assert_policies_match" in code, "The migration must verify what it claims to have done."
+    assert "_assert_policies_match" in code, (
+        f"{hardening_migration.name} must verify what it claims to have done, by re-reading "
+        "pg_policy rather than trusting that its DDL took effect."
+    )
     assert "RuntimeError" in code
+
+
+def test_hardening_migration_forces_rls_and_constrains_writes(hardening_migration):
+    """A policy is only worth what its weakest clause allows.
+
+    ENABLE without FORCE exempts the table owner, which is every identity the
+    migrations and the current application connect as. USING without WITH CHECK
+    filters reads and leaves writes free to land in any tenant. Both were real
+    defects in earlier revisions of this family, so both are checked structurally
+    here as well as behaviourally in the PostgreSQL suite.
+    """
+    code = _executable_source(hardening_migration).upper()
+    for clause in ("ENABLE ROW LEVEL SECURITY", "FORCE ROW LEVEL SECURITY", "WITH CHECK"):
+        assert clause in code, f"{hardening_migration.name} never issues {clause}."
 
 
 # ---------------------------------------------------------------------------

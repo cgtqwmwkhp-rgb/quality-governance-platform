@@ -24,6 +24,7 @@
     "template_asset_types": "Template\u2194asset-type junction for shared templates",
     "failed_tasks": "Platform Celery DLQ — failures may be global/system tasks without a resolvable tenant at persist time (writer does not require tenant_id)",
     "document_categories": "Governance Library taxonomy (Wave W0) — shared/global category catalog seeded from specs/governance-library/taxonomy.json; owner: Governance/Quality platform team",
-    "document_tags": "Governance Library tag vocabulary (Wave W0) — shared/global tag catalog; owner: Governance/Quality platform team"
+    "document_tags": "Governance Library tag vocabulary (Wave W0) — shared/global tag catalog; owner: Governance/Quality platform team",
+    "compliance_requirement_templates": "Compliance Schedule obligation catalogue (Wave 0) — shared/global template library seeded from specs/compliance-schedule/catalogue.json; tenant_id is always NULL by design because a template defines the statutory obligation, not a tenant's instance of it (tenant-owned rows live in compliance_requirements). Owner: Governance/Quality platform team (David Harris)"
   }
 }

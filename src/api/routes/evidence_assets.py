@@ -98,6 +98,7 @@ async def validate_source_exists(
         EvidenceSourceModule.AUDIT.value: "src.domain.models.audit:AuditRun",
         EvidenceSourceModule.ACTION.value: None,  # Actions are polymorphic, skip validation
         EvidenceSourceModule.CERTIFICATE.value: "src.domain.models.compliance_automation:Certificate",
+        EvidenceSourceModule.COMPLIANCE_RECORD.value: "src.domain.models.compliance_schedule:ComplianceRecord",
     }
 
     model_path = source_models.get(source_module)

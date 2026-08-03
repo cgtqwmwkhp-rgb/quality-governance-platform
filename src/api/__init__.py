@@ -22,6 +22,7 @@ from src.api.routes import (
     complaints,
     compliance,
     compliance_automation,
+    compliance_schedule,
     copilot,
     cross_standard_mappings,
     dlq_admin,
@@ -150,6 +151,11 @@ router.include_router(
     compliance_automation.router,
     prefix="/compliance-automation",
     tags=["Compliance Automation"],
+)
+router.include_router(
+    compliance_schedule.router,
+    prefix="/compliance-schedule",
+    tags=["Compliance Schedule"],
 )
 # Enterprise Risk Register & AI Intelligence (Tier 1 & 2)
 router.include_router(risk_register.router, prefix="/risk-register", tags=["Enterprise Risk Register"])

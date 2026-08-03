@@ -100,6 +100,8 @@ export default function Layout({
   const canAccessAdvancedNav = canAccessWorkforce || isSuperuser()
   const canManageUsers = isSuperuser()
   const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
+  const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
+  const canAccessComplianceSchedule = complianceScheduleEnabled && canAccessAdvancedNav
 
   const hubs = [
     {
@@ -203,6 +205,15 @@ export default function Layout({
           icon: FileText,
           label: t('nav.document_control', { defaultValue: 'Document Control' }),
         },
+        ...(canAccessComplianceSchedule
+          ? [
+              {
+                path: '/compliance-schedule',
+                icon: Calendar,
+                label: t('nav.compliance_schedule', { defaultValue: 'Compliance Schedule' }),
+              },
+            ]
+          : []),
         ...(canAccessAdvancedNav
           ? [
               {

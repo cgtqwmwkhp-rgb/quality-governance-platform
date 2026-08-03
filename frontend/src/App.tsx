@@ -82,6 +82,8 @@ const DashboardBuilder = lazy(() => import('./pages/DashboardBuilder'))
 const ReportGenerator = lazy(() => import('./pages/ReportGenerator'))
 const WorkflowCenter = lazy(() => import('./pages/WorkflowCenter'))
 const ComplianceAutomation = lazy(() => import('./pages/ComplianceAutomation'))
+const ComplianceSchedule = lazy(() => import('./pages/ComplianceSchedule'))
+const ComplianceScheduleDetail = lazy(() => import('./pages/ComplianceScheduleDetail'))
 const RiskRegister = lazy(() => import('./pages/RiskRegister'))
 const RiskProfile = lazy(() => import('./pages/RiskProfile'))
 const IMSDashboard = lazy(() => import('./pages/IMSDashboard'))
@@ -515,6 +517,8 @@ function App() {
                 <Route path="audit-trail" element={<AuditTrail />} />
                 <Route path="workflows" element={<WorkflowCenter />} />
                 <Route path="compliance-automation" element={<ComplianceAutomation />} />
+                <Route path="compliance-schedule" element={<ComplianceSchedule />} />
+                <Route path="compliance-schedule/:id" element={<ComplianceScheduleDetail />} />
                 <Route path="risk-register" element={<RiskRegister />} />
                 <Route path="risk-register/:riskId" element={<RiskProfile />} />
                 <Route path="ims" element={<IMSDashboard />} />
