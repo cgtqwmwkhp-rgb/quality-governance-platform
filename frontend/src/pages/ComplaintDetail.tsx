@@ -243,6 +243,7 @@ export default function ComplaintDetail() {
     { value: 'high', label: t('priority.high') },
     { value: 'medium', label: t('priority.medium') },
     { value: 'low', label: t('priority.low') },
+    { value: 'negligible', label: t('priority.negligible') },
   ]
   const [typeOptions, setTypeOptions] =
     useState<Array<{ value: string; label: string }>>(defaultTypeOptions)

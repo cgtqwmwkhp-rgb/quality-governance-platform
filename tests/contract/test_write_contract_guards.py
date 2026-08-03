@@ -244,10 +244,11 @@ class TestLookupEnumAgreement:
     ``incident_types``) to the enums; the active gate below holds the seed and
     the schema together so the drift cannot return unrecorded.
 
-    ``severity_levels`` still has a residual: it feeds three fields and
-    ``negligible`` is accepted by incident severity but not by complaint
-    priority or near-miss potential severity — recorded in
-    ``KNOWN_LOOKUP_ENUM_GAPS`` until a product decision lands.
+    ``severity_levels`` was the last residual: it feeds three fields and
+    ``negligible`` was accepted by incident severity but not by complaint
+    priority or near-miss potential severity. B-9 settled that as one shared
+    severity set, so ``KNOWN_LOOKUP_ENUM_GAPS`` is now empty and every parameter
+    below is an active assertion rather than an xfail.
     """
 
     @pytest.mark.parametrize("binding", LOOKUP_PARAMS)

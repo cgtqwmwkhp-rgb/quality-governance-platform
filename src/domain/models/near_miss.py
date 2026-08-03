@@ -15,7 +15,7 @@ class NearMiss(Base):
     __tablename__ = "near_misses"
     __table_args__ = (
         CheckConstraint(
-            "potential_severity IN ('low', 'medium', 'high', 'critical') OR potential_severity IS NULL",
+            "potential_severity IN ('negligible', 'low', 'medium', 'high', 'critical') OR potential_severity IS NULL",
             name="ck_nm_severity_values",
         ),
         # The incident lifecycle, value for value (N-2). Enforced on deployed

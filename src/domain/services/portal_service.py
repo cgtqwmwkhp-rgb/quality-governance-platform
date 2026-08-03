@@ -21,6 +21,11 @@ from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTAStatus
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.rta_severity import derive_portal_rta_severity, interpret_rta_injury_answer
+from src.domain.services.shared_severity import (
+    map_portal_severity,
+    near_miss_priority_for_severity,
+    normalize_portal_severity,
+)
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -64,31 +69,20 @@ def _hash_tracking_code(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
 
-def _map_severity(severity: str) -> tuple:
-    severity_map = {
-        "low": (IncidentSeverity.LOW, ComplaintPriority.LOW),
-        "medium": (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM),
-        "high": (IncidentSeverity.HIGH, ComplaintPriority.HIGH),
-        "critical": (IncidentSeverity.CRITICAL, ComplaintPriority.CRITICAL),
-    }
-    return severity_map.get(severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM))
+def _map_severity(severity: str) -> tuple[IncidentSeverity, ComplaintPriority]:
+    return map_portal_severity(severity)
 
 
 def _get_status_label(status: str) -> str:
-    # Keyed on the stored values, which are lowercase on all four registers since
-    # N-2 aligned near misses with the rest. Kept identical to
-    # ``employee_portal._STATUS_LABELS``, which is the copy the live portal reads.
     labels = {
-        "reported": "📋 Submitted",
-        "open": "📋 Open",
-        "under_investigation": "🔍 Under Investigation",
-        "pending_actions": "📌 Pending Actions",
-        "actions_in_progress": "⚙️ Actions In Progress",
-        "in_progress": "⚙️ In Progress",
-        "pending_review": "👀 Pending Review",
-        "resolved": "✅ Resolved",
-        "closed": "🏁 Closed",
-        "rejected": "❌ Rejected",
+        "REPORTED": "📋 Submitted",
+        "OPEN": "📋 Open",
+        "UNDER_INVESTIGATION": "🔍 Under Investigation",
+        "IN_PROGRESS": "⚙️ In Progress",
+        "PENDING_REVIEW": "👀 Pending Review",
+        "RESOLVED": "✅ Resolved",
+        "CLOSED": "🏁 Closed",
+        "REJECTED": "❌ Rejected",
     }
     return labels.get(status, status)
 
@@ -262,13 +256,7 @@ class PortalService:
 
     async def _submit_near_miss(self, data: dict, is_anonymous: bool, tracking_code: str) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "near_miss", NearMiss)
-        priority_map = {
-            "low": "LOW",
-            "medium": "MEDIUM",
-            "high": "HIGH",
-            "critical": "CRITICAL",
-        }
-        priority = priority_map.get(data.get("severity", "medium").lower(), "MEDIUM")
+        priority = near_miss_priority_for_severity(data.get("severity", "medium"))
 
         display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
         raw_submission = data.get("reporter_submission")
@@ -282,7 +270,7 @@ class PortalService:
             location=data.get("location") or "Not specified",
             event_date=datetime.now(timezone.utc),
             description=data["description"],
-            potential_severity=data.get("severity", "medium").lower(),
+            potential_severity=normalize_portal_severity(data.get("severity", "medium")),
             is_hipo=is_hipo,
             status="reported",
             priority=priority,

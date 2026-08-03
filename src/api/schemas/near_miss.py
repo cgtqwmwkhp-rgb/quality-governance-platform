@@ -6,6 +6,13 @@ from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.api.schemas.validators import reject_future_statutory_datetime, sanitize_field
+from src.domain.models.incident import IncidentSeverity
+
+# ``potential_severity`` is populated from the ``severity_levels`` lookup, the same
+# dropdown that fills incident severity and complaint priority (B-9). Deriving the
+# pattern from IncidentSeverity keeps this field from drifting out of that set the
+# way it had — the lookup offered ``negligible`` and this pattern rejected it.
+SHARED_SEVERITY_PATTERN = "^(" + "|".join(member.value for member in IncidentSeverity) + ")$"
 
 
 class NearMissBase(BaseModel):
@@ -43,7 +50,7 @@ class NearMissBase(BaseModel):
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (golden thread)")
 
     risk_category: Optional[str] = None
-    potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
+    potential_severity: Optional[str] = Field(None, pattern=SHARED_SEVERITY_PATTERN)
     is_hipo: bool = False
 
 
@@ -76,12 +83,8 @@ class NearMissUpdate(BaseModel):
     potential_consequences: Optional[str] = None
     preventive_action_suggested: Optional[str] = None
 
-    # The IncidentStatus values (N-2). A legacy uppercase label is refused here,
-    # at the boundary, rather than reaching a transition map that would report it
-    # as a dead-end status.
     status: Optional[str] = Field(
-        None,
-        pattern="^(reported|under_investigation|pending_actions|actions_in_progress|pending_review|closed)$",
+        None, pattern="^(reported|under_investigation|pending_actions|actions_in_progress|pending_review|closed)$"
     )
     priority: Optional[str] = Field(None, pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$")
 
@@ -92,7 +95,7 @@ class NearMissUpdate(BaseModel):
     corrective_actions_taken: Optional[str] = None
 
     risk_category: Optional[str] = None
-    potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
+    potential_severity: Optional[str] = Field(None, pattern=SHARED_SEVERITY_PATTERN)
     is_hipo: Optional[bool] = None
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
     asset_number: Optional[str] = None

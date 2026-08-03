@@ -21,6 +21,13 @@ These tests close the drift from both ends:
 * ``TestTheContractTestHasTeeth`` reproduces the production defect against a
   rogue option, so a future refactor cannot leave these assertions passing
   vacuously.
+
+``severity_levels`` joined the registry in B-9. It is the one category that fills
+more than one field — incident ``severity``, complaint ``priority``, near-miss
+``potential_severity`` — which is why it waited for the product decision that
+those three carry the same five values. The probe below exercises it through
+incident severity; the other two bindings are covered statically by write-contract
+Guard 3.
 """
 
 from __future__ import annotations
@@ -46,14 +53,31 @@ from src.domain.services.lookup_enum_contract import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20260831_realign_enum_lookups_and_dedupe_customers.py"
+VERSIONS_DIR = REPO_ROOT / "alembic" / "versions"
+
+# The migration that decides what a *migrated* tenant is offered for each
+# enum-backed category, and the name of the constant inside it holding those
+# defaults as ``(code, label, display_order)``.
+#
+# ``complaint_types`` and ``incident_types`` are owned by the PX-281/282 repair,
+# which reseeded them because their codes were not enum members. ``severity_levels``
+# is owned by the B-9 repair, for a different reason: its codes were always valid,
+# but a migrated tenant only ever had four of the five. ``20260827_lookup_tenant_fix``
+# adopts the pre-existing orphan rows, which leaves the category non-empty, and
+# ``20260828_lookup_defaults`` inserts only into a category with no rows at all — so
+# the seed module's ``negligible`` row was skipped on every migrated database.
+CATEGORY_DEFAULT_MIGRATIONS: dict[str, tuple[str, str]] = {
+    "complaint_types": ("20260831_realign_enum_lookups_and_dedupe_customers.py", "ENUM_LOOKUP_DEFAULTS"),
+    "incident_types": ("20260831_realign_enum_lookups_and_dedupe_customers.py", "ENUM_LOOKUP_DEFAULTS"),
+    "severity_levels": ("20260911_shared_severity_negligible.py", "ENUM_LOOKUP_DEFAULTS"),
+}
 
 TENANT = 1
 LOOKUP_ENDPOINT = "/api/v1/admin/config/lookup/{category}"
 
 
-def _load_migration() -> ModuleType:
-    """Load the repair migration by path; ``alembic/versions`` is not a package.
+def _load_migration(filename: str) -> ModuleType:
+    """Load a migration by path; ``alembic/versions`` is not a package.
 
     The repo ships an empty ``alembic/__init__.py`` that shadows the installed
     distribution once the repo root is on ``sys.path``, so ``alembic.op`` is
@@ -64,12 +88,27 @@ def _load_migration() -> ModuleType:
     if not hasattr(alembic, "op"):
         alembic.op = SimpleNamespace(get_bind=lambda: None)  # type: ignore[attr-defined]
 
-    spec = importlib.util.spec_from_file_location("qgp_lookup_enum_align", MIGRATION_PATH)
+    module_name = f"qgp_migration_{Path(filename).stem}"
+    spec = importlib.util.spec_from_file_location(module_name, VERSIONS_DIR / filename)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _migration_defaults(category: str) -> tuple[tuple[str, str, int], ...]:
+    """The ``(code, label, display_order)`` rows the owning migration installs.
+
+    ``_DEFAULT_ROWS`` is a flat list across categories and ``ENUM_LOOKUP_DEFAULTS``
+    is keyed by category; both are normalised to the same shape here so the
+    comparison against the seed module is one assertion.
+    """
+    filename, constant = CATEGORY_DEFAULT_MIGRATIONS[category]
+    defaults = getattr(_load_migration(filename), constant)
+    if isinstance(defaults, dict):
+        return tuple(defaults[category])
+    return tuple((code, label, order) for row_category, code, label, order in defaults if row_category == category)
 
 
 def _recent() -> str:
@@ -96,6 +135,23 @@ def _incident_payload(code: str) -> dict[str, Any]:
     }
 
 
+def _severity_payload(code: str) -> dict[str, Any]:
+    """Probe ``severity_levels`` through incident severity, the enum behind it.
+
+    The category also fills complaint ``priority`` and near-miss
+    ``potential_severity``; those two are checked against the same set by the
+    static write-contract guard (``tests/contract/test_write_contract_guards.py``,
+    Guard 3), which reads all three bindings out of the OpenAPI schema.
+    """
+    return {
+        "title": f"Lookup contract probe: severity {code}",
+        "description": f"Submitted with the active severity_levels option '{code}'.",
+        "incident_type": "other",
+        "severity": code,
+        "incident_date": _recent(),
+    }
+
+
 # The case endpoint each enum-backed category feeds, and how to build a minimal
 # valid create payload for it. Keyed by category so a new entry in
 # ENUM_BACKED_LOOKUPS without a probe fails ``test_every_registered_category_is_probed``
@@ -103,6 +159,7 @@ def _incident_payload(code: str) -> dict[str, Any]:
 CASE_PROBES: dict[str, tuple[str, Callable[[str], dict[str, Any]]]] = {
     "complaint_types": ("/api/v1/complaints/", _complaint_payload),
     "incident_types": ("/api/v1/incidents/", _incident_payload),
+    "severity_levels": ("/api/v1/incidents/", _severity_payload),
 }
 
 
@@ -152,20 +209,28 @@ class TestSeedDataIsWithinItsEnum:
 
 
 class TestMigrationDefaultsMatchTheSeed:
-    """The repair migration inlines the codes; the copy must not drift."""
+    """Migrations inline the codes; the copy must not drift.
+
+    The invariant is that a tenant whose options came from a migration and a
+    tenant freshly seeded by ``lookup_defaults_seed_data`` are offered the same
+    dropdown. Which migration installed them differs by category — see
+    ``CATEGORY_DEFAULT_MIGRATIONS`` — but the comparison is the same one.
+    """
 
     def test_migration_defaults_are_identical_to_the_seed_module(self, enum_lookup: EnumBackedLookup):
-        migration = _load_migration()
-        inline = migration.ENUM_LOOKUP_DEFAULTS[enum_lookup.category]
+        filename, constant = CATEGORY_DEFAULT_MIGRATIONS[enum_lookup.category]
+        inline = _migration_defaults(enum_lookup.category)
         seeded = tuple((row.code, row.label, row.display_order) for row in rows_for_category(enum_lookup.category))
         assert inline == seeded, (
-            f"alembic 20260831_lookup_enum_align and lookup_defaults_seed_data disagree about "
+            f"alembic {filename} ({constant}) and lookup_defaults_seed_data disagree about "
             f"'{enum_lookup.category}'; a migrated tenant and a freshly seeded one would offer different options"
         )
 
-    def test_migration_covers_every_enum_backed_category(self):
-        migration = _load_migration()
-        assert set(migration.ENUM_LOOKUP_DEFAULTS) == set(ENUM_BACKED_CATEGORIES)
+    def test_every_enum_backed_category_has_an_owning_migration(self):
+        assert set(CATEGORY_DEFAULT_MIGRATIONS) == set(ENUM_BACKED_CATEGORIES), (
+            "every enum-backed category needs a migration that installs its defaults, otherwise a tenant "
+            "that predates the seed module is offered something nothing checks"
+        )
 
 
 async def _active_codes(client: AsyncClient, category: str) -> list[str]:

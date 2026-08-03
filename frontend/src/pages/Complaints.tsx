@@ -191,6 +191,7 @@ export default function Complaints() {
     { value: 'high', label: t('priority.high') },
     { value: 'medium', label: t('priority.medium') },
     { value: 'low', label: t('priority.low') },
+    { value: 'negligible', label: t('priority.negligible') },
   ]
   const [priorityOptions, setPriorityOptions] = useState(defaultPriorityOptions)
   const [subjectEmail, setSubjectEmail] = useState('')

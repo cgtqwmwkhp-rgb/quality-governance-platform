@@ -17,10 +17,16 @@ Naming the pairings here gives the seed data, the repair migration, the
 admin write guard and the contract test one definition to agree with instead of
 four restatements of it.
 
-``severity_levels`` is deliberately *not* registered here: one lookup category
-feeds three differently-shaped fields (incident ``severity``, complaint
-``priority``, near-miss ``potential_severity``) with known ``negligible``
-mismatches. That needs a product decision before it can be a 1:1 enum contract.
+``severity_levels`` is the third entry, added by B-9. It is unusual in that one
+category feeds three differently-named fields — incident ``severity``, complaint
+``priority`` and near-miss ``potential_severity`` — which is why it sat outside
+this registry while they disagreed: the dropdown offered ``negligible`` and only
+incident severity accepted it. B-9 settled that as a product decision (one shared
+severity set across the three) rather than as three separate taxonomies, so the
+category now has a single enum behind it and belongs here. ``IncidentSeverity`` is
+that enum; ``ComplaintPriority`` mirrors it member for member. The RTA harm scale
+(``RTASeverity``) and audit finding grading are *not* part of the shared set —
+they measure different things and are not fed by this lookup.
 """
 
 from __future__ import annotations
@@ -31,7 +37,7 @@ from dataclasses import dataclass
 
 from src.domain.exceptions import ValidationError
 from src.domain.models.complaint import ComplaintType
-from src.domain.models.incident import IncidentType
+from src.domain.models.incident import IncidentSeverity, IncidentType
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +67,12 @@ ENUM_BACKED_LOOKUPS: tuple[EnumBackedLookup, ...] = (
         enum_class=IncidentType,
         request_field="incident_type",
         ticket="R22-01",
+    ),
+    EnumBackedLookup(
+        category="severity_levels",
+        enum_class=IncidentSeverity,
+        request_field="severity",
+        ticket="B-9",
     ),
 )
 
