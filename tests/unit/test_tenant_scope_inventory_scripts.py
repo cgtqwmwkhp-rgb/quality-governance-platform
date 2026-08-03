@@ -106,8 +106,9 @@ def test_excluded_tables_are_read_from_alembic_env():
     assert "escalation_rules" in excluded
     # A mid-set name, so a parse that stopped early is caught as well as one that
     # never started. `obsolete_document_records` held this role until C-24
-    # migrated it off the register.
-    assert "information_assets" in excluded
+    # migrated it off the register, and `information_assets` after it until
+    # 20260909_iso_absorb converged the last nine IMS / ISO27001 entries.
+    assert "risk_audit_mapping" in excluded
 
 
 def test_metadata_excludes_the_audit_template_collision_tables():

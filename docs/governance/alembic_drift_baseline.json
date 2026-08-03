@@ -9,13 +9,6 @@
     "DropIndexOp": 207
   },
   "excluded_table_drift": {
-    "access_control_records": {
-      "AlterColumnOp": 4,
-      "CreateForeignKeyOp": 3,
-      "DropColumnOp": 6,
-      "DropConstraintOp": 2,
-      "DropIndexOp": 2
-    },
     "audit_finding_clause_mapping": {
       "DropIndexOp": 2,
       "DropTableOp": 1
@@ -24,17 +17,6 @@
       "DropIndexOp": 2,
       "DropTableOp": 1
     },
-    "business_continuity_plans": {
-      "AlterColumnOp": 8,
-      "CreateForeignKeyOp": 2,
-      "DropColumnOp": 15,
-      "DropConstraintOp": 2,
-      "DropIndexOp": 2
-    },
-    "cross_standard_mappings": {
-      "AlterColumnOp": 1,
-      "DropIndexOp": 2
-    },
     "escalation_rules": {
       "CreateIndexOp": 2,
       "CreateTableOp": 1
@@ -42,29 +24,6 @@
     "escalation_rules_config": {
       "DropIndexOp": 1,
       "DropTableOp": 1
-    },
-    "ims_requirements": {
-      "AlterColumnOp": 1
-    },
-    "information_assets": {
-      "AlterColumnOp": 6,
-      "CreateForeignKeyOp": 3,
-      "DropConstraintOp": 1,
-      "DropIndexOp": 3
-    },
-    "information_security_risks": {
-      "AlterColumnOp": 9,
-      "CreateForeignKeyOp": 2,
-      "DropConstraintOp": 1,
-      "DropIndexOp": 2
-    },
-    "iso27001_controls": {
-      "AlterColumnOp": 3,
-      "CreateForeignKeyOp": 2,
-      "CreateTableCommentOp": 1,
-      "DropColumnOp": 10,
-      "DropConstraintOp": 2,
-      "DropIndexOp": 2
     },
     "risk_audit_mapping": {
       "DropIndexOp": 2,
@@ -81,40 +40,17 @@
     "risk_incident_mapping": {
       "DropIndexOp": 2,
       "DropTableOp": 1
-    },
-    "security_incidents": {
-      "AlterColumnOp": 9,
-      "CreateForeignKeyOp": 3,
-      "DropColumnOp": 7,
-      "DropConstraintOp": 1,
-      "DropIndexOp": 3
-    },
-    "supplier_security_assessments": {
-      "AlterColumnOp": 8,
-      "CreateForeignKeyOp": 1,
-      "DropColumnOp": 12,
-      "DropConstraintOp": 1,
-      "DropIndexOp": 2
     }
   },
   "excluded_tables": [
-    "access_control_records",
     "audit_finding_clause_mapping",
     "audit_section_clause_mapping",
-    "business_continuity_plans",
-    "cross_standard_mappings",
     "escalation_rules",
     "escalation_rules_config",
-    "ims_requirements",
-    "information_assets",
-    "information_security_risks",
-    "iso27001_controls",
     "risk_audit_mapping",
     "risk_clause_mapping",
     "risk_control_mapping",
-    "risk_incident_mapping",
-    "security_incidents",
-    "supplier_security_assessments"
+    "risk_incident_mapping"
   ],
   "tables": {
     "abac_policies": {

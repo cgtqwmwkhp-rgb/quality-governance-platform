@@ -62,8 +62,11 @@ class IMSRequirement(Base):
     is_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
     exclusion_justification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    # Nullable in the migrated table (f6e5d4c3b2a1). The ORM always supplies a
+    # value; making the column NOT NULL would need a backfill decision for any row
+    # that predates that, which is a separate exercise from recording the shape.
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=True
     )
 
 
@@ -79,6 +82,7 @@ class CrossStandardMapping(Base):
     primary_clause_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("clauses.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     primary_requirement_id: Mapped[int] = mapped_column(
         ForeignKey("ims_requirements.id", ondelete="CASCADE"), nullable=False
@@ -90,6 +94,7 @@ class CrossStandardMapping(Base):
     mapped_clause_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("clauses.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     mapped_requirement_id: Mapped[int] = mapped_column(
         ForeignKey("ims_requirements.id", ondelete="CASCADE"), nullable=False
@@ -105,8 +110,9 @@ class CrossStandardMapping(Base):
     # Annex SL common element
     annex_sl_element: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    # Nullable in the migrated table (f6e5d4c3b2a1); see IMSRequirement.created_at.
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=True
     )
 
 
