@@ -488,23 +488,113 @@ jobs:
             echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Create database backup
+      # Confirm a recovery point exists before migrations run, rather than trying to
+      # create one. `az postgres flexible-server backup create` is rejected outright on
+      # Burstable servers -- CustomerOnDemandBackupCannotBePerformedOnBurstableServer --
+      # and both psql-qgp-prod and psql-qgp-staging are Standard_B1ms, so the previous
+      # version of this step could never have succeeded. It also discarded stderr and
+      # relabelled the failure "verify Azure PostgreSQL backup is configured", which sent
+      # readers to inspect a backup configuration that was healthy the whole time.
+      #
+      # What actually protects the database is the automatic daily backup and its PITR
+      # window, so that is what this asserts. Errors from `az` are shown, never swallowed.
+      - name: Verify database recovery point
+        env:
+          MAX_BACKUP_AGE_HOURS: "30"
         run: |
-          echo "Creating pre-deployment database backup..."
+          set -uo pipefail
+          echo "=== Pre-deploy recovery point check ==="
+
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv 2>/dev/null || true)
           SERVER_NAME="${{ secrets.AZURE_DB_SERVER_NAME }}"
           if [ -z "$SERVER_NAME" ] && [ -n "$DB_URL" ]; then
             SERVER_NAME=$(DB_URL="$DB_URL" python3 -c "from urllib.parse import urlparse; import os; host = urlparse(os.environ.get('DB_URL', '')).hostname or ''; print(host.split('.')[0] if host else '')")
           fi
           if [ -z "$SERVER_NAME" ]; then
-            echo "::warning::Database backup command failed — unable to resolve production PostgreSQL server name"
+            echo "::warning::Cannot resolve the production PostgreSQL server name, so the recovery point is unverified. Set the AZURE_DB_SERVER_NAME secret."
             exit 0
           fi
-          az postgres flexible-server backup create \
-            --resource-group ${{ env.AZURE_DB_RESOURCE_GROUP }} \
-            --name "$SERVER_NAME" \
-            --backup-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" \
-            2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
+          echo "Server: $SERVER_NAME (resource group ${{ env.AZURE_DB_RESOURCE_GROUP }})"
+
+          # Two separate queries so a failure of either is attributable. An `az` failure
+          # means "unknown", not "no backup", and must not be reported as the latter.
+          if ! SERVER_JSON=$(az postgres flexible-server show \
+                --resource-group "${{ env.AZURE_DB_RESOURCE_GROUP }}" \
+                --name "$SERVER_NAME" \
+                --query "{retention:backup.backupRetentionDays,geo:backup.geoRedundantBackup,earliest:backup.earliestRestoreDate}" \
+                -o json); then
+            echo "::warning::Could not read backup configuration for $SERVER_NAME (see the az error above) — recovery point unverified."
+            exit 0
+          fi
+
+          if ! BACKUP_JSON=$(az postgres flexible-server backup list \
+                --resource-group "${{ env.AZURE_DB_RESOURCE_GROUP }}" \
+                --name "$SERVER_NAME" \
+                -o json); then
+            echo "::warning::Could not list backups for $SERVER_NAME (see the az error above) — recovery point unverified."
+            exit 0
+          fi
+
+          SERVER_JSON="$SERVER_JSON" BACKUP_JSON="$BACKUP_JSON" python3 <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os, sys
+          from datetime import datetime, timedelta, timezone
+
+          server = json.loads(os.environ["SERVER_JSON"])
+          backups = json.loads(os.environ["BACKUP_JSON"])
+          max_age = timedelta(hours=float(os.environ["MAX_BACKUP_AGE_HOURS"]))
+          now = datetime.now(timezone.utc)
+
+          def parsed(value):
+              # Azure emits +00:00 offsets; fromisoformat handles those on 3.11.
+              return datetime.fromisoformat(value) if value else None
+
+          completed = sorted(
+              (d for d in (parsed(b.get("completedTime")) for b in backups) if d),
+              reverse=True,
+          )
+          latest = completed[0] if completed else None
+          earliest = parsed(server.get("earliest"))
+          age = now - latest if latest else None
+
+          print("## Pre-deploy recovery point")
+          print()
+          print("| Item | Value |")
+          print("|------|-------|")
+          print(f"| Backups visible | {len(completed)} |")
+          print(f"| Most recent | {latest.isoformat() if latest else 'none'} |")
+          print(f"| Age | {f'{age.total_seconds() / 3600:.1f} h' if age else 'n/a'} |")
+          print(f"| Earliest restore point | {earliest.isoformat() if earliest else 'unknown'} |")
+          print(f"| Retention | {server.get('retention')} days |")
+          print(f"| Geo-redundant | {server.get('geo')} |")
+
+          # Only a definite answer blocks the deploy. Migrating with no recoverable state
+          # is the thing this gate exists to stop; an unreadable API is handled above.
+          if latest is None:
+              print()
+              print("**No recovery point.** Migrating would be unrecoverable.")
+              print("::error::No backup found for this server — refusing to migrate production without a recovery point.", file=sys.stderr)
+              sys.exit(1)
+
+          if age > max_age:
+              print()
+              print(f"**Newest backup is {age.total_seconds() / 3600:.1f} h old**, over the {max_age.total_seconds() / 3600:.0f} h threshold.")
+              print(
+                  f"::error::Newest backup for this server is {age.total_seconds() / 3600:.1f}h old, "
+                  "which exceeds the allowed age — investigate the Azure backup schedule before migrating.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print()
+          print(f"Recoverable to any point from {earliest.isoformat() if earliest else 'unknown'} onwards.")
+
+          # Worth stating on every deploy: the backups share a region with the server, so a
+          # regional loss takes both. Not a blocker, but it should not be silent either.
+          if str(server.get("geo")).lower() != "enabled":
+              print("::warning::Geo-redundant backup is disabled — a regional outage would take the database and its backups together.", file=sys.stderr)
+          PY
+
+          echo "Recovery point verified."
 
       - name: Pre-deploy staging canary verification (D18 — progressive delivery gate)
         run: |
