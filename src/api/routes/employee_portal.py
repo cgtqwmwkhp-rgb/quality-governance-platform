@@ -583,6 +583,8 @@ _STATUS_LABELS = {
     "resolved": "✅ Resolved",
     "closed": "🏁 Closed",
     "rejected": "❌ Rejected",
+    "under_review": "👀 Under Review",
+    "action_required": "⚠️ Action Required",
 }
 
 _PRIORITY_LABELS = {

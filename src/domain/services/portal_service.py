@@ -75,16 +75,18 @@ def _map_severity(severity: str) -> tuple[IncidentSeverity, ComplaintPriority]:
 
 def _get_status_label(status: str) -> str:
     labels = {
-        "REPORTED": "📋 Submitted",
-        "OPEN": "📋 Open",
-        "UNDER_INVESTIGATION": "🔍 Under Investigation",
-        "IN_PROGRESS": "⚙️ In Progress",
-        "PENDING_REVIEW": "👀 Pending Review",
-        "RESOLVED": "✅ Resolved",
-        "CLOSED": "🏁 Closed",
-        "REJECTED": "❌ Rejected",
+        "reported": "📋 Submitted",
+        "open": "📋 Open",
+        "under_investigation": "🔍 Under Investigation",
+        "in_progress": "⚙️ In Progress",
+        "pending_review": "👀 Pending Review",
+        "resolved": "✅ Resolved",
+        "closed": "🏁 Closed",
+        "rejected": "❌ Rejected",
+        "under_review": "👀 Under Review",
+        "action_required": "⚠️ Action Required",
     }
-    return labels.get(status, status)
+    return labels.get(status.lower(), status)
 
 
 def _get_priority_label(priority: str) -> str:
