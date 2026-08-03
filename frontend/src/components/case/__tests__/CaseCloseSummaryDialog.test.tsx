@@ -321,12 +321,15 @@ describe('CaseLifecycleControls', () => {
     await waitFor(() => expect(onReopen).toHaveBeenCalled())
   })
 
-  it('treats a near miss CLOSED status as closed despite the uppercase enum', () => {
+  // N-2 aligned near misses onto the incident lifecycle, so 'closed' is now the
+  // stored value. A legacy uppercase row must still read as closed, or a record
+  // from a database that has not run 20260909_nm_status_align loses its Reopen.
+  it.each(['closed', 'CLOSED'])('treats a near miss %s status as closed', (status) => {
     render(
       <CaseLifecycleControls
         caseType="near_miss"
         caseId={5}
-        status="CLOSED"
+        status={status}
         onClose={vi.fn()}
         onReopen={vi.fn()}
         testIdPrefix="near-miss"

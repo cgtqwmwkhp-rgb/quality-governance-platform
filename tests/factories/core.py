@@ -159,7 +159,7 @@ class NearMissFactory(factory.Factory):
     location = factory.Sequence(lambda n: f"Site {n}, Bay A")
     event_date = factory.LazyFunction(_fixed_ts)
     description = factory.Sequence(lambda n: f"Near miss description for event {n}.")
-    status = "REPORTED"
+    status = "reported"
     priority = "MEDIUM"
     tenant_id = 1
     created_at = factory.LazyFunction(_fixed_ts)

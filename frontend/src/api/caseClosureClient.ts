@@ -17,15 +17,15 @@ export const CLOSURE_REASON_OPEN_ACTIONS = 'OPEN_ACTIONS_REMAIN'
 export const CASE_REOPEN_STATUS: Record<CaseClosureCaseType, string> = {
   incident: 'pending_review',
   complaint: 'under_investigation',
-  near_miss: 'UNDER_REVIEW',
+  near_miss: 'pending_review',
   rta: 'under_investigation',
 }
 
-/** Status each register treats as closed. Near misses store status uppercase. */
+/** Status each register treats as closed. */
 export const CASE_CLOSED_STATUS: Record<CaseClosureCaseType, string> = {
   incident: 'closed',
   complaint: 'closed',
-  near_miss: 'CLOSED',
+  near_miss: 'closed',
   rta: 'closed',
 }
 
@@ -88,7 +88,13 @@ export interface CaseClosureValidation {
   summary: CaseClosureSummary
 }
 
-/** True when `status` is the closed state for this register (case-insensitively). */
+/**
+ * True when `status` is the closed state for this register.
+ *
+ * Compared case-insensitively, matching `case_closure.is_closed_status`: every
+ * register stores lowercase since N-2, so this is tolerance for a legacy
+ * uppercase near-miss row rather than a live requirement.
+ */
 export function isCaseClosed(caseType: CaseClosureCaseType, status?: string | null): boolean {
   return (status || '').toLowerCase() === CASE_CLOSED_STATUS[caseType].toLowerCase()
 }

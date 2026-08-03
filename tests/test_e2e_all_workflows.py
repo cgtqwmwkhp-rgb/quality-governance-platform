@@ -283,14 +283,16 @@ class TestNearMissWorkflow:
     @pytest.mark.asyncio
     async def test_near_miss_status_workflow(self, auth_headers):
         """Test near miss status transitions."""
+        # The incident lifecycle, value for value, since N-2 aligned the two.
         valid_statuses = [
-            "REPORTED",
-            "UNDER_REVIEW",
-            "ACTION_REQUIRED",
-            "IN_PROGRESS",
-            "CLOSED",
+            "reported",
+            "under_investigation",
+            "pending_actions",
+            "actions_in_progress",
+            "pending_review",
+            "closed",
         ]
-        assert len(valid_statuses) == 5
+        assert len(valid_statuses) == 6
 
     @pytest.mark.asyncio
     async def test_near_miss_risk_categories(self, auth_headers):

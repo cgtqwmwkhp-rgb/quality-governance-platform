@@ -183,9 +183,11 @@ CASE_CONFIGS: dict[str, _CaseConfig] = {
         label="near miss",
         capa_source=CAPASource.NEAR_MISS,
         assigned_entity_type="near_miss",
-        # Near misses store status as an uppercase VARCHAR, unlike the enum-backed siblings.
-        closed_status="CLOSED",
-        reopen_status="UNDER_REVIEW",
+        # Stored as a VARCHAR rather than an enum, but holding IncidentStatus's
+        # values since N-2 — so the reopen edge is the incident's, not a
+        # register-specific one.
+        closed_status="closed",
+        reopen_status="pending_review",
     ),
     CASE_TYPE_RTA: _CaseConfig(
         label="road traffic collision",
@@ -205,7 +207,14 @@ def status_value(status: Any) -> str:
 
 
 def is_closed_status(case_type: str, status: Any) -> bool:
-    """True when ``status`` is the closed terminal state for this register."""
+    """True when ``status`` is the closed terminal state for this register.
+
+    Every register stores lowercase since N-2, so the case-insensitive compare is
+    now tolerance rather than necessity: a near miss read from a database that
+    has not yet run ``20260910_nm_status_align`` still reads as closed, and is
+    still refused a transition by ``validate_near_miss_transition``, which is the
+    right way round.
+    """
     config = _config(case_type)
     return status_value(status).strip().lower() == config.closed_status.lower()
 

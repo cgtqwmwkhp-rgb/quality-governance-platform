@@ -113,7 +113,7 @@ class HsKpiService:
             NearMiss,
             NearMiss.event_date,
             "near_miss",
-            NearMiss.status == "CLOSED",
+            NearMiss.status == "closed",
         )
         await _pull(
             RoadTrafficCollision,
