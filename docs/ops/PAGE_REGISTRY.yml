@@ -466,6 +466,24 @@ admin_routes:
     expected_degraded_state: null
     description: "Compliance automation"
 
+  - pageId: compliance-schedule
+    route: /compliance-schedule
+    auth: jwt_admin
+    criticality: P2
+    component: ComplianceSchedule
+    expected_empty_state: "No active requirements; catalogue activate available"
+    expected_degraded_state: "Hidden when compliance_schedule feature flag is off"
+    description: "Organisation/location Compliance Schedule register"
+
+  - pageId: compliance-schedule-detail
+    route: /compliance-schedule/:id
+    auth: jwt_admin
+    criticality: P2
+    component: ComplianceScheduleDetail
+    expected_empty_state: "Requirement detail with empty occurrence records"
+    expected_degraded_state: "Hidden when compliance_schedule feature flag is off"
+    description: "Compliance Schedule requirement detail and completion"
+
   - pageId: risk-register
     route: /risk-register
     auth: jwt_admin

@@ -17,6 +17,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   // CUJ 5.4: Bow-tie UI remains hidden until backed by production data
   risk_bowtie: false,
 
+  // Compliance Schedule (Wave 1) — opener mirrors COMPLIANCE_SCHEDULE_ENABLED
+  compliance_schedule: false,
+
   // Other feature flags can be added here
   portal_offline_mode: false,
   admin_ai_copilot: false,

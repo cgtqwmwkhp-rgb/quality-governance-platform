@@ -22,6 +22,7 @@ import { createSafetyInsightsApi } from './safetyInsightsClient'
 import { createAuditChallengeApi } from './auditChallengeClient'
 import { createComplaintsApi } from './complaintsClient'
 import { createNearMissesApi } from './nearMissesClient'
+import { createComplianceScheduleApi } from './complianceScheduleClient'
 import { createCaseClosureApi } from './caseClosureClient'
 import { createRisksApi } from './risksClient'
 import { createStandardsApi } from './standardsClient'
@@ -1072,6 +1073,9 @@ export const complaintsApi = createComplaintsApi(api)
 
 // ============ Near Misses API (extracted: nearMissesClient.ts) ============
 export const nearMissesApi = createNearMissesApi(api)
+
+// ============ Compliance Schedule API ============
+export const complianceScheduleApi = createComplianceScheduleApi(api)
 
 // ============ Case closure validation (shared by the four registers) ============
 export const caseClosureApi = createCaseClosureApi(api)

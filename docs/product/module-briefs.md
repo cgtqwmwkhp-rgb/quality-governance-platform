@@ -842,7 +842,7 @@ Full persona definitions: [`docs/user-journeys/personas-and-journeys.md`](../use
   - As an auditor, I can evidence missed occurrences and link CAPA (Wave 2).
 - **Success Metrics**: Statutory overdue count; missed-occurrence rate; time-to-file evidence into the Governance Library.
 - **Journey Reference**: Journey 2 — Compliance Oversight (P2)
-- **API Surface**: Wave 1 — `src/api/routes/compliance_schedule.py` (not yet shipped). Wave 0 foundations only.
+- **API Surface**: Wave 1 — `GET/POST /api/v1/compliance-schedule/...` (`src/api/routes/compliance_schedule.py`). Flag defaults off.
 - **Data Entities**: `ComplianceRequirementTemplate`, `ComplianceRequirement`, `ComplianceRecord` (`src/domain/models/compliance_schedule.py`).
 - **Dependencies**: Locations, Evidence Assets, Document Library (filing Wave 2), CAPA (Wave 2), Notifications (Wave 2), Reference Numbers (CSR/CRC), Feature Flags (kill switch).
 - **Status**: Wave 0 foundations (flag default off)

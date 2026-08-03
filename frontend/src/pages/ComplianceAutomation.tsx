@@ -20,6 +20,7 @@ import {
   CheckCircle,
   Clock,
   Calendar,
+  CalendarClock,
   TrendingUp,
   TrendingDown,
   FileText,
@@ -885,16 +886,27 @@ export default function ComplianceAutomation() {
               <p className="text-sm text-muted-foreground mt-1">
                 {t(
                   'compliance.automation.audits.handoff_note',
-                  'Reads scheduled and in-progress runs from Audits — not the legacy compliance schedule feed.',
+                  'Monitoring shows scheduled and in-progress audit runs only. Organisation/location obligations live in Compliance Schedule.',
                 )}
               </p>
             </div>
-            <Button variant="outline" asChild>
-              <Link to={MONITORING_AUDITS_HANDOFF_PATH} data-testid="monitoring-audits-schedule-link">
-                <Calendar className="w-4 h-4 mr-2" />
-                {t('compliance.automation.open_audits', 'Open Audits')}
-              </Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" asChild>
+                <Link to="/compliance-schedule" data-testid="monitoring-compliance-schedule-link">
+                  <CalendarClock className="w-4 h-4 mr-2" />
+                  {t(
+                    'compliance.automation.audits.open_compliance_schedule',
+                    'Open Compliance Schedule',
+                  )}
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to={MONITORING_AUDITS_HANDOFF_PATH} data-testid="monitoring-audits-schedule-link">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  {t('compliance.automation.open_audits', 'Open Audits')}
+                </Link>
+              </Button>
+            </div>
           </div>
           {auditRuns.length === 0 ? (
             <div data-testid="monitoring-audits-empty">
