@@ -7,26 +7,37 @@ in [`alembic/env.py`](../../alembic/env.py). Those names are omitted from
 `alembic check` / autogenerate compare via `include_object` until additive
 migrations (or model alignment) land.
 
+**The register has been empty since 2026-09-12.** `alembic check` now compares
+every table in `Base.metadata` against every table in the migrated schema, with
+no name removed from the comparison. This document is therefore mostly the
+history of how it got there, plus the rules that keep it empty.
+
 **Do not remove an exclusion without a migration or model fix that makes
-`alembic check` green without the name in the frozenset.**
+`alembic check` green without the name in the frozenset.** And do not add one
+without reading "Scope of an exclusion" below: an entry mutes the whole table,
+columns included, not just the operation that prompted it.
 
-## Why exclusions exist
+## Why exclusions existed
 
-| Category | Reason |
-| --- | --- |
-| Junction / config without models | Tables exist in PostgreSQL but have no (or incomplete) SQLAlchemy models, so compare would invent drop/create noise. |
-| ORM vs migrated name mismatch | Model table name differs from the live migrated table (e.g. `escalation_rules` vs `escalation_rules_config`). |
+Every category this register ever carried has now been retired rather than
+deferred again, each with a dated section at the foot of this document.
 
-The "retained model after drop" category was retired on 2026-07-29 when its only
-entry was deleted rather than deferred; see the dated section at the foot of this
-document. Retaining a model whose table is gone is not a deferral this register
-should accept again — the model cannot be queried, and the one that existed broke
-`configure_mappers()` for every mapper in the registry.
+| Category | Reason it was deferred | Retired |
+| --- | --- | --- |
+| Legacy singular ISO27001 / ISMS names | In neither the metadata nor the schema, so nothing to defer. | 2026-07-29 |
+| Retained model after drop | Model declared a table a migration had dropped. | 2026-07-29 |
+| Missing create coverage | Model declared a table no migration created. | 2026-09-06 / 2026-09-07 |
+| Plural ORM names | Table and model disagreed about columns. | 2026-09-08 / 2026-09-09 |
+| Junction / config without models | Tables existed in PostgreSQL with no SQLAlchemy model, so compare offered to drop them. | 2026-09-12 |
+| ORM vs migrated name mismatch | Model table name differed from the live migrated table. | 2026-09-12 |
 
-The "plural ORM names" category was retired on 2026-09-09 when the last nine
-entries in it were converged rather than deferred again (dated section below).
-Every remaining entry is a table with no model, or a model whose table has a
-different name — one shape of problem, with one owner group each.
+Two of those retirements are worth restating as rules, because they are the ones
+that were argued rather than obvious. Retaining a model whose table is gone is
+not a deferral this register should accept again — the model cannot be queried,
+and the one that existed broke `configure_mappers()` for every mapper in the
+registry. Neither is a table with no model: an exclusion made the six junction
+tables of 2026-09-12 invisible for six months while the code they were built to
+replace went on reading the columns they were built to retire.
 
 CI sets `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` so `process_revision_directives`
 can strip noisy FK / index / unique / column ops. Phase 2 trialled surfacing unique
@@ -38,16 +49,16 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 
 ## Inventory
 
-| Table name | Owner | Reason |
-| --- | --- | --- |
-| `audit_finding_clause_mapping` | Risk / Audit mappings | Junction table present in DB without a complete SQLAlchemy model surface for compare. |
-| `audit_section_clause_mapping` | Risk / Audit mappings | Junction table present in DB without a complete SQLAlchemy model surface for compare. |
-| `escalation_rules_config` | Platform / DBA | Config table in DB; ORM uses a different name (`escalation_rules`). |
-| `risk_audit_mapping` | Risk / Audit mappings | Junction mapping in DB without matching ORM compare coverage. |
-| `risk_clause_mapping` | Risk / Audit mappings | Junction mapping in DB without matching ORM compare coverage. |
-| `risk_control_mapping` | Risk / Audit mappings | Junction mapping in DB without matching ORM compare coverage. |
-| `risk_incident_mapping` | Risk / Audit mappings | Junction mapping in DB without matching ORM compare coverage. |
-| `escalation_rules` | Platform / DBA | ORM table name differs from migrated `escalation_rules_config`. |
+Empty. No table is excluded from `alembic check`.
+
+When the register is next non-empty, this section is a table with one row per
+name and the columns `Table name | Owner | Reason`, where the table name is in
+backticks. `scripts/validate_alembic_drift_ratchet.py` reads exactly that shape
+out of this file and fails if it disagrees with `alembic/env.py` in either
+direction — an undocumented exclusion, or a row for a table that is not
+excluded. Nothing else in this document may use a backticked snake_case name in
+a table's first column, because the parser cannot tell that apart from an
+inventory row.
 
 ## Scope of an exclusion: intended table-level, actually total
 
@@ -74,21 +85,31 @@ these ~40 tables were not deferred, they were unreported — the difference betw
 list; `scripts/ops/run026/audit_attribution_schema.py` does not, and reports each
 finding's exclusion status as a field instead of dropping it.
 
+With the register empty that filter now narrows nothing, so the difference is
+currently unobservable. It is still the wrong shape, and it will start hiding
+findings again the first time a name is added, which is why the rule stays
+written down rather than being treated as closed by the register being empty.
+
 See [`attribution_schema_drift.md`](./attribution_schema_drift.md).
 
 ## How much is actually suppressed, and what stops it growing
 
-Two separate mutes are in play, and only one of them is this list:
+Two separate mutes were in play. Only one of them is left, and it was never this
+list:
 
-| Mute | Mechanism | Measured on main (2026-07-29) | After 2026-09-09 |
-| --- | --- | --- | --- |
-| Operation-type filter | `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` strips seven op types in `_filter_upgrade_ops` | 1058 operations across 209 tables reduced to 0 | unchanged |
-| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 25 tables carrying 196 further operations, including 4 `AddColumnOp` | 8 tables carrying 23 operations, **0** `AddColumnOp` |
+| Mute | Mechanism | Measured on main (2026-07-29) | After 2026-09-09 | After 2026-09-12 |
+| --- | --- | --- | --- | --- |
+| Operation-type filter | `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` strips seven op types in `_filter_upgrade_ops` | 1058 operations across 209 tables reduced to 0 | unchanged | 1056 operations across 209 tables reduced to 0 |
+| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 25 tables carrying 196 further operations, including 4 `AddColumnOp` | 8 tables carrying 23 operations, **0** `AddColumnOp` | **nothing** |
 
-The op-type filter, not this list, is what makes the gate green: the exclusion list
-removes its tables from the comparison before any operation is generated for them,
-so nothing of theirs ever reaches the filter or the published `before_filter`
-count. Both numbers are now printed by `alembic check` itself and enforced by
+The op-type filter, not this list, is what makes the gate green, and it is now the
+only thing muting it. That is the remaining work, and it is a much larger job
+than this register was: 1056 operations, 431 of them `AlterColumnOp` and 248
+`CreateIndexOp`, spread over 209 tables. What clearing this register bought is
+that those 1056 are now the whole of the deferral — there is no second number
+behind them, and no table whose drift is unmeasured.
+
+Both numbers are printed by `alembic check` itself and enforced by
 `scripts/validate_alembic_drift_ratchet.py`, which fails CI when:
 
 - any `AddColumnOp` appears on a non-excluded table (zero tolerance — the count is
@@ -439,3 +460,115 @@ table is called `escalation_rules_config` (rendered as `CreateTableOp`). None of
 them is a column-shape question, so none of them is fixed by the treatment used
 here.
 
+## 2026-09-12 the last eight entries cleared and the register emptied (C-24, #1526)
+
+Removed all eight, and with them the last two categories. There is no inventory
+row left in this document and no name left in the frozenset.
+
+The eight were two problems, and neither was a column-shape disagreement, so
+neither was fixable by the absorb-into-the-model treatment the four preceding
+dates used.
+
+**Six junction tables nothing reads, dropped.**
+`20260220_normalize_json` created six junction tables to replace JSON array
+columns, copied the arrays into them, and renamed the source columns with a
+`_legacy` suffix. The second half of that plan never happened. No SQLAlchemy
+model was ever written for any of the six; no service, route or script names
+them (verified by search across `src/`, `scripts/`, `frontend/src/` and `tests/`
+— every apparent hit is the *plural* `risk_control_mappings`, which is a real
+model in `risk_register.py` and a different table); and the application still
+reads the `_legacy` columns the junctions were built to retire, through
+`Risk.clause_ids_json_legacy` and the field maps in `audit_service.py`.
+
+So their contents were a six-month-old derived copy of data whose source is still
+present and still written to. Dropping them is not a data decision. The
+migration counts the rows in each table and logs the count and the source column
+before dropping it, so the deploy log is the record of what each environment
+discarded rather than this paragraph; and `downgrade` recreates all six in their
+original shape and re-derives their rows from the same `_legacy` columns with the
+same SQL `20260220_normalize_json` used, which is what makes it reversible.
+
+Renaming them into a finished normalized design was the alternative, and it is
+not a migration: it needs models, a rewrite of the `_legacy` reads, and an API
+contract change on `clause_ids` / `control_ids`. That work is
+[`json-column-reduction.md`](../data/json-column-reduction.md) and it is
+untouched here. What this settles is only that a half-finished normalization
+should not hold a gate muted while it waits.
+
+**One model that named a table which does not exist, pointed at the right one.**
+`escalation_rules` and `escalation_rules_config` were two rows on this register
+for one mismatch. `20260220_workflow_persist` created
+`escalation_rules_config`; `EscalationRule` in `src/domain/models/workflow.py`
+declared `escalation_rules`. The model was the wrong side, and not merely
+differently named — `select(EscalationRule)` would have raised `UndefinedTable`
+on every migrated database since February. Nothing raised, because nothing
+queries it: the escalation logic in `workflow_service.py` uses an in-memory
+`EscalationRule` `Enum` that happens to share the name. So the rename cannot
+break a caller, and it makes `escalation_logs.rule_id` reference the table its
+physical foreign key has always pointed at.
+
+Three columns then had to converge for the table to compare to zero, and both
+directions were used, by the 2026-09-08 rule — *the side that moves is the side
+whose move cannot lose or reject data*:
+
+- `tenant_id`, declared by the model and absent from the table, is added by
+  `20260912_clear_junctions` with its foreign key and index. It had to be: this
+  would otherwise have been the only `AddColumnOp` in the repository, the class
+  the ratchet fails on unconditionally, and it would have made the table
+  unreadable to `select(EscalationRule)` at the exact moment the rename made the
+  class reachable.
+- `trigger_unit`, `send_notification` and `is_active` are `NOT NULL` in the model
+  and nullable-with-a-server-default in the table. Here the **database** moves.
+  The server default already guarantees a value on every row inserted without
+  one, so the only row `SET NOT NULL` could reject is one where a NULL was
+  written explicitly — and nothing has ever written to this table. Any such row
+  is repaired to the column's own server default first and the count logged, so
+  the outcome does not depend on what the table holds. Making the model
+  `Optional` instead would have shipped a nullable boolean flag on a table that
+  is about to get its first reader.
+
+Measured on PostgreSQL 16.14 against a database built by `alembic upgrade head`:
+`before_filter` falls from **1058 operations across 209 tables to 1056 across
+209**, and the drift hidden by `include_object` falls from **23 operations across
+8 tables to nothing at all**. `AddColumnOp` stays at 0. `alembic check` is green
+with the frozenset empty, and the ratchet reports `tables removed from the
+comparison entirely by include_object: 0`.
+
+The two-operation fall is on `escalation_logs`, not on the eight: its `rule_id`
+foreign key was being reported as one `CreateForeignKeyOp` (the model's, against
+a table that did not exist) plus one `DropConstraintOp` (the database's, against
+a table with no model), and the rename collapses both. `escalation_rules_config`
+itself joins the comparison contributing zero, which is the point, and the six
+junction tables leave it by being in neither metadata nor schema.
+
+As on the four preceding dates, `alembic_drift_baseline.json` was edited rather
+than regenerated with `--write-baseline`, and for the same reason: a full refresh
+would also tighten `complaints` and `incidents` from 4 `DropColumnOp` to 3, which
+this work did not cause. What changed is `excluded_tables` and
+`excluded_table_drift`, which are now empty; `escalation_logs`, tightened to the
+single `CreateForeignKeyOp` it has left, because that fall *is* this PR's; and
+the three aggregates that have to move with it — `total_operations` 1060 → 1058,
+`CreateForeignKeyOp` 103 → 102, `DropConstraintOp` 33 → 32. The aggregates are
+not decoration:
+`test_the_baseline_covers_every_table_it_claims_to` asserts that
+`total_operations` equals the sum of the per-table counts, so a per-table
+tightening that leaves them alone makes the file self-contradictory. It still
+overstates reality by exactly the 2 `DropColumnOp` the preceding dates declined
+to absorb, on both sides of that equality, which is the ceiling it is meant to be.
+
+Row-level security was again deliberately not extended.
+`escalation_rules_config.tenant_id` arrives nullable because that is what the
+model declares, so the table does not meet the TEN2 precondition the expand waves
+used, and there is no parent row to derive a tenant from.
+
+Left as it was, deliberately: `escalation_logs.tenant_id` still has no foreign
+key to `tenants` although the model declares one. It is one of the 102
+`CreateForeignKeyOp` the operation-type filter suppresses repository-wide, it
+predates this work, and fixing one instance of a repository-wide class here would
+change no gate. It is recorded in the refreshed baseline.
+
+What this closes beyond the register: nothing about a table is now deferred by
+name anywhere in the repository. `DECLARED_BUT_UNMIGRATED` (2026-09-07),
+`DEFERRED_ABSENT_COLUMNS` (2026-09-08) and this register (2026-09-12) are all
+empty. The whole of the remaining deferral is the operation-type filter, it is
+one number, and it is printed on every run.

@@ -61,11 +61,16 @@ if config.config_file_name is not None:
 # Model's MetaData object for 'autogenerate' support
 target_metadata = Base.metadata
 
-# ORM vs migration naming drift and models not yet covered by migrations.
-# Excluded from `alembic check` / autogenerate compare until additive migrations land.
-# Owner + reason inventory: docs/governance/alembic_check_excluded_tables.md
+# Tables removed from `alembic check` / autogenerate compare entirely.
+# Empty since 2026-09-12. Owner + reason inventory, and the history of what used
+# to be here: docs/governance/alembic_check_excluded_tables.md
+#
+# A list rather than a set literal because Python has no empty-set literal: `{}`
+# here would be an empty dict, and a one-element tuple without its trailing comma
+# would be a frozenset of characters. `scripts/ops/run025/_models.py` parses this
+# call's first argument with `ast.literal_eval`, so it has to stay a literal.
 _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
-    {
+    [
         # The eight legacy singular ISO27001/ISMS names that used to head this set
         # were removed on 2026-07-29: they are in neither Base.metadata nor the
         # migrated schema, so autogenerate produced no operation for any of them
@@ -88,18 +93,19 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         # models absorbed the 50 columns the database had, the database widened 16
         # varchars and gained the 7 foreign keys the models declared, and all nine
         # now compare to zero operations.
+        # The last eight went on 2026-09-12 (20260912_clear_junctions), and the
+        # register is now empty: six unread junction tables were dropped, and
+        # EscalationRule was pointed at the escalation_rules_config table it has
+        # always described, so the escalation_rules / escalation_rules_config
+        # pair became one table that compares to zero operations.
         #
-        # Junction / config tables present in DB without SQLAlchemy models
-        "audit_finding_clause_mapping",
-        "audit_section_clause_mapping",
-        "escalation_rules_config",
-        "risk_audit_mapping",
-        "risk_clause_mapping",
-        "risk_control_mapping",
-        "risk_incident_mapping",
-        # ORM table name differs from migrated table (escalation_rules_config in DB)
-        "escalation_rules",
-    }
+        # This set is empty on purpose. `alembic check` now compares every table
+        # in Base.metadata against every table in the migrated schema, with no
+        # name removed from the comparison. Adding a name here re-mutes a table
+        # completely -- columns included -- so it needs a row in
+        # docs/governance/alembic_check_excluded_tables.md in the same PR, which
+        # scripts/validate_alembic_drift_ratchet.py enforces.
+    ]
 )
 
 

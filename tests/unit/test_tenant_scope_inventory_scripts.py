@@ -99,16 +99,42 @@ def test_side_effect_module_list_is_read_from_alembic_env():
         assert module in env_source
 
 
-def test_excluded_tables_are_read_from_alembic_env():
-    excluded = _models.alembic_check_excluded_tables()
-    # `escalation_rules` is the last name in the frozenset literal, so this also
-    # shows the parse reached the end of it rather than a leading fragment.
-    assert "escalation_rules" in excluded
-    # A mid-set name, so a parse that stopped early is caught as well as one that
-    # never started. `obsolete_document_records` held this role until C-24
-    # migrated it off the register, and `information_assets` after it until
-    # 20260909_iso_absorb converged the last nine IMS / ISO27001 entries.
-    assert "risk_audit_mapping" in excluded
+def test_the_exclusion_register_is_empty():
+    """No table is removed from `alembic check` by name.
+
+    This assertion is the register itself, not a detail of it. An exclusion mutes
+    a whole table's compare, columns included, so the empty set is what makes the
+    published drift numbers the whole of the deferral. 20260912_clear_junctions
+    emptied it; a name reappearing here needs a row in
+    docs/governance/alembic_check_excluded_tables.md and a reviewer, which is what
+    scripts/validate_alembic_drift_ratchet.py enforces.
+    """
+    assert _models.alembic_check_excluded_tables() == frozenset()
+
+
+def test_the_excluded_tables_parser_reads_a_populated_register(tmp_path, monkeypatch):
+    """Emptiness must be a fact about env.py, not a parser that returns nothing.
+
+    While the register had entries, this was pinned by asserting a first, middle
+    and last name were all present, so a parse that never started or stopped early
+    was caught. With the register empty there is no name to assert, so the parser
+    is pointed at a synthetic env.py instead — which tests the same property more
+    directly, and keeps testing it however long the register stays empty.
+    """
+    synthetic = tmp_path / "env.py"
+    synthetic.write_text(
+        "_ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(\n"
+        "    [\n"
+        '        "first_table",\n'
+        "        # a comment between entries, as the real file has\n"
+        '        "middle_table",\n'
+        '        "last_table",\n'
+        "    ]\n"
+        ")\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(_models, "ALEMBIC_ENV", synthetic)
+    assert _models.alembic_check_excluded_tables() == frozenset({"first_table", "middle_table", "last_table"})
 
 
 def test_metadata_excludes_the_audit_template_collision_tables():

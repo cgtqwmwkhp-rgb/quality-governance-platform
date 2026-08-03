@@ -28,6 +28,16 @@
 > table the application declares is absent from an Alembic-built schema any
 > more — see `DECLARED_BUT_UNMIGRATED` in
 > `tests/integration/_alembic_only_schema.py`, which is now empty.
+>
+> **Extended, 2026-09-12 (C-24).** `escalation_rules` is no longer an ORM name
+> for anything: `EscalationRule.__tablename__` is now `escalation_rules_config`,
+> the table `20260220_workflow_persist` actually created, and
+> `20260912_clear_junctions` adds the `tenant_id` the model declared. §2 and §4
+> below still list it as a declared-but-absent name with no reader, which was
+> true on 2026-07-28 and is the record this document keeps; the state it
+> describes is closed. The reasoning in §4 about the two look-alike
+> `escalation_rules` references stands and is why the rename could not break a
+> caller — there was none.
 
 Sixteen tables the SQLAlchemy models declare are not in the database, seven of
 them confirmed absent in production. This document records which they are, how
