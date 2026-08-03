@@ -61,7 +61,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup alembic/ ./alembic/
 COPY --chown=appuser:appgroup alembic.ini .
+# Spec files read at runtime, not build time. Migrations seed from these, so a
+# file missing here fails the deploy's migration step while every CI check —
+# which runs against a full repo checkout — still passes.
 COPY --chown=appuser:appgroup specs/governance-library/taxonomy.json ./specs/governance-library/taxonomy.json
+COPY --chown=appuser:appgroup specs/compliance-schedule/catalogue.json ./specs/compliance-schedule/catalogue.json
 COPY --chown=appuser:appgroup certs/ ./certs/
 COPY --chown=appuser:appgroup scripts/celery/ ./scripts/celery/
 
