@@ -831,6 +831,25 @@ Full persona definitions: [`docs/user-journeys/personas-and-journeys.md`](../use
 
 ---
 
+### 42. Compliance Schedule
+
+- **Domain**: Statutory & Premises Compliance
+- **Problem**: Organisation and location-level obligations (FRA, fire drills, EICR, LEV, insurance, GDPR review, etc.) have no schedule of record; Certificates/ScheduledAudits shelves have no create path and must not be extended.
+- **Primary Persona(s)**: P2 (Quality Auditor), P3 (Risk Manager), P4 (System Administrator)
+- **Key User Stories**:
+  - As a compliance manager, I can see Current / Due soon / Overdue obligations for each premises (never "Expired").
+  - As a facilities manager, I can complete a fire drill or FRA and keep a durable occurrence record.
+  - As an auditor, I can evidence missed occurrences and link CAPA (Wave 2).
+- **Success Metrics**: Statutory overdue count; missed-occurrence rate; time-to-file evidence into the Governance Library.
+- **Journey Reference**: Journey 2 — Compliance Oversight (P2)
+- **API Surface**: Wave 1 — `src/api/routes/compliance_schedule.py` (not yet shipped). Wave 0 foundations only.
+- **Data Entities**: `ComplianceRequirementTemplate`, `ComplianceRequirement`, `ComplianceRecord` (`src/domain/models/compliance_schedule.py`).
+- **Dependencies**: Locations, Evidence Assets, Document Library (filing Wave 2), CAPA (Wave 2), Notifications (Wave 2), Reference Numbers (CSR/CRC), Feature Flags (kill switch).
+- **Status**: Wave 0 foundations (flag default off)
+- **Note**: Certificates and ScheduledAudits remain read-only shelves with no create path; do not build Certificate POST here.
+
+---
+
 ---
 
 ## Cross-Cutting Concerns

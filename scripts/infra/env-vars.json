@@ -10,5 +10,6 @@
   "TELEMETRY_ENABLED": {"required": false, "description": "Enable OpenTelemetry instrumentation", "default": "true"},
   "LOG_LEVEL": {"required": false, "description": "Application log level", "default": "INFO"},
   "RATE_LIMIT_PER_MINUTE": {"required": false, "description": "API rate limit per minute per user", "default": "60"},
-  "DATA_RETENTION_DAYS": {"required": false, "description": "Default data retention period in days", "default": "365"}
+  "DATA_RETENTION_DAYS": {"required": false, "description": "Default data retention period in days", "default": "365"},
+  "COMPLIANCE_SCHEDULE_ENABLED": {"required": false, "description": "Enable Compliance Schedule module (organisation/location obligations). Default false; kill switch can only subtract.", "default": "false", "example": "false"}
 }

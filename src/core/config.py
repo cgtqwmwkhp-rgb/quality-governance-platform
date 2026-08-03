@@ -331,6 +331,10 @@ class Settings(BaseSettings):
     # PR3b: grounded register answers. Default off; ANDed with ai_copilot_enabled at the gate.
     ai_copilot_inference_enabled: bool = False
 
+    # Compliance Schedule (Wave 0). Closed until explicitly opted in; kill switch
+    # can only subtract (see compliance_schedule_kill_switch).
+    compliance_schedule_enabled: bool = False
+
     # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
     library_horizon_provider: str = "stub"
     perplexity_api_key: str = ""

@@ -76,6 +76,8 @@ RLS_TABLES = (
     "controlled_document_versions",
     "risks_v2",
     "evidence_assets",
+    "compliance_requirements",
+    "compliance_records",
 )
 
 # Name of the PostgreSQL GUC every tenant_isolation policy reads.

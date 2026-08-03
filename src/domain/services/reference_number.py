@@ -31,6 +31,8 @@ class ReferenceNumberService:
         "capa": "CAPA",
         "document": "DOC",
         "document_campaign": "CAM",
+        "compliance_requirement": "CSR",
+        "compliance_record": "CRC",
     }
 
     @classmethod
