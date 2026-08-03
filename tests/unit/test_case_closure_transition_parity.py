@@ -246,7 +246,7 @@ class TestValidationAndCloseAgreeOnTransitionLegality:
                 with pytest.raises(StateTransitionError) as exc_info:
                     await update_near_miss_route(
                         1,
-                        NearMissUpdate(status="CLOSED", lessons_learnt=LESSONS),
+                        NearMissUpdate(status="closed", lessons_learnt=LESSONS),
                         _db_returning(_near_miss()),
                         user,
                         request_id="req-dead-end",
@@ -290,7 +290,19 @@ class TestTransitionVerdictComesFromTheRegister:
             ),
             (
                 CASE_TYPE_NEAR_MISS,
-                ["REPORTED", "UNDER_REVIEW", "ACTION_REQUIRED", "IN_PROGRESS", "CLOSED", "AWAITING_TRIAGE"],
+                [
+                    "reported",
+                    "under_investigation",
+                    "pending_actions",
+                    "actions_in_progress",
+                    "pending_review",
+                    "closed",
+                    # Both a status this register never had and one it used to
+                    # have: 20260910_nm_status_align rewrote the uppercase labels,
+                    # so a surviving one is as unknown as anything else.
+                    "AWAITING_TRIAGE",
+                    "UNDER_REVIEW",
+                ],
             ),
             (
                 CASE_TYPE_RTA,
@@ -333,7 +345,7 @@ class TestTransitionVerdictComesFromTheRegister:
         """
         assert check_close_transition(CASE_TYPE_INCIDENT, "closed").allowed is True
         assert check_close_transition(CASE_TYPE_RTA, "closed").allowed is True
-        assert check_close_transition(CASE_TYPE_NEAR_MISS, "CLOSED").allowed is True
+        assert check_close_transition(CASE_TYPE_NEAR_MISS, "closed").allowed is True
 
         closed_complaint = check_close_transition(CASE_TYPE_COMPLAINT, "closed")
         assert closed_complaint.allowed is False

@@ -75,15 +75,20 @@ def _map_severity(severity: str) -> tuple:
 
 
 def _get_status_label(status: str) -> str:
+    # Keyed on the stored values, which are lowercase on all four registers since
+    # N-2 aligned near misses with the rest. Kept identical to
+    # ``employee_portal._STATUS_LABELS``, which is the copy the live portal reads.
     labels = {
-        "REPORTED": "📋 Submitted",
-        "OPEN": "📋 Open",
-        "UNDER_INVESTIGATION": "🔍 Under Investigation",
-        "IN_PROGRESS": "⚙️ In Progress",
-        "PENDING_REVIEW": "👀 Pending Review",
-        "RESOLVED": "✅ Resolved",
-        "CLOSED": "🏁 Closed",
-        "REJECTED": "❌ Rejected",
+        "reported": "📋 Submitted",
+        "open": "📋 Open",
+        "under_investigation": "🔍 Under Investigation",
+        "pending_actions": "📌 Pending Actions",
+        "actions_in_progress": "⚙️ Actions In Progress",
+        "in_progress": "⚙️ In Progress",
+        "pending_review": "👀 Pending Review",
+        "resolved": "✅ Resolved",
+        "closed": "🏁 Closed",
+        "rejected": "❌ Rejected",
     }
     return labels.get(status, status)
 
@@ -279,7 +284,7 @@ class PortalService:
             description=data["description"],
             potential_severity=data.get("severity", "medium").lower(),
             is_hipo=is_hipo,
-            status="REPORTED",
+            status="reported",
             priority=priority,
             tenant_id=self.tenant_id,
             source_form_id="portal_near_miss_v1",
@@ -440,7 +445,7 @@ class PortalService:
                 "icon": "⚠️",
             }
         ]
-        if near_miss.status != "REPORTED":
+        if near_miss.status != "reported":
             timeline.append(
                 {
                     "date": near_miss.updated_at.isoformat(),

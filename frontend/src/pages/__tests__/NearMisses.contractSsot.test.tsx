@@ -110,7 +110,7 @@ describe('NearMisses contract SSOT create form', () => {
         description: 'A pallet nearly fell over.',
         was_involved: true,
         witnesses_present: false,
-        status: 'REPORTED',
+        status: 'reported',
         priority: 'MEDIUM',
       },
     })

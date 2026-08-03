@@ -80,7 +80,7 @@ def _near_miss(**overrides):
         "tenant_id": 1,
         "reference_number": "NM-2026-0001",
         "description": "Load swung close to a pedestrian route",
-        "status": "UNDER_REVIEW",
+        "status": "under_investigation",
         "lessons_learnt": None,
         "closed_at": None,
         "closed_by_id": None,
@@ -491,7 +491,7 @@ class TestNearMissReadWriteAgree:
             with pytest.raises(StateTransitionError) as exc_info:
                 await update_near_miss_route(
                     1,
-                    NearMissUpdate(status="CLOSED"),
+                    NearMissUpdate(status="closed"),
                     _db_returning(_near_miss(tenant_id=7, lessons_learnt=None)),
                     user,
                     request_id="req-close",
@@ -508,11 +508,11 @@ class TestNearMissReadWriteAgree:
         with _no_open_work(), patches[0], patches[1], patches[2]:
             await update_near_miss_route(
                 1,
-                NearMissUpdate(status="CLOSED", lessons_learnt=LESSONS),
+                NearMissUpdate(status="closed", lessons_learnt=LESSONS),
                 _db_returning(near_miss),
                 user,
                 request_id="req-close-ok",
             )
 
-        assert near_miss.status == "CLOSED"
+        assert near_miss.status == "closed"
         assert near_miss.closed_at is not None

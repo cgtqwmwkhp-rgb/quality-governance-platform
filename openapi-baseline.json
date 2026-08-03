@@ -31091,7 +31091,7 @@
           "status": {
             "anyOf": [
               {
-                "pattern": "^(REPORTED|UNDER_REVIEW|ACTION_REQUIRED|IN_PROGRESS|CLOSED)$",
+                "pattern": "^(reported|under_investigation|pending_actions|actions_in_progress|pending_review|closed)$",
                 "type": "string"
               },
               {

@@ -279,7 +279,7 @@ class HsExcelImportService:
             event_date=row["event_date"],
             description=row["description"],
             persons_involved=row.get("person_involved") or None,
-            status="CLOSED" if row["closed"] else "REPORTED",
+            status="closed" if row["closed"] else "reported",
             source_form_id=SOURCE_FORM_ID,
             potential_consequences=row.get("notes") or None,
             lessons_learnt=row.get("notes") or None,

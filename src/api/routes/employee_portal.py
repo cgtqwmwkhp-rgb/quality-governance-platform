@@ -579,6 +579,10 @@ _STATUS_LABELS = {
     "reported": "📋 Submitted",
     "open": "📋 Open",
     "under_investigation": "🔍 Under Investigation",
+    # Reachable on a near miss as well as an incident since N-2 aligned the two
+    # lifecycles; without these the track page falls back to the raw key.
+    "pending_actions": "📌 Pending Actions",
+    "actions_in_progress": "⚙️ Actions In Progress",
     "in_progress": "⚙️ In Progress",
     "pending_review": "👀 Pending Review",
     "resolved": "✅ Resolved",
@@ -1153,7 +1157,7 @@ def build_near_miss_portal_fields(
         "risk_category": reporter_submission.get("risk_category"),
         "potential_severity": report.severity.lower(),
         "is_hipo": is_hipo,
-        "status": "REPORTED",
+        "status": "reported",
         "priority": priority,
         "source_form_id": "portal_near_miss_v1",
         "tenant_id": resolved_tenant_id,
