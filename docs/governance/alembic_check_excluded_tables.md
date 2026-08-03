@@ -14,7 +14,6 @@ migrations (or model alignment) land.
 
 | Category | Reason |
 | --- | --- |
-| Plural ORM names | SQLAlchemy models declare plural `__tablename__` values that are not yet migrated (or rename is pending). |
 | Junction / config without models | Tables exist in PostgreSQL but have no (or incomplete) SQLAlchemy models, so compare would invent drop/create noise. |
 | ORM vs migrated name mismatch | Model table name differs from the live migrated table (e.g. `escalation_rules` vs `escalation_rules_config`). |
 
@@ -23,6 +22,11 @@ entry was deleted rather than deferred; see the dated section at the foot of thi
 document. Retaining a model whose table is gone is not a deferral this register
 should accept again — the model cannot be queried, and the one that existed broke
 `configure_mappers()` for every mapper in the registry.
+
+The "plural ORM names" category was retired on 2026-09-09 when the last nine
+entries in it were converged rather than deferred again (dated section below).
+Every remaining entry is a table with no model, or a model whose table has a
+different name — one shape of problem, with one owner group each.
 
 CI sets `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` so `process_revision_directives`
 can strip noisy FK / index / unique / column ops. Phase 2 trialled surfacing unique
@@ -36,15 +40,6 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 
 | Table name | Owner | Reason |
 | --- | --- | --- |
-| `access_control_records` | IMS / ISO27001 | Plural ORM name without matching migrated table (or rename pending). |
-| `business_continuity_plans` | IMS / ISO27001 | Plural ORM name; migration/rename pending. |
-| `cross_standard_mappings` | IMS / ISO27001 | Cross-standard mapping ORM table; migration coverage pending. |
-| `ims_requirements` | IMS / ISO27001 | IMS requirements ORM; migration coverage pending. |
-| `information_assets` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
-| `information_security_risks` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
-| `iso27001_controls` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
-| `security_incidents` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
-| `supplier_security_assessments` | IMS / ISO27001 | Plural ORM counterpart to legacy singular; alignment pending. |
 | `audit_finding_clause_mapping` | Risk / Audit mappings | Junction table present in DB without a complete SQLAlchemy model surface for compare. |
 | `audit_section_clause_mapping` | Risk / Audit mappings | Junction table present in DB without a complete SQLAlchemy model surface for compare. |
 | `escalation_rules_config` | Platform / DBA | Config table in DB; ORM uses a different name (`escalation_rules`). |
@@ -85,10 +80,10 @@ See [`attribution_schema_drift.md`](./attribution_schema_drift.md).
 
 Two separate mutes are in play, and only one of them is this list:
 
-| Mute | Mechanism | Measured on main (2026-07-29) | After 2026-09-08 |
+| Mute | Mechanism | Measured on main (2026-07-29) | After 2026-09-09 |
 | --- | --- | --- | --- |
 | Operation-type filter | `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` strips seven op types in `_filter_upgrade_ops` | 1058 operations across 209 tables reduced to 0 | unchanged |
-| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 25 tables carrying 196 further operations, including 4 `AddColumnOp` | 17 tables carrying 167 operations, **0** `AddColumnOp` |
+| Table exclusion (this list) | `include_object` drops the table from the comparison entirely | 25 tables carrying 196 further operations, including 4 `AddColumnOp` | 8 tables carrying 23 operations, **0** `AddColumnOp` |
 
 The op-type filter, not this list, is what makes the gate green: the exclusion list
 removes its tables from the comparison before any operation is generated for them,
@@ -348,4 +343,99 @@ drift is entirely the reverse direction, 50 `DropColumnOp` for columns the
 database has and the model does not, plus 49 `AlterColumnOp` for shapes that
 disagree. The same absorb-into-the-model treatment applies, one owner decision
 per table. #1526.
+
+## 2026-09-09 the last nine IMS / ISO27001 entries converged and unfiltered (C-24, #1526)
+
+Removed `access_control_records`, `business_continuity_plans`,
+`cross_standard_mappings`, `ims_requirements`, `information_assets`,
+`information_security_risks`, `iso27001_controls`, `security_incidents` and
+`supplier_security_assessments` — the whole of what the section above deferred,
+and with it the "plural ORM names" category. Every name left on this register
+is now a table with no model or a model whose table is called something else.
+
+Unlike `soa_control_entries`, none of these nine was query-breaking: the models
+declared no column the database lacked, `select(Model)` worked, and the
+endpoints in `src/api/routes/iso27001.py` above them are live. What the
+exclusion hid was the reverse — **50 columns of real ISO 27001 evidence that no
+model could see**, which autogenerate renders as `DropColumnOp` over that
+evidence, plus 49 shape disagreements, 16 foreign keys, 14 indexes and a unique
+constraint.
+
+The rule applied is the one 2026-09-08 used: *the side that moves is the side
+whose move cannot lose or reject data.* That put almost all of the movement on
+the models.
+
+- **50 database-only columns** — the models absorbed them in the shape the
+  database has, including the `NOT NULL` and server default on the six that
+  carry one. Six sit beside a later column that might have been meant to
+  replace them (`plan_name`/`name`, `plan_type`, `status`,
+  `resource_name`/`system_name`, `findings`/`findings_details`,
+  `notification_required`/`regulatory_notification_required`).
+  `20260407_iso27001_drift_02` added the later one *beside* the original
+  instead of migrating the data across, so both are kept. Which supersedes
+  which is an IMS decision about live certification evidence and this PR does
+  not make it (#1398).
+- **25 nullability disagreements** (model `NOT NULL`, database nullable) — the
+  models moved. `20260407_iso27001_drift_02` made these columns nullable
+  deliberately, recording in its own docstring that existing rows could not
+  satisfy `NOT NULL` and that the application supplies the value on new rows.
+  Enforcing the model's claim now would need a value invented for every
+  historic `granted_date`, `effective_date`, `scope` and `category`. The
+  requirement is not lost — it is enforced where it always actually was, in the
+  request schemas (`AccessControlCreate.granted_date`, `BCPCreate.scope`, …),
+  and the read paths already null-guard these fields. Enforcing any of them in
+  the database is a per-column expand exercise with the IMS owner, still #1526.
+- **8 `jsonb` columns typed `JSON`** — the models moved, to the
+  `JSON().with_variant(JSONB, "postgresql")` idiom `governed_knowledge.py`
+  already uses. Converting the database to `json` would rewrite every table and
+  give up containment operators and GIN indexing.
+- **16 `varchar` columns narrower in the database than in the model** — the
+  *database* moved, and this is the only place it did. It is the
+  `implementation_status` argument from 2026-09-08 applied fifteen more times:
+  widening a `varchar` in PostgreSQL is catalogue-only, cannot reject or
+  truncate a value, and it closes a live failure — a 150-character
+  `threat_source` passes the request schema today and is rejected by
+  `varchar(100)` with a 500.
+- **16 foreign keys** — nine differed only in `ON DELETE`, which the database
+  has as `SET NULL` and the models did not declare; the models now declare it.
+  The other seven were absent from the database and `20260909_iso_absorb`
+  creates them, also `SET NULL`. `SET NULL` rather than the model's silent
+  `NO ACTION` on purpose: these are `owner_id` / `reported_by_id` columns, all
+  nullable, each with a `_name` column beside it holding the recorded name, and
+  `NO ACTION` would turn deleting a user into a foreign-key violation. The
+  migration **refuses** rather than repair if any of the seven columns holds a
+  dangling id (`OrphanedReferenceError`) — nulling it would discard the only
+  machine-readable link that row has to a person, and creating the constraint
+  `NOT VALID` would reflect as a real foreign key, so the next `alembic check`
+  would call the drift resolved when it is not.
+- **14 indexes and 1 unique constraint** — the models declare them. Nothing is
+  created or dropped.
+- **1 table comment** the model declared and the database lacked — set by the
+  migration.
+
+Measured on PostgreSQL 16.14 against a database built by `alembic upgrade head`:
+`before_filter` is unchanged at **1058 operations across 209 tables** — the nine
+tables joined the comparison and contributed zero between them, and no other
+table's per-table counts moved — and the drift hidden by `include_object` falls
+from **167 operations across 17 tables to 23 across 8**. `AddColumnOp` stays at
+0 across the whole repository. `alembic check` is green with all nine names gone
+from the frozenset, and the ratchet reports `exclusions with no drift left
+(removable): []`.
+
+As on the three preceding dates, the nine entries were deleted from
+`excluded_table_drift` and `excluded_tables` in `alembic_drift_baseline.json`
+rather than the whole file being regenerated, for the same reason: a full
+`--write-baseline` would also tighten `complaints` and `incidents` from 4
+`DropColumnOp` to 3, which this work did not cause.
+
+Row-level security was again deliberately not extended: every `tenant_id` in
+these nine is nullable, so none meets the TEN2 precondition the expand waves
+used.
+
+What is left on this register is eight names and 23 operations, and it is one
+problem, not nine: seven junction / config tables that exist in PostgreSQL with
+no model (rendered as `DropTableOp`), and `escalation_rules`, a model whose
+table is called `escalation_rules_config` (rendered as `CreateTableOp`). None of
+them is a column-shape question, so none of them is fixed by the treatment used
+here.
 

@@ -223,37 +223,48 @@ env -u DATABASE_URL -u PRODDB -u STAGING_DB \
 
 ## The direction no model-driven census can see
 
-95 columns exist in the database that no model declares. Reported by the census,
-ungated, because it is the direction every model-driven tool here is structurally
-blind to — and on this repository it is what *explained* drift 1. The largest
-groups:
+95 columns existed in the database that no model declared, at Run026. Reported by
+the census, ungated, because it is the direction every model-driven tool here is
+structurally blind to — and on this repository it is what *explained* drift 1.
+The largest groups, and where they stand now:
 
-| Table | Undeclared columns |
-| --- | --- |
-| `business_continuity_plans` | 15 |
-| `supplier_security_assessments` | 12 |
-| `iso27001_controls` | 10 |
-| `security_incidents` | 7 |
-| `access_control_records` | 6 |
-| `soa_control_entries` | 6 at Run026; **0** since 2026-09-08 — all six absorbed into the model |
-| `complaints`, `incidents`, `statement_of_applicability` | 4 each |
-| `risks`, `users` | 3 each |
-| the 8 tables in drift 1 | `created_by`, `updated_by` |
-| `audit_questions`, `audit_responses`, `audit_sections` | `tenant_id` |
+| Table | Undeclared columns at Run026 | Now |
+| --- | --- | --- |
+| `business_continuity_plans` | 15 | **0** — absorbed 2026-09-09 |
+| `supplier_security_assessments` | 12 | **0** — absorbed 2026-09-09 |
+| `iso27001_controls` | 10 | **0** — absorbed 2026-09-09 |
+| `security_incidents` | 7 | **0** — absorbed 2026-09-09 |
+| `access_control_records` | 6 | **0** — absorbed 2026-09-09 |
+| `soa_control_entries` | 6 | **0** — absorbed 2026-09-08 |
+| `complaints`, `incidents`, `statement_of_applicability` | 4 each | unchanged |
+| `risks`, `users` | 3 each | unchanged |
+| the 8 tables in drift 1 | `created_by`, `updated_by` | unchanged |
+| `audit_questions`, `audit_responses`, `audit_sections` | `tenant_id` | unchanged |
 
-Out of scope for Run026 and not fixed there. The IMS/ISO27001 group is the same
-model-versus-migrated-design mismatch as `soa_control_entries` and belongs to
-that owner; `soa_control_entries` is the first of them to be settled, and the
-treatment it received — absorb the undeclared columns into the model, add the
-declared ones to the database, drop nothing — is the template for the rest under
-#1526. The `audit_*.tenant_id` group is the blind spot already documented in
+The census total is 36 at 2026-09-09, down from 95, and no column was dropped to
+get there. Out of scope for Run026 and not fixed there: the IMS/ISO27001 group
+was the same model-versus-migrated-design mismatch as `soa_control_entries` and
+belonged to that owner. `soa_control_entries` was settled first (2026-09-08) and
+the treatment it received — absorb the undeclared columns into the model, add the
+declared ones to the database, drop nothing — was applied to the remaining five
+ISO 27001 tables by `20260909_iso_absorb`, which also took all nine remaining
+IMS / ISO27001 names off the `alembic check` exclusion register. What is left in
+this column is not that group: it is `complaints` / `incidents` /
+`statement_of_applicability`, the `created_by` / `updated_by` varchar pair from
+drift 1, and the `audit_*.tenant_id` blind spot already documented in
 `tests/integration/_run025_prodsim.py`.
 
 ## Deliberately left alone
 
 - **~384 nullability mismatches** where a model says `nullable=False` and the
   column permits NULL. Deferred by decision. `verify_model_schema_parity` reports
-  them; the Run026 census does not gate on them.
+  them; the Run026 census does not gate on them. 25 of them were settled by
+  `20260909_iso_absorb`, and settled the other way round from what "fixed" might
+  suggest: the model now records the nullability the database has, because
+  `20260407_iso27001_drift_02` made those columns nullable deliberately and
+  enforcing the model's claim would need a value invented for every historic row.
+  The requirement lives in the request schemas, which is where it was already
+  being enforced.
 - **16 declared tables with no physical table**, all already in the exclusion
   register with owners (document-control children, IMS/ISO27001, `escalation_rules`,
   `unified_audit_plans`, and `root_cause_analyses` whose table a migration dropped).
