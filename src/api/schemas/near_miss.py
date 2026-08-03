@@ -43,7 +43,7 @@ class NearMissBase(BaseModel):
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (golden thread)")
 
     risk_category: Optional[str] = None
-    potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
+    potential_severity: Optional[str] = Field(None, pattern="^(negligible|low|medium|high|critical)$")
     is_hipo: bool = False
 
 
@@ -92,7 +92,7 @@ class NearMissUpdate(BaseModel):
     corrective_actions_taken: Optional[str] = None
 
     risk_category: Optional[str] = None
-    potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
+    potential_severity: Optional[str] = Field(None, pattern="^(negligible|low|medium|high|critical)$")
     is_hipo: Optional[bool] = None
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
     asset_number: Optional[str] = None

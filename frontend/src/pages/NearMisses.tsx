@@ -122,6 +122,7 @@ export default function NearMisses() {
     { value: 'medium', label: t('severity.medium') },
     { value: 'high', label: t('severity.high') },
     { value: 'critical', label: t('severity.critical') },
+    { value: 'negligible', label: t('severity.negligible') },
   ]
   const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
   const eventDateInput = formData.event_date ? formData.event_date.slice(0, 16) : ''

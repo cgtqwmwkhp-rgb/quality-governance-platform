@@ -598,6 +598,7 @@ async def raise_risk_from_near_miss(
         )
 
     severity_impact = {
+        "negligible": 1,
         "low": 2,
         "medium": 3,
         "high": 4,
