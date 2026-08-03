@@ -66,9 +66,7 @@ def load_catalogue_templates(catalogue_path: Path | None = None) -> list[dict[st
                 "title": str(item["title"]).strip(),
                 "taxonomy_id": str(item["taxonomy_id"]).strip(),
                 "description": (str(item["description"]).strip() if item.get("description") else None),
-                "regulatory_basis": (
-                    str(item["regulatory_basis"]).strip() if item.get("regulatory_basis") else None
-                ),
+                "regulatory_basis": (str(item["regulatory_basis"]).strip() if item.get("regulatory_basis") else None),
                 "frequency_months": int(frequency_months) if frequency_months is not None else None,
                 "frequency_days": int(frequency_days) if frequency_days is not None else None,
                 "anchor": anchor,
@@ -116,8 +114,7 @@ def upsert_compliance_templates(
     )
 
     existing = {
-        r.template_key: r.id
-        for r in connection.execute(sa.select(table.c.id, table.c.template_key)).fetchall()
+        r.template_key: r.id for r in connection.execute(sa.select(table.c.id, table.c.template_key)).fetchall()
     }
 
     now = sa.func.now()

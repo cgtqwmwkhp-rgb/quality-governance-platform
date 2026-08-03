@@ -241,11 +241,7 @@ class ComplianceScheduleService:
             .all()
         )
         clock = _as_utc(now)
-        filtered = [
-            r
-            for r in rows
-            if derive_status(clock, r.next_due_date) == status
-        ]
+        filtered = [r for r in rows if derive_status(clock, r.next_due_date) == status]
         total = len(filtered)
         start = (page - 1) * page_size
         return filtered[start : start + page_size], total
@@ -319,9 +315,7 @@ class ComplianceScheduleService:
         template_id: Optional[int],
         is_active: bool = True,
     ) -> ComplianceRequirement:
-        ref = await ReferenceNumberService.generate(
-            self.db, "compliance_requirement", ComplianceRequirement
-        )
+        ref = await ReferenceNumberService.generate(self.db, "compliance_requirement", ComplianceRequirement)
         requirement = ComplianceRequirement(
             tenant_id=tenant_id,
             reference_number=ref,
@@ -521,9 +515,7 @@ class ComplianceScheduleService:
             frequency_days=requirement.frequency_days,
         )
 
-        ref = await ReferenceNumberService.generate(
-            self.db, "compliance_record", ComplianceRecord
-        )
+        ref = await ReferenceNumberService.generate(self.db, "compliance_record", ComplianceRecord)
         record = ComplianceRecord(
             tenant_id=tenant_id,
             reference_number=ref,

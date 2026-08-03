@@ -1118,7 +1118,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 115
+  total_routes: 117
   p0_routes: 12
   p1_routes: 61
-  p2_routes: 42
+  p2_routes: 44

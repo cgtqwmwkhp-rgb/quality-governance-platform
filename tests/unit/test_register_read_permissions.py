@@ -202,7 +202,7 @@ def test_newly_gated_tokens_are_in_the_admin_grant():
 
     ``User.has_permission`` does exact set-membership with no glob expansion, so
     a register gated on a token the admin role was never granted returns 403 to
-    administrators. Live DBs must receive the 78-token grant before this PR merges.
+    administrators. Live DBs must receive the 81-token grant before this PR merges.
     """
     for token in GATED_REGISTERS:
         assert token in ENFORCED_PERMISSIONS, f"{token} is gating a route but is not catalogued as enforced"
@@ -212,7 +212,7 @@ def test_newly_gated_tokens_are_in_the_admin_grant():
             "get 403 on that register. Add the token to the grant and apply it to roles.permissions "
             "before enforcing it, not after."
         )
-    assert len(ADMIN_ROLE_PERMISSIONS) == 78
+    assert len(ADMIN_ROLE_PERMISSIONS) == 81
     assert "action:delete" in ADMIN_ROLE_PERMISSIONS
     assert "action:read" in ADMIN_ROLE_PERMISSIONS
     assert "risk:read" in ADMIN_ROLE_PERMISSIONS

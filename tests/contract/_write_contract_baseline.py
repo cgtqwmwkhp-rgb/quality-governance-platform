@@ -408,6 +408,14 @@ KNOWN_ASYMMETRIC_RESPONSE_FIELDS: dict[str, tuple[str, ...]] = {
         "time_spent_seconds",
         "user_id",
     ),
+    # Compliance Schedule (Wave 0). ``outcome`` is decided by the completion
+    # event itself (completed vs missed) rather than sent, and the three filing
+    # fields are written by the Wave 2 library-filing bridge, not by a client.
+    # ``external_id`` follows AssetResponse/AuditTemplateResponse: server-minted.
+    "RecordResponse": ("external_id", "filing_error", "filing_status", "library_document_id", "outcome"),
+    # ``status`` is derived from next_due_date per ADR-0020 (Current / Due soon /
+    # Overdue / Missed), so it is computed on read and cannot be set.
+    "RequirementResponse": ("external_id", "status"),
     "RTAActionResponse": ("status",),
     "RTAResponse": ("reporter_submission",),
     "RiskActionItem": ("href", "source_id", "source_type", "status"),
@@ -448,6 +456,14 @@ KNOWN_UNREADABLE_REQUEST_FIELDS: dict[str, tuple[str, ...]] = {
     "POST /api/v1/audits/runs": ("external_audit_type",),
     "POST /api/v1/audits/runs/{run_id}/findings": ("clause_ids_json_legacy",),
     "POST /api/v1/capa/{capa_id}/transition": ("comment",),
+    # Compliance Schedule (Wave 0). Attaching evidence rebinds existing
+    # EvidenceAsset rows onto the record by setting source_module /source_id on
+    # the asset; the record itself stores no id list, so there is nothing on
+    # RecordResponse to echo. A client confirms the attach by listing evidence
+    # assets for the record, not by reading this response. Returning the ids
+    # here would require a reverse join on every row of the record list.
+    "POST /api/v1/compliance-schedule/records/{record_id}/evidence": ("evidence_asset_ids",),
+    "POST /api/v1/compliance-schedule/requirements/{requirement_id}/records": ("evidence_asset_ids",),
     "POST /api/v1/document-campaigns/campaigns": (
         "audience",
         "audience_department",

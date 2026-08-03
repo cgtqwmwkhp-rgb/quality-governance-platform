@@ -79,14 +79,11 @@ def test_compute_next_due_completion_requires_completed_at():
 
 
 def test_compute_next_due_supports_frequency_days():
-    assert (
-        policy.compute_next_due(
-            "schedule",
-            previous_due=date(2026, 1, 1),
-            frequency_days=14,
-        )
-        == date(2026, 1, 15)
-    )
+    assert policy.compute_next_due(
+        "schedule",
+        previous_due=date(2026, 1, 1),
+        frequency_days=14,
+    ) == date(2026, 1, 15)
 
 
 def test_module_never_mentions_expired():
