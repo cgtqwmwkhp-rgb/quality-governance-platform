@@ -149,7 +149,7 @@ async def create_near_miss(
     near_miss = NearMiss(
         **payload,
         reference_number=reference_number,
-        status="REPORTED",
+        status="reported",
         priority="MEDIUM",
         created_by_id=current_user.id,
         updated_by_id=current_user.id,

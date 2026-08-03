@@ -79,7 +79,7 @@ async def _seed_near_misses(*, tenant_id: int, count: int) -> list[int]:
             location="Sibling scope yard",
             event_date=_now() - timedelta(days=i),
             description="Seeded for the B-13 sibling tenancy tests.",
-            status="REPORTED",
+            status="reported",
             priority="MEDIUM",
         )
         for i in range(count)

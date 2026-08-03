@@ -74,8 +74,9 @@ def _near_miss(**overrides: Any) -> SimpleNamespace:
     fields: dict[str, Any] = {
         "reference_number": NEAR_MISS_REF,
         "contract": "Northern Depot",
-        # NearMiss persists a plain uppercase string, unlike the three enums.
-        "status": "UNDER_REVIEW",
+        # NearMiss persists a plain string rather than an enum, but the values are
+        # IncidentStatus's since N-2 aligned the two lifecycles.
+        "status": "under_investigation",
         "priority": "HIGH",
         "created_at": now,
         "updated_at": now,
@@ -244,7 +245,12 @@ def test_anonymous_submission_stays_code_only_for_signed_in_users() -> None:
     ("record", "reference", "expected_status", "expected_label"),
     [
         (_incident(), INCIDENT_REF, "under_investigation", "🔍 Under Investigation"),
-        (_near_miss(), NEAR_MISS_REF, "under_review", "under_review"),
+        (_near_miss(), NEAR_MISS_REF, "under_investigation", "🔍 Under Investigation"),
+        # A near miss on a database that has not yet run 20260910_nm_status_align
+        # still holds the legacy uppercase label. The wire casing is not allowed to
+        # depend on that, which is the whole of PX-316; the label falls back to the
+        # key because no such status exists any more.
+        (_near_miss(status="UNDER_REVIEW"), NEAR_MISS_REF, "under_review", "under_review"),
     ],
 )
 def test_status_is_lowercase_regardless_of_how_the_model_stores_it(

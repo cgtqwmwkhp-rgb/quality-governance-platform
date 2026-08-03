@@ -113,7 +113,7 @@ const nearMiss = {
   event_date: '2026-07-01T10:00:00Z',
   description: 'Near miss description long enough',
   witnesses_present: false,
-  status: 'REPORTED',
+  status: 'reported',
   priority: 'MEDIUM',
   created_at: '2026-07-01T10:00:00Z',
   updated_at: '2026-07-01T10:00:00Z',
@@ -290,12 +290,13 @@ describe('NearMissDetail closure lifecycle', () => {
     expect(screen.queryByTestId('near-miss-reopen')).not.toBeInTheDocument()
   })
 
-  it('reopens a CLOSED near miss back to UNDER_REVIEW', async () => {
+  // N-2: the reopen target is the incident register's, not a near-miss-only one.
+  it('reopens a closed near miss back to pending_review', async () => {
     ;(client.nearMissesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { ...nearMiss, status: 'CLOSED' },
+      data: { ...nearMiss, status: 'closed' },
     })
     ;(client.nearMissesApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { ...nearMiss, status: 'UNDER_REVIEW' },
+      data: { ...nearMiss, status: 'pending_review' },
     })
 
     renderPage()
@@ -308,7 +309,7 @@ describe('NearMissDetail closure lifecycle', () => {
     fireEvent.click(await screen.findByTestId('near-miss-reopen-confirm'))
 
     await waitFor(() => {
-      expect(client.nearMissesApi.update).toHaveBeenCalledWith(5, { status: 'UNDER_REVIEW' })
+      expect(client.nearMissesApi.update).toHaveBeenCalledWith(5, { status: 'pending_review' })
     })
   })
 

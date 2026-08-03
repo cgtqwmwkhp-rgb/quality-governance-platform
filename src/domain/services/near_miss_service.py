@@ -28,6 +28,7 @@ from src.domain.services.case_closure import (
     resolve_case_tenant_id,
 )
 from src.domain.services.contract_resolve import assert_tenant_contract, resolve_contract_id_by_code
+from src.domain.services.incident_service import INCIDENT_TRANSITIONS
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -75,13 +76,18 @@ async def resolve_near_miss_contract(
     return resolved_contract_id, resolved_contract
 
 
+# Derived, not restated: a near miss and an incident are the same lifecycle over
+# a different kind of event, and N-2 aligned them so the two registers cannot
+# answer "what may I do from here?" differently. Reading the edges off
+# INCIDENT_TRANSITIONS means a future change to that lifecycle reaches near
+# misses too, instead of leaving the copy here to rot the way the uppercase map
+# it replaced did.
+#
+# The keys are plain strings because ``near_misses.status`` is a VARCHAR, not a
+# PostgreSQL enum. That difference is deliberate and is what keeps the stricter
+# unknown-label behaviour below working.
 NEAR_MISS_TRANSITIONS: dict[str, set[str]] = {
-    "REPORTED": {"UNDER_REVIEW", "CLOSED"},
-    "UNDER_REVIEW": {"ACTION_REQUIRED", "IN_PROGRESS", "CLOSED"},
-    "ACTION_REQUIRED": {"IN_PROGRESS", "CLOSED"},
-    "IN_PROGRESS": {"CLOSED", "ACTION_REQUIRED"},
-    # Reopen is a single controlled reverse edge, not a free jump back into the lifecycle.
-    "CLOSED": {"UNDER_REVIEW"},
+    current.value: {target.value for target in targets} for current, targets in INCIDENT_TRANSITIONS.items()
 }
 
 
@@ -90,9 +96,14 @@ def validate_near_miss_transition(current: Any, target: Any) -> None:
 
     Raises StateTransitionError if the transition is not allowed.
     Same-status updates are a no-op (PATCH edit forms always re-send status).
-    Near misses store status as an uppercase VARCHAR, so an unrecognised label
-    has no allowed edges at all and is refused — unlike the enum-backed
-    registers, which wave legacy labels through.
+
+    An unrecognised label has no allowed edges at all and is refused — unlike
+    ``validate_incident_transition``, which waves a value it cannot coerce to
+    ``IncidentStatus`` through. Near misses can afford the stricter rule
+    precisely because the column is a VARCHAR: nothing at the database layer
+    stops a bad label being written, so this is the only place that can refuse
+    one. Casing is not normalised here either; the request schema's pattern is
+    what refuses a legacy uppercase label, at the API boundary, with a 422.
 
     Lifted out of ``NearMissService.update_near_miss`` so the closure gate can
     ask the same question the write path asks, instead of holding a second copy
@@ -148,7 +159,7 @@ class NearMissService:
         near_miss = NearMiss(
             **payload,
             reference_number=reference_number,
-            status="REPORTED",
+            status="reported",
             priority="MEDIUM",
             tenant_id=tenant_id,
             created_by_id=user_id,

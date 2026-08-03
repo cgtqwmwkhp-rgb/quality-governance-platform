@@ -99,7 +99,7 @@ def test_near_miss_schemas_retain_legacy_and_accept_asset_id():
         asset_number="FE-001",
         asset_type="extinguisher",
         asset_id=7,
-        status="REPORTED",
+        status="reported",
         priority="MEDIUM",
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
