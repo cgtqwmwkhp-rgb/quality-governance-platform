@@ -310,5 +310,7 @@ class TestRevisionChain:
     def test_migration_follows_the_expected_head(self):
         source = MIGRATION_PATH.read_text(encoding="utf-8")
         assert 'revision: str = "20260911_shared_severity"' in source
-        assert 'down_revision: Union[str, Sequence[str], None] = "20260908_soa_align"' in source
+        assert 'down_revision = "20260910_nm_status_align"' in source or (
+            'down_revision: Union[str, Sequence[str], None] = "20260910_nm_status_align"' in source
+        )
         assert len("20260911_shared_severity") <= 32
