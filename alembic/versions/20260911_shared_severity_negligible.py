@@ -58,12 +58,19 @@ one column where that is plausible is ``near_misses.potential_severity``:
 ``QuickReportCreate.severity`` is an unvalidated string and the portal wrote it
 through verbatim, so a client posting ``severity: "urgent"`` stored ``urgent``.
 That intake hole is closed in the same change
-(:mod:`src.domain.services.shared_severity`), but rows written before it are not
-rewritten here. This migration counts them and **raises**, naming the offending
-values. Skipping with a warning would leave the models declaring a constraint the
-database does not have — the drift ``tests/unit/test_migration_schema_drift_lint``
-exists to stop — and a refusal that names the rows is something an operator can
-act on.
+(:mod:`src.domain.services.shared_severity`), but rows written before it remain.
+
+One known alias is remapped first: production held a single
+``near_misses.potential_severity = 'extreme'`` row that blocked
+``20260911_shared_severity`` (B-9). The locked product decision is
+``extreme`` → ``critical`` (case-insensitive via ``lower()``), applied to both
+constrained columns before the refuse-unknown guard. **Do not invent remaps for
+unknown future values** — only ``extreme`` (and case variants) is decided here.
+Any other value outside the shared set still makes this migration count the rows
+and **raise**, naming the offending values. Skipping with a warning would leave
+the models declaring a constraint the database does not have — the drift
+``tests/unit/test_migration_schema_drift_lint`` exists to stop — and a refusal
+that names the rows is something an operator can act on.
 
 Not in scope
 ------------
@@ -143,6 +150,13 @@ WIDENED_CONSTRAINTS: tuple[tuple[str, str, str, str], ...] = (
         f"potential_severity IN ({_VALUE_LIST}) OR potential_severity IS NULL",
     ),
 )
+
+#: Known aliases observed in production that map onto the shared set.
+#: Only aliases locked by a product decision live here — do not invent remaps
+#: for unknown future values. Match is case-insensitive (``lower()``).
+KNOWN_SEVERITY_ALIASES: dict[str, str] = {
+    "extreme": "critical",
+}
 
 
 class UnconstrainableSeverityValuesError(RuntimeError):
@@ -389,11 +403,41 @@ def _offending_values(table: str, column: str) -> list[tuple[str, int]]:
     return [(str(row.value), int(row.row_count)) for row in rows]
 
 
+def _remap_known_severity_aliases(table: str, column: str) -> None:
+    """Rewrite locked aliases onto the shared set before the refuse-unknown guard.
+
+    Only ``KNOWN_SEVERITY_ALIASES`` are rewritten (currently ``extreme`` →
+    ``critical``). Any other value outside the shared set still raises
+    :class:`UnconstrainableSeverityValuesError`.
+    """
+    bind = op.get_bind()
+    for alias, canonical in KNOWN_SEVERITY_ALIASES.items():
+        result = bind.execute(
+            sa.text(
+                f"UPDATE {table} SET {column} = :canonical "
+                f"WHERE {column} IS NOT NULL AND lower({column}) = :alias"
+            ),
+            {"canonical": canonical, "alias": alias},
+        )
+        count = result.rowcount or 0
+        if count:
+            logger.info(
+                "shared severity: remapped %s.%s %r → %r (%s row(s))",
+                table,
+                column,
+                alias,
+                canonical,
+                count,
+            )
+
+
 def _widen_check_constraints() -> None:
     for table, column, name, predicate in WIDENED_CONSTRAINTS:
         if not _has_table(table):
             logger.warning("shared severity: table %s is absent, skipping %s", table, name)
             continue
+
+        _remap_known_severity_aliases(table, column)
 
         offending = _offending_values(table, column)
         if offending:
