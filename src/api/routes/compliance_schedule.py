@@ -41,9 +41,7 @@ router = APIRouter()
 
 async def compliance_schedule_is_open() -> bool:
     """Configuration opener first, then kill switch (subtract-only)."""
-    from src.domain.services.compliance_schedule_kill_switch import (
-        compliance_schedule_kill_switch_engaged,
-    )
+    from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_kill_switch_engaged
 
     if not settings.compliance_schedule_enabled:
         return False

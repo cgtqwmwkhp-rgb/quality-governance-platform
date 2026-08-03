@@ -25,7 +25,7 @@ from src.domain.models.compliance_schedule import (
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
 from src.domain.models.location import Location
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.compliance_schedule_policy import compute_next_due, derive_status
+from src.domain.services.compliance_schedule_policy import Anchor, compute_next_due, derive_status
 from src.domain.services.reference_number import ReferenceNumberService
 
 logger = logging.getLogger(__name__)
@@ -39,8 +39,19 @@ def _as_utc(value: Optional[datetime], *, fallback: Optional[datetime] = None) -
     return value.astimezone(timezone.utc)
 
 
-def _anchor_value(anchor: ComplianceScheduleAnchor | str) -> str:
-    return anchor.value if isinstance(anchor, ComplianceScheduleAnchor) else str(anchor)
+def _anchor_value(anchor: ComplianceScheduleAnchor | str) -> Anchor:
+    """Narrow a stored anchor to the literal pair ``compute_next_due`` accepts.
+
+    The column is an enum behind a CHECK constraint, so a third value is already
+    unstorable; rejecting it here fails in this service's terms rather than
+    several frames deeper in the policy helper.
+    """
+    raw = anchor.value if isinstance(anchor, ComplianceScheduleAnchor) else str(anchor)
+    if raw == "completion":
+        return "completion"
+    if raw == "schedule":
+        return "schedule"
+    raise ValueError(f"unknown anchor: {raw}")
 
 
 def _tenant_filter(query: Any, model: Any, tenant_id: Optional[int]) -> Any:

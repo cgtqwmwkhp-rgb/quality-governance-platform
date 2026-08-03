@@ -8,13 +8,8 @@ import pytest
 from httpx import AsyncClient
 
 from src.core.config import settings
-from src.domain.models.compliance_schedule import (
-    ComplianceRequirementTemplate,
-    ComplianceScheduleAnchor,
-)
-from src.domain.services.compliance_schedule_kill_switch import (
-    reset_compliance_schedule_kill_switch_cache,
-)
+from src.domain.models.compliance_schedule import ComplianceRequirementTemplate, ComplianceScheduleAnchor
+from src.domain.services.compliance_schedule_kill_switch import reset_compliance_schedule_kill_switch_cache
 
 
 @pytest.fixture
