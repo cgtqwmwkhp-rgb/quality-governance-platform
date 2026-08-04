@@ -28,7 +28,6 @@ from src.api.schemas.compliance_schedule import (
     RequirementUpdate,
 )
 from src.api.utils.tenant import require_tenant_id
-from src.core.config import settings
 from src.domain.models.user import User
 from src.domain.services.compliance_schedule_policy import derive_status
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
@@ -40,12 +39,15 @@ router = APIRouter()
 
 
 async def compliance_schedule_is_open() -> bool:
-    """Configuration opener first, then kill switch (subtract-only)."""
-    from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_kill_switch_engaged
+    """Whether the module is available. Thin wrapper binding the app's session factory.
 
-    if not settings.compliance_schedule_enabled:
-        return False
-    return not await compliance_schedule_kill_switch_engaged(async_session_maker)
+    Retained as a module-level name because tests and the router's dependency both
+    patch it here; the decision itself belongs to the domain layer, which the Celery
+    sweep also needs and which cannot import this module.
+    """
+    from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_is_open as _domain_is_open
+
+    return await _domain_is_open(async_session_maker)
 
 
 async def require_compliance_schedule_enabled() -> None:
