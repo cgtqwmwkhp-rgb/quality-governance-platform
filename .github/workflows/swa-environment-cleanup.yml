@@ -23,8 +23,12 @@ on:
         type: string
 
 env:
-  SWA_APP_NAME: purple-water-03205fa03
-  RESOURCE_GROUP: rg-qgp-prod
+  # purple-water-03205fa03 is the default hostname prefix, not the resource name, and
+  # rg-qgp-prod holds no Static Web App at all — so every `az staticwebapp` call here
+  # failed with ParentResourceNotFound. The app that PR previews deploy to is
+  # qgp-frontend in rg-qgp-staging; its hostname is what the old value was copied from.
+  SWA_APP_NAME: qgp-frontend
+  RESOURCE_GROUP: rg-qgp-staging
   # Production environment name - NEVER DELETE
   PRODUCTION_ENV_NAME: default
   # Safety switch - set to 'true' to disable ALL deletions
