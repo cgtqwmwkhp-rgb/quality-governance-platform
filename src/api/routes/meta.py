@@ -22,6 +22,7 @@ from fastapi import APIRouter
 from src.api.dependencies import OptionalCurrentUser
 from src.api.schemas.client_features import ClientFeatureFlagsResponse
 from src.domain.features.evaluator import SUCCESS_TTL_SECONDS, evaluate_client_features
+from src.infrastructure.database import async_session_maker
 
 router = APIRouter(tags=["Meta"])
 
@@ -34,7 +35,7 @@ async def get_client_features(current_user: OptionalCurrentUser) -> ClientFeatur
     caller's permission, so a ``true`` means the caller can actually use the
     feature rather than merely that it exists in this build.
     """
-    flags = await evaluate_client_features(current_user)
+    flags = await evaluate_client_features(current_user, async_session_maker)
     return ClientFeatureFlagsResponse(
         flags=flags,
         scope="user" if current_user is not None else "anonymous",

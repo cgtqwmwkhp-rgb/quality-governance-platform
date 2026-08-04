@@ -13,7 +13,7 @@ from __future__ import annotations
 from src.core.config import Settings
 from src.domain.authz.catalogue import ENFORCED_PERMISSIONS
 from src.domain.features.catalogue import CLIENT_FEATURES, CLIENT_FEATURES_BY_KEY
-from src.domain.features.evaluator import _kill_switch_readers
+from src.domain.features.evaluator import kill_switch_reader_keys
 
 
 def test_ui_keys_are_unique():
@@ -50,7 +50,7 @@ def test_every_required_permission_is_enforced():
 
 def test_every_kill_switch_has_a_reader():
     """A registry entry naming an unreadable switch reports the feature closed."""
-    readers = _kill_switch_readers()
+    readers = kill_switch_reader_keys()
     unwired = sorted(
         feature.kill_switch_key
         for feature in CLIENT_FEATURES

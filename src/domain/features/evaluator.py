@@ -12,6 +12,10 @@ that cannot be read leaves the previously observed value in place, and an
 unreadable flag that has never been read is treated as *enabled*, matching
 ``_ensure_user_management_enabled``'s behaviour of allowing through when the
 lookup fails.
+
+The session factory arrives as an argument rather than as an import, for the same
+reason the kill-switch modules take one: ``src/domain`` may not import
+``src/infrastructure``, and ``scripts/check_import_boundaries.py`` enforces it.
 """
 
 from __future__ import annotations
@@ -19,9 +23,10 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Dict, Mapping, Optional
+from typing import AsyncContextManager, Awaitable, Callable, Dict, Mapping, Optional
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings as global_settings
 from src.domain.features.catalogue import CLIENT_FEATURES, ClientFeature
@@ -33,21 +38,32 @@ logger = logging.getLogger(__name__)
 SUCCESS_TTL_SECONDS = 30.0
 ERROR_RETRY_SECONDS = 5.0
 
+SessionFactory = Callable[[], AsyncContextManager[AsyncSession]]
 
-def _kill_switch_readers() -> Mapping[str, Callable[[], Awaitable[bool]]]:
-    """Map a kill-switch flag key to the cached reader the feature's own routes use.
 
-    Imported lazily so this module stays importable without pulling the database
-    session factory in at import time.
-    """
+def _kill_switch_readers(session_factory: SessionFactory) -> Mapping[str, Callable[[], Awaitable[bool]]]:
+    """Map a kill-switch flag key to the cached reader the feature's own routes use."""
     from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_kill_switch_engaged
     from src.domain.services.copilot_kill_switch import copilot_kill_switch_engaged
-    from src.infrastructure.database import async_session_maker
 
     return {
-        "compliance_schedule_kill_switch": lambda: compliance_schedule_kill_switch_engaged(async_session_maker),
-        "copilot_kill_switch": lambda: copilot_kill_switch_engaged(async_session_maker),
+        "compliance_schedule_kill_switch": lambda: compliance_schedule_kill_switch_engaged(session_factory),
+        "copilot_kill_switch": lambda: copilot_kill_switch_engaged(session_factory),
     }
+
+
+def _unusable_session_factory() -> AsyncContextManager[AsyncSession]:
+    raise RuntimeError("session factory requested while only enumerating kill-switch keys")
+
+
+def kill_switch_reader_keys() -> frozenset[str]:
+    """Keys this module knows how to read, without needing a real session factory.
+
+    Derived from the one map rather than restated, so the drift test cannot pass
+    against a list that has fallen out of step with the readers it describes. The
+    readers are never invoked here, so the sentinel factory is never called.
+    """
+    return frozenset(_kill_switch_readers(_unusable_session_factory))
 
 
 @dataclass(frozen=True)
@@ -65,7 +81,7 @@ def reset_client_feature_cache() -> None:
     _enabling_flag_cache.clear()
 
 
-async def _enabling_flag_open(key: str) -> bool:
+async def _enabling_flag_open(key: str, session_factory: SessionFactory) -> bool:
     """Whether a positive ``feature_flags`` row leaves the feature open.
 
     Absent row means open, matching ``_ensure_user_management_enabled``.
@@ -75,10 +91,8 @@ async def _enabling_flag_open(key: str) -> bool:
     if cached is not None and asked_at < cached.expires_at:
         return cached.enabled
 
-    from src.infrastructure.database import async_session_maker
-
     try:
-        async with async_session_maker() as session:
+        async with session_factory() as session:
             result = await session.execute(select(FeatureFlag.enabled).where(FeatureFlag.key == key))
             row = result.scalar_one_or_none()
         enabled = True if row is None else bool(row)
@@ -97,12 +111,16 @@ async def _enabling_flag_open(key: str) -> bool:
     return enabled
 
 
-async def _feature_enabled(feature: ClientFeature, user: Optional[User]) -> bool:
+async def _feature_enabled(
+    feature: ClientFeature,
+    user: Optional[User],
+    session_factory: SessionFactory,
+) -> bool:
     if feature.settings_attr is not None and not bool(getattr(global_settings, feature.settings_attr, False)):
         return False
 
     if feature.kill_switch_key is not None:
-        reader = _kill_switch_readers().get(feature.kill_switch_key)
+        reader = _kill_switch_readers(session_factory).get(feature.kill_switch_key)
         if reader is None:
             # A registry entry naming a switch nothing can read is a wiring error.
             # Report the feature closed rather than silently ignoring the switch.
@@ -115,7 +133,9 @@ async def _feature_enabled(feature: ClientFeature, user: Optional[User]) -> bool
         if await reader():
             return False
 
-    if feature.enabling_flag_key is not None and not await _enabling_flag_open(feature.enabling_flag_key):
+    if feature.enabling_flag_key is not None and not await _enabling_flag_open(
+        feature.enabling_flag_key, session_factory
+    ):
         return False
 
     if feature.required_permission is not None:
@@ -125,13 +145,15 @@ async def _feature_enabled(feature: ClientFeature, user: Optional[User]) -> bool
     return True
 
 
-async def evaluate_client_features(user: Optional[User]) -> Dict[str, bool]:
+async def evaluate_client_features(user: Optional[User], session_factory: SessionFactory) -> Dict[str, bool]:
     """Effective value of every registered client feature for this caller."""
-    return {feature.ui_key: await _feature_enabled(feature, user) for feature in CLIENT_FEATURES}
+    return {feature.ui_key: await _feature_enabled(feature, user, session_factory) for feature in CLIENT_FEATURES}
 
 
 __all__ = [
     "SUCCESS_TTL_SECONDS",
+    "SessionFactory",
     "evaluate_client_features",
+    "kill_switch_reader_keys",
     "reset_client_feature_cache",
 ]
