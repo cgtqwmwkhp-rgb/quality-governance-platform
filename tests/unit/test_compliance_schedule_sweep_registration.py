@@ -1,6 +1,6 @@
-"""The sweep must be importable by the worker and absent from the beat schedule.
+"""The sweep must be importable by the worker and scheduled exactly once.
 
-Both halves are real failure modes here, not hypotheticals.
+Every failure mode below is silent, which is why each is pinned by a test.
 
 Registration: ``celery_app`` lists task modules explicitly because
 ``autodiscover_tasks`` looks for a nested ``tasks.tasks`` module and silently skips
@@ -8,9 +8,13 @@ these siblings -- the worker starts, answers a ping, and raises ``NotRegistered`
 moment anything is sent to it. A module that is never added to that tuple fails
 exactly that way, in production, with no import error to point at.
 
-Absence from beat: scheduling is deliberately a separate change so that switching
-this sweep off is a one-line revert. If a beat entry ever arrives in this module,
-that lever is gone and nobody would notice until they needed it.
+Scheduling: ``beat_schedule`` names its task as a dotted string, so a typo or a later
+rename yields an entry that dispatches to nothing, once a day, into a log. Two entries
+for the same task are equally quiet, because the dedupe key means the second sweep
+sends nothing a user would see.
+
+Start time: two cross-tenant sweeps beginning on the same minute contend for one
+worker pool, and 07:00 to 08:00 is already crowded.
 """
 
 from __future__ import annotations
@@ -36,14 +40,60 @@ def test_the_task_is_registered_under_its_full_dotted_name():
     assert TASK_NAME in celery_app.tasks, f"{TASK_NAME} is not in the task registry"
 
 
-def test_this_module_contributes_no_beat_entry():
+def test_the_sweep_is_scheduled_exactly_once():
+    """One beat entry, and only one.
+
+    This assertion replaced `test_this_module_contributes_no_beat_entry`, which held
+    while the task was registered but unscheduled and was the guard that kept
+    scheduling in its own change. That change is this one, so the guard is inverted
+    rather than deleted: it now pins the lever's existence instead of its absence.
+
+    "Exactly once" is the part worth keeping. Two entries for the same task means two
+    sweeps a day, and because each notification is deduplicated per occurrence and
+    band the second would be silent -- no duplicate reaches a user, so nothing would
+    reveal the mistake except the run counters nobody is watching yet.
+    """
     scheduled = [
         name for name, entry in celery_app.conf.beat_schedule.items() if MODULE_PATH in str(entry.get("task", ""))
     ]
-    assert scheduled == [], (
-        f"beat entries {scheduled} schedule this sweep. Scheduling belongs in its own "
-        "change so that disabling it stays a one-line revert."
+    assert len(scheduled) == 1, f"expected exactly one beat entry for the sweep, found {scheduled}"
+
+
+def test_the_beat_entry_points_at_the_task_that_exists():
+    """Guards the failure mode a string-keyed schedule invites.
+
+    ``beat_schedule`` names its task as a dotted string, so a typo or a later rename
+    produces a beat entry that dispatches to nothing. Beat itself does not complain;
+    the worker raises NotRegistered once a day, in a log, where it can sit unnoticed
+    for a long time.
+    """
+    entry = next(
+        entry for name, entry in celery_app.conf.beat_schedule.items() if MODULE_PATH in str(entry.get("task", ""))
     )
+    assert entry["task"] == TASK_NAME, f"beat dispatches to {entry['task']!r}, which is not the registered task name"
+    assert TASK_NAME in celery_app.tasks, "beat names a task that is not in the registry"
+
+
+def test_the_sweep_does_not_share_a_start_minute_with_another_sweep():
+    """Two cross-tenant sweeps starting on the same minute contend for one worker pool.
+
+    The 07:00-08:00 stretch is already occupied by competency expiry, safety asset
+    expiry, library review reminders and the horizon scan. This pins the separation so
+    a later edit cannot quietly stack this sweep on top of one of them.
+    """
+    entry = next(
+        entry for name, entry in celery_app.conf.beat_schedule.items() if MODULE_PATH in str(entry.get("task", ""))
+    )
+    ours = entry["schedule"]
+
+    clashing = [
+        name
+        for name, other in celery_app.conf.beat_schedule.items()
+        if MODULE_PATH not in str(other.get("task", ""))
+        and getattr(other.get("schedule"), "hour", None) == ours.hour
+        and getattr(other.get("schedule"), "minute", None) == ours.minute
+    ]
+    assert clashing == [], f"the sweep starts at the same time as {clashing}"
 
 
 def test_the_admin_role_is_configurable_and_falls_back(monkeypatch):
