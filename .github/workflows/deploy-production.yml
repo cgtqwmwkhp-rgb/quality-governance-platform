@@ -527,10 +527,31 @@ jobs:
             exit 0
           fi
 
-          if ! BACKUP_JSON=$(az postgres flexible-server backup list \
-                --resource-group "${{ env.AZURE_DB_RESOURCE_GROUP }}" \
-                --name "$SERVER_NAME" \
-                -o json); then
+          # `backup list` identifies the server with --server-name from azure-cli 2.86,
+          # which repurposed --name to mean the backup. Older CLIs only know --name and
+          # reject --server-name. Measured: run 30862396299 on a 2.86+ runner failed with
+          # "unrecognized arguments: --name", while 2.85 locally accepted it. Try the
+          # current spelling, fall back to the old one, so this works either side of that
+          # break rather than tracking whatever the runner image ships.
+          BACKUP_JSON=""
+          for server_flag in --server-name --name; do
+            if BACKUP_JSON=$(az postgres flexible-server backup list \
+                  --resource-group "${{ env.AZURE_DB_RESOURCE_GROUP }}" \
+                  "$server_flag" "$SERVER_NAME" \
+                  -o json 2>/tmp/az_backup_list_err); then
+              echo "Listed backups using $server_flag."
+              break
+            fi
+            BACKUP_JSON=""
+            # Only an unknown-argument rejection is worth retrying with the other
+            # spelling. Anything else is a genuine failure, and retrying it would just
+            # replace the real error with a confusing one.
+            if ! grep -qE "unrecognized arguments|invalid choice" /tmp/az_backup_list_err; then
+              break
+            fi
+          done
+          if [ -z "$BACKUP_JSON" ]; then
+            cat /tmp/az_backup_list_err >&2 || true
             echo "::warning::Could not list backups for $SERVER_NAME (see the az error above) — recovery point unverified."
             exit 0
           fi
