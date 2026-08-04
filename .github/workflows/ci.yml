@@ -1639,7 +1639,7 @@ jobs:
         run: python3 scripts/governance/update_boundary_trend.py
 
       - name: Upload boundary report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: boundary-enforcement-report
@@ -1909,7 +1909,7 @@ jobs:
           python3 scripts/governance/generate_migration_reversibility_evidence.py
 
       - name: Upload migration reversibility evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: migration-reversibility-evidence
@@ -2269,7 +2269,7 @@ jobs:
           echo "[OK] Schemathesis run complete"
 
       - name: Upload Schemathesis evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: schemathesis-api-property-tests
           path: |
