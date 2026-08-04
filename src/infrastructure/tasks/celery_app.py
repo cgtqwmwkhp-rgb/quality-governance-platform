@@ -80,6 +80,10 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.audit_challenge_tasks",
     "src.infrastructure.tasks.cleanup_tasks",
     "src.infrastructure.tasks.competency_tasks",
+    # Registered so the worker can run it on demand. Deliberately absent from
+    # beat_schedule: scheduling it is a separate change, so switching it on or off
+    # is a one-line revert rather than a code edit under pressure.
+    "src.infrastructure.tasks.compliance_schedule_notification_tasks",
     "src.infrastructure.tasks.dlq_replay",
     "src.infrastructure.tasks.document_campaign_tasks",
     "src.infrastructure.tasks.document_index_tasks",
