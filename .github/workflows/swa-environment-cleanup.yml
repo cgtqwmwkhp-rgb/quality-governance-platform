@@ -69,7 +69,7 @@ jobs:
       - name: Azure Login
         uses: azure/login@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
       
       - name: Get Open PR Numbers
         id: open_prs
