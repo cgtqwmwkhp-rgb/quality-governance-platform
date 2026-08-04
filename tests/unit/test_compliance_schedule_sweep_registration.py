@@ -121,6 +121,7 @@ def test_every_counter_a_runbook_will_quote_is_present():
     expected = {
         "tenants_considered",
         "tenants_swept",
+        "tenants_failed",
         "tenants_skipped_locked",
         "tenants_skipped_closed",
         "requirements_scanned",
@@ -130,10 +131,45 @@ def test_every_counter_a_runbook_will_quote_is_present():
         "notifications_skipped_conflict",
         "recipients_unresolved",
         "dry_run",
+        "timed_out",
         "evaluated_at",
         "admin_role",
     }
     assert set(ComplianceSweepResults.__annotations__) == expected
+
+
+def test_the_tenant_outcomes_account_for_every_tenant():
+    """Every way a tenant can end must have its own counter.
+
+    Without ``tenants_failed`` the only way to notice a tenant that raised was to
+    subtract the other three from ``tenants_considered`` and find a gap. An operator
+    reading a result dict at 3am should not have to do arithmetic to discover that a
+    customer was skipped.
+    """
+    from src.infrastructure.tasks.compliance_schedule_notification_tasks import ComplianceSweepResults
+
+    outcomes = {"tenants_swept", "tenants_failed", "tenants_skipped_locked", "tenants_skipped_closed"}
+    assert outcomes <= set(
+        ComplianceSweepResults.__annotations__
+    ), f"missing tenant outcome counters: {outcomes - set(ComplianceSweepResults.__annotations__)}"
+
+
+def test_the_sweep_is_given_time_limits_of_its_own():
+    """A cross-tenant sweep must not inherit request-shaped limits.
+
+    The global configuration is 300s soft and 600s hard, which is right for the work a
+    web request queues and wrong for a job that walks every tenant's register. Left on
+    the default, the soft limit is reachable on a legitimate run, and a limit that
+    fires in normal operation is indistinguishable from a fault.
+    """
+    task = celery_app.tasks[TASK_NAME]
+    assert task.soft_time_limit is not None, "the sweep inherits the global soft limit"
+    assert task.time_limit is not None, "the sweep inherits the global hard limit"
+    assert task.soft_time_limit > celery_app.conf.task_soft_time_limit
+    assert task.time_limit > task.soft_time_limit, (
+        "the hard limit must sit above the soft one, or the sweep is killed before it "
+        "can return its partial counters"
+    )
 
 
 @pytest.mark.parametrize("field", ["notifications_skipped_existing", "notifications_skipped_conflict"])

@@ -123,6 +123,7 @@ not `az webapp log download`, for the reasons in
 |---|---|---|
 | `tenants_considered` | Active tenants found at the start of the run | `0` means the module is closed **or** there are no active tenants — section 5 |
 | `tenants_swept` | Tenants scanned and committed (or rolled back, on a dry run) | Should equal `tenants_considered` on a clean run |
+| `tenants_failed` | Tenants whose sweep raised; logged with a traceback, the run continued | Above zero needs investigation — those tenants got no reminders. Not a task failure, so nothing reaches the DLQ |
 | `tenants_skipped_locked` | Tenants another sweep already held the advisory lock on | Above zero means two runs overlapped. Harmless; the other run did the work |
 | `tenants_skipped_closed` | Tenants left unswept because the kill switch was engaged mid-run | Above zero is an operator action, expected only if someone engaged the switch |
 | `requirements_scanned` | Active, non-deleted requirements read across all swept tenants | `0` everywhere is suspicious — section 5 |
@@ -132,14 +133,16 @@ not `az webapp log download`, for the reasons in
 | `notifications_skipped_conflict` | The database refused a duplicate write | Above zero means two workers overlapped mid-insert. Investigate, do not ignore |
 | `recipients_unresolved` | In-band requirements with nobody to notify | Above zero is a configuration fault someone must fix. See below |
 | `dry_run` | Whether this run wrote anything | Check it. A dry run's `notifications_created` is a forecast, not a delivery |
+| `timed_out` | The run hit its soft time limit and returned early | `true` means the remaining tenants are unswept. Safe — the next run finishes them. See below |
 | `evaluated_at` | UTC ISO timestamp taken at the start of the run | Also stamped into every row's `extra_data.evaluated_at`; use it to scope a cleanup |
 | `admin_role` | Role name used to resolve admin recipients | Should be the real admin role name for these tenants. Section 5 |
 
 ### A healthy steady-state run
 
-`tenants_swept == tenants_considered`, both skip-tenant counters `0`, `in_band` a modest
-number, `notifications_created` at or near `0`, `notifications_skipped_existing`
-comfortably larger than `notifications_created`, and `recipients_unresolved` at `0`.
+`tenants_swept == tenants_considered`, `tenants_failed` and both skip-tenant counters `0`,
+`timed_out` false, `in_band` a modest number, `notifications_created` at or near `0`,
+`notifications_skipped_existing` comfortably larger than `notifications_created`, and
+`recipients_unresolved` at `0`.
 
 `notifications_skipped_existing` being high is the *design working*. A requirement stays
 inside a band for days: something 40 days out is in `due_60` today and still in `due_60`
@@ -165,31 +168,45 @@ to the requirement, or by ensuring the tenant has an active user holding the adm
 
 ### Detecting a tenant that failed
 
-There is **no counter for a tenant that raised an exception.** A tenant that fails is
-logged and the sweep continues with the rest, which is the right behaviour, but it leaves
-no field in the result dict. Detect it by arithmetic:
+`tenants_failed` above zero is that many tenants whose sweep raised. The sweep logs the
+tenant and carries on with the rest deliberately — one tenant's fault must not stop
+another tenant's statutory reminders — so a failure is not a task failure and will not
+appear in the DLQ. `tenants_failed` is the only thing that surfaces it.
+
+The four tenant outcomes account for every tenant, so this identity holds on any run:
 
 ```text
-tenants_considered - tenants_swept - tenants_skipped_locked - tenants_skipped_closed
+tenants_considered == tenants_swept + tenants_failed
+                      + tenants_skipped_locked + tenants_skipped_closed
 ```
 
-Anything above zero is that many tenants that failed. Find them in the worker log under
-`Compliance schedule sweep failed for tenant <id>; continuing with the rest`, which
-carries the traceback.
+If it ever does not balance, treat that as a bug in the sweep rather than reasoning about
+the difference. Find the failures in the worker log under `Compliance schedule sweep
+failed for tenant <id>; continuing with the rest`, which carries the traceback.
 
-### When a run is retried
+Nothing is retried automatically for a failed tenant. Fix the cause and re-run: the
+re-run resends nothing, because every write is idempotent.
 
-The task's soft time limit is 300 seconds and its hard limit is 600. A first run against
-a large backlog across many tenants can exceed the soft limit; the task catches that,
-logs `Compliance schedule sweep failed`, and retries after 300 seconds, up to three
-times, before the failure lands in the DLQ ([`IMPORT_CELERY_DLQ_OPS.md`](./IMPORT_CELERY_DLQ_OPS.md)).
+### When a run runs out of time
 
-A retry is safe: each tenant commits its own transaction, so work already done stays
-done, and the retried run reports it as `notifications_skipped_existing` rather than
-sending anything twice. But **only the final attempt's counters are returned.** The
-numbers from the attempts that timed out exist only in the log. If the totals look too
-small for a first run, check the log for earlier attempts before concluding the backlog
-was smaller than the dry run said.
+The task sets its own limits — **900 seconds soft, 1200 hard** — rather than inheriting
+the global 300/600, which are sized for request-shaped work and are reachable on a
+legitimate cross-tenant sweep.
+
+On the soft limit the sweep stops and **returns the counters it has**, with
+`timed_out: true`. It does not retry, and it does not need to: the remaining tenants are
+picked up by the next scheduled run, and every write is idempotent, so nothing is sent
+twice and nothing needs compensating. `tenants_swept` tells you how far it got.
+
+So `timed_out: true` is not an incident on its own. It is worth acting on if it repeats,
+because it means a single day's run can no longer finish the register — check whether one
+tenant has grown a very large backlog, and if so clear it with a targeted manual run
+before the daily sweep is expected to absorb it.
+
+The hard limit at 1200 seconds is the backstop for a genuinely wedged run — a stuck query
+that never yields. That one **does** kill the worker child process and lose the result
+dict; if you see the task vanish with no result and no `timed_out` flag, look for a long
+running query rather than for a bug in the sweep.
 
 ---
 
