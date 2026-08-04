@@ -2,6 +2,8 @@
   "components": {
     "schemas": {
       "AccessControlCreate": {
+        "additionalProperties": false,
+        "description": "Create an ISO 27001 access-control record.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the record being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "access_level": {
             "enum": [
@@ -91,6 +93,8 @@
         "type": "object"
       },
       "AcknowledgementAction": {
+        "additionalProperties": false,
+        "description": "Driver response to an acknowledgement request (acknowledge or refuse).\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the response being recorded while the unknown key is silently dropped (B-10).",
         "properties": {
           "action": {
             "description": "acknowledge | refuse",
@@ -116,6 +120,8 @@
         "type": "object"
       },
       "AcknowledgementCreate": {
+        "additionalProperties": false,
+        "description": "Create a driver acknowledgement request.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the request being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "entity_id": {
             "title": "Entity Id",
@@ -146,7 +152,8 @@
         "type": "object"
       },
       "AcknowledgmentRequirementCreate": {
-        "description": "Schema for creating an acknowledgment requirement.",
+        "additionalProperties": false,
+        "description": "Schema for creating an acknowledgment requirement.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the requirement being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "acknowledgment_type": {
             "default": "read_only",
@@ -421,7 +428,8 @@
         "type": "object"
       },
       "ActionCreate": {
-        "description": "Schema for creating an action.",
+        "additionalProperties": false,
+        "description": "Schema for creating an action.\n\n``extra=\"forbid\"`` is deliberate: an unrecognised field used to be dropped\nin silence and the action created anyway, so a wrong-shaped request looked\nlike a success (PX-168). A misspelled or unsupported field must now fail.",
         "properties": {
           "action_type": {
             "default": "corrective",
@@ -455,6 +463,18 @@
             ],
             "description": "Due date in ISO format (YYYY-MM-DD)",
             "title": "Due Date"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "User id to assign to. Mirrors the owner_id returned by this API; send this or assigned_to_email, and if both, they must identify the same user.",
+            "title": "Owner Id"
           },
           "priority": {
             "default": "medium",
@@ -505,6 +525,8 @@
         "type": "object"
       },
       "ActionImportConfirm": {
+        "additionalProperties": false,
+        "description": "Confirm a Planet Mark action import session.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the import confirming while the unknown key is silently dropped (B-10).",
         "properties": {
           "selected_indices": {
             "anyOf": [
@@ -553,9 +575,23 @@
             "title": "Pages",
             "type": "integer"
           },
+          "sources_complete": {
+            "default": true,
+            "description": "False when at least one action store could not be read, so `items` may be missing rows and `total` is a floor rather than a total. An empty `items` with this false is NOT a report that there are no actions (C-53).",
+            "title": "Sources Complete",
+            "type": "boolean"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
+          },
+          "unavailable_sources": {
+            "description": "Action stores whose query failed, e.g. ['capa']. Named rather than counted so an operator can see which register is broken.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Unavailable Sources",
+            "type": "array"
           }
         },
         "required": [
@@ -569,7 +605,8 @@
         "type": "object"
       },
       "ActionOwnerNoteCreate": {
-        "description": "Request body for appending owner commentary.",
+        "additionalProperties": false,
+        "description": "Request body for appending owner commentary.\n\n``extra=\"forbid\"`` matches ``ActionCreate`` / ``ActionUpdate``: the frontend\nonly sends ``key`` and ``body``, and an unrecognised field must 422 rather\nthan be discarded while the note still saves (B-10 / PX-168 class).",
         "properties": {
           "body": {
             "maxLength": 16000,
@@ -854,6 +891,8 @@
         "type": "object"
       },
       "ActionStatusUpdate": {
+        "additionalProperties": false,
+        "description": "Update Planet Mark action status / progress.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the status update succeeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "actual_completion_date": {
             "anyOf": [
@@ -908,7 +947,8 @@
         "type": "object"
       },
       "ActionUpdate": {
-        "description": "Schema for updating an action. All fields are optional.",
+        "additionalProperties": false,
+        "description": "Schema for updating an action. All fields are optional.\n\nSee ``ActionCreate`` for why unknown fields are rejected rather than ignored.",
         "properties": {
           "action_type": {
             "anyOf": [
@@ -968,6 +1008,18 @@
             "description": "Due date in ISO format (YYYY-MM-DD)",
             "title": "Due Date"
           },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "User id to assign to. Mirrors the owner_id returned by this API; send this or assigned_to_email, and if both, they must identify the same user.",
+            "title": "Owner Id"
+          },
           "priority": {
             "anyOf": [
               {
@@ -1016,6 +1068,12 @@
             },
             "title": "By Display Status",
             "type": "object"
+          },
+          "overdue": {
+            "default": 0,
+            "description": "Open actions past their due date. Derived from the same predicate as the list `overdue=true` filter and /view-counts, so a KPI tile cannot contradict the filter chip beside it. This is an overlay, not a display status: it intersects open / in_progress rather than partitioning by_display_status.",
+            "title": "Overdue",
+            "type": "integer"
           },
           "total": {
             "title": "Total",
@@ -1088,6 +1146,8 @@
         "type": "object"
       },
       "AddCauseRequest": {
+        "additionalProperties": false,
+        "description": "Add a cause to a fishbone diagram.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the cause being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "category": {
             "description": "manpower, method, machine, material, measurement, mother_nature",
@@ -1121,6 +1181,8 @@
         "type": "object"
       },
       "AddCertificationRequest": {
+        "additionalProperties": false,
+        "description": "Add a certification to an auditor competence profile.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the certification being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "certification_body": {
             "title": "Certification Body",
@@ -1190,7 +1252,8 @@
         "type": "object"
       },
       "AddCommentRequest": {
-        "description": "Request body for adding a comment to an investigation.",
+        "additionalProperties": false,
+        "description": "Request body for adding a comment to an investigation.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the comment being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "body": {
             "anyOf": [
@@ -1250,6 +1313,8 @@
         "type": "object"
       },
       "AddTrainingRequest": {
+        "additionalProperties": false,
+        "description": "Add a training record to an auditor competence profile.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the training being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "duration_hours": {
             "anyOf": [
@@ -1296,6 +1361,8 @@
         "type": "object"
       },
       "AddWhyRequest": {
+        "additionalProperties": false,
+        "description": "Append one Why step to a 5-Whys analysis.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the step being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "answer": {
             "title": "Answer",
@@ -1325,6 +1392,8 @@
         "type": "object"
       },
       "AllocationRequest": {
+        "additionalProperties": false,
+        "description": "Allocate a vehicle to a driver.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the allocation proceeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "driver_profile_id": {
             "title": "Driver Profile Id",
@@ -1423,7 +1492,8 @@
         "type": "object"
       },
       "AnnotationCreate": {
-        "description": "Create annotation request.",
+        "additionalProperties": false,
+        "description": "Create annotation request.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the annotation being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "annotation_text": {
             "title": "Annotation Text",
@@ -1571,7 +1641,8 @@
         "type": "object"
       },
       "ApplyImportRequest": {
-        "description": "Request body for POST /planet-mark/apply-import.",
+        "additionalProperties": false,
+        "description": "Request body for POST /planet-mark/apply-import.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the import applying while the unknown key is silently dropped (B-10).",
         "properties": {
           "import_job_id": {
             "description": "ID of a completed Planet Mark import job to sync from",
@@ -1665,6 +1736,8 @@
         "type": "object"
       },
       "ApprovalActionRequest": {
+        "additionalProperties": false,
+        "description": "Approval workflow action body.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the action succeeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "action": {
             "description": "approved, rejected, returned, delegated",
@@ -1712,7 +1785,8 @@
         "type": "object"
       },
       "ApprovalResponse": {
-        "description": "Approval/Rejection response",
+        "additionalProperties": false,
+        "description": "Approval/Rejection response.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the approval succeeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "notes": {
             "anyOf": [
@@ -1981,6 +2055,8 @@
         "type": "object"
       },
       "AskAssignmentQuestionRequest": {
+        "additionalProperties": false,
+        "description": "Request to ask a question on a document-campaign assignment.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the question being accepted while the unknown key is silently dropped (B-10).",
         "properties": {
           "body": {
             "minLength": 1,
@@ -2006,6 +2082,8 @@
         "type": "object"
       },
       "AssessCompetencyRequest": {
+        "additionalProperties": false,
+        "description": "Record a competency assessment for an auditor.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the assessment being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "assessment_method": {
             "default": "supervisor",
@@ -2042,6 +2120,8 @@
         "type": "object"
       },
       "AssessEntityRequest": {
+        "additionalProperties": false,
+        "description": "Assess an operational entity against governed knowledge.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the assessment running while the unknown key is silently dropped (B-10).",
         "properties": {
           "content": {
             "anyOf": [
@@ -2193,7 +2273,8 @@
         "type": "object"
       },
       "AssessmentResponseCreate": {
-        "description": "Schema for creating an assessment response.",
+        "additionalProperties": false,
+        "description": "Schema for creating an assessment response.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the response being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "feedback": {
             "anyOf": [
@@ -2333,7 +2414,8 @@
         "type": "object"
       },
       "AssessmentResponseUpdate": {
-        "description": "Schema for updating an assessment response.",
+        "additionalProperties": false,
+        "description": "Schema for updating an assessment response.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the response being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "engineer_signature": {
             "anyOf": [
@@ -2397,7 +2479,8 @@
         "type": "object"
       },
       "AssessmentRunCreate": {
-        "description": "Schema for creating an assessment run.",
+        "additionalProperties": false,
+        "description": "Schema for creating an assessment run.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the run being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "asset_id": {
             "anyOf": [
@@ -2799,7 +2882,8 @@
         "type": "object"
       },
       "AssessmentRunUpdate": {
-        "description": "Schema for updating an assessment run.",
+        "additionalProperties": false,
+        "description": "Schema for updating an assessment run.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the run being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "location": {
             "anyOf": [
@@ -2853,7 +2937,8 @@
         "type": "object"
       },
       "AssessorGuidanceRequest": {
-        "description": "Request for assessor guidance generation.",
+        "additionalProperties": false,
+        "description": "Request for assessor guidance generation.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the guidance being generated while the unknown key is silently dropped (B-10).",
         "properties": {
           "asset_type": {
             "anyOf": [
@@ -3470,7 +3555,8 @@
         "type": "object"
       },
       "AssetTypeCreate": {
-        "description": "Schema for creating an Asset Type.",
+        "additionalProperties": false,
+        "description": "Schema for creating an Asset Type.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the asset type being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "category": {
             "description": "Asset category (lifting, power, transport, etc.)",
@@ -3653,7 +3739,8 @@
         "type": "object"
       },
       "AssetTypeUpdate": {
-        "description": "Schema for updating an Asset Type.",
+        "additionalProperties": false,
+        "description": "Schema for updating an Asset Type.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the asset type being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "category": {
             "anyOf": [
@@ -3717,7 +3804,8 @@
         "type": "object"
       },
       "AssignAcknowledgmentRequest": {
-        "description": "Request to assign acknowledgments to users.",
+        "additionalProperties": false,
+        "description": "Request to assign acknowledgments to users.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof assignments proceeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "policy_version": {
             "anyOf": [
@@ -4228,6 +4316,8 @@
         "type": "object"
       },
       "AuditCreate": {
+        "additionalProperties": false,
+        "description": "Create a UVDB audit.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the audit being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "audit_date": {
             "anyOf": [
@@ -4293,7 +4383,8 @@
         "type": "object"
       },
       "AuditFindingCreate": {
-        "description": "Schema for creating an Audit Finding.",
+        "additionalProperties": false,
+        "description": "Schema for creating an Audit Finding.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the finding being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "clause_ids_json_legacy": {
             "anyOf": [
@@ -4576,7 +4667,8 @@
         "type": "object"
       },
       "AuditFindingUpdate": {
-        "description": "Schema for updating an Audit Finding.",
+        "additionalProperties": false,
+        "description": "Schema for updating an Audit Finding.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the finding being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "clause_ids_json_legacy": {
             "anyOf": [
@@ -5062,7 +5154,8 @@
         "type": "object"
       },
       "AuditQuestionCreate": {
-        "description": "Schema for creating an Audit Question.",
+        "additionalProperties": false,
+        "description": "Schema for creating an Audit Question.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the question being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "allow_na": {
             "default": false,
@@ -5713,7 +5806,8 @@
         "type": "object"
       },
       "AuditQuestionUpdate": {
-        "description": "Schema for updating an Audit Question.",
+        "additionalProperties": false,
+        "description": "Schema for updating an Audit Question.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the question being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "allow_na": {
             "anyOf": [
@@ -6023,7 +6117,8 @@
         "type": "object"
       },
       "AuditResponseCreate": {
-        "description": "Schema for creating an Audit Response.",
+        "additionalProperties": false,
+        "description": "Schema for creating an Audit Response.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the response being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "applicability": {
             "anyOf": [
@@ -6309,7 +6404,8 @@
         "type": "object"
       },
       "AuditResponseUpdate": {
-        "description": "Schema for updating an Audit Response.",
+        "additionalProperties": false,
+        "description": "Schema for updating an Audit Response.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the response being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "applicability": {
             "anyOf": [
@@ -6440,7 +6536,8 @@
         "type": "object"
       },
       "AuditRunCreate": {
-        "description": "Schema for creating an Audit Run.",
+        "additionalProperties": false,
+        "description": "Schema for creating an Audit Run.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the run being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "assessment_mode": {
             "anyOf": [
@@ -7554,7 +7651,8 @@
         "type": "object"
       },
       "AuditRunUpdate": {
-        "description": "Schema for updating an Audit Run.",
+        "additionalProperties": false,
+        "description": "Schema for updating an Audit Run.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the run being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "assessment_mode": {
             "anyOf": [
@@ -7803,7 +7901,8 @@
         "type": "object"
       },
       "AuditSectionCreate": {
-        "description": "Schema for creating an Audit Section.",
+        "additionalProperties": false,
+        "description": "Schema for creating an Audit Section.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the section being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "applicability_rules_json": {
             "anyOf": [
@@ -7965,7 +8064,8 @@
         "type": "object"
       },
       "AuditSectionUpdate": {
-        "description": "Schema for updating an Audit Section.",
+        "additionalProperties": false,
+        "description": "Schema for updating an Audit Section.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the section being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "applicability_rules_json": {
             "anyOf": [
@@ -8121,7 +8221,8 @@
         "type": "object"
       },
       "AuditTemplateCreate": {
-        "description": "Schema for creating an Audit Template.",
+        "additionalProperties": false,
+        "description": "Schema for creating an Audit Template.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the template being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "allow_offline": {
             "default": false,
@@ -8833,7 +8934,8 @@
         "type": "object"
       },
       "AuditTemplateUpdate": {
-        "description": "Schema for updating an Audit Template.",
+        "additionalProperties": false,
+        "description": "Schema for updating an Audit Template.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the template being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "allow_offline": {
             "anyOf": [
@@ -9080,6 +9182,8 @@
         "type": "object"
       },
       "AuditUpdate": {
+        "additionalProperties": false,
+        "description": "Update a UVDB audit.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the audit being updated while the unknown key is silently dropped (B-10).",
         "properties": {
           "audit_notes": {
             "anyOf": [
@@ -9130,6 +9234,8 @@
         "type": "object"
       },
       "AutoTagRequest": {
+        "additionalProperties": false,
+        "description": "Auto-tag content against compliance clauses.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof tagging while the unknown key is silently dropped (B-10).",
         "properties": {
           "content": {
             "title": "Content",
@@ -9191,7 +9297,8 @@
         "type": "object"
       },
       "AzureTokenExchangeRequest": {
-        "description": "Request to exchange Azure AD token for platform token.",
+        "additionalProperties": false,
+        "description": "Request to exchange Azure AD token for platform token.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the exchange proceeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "id_token": {
             "title": "Id Token",
@@ -9230,6 +9337,8 @@
         "type": "object"
       },
       "BCPCreate": {
+        "additionalProperties": false,
+        "description": "Create a business continuity plan.\n\n``extra=\"forbid\"`` so unknown body fields fail loudly instead of being\nsilently dropped (B-10).",
         "properties": {
           "activation_criteria": {
             "anyOf": [
@@ -9421,6 +9530,8 @@
         "type": "object"
       },
       "BCPUpdate": {
+        "additionalProperties": false,
+        "description": "Partial update for a business continuity plan.\n\n``extra=\"forbid\"`` so unknown body fields fail loudly instead of being\nsilently dropped (B-10).",
         "properties": {
           "activation_criteria": {
             "anyOf": [
@@ -9624,6 +9735,8 @@
         "type": "object"
       },
       "BatchFindingRequest": {
+        "additionalProperties": false,
+        "description": "Batch finding analysis request.\n\n``extra=\"forbid\"`` so unknown body fields fail loudly instead of being\nsilently dropped (B-10).",
         "properties": {
           "findings": {
             "items": {
@@ -9642,6 +9755,8 @@
         "type": "object"
       },
       "BatchGateRequest": {
+        "additionalProperties": false,
+        "description": "Batch vehicle compliance-gate check.\n\n``extra=\"forbid\"`` so unknown body fields fail loudly instead of being\nsilently dropped (B-10).",
         "properties": {
           "vehicle_regs": {
             "items": {
@@ -9658,7 +9773,8 @@
         "type": "object"
       },
       "BatchImportRequest": {
-        "description": "Request body for batch import from server directory.",
+        "additionalProperties": false,
+        "description": "Request body for batch import from server directory.\n\n``extra=\"forbid\"`` so unknown body fields fail loudly instead of being\nsilently dropped (B-10).",
         "properties": {
           "directory_path": {
             "description": "Absolute or relative path to directory containing XML layout files",
@@ -10124,6 +10240,27 @@
         "title": "Body_upload_evidence_asset_api_v1_evidence_assets_upload_post",
         "type": "object"
       },
+      "Body_upload_portal_attachment_api_v1_portal_reports_attachments_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Photo or document to attach to the report",
+            "title": "File",
+            "type": "string"
+          },
+          "report_type": {
+            "description": "Type: incident, complaint, rta or near_miss",
+            "title": "Report Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "report_type"
+        ],
+        "title": "Body_upload_portal_attachment_api_v1_portal_reports_attachments_post",
+        "type": "object"
+      },
       "Body_upload_training_matrix_api_v1_training_matrix_imports_post": {
         "properties": {
           "file": {
@@ -10139,6 +10276,8 @@
         "type": "object"
       },
       "BowTieElementCreate": {
+        "additionalProperties": false,
+        "description": "Create a bow-tie element on a risk.\n\n``extra=\"forbid\"`` so unknown body fields fail loudly instead of being\nsilently dropped (B-10).",
         "properties": {
           "barrier_type": {
             "anyOf": [
@@ -10326,6 +10465,7 @@
         "type": "object"
       },
       "BulkConfirmRequest": {
+        "additionalProperties": false,
         "properties": {
           "link_ids": {
             "items": {
@@ -10435,6 +10575,7 @@
         "type": "object"
       },
       "BulkStatusUpdate": {
+        "additionalProperties": false,
         "properties": {
           "action_ids": {
             "items": {
@@ -10457,6 +10598,7 @@
         "type": "object"
       },
       "CAPACreate": {
+        "additionalProperties": false,
         "properties": {
           "asset_id": {
             "anyOf": [
@@ -10922,7 +11064,8 @@
           "competence_gap",
           "investigation",
           "near_miss",
-          "rta"
+          "rta",
+          "compliance_record"
         ],
         "title": "CAPASource",
         "type": "string"
@@ -10968,6 +11111,8 @@
         "type": "string"
       },
       "CAPAStatusTransition": {
+        "additionalProperties": false,
+        "description": "Transition a CAPA action to a new status.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the transition succeeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "comment": {
             "anyOf": [
@@ -10999,6 +11144,7 @@
         "type": "string"
       },
       "CAPAUpdate": {
+        "additionalProperties": false,
         "properties": {
           "assigned_to_id": {
             "anyOf": [
@@ -11662,6 +11808,18 @@
             ],
             "title": "Quiz Draft Id"
           },
+          "reference_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stored CAM-YYYY-NNNN reference (PX-222). Null only on rows predating the backfill.",
+            "title": "Reference Number"
+          },
           "reminder_hours": {
             "items": {
               "type": "integer"
@@ -11991,6 +12149,324 @@
         "title": "CampaignUpdateRequest",
         "type": "object"
       },
+      "CaseClosureBlockingItem": {
+        "description": "An action or CAPA that is blocking case closure.",
+        "properties": {
+          "action_key": {
+            "title": "Action Key",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "reference_number": {
+            "title": "Reference Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unblock_hint": {
+            "default": "Complete or cancel this action before closing the case.",
+            "title": "Unblock Hint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "reference_number",
+          "title",
+          "status",
+          "action_key"
+        ],
+        "title": "CaseClosureBlockingItem",
+        "type": "object"
+      },
+      "CaseClosureLinkedInvestigation": {
+        "description": "Linked investigation shown for context; it never blocks closure.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reference_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Number"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "CaseClosureLinkedInvestigation",
+        "type": "object"
+      },
+      "CaseClosureSummary": {
+        "description": "Everything the Close summary dialog renders about the case.",
+        "properties": {
+          "actions_complete": {
+            "default": 0,
+            "title": "Actions Complete",
+            "type": "integer"
+          },
+          "actions_incomplete": {
+            "default": 0,
+            "title": "Actions Incomplete",
+            "type": "integer"
+          },
+          "actions_total": {
+            "default": 0,
+            "title": "Actions Total",
+            "type": "integer"
+          },
+          "case_label": {
+            "title": "Case Label",
+            "type": "string"
+          },
+          "case_type": {
+            "title": "Case Type",
+            "type": "string"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "lessons_learnt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lessons Learnt"
+          },
+          "lessons_present": {
+            "default": false,
+            "title": "Lessons Present",
+            "type": "boolean"
+          },
+          "linked_investigation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseClosureLinkedInvestigation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "reference_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Number"
+          },
+          "reported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported At"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_status": {
+            "title": "Target Status",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "case_type",
+          "case_label",
+          "id",
+          "status",
+          "target_status"
+        ],
+        "title": "CaseClosureSummary",
+        "type": "object"
+      },
+      "CaseClosureValidationResponse": {
+        "description": "Closure-readiness result for a single case.",
+        "examples": [
+          {
+            "can_close": false,
+            "reasons": [
+              "MISSING_LESSONS_LEARNT"
+            ]
+          }
+        ],
+        "properties": {
+          "allowed_next_statuses": {
+            "description": "Legal next statuses for this case, reported when the close transition is refused.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Next Statuses",
+            "type": "array"
+          },
+          "can_close": {
+            "title": "Can Close",
+            "type": "boolean"
+          },
+          "lessons_present": {
+            "default": false,
+            "title": "Lessons Present",
+            "type": "boolean"
+          },
+          "open_work": {
+            "items": {
+              "$ref": "#/components/schemas/CaseClosureBlockingItem"
+            },
+            "title": "Open Work",
+            "type": "array"
+          },
+          "open_work_count": {
+            "default": 0,
+            "title": "Open Work Count",
+            "type": "integer"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CaseClosureSummary"
+          },
+          "transition_allowed": {
+            "default": true,
+            "description": "False when this status cannot move straight to closed, whatever else is in order.",
+            "title": "Transition Allowed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_close",
+          "summary"
+        ],
+        "title": "CaseClosureValidationResponse",
+        "type": "object"
+      },
       "CaseRefInput": {
         "properties": {
           "id": {
@@ -12010,6 +12486,168 @@
           "id"
         ],
         "title": "CaseRefInput",
+        "type": "object"
+      },
+      "CatalogueActivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "last_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Completed At"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "next_due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due Date"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          }
+        },
+        "title": "CatalogueActivateRequest",
+        "type": "object"
+      },
+      "CatalogueListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueTemplateResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "CatalogueListResponse",
+        "type": "object"
+      },
+      "CatalogueTemplateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/ComplianceScheduleAnchor"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "frequency_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Days"
+          },
+          "frequency_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Months"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "regulatory_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Basis"
+          },
+          "statutory": {
+            "title": "Statutory",
+            "type": "boolean"
+          },
+          "taxonomy_id": {
+            "title": "Taxonomy Id",
+            "type": "string"
+          },
+          "template_key": {
+            "title": "Template Key",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "template_key",
+          "title",
+          "taxonomy_id",
+          "anchor",
+          "statutory",
+          "is_active"
+        ],
+        "title": "CatalogueTemplateResponse",
         "type": "object"
       },
       "CertificationStatusPatch": {
@@ -12420,6 +13058,7 @@
         "type": "object"
       },
       "ChallengeDecideRequest": {
+        "additionalProperties": false,
         "properties": {
           "decision": {
             "enum": [
@@ -12451,6 +13090,7 @@
         "type": "object"
       },
       "ChallengeMessageRequest": {
+        "additionalProperties": false,
         "description": "Follow-up chat turn on an existing session.",
         "properties": {
           "chip_id": {
@@ -12479,6 +13119,7 @@
         "type": "object"
       },
       "ChallengeSessionCreateRequest": {
+        "additionalProperties": false,
         "description": "Start a Check & Challenge coach session over a template snapshot.",
         "properties": {
           "brief": {
@@ -12760,6 +13401,47 @@
         "title": "ClauseUpdate",
         "type": "object"
       },
+      "ClientFeatureFlagsResponse": {
+        "description": "The set of UI features this deployment is prepared to show the caller.",
+        "properties": {
+          "evaluated_at": {
+            "description": "When the server evaluated these flags (UTC).",
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          },
+          "flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "description": "Effective value per feature key: the configuration opener, the kill switch and the caller's permission folded into a single boolean.",
+            "title": "Flags",
+            "type": "object"
+          },
+          "scope": {
+            "description": "Whether a caller identity was presented. Permission-gated features are always false for 'anonymous', so a client must refetch after signing in.",
+            "enum": [
+              "anonymous",
+              "user"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "description": "How long the client may treat this response as fresh. Advisory: the response is sent no-store because it varies per caller.",
+            "title": "Ttl Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "flags",
+          "scope",
+          "evaluated_at",
+          "ttl_seconds"
+        ],
+        "title": "ClientFeatureFlagsResponse",
+        "type": "object"
+      },
       "CompetencyRecordResponse": {
         "description": "Schema for competency record response.",
         "properties": {
@@ -12840,6 +13522,7 @@
         "type": "object"
       },
       "CompetencyRequirementAllocateRequest": {
+        "additionalProperties": false,
         "description": "Allocate a requirement to engineers (explicit ids and/or site/role filters).",
         "properties": {
           "due_days": {
@@ -12929,6 +13612,7 @@
         "type": "object"
       },
       "CompetencyRequirementCreate": {
+        "additionalProperties": false,
         "description": "Create a competency requirement (frequency + allocation filters).",
         "properties": {
           "asset_type_id": {
@@ -13127,6 +13811,7 @@
         "type": "object"
       },
       "CompetencyRequirementUpdate": {
+        "additionalProperties": false,
         "description": "Partial update for a competency requirement.",
         "properties": {
           "asset_type_id": {
@@ -13340,6 +14025,33 @@
             ],
             "title": "Related Reference"
           },
+          "response_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Explicit response deadline; derived from received_date + response_sla_hours when omitted",
+            "title": "Response Due At"
+          },
+          "response_sla_hours": {
+            "anyOf": [
+              {
+                "maximum": 8760.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Agreed hours from received_date to respond to the complainant (PX-210)",
+            "title": "Response Sla Hours"
+          },
           "source_type": {
             "default": "manual",
             "enum": [
@@ -13439,7 +14151,8 @@
           "critical",
           "high",
           "medium",
-          "low"
+          "low",
+          "negligible"
         ],
         "title": "ComplaintPriority",
         "type": "string"
@@ -13575,6 +14288,18 @@
             ],
             "title": "External Ref"
           },
+          "first_response_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Response At"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -13668,6 +14393,40 @@
               }
             ],
             "title": "Resolution Summary"
+          },
+          "response_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Due At"
+          },
+          "response_sla_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Sla Hours"
+          },
+          "response_sla_state": {
+            "default": "not_configured",
+            "enum": [
+              "not_configured",
+              "pending",
+              "met",
+              "breached"
+            ],
+            "title": "Response Sla State",
+            "type": "string"
           },
           "root_cause": {
             "anyOf": [
@@ -13776,8 +14535,19 @@
         "type": "string"
       },
       "ComplaintSummary": {
-        "description": "Complaint module summary.",
+        "description": "Complaint module summary.\n\n`total_in_period` / `closed_in_period` are windowed (different date columns).\n`register_*` reconcile on the whole register. `received_in_period_closed` is\nthe cohort-coherent numerator for resolution_rate (received in window AND closed).",
         "properties": {
+          "avg_resolution_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Resolution Days"
+          },
           "closed_in_period": {
             "title": "Closed In Period",
             "type": "integer"
@@ -13785,6 +14555,50 @@
           "open": {
             "title": "Open",
             "type": "integer"
+          },
+          "received_in_period_closed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received In Period Closed"
+          },
+          "register_closed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register Closed"
+          },
+          "register_open": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register Open"
+          },
+          "register_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register Total"
           },
           "resolution_rate": {
             "anyOf": [
@@ -13935,6 +14749,18 @@
             ],
             "title": "Description"
           },
+          "first_response_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Response At"
+          },
           "investigation_notes": {
             "anyOf": [
               {
@@ -14013,6 +14839,31 @@
               }
             ],
             "title": "Resolution Summary"
+          },
+          "response_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Due At"
+          },
+          "response_sla_hours": {
+            "anyOf": [
+              {
+                "maximum": 8760.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Sla Hours"
           },
           "root_cause": {
             "anyOf": [
@@ -14109,6 +14960,8 @@
         "type": "object"
       },
       "CompleteAnalysisRequest": {
+        "additionalProperties": false,
+        "description": "Mark an RCA analysis/diagram complete.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof completion succeeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "proposed_actions": {
             "anyOf": [
@@ -14130,6 +14983,8 @@
         "type": "object"
       },
       "CompleteAssignmentRequest": {
+        "additionalProperties": false,
+        "description": "Request to complete a document-campaign assignment.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof completion succeeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "acceptance_statement": {
             "minLength": 1,
@@ -14196,6 +15051,8 @@
         "type": "object"
       },
       "CompleteTrainingRequest": {
+        "additionalProperties": false,
+        "description": "Mark auditor training as completed.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof completion being recorded while the unknown key is silently dropped (B-10).",
         "properties": {
           "assessment_passed": {
             "anyOf": [
@@ -14242,8 +15099,8 @@
         "title": "CompleteTrainingRequest",
         "type": "object"
       },
-      "ComplianceDashboardResponse": {
-        "description": "Schema for compliance dashboard.",
+      "ComplianceDashboardMetrics": {
+        "description": "Counts that were actually read from the database.",
         "properties": {
           "completed": {
             "title": "Completed",
@@ -14278,8 +15135,18 @@
           "completion_rate",
           "overdue_rate"
         ],
-        "title": "ComplianceDashboardResponse",
+        "title": "ComplianceDashboardMetrics",
         "type": "object"
+      },
+      "ComplianceFilingStatus": {
+        "description": "Library filing state for a completed record (separate from completion).",
+        "enum": [
+          "not_filed",
+          "filed",
+          "filing_failed"
+        ],
+        "title": "ComplianceFilingStatus",
+        "type": "string"
       },
       "ComplianceGateResponse": {
         "properties": {
@@ -14557,6 +15424,53 @@
         "title": "CompliancePeopleResponse",
         "type": "object"
       },
+      "ComplianceRecordOutcome": {
+        "description": "Whether the occurrence was completed or marked missed by the sweep.",
+        "enum": [
+          "completed",
+          "missed"
+        ],
+        "title": "ComplianceRecordOutcome",
+        "type": "string"
+      },
+      "ComplianceScheduleAnchor": {
+        "description": "How ``next_due_date`` advances after an occurrence closes.",
+        "enum": [
+          "completion",
+          "schedule"
+        ],
+        "title": "ComplianceScheduleAnchor",
+        "type": "string"
+      },
+      "ComplianceScheduleStatsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "current": {
+            "title": "Current",
+            "type": "integer"
+          },
+          "due_soon": {
+            "title": "Due Soon",
+            "type": "integer"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "total_active": {
+            "title": "Total Active",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_active",
+          "current",
+          "due_soon",
+          "overdue"
+        ],
+        "title": "ComplianceScheduleStatsResponse",
+        "type": "object"
+      },
       "ComplianceScoreResponse": {
         "description": "Schema for compliance score response.",
         "properties": {
@@ -14627,6 +15541,14 @@
           "clause_count": {
             "title": "Clause Count",
             "type": "integer"
+          },
+          "clause_count_breakdown": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "Clause Count Breakdown",
+            "type": "object"
           },
           "code": {
             "title": "Code",
@@ -14808,6 +15730,17 @@
           "quiz_pass_count": {
             "title": "Quiz Pass Count",
             "type": "integer"
+          },
+          "reference_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Number"
           },
           "reminder_offsets_hours": {
             "items": {
@@ -15389,6 +16322,7 @@
         "type": "object"
       },
       "ConvertToAssessmentRequest": {
+        "additionalProperties": false,
         "description": "Request body containing template data to convert.",
         "properties": {
           "template": {
@@ -15461,6 +16395,8 @@
         "type": "object"
       },
       "CreateCAPARequest": {
+        "additionalProperties": false,
+        "description": "Create a CAPA item from RCA tools.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the CAPA being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "action_type": {
             "description": "corrective or preventive",
@@ -15557,6 +16493,8 @@
         "type": "object"
       },
       "CreateCapaRequest": {
+        "additionalProperties": false,
+        "description": "Request to create a CAPA from a competence gap.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the CAPA being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "due_date": {
             "anyOf": [
@@ -15606,8 +16544,39 @@
         "title": "CreateCapaRequest",
         "type": "object"
       },
+      "CreateExportRequest": {
+        "additionalProperties": false,
+        "description": "POST /exports body \u2014 sync stream only this wave (no async job create).\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the export proceeding while the unknown key is silently dropped (B-10).",
+        "properties": {
+          "format": {
+            "const": "csv",
+            "default": "csv",
+            "title": "Format",
+            "type": "string"
+          },
+          "module": {
+            "enum": [
+              "incidents",
+              "rtas",
+              "complaints",
+              "risks",
+              "audits",
+              "actions",
+              "documents"
+            ],
+            "title": "Module",
+            "type": "string"
+          }
+        },
+        "required": [
+          "module"
+        ],
+        "title": "CreateExportRequest",
+        "type": "object"
+      },
       "CreateFindingCapaRequest": {
-        "description": "Optional overrides when creating a CAPA from an audit finding.",
+        "additionalProperties": false,
+        "description": "Optional overrides when creating a CAPA from an audit finding.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the CAPA being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "assignee_email": {
             "anyOf": [
@@ -15649,6 +16618,8 @@
         "type": "object"
       },
       "CreateFishboneRequest": {
+        "additionalProperties": false,
+        "description": "Create a Fishbone diagram.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the diagram being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "effect_statement": {
             "title": "Effect Statement",
@@ -15695,6 +16666,8 @@
         "type": "object"
       },
       "CreateFiveWhysRequest": {
+        "additionalProperties": false,
+        "description": "Create a 5-Whys analysis.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the analysis being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "entity_id": {
             "anyOf": [
@@ -15801,6 +16774,19 @@
             ],
             "title": "Assignee Id"
           },
+          "assignee_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Roster display name when the assignee has no portal login",
+            "title": "Assignee Name"
+          },
           "description": {
             "anyOf": [
               {
@@ -15851,6 +16837,8 @@
         "type": "object"
       },
       "CreateProfileRequest": {
+        "additionalProperties": false,
+        "description": "Create an auditor competence profile.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the profile being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "department": {
             "anyOf": [
@@ -15891,6 +16879,8 @@
         "type": "object"
       },
       "CreateWatchActionRequest": {
+        "additionalProperties": false,
+        "description": "Create an Action (CAPA) from a regulatory watch impact.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the action being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "due_date": {
             "anyOf": [
@@ -16339,6 +17329,11 @@
             ],
             "title": "Date To"
           },
+          "external_processing_acknowledged": {
+            "default": false,
+            "title": "External Processing Acknowledged",
+            "type": "boolean"
+          },
           "include_benchmark": {
             "default": false,
             "title": "Include Benchmark",
@@ -16434,6 +17429,8 @@
         "type": "object"
       },
       "DefectCAPARequest": {
+        "additionalProperties": false,
+        "description": "Create a CAPA from a vehicle defect.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the CAPA being created while the unknown key is silently dropped (B-10).",
         "properties": {
           "defect_id": {
             "title": "Defect Id",
@@ -20938,6 +21935,9 @@
           "sla_performance": {
             "$ref": "#/components/schemas/SLASummary"
           },
+          "training": {
+            "$ref": "#/components/schemas/TrainingSummary"
+          },
           "trends": {
             "$ref": "#/components/schemas/TrendData"
           }
@@ -20958,6 +21958,108 @@
           "alerts"
         ],
         "title": "ExecutiveDashboardResponse",
+        "type": "object"
+      },
+      "ExportCapabilities": {
+        "description": "Honest capability disclosure \u2014 sync CSV now; job store deferred to Lane S.",
+        "properties": {
+          "job_history": {
+            "default": false,
+            "title": "Job History",
+            "type": "boolean"
+          },
+          "max_sync_rows": {
+            "title": "Max Sync Rows",
+            "type": "integer"
+          },
+          "scheduled_templates": {
+            "default": false,
+            "title": "Scheduled Templates",
+            "type": "boolean"
+          },
+          "sync_csv": {
+            "default": true,
+            "title": "Sync Csv",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "max_sync_rows"
+        ],
+        "title": "ExportCapabilities",
+        "type": "object"
+      },
+      "ExportCatalogResponse": {
+        "description": "Catalog returned by GET /exports/catalog.",
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ExportCapabilities"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/ExportModuleCatalogItem"
+            },
+            "title": "Modules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "modules",
+          "capabilities"
+        ],
+        "title": "ExportCatalogResponse",
+        "type": "object"
+      },
+      "ExportModuleCatalogItem": {
+        "description": "One exportable module with a live tenant-scoped row count.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "formats": {
+            "items": {
+              "const": "csv",
+              "type": "string"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
+          "id": {
+            "enum": [
+              "incidents",
+              "rtas",
+              "complaints",
+              "risks",
+              "audits",
+              "actions",
+              "documents"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "record_count": {
+            "minimum": 0.0,
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "sync_available": {
+            "default": true,
+            "title": "Sync Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "record_count"
+        ],
+        "title": "ExportModuleCatalogItem",
         "type": "object"
       },
       "ExternalAuditBulkReviewRequest": {
@@ -21246,7 +22348,7 @@
           "severity": {
             "anyOf": [
               {
-                "pattern": "^(negligible|low|medium|high|critical)$",
+                "pattern": "^(low|medium|high|critical)$",
                 "type": "string"
               },
               {
@@ -22311,6 +23413,7 @@
         "type": "object"
       },
       "FiveWhysRequest": {
+        "additionalProperties": false,
         "properties": {
           "answers": {
             "items": {
@@ -25808,8 +26911,19 @@
         "type": "string"
       },
       "IncidentSummary": {
-        "description": "Incident module summary.",
+        "description": "Incident module summary.\n\n`total_in_period` is windowed. `register_*` describe the whole register and\nreconcile: register_open + register_closed == register_total. `open` remains\nthe narrower actively-worked subset (excludes some terminal-adjacent statuses).",
         "properties": {
+          "avg_resolution_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Resolution Days"
+          },
           "by_severity": {
             "additionalProperties": {
               "type": "integer"
@@ -25828,6 +26942,39 @@
           "psif_count": {
             "title": "Psif Count",
             "type": "integer"
+          },
+          "register_closed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register Closed"
+          },
+          "register_open": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register Open"
+          },
+          "register_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register Total"
           },
           "sif_count": {
             "title": "Sif Count",
@@ -26720,12 +27867,82 @@
         "title": "InvestigationClosureBlockingItem",
         "type": "object"
       },
+      "InvestigationClosureMissingItem": {
+        "description": "A named template section/field that is blocking closure.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "field_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Key"
+          },
+          "field_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Label"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "section_key": {
+            "title": "Section Key",
+            "type": "string"
+          },
+          "section_label": {
+            "title": "Section Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "section_key",
+          "section_label",
+          "path"
+        ],
+        "title": "InvestigationClosureMissingItem",
+        "type": "object"
+      },
       "InvestigationClosureValidationResponse": {
         "description": "Closure-validation result for an investigation.",
         "properties": {
           "can_close": {
             "title": "Can Close",
             "type": "boolean"
+          },
+          "can_complete": {
+            "default": false,
+            "title": "Can Complete",
+            "type": "boolean"
+          },
+          "completion_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Completion Reasons",
+            "type": "array"
+          },
+          "missing_items": {
+            "items": {
+              "$ref": "#/components/schemas/InvestigationClosureMissingItem"
+            },
+            "title": "Missing Items",
+            "type": "array"
           },
           "open_work": {
             "items": {
@@ -27139,6 +28356,17 @@
             "title": "Assigned Entity Id",
             "type": "integer"
           },
+          "assigned_entity_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Entity Reference"
+          },
           "assigned_entity_type": {
             "title": "Assigned Entity Type",
             "type": "string"
@@ -27320,6 +28548,32 @@
               }
             ],
             "title": "Assigned To User Id"
+          },
+          "closure_override": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Supervisor override to complete/close with open CAPA/actions (requires reason).",
+            "title": "Closure Override"
+          },
+          "closure_override_reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mandatory reason when closure_override is true and open work remains.",
+            "title": "Closure Override Reason"
           },
           "data": {
             "anyOf": [
@@ -27669,6 +28923,17 @@
               }
             ],
             "title": "Actor Id"
+          },
+          "actor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Name"
           },
           "created_at": {
             "format": "date-time",
@@ -29424,6 +30689,7 @@
         "type": "object"
       },
       "LoginRequest": {
+        "additionalProperties": false,
         "description": "Schema for login request.",
         "properties": {
           "email": {
@@ -30045,6 +31311,25 @@
         "title": "MatterLegalHoldResponse",
         "type": "object"
       },
+      "MeasuredComplianceDashboard": {
+        "description": "A real measurement. Every count in ``metrics`` came from a query that ran.",
+        "properties": {
+          "measurement": {
+            "const": "measured",
+            "default": "measured",
+            "title": "Measurement",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/ComplianceDashboardMetrics"
+          }
+        },
+        "required": [
+          "metrics"
+        ],
+        "title": "MeasuredComplianceDashboard",
+        "type": "object"
+      },
       "MentionSearchResult": {
         "description": "User mention search result",
         "properties": {
@@ -30364,7 +31649,7 @@
           "potential_severity": {
             "anyOf": [
               {
-                "pattern": "^(negligible|low|medium|high|critical)$",
+                "pattern": "^(critical|high|medium|low|negligible)$",
                 "type": "string"
               },
               {
@@ -31034,7 +32319,7 @@
           "potential_severity": {
             "anyOf": [
               {
-                "pattern": "^(negligible|low|medium|high|critical)$",
+                "pattern": "^(critical|high|medium|low|negligible)$",
                 "type": "string"
               },
               {
@@ -31718,6 +33003,8 @@
         "type": "string"
       },
       "ObsoleteRequest": {
+        "additionalProperties": false,
+        "description": "Mark-document-obsolete body.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof obsolescence succeeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "obsolete_reason": {
             "minLength": 10,
@@ -32383,6 +33670,7 @@
         "type": "object"
       },
       "PasswordChangeRequest": {
+        "additionalProperties": false,
         "description": "Schema for password change request.",
         "properties": {
           "current_password": {
@@ -32405,6 +33693,7 @@
         "type": "object"
       },
       "PasswordResetConfirm": {
+        "additionalProperties": false,
         "description": "Schema for password reset confirmation.",
         "properties": {
           "new_password": {
@@ -32426,6 +33715,7 @@
         "type": "object"
       },
       "PasswordResetRequest": {
+        "additionalProperties": false,
         "description": "Schema for password reset request.",
         "properties": {
           "email": {
@@ -32842,6 +34132,42 @@
         "title": "PolicyUpdate",
         "type": "object"
       },
+      "PortalAttachmentUploadResponse": {
+        "description": "Receipt for one uploaded file, to be passed back in ``attachment_ids``.",
+        "properties": {
+          "attachment_id": {
+            "description": "Opaque handle to send in attachment_ids when submitting the report",
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "attachment_id",
+          "content_type",
+          "size_bytes"
+        ],
+        "title": "PortalAttachmentUploadResponse",
+        "type": "object"
+      },
       "PortalDefectCounts": {
         "properties": {
           "p1": {
@@ -32954,7 +34280,8 @@
             "enum": [
               "clear",
               "attention",
-              "blocked"
+              "blocked",
+              "no_data"
             ],
             "title": "Clear State",
             "type": "string"
@@ -34021,6 +35348,8 @@
         "type": "object"
       },
       "QuestionReplyRequest": {
+        "additionalProperties": false,
+        "description": "Request to reply on a document-campaign question thread.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the reply being accepted while the unknown key is silently dropped (B-10).",
         "properties": {
           "body": {
             "minLength": 1,
@@ -34142,14 +35471,14 @@
           },
           "is_anonymous": {
             "default": false,
-            "description": "Submit anonymously",
+            "description": "Must be false; anonymous portal submit is not available",
             "title": "Is Anonymous",
             "type": "boolean"
           },
           "location": {
             "anyOf": [
               {
-                "maxLength": 200,
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -34179,7 +35508,7 @@
           "reporter_name": {
             "anyOf": [
               {
-                "maxLength": 100,
+                "maxLength": 200,
                 "type": "string"
               },
               {
@@ -34191,7 +35520,7 @@
           "reporter_phone": {
             "anyOf": [
               {
-                "maxLength": 20,
+                "maxLength": 50,
                 "type": "string"
               },
               {
@@ -34215,7 +35544,7 @@
           },
           "severity": {
             "default": "medium",
-            "description": "Severity: low, medium, high, critical",
+            "description": "Severity: negligible, low, medium, high, critical",
             "title": "Severity",
             "type": "string"
           },
@@ -36190,8 +37519,23 @@
         "type": "string"
       },
       "RTASummary": {
-        "description": "RTA module summary.",
+        "description": "RTA module summary.\n\nTwo populations, kept apart on purpose: `total_in_period` is windowed by the\ndashboard period, while `total` / `open` / `closed` describe the whole register.\n`open` + `closed` always equals `total`.",
         "properties": {
+          "closed": {
+            "default": 0,
+            "title": "Closed",
+            "type": "integer"
+          },
+          "open": {
+            "default": 0,
+            "title": "Open",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
           "total_in_period": {
             "title": "Total In Period",
             "type": "integer"
@@ -37225,7 +38569,8 @@
         "type": "object"
       },
       "RecordAcknowledgmentRequest": {
-        "description": "Request to record an acknowledgment.",
+        "additionalProperties": false,
+        "description": "Request to record an acknowledgment.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the acknowledgment being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "acceptance_statement": {
             "anyOf": [
@@ -37262,6 +38607,250 @@
           }
         },
         "title": "RecordAcknowledgmentRequest",
+        "type": "object"
+      },
+      "RecordCompleteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "check_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Passed"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "evidence_asset_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Asset Ids"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "title": "RecordCompleteRequest",
+        "type": "object"
+      },
+      "RecordEvidenceAttachRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_asset_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Evidence Asset Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "evidence_asset_ids"
+        ],
+        "title": "RecordEvidenceAttachRequest",
+        "type": "object"
+      },
+      "RecordListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecordResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "pages"
+        ],
+        "title": "RecordListResponse",
+        "type": "object"
+      },
+      "RecordResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "check_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Passed"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "filing_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filing Error"
+          },
+          "filing_status": {
+            "$ref": "#/components/schemas/ComplianceFilingStatus"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "library_document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Document Id"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ComplianceRecordOutcome"
+          },
+          "reference_number": {
+            "title": "Reference Number",
+            "type": "string"
+          },
+          "requirement_id": {
+            "title": "Requirement Id",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "integer"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "external_id",
+          "tenant_id",
+          "reference_number",
+          "requirement_id",
+          "due_date",
+          "outcome",
+          "filing_status",
+          "created_at"
+        ],
+        "title": "RecordResponse",
         "type": "object"
       },
       "RefreshTokenRequest": {
@@ -37712,6 +39301,518 @@
           "notified"
         ],
         "title": "RequestSignatureResponse",
+        "type": "object"
+      },
+      "RequirementCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/ComplianceScheduleAnchor",
+            "default": "schedule"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "frequency_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Days"
+          },
+          "frequency_months": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Months"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "last_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Completed At"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "next_due_date": {
+            "format": "date",
+            "title": "Next Due Date",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "regulatory_basis": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Basis"
+          },
+          "statutory": {
+            "default": false,
+            "title": "Statutory",
+            "type": "boolean"
+          },
+          "taxonomy_id": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Taxonomy Id",
+            "type": "string"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "taxonomy_id",
+          "next_due_date"
+        ],
+        "title": "RequirementCreate",
+        "type": "object"
+      },
+      "RequirementListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RequirementResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "pages"
+        ],
+        "title": "RequirementListResponse",
+        "type": "object"
+      },
+      "RequirementResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/ComplianceScheduleAnchor"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "frequency_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Days"
+          },
+          "frequency_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Months"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "last_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Completed At"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "next_due_date": {
+            "format": "date",
+            "title": "Next Due Date",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "reference_number": {
+            "title": "Reference Number",
+            "type": "string"
+          },
+          "regulatory_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Basis"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "current",
+                  "due_soon",
+                  "overdue"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "statutory": {
+            "title": "Statutory",
+            "type": "boolean"
+          },
+          "taxonomy_id": {
+            "title": "Taxonomy Id",
+            "type": "string"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "external_id",
+          "tenant_id",
+          "reference_number",
+          "title",
+          "taxonomy_id",
+          "anchor",
+          "statutory",
+          "next_due_date",
+          "is_active",
+          "created_at"
+        ],
+        "title": "RequirementResponse",
+        "type": "object"
+      },
+      "RequirementUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComplianceScheduleAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "frequency_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Days"
+          },
+          "frequency_months": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Months"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "last_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Completed At"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "next_due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due Date"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "regulatory_basis": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Basis"
+          },
+          "statutory": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statutory"
+          },
+          "taxonomy_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxonomy Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "RequirementUpdate",
         "type": "object"
       },
       "ResearchRequest": {
@@ -40504,7 +42605,7 @@
         "type": "object"
       },
       "RiskSummary": {
-        "description": "Risk module summary.",
+        "description": "Risk module summary.\n\nTwo populations, kept apart on purpose. `register_total` is the whole\nEnterprise Risk Register visible to the tenant and reconciles exactly with\n`GET /api/v1/risk-register/`; `total_active` and the level breakdown cover\nthe narrower not-closed subset reported by `/risk-register/summary`.\n`register_total` is None when the aggregate could not be computed, so a\nfailure does not read as an empty register.",
         "properties": {
           "average_score": {
             "title": "Average Score",
@@ -40520,6 +42621,17 @@
           "high_critical": {
             "title": "High Critical",
             "type": "integer"
+          },
+          "register_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register Total"
           },
           "total_active": {
             "title": "Total Active",
@@ -42109,6 +44221,25 @@
         "title": "SafetyLookupPreviewResponse",
         "type": "object"
       },
+      "SafetyLookupRejectRequest": {
+        "description": "Optional target remaps assets; omit to discard an unused provisional lookup.",
+        "properties": {
+          "target_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          }
+        },
+        "title": "SafetyLookupRejectRequest",
+        "type": "object"
+      },
       "ScanKbRequest": {
         "properties": {
           "clause_texts": {
@@ -42759,6 +44890,8 @@
         "type": "object"
       },
       "SetFishboneRootCauseRequest": {
+        "additionalProperties": false,
+        "description": "Set the root cause on a fishbone diagram.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the root cause being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "primary_causes": {
             "anyOf": [
@@ -42791,6 +44924,8 @@
         "type": "object"
       },
       "SetRootCauseRequest": {
+        "additionalProperties": false,
+        "description": "Set the primary root cause on a 5-Whys analysis.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the root cause being saved while the unknown key is silently dropped (B-10).",
         "properties": {
           "contributing_factors": {
             "anyOf": [
@@ -43283,6 +45418,67 @@
           "snooze_until"
         ],
         "title": "SnoozeAssignmentResponse",
+        "type": "object"
+      },
+      "SourceCoverageItem": {
+        "description": "Investigation coverage for a single source register.",
+        "properties": {
+          "investigated": {
+            "title": "Investigated",
+            "type": "integer"
+          },
+          "not_investigated": {
+            "title": "Not Investigated",
+            "type": "integer"
+          },
+          "source_type": {
+            "title": "Source Type",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_type",
+          "total",
+          "investigated",
+          "not_investigated"
+        ],
+        "title": "SourceCoverageItem",
+        "type": "object"
+      },
+      "SourceCoverageResponse": {
+        "description": "How much of each source register actually has an investigation attached.",
+        "properties": {
+          "investigated": {
+            "title": "Investigated",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCoverageItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "not_investigated": {
+            "title": "Not Investigated",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "investigated",
+          "not_investigated"
+        ],
+        "title": "SourceCoverageResponse",
         "type": "object"
       },
       "SourceRecordItem": {
@@ -46393,6 +48589,68 @@
         "title": "TrainingMatrixTopCourse",
         "type": "object"
       },
+      "TrainingSummary": {
+        "description": "Headline training compliance from the tenant's latest matrix import.\n\nEvery field is optional and defaults to None because \"we could not measure\nthis\" has to be expressible. An unpopulated or unreadable matrix is not a\nworkforce with 0% training, and it is not one with 100% either (C-7).",
+        "properties": {
+          "completion_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Rate"
+          },
+          "compliant_cells": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliant Cells"
+          },
+          "expiring_soon": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiring Soon"
+          },
+          "measured_cells": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured Cells"
+          },
+          "overdue": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overdue"
+          }
+        },
+        "title": "TrainingSummary",
+        "type": "object"
+      },
       "TrainingTicketCreate": {
         "description": "Create a first-class training ticket.",
         "properties": {
@@ -46730,7 +48988,7 @@
         "type": "object"
       },
       "TrendData": {
-        "description": "Trend data for charts \u2014 weekly buckets for pulse sparklines.",
+        "description": "Trend data for charts \u2014 weekly buckets for pulse sparklines.\n\n``unavailable`` lists series names whose queries failed. An empty series that\nis *not* listed means a genuine empty window, not a failed fetch (PX-193).",
         "properties": {
           "audits_weekly": {
             "items": {
@@ -46773,12 +49031,49 @@
             },
             "title": "Training Compliance Weekly",
             "type": "array"
+          },
+          "unavailable": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unavailable",
+            "type": "array"
           }
         },
         "title": "TrendData",
         "type": "object"
       },
+      "UnmeasurableComplianceDashboard": {
+        "description": "No measurement was possible, so this variant carries no numbers at all.\n\n``metrics`` is absent rather than zeroed or nulled: a caller reading\n``body[\"metrics\"][\"completion_rate\"]`` raises instead of receiving a 0 that\nwould be indistinguishable from \"nobody has acknowledged anything\".",
+        "properties": {
+          "measurement": {
+            "const": "unmeasurable",
+            "default": "unmeasurable",
+            "title": "Measurement",
+            "type": "string"
+          },
+          "missing_tables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Tables",
+            "type": "array"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "missing_tables"
+        ],
+        "title": "UnmeasurableComplianceDashboard",
+        "type": "object"
+      },
       "UpdateCAPAStatusRequest": {
+        "additionalProperties": false,
+        "description": "Update RCA-tools CAPA status.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the status changing while the unknown key is silently dropped (B-10).",
         "properties": {
           "notes": {
             "anyOf": [
@@ -48057,6 +50352,8 @@
         "type": "object"
       },
       "VerifyCAPARequest": {
+        "additionalProperties": false,
+        "description": "Verify an RCA-tools CAPA is effective.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof verification succeeding while the unknown key is silently dropped (B-10).",
         "properties": {
           "is_effective": {
             "default": true,
@@ -48256,6 +50553,17 @@
             },
             "title": "Competencies",
             "type": "object"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
           },
           "employee_number": {
             "anyOf": [
@@ -53335,6 +55643,56 @@
       }
     },
     "/api/v1/actions/{action_id}": {
+      "delete": {
+        "description": "Soft-delete an incident or complaint action (PX-177).\n\nSets deleted_at; list/get exclude the row. Other source_types are not\nsupported in this slice (near-miss/RTA/investigation remain follow-ups).",
+        "operationId": "delete_action_api_v1_actions__action_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Source discriminator: incident or complaint (PX-177 soft-delete)",
+            "in": "query",
+            "name": "source_type",
+            "required": true,
+            "schema": {
+              "description": "Source discriminator: incident or complaint (PX-177 soft-delete)",
+              "title": "Source Type",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Action",
+        "tags": [
+          "Actions"
+        ]
+      },
       "get": {
         "description": "Get a specific action by ID.",
         "operationId": "get_action_api_v1_actions__action_id__get",
@@ -59952,7 +62310,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SafetyLookupMergeRequest"
+                "$ref": "#/components/schemas/SafetyLookupRejectRequest"
               }
             }
           },
@@ -65751,6 +68109,46 @@
       }
     },
     "/api/v1/complaints/{complaint_id}": {
+      "delete": {
+        "description": "Soft-delete a complaint (PX-177).\n\nSets deleted_at; list/get exclude the row. Requires complaint:delete.",
+        "operationId": "delete_complaint_api_v1_complaints__complaint_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "complaint_id",
+            "required": true,
+            "schema": {
+              "title": "Complaint Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Complaint",
+        "tags": [
+          "Complaints",
+          "Complaints"
+        ]
+      },
       "get": {
         "description": "Get a complaint by ID.\n\nRequires authentication.",
         "operationId": "get_complaint_api_v1_complaints__complaint_id__get",
@@ -65850,6 +68248,55 @@
           }
         ],
         "summary": "Update Complaint",
+        "tags": [
+          "Complaints",
+          "Complaints"
+        ]
+      }
+    },
+    "/api/v1/complaints/{complaint_id}/closure-validation": {
+      "get": {
+        "description": "Report whether this complaint can be closed, and why not if it cannot.",
+        "operationId": "get_complaint_closure_validation_api_v1_complaints__complaint_id__closure_validation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "complaint_id",
+            "required": true,
+            "schema": {
+              "title": "Complaint Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseClosureValidationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Complaint Closure Validation",
         "tags": [
           "Complaints",
           "Complaints"
@@ -67035,6 +69482,677 @@
         ]
       }
     },
+    "/api/v1/compliance-schedule/catalogue": {
+      "get": {
+        "operationId": "list_catalogue_api_v1_compliance_schedule_catalogue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "active_only",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Active Only",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Catalogue",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/catalogue/{template_key}/activate": {
+      "post": {
+        "operationId": "activate_catalogue_template_api_v1_compliance_schedule_catalogue__template_key__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_key",
+            "required": true,
+            "schema": {
+              "title": "Template Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogueActivateRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Activate Catalogue Template",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/records/{record_id}": {
+      "get": {
+        "operationId": "get_record_api_v1_compliance_schedule_records__record_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Record",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/records/{record_id}/evidence": {
+      "post": {
+        "description": "Attach existing evidence assets to a compliance record.",
+        "operationId": "attach_record_evidence_api_v1_compliance_schedule_records__record_id__evidence_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordEvidenceAttachRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Attach Record Evidence",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/requirements": {
+      "get": {
+        "operationId": "list_requirements_api_v1_compliance_schedule_requirements_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "is_active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": true,
+              "title": "Is Active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Requirements",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      },
+      "post": {
+        "operationId": "create_requirement_api_v1_compliance_schedule_requirements_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequirementCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Requirement",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/requirements/{requirement_id}": {
+      "get": {
+        "operationId": "get_requirement_api_v1_compliance_schedule_requirements__requirement_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "requirement_id",
+            "required": true,
+            "schema": {
+              "title": "Requirement Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Requirement",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      },
+      "patch": {
+        "operationId": "update_requirement_api_v1_compliance_schedule_requirements__requirement_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "requirement_id",
+            "required": true,
+            "schema": {
+              "title": "Requirement Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequirementUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Requirement",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/requirements/{requirement_id}/deactivate": {
+      "post": {
+        "operationId": "deactivate_requirement_api_v1_compliance_schedule_requirements__requirement_id__deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "requirement_id",
+            "required": true,
+            "schema": {
+              "title": "Requirement Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deactivate Requirement",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/requirements/{requirement_id}/records": {
+      "get": {
+        "operationId": "list_requirement_records_api_v1_compliance_schedule_requirements__requirement_id__records_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "requirement_id",
+            "required": true,
+            "schema": {
+              "title": "Requirement Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Requirement Records",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      },
+      "post": {
+        "operationId": "complete_requirement_api_v1_compliance_schedule_requirements__requirement_id__records_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "requirement_id",
+            "required": true,
+            "schema": {
+              "title": "Requirement Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Requirement",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/stats": {
+      "get": {
+        "operationId": "get_stats_api_v1_compliance_schedule_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceScheduleStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Stats",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
     "/api/v1/compliance/analyze": {
       "post": {
         "description": "World-class 5-stage ISO evidence analysis powered by Genspark.ai.\n\nRuns a multi-stage pipeline:\n  Stage 1 \u2014 Keyword pre-filter (fast, always runs)\n  Stage 2 \u2014 Genspark LLM semantic mapping (requires GENSPARK_API_KEY)\n  Stage 3 \u2014 Cross-standard mapping identification\n  Stage 4 \u2014 Evidence quality scoring (Direct/Procedural/Documentary)\n  Stage 5 \u2014 Auditor conformance statement generation\n\nReturns a structured evidence analysis package with conformance statements\nsuitable for ISO certification audit packs.",
@@ -67128,15 +70246,21 @@
             }
           },
           {
-            "description": "Organisation name for SoA",
+            "description": "Organisation name for SoA (defaults to tenant name when omitted)",
             "in": "query",
             "name": "organization_name",
             "required": false,
             "schema": {
-              "default": "Organisation",
-              "description": "Organisation name for SoA",
-              "title": "Organization Name",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Organisation name for SoA (defaults to tenant name when omitted)",
+              "title": "Organization Name"
             }
           }
         ],
@@ -67751,19 +70875,25 @@
     },
     "/api/v1/compliance/soa": {
       "get": {
-        "description": "Generate an evidence-derived Annex A SoA for ISO 27001:2022.\n\n**Distinct from** ``GET /api/v1/iso27001/soa`` which returns the persisted\nISMS Statement of Applicability entity (a DB-backed record managed by the\nISMS module with full lifecycle, versioning, and approval workflow).\n\nThis endpoint dynamically derives control applicability from the live\nevidence link database.  All 93 ISO 27001:2022 Annex A controls are assessed\nagainst persisted evidence items and returned with:\n\n- Implementation status (Implemented / Partially Implemented / Not Implemented)\n- Evidence count and evidence item list (including ``notes`` field)\n- Auditor justification statement\n\nSuitable for exporting a point-in-time evidence SoA for external auditors or\nfeeding into the ISO certification pack via the Audit Pack download.",
+        "description": "Generate an evidence-derived Annex A SoA for ISO 27001:2022.\n\n**Distinct from** ``GET /api/v1/iso27001/soa`` which returns the persisted\nISMS Statement of Applicability entity (a DB-backed record managed by the\nISMS module with full lifecycle, versioning, and approval workflow).\n\nThis endpoint dynamically derives control evidence coverage from the live\nevidence link database.  All 93 ISO 27001:2022 Annex A controls are assessed\nagainst persisted evidence items. Applicability decisions are not recorded\nin this path and are not invented.",
         "operationId": "get_statement_of_applicability_api_v1_compliance_soa_get",
         "parameters": [
           {
-            "description": "Organisation name for SoA header",
+            "description": "Organisation name for SoA header (defaults to tenant name when omitted)",
             "in": "query",
             "name": "organization_name",
             "required": false,
             "schema": {
-              "default": "Organisation",
-              "description": "Organisation name for SoA header",
-              "title": "Organization Name",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Organisation name for SoA header (defaults to tenant name when omitted)",
+              "title": "Organization Name"
             }
           },
           {
@@ -70430,7 +73560,7 @@
     },
     "/api/v1/document-control/summary": {
       "get": {
-        "description": "Get document control summary statistics",
+        "description": "Get document control summary statistics, omitting any figure not measured.\n\nSeven of the eight figures aggregate ``controlled_documents``, which exists\nand holds rows. Only ``pending_acknowledgments`` reads\n``document_distributions``, which does not exist \u2014 and because one query in a\nrequest is enough to abort the whole transaction, that single figure has been\ntaking the other seven down with it and answering this endpoint with a 500.\n\nSo the unmeasurable figure is omitted and named, rather than the measurable\nones being discarded to protect it. Omitted rather than reported as ``0``:\nthat substitution is the defect PR #1402 fixed on the acknowledgment\ndashboard, where \"0% compliance\" was read as an audit finding when it was\nonly a table nobody could open. It is also omitted rather than sent as\n``null``, because a client writing ``pending_acknowledgments ?? 0`` would\nreconstruct the same lie from a null.",
         "operationId": "get_document_summary_api_v1_document_control_summary_get",
         "responses": {
           "200": {
@@ -70459,7 +73589,7 @@
     },
     "/api/v1/document-control/workflows": {
       "get": {
-        "description": "List approval workflows",
+        "description": "List approval workflows, or report that none can be listed.\n\nAn empty array here would say \"this tenant has configured no approval\nworkflows\", which is a sentence a reader acts on by configuring one. While the\ntable is absent that is not what is true, so the absence is reported instead.",
         "operationId": "list_workflows_api_v1_document_control_workflows_get",
         "responses": {
           "200": {
@@ -70535,7 +73665,7 @@
     },
     "/api/v1/document-control/{document_id}": {
       "get": {
-        "description": "Get detailed document information",
+        "description": "Get detailed document information, disclosing any part that is unavailable.\n\nThe document, its version history and its metadata all come from tables that\nexist and hold rows. Two subordinate reads do not: the distribution list, and\nthe access-log row this endpoint writes on every view. Because a failed\nstatement aborts the whole transaction on PostgreSQL, those two have been\ndenying access to every controlled document's detail \u2014 and silently dropping\nthe ``view_count`` increment staged in the same commit.\n\nSo the readable part is served and the unreadable parts are named in an\n``unavailable`` block. That block is the load-bearing half: ``distributions``\nstill arrives as ``[]`` because the one consumer reads\n``detail.distributions.length`` and a missing key would crash the page, and\n``[]`` on its own is exactly the \"no controlled copies issued\" claim that must\nnot be made here. The array is safe to render only because something beside it\nsays it was never read; ``frontend/src/pages/DocumentControl.tsx`` is changed\nin the same commit to say so.\n\nThe skipped access-log write is disclosed for the same reason it is skipped:\nno trail is recorded either way while the table is absent, so failing the read\nwould buy no audit integrity and would hide the gap behind a generic 500. A\nhuman auditor needs to see it in the payload, not only in the logs.",
         "operationId": "get_document_api_v1_document_control__document_id__get",
         "parameters": [
           {
@@ -70643,7 +73773,7 @@
     },
     "/api/v1/document-control/{document_id}/access-log": {
       "get": {
-        "description": "Get document access log",
+        "description": "Get document access log, or report that it cannot be read.\n\nAn empty access log asserts that nobody has opened this document, which is an\nISO-relevant claim and a stronger one than it looks. It must not be produced\nby a table that was never there to be read.",
         "operationId": "get_access_log_api_v1_document_control__document_id__access_log_get",
         "parameters": [
           {
@@ -70874,7 +74004,7 @@
     },
     "/api/v1/document-control/{document_id}/obsolete": {
       "post": {
-        "description": "Mark document as obsolete",
+        "description": "Mark document as obsolete.\n\nRefused rather than partially applied. The retention record and the status\nchange are one transaction on purpose: obsoleting a controlled document\nwithout recording its retention end date would satisfy the request and lose\nthe reason the record exists. So while the retention table is absent, the\nhonest outcome is that the document stays current and the caller is told why.",
         "operationId": "mark_document_obsolete_api_v1_document_control__document_id__obsolete_post",
         "parameters": [
           {
@@ -71000,7 +74130,7 @@
     },
     "/api/v1/document-control/{document_id}/submit-for-approval": {
       "post": {
-        "description": "Submit document for approval",
+        "description": "Submit document for approval.\n\nChecked before the document is touched, because the effect of not checking is\nnot merely a bad error message: ``document.status`` is set to\n``pending_approval`` in the same transaction as the approval instance, so a\nfailing INSERT takes the status change down with it. A user would be told the\nsubmission failed while the register showed the document awaiting an approval\nthat no table can hold.",
         "operationId": "submit_for_approval_api_v1_document_control__document_id__submit_for_approval_post",
         "parameters": [
           {
@@ -71196,7 +74326,7 @@
     },
     "/api/v1/documents/": {
       "get": {
-        "description": "List documents with filtering and pagination.",
+        "description": "List documents with filtering and pagination.\n\nRequires ``document:read``, the staff-level token of the library permission\nmodel in :mod:`src.domain.services.document_library_rbac`. Per-document ACL\nnarrowing still applies below on top of it.\n\nScoped to the caller's own tenant for every caller, superuser included\n(B-13). ``get_document`` keeps its superuser exemption, so one named\ncross-tenant document can still be opened by id; only enumerating the\nlibrary is withdrawn.",
         "operationId": "list_documents_api_v1_documents__get",
         "parameters": [
           {
@@ -71577,9 +74707,71 @@
         ]
       }
     },
+    "/api/v1/documents/search/content": {
+      "get": {
+        "description": "Full-text search over document chunk body text (RBAC-scoped).",
+        "operationId": "search_document_content_api_v1_documents_search_content_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "top_k",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Top K",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/src__api__routes__documents__SearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Document Content",
+        "tags": [
+          "Document Library"
+        ]
+      }
+    },
     "/api/v1/documents/search/semantic": {
       "get": {
-        "description": "Semantic search across documents using AI embeddings.",
+        "description": "Semantic search across documents using AI embeddings.\n\nGated on ``document:read``, the token ``list_documents`` and\n``search_document_content`` already require. It was left on bare\nauthentication, so a caller with no library permission at all could reach\nthe whole non-restricted library of their tenant by phrase \u2014 the two\nsibling surfaces refuse that, and the per-hit ACL below does not stand in\nfor it: ``user_can_read_library_document`` returns True for an ``all_staff``\ndocument without consulting any permission.\n\nScoped to the caller's own tenant for every caller, superuser included\n(B-13). This is an enumeration surface like ``list_documents``: the caller\nsupplies a phrase, not an id, so the same withdrawal applies. ``get_document``\nkeeps its superuser exemption, so one named cross-tenant document can still\nbe opened by id.\n\nTwo layers scope it, and both are load-bearing. The Pinecone metadata filter\nbelow is what stops another tenant's chunk text reaching the response as a\n``content_preview``, and it is the only thing that can \u2014 the vector store is\nthe source of those strings, not the database. The SQL predicate on the\nper-hit lookup is what catches a hit whose ``tenant_id`` metadata is stale\nagainst the row it names, which is reachable today: reassigning a document's\ntenant does not re-upsert its vectors.",
         "operationId": "semantic_search_api_v1_documents_search_semantic_get",
         "parameters": [
           {
@@ -71656,7 +74848,7 @@
     },
     "/api/v1/documents/stats/overview": {
       "get": {
-        "description": "Get document library statistics.",
+        "description": "Get document library statistics.\n\nScoped to the caller's own tenant for every caller, superuser included, so\nthese totals describe the same population ``list_documents`` pages through.",
         "operationId": "get_document_stats_api_v1_documents_stats_overview_get",
         "responses": {
           "200": {
@@ -74511,6 +77703,179 @@
         ]
       }
     },
+    "/api/v1/exports": {
+      "post": {
+        "description": "Run a synchronous CSV export and stream the file immediately.\n\nMatches WORKFLOW_REGISTRY ``POST /api/v1/exports``. Does not enqueue a job.",
+        "operationId": "create_sync_export_api_v1_exports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Sync Export",
+        "tags": [
+          "Export Center"
+        ]
+      }
+    },
+    "/api/v1/exports/": {
+      "post": {
+        "description": "Run a synchronous CSV export and stream the file immediately.\n\nMatches WORKFLOW_REGISTRY ``POST /api/v1/exports``. Does not enqueue a job.",
+        "operationId": "create_sync_export_api_v1_exports__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Sync Export",
+        "tags": [
+          "Export Center"
+        ]
+      }
+    },
+    "/api/v1/exports/catalog": {
+      "get": {
+        "description": "List exportable modules with live tenant-scoped record counts.",
+        "operationId": "get_export_catalog_api_v1_exports_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportCatalogResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Export Catalog",
+        "tags": [
+          "Export Center"
+        ]
+      }
+    },
+    "/api/v1/exports/{module}/csv": {
+      "get": {
+        "description": "GET convenience for sync CSV download of a single module.",
+        "operationId": "download_module_csv_api_v1_exports__module__csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "module",
+            "required": true,
+            "schema": {
+              "title": "Module",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "csv",
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Module Csv",
+        "tags": [
+          "Export Center"
+        ]
+      }
+    },
     "/api/v1/external-audit-imports/drafts/{draft_id}": {
       "patch": {
         "description": "Accept, reject, or edit a draft before live promotion.",
@@ -76633,6 +79998,24 @@
               "description": "Comma-separated incident ids (Safety Insights theme deep-link)",
               "title": "Ids"
             }
+          },
+          {
+            "description": "Match reference, title, or description (ilike)",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Match reference, title, or description (ilike)",
+              "title": "Search"
+            }
           }
         ],
         "responses": {
@@ -76733,7 +80116,7 @@
     },
     "/api/v1/incidents/{incident_id}": {
       "delete": {
-        "description": "Delete an incident.\n\nRequires authentication.",
+        "description": "Soft-delete an incident (PX-177).\n\nSets deleted_at; list/get exclude the row. Requires incident:delete.",
         "operationId": "delete_incident_api_v1_incidents__incident_id__delete",
         "parameters": [
           {
@@ -76869,6 +80252,54 @@
           }
         ],
         "summary": "Update Incident",
+        "tags": [
+          "Incidents"
+        ]
+      }
+    },
+    "/api/v1/incidents/{incident_id}/closure-validation": {
+      "get": {
+        "description": "Report whether this incident can be closed, and why not if it cannot.",
+        "operationId": "get_incident_closure_validation_api_v1_incidents__incident_id__closure_validation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "title": "Incident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseClosureValidationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Incident Closure Validation",
         "tags": [
           "Incidents"
         ]
@@ -78147,6 +81578,33 @@
         ]
       }
     },
+    "/api/v1/investigations/source-coverage": {
+      "get": {
+        "description": "Count source records with and without an investigation, per register.\n\nExists so the Investigations list can state plainly how many real incidents\n(and other source records) have no investigation, instead of letting a short\nlist of test investigations imply the register is covered.",
+        "operationId": "get_source_coverage_api_v1_investigations_source_coverage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCoverageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Source Coverage",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
     "/api/v1/investigations/source-records": {
       "get": {
         "description": "List source records available for investigation creation.\n\nReturns records of the specified type with investigation status.\nRecords that already have an investigation are marked with investigation_id.\n\nQuery Parameters:\n- source_type: Required. One of: near_miss, road_traffic_collision, complaint, reporting_incident\n- q: Optional search query\n- page: Page number (default: 1)\n- page_size: Page size (default: 20, max: 100)\n\nResponse includes:\n- source_id: Record ID\n- display_label: Human-readable label for dropdown\n- reference_number: Record reference\n- status: Current status\n- created_at: Creation date\n- investigation_id: If already investigated, the investigation ID (null otherwise)\n- investigation_reference: If investigated, the investigation reference",
@@ -78348,7 +81806,7 @@
     },
     "/api/v1/investigations/{investigation_id}/approve": {
       "post": {
-        "description": "Approve or reject an investigation.\n\nMoves investigation to COMPLETED (approved) or back to IN_PROGRESS (rejected).",
+        "description": "Approve or reject an investigation.\n\nMoves investigation to COMPLETED (approved) or back to IN_PROGRESS (rejected).\nApproval uses the same completion readiness gate as PATCH status=completed\n(PX-133): lead + start (and remaining checklist) must already be satisfied.",
         "operationId": "approve_investigation_api_v1_investigations__investigation_id__approve_post",
         "parameters": [
           {
@@ -78974,6 +82432,59 @@
           }
         ],
         "summary": "Get Investigation Packs",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
+    "/api/v1/investigations/{investigation_id}/packs/{pack_id}/pdf": {
+      "get": {
+        "description": "Render a previously generated customer pack as a branded PDF (PX-143).\n\nRenders the stored, already-redacted pack payload \u2014 this endpoint never\nre-reads the investigation, so it cannot leak content the pack omitted.",
+        "operationId": "download_customer_pack_pdf_api_v1_investigations__investigation_id__packs__pack_id__pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pack_id",
+            "required": true,
+            "schema": {
+              "title": "Pack Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "Branded customer pack PDF"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Customer Pack Pdf",
         "tags": [
           "Investigations"
         ]
@@ -83400,6 +86911,34 @@
         ]
       }
     },
+    "/api/v1/meta/features": {
+      "get": {
+        "description": "Report the effective state of every client-facing feature flag.\n\nEach value folds together the configuration opener, the kill switch and the\ncaller's permission, so a ``true`` means the caller can actually use the\nfeature rather than merely that it exists in this build.",
+        "operationId": "get_client_features_api_v1_meta_features_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientFeatureFlagsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Client Features",
+        "tags": [
+          "Meta",
+          "Meta"
+        ]
+      }
+    },
     "/api/v1/meta/ocr-artifacts/ack": {
       "post": {
         "description": "Record human acknowledgement on an OCR artifact \u2014 stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
@@ -83888,7 +87427,7 @@
         ]
       },
       "patch": {
-        "description": "Update a near miss.",
+        "description": "Update a near miss.\n\nSuperusers are exempted from the tenant filter here for the same reason they\nare on ``_get_near_miss_or_404``: a screen that opens a record must also be\nable to save it, or the Close dialog offers a close that returns 404. The\nregister list no longer carries that exemption (B-13), so the record has to\nbe reached by id rather than found by browsing.\n\nStateTransitionError propagates to the global domain handler so the closure\ngate codes reach the client instead of collapsing into a bare 409 string.",
         "operationId": "update_near_miss_api_v1_near_misses__near_miss_id__patch",
         "parameters": [
           {
@@ -83939,6 +87478,55 @@
           }
         ],
         "summary": "Update Near Miss",
+        "tags": [
+          "Near Misses",
+          "Near Misses"
+        ]
+      }
+    },
+    "/api/v1/near-misses/{near_miss_id}/closure-validation": {
+      "get": {
+        "description": "Report whether this near miss can be closed, and why not if it cannot.",
+        "operationId": "get_near_miss_closure_validation_api_v1_near_misses__near_miss_id__closure_validation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "near_miss_id",
+            "required": true,
+            "schema": {
+              "title": "Near Miss Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseClosureValidationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Near Miss Closure Validation",
         "tags": [
           "Near Misses",
           "Near Misses"
@@ -87620,14 +91208,29 @@
     },
     "/api/v1/policy-acknowledgments/dashboard": {
       "get": {
-        "description": "Get overall policy acknowledgment compliance dashboard.",
+        "description": "Get overall policy acknowledgment compliance, or report it as unmeasurable.\n\nA missing backing table used to be caught here and answered with zeros, which\ntold an auditor that nobody had acknowledged anything \u2014 a measurement that had\nnever been taken. The two outcomes are now separate response variants, so a\ncaller cannot read a rate that was never computed.",
         "operationId": "get_compliance_dashboard_api_v1_policy_acknowledgments_dashboard_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ComplianceDashboardResponse"
+                  "discriminator": {
+                    "mapping": {
+                      "measured": "#/components/schemas/MeasuredComplianceDashboard",
+                      "unmeasurable": "#/components/schemas/UnmeasurableComplianceDashboard"
+                    },
+                    "propertyName": "measurement"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/MeasuredComplianceDashboard"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnmeasurableComplianceDashboard"
+                    }
+                  ],
+                  "title": "Response Get Compliance Dashboard Api V1 Policy Acknowledgments Dashboard Get"
                 }
               }
             },
@@ -87648,7 +91251,7 @@
     },
     "/api/v1/policy-acknowledgments/my-pending": {
       "get": {
-        "description": "Get current user's pending acknowledgments.",
+        "description": "Get current user's pending acknowledgments.\n\nNo failure is converted into an empty list here. If the backing table is\nabsent the service raises ``MeasurementUnavailableError`` and the caller gets\na 503 naming it, because an empty reading queue is something a user acts on\nby doing nothing.",
         "operationId": "get_my_pending_acknowledgments_api_v1_policy_acknowledgments_my_pending_get",
         "responses": {
           "200": {
@@ -88552,7 +92155,7 @@
     },
     "/api/v1/portal/reports/": {
       "post": {
-        "description": "Submit an incident or complaint report. Can be anonymous.",
+        "description": "Submit an identified incident, complaint, near-miss, or RTA report.",
         "operationId": "submit_quick_report_api_v1_portal_reports__post",
         "parameters": [
           {
@@ -88616,6 +92219,54 @@
         ]
       }
     },
+    "/api/v1/portal/reports/attachments": {
+      "post": {
+        "description": "Upload one photo or document before submitting a portal report. Can be anonymous.",
+        "operationId": "upload_portal_attachment_api_v1_portal_reports_attachments_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_portal_attachment_api_v1_portal_reports_attachments_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalAttachmentUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload evidence for a portal report",
+        "tags": [
+          "Employee Portal",
+          "Employee Portal"
+        ]
+      }
+    },
     "/api/v1/portal/reports/{reference_number}/": {
       "get": {
         "description": "Check the status of a submitted report by reference number.",
@@ -88631,7 +92282,7 @@
             }
           },
           {
-            "description": "Required for anonymous reports",
+            "description": "Tracking code issued at submission. Required unless the caller is signed in as the account that submitted the report.",
             "in": "query",
             "name": "tracking_code",
             "required": false,
@@ -88644,7 +92295,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Required for anonymous reports",
+              "description": "Tracking code issued at submission. Required unless the caller is signed in as the account that submitted the report.",
               "title": "Tracking Code"
             }
           }
@@ -88671,6 +92322,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Track Report Status",
         "tags": [
           "Employee Portal",
@@ -91855,7 +95511,8 @@
     },
     "/api/v1/risks/": {
       "get": {
-        "description": "List all risks with pagination and filtering.",
+        "deprecated": true,
+        "description": "List all risks with pagination and filtering.\n\nScoped to the caller's own tenant for every caller, superuser included.\n``get_risk`` keeps its superuser exemption, so one named cross-tenant risk\ncan still be opened by id; only enumerating the estate is withdrawn.",
         "operationId": "list_risks_api_v1_risks__get",
         "parameters": [
           {
@@ -91995,6 +95652,7 @@
         ]
       },
       "post": {
+        "deprecated": true,
         "description": "Create a new risk.",
         "operationId": "create_risk_api_v1_risks__post",
         "requestBody": {
@@ -92042,6 +95700,7 @@
     },
     "/api/v1/risks/controls/{control_id}": {
       "delete": {
+        "deprecated": true,
         "description": "Soft delete a risk control.",
         "operationId": "delete_control_api_v1_risks_controls__control_id__delete",
         "parameters": [
@@ -92081,6 +95740,7 @@
         ]
       },
       "patch": {
+        "deprecated": true,
         "description": "Update a risk control.",
         "operationId": "update_control_api_v1_risks_controls__control_id__patch",
         "parameters": [
@@ -92139,7 +95799,8 @@
     },
     "/api/v1/risks/matrix": {
       "get": {
-        "description": "Get the risk matrix with risk counts per cell.",
+        "deprecated": true,
+        "description": "Get the risk matrix with risk counts per cell.\n\nScoped to the caller's own tenant for every caller, superuser included, for\nthe same reason as ``get_risk_statistics``.",
         "operationId": "get_risk_matrix_api_v1_risks_matrix_get",
         "responses": {
           "200": {
@@ -92166,7 +95827,8 @@
     },
     "/api/v1/risks/statistics": {
       "get": {
-        "description": "Get risk register statistics.",
+        "deprecated": true,
+        "description": "Get risk register statistics.\n\nScoped to the caller's own tenant for every caller, superuser included, so\nthese aggregates describe the same population ``list_risks`` pages through.",
         "operationId": "get_risk_statistics_api_v1_risks_statistics_get",
         "responses": {
           "200": {
@@ -92193,6 +95855,7 @@
     },
     "/api/v1/risks/{risk_id}": {
       "delete": {
+        "deprecated": true,
         "description": "Soft delete a risk (superuser only).",
         "operationId": "delete_risk_api_v1_risks__risk_id__delete",
         "parameters": [
@@ -92232,6 +95895,7 @@
         ]
       },
       "get": {
+        "deprecated": true,
         "description": "Get a specific risk with controls and assessments.",
         "operationId": "get_risk_api_v1_risks__risk_id__get",
         "parameters": [
@@ -92278,6 +95942,7 @@
         ]
       },
       "patch": {
+        "deprecated": true,
         "description": "Update a risk.",
         "operationId": "update_risk_api_v1_risks__risk_id__patch",
         "parameters": [
@@ -92336,6 +96001,7 @@
     },
     "/api/v1/risks/{risk_id}/assessments": {
       "get": {
+        "deprecated": true,
         "description": "List the complete assessment history (legacy array response).",
         "operationId": "list_assessments_api_v1_risks__risk_id__assessments_get",
         "parameters": [
@@ -92386,6 +96052,7 @@
         ]
       },
       "post": {
+        "deprecated": true,
         "description": "Create a new assessment for a risk.",
         "operationId": "create_assessment_api_v1_risks__risk_id__assessments_post",
         "parameters": [
@@ -92444,6 +96111,7 @@
     },
     "/api/v1/risks/{risk_id}/assessments/paged": {
       "get": {
+        "deprecated": true,
         "description": "List assessment history with explicit pagination metadata.",
         "operationId": "list_assessments_paged_api_v1_risks__risk_id__assessments_paged_get",
         "parameters": [
@@ -92515,6 +96183,7 @@
     },
     "/api/v1/risks/{risk_id}/controls": {
       "get": {
+        "deprecated": true,
         "description": "List controls for a risk with pagination.",
         "operationId": "list_controls_api_v1_risks__risk_id__controls_get",
         "parameters": [
@@ -92586,6 +96255,7 @@
         ]
       },
       "post": {
+        "deprecated": true,
         "description": "Create a new control for a risk.",
         "operationId": "create_control_api_v1_risks__risk_id__controls_post",
         "parameters": [
@@ -92644,7 +96314,7 @@
     },
     "/api/v1/rtas/": {
       "get": {
-        "description": "List RTAs with deterministic ordering and pagination.\n\nRequires authentication. Users can only filter by their own email\nunless they have admin permissions.",
+        "description": "List RTAs with deterministic ordering and pagination.\n\nRequires ``rta:read``. Users can only filter by their own email unless they\nalso hold ``rta:view_all``.",
         "operationId": "list_rtas_api_v1_rtas__get",
         "parameters": [
           {
@@ -92944,7 +96614,7 @@
         ]
       },
       "patch": {
-        "description": "Partially update an RTA.",
+        "description": "Partially update an RTA.\n\nStatus moves through ``RTA_TRANSITIONS`` in the service rather than being\nrejected outright: closure is a gated transition, not a forbidden field.",
         "operationId": "update_rta_api_v1_rtas__rta_id__patch",
         "parameters": [
           {
@@ -93241,6 +96911,55 @@
           }
         ],
         "summary": "Update Rta Action",
+        "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      }
+    },
+    "/api/v1/rtas/{rta_id}/closure-validation": {
+      "get": {
+        "description": "Report whether this RTA can be closed, and why not if it cannot.",
+        "operationId": "get_rta_closure_validation_api_v1_rtas__rta_id__closure_validation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseClosureValidationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Rta Closure Validation",
         "tags": [
           "Road Traffic Collisions",
           "Road Traffic Collisions"
@@ -99071,7 +102790,7 @@
     },
     "/api/v1/uvdb/sections/scores": {
       "get": {
-        "description": "Return per-section scores from the most recent completed UVDB audit.",
+        "description": "Return per-section scores from the most recent completed UVDB audit.\n\nSection scores on an imported audit are lifted from the source report, not\ncomputed from protocol responses, so every entry is tagged with its\nprovenance. Entries whose label cannot be matched to a protocol section\nwith certainty are returned under ``unmapped_sections`` so the score stays\nvisible instead of being dropped or pinned to the wrong section.",
         "operationId": "get_section_scores_api_v1_uvdb_sections_scores_get",
         "responses": {
           "200": {
@@ -102451,7 +106170,7 @@
     },
     "/api/v1/workflows/stats": {
       "get": {
-        "description": "Get workflow statistics.",
+        "description": "Get workflow statistics.\n\nScoped to the caller: `pending_approvals` counts the same queue returned by\n`GET /approvals/pending` (PX-286). Metrics the engine cannot measure are\nreturned as null \u2014 never fabricated organisation-wide constants.\n\nClients that render the pending list alongside this tile should treat the\nlist length as authoritative if the two ever diverge.",
         "operationId": "get_workflow_stats_api_v1_workflows_stats_get",
         "responses": {
           "200": {
