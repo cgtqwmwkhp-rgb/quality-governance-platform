@@ -264,8 +264,15 @@ jobs:
           echo "" >> artifacts/cleanup-report.md
           echo "| Environment | Source | Action | Result |" >> artifacts/cleanup-report.md
           echo "|-------------|--------|--------|--------|" >> artifacts/cleanup-report.md
+          # REPORT ends in a trailing \n, so the last line here is always empty. Under
+          # `bash -e` a `[ -n "$env" ] && echo` guard returns 1 on that final iteration,
+          # which becomes the while loop's exit status and fails the step. An `if` with
+          # no else returns 0 when the condition is false, so the blank line is skipped
+          # without killing the run.
           echo -e "$REPORT" | tail -n +2 | while IFS=, read -r env source action reason; do
-            [ -n "$env" ] && echo "| $env | $source | $action | $reason |" >> artifacts/cleanup-report.md
+            if [ -n "$env" ]; then
+              echo "| $env | $source | $action | $reason |" >> artifacts/cleanup-report.md
+            fi
           done
           
           echo "" >> artifacts/cleanup-report.md
