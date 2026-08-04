@@ -80,9 +80,6 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.audit_challenge_tasks",
     "src.infrastructure.tasks.cleanup_tasks",
     "src.infrastructure.tasks.competency_tasks",
-    # Registered so the worker can run it on demand. Deliberately absent from
-    # beat_schedule: scheduling it is a separate change, so switching it on or off
-    # is a one-line revert rather than a code edit under pressure.
     "src.infrastructure.tasks.compliance_schedule_notification_tasks",
     "src.infrastructure.tasks.dlq_replay",
     "src.infrastructure.tasks.document_campaign_tasks",
@@ -158,6 +155,22 @@ celery_app.conf.beat_schedule = {
     "check-safety-asset-expiry": {
         "task": "src.infrastructure.tasks.safety_asset_expiry_tasks.check_safety_asset_expiry",
         "schedule": crontab(hour=7, minute=30),  # Daily at 07:30 UTC
+    },
+    # 08:15 UTC, chosen so it does not share a minute with another sweep: 07:00
+    # competency, 07:30 safety assets, 07:45 library reviews and 08:00 the horizon
+    # scan already occupy this stretch, and two cross-tenant sweeps starting together
+    # contend for the same worker pool.
+    #
+    # This entry is the on/off lever for the whole compliance schedule sweep. Deleting
+    # these four lines stops it without touching the task, so a rollback is a revert of
+    # this hunk alone. The faster lever, needing no deploy, is the kill switch: the task
+    # asks at entry and again at each tenant boundary.
+    #
+    # Reminders are worth nothing if they arrive after the work should have started, so
+    # this runs early in the UK working day rather than overnight.
+    "sweep-compliance-schedule-due": {
+        "task": "src.infrastructure.tasks.compliance_schedule_notification_tasks.sweep_compliance_schedule_due",
+        "schedule": crontab(hour=8, minute=15),  # Daily at 08:15 UTC
     },
     "recalculate-compliance-scores": {
         "task": "src.infrastructure.tasks.report_tasks.recalculate_compliance_scores",
