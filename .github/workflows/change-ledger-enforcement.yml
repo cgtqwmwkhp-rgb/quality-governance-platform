@@ -2,16 +2,128 @@ name: Change Ledger Enforcement
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   enforce-change-ledger:
     name: Enforce PR Change Ledger + Gates
     runs-on: ubuntu-latest
     steps:
+      # Dependabot cannot write a ledger, but every fact a ledger records for a
+      # dependency bump is already machine-known. Synthesise one and stamp it into the
+      # PR body, so the audit trail is a real artifact rather than a waived gate.
+      #
+      # Generation and validation must live in the SAME job. A body edit made by a
+      # different workflow using GITHUB_TOKEN does not start a new workflow run, so the
+      # check would stay red on its stale result and never re-evaluate.
+      #
+      # Restricted to Dependabot's own in-repo branches: a fork PR gets a read-only
+      # token, so the write would fail anyway.
+      - name: Fetch Dependabot metadata
+        id: metadata
+        if: >-
+          github.event.pull_request.user.login == 'dependabot[bot]'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate ledger for Dependabot
+        if: steps.metadata.conclusion == 'success'
+        uses: actions/github-script@v9
+        env:
+          DEP_NAMES: ${{ steps.metadata.outputs.dependency-names }}
+          DEP_TYPE: ${{ steps.metadata.outputs.dependency-type }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+          DIRECTORY: ${{ steps.metadata.outputs.directory }}
+          PREV: ${{ steps.metadata.outputs.previous-version }}
+          NEXT: ${{ steps.metadata.outputs.new-version }}
+          GROUP: ${{ steps.metadata.outputs.dependency-group }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const MARKER = "<!-- dependabot-change-ledger -->";
+            if ((pr.body || "").includes(MARKER)) {
+              core.info("Generated ledger already present; leaving body untouched.");
+              return;
+            }
+            const e = process.env;
+            const ledger = [
+              MARKER,
+              "## Change Ledger (generated)",
+              "",
+              "Generated from Dependabot metadata by `change-ledger-enforcement.yml`.",
+              "**No human has attested to this ledger.** It records facts, not judgement.",
+              "",
+              "### Summary",
+              `Bump \`${e.DEP_NAMES}\` from \`${e.PREV}\` to \`${e.NEXT}\`.`,
+              `Ecosystem \`${e.ECOSYSTEM}\`, dependency type \`${e.DEP_TYPE}\`, group \`${e.GROUP || "none"}\`.`,
+              "",
+              "### Impact map",
+              `Dependency manifest only, in \`${e.DIRECTORY}\`. No first-party source,`,
+              "database schema or API surface is modified by this pull request.",
+              "",
+              "### Compatibility",
+              `Semantic version level: \`${e.UPDATE_TYPE}\`.`,
+              "",
+              "### Acceptance criteria",
+              "- AC-01 Every required status check passes at this commit SHA.",
+              "- AC-02 The dependency audit gates report no new high-severity advisory.",
+              "- AC-03 The application builds and starts (`Build Check`).",
+              "",
+              "### Testing evidence",
+              "The full CI suite for this commit is the evidence; see the Checks tab.",
+              "",
+              "### Critical journeys",
+              "- CUJ-01 exercised by `Smoke Tests (CRITICAL)`.",
+              "- CUJ-02 exercised by `End-to-End Tests` and `UAT Tests (User Acceptance)`.",
+              "",
+              "### Observability",
+              "No new signals. Post-deploy health is observed via the existing staging and",
+              "production smoke gates.",
+              "",
+              "### Release plan",
+              "Squash-merge to `main`, promoting through `Deploy to Azure Staging` and then",
+              "`Deploy to Azure Production`.",
+              "",
+              "### Rollback plan",
+              "Owner: the maintainer on call at merge time.",
+              "Rollback steps: revert this commit on `main` and allow the pipeline to deploy",
+              "the reverted state. For a backend regression, `Emergency Rollback - Production`",
+              "can restore the previous container image first. Note it restores the backend",
+              "image only, so a frontend regression must be recovered by the revert.",
+              "",
+              "### Evidence pack",
+              `Dependabot metadata as recorded above; full CI run for commit ${pr.head.sha}.`,
+              "",
+              "### Gate checklist",
+              "- Gate 0 dependency metadata resolved",
+              "- Gate 1 required checks green",
+              "- Gate 2 staging deploy and smoke",
+              "- Gate 3 production deploy and smoke",
+            ].join("\n");
+            await github.rest.pulls.update({
+              ...context.repo,
+              pull_number: pr.number,
+              body: pr.body ? `${pr.body}\n\n${ledger}` : ledger,
+            });
+            core.info("Generated Change Ledger written to PR body.");
+
       - name: Validate PR description contains required sections
         uses: actions/github-script@v9
         with:
           script: |
-            const pr = context.payload.pull_request;
+            // Read the body back from the API rather than context.payload: the payload is
+            // a snapshot taken before the generate step above ran, so it would still show
+            // the original body and the check would fail on freshly stamped PRs.
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: context.payload.pull_request.number,
+            });
             const body = (pr.body || "").toLowerCase();
 
             const required = [

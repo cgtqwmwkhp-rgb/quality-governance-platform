@@ -1,3 +1,17 @@
+# Grouping is not cosmetic here. Branch protection on main sets strict: true, so every
+# PR must be up to date before it merges, and GitHub does not update PR branches for you.
+# Ungrouped, each merge leaves the rest BEHIND and the queue drains at roughly one PR per
+# Dependabot rebase cycle while burning a full CI matrix per attempt. Grouping collapses
+# the queue into a handful of PRs.
+#
+# cooldown applies to version updates only and never to security updates, so routine
+# churn waits while a security patch still arrives immediately.
+#
+# The 04:00 schedule keeps the resulting production deploys out of business hours:
+# deploys are not zero-downtime and cost 1-2 minutes of hung requests each.
+#
+# Major updates deliberately fall outside every update-types group, so they still arrive
+# as individual PRs and are excluded from auto-merge by dependabot-auto-merge.yml.
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -5,27 +19,91 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+      time: "04:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "python"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      pip-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      pip-runtime:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+      pip-dev:
+        applies-to: version-updates
+        dependency-type: development
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+      time: "04:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "javascript"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      npm-runtime:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+      npm-dev:
+        applies-to: version-updates
+        dependency-type: development
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
 
+  # Never auto-merged; see the exclusion in dependabot-auto-merge.yml. A compromised
+  # action runs inside CI with this repository's credentials, and no required check
+  # inspects what an action actually does.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "04:00"
+      timezone: "Europe/London"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "ci"
+      - "manual-review"
+    cooldown:
+      default-days: 14
+    groups:
+      github-actions:
+        patterns:
+          - "*"
