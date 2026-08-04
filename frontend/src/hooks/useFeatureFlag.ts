@@ -5,9 +5,16 @@
  * 1. Window.__FEATURE_FLAGS__ (injected at runtime)
  * 2. localStorage overrides (for testing)
  * 3. Default values
+ *
+ * "Injected at runtime" was aspirational until FeatureFlagProvider existed —
+ * nothing populated `window.__FEATURE_FLAGS__`, so every flag fell through to its
+ * default. The provider now fills it from `GET /api/v1/meta/features` and bumps a
+ * context version so mounted consumers re-read. Resolution order is unchanged,
+ * and a consumer rendered outside the provider behaves exactly as it did before.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
+import { FeatureFlagContext } from '../contexts/FeatureFlagContext'
 
 // Feature flag definitions with defaults
 const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
@@ -69,6 +76,9 @@ function getFeatureFlagValue(flagName: string): boolean {
  * Supports localStorage overrides for testing.
  */
 export function useFeatureFlag(flagName: string): boolean {
+  // Only the change signal comes from context; the value still comes from
+  // getFeatureFlagValue, so precedence is defined in exactly one place.
+  const { version } = useContext(FeatureFlagContext)
   const [isEnabled, setIsEnabled] = useState(() => getFeatureFlagValue(flagName))
 
   useEffect(() => {
@@ -84,7 +94,7 @@ export function useFeatureFlag(flagName: string): boolean {
 
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
-  }, [flagName])
+  }, [flagName, version])
 
   return isEnabled
 }
