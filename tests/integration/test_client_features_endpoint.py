@@ -11,21 +11,59 @@ from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import delete
 
 from src.core.config import settings
 from src.domain.features.evaluator import reset_client_feature_cache
+from src.domain.models.feature_flag import FeatureFlag
 from src.domain.services.compliance_schedule_kill_switch import reset_compliance_schedule_kill_switch_cache
+from src.domain.services.feature_flag_service import FeatureFlagService
 
 ENDPOINT = "/api/v1/meta/features"
 
 
+def _reset_every_flag_cache() -> None:
+    """Clear all three caches that read the ``feature_flags`` table.
+
+    ``FeatureFlagService`` is included even though this endpoint does not use it:
+    its module-level cache has no TTL and holds ORM instances, so a row this
+    module writes would otherwise be served to a later test from a closed
+    session, which surfaces as DetachedInstanceError somewhere unrelated.
+    """
+    reset_client_feature_cache()
+    reset_compliance_schedule_kill_switch_cache()
+    FeatureFlagService.clear_cache()
+
+
 @pytest.fixture(autouse=True)
 def _clean_flag_caches():
-    reset_client_feature_cache()
-    reset_compliance_schedule_kill_switch_cache()
+    _reset_every_flag_cache()
     yield
-    reset_client_feature_cache()
-    reset_compliance_schedule_kill_switch_cache()
+    _reset_every_flag_cache()
+
+
+@pytest.fixture
+async def flag_row(test_session):
+    """Insert ``feature_flags`` rows and guarantee they are gone afterwards.
+
+    The integration database is shared, so a committed row outlives the test that
+    wrote it. Leaving one behind here would silently disable Compliance Schedule
+    or user management for every test that ran later.
+    """
+    created: list[str] = []
+
+    async def _add(key: str, *, enabled: bool) -> None:
+        test_session.add(FeatureFlag(key=key, name=key, enabled=enabled))
+        await test_session.commit()
+        created.append(key)
+        _reset_every_flag_cache()
+
+    yield _add
+
+    for key in created:
+        await test_session.execute(delete(FeatureFlag).where(FeatureFlag.key == key))
+    await test_session.commit()
+    _reset_every_flag_cache()
 
 
 @pytest.fixture
@@ -86,19 +124,9 @@ async def test_config_on_reports_true_for_superuser(superuser_client: AsyncClien
     assert flags["compliance_schedule"] is True
 
 
-async def test_kill_switch_closes_the_feature(superuser_client: AsyncClient, compliance_schedule_on, test_session):
+async def test_kill_switch_closes_the_feature(superuser_client: AsyncClient, compliance_schedule_on, flag_row):
     """Engaging the switch must hide the nav, not merely 404 the API behind it."""
-    from src.domain.models.feature_flag import FeatureFlag
-
-    test_session.add(
-        FeatureFlag(
-            key="compliance_schedule_kill_switch",
-            name="Compliance Schedule kill switch",
-            enabled=True,
-        )
-    )
-    await test_session.commit()
-    reset_compliance_schedule_kill_switch_cache()
+    await flag_row("compliance_schedule_kill_switch", enabled=True)
 
     flags = (await superuser_client.get(ENDPOINT)).json()["flags"]
     assert flags["compliance_schedule"] is False
@@ -110,13 +138,9 @@ async def test_admin_user_management_defaults_open(unauth_client: AsyncClient):
     assert flags["admin_user_management"] is True
 
 
-async def test_disabling_row_closes_admin_user_management(unauth_client: AsyncClient, test_session):
+async def test_disabling_row_closes_admin_user_management(unauth_client: AsyncClient, flag_row):
     """A positive flag reads the opposite way round from a kill switch."""
-    from src.domain.models.feature_flag import FeatureFlag
-
-    test_session.add(FeatureFlag(key="admin_user_management", name="User management", enabled=False))
-    await test_session.commit()
-    reset_client_feature_cache()
+    await flag_row("admin_user_management", enabled=False)
 
     flags = (await unauth_client.get(ENDPOINT)).json()["flags"]
     assert flags["admin_user_management"] is False
