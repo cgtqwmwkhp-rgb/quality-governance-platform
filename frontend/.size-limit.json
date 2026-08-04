@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "189 kB",
+    "limit": "190 kB",
     "gzip": true,
-    "name": "index: 187→189 kB — Compliance Schedule Wave 0. Measured on this branch: 186.47 kB on main tip 9978b101 vs 187.81 kB with the module, so +1.34 kB gzip. ComplianceSchedule/ComplianceScheduleDetail are lazy() route chunks and are NOT in this number; the shell-level cost is the en+cy i18n keys, the Layout nav entry, the compliance-schedule API client re-exported from the shell api surface, and the feature-flag hook. Budget set 2 kB above the prior limit rather than 1 kB because size-limit measured 187.43 kB on CI against 187.81 kB locally, and a 190 B margin is inside that variance."
+    "name": "index: 189→190 kB — FeatureFlagProvider. Measured on this machine against this branch's own base: 187.73 kB on main 78a2efe7 vs 188.57 kB with the provider, so +0.84 kB gzip. It sits in the shell rather than a route chunk because it wraps <App/> in main.tsx, which is the point — every flagged surface has to be able to ask. 188.57 kB would already fit the previous 189 kB budget, but only by 430 B, and the note below this one records size-limit reading 187.43 kB on CI against 187.81 kB locally; a margin smaller than the observed CI-vs-local variance is not a margin. Prior entry, retained because the measurement is still the reason the budget is where it is: index 187→189 kB for Compliance Schedule Wave 0, 186.47 kB on main tip 9978b101 vs 187.81 kB with the module, +1.34 kB gzip, where the shell-level cost was the en+cy i18n keys, the Layout nav entry, the compliance-schedule API client re-exported from the shell api surface, and the feature-flag hook."
   },
   {
     "path": "dist/assets/vendor-*.js",
