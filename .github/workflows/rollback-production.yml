@@ -39,7 +39,11 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+          # AZURE_CREDENTIALS_PROD has never existed as a secret. This workflow is
+          # dispatch-only, so the login failed silently until the nightly SWA cleanup —
+          # which shares the same typo — exposed it by failing eight nights running.
+          # AZURE_CREDENTIALS is the credential the production deploy already uses.
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
