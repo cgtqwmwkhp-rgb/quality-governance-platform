@@ -116,6 +116,13 @@ PUBLIC_BY_DESIGN: Mapping[EndpointKey, str] = MappingProxyType(
             "Unauthenticated ops/deployment metadata. Carries no tenant data."
         ),
         ("GET", "/api/v1/health/readyz"): ("Infrastructure liveness/readiness probe, called before any user exists."),
+        ("GET", "/api/v1/meta/features"): (
+            "Tells the frontend which UI features this deployment has switched on. Reads a caller "
+            "only if one is offered, to fold in permission-gated features; anonymous callers get "
+            "false for every one of those. Carries no tenant data, and the keys it can return are "
+            "fixed by the CLIENT_FEATURES allowlist, so operational settings such as "
+            "allow_local_password_login and library_disposal_execute can never appear here."
+        ),
         ("GET", "/api/v1/meta/ocr-capabilities"): (
             "Static capability metadata describing which OCR providers are configured. No tenant data."
         ),
@@ -764,7 +771,12 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: is a deliberate decision that a reviewer sees as a changed number in a file
 #: about unprotected endpoints.
 MAX_AUTHENTICATED_ONLY_DEBT: int = 465
-MAX_PUBLIC_BY_DESIGN: int = 50
+#: Raised 50 -> 51 for GET /api/v1/meta/features. The alternative was to make it
+#: require authentication, which would land it in AUTHENTICATED_ONLY_DEBT — a list
+#: that is at its ceiling and deliberately closed to new entries. Requiring a
+#: permission was worse still: no universal token exists, and a flags endpoint that
+#: 403s leaves the caller with no navigation at all.
+MAX_PUBLIC_BY_DESIGN: int = 51
 
 #: Endpoints gated on ``CurrentSuperuser`` rather than on a named permission,
 #: counted when the gap was measured.
