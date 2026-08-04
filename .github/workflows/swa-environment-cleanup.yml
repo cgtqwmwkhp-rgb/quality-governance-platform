@@ -97,7 +97,17 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --query "[].name" \
             --output tsv)
-          echo "all_envs=$ALL_ENVS" >> $GITHUB_OUTPUT
+          # `-o tsv` returns one name per line, and key=value only accepts a single
+          # line — a second environment made the runner reject the whole write with
+          # "Invalid format 'staging'". The delimiter form keeps the newlines, which
+          # the consumers below depend on: production protection anchors a match with
+          # ^name$, and the stale loop word-splits. Collapsing to spaces would silently
+          # break the first of those.
+          {
+            echo "all_envs<<ENVS_EOF"
+            echo "$ALL_ENVS"
+            echo "ENVS_EOF"
+          } >> "$GITHUB_OUTPUT"
           
           # Get non-production environments
           NON_PROD_ENVS=$(az staticwebapp environment list \
@@ -105,7 +115,11 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --query "[?name!='${{ env.PRODUCTION_ENV_NAME }}'].name" \
             --output tsv)
-          echo "non_prod_envs=$NON_PROD_ENVS" >> $GITHUB_OUTPUT
+          {
+            echo "non_prod_envs<<ENVS_EOF"
+            echo "$NON_PROD_ENVS"
+            echo "ENVS_EOF"
+          } >> "$GITHUB_OUTPUT"
       
       - name: Verify Production Protection
         run: |
