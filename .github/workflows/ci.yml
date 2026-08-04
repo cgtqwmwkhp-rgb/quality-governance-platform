@@ -342,7 +342,7 @@ jobs:
           # EG-05: updated to 48% after planet-mark route expansion (48.41% actual); full-suite 70% target in pyproject.toml
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           file: ./coverage.xml
           flags: unit
@@ -654,7 +654,7 @@ jobs:
           # EG-05: maintained at 43% (actual integration coverage 43.48%; full-suite 70% target in pyproject.toml)
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           file: ./coverage.xml
           flags: integration
