@@ -41,6 +41,16 @@ on:
         type: string
         default: ''
 
+# `Create Web App` re-points an existing production Web App at
+# quality-governance-platform:latest even when the app already exists — the `if` above it
+# only skips the `az webapp create`, not the container set — so this workflow is a
+# production writer. Same group as deploy-production.yml and rollback-production.yml.
+# cancel-in-progress is false: never interrupt a provision run part-way through creating
+# infrastructure.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   LOCATION: westeurope
   RG_NAME: ${{ github.event.inputs.resource_group }}

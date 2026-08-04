@@ -38,6 +38,42 @@ on:
   release:
     types: [published]
 
+# Production is written by three workflows: this one, `Emergency Rollback - Production`
+# (rollback-production.yml) and `Provision Production Azure Resources`
+# (provision-production.yml). All three share the group `deploy-production` so only one
+# of them can be setting the container image on app-qgp-prod at a time.
+#
+# DO NOT RENAME THIS GROUP without renaming it in the other two files. If they drift
+# there is no error and no failed run — the guard silently stops existing, the workflows
+# run concurrently again, and the last writer wins. That is the bug this stanza fixes.
+#
+# Why it is needed: `Capture previous production image` (id capture_previous_image) reads
+# the live image immediately before `Deploy to Azure Web App` overwrites it. With no
+# deployment slots on this tier that captured value is the only rollback target
+# `auto-rollback` has. Two overlapping runs both capture the same predecessor, so the
+# second run's rollback target is already one deploy stale before it is ever used.
+#
+# cancel-in-progress is false HERE: an arriving deploy must never kill a deploy or a
+# rollback that is already mid-write. Emergency Rollback sets it to true on this same
+# group, so a rollback preempts a deploy but not the reverse. That asymmetry is
+# deliberate and verified — see the comment in rollback-production.yml.
+#
+# A `rollback: true` dispatch runs only `Production rollback (documented)`, which reads
+# Azure config and prints commands. It mutates nothing, so it takes its own group: in the
+# shared group it would queue for no benefit, and while pending it could displace a
+# pending real deploy.
+#
+# If production deploys sit "pending", another run holds the group. Find it with
+#   gh run list --workflow="Deploy to Azure Production"
+#   gh run list --workflow="Emergency Rollback - Production"
+#   gh run list --workflow="Provision Production Azure Resources"
+# and clear it with `gh run cancel <id>`. The break-glass path bypasses Actions entirely:
+# dispatch this workflow with rollback=true to print the az commands, or use Emergency
+# Rollback with a known-good image SHA.
+concurrency:
+  group: ${{ github.event.inputs.rollback == 'true' && 'deploy-production-docs' || 'deploy-production' }}
+  cancel-in-progress: false
+
 env:
   ACR_NAME: ${{ secrets.PROD_ACR_NAME }}
   AZURE_WEBAPP_NAME: ${{ secrets.PROD_AZURE_WEBAPP_NAME }}

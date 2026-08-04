@@ -10,9 +10,34 @@ on:
         description: 'Reason for rollback'
         required: true
 
+# Shared with deploy-production.yml and provision-production.yml so a rollback and a
+# deploy can never both be setting the container image on app-qgp-prod. Renaming this
+# group in one file and not the others silently removes the guard.
+#
+# cancel-in-progress: true is deliberate, and deliberately asymmetric — the deploy
+# workflow keeps false. A rollback must preempt rather than queue:
+#
+#   1. Pending is not a safe place to wait. GitHub keeps at most one pending run per
+#      group and replaces it with the next arrival. A rollback queued behind a deploy is
+#      therefore cancelled by the next production deploy to arrive — and during an
+#      incident, merges to main are landing, which is exactly what triggers one. The
+#      rollback would silently never run.
+#   2. deploy-production.yml sets no timeout-minutes on any job, so a hung deploy can
+#      hold this group for the default 360 minutes.
+#
+# Verified, not assumed: a run of this workflow was dispatched against a deliberately
+# sleeping run of another workflow in the same group. The holder went to `cancelled` and
+# this side started within 30s, confirming cancel-in-progress acts across workflows.
+#
+# Preempting is safe for the image write: the deploy's own `az webapp config container
+# set` either already landed or never runs, and this workflow writes after it. It is NOT
+# safe for schema state — `Run database migrations` in deploy-production.yml creates an
+# Azure Container Instance running `alembic upgrade head` and merely polls it, so
+# cancelling the run does not stop the migration. If you preempt a deploy that had
+# reached migrations, check the alembic revision before trusting production.
 concurrency:
   group: deploy-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   ACR_NAME: ${{ secrets.PROD_ACR_NAME }}
