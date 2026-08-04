@@ -42,7 +42,7 @@ jobs:
       cleanup_report: ${{ steps.cleanup.outputs.report }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       
       - name: Check Safety Switch
         if: env.DISABLE_CLEANUP == 'true'

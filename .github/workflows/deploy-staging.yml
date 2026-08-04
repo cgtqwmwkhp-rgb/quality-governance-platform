@@ -46,7 +46,7 @@ jobs:
           echo "📋 Deployment ID: $DEPLOYMENT_ID"
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Log deployment info
         run: |
@@ -708,7 +708,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run smoke tests
         id: smoke
