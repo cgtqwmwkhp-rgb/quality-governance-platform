@@ -329,6 +329,55 @@ def _resolve_portal_triage_tokens(src_root: Path) -> set[str]:
     return {str(value) for value in mapping.values()}
 
 
+def _resolve_client_feature_tokens(src_root: Path) -> set[str]:
+    """Tokens the client feature-flag evaluator folds in, read from the registry.
+
+    ``CLIENT_FEATURES`` is a tuple of ``ClientFeature(...)`` constructor calls, so
+    it is not something :func:`_literal_module_constant` can evaluate. The keyword
+    arguments are literals though, which is the property that matters: registering
+    a feature against a new permission changes the derived set and trips the
+    catalogue test, exactly as a literal call site would.
+    """
+    module = src_root / "domain" / "features" / "catalogue.py"
+    if not module.exists():
+        raise ResolverContractError(f"expected client feature catalogue at {module}")
+
+    tree = ast.parse(module.read_text(encoding="utf-8"))
+    assignment: Optional[ast.expr] = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+            value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+            value = node.value if node.value is not None else ast.Constant(value=None)
+        else:
+            continue
+        if any(isinstance(target, ast.Name) and target.id == "CLIENT_FEATURES" for target in targets):
+            assignment = value
+    if assignment is None:
+        raise ResolverContractError("CLIENT_FEATURES is no longer a module-level assignment")
+    if not isinstance(assignment, ast.Tuple):
+        raise ResolverContractError("CLIENT_FEATURES is no longer a tuple literal")
+
+    tokens: set[str] = set()
+    constructors = 0
+    for element in assignment.elts:
+        if not isinstance(element, ast.Call) or _callee_name(element.func) != "ClientFeature":
+            raise ResolverContractError("CLIENT_FEATURES holds something other than ClientFeature(...) calls")
+        constructors += 1
+        for keyword in element.keywords:
+            if keyword.arg != "required_permission":
+                continue
+            if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                tokens.add(keyword.value.value)
+            elif not (isinstance(keyword.value, ast.Constant) and keyword.value.value is None):
+                raise ResolverContractError("a ClientFeature.required_permission is neither a string literal nor None")
+    if constructors == 0:
+        raise ResolverContractError("CLIENT_FEATURES is empty, so the evaluator can enforce nothing")
+    return tokens
+
+
 #: Non-literal call sites that are known and accounted for. Keyed by
 #: ``<path relative to repo root>::<enclosing qualname>`` so the key survives
 #: edits above the call, unlike a line number.
@@ -357,6 +406,15 @@ DECLARED_DYNAMIC_SITES: tuple[DeclaredDynamicSite, ...] = (
             "Looks the token up in _UPDATE_PERMISSION_BY_ENTITY. Tokens are " "derived from that mapping's values."
         ),
         resolver=_resolve_portal_triage_tokens,
+    ),
+    DeclaredDynamicSite(
+        site="src/domain/features/evaluator.py::_feature_enabled",
+        reason=(
+            "Folds the caller's permission into the flag reported to the browser. The "
+            "token is whichever one the registry entry names, so tokens are derived "
+            "from ClientFeature.required_permission in the feature catalogue."
+        ),
+        resolver=_resolve_client_feature_tokens,
     ),
 )
 

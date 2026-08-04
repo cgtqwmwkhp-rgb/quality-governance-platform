@@ -57,6 +57,7 @@ from src.api.routes import (
     legal_holds,
     library_review,
     loler_inspections,
+    meta,
     near_miss,
     notifications,
     ocr_ops,
@@ -290,6 +291,8 @@ router.include_router(slo.router, prefix="/slo", tags=["SLO Metrics"])
 router.include_router(health.router, prefix="/health", tags=["Health"])
 # Canonical OCR / meta ops (alias; legacy remains under /health/meta)
 router.include_router(ocr_ops.router, prefix="/meta", tags=["Meta"])
+# Client feature-flag channel: what the frontend is allowed to render
+router.include_router(meta.router, prefix="/meta", tags=["Meta"])
 # GDPR data-subject rights (Art. 15 export, Art. 17 erasure)
 router.include_router(gdpr.router, tags=["GDPR"])
 # Public privacy contact + lifecycle capability flags (Path-to-10 S15)
