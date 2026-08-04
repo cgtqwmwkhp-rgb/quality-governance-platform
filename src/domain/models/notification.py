@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import JSON, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import Base
@@ -93,6 +93,29 @@ class Notification(Base):
     """Notification model for real-time alerts"""
 
     __tablename__ = "notifications"
+
+    # One notification per (recipient, requirement occurrence, band) for the
+    # compliance schedule. A query-before-insert cannot supply this: two workers
+    # that both read "absent" both insert, and the second is the duplicate the
+    # user sees. Only a unique index refuses the second write.
+    #
+    # Scoped to entity_type = 'compliance_requirement' because notifications is
+    # shared by every feature and most rows carry no dedupe_key at all -- an
+    # unscoped index would collapse them to one row per user via the COALESCE.
+    # Both dialect predicates are required, not one: sqlite_where is omitted at
+    # this repository's peril, since create_all builds the index in the test
+    # database and a missing WHERE there rejects a user's second ordinary
+    # notification. Same pairing as external_audit_record.py, for the same reason.
+    __table_args__ = (
+        Index(
+            "uq_notifications_compliance_dedupe",
+            "user_id",
+            text("COALESCE(extra_data ->> 'dedupe_key', '')"),
+            unique=True,
+            postgresql_where=text("entity_type = 'compliance_requirement'"),
+            sqlite_where=text("entity_type = 'compliance_requirement'"),
+        ),
+    )
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
