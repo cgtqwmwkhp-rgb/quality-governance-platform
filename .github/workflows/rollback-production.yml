@@ -74,15 +74,37 @@ jobs:
         run: az acr login --name ${{ env.ACR_NAME }}
 
       - name: Verify target image exists
+        env:
+          IMAGE_SHA: ${{ github.event.inputs.image_sha }}
         run: |
-          IMAGE="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.image_sha }}"
+          set -euo pipefail
+          IMAGE="${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${IMAGE_SHA}"
           echo "Verifying image: ${IMAGE}"
-          az acr repository show-tags --name ${{ env.ACR_NAME }} --repository ${{ env.IMAGE_NAME }} --query "[?contains(@, '${{ github.event.inputs.image_sha }}')]" -o tsv
-          if [ $? -ne 0 ]; then
-            echo "ERROR: Image not found in ACR"
+
+          # This gate previously let two classes of bad input through to the deploy step
+          # below, each of which points production at an image that does not exist:
+          #
+          #   1. A --query that matches nothing still exits 0, so testing $? only ever
+          #      caught az itself failing, never a missing tag.
+          #   2. contains(@, ...) is a substring test, but the deploy step interpolates
+          #      IMAGE_SHA verbatim. A short SHA pasted from the GitHub UI matches the
+          #      full-length tag and passes, then deploys the short tag, which is not
+          #      there. Verified one image, shipped another.
+          #
+          # Hence exact equality, and a test on the output rather than the exit code.
+          # Both were confirmed against the production registry before this change.
+          MATCHED_TAG="$(az acr repository show-tags \
+            --name "${ACR_NAME}" \
+            --repository "${IMAGE_NAME}" \
+            --query "[?@=='${IMAGE_SHA}']" \
+            -o tsv)"
+
+          if [ -z "${MATCHED_TAG}" ]; then
+            echo "::error::Tag '${IMAGE_SHA}' does not exist in ACR repository '${IMAGE_NAME}'. Refusing to point production at a nonexistent image. Supply the full 40-character commit SHA, or a release tag such as release-2597."
             exit 1
           fi
-          echo "Image verified."
+
+          echo "Image verified: ${MATCHED_TAG}"
 
       - name: Deploy previous image
         run: |
