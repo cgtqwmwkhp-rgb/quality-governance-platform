@@ -2285,7 +2285,11 @@ jobs:
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    if: github.event_name != 'schedule'
+    # always() is load-bearing. Without it, any failed job in `needs` skips this one,
+    # and GitHub reports a skipped check as successful — so as a required check it would
+    # go green precisely when CI had failed. The terminal step below supplies the actual
+    # verdict now that the job runs unconditionally.
+    if: always() && github.event_name != 'schedule'
     needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, dependency-integrity, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build, adr-lifecycle-check, registry-validation, schema-constraint-lint, error-code-coverage, schemathesis-api-tests]
     
     steps:
@@ -2304,7 +2308,29 @@ jobs:
           retention-days: 90
         if: always()
 
-      - name: All checks passed
+      # Last step in the job so the gate summary above is always uploaded first, even
+      # when this fails. This is the step that makes the job's name honest.
+      - name: Verify every CI job succeeded
+        env:
+          # Passed via env rather than interpolated into the script, so the shell never
+          # sees raw expression output.
+          RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
+          set -euo pipefail
+          echo "Upstream job results: ${RESULTS}"
+
+          FAILED=0
+          for r in ${RESULTS}; do
+            case "$r" in
+              success|skipped) ;;
+              *) FAILED=1 ;;
+            esac
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more CI jobs failed or were cancelled. This gate reports the aggregate verdict, so it fails with them."
+            exit 1
+          fi
+
           echo "[OK] All CI checks passed successfully!"
           echo "The code is ready to be merged."
