@@ -428,7 +428,12 @@ test.describe("Compliance Schedule CUJ", () => {
     await page.locator("#cs-notes").fill("Assessment carried out by Ledger Fire Safety Ltd.");
     await page.getByTestId("compliance-schedule-complete-submit").click();
 
-    await expect(page.getByText("Occurrence recorded")).toBeVisible({ timeout: 20_000 });
+    // Scoped to the alert and taken first: the message text also matches the
+    // toast's own wrapper, and it self-dismisses after four seconds, so a long
+    // timeout here would be theatre.
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Occurrence recorded" }).first(),
+    ).toBeVisible({ timeout: 5_000 });
 
     // The completion the server anchors the roll-forward to must actually reach it.
     await expect.poll(() => proof.completionPayloads().length).toBe(1);
