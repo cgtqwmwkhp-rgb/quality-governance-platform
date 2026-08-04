@@ -17,6 +17,7 @@ from typing import AsyncContextManager, Callable, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
 from src.domain.models.feature_flag import FeatureFlag
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,22 @@ def compliance_schedule_kill_switch_last_known() -> bool:
     """The last observed verdict, without doing any I/O."""
     verdict = _verdict
     return verdict.engaged if verdict is not None else False
+
+
+async def compliance_schedule_is_open(session_factory: SessionFactory) -> bool:
+    """Whether Compliance Schedule is available: configuration opener, then kill switch.
+
+    Lives here rather than at a call site because the two inputs read in opposite
+    directions -- ``compliance_schedule_enabled`` is permissive, the kill switch is
+    ``True`` for *closed*. Every caller that composes them itself is a chance to
+    negate the wrong one, so the composition exists once and callers ask this.
+
+    The opener is checked first because it costs nothing and a disabled module must
+    not issue a query per call.
+    """
+    if not settings.compliance_schedule_enabled:
+        return False
+    return not await compliance_schedule_kill_switch_engaged(session_factory)
 
 
 async def compliance_schedule_kill_switch_engaged(session_factory: SessionFactory) -> bool:

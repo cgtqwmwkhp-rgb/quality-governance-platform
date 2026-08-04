@@ -6,6 +6,7 @@ import pytest
 
 from src.domain.services import compliance_schedule_kill_switch as kill_switch_module
 from src.domain.services.compliance_schedule_kill_switch import (
+    compliance_schedule_is_open,
     compliance_schedule_kill_switch_engaged,
     compliance_schedule_kill_switch_last_known,
     reset_compliance_schedule_kill_switch_cache,
@@ -85,3 +86,46 @@ async def test_unreadable_switch_cannot_reopen_an_observed_kill(monkeypatch):
 
 async def test_last_known_is_false_before_any_read():
     assert compliance_schedule_kill_switch_last_known() is False
+
+
+@pytest.mark.parametrize(
+    ("opener", "kill_engaged", "expected_open"),
+    [
+        (False, False, False),
+        (False, True, False),
+        (True, True, False),
+        (True, False, True),
+    ],
+    ids=[
+        "opener off, switch clear -> closed",
+        "opener off, switch engaged -> closed",
+        "opener on, switch engaged -> closed",
+        "opener on, switch clear -> OPEN",
+    ],
+)
+async def test_is_open_truth_table(monkeypatch, opener, kill_engaged, expected_open):
+    """Exactly one combination is open. The switch can only ever subtract."""
+    monkeypatch.setattr(kill_switch_module.settings, "compliance_schedule_enabled", opener)
+    factory = _FakeSessionFactory(enabled=kill_engaged)
+
+    assert await compliance_schedule_is_open(factory) is expected_open
+
+
+async def test_is_open_does_not_query_when_the_opener_is_off(monkeypatch):
+    """A module switched off in configuration must not cost a query per call."""
+    monkeypatch.setattr(kill_switch_module.settings, "compliance_schedule_enabled", False)
+    factory = _FakeSessionFactory(enabled=False)
+
+    assert await compliance_schedule_is_open(factory) is False
+    assert factory.reads == 0
+
+
+async def test_is_open_reports_closed_when_the_switch_cannot_be_read_after_a_kill(monkeypatch):
+    """An unreadable switch must not reopen a module an operator has closed."""
+    monkeypatch.setattr(kill_switch_module.settings, "compliance_schedule_enabled", True)
+    monkeypatch.setattr(kill_switch_module, "SUCCESS_TTL_SECONDS", 0.0)
+    monkeypatch.setattr(kill_switch_module, "ERROR_RETRY_SECONDS", 0.0)
+
+    assert await compliance_schedule_is_open(_FakeSessionFactory(enabled=True)) is False
+    broken = _FakeSessionFactory(error=ConnectionRefusedError("database is gone"))
+    assert await compliance_schedule_is_open(broken) is False
