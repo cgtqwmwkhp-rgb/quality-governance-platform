@@ -23,8 +23,12 @@ on:
         type: string
 
 env:
-  SWA_APP_NAME: purple-water-03205fa03
-  RESOURCE_GROUP: rg-qgp-prod
+  # purple-water-03205fa03 is the default hostname prefix, not the resource name, and
+  # rg-qgp-prod holds no Static Web App at all — so every `az staticwebapp` call here
+  # failed with ParentResourceNotFound. The app that PR previews deploy to is
+  # qgp-frontend in rg-qgp-staging; its hostname is what the old value was copied from.
+  SWA_APP_NAME: qgp-frontend
+  RESOURCE_GROUP: rg-qgp-staging
   # Production environment name - NEVER DELETE
   PRODUCTION_ENV_NAME: default
   # Safety switch - set to 'true' to disable ALL deletions
@@ -69,7 +73,7 @@ jobs:
       - name: Azure Login
         uses: azure/login@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
       
       - name: Get Open PR Numbers
         id: open_prs
@@ -93,7 +97,17 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --query "[].name" \
             --output tsv)
-          echo "all_envs=$ALL_ENVS" >> $GITHUB_OUTPUT
+          # `-o tsv` returns one name per line, and key=value only accepts a single
+          # line — a second environment made the runner reject the whole write with
+          # "Invalid format 'staging'". The delimiter form keeps the newlines, which
+          # the consumers below depend on: production protection anchors a match with
+          # ^name$, and the stale loop word-splits. Collapsing to spaces would silently
+          # break the first of those.
+          {
+            echo "all_envs<<ENVS_EOF"
+            echo "$ALL_ENVS"
+            echo "ENVS_EOF"
+          } >> "$GITHUB_OUTPUT"
           
           # Get non-production environments
           NON_PROD_ENVS=$(az staticwebapp environment list \
@@ -101,7 +115,11 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --query "[?name!='${{ env.PRODUCTION_ENV_NAME }}'].name" \
             --output tsv)
-          echo "non_prod_envs=$NON_PROD_ENVS" >> $GITHUB_OUTPUT
+          {
+            echo "non_prod_envs<<ENVS_EOF"
+            echo "$NON_PROD_ENVS"
+            echo "ENVS_EOF"
+          } >> "$GITHUB_OUTPUT"
       
       - name: Verify Production Protection
         run: |
@@ -246,8 +264,15 @@ jobs:
           echo "" >> artifacts/cleanup-report.md
           echo "| Environment | Source | Action | Result |" >> artifacts/cleanup-report.md
           echo "|-------------|--------|--------|--------|" >> artifacts/cleanup-report.md
+          # REPORT ends in a trailing \n, so the last line here is always empty. Under
+          # `bash -e` a `[ -n "$env" ] && echo` guard returns 1 on that final iteration,
+          # which becomes the while loop's exit status and fails the step. An `if` with
+          # no else returns 0 when the condition is false, so the blank line is skipped
+          # without killing the run.
           echo -e "$REPORT" | tail -n +2 | while IFS=, read -r env source action reason; do
-            [ -n "$env" ] && echo "| $env | $source | $action | $reason |" >> artifacts/cleanup-report.md
+            if [ -n "$env" ]; then
+              echo "| $env | $source | $action | $reason |" >> artifacts/cleanup-report.md
+            fi
           done
           
           echo "" >> artifacts/cleanup-report.md

@@ -10,9 +10,34 @@ on:
         description: 'Reason for rollback'
         required: true
 
+# Shared with deploy-production.yml and provision-production.yml so a rollback and a
+# deploy can never both be setting the container image on app-qgp-prod. Renaming this
+# group in one file and not the others silently removes the guard.
+#
+# cancel-in-progress: true is deliberate, and deliberately asymmetric — the deploy
+# workflow keeps false. A rollback must preempt rather than queue:
+#
+#   1. Pending is not a safe place to wait. GitHub keeps at most one pending run per
+#      group and replaces it with the next arrival. A rollback queued behind a deploy is
+#      therefore cancelled by the next production deploy to arrive — and during an
+#      incident, merges to main are landing, which is exactly what triggers one. The
+#      rollback would silently never run.
+#   2. deploy-production.yml sets no timeout-minutes on any job, so a hung deploy can
+#      hold this group for the default 360 minutes.
+#
+# Verified, not assumed: a run of this workflow was dispatched against a deliberately
+# sleeping run of another workflow in the same group. The holder went to `cancelled` and
+# this side started within 30s, confirming cancel-in-progress acts across workflows.
+#
+# Preempting is safe for the image write: the deploy's own `az webapp config container
+# set` either already landed or never runs, and this workflow writes after it. It is NOT
+# safe for schema state — `Run database migrations` in deploy-production.yml creates an
+# Azure Container Instance running `alembic upgrade head` and merely polls it, so
+# cancelling the run does not stop the migration. If you preempt a deploy that had
+# reached migrations, check the alembic revision before trusting production.
 concurrency:
   group: deploy-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   ACR_NAME: ${{ secrets.PROD_ACR_NAME }}
@@ -39,21 +64,47 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+          # AZURE_CREDENTIALS_PROD has never existed as a secret. This workflow is
+          # dispatch-only, so the login failed silently until the nightly SWA cleanup —
+          # which shares the same typo — exposed it by failing eight nights running.
+          # AZURE_CREDENTIALS is the credential the production deploy already uses.
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
 
       - name: Verify target image exists
+        env:
+          IMAGE_SHA: ${{ github.event.inputs.image_sha }}
         run: |
-          IMAGE="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.image_sha }}"
+          set -euo pipefail
+          IMAGE="${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${IMAGE_SHA}"
           echo "Verifying image: ${IMAGE}"
-          az acr repository show-tags --name ${{ env.ACR_NAME }} --repository ${{ env.IMAGE_NAME }} --query "[?contains(@, '${{ github.event.inputs.image_sha }}')]" -o tsv
-          if [ $? -ne 0 ]; then
-            echo "ERROR: Image not found in ACR"
+
+          # This gate previously let two classes of bad input through to the deploy step
+          # below, each of which points production at an image that does not exist:
+          #
+          #   1. A --query that matches nothing still exits 0, so testing $? only ever
+          #      caught az itself failing, never a missing tag.
+          #   2. contains(@, ...) is a substring test, but the deploy step interpolates
+          #      IMAGE_SHA verbatim. A short SHA pasted from the GitHub UI matches the
+          #      full-length tag and passes, then deploys the short tag, which is not
+          #      there. Verified one image, shipped another.
+          #
+          # Hence exact equality, and a test on the output rather than the exit code.
+          # Both were confirmed against the production registry before this change.
+          MATCHED_TAG="$(az acr repository show-tags \
+            --name "${ACR_NAME}" \
+            --repository "${IMAGE_NAME}" \
+            --query "[?@=='${IMAGE_SHA}']" \
+            -o tsv)"
+
+          if [ -z "${MATCHED_TAG}" ]; then
+            echo "::error::Tag '${IMAGE_SHA}' does not exist in ACR repository '${IMAGE_NAME}'. Refusing to point production at a nonexistent image. Supply the full 40-character commit SHA, or a release tag such as release-2597."
             exit 1
           fi
-          echo "Image verified."
+
+          echo "Image verified: ${MATCHED_TAG}"
 
       - name: Deploy previous image
         run: |
