@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Optional, Sequence
 
 from sqlalchemy import false, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
@@ -60,6 +61,32 @@ def _tenant_filter(query: Any, model: Any, tenant_id: Optional[int]) -> Any:
     if tenant_id is None:
         return query.where(false())
     return query.where(model.tenant_id == tenant_id)
+
+
+# ``uq_compliance_records_tenant_requirement_due``, in the two ways the drivers
+# report it. PostgreSQL names the constraint; SQLite names the columns instead and
+# never the constraint, so matching only the name would make the same lost race a
+# 409 on the database CI runs integration tests against and a 500 on the one it
+# runs the SQLite suites against. Matched by substring because that is how this
+# repository already identifies a violated constraint (see the reference-number
+# retry in ``api.routes.assessments``); there is no portable structured field.
+_DUPLICATE_OCCURRENCE_SIGNATURES = (
+    "uq_compliance_records_tenant_requirement_due",
+    "compliance_records.due_date",
+)
+
+
+def _is_duplicate_occurrence(exc: IntegrityError) -> bool:
+    """Whether this integrity error is the occurrence-uniqueness constraint.
+
+    Deliberately narrow. Any other integrity error reaching the same handler is
+    ours rather than the caller's — a missing tenant row, a null in a NOT NULL
+    column — and answering 409 to it would tell the caller their request
+    conflicted with someone else's when in fact the service is broken. Those keep
+    propagating and stay a 500, which is where a defect belongs.
+    """
+    text = str(exc)
+    return any(signature in text for signature in _DUPLICATE_OCCURRENCE_SIGNATURES)
 
 
 class ComplianceScheduleService:
@@ -530,6 +557,35 @@ class ComplianceScheduleService:
         tenant_id: int,
         user_id: int,
     ) -> ComplianceRequirement:
+        """Retire an obligation, refusing one that is already retired.
+
+        Retirement is a state transition, not a field edit, and this method
+        reaches it through ``update_requirement``, which audits only the fields it
+        found changed. Setting ``is_active`` false on a row where it is already
+        false changes nothing, so the request answered 200 having written no row
+        and recorded no audit event — telling the caller a retirement happened at
+        a moment the trail can never account for. On a compliance register, which
+        exists to be evidence, that is the one outcome worth refusing outright.
+
+        409 rather than a documented idempotent success, for consistency with
+        ``_assert_template_not_already_active``: activating what is already active
+        conflicts here, and the mirror case should not quietly succeed. The
+        precondition is asserted here rather than in ``update_requirement``,
+        because a PATCH that changes nothing is legitimately a no-op and other
+        callers rely on that.
+
+        Not a guard against concurrency: two simultaneous retirements can both
+        pass this check and both write, and the outcome — retired, audited once
+        per writer — is the state the caller asked for either way.
+        """
+        requirement = await self.get_requirement(requirement_id, tenant_id=tenant_id)
+        if not requirement.is_active:
+            raise ConflictError(
+                f"{requirement.reference_number} is already retired",
+                code="DUPLICATE_ENTITY",
+                details={"requirement_id": requirement.id, "reference_number": requirement.reference_number},
+            )
+
         return await self.update_requirement(
             requirement_id,
             tenant_id=tenant_id,
@@ -576,7 +632,9 @@ class ComplianceScheduleService:
 
         Atomic: record insert, requirement schedule update, and evidence rebind
         share one transaction. Unique (tenant, requirement, due_date) prevents
-        double-complete of the same occurrence.
+        double-complete of the same occurrence — the check below reports it when
+        the earlier record is already visible, and the constraint reports it when
+        the two overlap. Both answer 409; see the handler for why.
         """
         requirement = await self.get_requirement(requirement_id, tenant_id=tenant_id)
         if not requirement.is_active:
@@ -599,6 +657,7 @@ class ComplianceScheduleService:
             raise ConflictError(
                 f"Occurrence for due date {occurrence_due.isoformat()} already recorded",
                 code="DUPLICATE_ENTITY",
+                details={"requirement_id": requirement_id, "due_date": occurrence_due.isoformat()},
             )
 
         next_due = compute_next_due(
@@ -608,6 +667,12 @@ class ComplianceScheduleService:
             frequency_months=requirement.frequency_months,
             frequency_days=requirement.frequency_days,
         )
+
+        # Read off the instance before the write, because the rollback in the
+        # handler below expires every object in the session: an attribute touched
+        # after it would re-load lazily from a sync context and raise
+        # MissingGreenlet, losing the conflict behind an unrelated error.
+        requirement_ref = requirement.reference_number
 
         ref = await ReferenceNumberService.generate(self.db, "compliance_record", ComplianceRecord)
         record = ComplianceRecord(
@@ -624,45 +689,68 @@ class ComplianceScheduleService:
             updated_by_id=user_id,
         )
         self.db.add(record)
-        await self.db.flush()
 
-        requirement.last_completed_at = clock
-        requirement.next_due_date = next_due
-        requirement.updated_by_id = user_id
+        try:
+            await self.db.flush()
 
-        if evidence_asset_ids:
-            await self._attach_evidence_assets(
-                record,
-                evidence_asset_ids=evidence_asset_ids,
+            requirement.last_completed_at = clock
+            requirement.next_due_date = next_due
+            requirement.updated_by_id = user_id
+
+            if evidence_asset_ids:
+                await self._attach_evidence_assets(
+                    record,
+                    evidence_asset_ids=evidence_asset_ids,
+                    tenant_id=tenant_id,
+                )
+
+            await record_audit_event(
+                db=self.db,
+                event_type="compliance_schedule.requirement_completed",
+                entity_type="compliance_record",
+                entity_id=str(record.id),
+                entity_name=record.reference_number,
+                action="create",
+                description=(
+                    f"Completed {requirement_ref} occurrence "
+                    f"due {occurrence_due.isoformat()}; next due {next_due.isoformat()}"
+                ),
+                payload={
+                    "requirement_id": requirement_id,
+                    "requirement_ref": requirement_ref,
+                    "due_date": occurrence_due.isoformat(),
+                    "next_due_date": next_due.isoformat(),
+                    "check_passed": check_passed,
+                    "evidence_asset_ids": list(evidence_asset_ids or []),
+                },
+                user_id=user_id,
+                actor_user_id=user_id,
+                changed_fields=["outcome", "completed_at", "next_due_date", "last_completed_at"],
                 tenant_id=tenant_id,
             )
 
-        await record_audit_event(
-            db=self.db,
-            event_type="compliance_schedule.requirement_completed",
-            entity_type="compliance_record",
-            entity_id=str(record.id),
-            entity_name=record.reference_number,
-            action="create",
-            description=(
-                f"Completed {requirement.reference_number} occurrence "
-                f"due {occurrence_due.isoformat()}; next due {next_due.isoformat()}"
-            ),
-            payload={
-                "requirement_id": requirement.id,
-                "requirement_ref": requirement.reference_number,
-                "due_date": occurrence_due.isoformat(),
-                "next_due_date": next_due.isoformat(),
-                "check_passed": check_passed,
-                "evidence_asset_ids": list(evidence_asset_ids or []),
-            },
-            user_id=user_id,
-            actor_user_id=user_id,
-            changed_fields=["outcome", "completed_at", "next_due_date", "last_completed_at"],
-            tenant_id=tenant_id,
-        )
+            await self.db.commit()
+        except IntegrityError as exc:
+            # The duplicate check above is a read with no lock held after it, so
+            # two requests closing the same occurrence both pass it and both
+            # insert. This is the constraint refusing the second one, and it is
+            # the same outcome the check reports — reported the same way, because
+            # which of the two noticed is an implementation detail and the caller
+            # is owed one answer for one situation.
+            await self.db.rollback()
+            if not _is_duplicate_occurrence(exc):
+                raise
+            logger.info(
+                "compliance completion lost a race for requirement=%s due=%s",
+                requirement_id,
+                occurrence_due.isoformat(),
+            )
+            raise ConflictError(
+                f"Occurrence for due date {occurrence_due.isoformat()} already recorded",
+                code="DUPLICATE_ENTITY",
+                details={"requirement_id": requirement_id, "due_date": occurrence_due.isoformat()},
+            ) from exc
 
-        await self.db.commit()
         await self.db.refresh(record)
         await self.db.refresh(requirement)
         return record
