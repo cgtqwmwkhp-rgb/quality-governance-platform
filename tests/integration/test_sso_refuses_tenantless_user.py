@@ -17,11 +17,10 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from src.infrastructure.database import async_session_maker
-
 from src.domain.models.tenant import TenantUser
 from src.domain.models.user import User
 from src.domain.services.auth_service import AuthService, TenantProvisioningRequiredError
+from src.infrastructure.database import async_session_maker
 
 
 def _assertion(email, azure_oid):
