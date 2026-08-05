@@ -6,6 +6,22 @@ from src.infrastructure.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+#: ``(table, date column, retention days)`` per docs/privacy/data-retention-policy.md.
+#:
+#: Module level so the suite can check every target against the declared schema
+#: without running a sweep. ``notification_log`` sat here for as long as it did
+#: because nothing but a live PostgreSQL run could see that the name was wrong.
+RETENTION_RULES: tuple[tuple[str, str, int], ...] = (
+    ("audit_log_entries", "created_at", 365),
+    ("token_blacklist", "expires_at", 0),
+    ("notification_logs", "created_at", 90),
+    ("incidents", "created_at", 365),
+    ("complaints", "created_at", 365),
+    ("road_traffic_collisions", "created_at", 365),
+    ("near_misses", "created_at", 365),
+    ("investigations", "created_at", 365),
+)
+
 
 @celery_app.task(
     name="src.infrastructure.tasks.cleanup_tasks.cleanup_expired_tokens",
@@ -40,38 +56,45 @@ def run_data_retention(self) -> dict:  # type: ignore[override]
     engine = engine_ref
     now = datetime.utcnow()
 
-    retention_rules = [
-        ("audit_log_entries", "created_at", 365),
-        ("token_blacklist", "expires_at", 0),
-        ("notification_log", "created_at", 90),
-        ("incidents", "created_at", 365),
-        ("complaints", "created_at", 365),
-        ("road_traffic_collisions", "created_at", 365),
-        ("near_misses", "created_at", 365),
-        ("investigations", "created_at", 365),
-    ]
-
     try:
         with engine.begin() as conn:
-            for table, date_col, retention_days in retention_rules:
+            for table, date_col, retention_days in RETENTION_RULES:
+                cutoff = now - timedelta(days=retention_days)
                 try:
-                    cutoff = now - timedelta(days=retention_days)
-                    result = conn.execute(
-                        text(f"DELETE FROM {table} WHERE {date_col} < :cutoff"),  # nosec B608  # noqa: S608
-                        {"cutoff": cutoff},
-                    )
-                    deleted = result.rowcount or 0
-                    results[table] = deleted
-                    if deleted > 0:
-                        logger.info(
-                            "Retention: purged %d rows from %s (cutoff=%s)",
-                            deleted,
-                            table,
-                            cutoff.isoformat(),
+                    # SAVEPOINT per table because on PostgreSQL the first failing
+                    # statement aborts the whole transaction: without unwinding to a
+                    # savepoint, one bad target makes every later DELETE raise
+                    # InFailedSqlTransaction and turns the closing COMMIT into a
+                    # rollback, so the counts below are reported for rows that were
+                    # never actually purged. Same C-8 shape as ``_read_savepoint``.
+                    with conn.begin_nested():
+                        result = conn.execute(
+                            text(f"DELETE FROM {table} WHERE {date_col} < :cutoff"),  # nosec B608  # noqa: S608
+                            {"cutoff": cutoff},
                         )
-                except Exception:
-                    logger.warning("Retention: table %s skipped (may not exist)", table)
+                        deleted = result.rowcount or 0
+                except Exception as exc:
+                    # Names the table *and* the error: the previous wording asserted
+                    # "may not exist" without checking, which is how a misnamed
+                    # target read as routine for as long as it did.
+                    logger.warning(
+                        "Retention: table %s NOT purged, rule had no effect: %s: %s",
+                        table,
+                        type(exc).__name__,
+                        exc,
+                        exc_info=True,
+                    )
                     results[table] = -1
+                    continue
+
+                results[table] = deleted
+                if deleted > 0:
+                    logger.info(
+                        "Retention: purged %d rows from %s (cutoff=%s)",
+                        deleted,
+                        table,
+                        cutoff.isoformat(),
+                    )
 
         logger.info("Data retention sweep complete: %s", results)
         return {"status": "completed", "purged": results}
