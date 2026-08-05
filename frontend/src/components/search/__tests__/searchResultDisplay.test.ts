@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildHighlightedSegments,
   collectHighlightTerms,
+  COMPLIANCE_SCHEDULE_MODULE,
   DOCUMENT_CONTENT_MODULE,
   getSearchLocationMeta,
   isDocumentContentResult,
@@ -70,5 +71,11 @@ describe('searchResultDisplay', () => {
     expect(moduleDisplayLabel(DOCUMENT_CONTENT_MODULE)).toBe('Document body')
     expect(MODULE_FILTER_OPTIONS.some((o) => o.value === DOCUMENT_CONTENT_MODULE)).toBe(true)
     expect(moduleDisplayLabel('Incidents')).toBe('Incidents')
+  })
+
+  it('offers a Compliance Schedule filter chip whose value matches the API module', () => {
+    expect(COMPLIANCE_SCHEDULE_MODULE).toBe('Compliance Schedule')
+    expect(MODULE_FILTER_OPTIONS.some((o) => o.value === COMPLIANCE_SCHEDULE_MODULE)).toBe(true)
+    expect(moduleDisplayLabel(COMPLIANCE_SCHEDULE_MODULE)).toBe('Compliance')
   })
 })

@@ -14,6 +14,7 @@ def test_build_search_path_known_types():
     assert build_search_path("audit", 7) == "/audits"
     assert build_search_path("document", 9) == "/documents/9"
     assert build_search_path("document_content", 9) == "/documents/9"
+    assert build_search_path("compliance_requirement", 8) == "/compliance-schedule/8"
 
 
 def test_build_search_path_document_content_deep_link():

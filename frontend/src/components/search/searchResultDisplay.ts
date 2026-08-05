@@ -8,6 +8,8 @@ export const SNIPPET_SUPPRESSED = 'snippet_suppressed'
 
 export const DOCUMENT_CONTENT_MODULE = 'Document Content'
 
+export const COMPLIANCE_SCHEDULE_MODULE = 'Compliance Schedule'
+
 /** Filter / facet chip value → clearer chip label (value stays API-aligned). */
 export const MODULE_FILTER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'Incidents', label: 'Incidents' },
@@ -18,6 +20,7 @@ export const MODULE_FILTER_OPTIONS: ReadonlyArray<{ value: string; label: string
   { value: 'Actions', label: 'Actions' },
   { value: 'Documents', label: 'Documents' },
   { value: DOCUMENT_CONTENT_MODULE, label: 'Document body' },
+  { value: COMPLIANCE_SCHEDULE_MODULE, label: 'Compliance' },
 ]
 
 export function isSnippetSuppressed(highlights: string[] | null | undefined): boolean {
