@@ -680,7 +680,7 @@ jobs:
           fi
           # Per-shard coverage cannot meet the suite floor; the aggregator combines
           # .coverage data and enforces --fail-under=43 (EG-05).
-          pytest "${SELECTED[@]}" -v --cov=src --cov-report=xml --cov-report=term --junit-xml=junit-integration.xml
+          pytest "${SELECTED[@]}" -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=0 --junit-xml=junit-integration.xml
           mv .coverage ".coverage.shard${SHARD}"
 
       - name: Upload shard coverage data
@@ -719,8 +719,8 @@ jobs:
           python-version: '3.11'
 
       - name: Download shard JUnit artifacts
+        if: always()
         uses: actions/download-artifact@v8
-        continue-on-error: true
         with:
           pattern: junit-integration-tests-*
           merge-multiple: true
@@ -764,8 +764,8 @@ jobs:
         if: always()
 
       - name: Download shard coverage data
+        if: always()
         uses: actions/download-artifact@v8
-        continue-on-error: true
         with:
           pattern: coverage-integration-*
           merge-multiple: true

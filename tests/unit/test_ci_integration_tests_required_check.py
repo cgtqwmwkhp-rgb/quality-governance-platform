@@ -119,3 +119,23 @@ def test_naming_the_matrix_job_integration_tests_fails_the_pin() -> None:
 
     with pytest.raises(AssertionError, match="must NOT be named"):
         assert_integration_tests_required_check_shape(jobs)
+
+
+def test_shards_do_not_enforce_suite_coverage_floor() -> None:
+    """A quarter of the suite cannot meet the estate floor; the aggregator owns EG-05."""
+    text = CI_YML.read_text(encoding="utf-8")
+    assert (
+        "--cov-fail-under=0" in text
+    ), "shard pytest must disable cov-fail-under so a green shard is not failed for coverage"
+
+
+def test_integration_tests_aggregator_has_no_continue_on_error() -> None:
+    """CI Security Covenant forbids continue-on-error inside critical job integration-tests."""
+    import re
+
+    text = CI_YML.read_text(encoding="utf-8")
+    m = re.search(r"(?ms)^  integration-tests:\n(.*?)(?=^  \w[\w-]*:|\Z)", text)
+    assert m, "integration-tests job missing"
+    assert not re.search(
+        r"^        continue-on-error:\s*true\s*$", m.group(1), re.M
+    ), "continue-on-error inside integration-tests trips the Stage 2.0 covenant"
