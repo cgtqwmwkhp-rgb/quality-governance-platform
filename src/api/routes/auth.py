@@ -22,7 +22,7 @@ from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
 from src.core.config import settings
 from src.domain.services.audit_log_service import AuditLogService
-from src.domain.services.auth_service import AuthService
+from src.domain.services.auth_service import AuthService, TenantProvisioningRequiredError
 from src.infrastructure.monitoring.azure_monitor import record_auth_logout, track_metric
 from src.infrastructure.websocket.connection_manager import connection_manager
 
@@ -140,6 +140,10 @@ async def exchange_azure_token(
         if "missing email" in message.lower():
             raise _auth_http_error(status.HTTP_400_BAD_REQUEST, ErrorCode.VALIDATION_ERROR, message) from exc
         raise _auth_http_error(status.HTTP_401_UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, message) from exc
+    except TenantProvisioningRequiredError as exc:
+        # Must precede PermissionError: this is a subclass, and ACCOUNT_LOCKED would tell
+        # the person their account is disabled when in fact it was never set up.
+        raise _auth_http_error(status.HTTP_403_FORBIDDEN, ErrorCode.TENANT_ACCESS_DENIED, str(exc)) from exc
     except PermissionError as exc:
         raise _auth_http_error(status.HTTP_403_FORBIDDEN, ErrorCode.ACCOUNT_LOCKED, str(exc)) from exc
 

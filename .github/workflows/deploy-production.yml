@@ -832,12 +832,17 @@ jobs:
           echo "✅ Application settings configured"
 
           # Celery worker runs library index OCR — keep DI env aligned with API.
+          # It also runs the Compliance Schedule sweep, which reads
+          # COMPLIANCE_SCHEDULE_ENABLED itself and treats "unset" as off. That flag must
+          # therefore come from the same variable the API block uses: if only the API is
+          # told, the two silently disagree and the sweep no-ops while the module looks on.
           for celery_app in "${{ env.AZURE_WEBAPP_NAME }}-worker" "${{ env.AZURE_WEBAPP_NAME }}-beat"; do
             if az webapp show --name "$celery_app" --resource-group "$AZURE_RESOURCE_GROUP" &>/dev/null; then
               az webapp config appsettings set \
                 --name "$celery_app" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
                 --settings \
+                  COMPLIANCE_SCHEDULE_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_ENABLED || 'false' }}" \
                   AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
                   AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
                   AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
@@ -850,7 +855,8 @@ jobs:
                   PINECONE_API_KEY="${PINECONE_API_KEY_VAL}" \
                   PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
                   PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-gcp-starter}" \
-                --output none || true
+                --output none \
+                || echo "::warning title=Celery settings not applied::$celery_app kept its previous app settings, so COMPLIANCE_SCHEDULE_ENABLED may now disagree with the API"
             fi
           done
 
