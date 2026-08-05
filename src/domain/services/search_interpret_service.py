@@ -18,6 +18,7 @@ ALLOWED_MODULES = {
     "Audits",
     "Actions",
     "Documents",
+    "Compliance Schedule",
 }
 
 # Phrase → structured intent (checked before LLM).
@@ -154,7 +155,7 @@ async def interpret_with_gemini(query: str) -> Optional[dict[str, Any]]:
             return None
 
         prompt = f"""Convert this workplace quality-governance search request into JSON only.
-Allowed modules: Incidents, RTAs, Complaints, Risks, Audits, Actions, Documents.
+Allowed modules: Incidents, RTAs, Complaints, Risks, Audits, Actions, Documents, Compliance Schedule.
 Return object keys: q (keywords), module (or null), status (comma-separated or null),
 date_from (YYYY-MM-DD or null), date_to (YYYY-MM-DD or null), label (short human label).
 No markdown. Query: {query!r}"""
