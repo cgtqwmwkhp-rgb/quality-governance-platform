@@ -1895,6 +1895,38 @@ jobs:
             docs/evidence/stability_gate_${{ github.run_id }}.json
           retention-days: 90
 
+      - name: Assert COMPLIANCE_SCHEDULE_ENABLED API/worker live parity
+        run: |
+          set -euo pipefail
+          # Post-deploy live check: PR #1590 made deploy *write* the same expression to API
+          # and worker, but a manual `az webapp config appsettings set` can still drift them
+          # afterwards. Fail the deploy if the live Azure values disagree.
+          RG="${{ env.AZURE_RESOURCE_GROUP }}"
+          API_APP="${{ env.AZURE_WEBAPP_NAME }}"
+          WORKER_APP="${API_APP}-worker"
+          FLAG=COMPLIANCE_SCHEDULE_ENABLED
+
+          API_VAL=$(az webapp config appsettings list \
+            -g "$RG" -n "$API_APP" \
+            --query "[?name=='$FLAG'].value | [0]" -o tsv)
+          WORKER_VAL=$(az webapp config appsettings list \
+            -g "$RG" -n "$WORKER_APP" \
+            --query "[?name=='$FLAG'].value | [0]" -o tsv)
+
+          # az prints the literal string "null" when JMESPath finds nothing; treat as unset.
+          # Use if/fi (not `&&`) so a non-match does not trip `set -e`.
+          if [ "${API_VAL:-}" = "null" ]; then API_VAL=""; fi
+          if [ "${WORKER_VAL:-}" = "null" ]; then WORKER_VAL=""; fi
+
+          echo "API ($API_APP): $FLAG=${API_VAL:-<unset>}"
+          echo "Worker ($WORKER_APP): $FLAG=${WORKER_VAL:-<unset>}"
+
+          if [ "${API_VAL}" != "${WORKER_VAL}" ]; then
+            echo "::error title=Flag parity failed::$FLAG differs between API ('${API_VAL:-<unset>}') and worker ('${WORKER_VAL:-<unset>}')"
+            exit 1
+          fi
+          echo "✅ $FLAG matches on API and worker (${API_VAL:-<unset>})"
+
       - name: Verify deployment - Security checks (Stage 4)
         run: |
           echo "Running post-deployment security verification..."
