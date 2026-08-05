@@ -85,7 +85,11 @@ export interface CompleteRecordPayload {
 }
 
 export function createComplianceScheduleApi(api: AxiosInstance) {
-  const base = '/compliance-schedule'
+  // The shared axios instance sets baseURL to the host only, with no version
+  // segment, so every client spells `/api/v1` itself. Omitting it here sent all
+  // twelve of these requests to paths the server does not serve, and each one
+  // answered 404 in every environment.
+  const base = '/api/v1/compliance-schedule'
 
   return {
     listRequirements: (params?: {
