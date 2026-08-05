@@ -28,6 +28,12 @@ vi.mock('../compliance/RecordCompletionSheet', () => ({
   RecordCompletionSheet: () => null,
 }))
 
+// Stubbed for the same reason as the completion sheet: this file is about what
+// the profile renders, and the dialog is covered by its own suite.
+vi.mock('../compliance/RequirementFormDialog', () => ({
+  RequirementFormDialog: () => null,
+}))
+
 function requirement(overrides: Record<string, unknown> = {}) {
   return {
     id: 7,
