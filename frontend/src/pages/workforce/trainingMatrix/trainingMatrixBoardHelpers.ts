@@ -848,9 +848,12 @@ export type MyTrainingSummary = {
 
 /** Progress counts + next due module for the "My training" panel (Complete = compliant + due_soon). */
 
-export function myTrainingSummary(rows: TrainingMatrixComplianceRow[]): MyTrainingSummary {
+export function myTrainingSummary(
+  rows: TrainingMatrixComplianceRow[],
+  today: Date = new Date(),
+): MyTrainingSummary {
   const okCount = rows.filter((r) => isOkStatus(r.status)).length
-  const todayStart = startOfDay(new Date())
+  const todayStart = startOfDay(today)
   const gaps = rows
     .filter((r) => r.qgp_due_on && isGapStatus(r.status))
     .map((row) => ({ row, due: parseDueDate(row.qgp_due_on)! }))
