@@ -4,6 +4,7 @@ import {
   AlignLeft,
   ArrowRight,
   Calendar,
+  CalendarCheck,
   Car,
   ChevronRight,
   ClipboardCheck,
@@ -31,6 +32,7 @@ import { cn } from '../../helpers/utils'
 import { getSuggestedSearches } from './suggestedSearches'
 import {
   buildHighlightedSegments,
+  COMPLIANCE_SCHEDULE_MODULE,
   DOCUMENT_CONTENT_MODULE,
   getSearchLocationMeta,
   isDocumentContentResult,
@@ -58,6 +60,7 @@ const moduleIcons: Record<string, ReactNode> = {
   Actions: <Zap className="w-5 h-5" />,
   Documents: <FileText className="w-5 h-5" />,
   [DOCUMENT_CONTENT_MODULE]: <AlignLeft className="w-5 h-5" />,
+  [COMPLIANCE_SCHEDULE_MODULE]: <CalendarCheck className="w-5 h-5" />,
 }
 
 const moduleColors: Record<string, string> = {
@@ -69,6 +72,7 @@ const moduleColors: Record<string, string> = {
   Actions: 'text-info bg-info/20',
   Documents: 'text-info bg-info/20',
   [DOCUMENT_CONTENT_MODULE]: 'text-info bg-info/20',
+  [COMPLIANCE_SCHEDULE_MODULE]: 'text-success bg-success/20',
 }
 
 function SearchResultBody({ result }: { result: GlobalSearchResultRecord }) {
@@ -140,6 +144,9 @@ const statusVariants: Record<
   overdue: 'destructive',
   closed: 'resolved',
   completed: 'resolved',
+  // Compliance Schedule vocabulary (compliance_schedule_policy.derive_status)
+  due_soon: 'warning',
+  current: 'resolved',
 }
 
 export default function GlobalSearchPanel({
