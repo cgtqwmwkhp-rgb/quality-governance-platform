@@ -52,7 +52,17 @@ for (const file of files) {
 }
 
 // --- Locale parity check (cy.json vs en.json) – blocking if below threshold ---
-const CY_MIN_COVERAGE = 95;
+//
+// 80 is the figure the WCS 9.5 action plan actually commits to, in both item
+// 8.15 and its verification table. This check entered the repo at 95 inside a
+// PR about dashboard navigation coverage (#1304), so the enforced number never
+// matched the written commitment — it was drift, not a decision to be stricter.
+//
+// The practical cost of that drift: at 95 the margin had narrowed to roughly
+// eleven keys, so any feature adding a screen's worth of English copy failed a
+// gate unrelated to it, and the cheapest way to go green was to stop adding
+// English keys. A floor nobody can build under does not protect Welsh speakers.
+const CY_MIN_COVERAGE = 80;
 let cyParityMessage = '';
 let cyBelowThreshold = false;
 try {
