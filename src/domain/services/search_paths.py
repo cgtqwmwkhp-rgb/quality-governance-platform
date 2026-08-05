@@ -44,6 +44,7 @@ def build_search_path(
         "complaint": f"/complaints/{entity_id}",
         "near_miss": f"/near-misses/{entity_id}",
         "risk": f"/risk-register/{entity_id}",
+        "compliance_requirement": f"/compliance-schedule/{entity_id}",
         # Finding id alone cannot deep-link; prefer audit_run_id above.
         "audit": "/audits",
         "action": f"/actions/{entity_id}",  # bare id → capa:{id} on FE; prefer action_key_kind

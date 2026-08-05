@@ -4,12 +4,16 @@ Extracts multi-entity search logic from the global_search route module.
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
+from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_kill_switch_last_known
+from src.domain.services.compliance_schedule_policy import derive_status
 from src.domain.services.document_library_rbac import (
     PERM_ADMIN_MANAGE,
     PERM_DOCUMENT_READ,
@@ -26,6 +30,13 @@ _SHORT_QUERY_THRESHOLD = 3
 _CONTENT_SNIPPET_MAX_CHARS = 280
 _SNIPPET_SUPPRESSED_SENSITIVITY = frozenset({"confidential", "restricted"})
 _CONTENT_SEARCH_LIMIT = 10
+
+#: Spelled here rather than passed to ``has_permission`` as a literal: the permission
+#: scan in ``src.domain.authz.extraction`` refuses any non-literal argument to that
+#: call, and this file reaches permissions through ``_user_has`` instead.
+PERM_COMPLIANCE_SCHEDULE_READ = "compliance_schedule:read"
+
+COMPLIANCE_SCHEDULE_MODULE = "Compliance Schedule"
 
 
 class SearchResultItem:
@@ -126,6 +137,7 @@ class SearchService:
         all_results.extend(await self._search_actions(query, tenant_id, request_id))
         all_results.extend(await self._search_documents(query, tenant_id, request_id, user=user))
         all_results.extend(await self._search_document_content(query, user, request_id))
+        all_results.extend(await self._search_compliance_requirements(query, tenant_id, request_id, user=user))
 
         if module:
             all_results = [r for r in all_results if r.module.lower() == module.lower()]
@@ -891,6 +903,91 @@ class SearchService:
         except (AttributeError, SQLAlchemyError, ValueError, TypeError) as e:
             logger.warning(
                 "Search: document content query failed [request_id=%s]: %s",
+                request_id,
+                type(e).__name__,
+                exc_info=True,
+            )
+        return results
+
+    @staticmethod
+    def _compliance_schedule_is_available() -> bool:
+        """Whether Compliance Schedule may appear in search at all.
+
+        The opener is authoritative and free. The kill switch is only consulted
+        through its last observed verdict, because ``SearchService`` holds a session
+        and the real read wants a session factory that ``src/domain`` may not import.
+        That read can only ever subtract: a process that has never observed a kill
+        behaves exactly as it would without the check, and one that has stops showing
+        obligations the operator has closed.
+        """
+        if not settings.compliance_schedule_enabled:
+            return False
+        return not compliance_schedule_kill_switch_last_known()
+
+    async def _search_compliance_requirements(
+        self,
+        query: str,
+        tenant_id: int | None,
+        request_id: str | None,
+        *,
+        user: Any | None = None,
+    ) -> list[SearchResultItem]:
+        """Compliance obligations, gated on ``compliance_schedule:read``.
+
+        Deliberately unlike its tenant-only neighbours: a caller without the module's
+        read permission gets nothing, so search cannot become a way to enumerate
+        obligations the register itself would refuse to show.
+        """
+        results: list[SearchResultItem] = []
+        if user is None or tenant_id is None:
+            return results
+        # Fail closed on a caller whose own tenancy disagrees with the scope asked for.
+        if getattr(user, "tenant_id", None) != tenant_id:
+            return results
+        if not self._user_has(user, PERM_COMPLIANCE_SCHEDULE_READ):
+            return results
+        if not self._compliance_schedule_is_available():
+            return results
+
+        try:
+            from src.domain.models.compliance_schedule import ComplianceRequirement
+
+            search_filter = f"%{query}%"
+            stmt = (
+                select(ComplianceRequirement)
+                .where(ComplianceRequirement.tenant_id == tenant_id)
+                .where(ComplianceRequirement.deleted_at.is_(None))
+                .where(ComplianceRequirement.is_active.is_(True))
+                .where(
+                    or_(
+                        ComplianceRequirement.title.ilike(search_filter),
+                        ComplianceRequirement.description.ilike(search_filter),
+                        ComplianceRequirement.reference_number.ilike(search_filter),
+                    )
+                )
+                .order_by(ComplianceRequirement.next_due_date.asc())
+                .limit(10)
+            )
+            db_result = await self.db.execute(stmt)
+            now = datetime.now(timezone.utc)
+            for requirement in db_result.scalars().all():
+                results.append(
+                    SearchResultItem(
+                        id=requirement.reference_number or f"CSR-{requirement.id}",
+                        type="compliance_requirement",
+                        title=requirement.title or "Untitled Compliance Requirement",
+                        description=(requirement.description or "")[:200],
+                        module=COMPLIANCE_SCHEDULE_MODULE,
+                        status=derive_status(now, requirement.next_due_date) or "current",
+                        date=str(requirement.next_due_date or ""),
+                        relevance=self._simple_relevance(query, requirement.title, requirement.description),
+                        highlights=self._highlight_words(query, requirement.title, requirement.description),
+                        entity_id=requirement.id,
+                    )
+                )
+        except (AttributeError, SQLAlchemyError, ValueError, TypeError) as e:
+            logger.warning(
+                "Search: compliance requirement query failed [request_id=%s]: %s",
                 request_id,
                 type(e).__name__,
                 exc_info=True,
