@@ -39,6 +39,16 @@ from src.infrastructure.security.login_lockout import (
 logger = logging.getLogger(__name__)
 
 
+class TenantProvisioningRequiredError(PermissionError):
+    """Sign-in refused because no organisation could be resolved for the account.
+
+    Subclasses ``PermissionError`` so a caller that does not know about this case still
+    answers 403 rather than 500. Callers that do know should distinguish it: "you are not
+    in an organisation yet" is an account-setup problem an administrator fixes, not a
+    locked account and not a missing permission.
+    """
+
+
 def _access_token_for_user(user: User) -> str:
     return create_access_token(
         subject=user.id,
@@ -93,8 +103,28 @@ class AuthService:
         await self.db.commit()
         await self.db.refresh(user)
 
+    async def _default_tenant_for_new_user(self) -> Tenant | None:
+        """The tenant a brand-new SSO user may be placed in, or None to refuse.
+
+        Production fails closed: silently dropping an unknown person into the first
+        active tenant is a cross-organisation grant, so provisioning must be explicit.
+        Deliberately takes no user, so it can be consulted *before* anything is
+        persisted rather than after.
+        """
+        if settings.is_production:
+            logger.warning("Refusing silent first-tenant assignment for a new user in production")
+            return None
+
+        tenant_result = await self.db.execute(
+            select(Tenant).where(Tenant.is_active == True).order_by(Tenant.id.asc()).limit(1)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        if tenant is None:
+            logger.warning("No active tenant available for a new user")
+        return tenant
+
     async def _resolve_default_tenant(self, user: User) -> Tenant | None:
-        """Assign a new user to the first active tenant and create a TenantUser row.
+        """Assign an existing user to the first active tenant and create a TenantUser row.
 
         Production fail-closed: never silently assign the first active tenant.
         Callers must provision tenant membership explicitly before the user can
@@ -104,19 +134,8 @@ class AuthService:
         if existing.scalar_one_or_none() is not None:
             return None
 
-        if settings.is_production:
-            logger.warning(
-                "Refusing silent first-tenant assignment for user %s in production",
-                user.id,
-            )
-            return None
-
-        tenant_result = await self.db.execute(
-            select(Tenant).where(Tenant.is_active == True).order_by(Tenant.id.asc()).limit(1)
-        )
-        tenant = tenant_result.scalar_one_or_none()
+        tenant = await self._default_tenant_for_new_user()
         if tenant is None:
-            logger.warning("No active tenant found for new user %s", user.id)
             return None
 
         user.tenant_id = tenant.id
@@ -393,6 +412,22 @@ class AuthService:
                 raise PermissionError("Microsoft identity conflict detected for this account")
 
         if user is None:
+            # Resolve the organisation BEFORE persisting anything. A committed user with no
+            # tenant is refused by ``_resolve_user_tenant_context`` on every subsequent
+            # request, so it is an account that signs in successfully and can then do
+            # nothing at all — and it leaves behind exactly the tenant-less row the RLS
+            # cutover has to drain. Refusing at the door is the honest answer.
+            tenant = await self._default_tenant_for_new_user()
+            if tenant is None:
+                logger.warning(
+                    "Refusing to provision an SSO user with no resolvable tenant",
+                    extra={"email_masked": _mask_email(email), "azure_oid": azure_oid or "missing"},
+                )
+                raise TenantProvisioningRequiredError(
+                    "Your account is not linked to an organisation yet, so it cannot be signed in. "
+                    "Ask an administrator to provision your access."
+                )
+
             first_name, last_name = self._split_name(user_info.get("name"), email)
 
             user = User(
@@ -406,21 +441,32 @@ class AuthService:
                 department=user_info.get("department"),
                 job_title=user_info.get("job_title"),
                 last_login=datetime.now(timezone.utc).isoformat(),
+                tenant_id=tenant.id,
             )
             self.db.add(user)
-            await self.db.commit()
-            await self.db.refresh(user)
-
-            default_tenant = await self._resolve_default_tenant(user)
-            if default_tenant is not None:
-                logger.info(
-                    "Assigned new Azure AD user to tenant %s",
-                    default_tenant.id,
-                    extra={"email_masked": _mask_email(email)},
+            await self.db.flush()
+            self.db.add(
+                TenantUser(
+                    tenant_id=tenant.id,
+                    user_id=user.id,
+                    is_active=True,
+                    is_primary=True,
+                    role="user",
                 )
+            )
+            await self.db.commit()
+            # Re-select with roles eagerly loaded. ``_access_token_for_user`` reads
+            # ``user.roles``, and a lazy load after commit raises MissingGreenlet on an
+            # async session. The two existing-user lookups above already selectinload for
+            # exactly this reason; this branch did not, so a first SSO sign-in answered 500
+            # *after* committing the account. Pre-existing, and reachable on every new user.
+            user = (
+                await self.db.execute(select(User).options(selectinload(User.roles)).where(User.id == user.id))
+            ).scalar_one()
 
             logger.info(
-                "Created new user from Azure AD",
+                "Created new user from Azure AD in tenant %s",
+                tenant.id,
                 extra={"email_masked": _mask_email(email), "azure_oid": azure_oid or "missing"},
             )
         else:

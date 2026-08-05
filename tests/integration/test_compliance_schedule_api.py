@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from src.core.config import settings
 from src.domain.models.compliance_schedule import ComplianceRequirementTemplate, ComplianceScheduleAnchor
@@ -345,3 +347,325 @@ async def test_the_same_template_at_two_sites_is_not_a_duplicate(
     # ...but a second one at the same site still is.
     again = await _activate(client, superuser_auth_headers, key, location_id=sites[0].id)
     assert again.status_code == 409, again.text
+
+
+# ---------------------------------------------------------------------------
+# Losing a completion race
+# ---------------------------------------------------------------------------
+#
+# ``complete_requirement`` looks for an existing record for the occurrence and
+# inserts when it finds none. Nothing holds a lock between the two, so two
+# requests closing the same occurrence both read "absent" and both insert;
+# ``uq_compliance_records_tenant_requirement_due`` refuses the second. What the
+# loser's user sees is the subject of these tests.
+#
+# Assertions are scoped to the requirement id created by the test rather than to
+# a count of rows in the table. The integration harness only drops tables on
+# SQLite, so on PostgreSQL every earlier test's compliance records are still
+# there and any global count is whatever the rest of the session happened to
+# leave behind.
+
+DUE = "2026-04-01"
+
+
+async def _requirement_for_completion(client, headers, test_session) -> int:
+    """An active obligation due ``DUE``, returned as a bare id.
+
+    An id rather than the ORM row on purpose: reading an attribute off a
+    fixture-owned instance after an intervening commit re-triggers a lazy load
+    outside the greenlet that owns the session, which surfaces as
+    ``MissingGreenlet`` rather than as anything resembling the real problem.
+    """
+    template = await _seed_template(test_session)
+    response = await _activate(client, headers, template.template_key)
+    assert response.status_code == 201, response.text
+    return int(response.json()["id"])
+
+
+async def _records_for(requirement_id: int) -> list:
+    """Every compliance record for one requirement, read on its own connection."""
+    from src.domain.models.compliance_schedule import ComplianceRecord
+    from src.infrastructure.database import async_session_maker
+
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(ComplianceRecord)
+            .where(ComplianceRecord.requirement_id == requirement_id)
+            .order_by(ComplianceRecord.id)
+        )
+        return list(result.scalars().all())
+
+
+def _complete(client, headers, requirement_id: int, **body):
+    return client.post(
+        f"/api/v1/compliance-schedule/requirements/{requirement_id}/records",
+        headers=headers,
+        json={"completed_at": "2026-04-02T09:00:00Z", "check_passed": True, **body},
+    )
+
+
+async def _land_competing_record(requirement_id: int, due_date: date) -> None:
+    """Commit a rival record for the same occurrence from a separate connection.
+
+    This is the other request, reduced to the only part of it that matters: a
+    committed row holding the key the caller is about to insert. It is a real
+    connection committing a real row, so what refuses the caller afterwards is
+    the live unique constraint and not a stand-in for it.
+    """
+    from src.domain.models.compliance_schedule import ComplianceFilingStatus, ComplianceRecord, ComplianceRecordOutcome
+    from src.infrastructure.database import async_session_maker
+
+    async with async_session_maker() as session:
+        session.add(
+            ComplianceRecord(
+                tenant_id=1,
+                reference_number=f"CRC-RIVAL-{uuid4().hex[:8]}",
+                requirement_id=requirement_id,
+                due_date=due_date,
+                outcome=ComplianceRecordOutcome.COMPLETED,
+                completed_at=datetime(2026, 4, 2, 8, 0, tzinfo=timezone.utc),
+                check_passed=True,
+                notes="rival writer",
+                filing_status=ComplianceFilingStatus.NOT_FILED,
+                created_by_id=1,
+                updated_by_id=1,
+            )
+        )
+        await session.commit()
+
+
+@pytest.fixture
+def arm_rival_writer(monkeypatch):
+    """Arm a rival writer to land inside the window the race lives in.
+
+    The gap being exercised runs from the duplicate check to the INSERT, and both
+    are inside one service call, so the rival has to be committed while that call
+    is in flight. ``ReferenceNumberService.generate`` is the one awaited step in
+    between, which makes it the seam — the collision itself is left entirely to
+    the database.
+
+    What is simulated here is the timing, and only the timing. Under a real race
+    the rival commits at a moment nobody chooses; here it commits at a moment the
+    test chooses, so that the outcome is the same on every run. Everything the
+    assertion turns on — a committed rival row, the constraint, the error the
+    driver raises — is real.
+
+    Yields a callable taking the requirement id and returning a list that the
+    rival appends to, so a test can assert the race was genuinely provoked rather
+    than trusting that it was.
+    """
+    from src.domain.services.reference_number import ReferenceNumberService
+
+    original = ReferenceNumberService.generate.__func__
+
+    def _arm(requirement_id: int) -> list[int]:
+        landed: list[int] = []
+
+        async def _generate_after_rival_lands(cls, db, record_type, model_class, year=None):
+            if record_type == "compliance_record" and not landed:
+                landed.append(requirement_id)
+                await _land_competing_record(requirement_id, date.fromisoformat(DUE))
+            return await original(cls, db, record_type, model_class, year)
+
+        monkeypatch.setattr(
+            ReferenceNumberService,
+            "generate",
+            classmethod(_generate_after_rival_lands),
+        )
+        return landed
+
+    return _arm
+
+
+@pytest.mark.asyncio
+async def test_losing_a_completion_race_is_a_conflict_not_a_server_error(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+    arm_rival_writer,
+):
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+    landed = arm_rival_writer(requirement_id)
+
+    response = await _complete(client, superuser_auth_headers, requirement_id)
+
+    assert landed == [requirement_id], "the rival never landed; the race was not exercised"
+    assert response.status_code == 409, response.text
+
+
+@pytest.mark.asyncio
+async def test_the_refused_completion_names_the_occurrence_it_lost(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+    arm_rival_writer,
+):
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+    arm_rival_writer(requirement_id)
+
+    response = await _complete(client, superuser_auth_headers, requirement_id)
+    assert response.status_code == 409, response.text
+
+    body = response.json()
+    # Whoever is looking at the screen has to be able to tell "already done" from
+    # "your submission was lost", and the due date is what distinguishes them.
+    assert DUE in str(body), body
+    assert body["error"]["code"] == "DUPLICATE_ENTITY", body
+
+
+@pytest.mark.asyncio
+async def test_a_lost_completion_race_leaves_one_record_and_an_unmoved_schedule(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+    arm_rival_writer,
+):
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+    arm_rival_writer(requirement_id)
+
+    assert (await _complete(client, superuser_auth_headers, requirement_id)).status_code == 409
+
+    records = await _records_for(requirement_id)
+    assert len(records) == 1, [r.reference_number for r in records]
+    assert records[0].notes == "rival writer"
+
+    # The loser must not have advanced the schedule. It rolls forward once per
+    # occurrence closed, and only one was closed here — by the winner, whose
+    # write went straight to the table and left next_due_date alone.
+    detail = await client.get(
+        f"/api/v1/compliance-schedule/requirements/{requirement_id}",
+        headers=superuser_auth_headers,
+    )
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["next_due_date"] == DUE
+
+
+@pytest.mark.asyncio
+async def test_two_concurrent_completions_produce_one_record_and_no_server_error(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+):
+    """The unchoreographed version: two real requests, in flight together.
+
+    Which of the two paths refuses the loser — the duplicate check or the
+    constraint — depends on how the event loop interleaves them, so this test
+    deliberately asserts only what must hold either way. It is here because the
+    choreographed tests above pick the moment the rival lands, and something has
+    to check that the outcome survives when nobody picks it.
+    """
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+
+    first, second = await asyncio.gather(
+        _complete(client, superuser_auth_headers, requirement_id),
+        _complete(client, superuser_auth_headers, requirement_id),
+    )
+
+    statuses = sorted([first.status_code, second.status_code])
+    assert 500 not in statuses, (first.text, second.text)
+    assert statuses == [201, 409], (first.text, second.text)
+
+    records = await _records_for(requirement_id)
+    assert len(records) == 1, [r.reference_number for r in records]
+
+
+# ---------------------------------------------------------------------------
+# Retiring what is already retired
+# ---------------------------------------------------------------------------
+#
+# ``deactivate_requirement`` delegates to ``update_requirement``, which audits
+# the fields it changed. Setting is_active to false on a row where it is already
+# false changes nothing, so there is nothing to audit and the request returned
+# 200 having done and recorded nothing at all.
+#
+# Refused with 409 rather than returned as an idempotent success. Two reasons.
+# The first is consistency: this file's other "already in that state" case,
+# ``_assert_template_not_already_active``, is a 409, and a register where
+# activating twice conflicts but retiring twice quietly succeeds is harder to
+# predict than one where both refuse. The second is that a compliance register is
+# an evidence trail, and a 200 that leaves no audit row is the one outcome an
+# evidence trail cannot afford: it tells the caller a retirement happened at a
+# time the log will never be able to account for.
+
+
+@pytest.mark.asyncio
+async def test_retiring_an_already_retired_obligation_conflicts(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    superuser_auth_headers: dict,
+):
+    activate = await _activate(client, superuser_auth_headers, unique_template.template_key)
+    assert activate.status_code == 201, activate.text
+    requirement_id = activate.json()["id"]
+
+    first = await client.post(
+        f"/api/v1/compliance-schedule/requirements/{requirement_id}/deactivate",
+        headers=superuser_auth_headers,
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["is_active"] is False
+
+    second = await client.post(
+        f"/api/v1/compliance-schedule/requirements/{requirement_id}/deactivate",
+        headers=superuser_auth_headers,
+    )
+    assert second.status_code == 409, second.text
+    assert second.json()["error"]["code"] == "DUPLICATE_ENTITY", second.json()
+
+
+@pytest.mark.asyncio
+async def test_a_retirement_is_audited_exactly_once_however_often_it_is_asked_for(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    superuser_auth_headers: dict,
+):
+    activate = await _activate(client, superuser_auth_headers, unique_template.template_key)
+    assert activate.status_code == 201, activate.text
+    requirement_id = activate.json()["id"]
+
+    statuses = []
+    for _ in range(3):
+        response = await client.post(
+            f"/api/v1/compliance-schedule/requirements/{requirement_id}/deactivate",
+            headers=superuser_auth_headers,
+        )
+        statuses.append(response.status_code)
+
+    # One retirement happened, so exactly one 200 and exactly one audit row. Both
+    # assertions are needed: the count alone held before the fix as well, because
+    # the surplus attempts recorded nothing — while still answering 200, which is
+    # the half the count cannot see.
+    assert statuses == [200, 409, 409], statuses
+
+    retirements = await _retirement_audit_events(requirement_id)
+    assert len(retirements) == 1, [e.changed_fields for e in retirements]
+
+
+async def _retirement_audit_events(requirement_id: int) -> list:
+    """Audit rows recording an is_active change on one requirement.
+
+    Filtered on ``changed_fields`` rather than on the event type, because
+    ``AuditLogEntry`` has no event_type column: ``record_audit_event`` maps the
+    domain event onto ``action`` plus the changed field list, and the field list
+    is the part that distinguishes a retirement from any other update.
+    """
+    from src.domain.models.audit_log import AuditLogEntry
+    from src.infrastructure.database import async_session_maker
+
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(AuditLogEntry).where(
+                AuditLogEntry.entity_type == "compliance_requirement",
+                AuditLogEntry.entity_id == str(requirement_id),
+                AuditLogEntry.action == "update",
+            )
+        )
+        entries = list(result.scalars().all())
+
+    return [e for e in entries if "is_active" in (e.changed_fields or [])]
