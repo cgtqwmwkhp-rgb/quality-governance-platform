@@ -17,6 +17,7 @@ import {
 import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { RecordCompletionSheet } from './compliance/RecordCompletionSheet'
 import { RequirementFormDialog } from './compliance/RequirementFormDialog'
+import { RequirementLifecycleControls } from './compliance/RequirementLifecycleControls'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceScheduleDetail() {
@@ -110,9 +111,27 @@ export default function ComplianceScheduleDetail() {
                 </Button>
               </>
             )}
+            <RequirementLifecycleControls requirement={requirement} onChanged={() => void load()} />
           </div>
         </div>
       </div>
+
+      {!requirement.is_active && (
+        <div
+          className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+          data-testid="compliance-schedule-inactive-banner"
+        >
+          <p className="font-medium">
+            {t('compliance.schedule.inactive.banner_title', 'This obligation is retired')}
+          </p>
+          <p className="mt-1">
+            {t(
+              'compliance.schedule.inactive.banner_body',
+              'It is off the active register and generates no reminders. Its history below is unchanged. Reactivate it to put it back on the schedule.',
+            )}
+          </p>
+        </div>
+      )}
 
       {requirement.description && (
         <p
