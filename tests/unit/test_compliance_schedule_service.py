@@ -233,3 +233,122 @@ async def test_attach_evidence_missing_asset_fails_closed(db):
     service = ComplianceScheduleService(db)
     with pytest.raises(NotFoundError, match="Evidence"):
         await service.attach_evidence_to_record(55, tenant_id=1, evidence_asset_ids=[7, 8])
+
+
+# ---------------------------------------------------------------------------
+# Owner tenancy
+#
+# The owner is a notification recipient, not a label. The reminder sweep scopes
+# its admin fallback to the tenant but passes the owner through untouched, and
+# notifications are read back filtered by user alone — so an owner id belonging
+# to another tenant delivers one customer's obligation into another customer's
+# inbox. Location was already guarded this way; the owner never was.
+# ---------------------------------------------------------------------------
+
+
+def _template() -> ComplianceRequirementTemplate:
+    return ComplianceRequirementTemplate(
+        id=1,
+        template_key="fire-risk-assessment",
+        title="FRA",
+        taxonomy_id="HS",
+        frequency_months=12,
+        frequency_days=None,
+        anchor=ComplianceScheduleAnchor.SCHEDULE,
+        statutory=True,
+        is_active=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_activate_rejects_cross_tenant_owner(db):
+    # template hit, location skipped (None), owner miss
+    db.execute = AsyncMock(side_effect=[_result(_template()), _result(None)])
+    service = ComplianceScheduleService(db)
+    with pytest.raises(NotFoundError, match="User"):
+        await service.activate_catalogue_template(
+            "fire-risk-assessment",
+            tenant_id=1,
+            user_id=9,
+            owner_id=4242,
+        )
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_cross_tenant_owner(db):
+    # location skipped (None), owner miss
+    db.execute = AsyncMock(side_effect=[_result(None)])
+    service = ComplianceScheduleService(db)
+    with pytest.raises(NotFoundError, match="User"):
+        await service.create_requirement(
+            tenant_id=1,
+            user_id=9,
+            title="Bespoke obligation",
+            taxonomy_id="HS",
+            frequency_months=12,
+            next_due_date=date(2026, 9, 1),
+            owner_id=4242,
+        )
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_rejects_cross_tenant_owner(db):
+    requirement = ComplianceRequirement(
+        id=20,
+        tenant_id=1,
+        reference_number="CSR-2026-0020",
+        title="FRA",
+        taxonomy_id="HS",
+        frequency_months=12,
+        frequency_days=None,
+        anchor=ComplianceScheduleAnchor.SCHEDULE,
+        statutory=True,
+        next_due_date=date(2026, 9, 1),
+        is_active=True,
+        external_id="ext20",
+        owner_id=1,
+    )
+    # get_requirement, then owner miss
+    db.execute = AsyncMock(side_effect=[_result(requirement), _result(None)])
+    service = ComplianceScheduleService(db)
+    with pytest.raises(NotFoundError, match="User"):
+        await service.update_requirement(
+            20,
+            tenant_id=1,
+            user_id=9,
+            updates={"owner_id": 4242},
+        )
+    # The reassignment must not have been applied before the guard ran.
+    assert requirement.owner_id == 1
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_owner_guard_does_not_leak_whether_the_user_exists_elsewhere(db):
+    # A user who exists in another tenant and a user who does not exist at all
+    # must be indistinguishable from outside, which is why the query filters on
+    # tenant and the failure is a flat 404.
+    db.execute = AsyncMock(side_effect=[_result(None)])
+    service = ComplianceScheduleService(db)
+    with pytest.raises(NotFoundError) as exc:
+        await service._assert_owner_in_tenant(4242, tenant_id=1)
+    assert "4242" in str(exc.value)
+    assert "tenant" not in str(exc.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_owner_guard_is_a_no_op_for_an_unowned_obligation(db):
+    # Unowned is a legitimate state — the sweep falls back to the admin role —
+    # so the guard must not turn "no owner" into a 404.
+    db.execute = AsyncMock(side_effect=AssertionError("must not query for a null owner"))
+    service = ComplianceScheduleService(db)
+    await service._assert_owner_in_tenant(None, tenant_id=1)
+
+
+@pytest.mark.asyncio
+async def test_owner_guard_accepts_an_owner_in_the_same_tenant(db):
+    db.execute = AsyncMock(side_effect=[_result(7)])
+    service = ComplianceScheduleService(db)
+    await service._assert_owner_in_tenant(7, tenant_id=1)

@@ -24,6 +24,7 @@ from src.domain.models.compliance_schedule import (
 )
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
 from src.domain.models.location import Location
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.compliance_schedule_policy import Anchor, compute_next_due, derive_status
 from src.domain.services.reference_number import ReferenceNumberService
@@ -142,6 +143,40 @@ class ComplianceScheduleService:
                 code="ENTITY_NOT_FOUND",
             )
 
+    async def _assert_owner_in_tenant(
+        self,
+        owner_id: Optional[int],
+        *,
+        tenant_id: int,
+    ) -> None:
+        """Refuse an owner who does not belong to this tenant.
+
+        The owner is a notification recipient, not merely a label. The reminder
+        sweep passes ``requirement.owner_id`` through untouched while scoping its
+        admin fallback to the tenant, and the notification body carries the
+        obligation's reference number and title. Reading notifications is
+        filtered by user alone, so an owner id from another tenant delivers one
+        customer's obligation into another customer's inbox.
+
+        Location is already guarded this way; the owner never was.
+        """
+        if owner_id is None:
+            return
+        result = await self.db.execute(
+            select(User.id).where(
+                User.id == owner_id,
+                User.tenant_id == tenant_id,
+                User.is_active.is_(True),
+            )
+        )
+        if result.scalar_one_or_none() is None:
+            # Fail closed, matching the location precedent: do not disclose
+            # whether the user exists in some other tenant.
+            raise NotFoundError(
+                f"User {owner_id} not found",
+                code="ENTITY_NOT_FOUND",
+            )
+
     # ------------------------------------------------------------------
     # Catalogue
     # ------------------------------------------------------------------
@@ -171,6 +206,7 @@ class ComplianceScheduleService:
         """Materialise a catalogue template as a tenant requirement."""
         template = await self._get_template_by_key(template_key)
         await self._assert_location_in_tenant(location_id, tenant_id=tenant_id)
+        await self._assert_owner_in_tenant(owner_id, tenant_id=tenant_id)
 
         clock = _as_utc(now)
         due = next_due_date or clock.date()
@@ -286,6 +322,7 @@ class ComplianceScheduleService:
             raise ValidationError(f"invalid anchor: {anchor}", code="VALIDATION_ERROR")
 
         await self._assert_location_in_tenant(location_id, tenant_id=tenant_id)
+        await self._assert_owner_in_tenant(owner_id, tenant_id=tenant_id)
 
         return await self._create_requirement_row(
             tenant_id=tenant_id,
@@ -384,6 +421,8 @@ class ComplianceScheduleService:
         requirement = await self.get_requirement(requirement_id, tenant_id=tenant_id)
         if "location_id" in updates:
             await self._assert_location_in_tenant(updates["location_id"], tenant_id=tenant_id)
+        if "owner_id" in updates:
+            await self._assert_owner_in_tenant(updates["owner_id"], tenant_id=tenant_id)
 
         if "anchor" in updates and updates["anchor"] is not None:
             anchor = updates["anchor"]
