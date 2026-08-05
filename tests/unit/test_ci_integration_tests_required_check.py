@@ -162,3 +162,19 @@ def test_shard_coverage_upload_includes_hidden_dotfiles() -> None:
     assert (
         str(with_.get("if-no-files-found")) == "error"
     ), "coverage upload should fail the shard when the coverage file is missing"
+
+
+def test_aggregator_uses_eg05_fail_under_not_pyproject_70() -> None:
+    """Combined coverage must enforce EG-05 (43), not the full-suite 70 from pyproject."""
+    jobs = _load_jobs()
+    steps = jobs[AGGREGATOR_JOB_ID].get("steps") or []
+    combine = next(
+        (s for s in steps if isinstance(s, dict) and s.get("name") == "Combine coverage and enforce EG-05 floor"),
+        None,
+    )
+    assert combine is not None
+    script = str(combine.get("run") or "")
+    assert "--fail-under=43" in script, script
+    assert "coverage xml" in script and "--fail-under=0" in script, (
+        "coverage xml must disable pyproject fail_under=70 so EG-05 is the gate; " f"script={script!r}"
+    )

@@ -790,9 +790,11 @@ jobs:
           fi
           cp "${files[@]}" .
           coverage combine
-          # EG-05: maintained at 43% (actual integration coverage 43.48%; full-suite 70% target in pyproject.toml)
+          # EG-05: integration floor stays 43%. Do not use bare `coverage xml` here —
+          # it inherits pyproject fail_under=70 (full-suite target) and fails after a
+          # successful 47% combine. Keep the global 70 floor intact for other jobs.
+          coverage xml -o coverage.xml --fail-under=0
           coverage report --fail-under=43
-          coverage xml -o coverage.xml
 
       - name: Upload combined coverage reports
         uses: codecov/codecov-action@v4
