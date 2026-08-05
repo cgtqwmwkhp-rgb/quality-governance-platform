@@ -73,11 +73,6 @@ from src.domain.models.compliance_schedule import (
     ComplianceRequirementTemplate,
     ComplianceScheduleAnchor,
 )
-from src.domain.models.sso_provisioning import (
-    SSOProvisioningMatchBasis,
-    SSOProvisioningRequest,
-    SSOProvisioningStatus,
-)
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
@@ -265,6 +260,7 @@ from src.domain.models.safety_insight import (
     SafetyInsightTheme,
     SafetyInsightThemeCase,
 )
+from src.domain.models.sso_provisioning import SSOProvisioningMatchBasis, SSOProvisioningRequest, SSOProvisioningStatus
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.tenant import Tenant, TenantInvitation, TenantUser
 from src.domain.models.token_blacklist import TokenBlacklist
