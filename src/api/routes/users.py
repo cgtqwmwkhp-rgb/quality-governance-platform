@@ -22,7 +22,7 @@ from src.api.schemas.user import (
 from src.api.utils.errors import api_error
 from src.core.security import get_password_hash
 from src.domain.authz import describe_stored_permissions
-from src.domain.models.tenant import Tenant
+from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import Role, User
 from src.domain.services.feature_flag_service import FeatureFlagService
 
@@ -172,6 +172,37 @@ async def list_users(
     )
 
 
+async def _resolve_roles_for_tenant(db: DbSession, role_ids: list[int], tenant_id: int) -> list[Role]:
+    """Load the requested roles, refusing any that belong to a different tenant.
+
+    ``Role.name`` is globally unique and some authorisation reads role *names* without
+    re-checking tenancy — ``routes/engineers.py:_is_workforce_manager`` treats any role
+    named ``admin`` or ``supervisor`` as workforce management. Assigning one organisation's
+    ``supervisor`` row to another organisation's user would therefore grant authority in
+    the wrong place. A role with a NULL ``tenant_id`` is global and stays assignable.
+    """
+    result = await db.execute(select(Role).where(Role.id.in_(role_ids)))
+    roles = list(result.scalars().all())
+
+    missing = sorted(set(role_ids) - {role.id for role in roles})
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, f"Unknown role ids: {missing}"),
+        )
+
+    foreign = sorted(role.id for role in roles if role.tenant_id is not None and role.tenant_id != tenant_id)
+    if foreign:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                f"Roles {foreign} belong to a different organisation and cannot be assigned",
+            ),
+        )
+    return roles
+
+
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
@@ -213,33 +244,37 @@ async def create_user(
 
     # Assign roles if provided
     if user_data.role_ids:
-        result = await db.execute(select(Role).where(Role.id.in_(user_data.role_ids)))
-        roles = result.scalars().all()
+        roles = await _resolve_roles_for_tenant(db, list(user_data.role_ids), resolved_tenant_id)
         user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-001
 
     db.add(user)
+    await db.flush()
+
+    # Tenancy is recorded in two places and both are read: ``users.tenant_id`` is what
+    # ``_resolve_user_tenant_context`` admits a request on, while ``tenant_users`` is what
+    # the tenant member list reports. Writing only one leaves the two disagreeing, which
+    # is how accounts end up admitted but invisible to the organisation that owns them.
+    db.add(TenantUser(tenant_id=resolved_tenant_id, user_id=user.id, is_active=True, is_primary=True))
 
     # Best-in-class: Person record always exists for a login seat (never writes PAMS).
-    if user.tenant_id is not None:
-        from src.domain.services.engineer_user_link_service import ensure_engineer_for_user_async
+    from src.domain.services.engineer_user_link_service import ensure_engineer_for_user_async
 
-        await db.flush()
-        try:
-            await ensure_engineer_for_user_async(db, user, tenant_id=user.tenant_id)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=api_error(ErrorCode.VALIDATION_ERROR, str(exc)),
-            ) from exc
-        except IntegrityError as exc:
-            logger.warning("ensure_engineer_for_user failed on create user=%s", normalized_email, exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=api_error(
-                    ErrorCode.VALIDATION_ERROR,
-                    "Unable to provision workforce person record for this user",
-                ),
-            ) from exc
+    try:
+        await ensure_engineer_for_user_async(db, user, tenant_id=resolved_tenant_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, str(exc)),
+        ) from exc
+    except IntegrityError as exc:
+        logger.warning("ensure_engineer_for_user failed on create user=%s", normalized_email, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Unable to provision workforce person record for this user",
+            ),
+        ) from exc
 
     await db.commit()
     # Re-load with roles: async lazy-load of relationships after refresh → MissingGreenlet 500 (ACT-051).

@@ -49,7 +49,9 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
             return _FakeResult(None)
         if db.execute.await_count == 2:
             return _FakeResult([role])
-        created = db.add.call_args.args[0]
+        # The route now adds a tenant membership row too, so address the User positionally
+        # rather than taking whatever happened to be added last.
+        created = db.add.call_args_list[0].args[0]
         created.id = 101
         created.created_at = now
         created.updated_at = now
@@ -79,7 +81,7 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
         current_user,
     )
 
-    created_user = db.add.call_args.args[0]
+    created_user = db.add.call_args_list[0].args[0]
     assert created_user.email == "sso.user@example.com"
     assert created_user.hashed_password == ""
     assert created_user.roles[0].name == "manager"
