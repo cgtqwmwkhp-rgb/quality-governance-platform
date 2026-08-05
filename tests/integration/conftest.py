@@ -466,6 +466,21 @@ async def _seed_default_data():
         async with engine.begin() as conn:
             await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
             await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 2))"))
+            # Explicit id=1 inserts (e.g. get_or_create_default_template) leave the serial
+            # behind; without this, the next ORM insert collides on investigation_templates_pkey.
+            # Same class of hazard for audit_templates when tests mix API creates and ORM seeds.
+            await conn.execute(
+                text(
+                    "SELECT setval('investigation_templates_id_seq', "
+                    "GREATEST(COALESCE((SELECT MAX(id) FROM investigation_templates), 1), 1))"
+                )
+            )
+            await conn.execute(
+                text(
+                    "SELECT setval('audit_templates_id_seq', "
+                    "GREATEST(COALESCE((SELECT MAX(id) FROM audit_templates), 1), 1))"
+                )
+            )
 
     yield
 

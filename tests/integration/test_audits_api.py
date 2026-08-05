@@ -82,6 +82,7 @@ class TestAuditsAPI:
                 category="Safety",
                 audit_type="inspection",
                 created_by_id=test_user.id,
+                tenant_id=test_user.tenant_id or 1,
                 reference_number=generate_test_reference("TPL"),
             )
             for i in range(1, 4)
@@ -570,6 +571,7 @@ class TestAuditsAPI:
                 category="Safety",
                 audit_type="inspection",
                 created_by_id=test_user.id,
+                tenant_id=test_user.tenant_id or 1,
                 reference_number=generate_test_reference("TPL"),
             ),
             AuditTemplate(
@@ -577,6 +579,7 @@ class TestAuditsAPI:
                 category="Safety",
                 audit_type="inspection",
                 created_by_id=test_user.id,
+                tenant_id=test_user.tenant_id or 1,
                 reference_number=generate_test_reference("TPL"),
             ),
             AuditTemplate(
@@ -584,6 +587,7 @@ class TestAuditsAPI:
                 category="Quality",
                 audit_type="audit",
                 created_by_id=test_user.id,
+                tenant_id=test_user.tenant_id or 1,
                 reference_number=generate_test_reference("TPL"),
             ),
         ]
