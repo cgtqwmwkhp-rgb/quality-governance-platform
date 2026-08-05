@@ -688,8 +688,11 @@ jobs:
         with:
           name: coverage-integration-${{ matrix.shard }}
           path: .coverage.shard${{ matrix.shard }}
+          # Dotfiles are omitted unless this is set — without it the aggregator
+          # sees zero coverage artifacts and fails EG-05 combine.
+          include-hidden-files: true
           retention-days: 7
-          if-no-files-found: warn
+          if-no-files-found: error
         if: always()
 
       - name: Upload shard JUnit XML
@@ -781,6 +784,8 @@ jobs:
           files=(coverage-shards/.coverage.*)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "::error::No shard coverage data to combine"
+            echo "Downloaded tree:"
+            find coverage-shards -type f -print 2>/dev/null || echo "(coverage-shards missing)"
             exit 1
           fi
           cp "${files[@]}" .

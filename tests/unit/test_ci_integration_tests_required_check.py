@@ -139,3 +139,26 @@ def test_integration_tests_aggregator_has_no_continue_on_error() -> None:
     assert not re.search(
         r"^        continue-on-error:\s*true\s*$", m.group(1), re.M
     ), "continue-on-error inside integration-tests trips the Stage 2.0 covenant"
+
+
+def test_shard_coverage_upload_includes_hidden_dotfiles() -> None:
+    """upload-artifact omits .coverage.* unless include-hidden-files is true."""
+    jobs = _load_jobs()
+    shard = jobs[SHARD_JOB_ID]
+    steps = shard.get("steps") or []
+    upload = None
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        if step.get("name") == "Upload shard coverage data":
+            upload = step
+            break
+    assert upload is not None, "missing Upload shard coverage data step"
+    with_ = upload.get("with") or {}
+    assert with_.get("include-hidden-files") is True, (
+        "coverage upload must set include-hidden-files: true or .coverage.shard* "
+        f"artifacts are silently dropped; with={with_!r}"
+    )
+    assert str(with_.get("if-no-files-found")) == "error", (
+        "coverage upload should fail the shard when the coverage file is missing"
+    )
