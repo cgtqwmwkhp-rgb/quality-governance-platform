@@ -574,7 +574,7 @@ describe('myTrainingSummary', () => {
       row({ course_display_name: 'GDPR', status: 'overdue', qgp_due_on: iso(-1) }),
       row({ course_display_name: 'DSE', status: 'due_soon', qgp_due_on: iso(5) }),
     ]
-    const summary = myTrainingSummary(rows)
+    const summary = myTrainingSummary(rows, TODAY)
     expect(summary.total).toBe(3)
     expect(summary.okCount).toBe(2) // compliant + due_soon
     expect(summary.nextDue?.course_display_name).toBe('GDPR')
@@ -585,8 +585,25 @@ describe('myTrainingSummary', () => {
       row({ course_display_name: 'DSE', status: 'overdue', qgp_due_on: iso(-400) }),
       row({ course_display_name: 'Fire Safety', status: 'missing', qgp_due_on: iso(15) }),
     ]
-    const summary = myTrainingSummary(rows)
+    const summary = myTrainingSummary(rows, TODAY)
     expect(summary.nextDue?.course_display_name).toBe('Fire Safety')
     expect(summary.nextDue?.kind).toBe('next')
+  })
+
+  it('classifies against the date it is given, not the wall clock', () => {
+    // The PX-309 test above builds its dates from a frozen TODAY but the function
+    // read `new Date()`, so once the real date passed TODAY + 15 days a future
+    // obligation was classified 'most_overdue' and the assertion failed on the
+    // calendar rather than on the behaviour. Anchoring the test is only half the
+    // fix; this is what stops the parameter being ignored again.
+    const rows = [row({ course_display_name: 'Fire Safety', status: 'missing', qgp_due_on: iso(15) })]
+
+    const asOfBefore = new Date(TODAY)
+    asOfBefore.setDate(asOfBefore.getDate() + 1)
+    expect(myTrainingSummary(rows, asOfBefore).nextDue?.kind).toBe('next')
+
+    const asOfAfter = new Date(TODAY)
+    asOfAfter.setDate(asOfAfter.getDate() + 400)
+    expect(myTrainingSummary(rows, asOfAfter).nextDue?.kind).toBe('most_overdue')
   })
 })
