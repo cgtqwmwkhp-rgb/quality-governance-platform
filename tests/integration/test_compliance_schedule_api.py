@@ -200,8 +200,7 @@ async def test_create_with_due_overrides(
 # raise on the second reader.
 
 
-@pytest.fixture
-async def unique_template(test_session, request):
+async def _seed_template(test_session) -> ComplianceRequirementTemplate:
     template = ComplianceRequirementTemplate(
         tenant_id=None,
         template_key=f"dup-{uuid4().hex[:12]}",
@@ -219,6 +218,11 @@ async def unique_template(test_session, request):
     await test_session.commit()
     await test_session.refresh(template)
     return template
+
+
+@pytest.fixture
+async def unique_template(test_session):
+    return await _seed_template(test_session)
 
 
 async def _activate(client, headers, key, **body):
@@ -255,11 +259,22 @@ async def test_a_refused_duplicate_leaves_exactly_one_obligation(
     enable_compliance_schedule,
     unique_template,
     superuser_auth_headers: dict,
+    test_session,
 ):
     key = unique_template.template_key
     first = await _activate(client, superuser_auth_headers, key)
     assert first.status_code == 201
     assert (await _activate(client, superuser_auth_headers, key)).status_code == 409
+
+    # A second, different template that happens to share the title. This is here
+    # so the assertion below has to be scoped by template rather than by title:
+    # without a confounding row the two are indistinguishable on SQLite, which
+    # the harness wipes between tests, and the test would only fail on
+    # PostgreSQL, where rows persist across a session. It did exactly that.
+    other = await _seed_template(test_session)
+    assert (
+        await _activate(client, superuser_auth_headers, other.template_key)
+    ).status_code == 201
 
     listing = await client.get(
         "/api/v1/compliance-schedule/requirements",
@@ -267,10 +282,15 @@ async def test_a_refused_duplicate_leaves_exactly_one_obligation(
         params={"page_size": 100},
     )
     assert listing.status_code == 200
-    # Scoped by template rather than counting the whole register, which other
-    # tests in this session may have added to on PostgreSQL.
-    same = [i for i in listing.json()["items"] if i["title"] == unique_template.title]
-    assert len(same) == 1
+    items = listing.json()["items"]
+
+    same_template = [i for i in items if i["template_id"] == unique_template.id]
+    assert len(same_template) == 1
+
+    # The confounder is genuinely present, so the scoping above is doing work
+    # rather than passing by coincidence.
+    same_title = [i for i in items if i["title"] == unique_template.title]
+    assert len(same_title) >= 2
 
 
 @pytest.mark.asyncio
