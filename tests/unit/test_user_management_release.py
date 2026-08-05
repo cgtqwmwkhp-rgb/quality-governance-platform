@@ -39,6 +39,9 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
         add=Mock(),
         commit=AsyncMock(),
         refresh=AsyncMock(),
+        flush=AsyncMock(),
+        # Tenant existence lookup in _resolve_new_user_tenant.
+        scalar=AsyncMock(return_value=1),
     )
 
     async def _execute(_query):
@@ -53,8 +56,16 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
         return _FakeResult(created)
 
     db.execute = AsyncMock(side_effect=_execute)
-    current_user = types.SimpleNamespace(id=1, email="admin@example.com", is_superuser=True)
+    # A real creating admin always carries a tenant; a tenant-less one is now refused.
+    current_user = types.SimpleNamespace(id=1, email="admin@example.com", is_superuser=True, tenant_id=1)
     monkeypatch.setattr("src.api.routes.users._ensure_user_management_enabled", AsyncMock())
+    # Person provisioning now runs (it was skipped while tenant_id was NULL). It has its
+    # own integration cover; stub it here so this test keeps asserting only SSO password
+    # handling and its exact DB round-trip count.
+    monkeypatch.setattr(
+        "src.domain.services.engineer_user_link_service.ensure_engineer_for_user_async",
+        AsyncMock(),
+    )
 
     await create_user(
         UserCreate(
