@@ -44,7 +44,9 @@ def test_it_runs_on_a_clock_not_only_on_a_deploy(parsed: dict) -> None:
     GitHub workflow files.
     """
     triggers = parsed.get("on", parsed.get(True))
-    assert "schedule" in triggers, "without a schedule this can only report when someone asks, which is the gap it exists to close"
+    assert (
+        "schedule" in triggers
+    ), "without a schedule this can only report when someone asks, which is the gap it exists to close"
     assert triggers["schedule"], "schedule is declared but empty"
 
 
@@ -69,9 +71,9 @@ def test_a_recent_commit_is_not_reported_as_drift(raw: str) -> None:
     that reports that is indistinguishable from one that is broken.
     """
     assert "AGE_MINUTES" in raw and "GRACE_MINUTES" in raw, "no grace window, so this fires on every merge"
-    assert '"$AGE_MINUTES" -lt "$GRACE_MINUTES"' in raw, (
-        "the grace window is declared but not compared, so it cannot suppress anything"
-    )
+    assert (
+        '"$AGE_MINUTES" -lt "$GRACE_MINUTES"' in raw
+    ), "the grace window is declared but not compared, so it cannot suppress anything"
 
 
 def test_the_grace_path_does_not_set_the_failure_flag(raw: str) -> None:
@@ -93,9 +95,9 @@ def test_an_unreachable_environment_is_not_called_drift(raw: str) -> None:
 def test_it_fails_the_run_rather_than_only_logging(raw: str) -> None:
     """Today's lesson twice over: a green tick hid a real problem both times."""
     assert "::error title=" in raw, "nothing surfaces outside the log"
-    assert raw.rstrip().endswith("echo \"No drift: every environment is serving main.\""), (
-        "the success path should be the last thing in the script, after the failure exit"
-    )
+    assert raw.rstrip().endswith(
+        'echo "No drift: every environment is serving main."'
+    ), "the success path should be the last thing in the script, after the failure exit"
     assert "exit 1" in raw
 
 
@@ -108,6 +110,6 @@ def test_missing_secrets_are_a_misconfiguration_not_a_silent_pass(raw: str) -> N
 def test_it_does_not_stop_at_the_first_drifted_environment(raw: str) -> None:
     """Staging being behind must not hide production being behind."""
     check_body = raw.split("check_env() {", 1)[1].split("\n          }", 1)[0]
-    assert "exit 1" not in check_body, (
-        "check_env exits on the first problem, so a drifted staging would mask production"
-    )
+    assert (
+        "exit 1" not in check_body
+    ), "check_env exits on the first problem, so a drifted staging would mask production"
