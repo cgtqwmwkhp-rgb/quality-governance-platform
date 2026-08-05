@@ -28,6 +28,25 @@ export function statusChipClass(status: ComplianceStatus | null | undefined): st
   }
 }
 
+/** Who an obligation belongs to, as far as this page can tell without a user lookup. */
+export type Ownership = 'you' | 'other' | 'unassigned'
+
+/**
+ * An unowned obligation is reported as such rather than glossed over: it is the
+ * case where reminders fall back to the admin role, and where they reach nobody
+ * at all if no one holds it.
+ *
+ * A signed-out or unidentifiable caller yields 'other', never 'you' — the page
+ * must not claim an obligation is yours when it cannot tell who you are.
+ */
+export function ownershipOf(
+  ownerId: number | null | undefined,
+  currentUserId: number | null,
+): Ownership {
+  if (ownerId === null || ownerId === undefined) return 'unassigned'
+  return currentUserId !== null && ownerId === currentUserId ? 'you' : 'other'
+}
+
 export function deriveStatusFromDue(
   nextDue: string | null | undefined,
   now: Date = new Date(),

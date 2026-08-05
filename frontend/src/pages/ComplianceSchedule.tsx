@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { CalendarClock, Plus } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { ErrorState } from '../components/ui/async'
+import { getCurrentUserId } from '../utils/auth'
 import { complianceScheduleApi, getApiErrorMessage } from '../api/client'
 import type {
   CatalogueTemplate,
@@ -11,7 +12,7 @@ import type {
   ComplianceScheduleStats,
   ComplianceStatus,
 } from '../api/complianceScheduleClient'
-import { statusChipClass, statusLabel } from './complianceScheduleHelpers'
+import { ownershipOf, statusChipClass, statusLabel, type Ownership } from './complianceScheduleHelpers'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceSchedule() {
@@ -23,6 +24,13 @@ export default function ComplianceSchedule() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activating, setActivating] = useState<string | null>(null)
+  const currentUserId = useMemo(() => getCurrentUserId(), [])
+
+  const ownershipLabel = (ownership: Ownership): string => {
+    if (ownership === 'you') return t('compliance.schedule.owner.you', 'Owned by you')
+    if (ownership === 'other') return t('compliance.schedule.owner.other', 'Owned by someone else')
+    return t('compliance.schedule.owner.unassigned', 'Unassigned')
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -63,6 +71,11 @@ export default function ComplianceSchedule() {
       nextDue.setUTCMonth(nextDue.getUTCMonth() + 1)
       await complianceScheduleApi.activateCatalogue(key, {
         next_due_date: nextDue.toISOString().slice(0, 10),
+        // An obligation with no owner falls back to whoever holds the admin role,
+        // and in an estate where nobody holds it the reminder reaches no one at
+        // all. Defaulting to the person activating it means someone is always
+        // told; the row shows who, so it can be reassigned rather than assumed.
+        owner_id: currentUserId ?? undefined,
       })
       toast.success(t('compliance.schedule.activate.success', 'Requirement activated'))
       await load()
@@ -170,7 +183,10 @@ export default function ComplianceSchedule() {
                       </Link>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {item.reference_number} · {t('compliance.schedule.due', 'Due')}{' '}
-                        {item.next_due_date}
+                        {item.next_due_date} ·{' '}
+                        <span data-testid={`compliance-schedule-owner-${item.id}`}>
+                          {ownershipLabel(ownershipOf(item.owner_id, currentUserId))}
+                        </span>
                       </div>
                     </div>
                     <span

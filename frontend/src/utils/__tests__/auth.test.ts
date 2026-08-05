@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   clearTokens,
+  getCurrentUserId,
   getPlatformToken,
   getTokenExpirySeconds,
   getUserRole,
@@ -112,5 +113,42 @@ describe('auth token expiry helpers', () => {
 
   it('treats a malformed token as needing refresh', () => {
     expect(shouldRefreshToken('not-a-jwt')).toBe(true)
+  })
+})
+
+describe('getCurrentUserId', () => {
+  beforeEach(() => {
+    clearTokens()
+  })
+
+  it('reads the numeric user id from the sub claim', () => {
+    // The backend serialises sub with str(user.id), so the claim is a string
+    // even though the column is an integer.
+    setAdminToken(createToken({ sub: '42' }))
+    expect(getCurrentUserId()).toBe(42)
+  })
+
+  it('accepts a numeric sub as well', () => {
+    setAdminToken(createToken({ sub: 42 }))
+    expect(getCurrentUserId()).toBe(42)
+  })
+
+  it('returns null rather than a fabricated id when there is no token', () => {
+    expect(getCurrentUserId()).toBeNull()
+  })
+
+  it('returns null for a token with no sub claim', () => {
+    setAdminToken(createToken({ roles: ['admin'] }))
+    expect(getCurrentUserId()).toBeNull()
+  })
+
+  it('returns null for a sub that is not a number, rather than NaN', () => {
+    setAdminToken(createToken({ sub: 'not-a-number' }))
+    expect(getCurrentUserId()).toBeNull()
+  })
+
+  it('returns null for a malformed token', () => {
+    setAdminToken('not-a-jwt')
+    expect(getCurrentUserId()).toBeNull()
   })
 })
