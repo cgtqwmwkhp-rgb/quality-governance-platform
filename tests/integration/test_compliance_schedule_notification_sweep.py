@@ -6,11 +6,13 @@ nothing, that a dry run writes nothing, that a closed module reads nothing, and 
 the one that matters most -- that an administrator belonging to no tenant is not
 told about a tenant's obligations.
 
-That last test exists because the precedent sweep this one replaces has exactly that
-defect. ``safety_asset_expiry_tasks`` admits any admin whose ``tenant_id`` is NULL
-for every row in every tenant, so such an admin receives notifications naming other
-customers' assets. A test that only checked "the owner got notified" would pass
-against that bug.
+That last test exists because the precedent sweep this one replaces shipped with exactly
+that defect. ``safety_asset_expiry_tasks`` admitted any admin whose ``tenant_id`` is NULL
+for every row in every tenant, so such an admin received notifications naming other
+customers' assets. A test that only checked "the owner got notified" would pass against
+that bug, which is why this file has the test below;
+``tests/integration/test_safety_asset_expiry_sweep.py`` is now its counterpart for the
+sweep that had the defect.
 
 Rows are removed explicitly in a finally: the integration conftest only calls
 ``drop_all`` on SQLite, so on PostgreSQL anything committed here survives into every
@@ -311,7 +313,7 @@ async def test_a_soft_time_limit_returns_partial_counters_instead_of_dying(
 
 
 async def test_an_admin_belonging_to_no_tenant_is_never_a_recipient(test_session, test_user, test_tenant):
-    """The cross-tenant leak guard. This is the test the precedent sweep fails.
+    """The cross-tenant leak guard. This is the test the precedent sweep used to fail.
 
     A NULL-tenant admin exists in real deployments, and the obvious implementation
     -- ``tenant_id IS NULL OR tenant_id = :tenant`` -- hands them every tenant's

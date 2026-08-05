@@ -423,7 +423,9 @@ what you just removed.
 
 ## 8. Tenant isolation
 
-Worth stating because the closest precedent in this repository gets it wrong.
+Worth stating because the closest precedent in this repository got it wrong, and shipped
+that way: `safety_asset_expiry_tasks` admitted NULL-tenant admins for every tenant until
+its own leak fix. Treat the rules below as the pattern a new sweep copies.
 
 - **Admin recipients are scoped strictly to the tenant.** Admins are selected with
   `User.tenant_id == tenant_id` and nothing else. There is no NULL-tenant fallback, so no

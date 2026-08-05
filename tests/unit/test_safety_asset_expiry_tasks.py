@@ -9,6 +9,7 @@ import pytest
 
 from src.infrastructure.tasks.safety_asset_expiry_tasks import (
     action_url_for_asset,
+    admin_user_ids_for_tenant,
     build_notification_kwargs,
     classify_expiry_band,
     dedupe_key,
@@ -64,6 +65,22 @@ def test_recipient_user_ids_owner_plus_admins_deduped():
     assert recipient_user_ids(owner_user_id=7, admin_user_ids=[7, 9, 9, 11]) == [7, 9, 11]
     assert recipient_user_ids(owner_user_id=None, admin_user_ids=[3]) == [3]
     assert recipient_user_ids(owner_user_id=None, admin_user_ids=[]) == []
+
+
+def test_admin_lookup_for_a_tenantless_asset_issues_no_query_at_all():
+    """The guard must short-circuit, not reach the database.
+
+    Without it, ``User.tenant_id == None`` renders as ``IS NULL`` and a
+    tenant-less asset is handed every tenant-less user -- which is the
+    cross-tenant leak facing the other way. Asserting on the returned list alone
+    would pass against that, because the SQL is what is wrong.
+    """
+
+    class _RefusesToBeQueried:
+        def execute(self, *_args, **_kwargs):
+            raise AssertionError("a tenant-less asset must not be turned into an admin query")
+
+    assert admin_user_ids_for_tenant(_RefusesToBeQueried(), None) == []
 
 
 def test_notification_exists_for_band_matches_band_or_dedupe_key():

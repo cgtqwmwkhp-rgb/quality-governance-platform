@@ -9,17 +9,17 @@ hand, which is also how the first run in any environment should happen -- see
 What this task is careful about, and why
 ----------------------------------------
 Four things here are not incidental, and the closest precedent in this repository
-(``safety_asset_expiry_tasks``) gets three of them wrong. They are called out so
-the next person to copy a sweep copies this one.
+(``safety_asset_expiry_tasks``) shipped to production getting three of them wrong.
+They are called out so the next person to copy a sweep copies this one.
 
 **Tenant isolation is explicit, not inherited.** Admin recipients are selected with
-``User.tenant_id == tenant_id`` and nothing else. The precedent additionally admits
+``User.tenant_id == tenant_id`` and nothing else. The precedent additionally admitted
 any admin whose ``tenant_id`` is NULL, for *every* row in *every* tenant, so such an
-admin receives notifications naming other customers' assets. There is no band of
-this sweep where telling one tenant's administrator about another tenant's fire risk
-assessment is correct, so a NULL-tenant user is simply not a recipient. If
-cross-tenant oversight is ever wanted it needs its own deliberate design, not a
-NULL check.
+admin received notifications naming other customers' assets; it now resolves
+recipients the way this module does. There is no band of this sweep where telling one
+tenant's administrator about another tenant's fire risk assessment is correct, so a
+NULL-tenant user is simply not a recipient. If cross-tenant oversight is ever wanted
+it needs its own deliberate design, not a NULL check.
 
 **The GUC is bound per tenant.** Today the worker connects as a role with
 ``BYPASSRLS`` -- measured, not assumed -- so an unbound sweep sees every tenant and
@@ -165,8 +165,8 @@ async def _active_tenant_ids(session: "AsyncSession") -> Sequence[int]:
 async def _admin_user_ids(session: "AsyncSession", tenant_id: int) -> list[int]:
     """Active, non-deleted admins **of this tenant**.
 
-    No NULL-tenant fallback. See the module docstring: that fallback is the
-    cross-tenant leak in the precedent sweep.
+    No NULL-tenant fallback. See the module docstring: that fallback was the
+    cross-tenant leak in the precedent sweep, which now mirrors this query.
     """
     from sqlalchemy import select
 
