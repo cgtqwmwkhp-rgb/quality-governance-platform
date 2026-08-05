@@ -5,6 +5,27 @@ due_90 / overdue) from ``expiry_date`` and optionally ``next_service_due``,
 then creates in-app notifications for the owner plus a configurable admin
 role. Notifications deep-link to ``/safety-assets/:id`` and are deduped per
 (user, asset, band).
+
+Tenant isolation
+----------------
+Admin recipients are resolved with ``User.tenant_id == asset.tenant_id`` and
+nothing else, matching ``_admin_user_ids`` in
+``compliance_schedule_notification_tasks``. This sweep previously admitted any
+admin whose ``tenant_id`` was NULL for *every* asset in *every* tenant, so a
+NULL-tenant user -- a service or ETL account, which is the usual reason a user
+has no tenant -- received notifications naming other customers' assets by
+number and name. There is no band of this sweep where telling one customer's
+administrator about another customer's fire extinguisher is correct, so a
+NULL-tenant user is simply not a recipient. Cross-tenant oversight, if it is
+ever wanted, needs its own deliberate design rather than a NULL check.
+
+An asset carrying no ``tenant_id`` gets no admin recipients for the mirror-image
+reason: it names no tenant whose administrators could be told about it. Its
+owner, if it has one, is still notified.
+
+Soft-deleted admins are excluded too. ``is_active`` and ``deleted_at`` answer
+different questions, and only the first was being asked, so a deleted account
+kept receiving expiry mail.
 """
 
 from __future__ import annotations
@@ -36,6 +57,7 @@ class _ExpirySweepResults(TypedDict):
     in_band: int
     notifications_created: int
     notifications_skipped_dedupe: int
+    recipients_unresolved: int
     admin_role: str
 
 
@@ -178,6 +200,40 @@ def notification_exists_for_band(
     return False
 
 
+def admin_user_ids_for_tenant(db: Any, tenant_id: Optional[int]) -> list[int]:
+    """Active, non-deleted admins **of this tenant**, and nobody else.
+
+    Deliberately not a helper that takes pre-fetched rows and filters them in
+    Python: the previous shape did exactly that, and the ``tenant_id is None or
+    tenant_id == asset.tenant_id`` predicate it applied is the leak. Expressing
+    the tenancy in the ``WHERE`` clause means a NULL-tenant user cannot be
+    admitted by an oversight in the filtering, because they are never fetched.
+
+    Returns nothing for ``tenant_id=None``. ``User.tenant_id == None`` would
+    render as ``IS NULL`` in SQL and hand a tenant-less asset every tenant-less
+    user, which is the same defect wearing the other direction.
+    """
+    from sqlalchemy import select
+
+    from src.domain.models.user import Role, User
+
+    if tenant_id is None:
+        return []
+
+    rows = db.execute(
+        select(User.id)
+        .join(User.roles)
+        .where(
+            Role.name == _admin_role_name(),
+            User.tenant_id == tenant_id,
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.id)
+    )
+    return list(rows.scalars().all())
+
+
 def recipient_user_ids(
     *,
     owner_user_id: Optional[int],
@@ -241,13 +297,12 @@ def check_safety_asset_expiry(self) -> _ExpirySweepResults:
 
     Runs daily via Celery beat. Dedupes per (user, asset, band) so repeat runs
     do not spam. Admin recipients come from ``SAFETY_ASSET_EXPIRY_ADMIN_ROLE``
-    (default: ``admin``).
+    (default: ``admin``) and are scoped to the asset's own tenant.
     """
     from sqlalchemy import or_, select
 
     from src.domain.models.asset import Asset, AssetCategory, AssetStatus, AssetType
     from src.domain.models.notification import Notification
-    from src.domain.models.user import Role, User
     from src.infrastructure.database import SessionLocal
 
     now = datetime.now(timezone.utc)
@@ -256,6 +311,7 @@ def check_safety_asset_expiry(self) -> _ExpirySweepResults:
         "in_band": 0,
         "notifications_created": 0,
         "notifications_skipped_dedupe": 0,
+        "recipients_unresolved": 0,
         "admin_role": _admin_role_name(),
     }
 
@@ -279,15 +335,11 @@ def check_safety_asset_expiry(self) -> _ExpirySweepResults:
             )
             results["assets_scanned"] = len(assets)
 
-            admin_role = _admin_role_name()
-            admin_rows = db.execute(
-                select(User.id, User.tenant_id)
-                .join(User.roles)
-                .where(
-                    Role.name == admin_role,
-                    User.is_active.is_(True),
-                )
-            ).all()
+            # Resolved per tenant and remembered, rather than one query for every
+            # admin everywhere: the tenancy then lives in the WHERE clause, where it
+            # cannot be widened by a filtering mistake. Populated lazily so a run
+            # over assets in one tenant costs one recipient query, not one per asset.
+            admin_ids_by_tenant: dict[Optional[int], list[int]] = {}
 
             for asset in assets:
                 due_at = effective_due_date(asset.expiry_date, asset.next_service_due)
@@ -296,16 +348,20 @@ def check_safety_asset_expiry(self) -> _ExpirySweepResults:
                     continue
                 results["in_band"] += 1
 
-                admin_ids = [
-                    admin_id
-                    for admin_id, admin_tenant_id in admin_rows
-                    if admin_tenant_id is None or admin_tenant_id == asset.tenant_id
-                ]
+                if asset.tenant_id not in admin_ids_by_tenant:
+                    admin_ids_by_tenant[asset.tenant_id] = admin_user_ids_for_tenant(db, asset.tenant_id)
+
                 recipients = recipient_user_ids(
                     owner_user_id=asset.owner_user_id,
-                    admin_user_ids=admin_ids,
+                    admin_user_ids=admin_ids_by_tenant[asset.tenant_id],
                 )
                 if not recipients:
+                    # An asset that is due and that nobody can be told about. Counted
+                    # rather than skipped silently, because the whole register being
+                    # unowned in a tenant with no admins is invisible otherwise: the
+                    # run reports success having notified nobody, which is what it has
+                    # been doing in production.
+                    results["recipients_unresolved"] += 1
                     continue
 
                 existing = (
