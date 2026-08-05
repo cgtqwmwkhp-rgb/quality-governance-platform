@@ -56,4 +56,3 @@ def test_staging_concurrency_does_not_cancel_in_progress(parsed: dict) -> None:
         "LIVE on a SHA whose staging run never concludes success, so production "
         "fail-closes and never promotes via the governed path"
     )
-
