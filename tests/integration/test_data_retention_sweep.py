@@ -50,6 +50,7 @@ from tests.integration import _alembic_only_schema as harness
 
 PUSH_RETENTION_DAYS = 90
 
+
 #: A rule that cannot possibly succeed, used to keep the isolation property under test.
 #:
 #: This module originally leaned on two *real* broken rules for that -- a wrong column on
@@ -264,9 +265,11 @@ class TestThePushNotificationPolicyActuallyDeletes:
         assert "incidents" not in result["purged"], "a policy-governed table reached the DELETE path"
 
         with retention_db.connect() as conn:
-            survivors = conn.execute(
-                sa.text("SELECT reference_number FROM incidents WHERE reference_number = 'RET-GUARD-001'")
-            ).scalars().all()
+            survivors = (
+                conn.execute(sa.text("SELECT reference_number FROM incidents WHERE reference_number = 'RET-GUARD-001'"))
+                .scalars()
+                .all()
+            )
         assert survivors == ["RET-GUARD-001"], "a 4000-day-old incident was destroyed despite a 2555-day policy"
 
     def test_a_rule_failing_before_the_push_rule_does_not_block_it(self, retention_db: sa.Engine, monkeypatch):

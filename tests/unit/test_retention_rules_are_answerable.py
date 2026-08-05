@@ -14,12 +14,20 @@ was invisible without a live PostgreSQL run:
 
 A misnamed target fails loudly here rather than at 02:00 in a swallowed exception, and a
 horizon cannot disagree with the policy because it is no longer written twice.
+
+Where the schema checks live
+---------------------------
+Deliberately not here. Whether every rule names a real table and a real column is asserted
+in ``tests/unit/infrastructure/test_data_retention_targets.py``, which reads the schema in
+a *child interpreter*. That matters: importing every model module in-process registers
+tables on the shared ``Base.metadata``, and doing so makes
+``test_delete_cascade_audit_visibility`` fail with two workflow cascades its register does
+not carry -- purely because this module ran first. Measured, not assumed: an earlier draft
+of this file did exactly that and broke it. So this module restricts itself to properties
+that need no schema at all, and does not duplicate the two that do.
 """
 
 from __future__ import annotations
-
-import importlib
-import pkgutil
 
 import pytest
 
@@ -27,47 +35,8 @@ from src.core.retention_config import DEFAULT_RETENTION_POLICIES
 from src.infrastructure.tasks.cleanup_tasks import RETENTION_RULES, RetentionRule
 
 
-def _metadata():
-    """Table metadata with *every* model module imported.
-
-    Importing only the `src.domain.models` package leaves the registry partial -- 189
-    tables against 252 -- because the package does not import every module. A schema check
-    built on that would report real tables as missing, which is precisely the kind of
-    false signal that teaches people to ignore a test.
-    """
-    package = importlib.import_module("src.domain.models")
-    for module in pkgutil.iter_modules(package.__path__):
-        importlib.import_module(f"src.domain.models.{module.name}")
-
-    from src.infrastructure.database import Base
-
-    return Base.metadata
-
-
-@pytest.fixture(scope="module")
-def metadata():
-    return _metadata()
-
-
 def _ids(rule: RetentionRule) -> str:
     return rule.table
-
-
-@pytest.mark.parametrize("rule", RETENTION_RULES, ids=_ids)
-def test_the_target_table_exists(rule: RetentionRule, metadata) -> None:
-    assert rule.table in metadata.tables, (
-        f"retention rule targets {rule.table!r}, which is not a table. "
-        "A DELETE against it raises, and this sweep swallows the error, so the rule "
-        "silently never runs."
-    )
-
-
-@pytest.mark.parametrize("rule", RETENTION_RULES, ids=_ids)
-def test_the_date_column_exists(rule: RetentionRule, metadata) -> None:
-    table = metadata.tables[rule.table]
-    assert rule.date_column in table.columns, (
-        f"{rule.table}.{rule.date_column} does not exist; columns are " f"{sorted(table.columns.keys())}"
-    )
 
 
 @pytest.mark.parametrize("rule", RETENTION_RULES, ids=_ids)
