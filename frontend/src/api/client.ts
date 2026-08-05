@@ -706,8 +706,7 @@ api.interceptors.response.use(
 
       ;(error as ClassifiedAxiosError).classifiedMessage = 'Session expired. Please sign in again.'
     } else if (status === 403) {
-      ;(error as ClassifiedAxiosError).classifiedMessage =
-        "You don't have permission to perform this action."
+      ;(error as ClassifiedAxiosError).classifiedMessage = forbiddenMessageFor(error)
     } else if (status === 409) {
       const data409 = error.response?.data as Record<string, unknown> | undefined
       if (data409?.error_class === 'UAT_WRITE_BLOCKED') {
@@ -798,6 +797,25 @@ export function getApiErrorCode(error: unknown): string | null {
     if (typeof code === 'string' && code.trim()) return code
   }
   return null
+}
+
+/**
+ * The message for a 403, which is two different failures wearing one status code.
+ *
+ * A user whose account carries no tenant is refused by ``_resolve_user_tenant_context``
+ * on every request, including endpoints that check no permission at all. Telling them
+ * they lack permission is both untrue and unactionable — there is no permission to
+ * grant, and the fix is an administrator assigning their organisation.
+ */
+export function forbiddenMessageFor(error: unknown): string {
+  if (getApiErrorCode(error) === 'TENANT_ACCESS_DENIED') {
+    return (
+      'Your account is not linked to an organisation yet, so it cannot load any data. ' +
+      'This is an account setup issue rather than a permissions one — ask an administrator ' +
+      'to assign your organisation.'
+    )
+  }
+  return "You don't have permission to perform this action."
 }
 
 /** True when a failure is a missing table rather than something that went wrong. */
