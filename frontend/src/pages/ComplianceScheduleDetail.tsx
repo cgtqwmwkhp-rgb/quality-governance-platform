@@ -16,6 +16,7 @@ import {
 } from './complianceScheduleHelpers'
 import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { RecordCompletionSheet } from './compliance/RecordCompletionSheet'
+import { RequirementFormDialog } from './compliance/RequirementFormDialog'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceScheduleDetail() {
@@ -27,6 +28,7 @@ export default function ComplianceScheduleDetail() {
   const [requirement, setRequirement] = useState<ComplianceRequirement | null>(null)
   const [records, setRecords] = useState<ComplianceRecord[]>([])
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -92,12 +94,21 @@ export default function ComplianceScheduleDetail() {
               {statusLabel(requirement.status)}
             </span>
             {requirement.is_active && (
-              <Button
-                data-testid="compliance-schedule-open-complete"
-                onClick={() => setSheetOpen(true)}
-              >
-                {t('compliance.schedule.complete.cta', 'Record completion')}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  data-testid="compliance-schedule-open-edit"
+                  onClick={() => setEditOpen(true)}
+                >
+                  {t('compliance.schedule.edit.cta', 'Edit')}
+                </Button>
+                <Button
+                  data-testid="compliance-schedule-open-complete"
+                  onClick={() => setSheetOpen(true)}
+                >
+                  {t('compliance.schedule.complete.cta', 'Record completion')}
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -217,6 +228,13 @@ export default function ComplianceScheduleDetail() {
         requirementTitle={requirement.title}
         nextDueDate={requirement.next_due_date}
         onCompleted={() => void load()}
+      />
+
+      <RequirementFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        requirement={requirement}
+        onSaved={() => void load()}
       />
     </div>
   )

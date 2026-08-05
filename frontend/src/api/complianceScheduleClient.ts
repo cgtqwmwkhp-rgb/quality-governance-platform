@@ -84,6 +84,39 @@ export interface CompleteRecordPayload {
   due_date?: string
 }
 
+/**
+ * Create payload, mirroring `RequirementCreate` in
+ * `src/api/schemas/compliance_schedule.py`.
+ *
+ * `template_id` is deliberately absent. The schema accepts it as a
+ * client-settable foreign key with no validation, so a wrong value surfaces as
+ * an unhandled integrity error rather than a rejected field — not something a
+ * form should be able to reach.
+ */
+export interface RequirementCreatePayload {
+  title: string
+  taxonomy_id: string
+  next_due_date: string
+  description?: string | null
+  regulatory_basis?: string | null
+  frequency_months?: number | null
+  frequency_days?: number | null
+  anchor?: 'completion' | 'schedule'
+  statutory?: boolean
+  location_id?: number | null
+  owner_id?: number | null
+}
+
+/**
+ * Update payload, mirroring `RequirementUpdate`. Every field is optional and the
+ * route applies `exclude_unset`, so an absent key means "leave alone" while an
+ * explicit `null` clears the value. Callers must therefore omit keys they do not
+ * intend to change rather than sending undefined-ish placeholders.
+ */
+export type RequirementUpdatePayload = Partial<RequirementCreatePayload> & {
+  is_active?: boolean
+}
+
 export function createComplianceScheduleApi(api: AxiosInstance) {
   // The shared axios instance sets baseURL to the host only, with no version
   // segment, so every client spells `/api/v1` itself. Omitting it here sent all
@@ -102,10 +135,10 @@ export function createComplianceScheduleApi(api: AxiosInstance) {
 
     getRequirement: (id: number) => api.get<ComplianceRequirement>(`${base}/requirements/${id}`),
 
-    createRequirement: (data: Record<string, unknown>) =>
+    createRequirement: (data: RequirementCreatePayload) =>
       api.post<ComplianceRequirement>(`${base}/requirements`, data),
 
-    updateRequirement: (id: number, data: Record<string, unknown>) =>
+    updateRequirement: (id: number, data: RequirementUpdatePayload) =>
       api.patch<ComplianceRequirement>(`${base}/requirements/${id}`, data),
 
     deactivateRequirement: (id: number) =>

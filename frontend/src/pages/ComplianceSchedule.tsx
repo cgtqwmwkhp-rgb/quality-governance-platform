@@ -14,6 +14,7 @@ import type {
 } from '../api/complianceScheduleClient'
 import { ownershipOf, statusChipClass, statusLabel } from './complianceScheduleHelpers'
 import { useOwnershipLabel } from './compliance/useOwnershipLabel'
+import { RequirementFormDialog } from './compliance/RequirementFormDialog'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceSchedule() {
@@ -25,6 +26,7 @@ export default function ComplianceSchedule() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activating, setActivating] = useState<string | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
   const currentUserId = useMemo(() => getCurrentUserId(), [])
   const ownershipLabel = useOwnershipLabel()
 
@@ -97,7 +99,7 @@ export default function ComplianceSchedule() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {(['', 'current', 'due_soon', 'overdue'] as const).map((s) => (
             <Button
               key={s || 'all'}
@@ -109,6 +111,14 @@ export default function ComplianceSchedule() {
               {s ? statusLabel(s) : t('compliance.schedule.filter.all', 'All')}
             </Button>
           ))}
+          <Button
+            size="sm"
+            onClick={() => setFormOpen(true)}
+            data-testid="compliance-schedule-add"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            {t('compliance.schedule.form.create', 'Add obligation')}
+          </Button>
         </div>
       </div>
 
@@ -231,6 +241,12 @@ export default function ComplianceSchedule() {
           </section>
         </>
       )}
+
+      <RequirementFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        onSaved={() => void load()}
+      />
     </div>
   )
 }
