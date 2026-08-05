@@ -27,6 +27,11 @@ export default function ComplianceSchedule() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activating, setActivating] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  // Active and retired obligations are two views rather than one mixed list,
+  // because the API's is_active filter is a plain boolean defaulting to true —
+  // there is no value that means "both", so a combined list is not available to
+  // ask for.
+  const [showInactive, setShowInactive] = useState(false)
   const currentUserId = useMemo(() => getCurrentUserId(), [])
   const ownershipLabel = useOwnershipLabel()
 
@@ -36,7 +41,7 @@ export default function ComplianceSchedule() {
     try {
       const [listRes, statsRes, catRes] = await Promise.all([
         complianceScheduleApi.listRequirements({
-          is_active: true,
+          is_active: !showInactive,
           status: statusFilter || undefined,
           page_size: 100,
         }),
@@ -56,7 +61,7 @@ export default function ComplianceSchedule() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter])
+  }, [statusFilter, showInactive])
 
   useEffect(() => {
     void load()
@@ -112,13 +117,24 @@ export default function ComplianceSchedule() {
             </Button>
           ))}
           <Button
+            variant={showInactive ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setFormOpen(true)}
-            data-testid="compliance-schedule-add"
+            aria-pressed={showInactive}
+            onClick={() => setShowInactive((v) => !v)}
+            data-testid="compliance-schedule-toggle-inactive"
           >
-            <Plus className="h-4 w-4 mr-1" />
-            {t('compliance.schedule.form.create', 'Add obligation')}
+            {t('compliance.schedule.filter.inactive', 'Retired')}
           </Button>
+          {!showInactive && (
+            <Button
+              size="sm"
+              onClick={() => setFormOpen(true)}
+              data-testid="compliance-schedule-add"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              {t('compliance.schedule.form.create', 'Add obligation')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -136,7 +152,7 @@ export default function ComplianceSchedule() {
         />
       ) : (
         <>
-          {stats && (
+          {stats && !showInactive && (
             <div
               className="grid grid-cols-2 md:grid-cols-4 gap-3"
               data-testid="compliance-schedule-stats"
@@ -159,7 +175,9 @@ export default function ComplianceSchedule() {
 
           <section className="rounded-lg border border-border bg-card">
             <div className="border-b border-border px-4 py-3 font-medium">
-              {t('compliance.schedule.requirements', 'Requirements')}
+              {showInactive
+                ? t('compliance.schedule.retired_requirements', 'Retired obligations')
+                : t('compliance.schedule.requirements', 'Requirements')}
             </div>
             {loading ? (
               <p className="p-6 text-sm text-muted-foreground">
@@ -170,10 +188,15 @@ export default function ComplianceSchedule() {
                 className="p-6 text-sm text-muted-foreground"
                 data-testid="compliance-schedule-empty"
               >
-                {t(
-                  'compliance.schedule.empty',
-                  'No active requirements yet. Activate a catalogue template below.',
-                )}
+                {showInactive
+                  ? t(
+                      'compliance.schedule.empty_inactive',
+                      'Nothing has been retired. Obligations you retire are kept here and can be reactivated.',
+                    )
+                  : t(
+                      'compliance.schedule.empty',
+                      'No active requirements yet. Activate a catalogue template below.',
+                    )}
               </div>
             ) : (
               <ul className="divide-y divide-border" data-testid="compliance-schedule-list">
@@ -195,17 +218,33 @@ export default function ComplianceSchedule() {
                         </span>
                       </div>
                     </div>
-                    <span
-                      className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${statusChipClass(item.status)}`}
-                    >
-                      {statusLabel(item.status)}
-                    </span>
+                    {showInactive ? (
+                      // A retired obligation still carries a computed status, and
+                      // labelling it "Overdue" would claim a breach that is not
+                      // being tracked and will not be notified. The view is keyed
+                      // on rather than the row's own flag because the request
+                      // filtered on is_active, so every row here is retired by
+                      // construction — no row can disagree with the heading.
+                      <span
+                        className="shrink-0 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                        data-testid={`compliance-schedule-retired-${item.id}`}
+                      >
+                        {t('compliance.schedule.filter.inactive', 'Retired')}
+                      </span>
+                    ) : (
+                      <span
+                        className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${statusChipClass(item.status)}`}
+                      >
+                        {statusLabel(item.status)}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
           </section>
 
+          {!showInactive && (
           <section className="rounded-lg border border-border bg-card">
             <div className="border-b border-border px-4 py-3 font-medium">
               {t('compliance.schedule.catalogue', 'Catalogue')}
@@ -239,6 +278,7 @@ export default function ComplianceSchedule() {
               ))}
             </ul>
           </section>
+          )}
         </>
       )}
 
