@@ -3997,6 +3997,7 @@
   "compliance.schedule.activate.success": "Requirement activated",
   "compliance.schedule.activate.error": "Could not activate template",
   "compliance.schedule.load_error": "Could not load Compliance Schedule",
+  "compliance.schedule.load_error_hint": "The register could not be read, so this is not a statement that you have no obligations. Nothing has been changed.",
   "compliance.schedule.statutory": "Statutory",
   "compliance.schedule.back": "Back to schedule",
   "compliance.schedule.detail.load_error": "Could not load requirement",
