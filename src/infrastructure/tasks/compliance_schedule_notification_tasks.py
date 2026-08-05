@@ -60,6 +60,8 @@ import os
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional, Sequence, TypedDict
 
+from celery.exceptions import SoftTimeLimitExceeded
+
 from src.infrastructure.tasks.celery_app import celery_app
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -88,6 +90,7 @@ class ComplianceSweepResults(TypedDict):
 
     tenants_considered: int
     tenants_swept: int
+    tenants_failed: int
     tenants_skipped_locked: int
     tenants_skipped_closed: int
     requirements_scanned: int
@@ -97,6 +100,7 @@ class ComplianceSweepResults(TypedDict):
     notifications_skipped_conflict: int
     recipients_unresolved: int
     dry_run: bool
+    timed_out: bool
     evaluated_at: str
     admin_role: str
 
@@ -109,6 +113,7 @@ def _empty_results(*, dry_run: bool, evaluated_at: datetime) -> ComplianceSweepR
     return {
         "tenants_considered": 0,
         "tenants_swept": 0,
+        "tenants_failed": 0,
         "tenants_skipped_locked": 0,
         "tenants_skipped_closed": 0,
         "requirements_scanned": 0,
@@ -118,6 +123,7 @@ def _empty_results(*, dry_run: bool, evaluated_at: datetime) -> ComplianceSweepR
         "notifications_skipped_conflict": 0,
         "recipients_unresolved": 0,
         "dry_run": dry_run,
+        "timed_out": False,
         "evaluated_at": evaluated_at.isoformat(),
         "admin_role": _admin_role_name(),
     }
@@ -313,7 +319,6 @@ async def _sweep_tenant(
 async def _sweep(*, dry_run: bool, today: Optional[date] = None) -> ComplianceSweepResults:
     from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_is_open
     from src.infrastructure.database import async_session_maker
-    from src.infrastructure.middleware.tenant_context import apply_tenant_guc
 
     evaluated_at = datetime.now(timezone.utc)
     effective_today = today or evaluated_at.date()
@@ -329,6 +334,50 @@ async def _sweep(*, dry_run: bool, today: Optional[date] = None) -> ComplianceSw
         tenant_ids = await _active_tenant_ids(session)
         results["tenants_considered"] = len(tenant_ids)
 
+    try:
+        await _sweep_all_tenants(
+            tenant_ids,
+            today=effective_today,
+            evaluated_at=evaluated_at,
+            dry_run=dry_run,
+            results=results,
+        )
+    except SoftTimeLimitExceeded:
+        # Returned rather than re-raised, so the counters describing what *was*
+        # delivered survive. The sweep is idempotent -- the dedupe index refuses a
+        # repeat and the read-before-write skips it -- so a truncated run needs no
+        # compensation: the next run, scheduled or manual, finishes the remainder.
+        # Retrying here instead would discard these counters and start again.
+        results["timed_out"] = True
+        logger.warning(
+            "Compliance schedule sweep hit its soft time limit after %d of %d tenant(s); "
+            "returning partial results, the remainder is picked up by the next run",
+            results["tenants_swept"],
+            results["tenants_considered"],
+        )
+
+    logger.info("Compliance schedule sweep completed: %s", results)
+    return results
+
+
+async def _sweep_all_tenants(
+    tenant_ids: Sequence[int],
+    *,
+    today: date,
+    evaluated_at: datetime,
+    dry_run: bool,
+    results: ComplianceSweepResults,
+) -> None:
+    """The per-tenant loop. Separated so its caller can catch a soft timeout.
+
+    Mutates ``results`` rather than returning one, because a run cut short partway
+    must still report what it managed. A return value would be lost on the exception
+    that cuts it short, which is the whole failure this separation exists to avoid.
+    """
+    from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_is_open
+    from src.infrastructure.database import async_session_maker
+    from src.infrastructure.middleware.tenant_context import apply_tenant_guc
+
     for position, tenant_id in enumerate(tenant_ids):
         # Re-asked per tenant so an operator engaging the kill switch part-way
         # through stops the run at the next tenant boundary rather than after it.
@@ -342,7 +391,7 @@ async def _sweep(*, dry_run: bool, today: Optional[date] = None) -> ComplianceSw
                 "Compliance schedule sweep: kill switch engaged mid-run, stopping with %d tenant(s) unswept",
                 len(tenant_ids) - position,
             )
-            break
+            return
 
         # One session and therefore one transaction per tenant: the advisory lock
         # is transaction-scoped, and a tenant that fails must not roll back the
@@ -361,7 +410,7 @@ async def _sweep(*, dry_run: bool, today: Optional[date] = None) -> ComplianceSw
                 await _sweep_tenant(
                     session,
                     tenant_id=tenant_id,
-                    today=effective_today,
+                    today=today,
                     evaluated_at=evaluated_at,
                     dry_run=dry_run,
                     results=results,
@@ -372,15 +421,22 @@ async def _sweep(*, dry_run: bool, today: Optional[date] = None) -> ComplianceSw
                 else:
                     await session.commit()
                 results["tenants_swept"] += 1
+            except SoftTimeLimitExceeded:
+                # Must not be swallowed by the handler below. The soft limit exists so
+                # a task can stop while it still has time to stop cleanly; treating it
+                # as "this tenant failed, try the next one" defeats it entirely and the
+                # run continues until the hard limit kills the worker mid-transaction,
+                # taking the result dict with it. Re-raised to the loop, which records
+                # the truncation and returns what was actually done.
+                await session.rollback()
+                raise
             except Exception:
                 await session.rollback()
+                results["tenants_failed"] += 1
                 logger.exception(
                     "Compliance schedule sweep failed for tenant %d; continuing with the rest",
                     tenant_id,
                 )
-
-    logger.info("Compliance schedule sweep completed: %s", results)
-    return results
 
 
 @celery_app.task(
@@ -388,6 +444,17 @@ async def _sweep(*, dry_run: bool, today: Optional[date] = None) -> ComplianceSw
     queue="notifications",
     bind=True,
     max_retries=3,
+    # Overrides the global 300s soft / 600s hard limits, which are sized for
+    # request-shaped work. This sweep walks every tenant and its whole register, so
+    # 300s is a limit it can reach legitimately rather than only through a fault --
+    # and the global limit arriving mid-run is indistinguishable from a real failure.
+    #
+    # Still finite, and finite is the point: on the soft limit the sweep returns its
+    # partial counters and the next run finishes the rest, which is safe because every
+    # write is idempotent. The hard limit remains the backstop for a genuinely wedged
+    # run, sitting far enough above the soft one to leave room to unwind cleanly.
+    soft_time_limit=900,
+    time_limit=1200,
 )
 def sweep_compliance_schedule_due(
     self,

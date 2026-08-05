@@ -240,6 +240,76 @@ async def test_an_index_conflict_is_absorbed_and_the_run_continues(test_session,
         await _cleanup(test_session, requirement_id=requirement_id)
 
 
+async def test_a_tenant_that_raises_is_counted_and_the_run_continues(test_session, test_user, test_tenant, monkeypatch):
+    """A failed tenant must appear in the counters, not only in a log line.
+
+    Before ``tenants_failed`` existed the only evidence was ``tenants_considered``
+    exceeding the sum of the other outcomes, which required an operator to notice a
+    gap by arithmetic.
+    """
+    import src.infrastructure.tasks.compliance_schedule_notification_tasks as task_mod
+
+    user_id, tenant_id = test_user.id, test_tenant.id
+    requirement_id = None
+    try:
+        requirement_id = await _make_requirement(test_session, tenant_id=tenant_id, owner_id=user_id)
+
+        async def _boom(*_args, **_kwargs):
+            raise RuntimeError("simulated failure for one tenant")
+
+        monkeypatch.setattr(task_mod, "_sweep_tenant", _boom)
+
+        result = await _sweep(dry_run=False)
+
+        assert result["tenants_failed"] >= 1, f"the failed tenant was not counted: {result}"
+        assert result["timed_out"] is False, "an ordinary failure was misreported as a timeout"
+        outcomes = (
+            result["tenants_swept"]
+            + result["tenants_failed"]
+            + result["tenants_skipped_locked"]
+            + result["tenants_skipped_closed"]
+        )
+        assert (
+            outcomes == result["tenants_considered"]
+        ), f"tenant outcomes {outcomes} do not account for {result['tenants_considered']} considered: {result}"
+    finally:
+        await _cleanup(test_session, requirement_id=requirement_id)
+
+
+async def test_a_soft_time_limit_returns_partial_counters_instead_of_dying(
+    test_session, test_user, test_tenant, monkeypatch
+):
+    """The soft limit must truncate the run, not be swallowed as a per-tenant failure.
+
+    ``SoftTimeLimitExceeded`` subclasses ``Exception``, so the per-tenant handler would
+    absorb it and carry on to the next tenant -- defeating the soft limit entirely and
+    letting the run continue until the hard limit kills the worker mid-transaction,
+    losing every counter. This asserts it propagates to the loop, is recorded, and the
+    result survives.
+    """
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    import src.infrastructure.tasks.compliance_schedule_notification_tasks as task_mod
+
+    user_id, tenant_id = test_user.id, test_tenant.id
+    requirement_id = None
+    try:
+        requirement_id = await _make_requirement(test_session, tenant_id=tenant_id, owner_id=user_id)
+
+        async def _timeout(*_args, **_kwargs):
+            raise SoftTimeLimitExceeded()
+
+        monkeypatch.setattr(task_mod, "_sweep_tenant", _timeout)
+
+        result = await _sweep(dry_run=False)
+
+        assert result["timed_out"] is True, f"the timeout was not recorded: {result}"
+        assert result["tenants_failed"] == 0, "a timeout was miscounted as a tenant failure"
+        assert result["tenants_considered"] >= 1, "the result dict did not survive the timeout"
+    finally:
+        await _cleanup(test_session, requirement_id=requirement_id)
+
+
 async def test_an_admin_belonging_to_no_tenant_is_never_a_recipient(test_session, test_user, test_tenant):
     """The cross-tenant leak guard. This is the test the precedent sweep fails.
 
