@@ -77,3 +77,75 @@ def test_both_blocks_read_one_expression(workflow: Path, flag: str) -> None:
         f"{workflow.name}: {flag} is assigned from more than one expression "
         f"({sorted(expressions)}), so the API and worker can disagree."
     )
+
+
+# ---------------------------------------------------------------------------
+# Post-deploy live parity (catches manual `az` drift after a successful write)
+# ---------------------------------------------------------------------------
+#
+# Deploy-time write parity (above) is necessary but not sufficient: anyone can
+# later change one App Service with `az webapp config appsettings set` and the
+# next deploy is the only thing that would heal it. The post-deploy step reads
+# the live values and fails hard if they disagree.
+
+_POSTDEPLOY_PARITY_STEP = re.compile(
+    r"- name:\s*Assert COMPLIANCE_SCHEDULE_ENABLED API/worker live parity\n"
+    r"\s+run:\s*\|\n"
+    r"(?P<body>.*?)(?=\n      - name:|\n  [a-zA-Z]|\Z)",
+    re.DOTALL,
+)
+
+_APPSETTINGS_LIST = re.compile(
+    r"az webapp config appsettings list\s+.*?-n\s+\"([^\"]+)\"\s+.*?"
+    r"--query\s+\"\[\?name=='\$FLAG'\]\.value\s*\|\s*\[0\]\"",
+    re.DOTALL,
+)
+
+
+def _postdeploy_parity_body(text: str) -> str:
+    match = _POSTDEPLOY_PARITY_STEP.search(text)
+    assert match is not None, "missing step 'Assert COMPLIANCE_SCHEDULE_ENABLED API/worker live parity'"
+    return match.group("body")
+
+
+@pytest.mark.parametrize("workflow", WORKFLOWS, ids=lambda p: p.name)
+@pytest.mark.parametrize("flag", WORKER_EVALUATED_FLAGS)
+def test_postdeploy_reads_flag_from_api_and_worker(workflow: Path, flag: str) -> None:
+    """Both apps must be queried for the same setting key after deploy.
+
+    Writing the flag at deploy time is not enough: a later manual `az` edit can
+    reintroduce divergence. This step is the after-the-fact assertion.
+    """
+    body = _postdeploy_parity_body(workflow.read_text())
+
+    assert f"FLAG={flag}" in body, f"{workflow.name}: post-deploy parity step does not pin FLAG={flag}"
+
+    targets = _APPSETTINGS_LIST.findall(body)
+    assert any(
+        "API_APP" in t for t in targets
+    ), f"{workflow.name}: post-deploy parity does not read appsettings from the API app"
+    assert any(
+        "WORKER_APP" in t for t in targets
+    ), f"{workflow.name}: post-deploy parity does not read appsettings from the worker app"
+    assert (
+        'WORKER_APP="${API_APP}-worker"' in body or 'WORKER_APP="${API_APP}-worker"' in body
+    ), f"{workflow.name}: worker app name must follow the existing '<api>-worker' convention"
+
+
+@pytest.mark.parametrize("workflow", WORKFLOWS, ids=lambda p: p.name)
+def test_postdeploy_fails_when_api_and_worker_disagree(workflow: Path) -> None:
+    """A mismatch must be a hard error, not a warning swallowed by `|| true`."""
+    body = _postdeploy_parity_body(workflow.read_text())
+
+    assert (
+        'if [ "${API_VAL}" != "${WORKER_VAL}" ]' in body
+    ), f"{workflow.name}: post-deploy parity step does not compare API_VAL to WORKER_VAL"
+    assert "exit 1" in body, f"{workflow.name}: post-deploy parity step must exit 1 when values differ"
+    # The Celery *write* path still warns with || echo; this *read* path must not.
+    assert "|| true" not in body, f"{workflow.name}: post-deploy parity must not swallow failures with '|| true'"
+
+
+def test_postdeploy_parity_present_in_both_workflows() -> None:
+    """Removing the check from one environment is exactly how silent drift returns."""
+    missing = [p.name for p in WORKFLOWS if _POSTDEPLOY_PARITY_STEP.search(p.read_text()) is None]
+    assert not missing, f"post-deploy COMPLIANCE_SCHEDULE_ENABLED parity step missing from: {missing}"
