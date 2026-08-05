@@ -159,6 +159,6 @@ def test_shard_coverage_upload_includes_hidden_dotfiles() -> None:
         "coverage upload must set include-hidden-files: true or .coverage.shard* "
         f"artifacts are silently dropped; with={with_!r}"
     )
-    assert str(with_.get("if-no-files-found")) == "error", (
-        "coverage upload should fail the shard when the coverage file is missing"
-    )
+    assert (
+        str(with_.get("if-no-files-found")) == "error"
+    ), "coverage upload should fail the shard when the coverage file is missing"
