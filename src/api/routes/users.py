@@ -22,6 +22,7 @@ from src.api.schemas.user import (
 from src.api.utils.errors import api_error
 from src.core.security import get_password_hash
 from src.domain.authz import describe_stored_permissions
+from src.domain.models.tenant import Tenant
 from src.domain.models.user import Role, User
 from src.domain.services.feature_flag_service import FeatureFlagService
 
@@ -49,6 +50,33 @@ async def _ensure_user_management_enabled(db: DbSession) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.CONFIGURATION_ERROR, "User management is currently unavailable"),
         )
+
+
+async def _resolve_new_user_tenant(db: DbSession, requested_tenant_id: Optional[int], creator: User) -> int:
+    """Resolve which tenant a newly created user belongs to.
+
+    A user stored with ``tenant_id`` NULL is locked out of the entire product:
+    ``_resolve_user_tenant_context`` fails closed in production, so every request
+    answers 403 ``TENANT_ACCESS_DENIED``. The admin create form does not send a
+    tenant, so inherit the creating account's rather than persisting an account
+    that cannot be used. An explicit tenant still wins, so cross-tenant creation
+    by a superuser is unaffected.
+    """
+    resolved = requested_tenant_id if requested_tenant_id is not None else creator.tenant_id
+    if resolved is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "tenant_id is required: the account creating this user has no tenant to inherit",
+            ),
+        )
+    if await db.scalar(select(Tenant.id).where(Tenant.id == resolved)) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, f"Tenant {resolved} does not exist"),
+        )
+    return int(resolved)
 
 
 # ============== User Endpoints ==============
@@ -167,6 +195,8 @@ async def create_user(
             detail=api_error(ErrorCode.VALIDATION_ERROR, "Password is required for local accounts"),
         )
 
+    resolved_tenant_id = await _resolve_new_user_tenant(db, user_data.tenant_id, current_user)
+
     # Create user
     user = User(
         email=normalized_email,
@@ -178,7 +208,7 @@ async def create_user(
         phone=user_data.phone,
         is_active=user_data.is_active,
         is_superuser=user_data.is_superuser,
-        tenant_id=user_data.tenant_id,
+        tenant_id=resolved_tenant_id,
     )
 
     # Assign roles if provided
