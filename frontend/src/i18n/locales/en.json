@@ -4068,5 +4068,11 @@
   "compliance.schedule.anchor.completion": "From completion",
   "compliance.schedule.anchor.schedule_hint": "The next date is measured from the current due date, so the anniversary holds even if the work is done late.",
   "compliance.schedule.anchor.completion_hint": "The next date is measured from the day the work is done, so completing late pushes the schedule back.",
-  "compliance.schedule.edit.cta": "Edit"
+  "compliance.schedule.edit.cta": "Edit",
+  "compliance.schedule.evidence.show": "Evidence for this occurrence",
+  "compliance.schedule.evidence.hide": "Hide evidence",
+  "compliance.schedule.evidence.title": "Occurrence evidence",
+  "compliance.schedule.evidence.empty_title": "No evidence on this occurrence yet",
+  "compliance.schedule.evidence.empty_description": "Upload certificates, reports, or photos that prove {{ref}} was done.",
+  "compliance.schedule.evidence.needs_record": "Evidence attaches to an occurrence once one is recorded — not to the obligation itself."
 }

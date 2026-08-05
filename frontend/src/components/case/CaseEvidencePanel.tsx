@@ -12,6 +12,8 @@ export type CaseEvidenceSourceType =
   | 'near_miss'
   | 'complaint'
   | 'road_traffic_collision'
+  /** A completed or missed Compliance Schedule occurrence (`ComplianceRecord`), not the obligation itself. */
+  | 'compliance_record'
 
 export interface CaseEvidencePanelProps {
   sourceType: CaseEvidenceSourceType
