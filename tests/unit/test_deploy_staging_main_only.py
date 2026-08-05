@@ -45,3 +45,15 @@ def test_build_and_deploy_requires_main_head_branch(parsed: dict, raw: str) -> N
 def test_workflow_dispatch_still_works(parsed: dict) -> None:
     condition = parsed["jobs"]["build-and-deploy"].get("if") or ""
     assert "workflow_dispatch" in condition
+
+
+def test_staging_concurrency_does_not_cancel_in_progress(parsed: dict) -> None:
+    """In-flight staging must finish; cancel-in-progress thrash blocks prod promotion."""
+    concurrency = parsed.get("concurrency") or {}
+    assert concurrency.get("group") == "deploy-staging"
+    assert concurrency.get("cancel-in-progress") is False, (
+        "cancel-in-progress: true cancels mid-deploy staging runs; App Service can be "
+        "LIVE on a SHA whose staging run never concludes success, so production "
+        "fail-closes and never promotes via the governed path"
+    )
+

@@ -14,7 +14,13 @@ on:
 
 concurrency:
   group: deploy-staging
-  cancel-in-progress: true
+  # cancel-in-progress MUST be false. Rapid main merges otherwise cancel an in-flight
+  # staging deploy mid-write: the App Service can end up on the new image while the
+  # staging run concludes cancelled, its release gate fails, and production's
+  # workflow_run trigger then fail-closes ("staging did not deploy"). That leaves
+  # staging LIVE on a SHA that the governed path will never promote. Same rationale
+  # as deploy-production.yml — never kill a deploy that is already mutating Azure.
+  cancel-in-progress: false
 
 env:
   ACR_NAME: ${{ secrets.ACR_NAME }}
