@@ -43,6 +43,7 @@ ALLOWED_STANDALONE_TOOLS = frozenset(
     {
         "bandit",
         "celery",
+        "coverage",
         "cyclonedx-bom",
         "httpx",
         "locust",
