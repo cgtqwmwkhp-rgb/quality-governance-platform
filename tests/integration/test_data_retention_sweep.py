@@ -48,11 +48,25 @@ import sqlalchemy as sa
 
 from tests.integration import _alembic_only_schema as harness
 
-#: Rules that cannot succeed against the declared schema, in RETENTION_RULES order.
-#: ``audit_log_entries`` is first, which is what made the blast radius total.
-BROKEN_RULES = ("audit_log_entries", "investigations")
-
 PUSH_RETENTION_DAYS = 90
+
+#: A rule that cannot possibly succeed, used to keep the isolation property under test.
+#:
+#: This module originally leaned on two *real* broken rules for that -- a wrong column on
+#: ``audit_log_entries`` and an ``investigations`` table that does not exist. Both have
+#: since been fixed at the source, so depending on them would mean depending on defects
+#: staying unfixed. A synthetic rule pins the same property and cannot rot: the isolation
+#: guarantee is about what a failing rule does to its siblings, not about which rule fails.
+def _impossible_rule():
+    from src.infrastructure.tasks.cleanup_tasks import RetentionRule
+
+    return RetentionRule("table_that_does_not_exist", "created_at", operational_days=1)
+
+
+def _push_rule():
+    from src.infrastructure.tasks.cleanup_tasks import RetentionRule
+
+    return RetentionRule("notification_logs", "created_at", operational_days=PUSH_RETENTION_DAYS)
 
 
 def _create_database(suite_url: str, name: str, template: str | None = None) -> str:
@@ -145,21 +159,21 @@ def _run_sweep() -> dict:
 class TestTheHarnessIsTheStateProductionIsIn:
     """Without this, every assertion below could be passing for the wrong reason."""
 
-    def test_the_push_table_exists_and_the_broken_targets_are_broken(self, retention_db: sa.Engine):
+    def test_the_push_table_exists_and_the_synthetic_failure_really_fails(self, retention_db: sa.Engine):
         with retention_db.connect() as conn:
             tables = set(sa.inspect(conn).get_table_names())
             columns = {column["name"] for column in sa.inspect(conn).get_columns("audit_log_entries")}
 
         assert "notification_logs" in tables, "the table the 90-day rule targets is absent from the harness"
-        assert "investigations" not in tables, (
-            "the harness has an 'investigations' table, so the trailing rule would "
-            "succeed and this module could not show that a later failure no longer "
-            "rolls back the earlier purges"
+        assert _impossible_rule().table not in tables, (
+            "the harness has a table by the name this module uses for a guaranteed "
+            "failure, so the isolation assertions below would pass vacuously"
         )
+        # Records why the audit rule is now safe to point at a real column: it is not the
+        # column that protects the hash chain, it is the policy refusing a hard delete.
         assert "created_at" not in columns and "timestamp" in columns, (
-            "audit_log_entries carries a 'created_at' here, so the first rule would "
-            "succeed and the harness would not reproduce the failure that precedes "
-            "every other rule in production"
+            "audit_log_entries no longer times entries with 'timestamp', so the "
+            "retention rule's column name needs revisiting"
         )
 
 
@@ -194,14 +208,66 @@ class TestThePushNotificationPolicyActuallyDeletes:
             "that a later broken rule caused."
         )
 
-    def test_the_broken_rules_still_fail_and_are_reported_as_failures(self, retention_db: sa.Engine):
-        """The fix must not paper over them by making the sweep look clean."""
-        purged = _run_sweep()["purged"]
+    def test_a_rule_that_cannot_run_is_reported_as_a_failure(self, retention_db: sa.Engine, monkeypatch):
+        """The fix must not paper over a broken rule by making the sweep look clean."""
+        import src.infrastructure.tasks.cleanup_tasks as tasks
 
-        for table in BROKEN_RULES:
-            assert (
-                purged[table] == -1
-            ), f"{table} is reported as a successful purge ({purged[table]}) when it cannot run"
+        monkeypatch.setattr(tasks, "RETENTION_RULES", (_impossible_rule(), _push_rule()))
+
+        purged = _run_sweep()["purged"]
+        table = _impossible_rule().table
+
+        assert purged[table] == -1, f"{table} is reported as a successful purge ({purged[table]}) when it cannot run"
+
+    def test_a_policy_governed_table_is_never_hard_deleted(self, retention_db: sa.Engine):
+        """The guard that matters, measured against PostgreSQL rather than reasoned about.
+
+        ``incidents`` is governed by a 2555-day policy marked ``soft_delete_first``, and
+        this sweep has no soft-delete phase. Before the guard existed the rule carried a
+        hand-written 365 days and a bare ``DELETE``, cascading to actions and running
+        sheets, at 02:00, unattended. Seed a row far past every horizon and require it to
+        survive.
+        """
+        # Inserted through the ORM rather than raw SQL: several NOT NULL columns on this
+        # table carry Python-side defaults, which a text INSERT does not apply, so raw SQL
+        # here means enumerating constraints until the statement happens to work.
+        from sqlalchemy.orm import Session
+
+        from src.domain.models.incident import Incident
+        from src.domain.models.tenant import Tenant
+
+        ancient = datetime.utcnow() - timedelta(days=4000)
+        with Session(retention_db) as session:
+            # The harness template carries schema but no rows, and incidents.tenant_id is
+            # a foreign key.
+            session.add(Tenant(name="Retention Guard", slug="retention-guard", admin_email="guard@example.com"))
+            session.flush()
+            session.add(
+                Incident(
+                    reference_number="RET-GUARD-001",
+                    title="ancient",
+                    description="far past every retention horizon",
+                    tenant_id=1,
+                    incident_date=ancient,
+                    reported_date=ancient,
+                    created_at=ancient,
+                )
+            )
+            session.commit()
+
+        result = _run_sweep()
+
+        assert "incidents" in result["held"], (
+            "incidents was not held back by its retention policy, so this sweep is "
+            f"free to hard-delete a statutory record: held={result['held']}"
+        )
+        assert "incidents" not in result["purged"], "a policy-governed table reached the DELETE path"
+
+        with retention_db.connect() as conn:
+            survivors = conn.execute(
+                sa.text("SELECT reference_number FROM incidents WHERE reference_number = 'RET-GUARD-001'")
+            ).scalars().all()
+        assert survivors == ["RET-GUARD-001"], "a 4000-day-old incident was destroyed despite a 2555-day policy"
 
     def test_a_rule_failing_before_the_push_rule_does_not_block_it(self, retention_db: sa.Engine, monkeypatch):
         """Ordering must not decide whether a sound rule runs.
@@ -213,14 +279,7 @@ class TestThePushNotificationPolicyActuallyDeletes:
         """
         import src.infrastructure.tasks.cleanup_tasks as tasks
 
-        monkeypatch.setattr(
-            tasks,
-            "RETENTION_RULES",
-            (
-                ("table_that_does_not_exist", "created_at", 1),
-                ("notification_logs", "created_at", PUSH_RETENTION_DAYS),
-            ),
-        )
+        monkeypatch.setattr(tasks, "RETENTION_RULES", (_impossible_rule(), _push_rule()))
         _seed_notification_logs(retention_db, {"well-past": PUSH_RETENTION_DAYS + 200, "today": 0})
 
         purged = _run_sweep()["purged"]
@@ -237,21 +296,37 @@ class TestThePushNotificationPolicyActuallyDeletes:
 
 
 class TestAFailedRuleIsVisible:
-    def test_the_warning_names_the_table_and_the_postgres_error(self, retention_db: sa.Engine, caplog):
+    def test_the_warning_names_the_table_and_the_postgres_error(self, retention_db: sa.Engine, caplog, monkeypatch):
         """``UndefinedTable``/``UndefinedColumn`` must reach the log, not just ``-1``.
 
         The previous wording -- ``"table %s skipped (may not exist)"`` -- asserted a
         cause it had not checked and dropped the exception entirely, which is why a
         misnamed target read as routine housekeeping for as long as it did.
         """
+        import src.infrastructure.tasks.cleanup_tasks as tasks
+
+        # A wrong table and a wrong column raise different PostgreSQL errors, and the
+        # handler must carry either. The wrong column is put on ``token_blacklist`` rather
+        # than on the push table, so the final assertion below -- that a rule which
+        # succeeded is not warned about -- still means something.
+        monkeypatch.setattr(
+            tasks,
+            "RETENTION_RULES",
+            (
+                _impossible_rule(),
+                tasks.RetentionRule("token_blacklist", "no_such_column", operational_days=1),
+                _push_rule(),
+            ),
+        )
+
         with caplog.at_level("WARNING"):
             _run_sweep()
 
         warnings = [record.getMessage() for record in caplog.records if record.levelname == "WARNING"]
 
         for table, expected_error in (
-            ("audit_log_entries", "UndefinedColumn"),
-            ("investigations", "UndefinedTable"),
+            (_impossible_rule().table, "UndefinedTable"),
+            ("token_blacklist", "UndefinedColumn"),
         ):
             named = [message for message in warnings if table in message]
             assert named, f"nothing was logged at WARNING for the failed rule {table!r}"

@@ -55,22 +55,24 @@ from src.infrastructure.tasks.cleanup_tasks import RETENTION_RULES  # noqa: E402
 #: entry earns its place by being a decision someone has taken; ``notification_log``
 #: never was, which is why it is not here.
 #:
-#: ``investigations`` -- no such table. The models declare nine investigation
-#: tables (``investigation_runs`` and eight children) and which of them a 365-day
-#: horizon applies to is a records-retention decision, not a typo. Out of scope for
-#: the change that fixed ``notification_logs``; it is reported, not guessed at.
-KNOWN_UNBACKED_TARGETS = frozenset({"investigations"})
+#: Now empty, and the emptiness is the point. ``investigations`` was listed here
+#: because no such table exists; rather than guess which of the nine investigation
+#: tables a horizon covers, the rule was removed from ``RETENTION_RULES`` entirely. A
+#: rule that cannot name a table is not an excused defect, it is not a rule.
+KNOWN_UNBACKED_TARGETS: frozenset[str] = frozenset()
 
 #: Rules whose table exists but whose date column does not, same register rules.
 #:
-#: ``audit_log_entries.created_at`` -- the table times entries with ``timestamp``;
-#: there is no ``created_at``, so the rule raises ``UndefinedColumn`` and purges
-#: nothing. Not corrected here, and deliberately so: the model carries
-#: ``retention_days`` defaulting to 2555 and ``DEFAULT_RETENTION_POLICIES["audit_logs"]``
-#: agrees, so simply repointing the rule at ``timestamp`` would begin purging a
-#: tamper-evident hash chain at 365 days -- seven times earlier than the retention
-#: the platform documents. Which horizon governs is a compliance decision.
-KNOWN_WRONG_DATE_COLUMNS = frozenset({("audit_log_entries", "created_at")})
+#: Also now empty. ``audit_log_entries.created_at`` was excused here because the table
+#: times entries with ``timestamp``, and repointing the rule looked dangerous: the
+#: documented horizon is 2555 days and the rule said 365, so a correct column name
+#: would have begun purging a tamper-evident hash chain seven times too early.
+#:
+#: That danger has been removed at its source rather than by leaving a column name
+#: wrong. The rule now takes its horizon from ``DEFAULT_RETENTION_POLICIES["audit_logs"]``,
+#: which is 2555 days and ``soft_delete_first``, so the sweep refuses to hard-delete it
+#: at all. The column name can therefore be truthful without being dangerous.
+KNOWN_WRONG_DATE_COLUMNS: frozenset[tuple[str, str]] = frozenset()
 
 
 #: Reads the whole declared schema without importing it into this process.
@@ -130,7 +132,7 @@ class TestEveryTargetNamesARealTable:
         """
         from src.domain.models.push_notification import NotificationLog
 
-        targets = {table for table, _, _ in RETENTION_RULES}
+        targets = {rule.table for rule in RETENTION_RULES}
 
         assert NotificationLog.__tablename__ in targets, (
             f"no retention rule targets {NotificationLog.__tablename__!r}, so the "
@@ -150,7 +152,7 @@ class TestEveryTargetNamesARealTable:
         register cannot quietly grow stale and keep a live defect excused.
         """
         declared = _declared_schema()
-        unbacked = {table for table, _, _ in RETENTION_RULES if table not in declared}
+        unbacked = {rule.table for rule in RETENTION_RULES if rule.table not in declared}
 
         assert unbacked == KNOWN_UNBACKED_TARGETS, (
             f"retention targets naming no declared table: {sorted(unbacked)}; "
@@ -168,9 +170,9 @@ class TestEveryTargetNamesARealTable:
         declared = _declared_schema()
 
         wrong = {
-            (table, date_col)
-            for table, date_col, _ in RETENTION_RULES
-            if table in declared and date_col not in declared[table]
+            (rule.table, rule.date_column)
+            for rule in RETENTION_RULES
+            if rule.table in declared and rule.date_column not in declared[rule.table]
         }
 
         assert wrong == KNOWN_WRONG_DATE_COLUMNS, (
@@ -207,7 +209,10 @@ class TestAFailingTargetIsVisibleInTheLog:
         assert result["status"] == "completed", "one unusable table must not abort the whole sweep"
 
         warnings = [record.getMessage() for record in caplog.records if record.levelname == "WARNING"]
-        for table, _, _ in RETENTION_RULES:
+        # Only rules the sweep actually attempts can fail. A policy-governed table is
+        # skipped before any SQL is built, so it never raises and must not be expected to
+        # warn -- it is accounted for in ``held``, asserted below.
+        for table in (rule.table for rule in RETENTION_RULES if rule.may_hard_delete):
             named = [message for message in warnings if table in message]
             assert named, f"nothing was logged at WARNING for the failed table {table!r}"
             assert any("OperationalError" in message or "no such table" in message for message in named), (
@@ -219,9 +224,14 @@ class TestAFailingTargetIsVisibleInTheLog:
     def test_a_failed_table_is_not_reported_as_a_purge(self, empty_sqlite_engine):
         from src.infrastructure.tasks.cleanup_tasks import run_data_retention
 
-        purged = run_data_retention.apply().get()["purged"]
+        result = run_data_retention.apply().get()
+        purged, held = result["purged"], result["held"]
 
-        assert set(purged) == {table for table, _, _ in RETENTION_RULES}
+        # Every rule is still accounted for, but across two outcomes now: attempted and
+        # failed, or deliberately not attempted. The original single-dict assertion is
+        # preserved as this union -- what matters is that no rule vanishes from the report.
+        assert set(purged) | set(held) == {rule.table for rule in RETENTION_RULES}
+        assert set(held) == {rule.table for rule in RETENTION_RULES if not rule.may_hard_delete}
         assert all(count == -1 for count in purged.values()), (
             f"a table that could not be read was reported as purged: {purged}. A "
             "positive count for a DELETE that never committed is worse than a gap."
