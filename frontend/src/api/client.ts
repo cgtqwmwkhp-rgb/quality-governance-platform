@@ -2344,6 +2344,7 @@ export interface GlobalSearchResultRecord {
     | 'action'
     | 'document'
     | 'document_content'
+    | 'compliance_requirement'
   title: string
   description: string
   module: string

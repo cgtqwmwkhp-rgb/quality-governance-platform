@@ -254,4 +254,68 @@ describe('GlobalSearchPalette', () => {
     const moduleLabels = screen.getAllByText('Document body')
     expect(moduleLabels.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('offers a Compliance chip and deep-links a compliance obligation hit', async () => {
+    mockInterpret.mockResolvedValue({
+      data: {
+        q: 'fire risk',
+        module: null,
+        status: null,
+        date_from: null,
+        date_to: null,
+        navigate: null,
+        label: null,
+        source: 'keyword',
+      },
+    })
+    mockSearch.mockResolvedValue({
+      data: {
+        total: 1,
+        query: 'fire risk',
+        facets: { modules: { 'Compliance Schedule': 1 } },
+        results: [
+          {
+            id: 'CSR-2026-0001',
+            type: 'compliance_requirement',
+            title: 'Fire Risk Assessment',
+            description: 'Annual FRA for the Wickford depot',
+            module: 'Compliance Schedule',
+            status: 'due_soon',
+            date: '2026-09-01',
+            relevance: 91,
+            highlights: ['fire'],
+            entity_id: 5,
+            path: '/compliance-schedule/5',
+          },
+        ],
+      },
+    })
+
+    const user = userEvent.setup()
+    const GlobalSearchPalette = (await import('../GlobalSearchPalette')).default
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route path="/compliance-schedule/:id" element={<div>Obligation detail</div>} />
+          <Route path="*" element={<GlobalSearchPalette open onOpenChange={vi.fn()} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Toggle filters/i }))
+    expect(screen.getByRole('button', { name: 'Compliance' })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText(/Search incidents/i), {
+      target: { value: 'fire risk' },
+    })
+    await user.click(screen.getByRole('button', { name: /^Search$/ }))
+
+    expect(await screen.findByText('Fire Risk Assessment')).toBeInTheDocument()
+    expect(screen.getByText('CSR-2026-0001')).toBeInTheDocument()
+    expect(screen.getByText('due soon')).toBeInTheDocument()
+
+    await user.click(screen.getByText('Fire Risk Assessment'))
+    expect(await screen.findByText('Obligation detail')).toBeInTheDocument()
+  })
 })
