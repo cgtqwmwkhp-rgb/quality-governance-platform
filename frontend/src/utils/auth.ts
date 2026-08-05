@@ -391,3 +391,21 @@ export function isSuperuser(): boolean {
   const payload = decodeTokenPayload(token)
   return payload?.is_superuser === true
 }
+
+/**
+ * The signed-in user's id, taken from the token's `sub` claim.
+ *
+ * `sub` is set to `user.id` when the token is issued
+ * (`src/domain/services/auth_service.py::_access_token_for_user`), but it is
+ * serialised as a string, so callers that need a numeric foreign key must not
+ * use it raw. Returns null when there is no token or the claim is unusable,
+ * which callers should treat as "unknown", never as user 0.
+ */
+export function getCurrentUserId(): number | null {
+  const token = getPlatformToken()
+  if (!token) return null
+  const sub = decodeTokenPayload(token)?.sub
+  if (sub === undefined || sub === null) return null
+  const id = parseInt(String(sub), 10)
+  return Number.isFinite(id) ? id : null
+}
