@@ -51,6 +51,7 @@ ROLE_MIGRATION = VERSIONS / "20260903_app_least_privilege_role.py"
 HARDENING_MIGRATIONS: tuple[tuple[Path, tuple[str, ...]], ...] = (
     (GUC_GUARD_MIGRATION, ("REWRITE_TABLES", "ADOPT_TABLES")),
     (VERSIONS / "20260913_compliance_schedule_wave0.py", ("ADOPT_TABLES",)),
+    (VERSIONS / "20261012_rls_sso_provisioning.py", ("ADOPT_TABLES",)),
 )
 
 

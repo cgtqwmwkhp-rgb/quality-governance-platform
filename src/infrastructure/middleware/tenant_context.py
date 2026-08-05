@@ -52,7 +52,7 @@ SKIP_PATHS = frozenset(
 # 20260711_rls_force_expand_docs (document_versions, controlled_documents,
 # controlled_document_versions), and 20260719_rls_gt_exp (risks_v2,
 # evidence_assets), and 20260913_cs_wave0 (compliance_requirements,
-# compliance_records).
+# compliance_records), and 20261012_rls_sso_prov (sso_provisioning_requests).
 #
 # Every name here must be hardened by a migration registered in
 # HARDENING_MIGRATIONS (tests/unit/test_run026_rls_least_privilege.py), and must
@@ -86,6 +86,7 @@ RLS_TABLES = (
     "evidence_assets",
     "compliance_requirements",
     "compliance_records",
+    "sso_provisioning_requests",
 )
 
 # Name of the PostgreSQL GUC every tenant_isolation policy reads.

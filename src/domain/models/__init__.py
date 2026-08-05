@@ -73,6 +73,11 @@ from src.domain.models.compliance_schedule import (
     ComplianceRequirementTemplate,
     ComplianceScheduleAnchor,
 )
+from src.domain.models.sso_provisioning import (
+    SSOProvisioningMatchBasis,
+    SSOProvisioningRequest,
+    SSOProvisioningStatus,
+)
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
@@ -332,6 +337,9 @@ __all__ = [
     "ComplianceScheduleAnchor",
     "ComplianceFilingStatus",
     "ComplianceRecordOutcome",
+    "SSOProvisioningRequest",
+    "SSOProvisioningStatus",
+    "SSOProvisioningMatchBasis",
     "AiDecisionLog",
     "DocumentDiscussionMessage",
     "DocumentDiscussionThread",
