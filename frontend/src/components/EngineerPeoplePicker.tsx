@@ -147,7 +147,9 @@ export function EngineerPeoplePicker({
                       <span className="block text-xs text-muted-foreground">
                         {hasLogin
                           ? eng.linked_user?.email || `User #${eng.user_id}`
-                          : 'No login — link on Employees profile to assign'}
+                          : requireLogin
+                            ? 'No login — link on Employees profile to assign'
+                            : 'No login — can be named, but will not be notified'}
                       </span>
                     </span>
                   </button>
