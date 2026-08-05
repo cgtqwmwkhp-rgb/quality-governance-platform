@@ -33,10 +33,10 @@ def test_expand_adds_golden_thread_tables():
 
 
 def test_middleware_rls_tables_include_gt_expansion():
-    # 23 up to this migration, plus the two Compliance Schedule tables hardened by
-    # 20260913_cs_wave0. See test_rls_force_expand_actions.py for why the bare
+    # 23 up to this migration, plus CS tables (20260913_cs_wave0) and sso_provisioning_requests
+    # (20261012_rls_sso_prov). See test_rls_force_expand_actions.py for why the bare
     # count is kept.
-    assert len(RLS_TABLES) == 25
+    assert len(RLS_TABLES) == 26
     for table in ("risks_v2", "evidence_assets"):
         assert table in RLS_TABLES
 
