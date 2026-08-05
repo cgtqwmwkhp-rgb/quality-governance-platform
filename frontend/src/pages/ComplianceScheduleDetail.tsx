@@ -1,11 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { complianceScheduleApi } from '../api/client'
+import { getCurrentUserId } from '../utils/auth'
 import type { ComplianceRecord, ComplianceRequirement } from '../api/complianceScheduleClient'
-import { statusChipClass, statusLabel } from './complianceScheduleHelpers'
+import {
+  anchorHint,
+  anchorLabel,
+  frequencyLabel,
+  ownershipOf,
+  statusChipClass,
+  statusLabel,
+} from './complianceScheduleHelpers'
+import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { RecordCompletionSheet } from './compliance/RecordCompletionSheet'
 import { toast } from '../contexts/ToastContext'
 
@@ -13,6 +22,8 @@ export default function ComplianceScheduleDetail() {
   const { id } = useParams<{ id: string }>()
   const requirementId = Number(id)
   const { t } = useTranslation()
+  const currentUserId = useMemo(() => getCurrentUserId(), [])
+  const ownershipLabel = useOwnershipLabel()
   const [requirement, setRequirement] = useState<ComplianceRequirement | null>(null)
   const [records, setRecords] = useState<ComplianceRecord[]>([])
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -92,6 +103,15 @@ export default function ComplianceScheduleDetail() {
         </div>
       </div>
 
+      {requirement.description && (
+        <p
+          className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+          data-testid="compliance-schedule-detail-description"
+        >
+          {requirement.description}
+        </p>
+      )}
+
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-border bg-card p-4 text-sm">
         <div>
           <dt className="text-muted-foreground">{t('compliance.schedule.due', 'Due')}</dt>
@@ -108,8 +128,38 @@ export default function ComplianceScheduleDetail() {
           </dd>
         </div>
         <div>
+          <dt className="text-muted-foreground">
+            {t('compliance.schedule.frequency', 'Frequency')}
+          </dt>
+          <dd className="font-medium mt-0.5" data-testid="compliance-schedule-detail-frequency">
+            {frequencyLabel(requirement.frequency_months, requirement.frequency_days) ??
+              t('compliance.schedule.frequency.none', 'No fixed interval')}
+          </dd>
+        </div>
+        <div>
           <dt className="text-muted-foreground">{t('compliance.schedule.anchor', 'Anchor')}</dt>
-          <dd className="font-medium mt-0.5">{requirement.anchor}</dd>
+          <dd className="font-medium mt-0.5" data-testid="compliance-schedule-detail-anchor">
+            {anchorLabel(requirement.anchor)}
+          </dd>
+          {anchorHint(requirement.anchor) && (
+            <p className="text-xs text-muted-foreground mt-0.5">{anchorHint(requirement.anchor)}</p>
+          )}
+        </div>
+        <div>
+          <dt className="text-muted-foreground">
+            {t('compliance.schedule.statutory_status', 'Statutory')}
+          </dt>
+          <dd className="font-medium mt-0.5" data-testid="compliance-schedule-detail-statutory">
+            {requirement.statutory
+              ? t('compliance.schedule.statutory.yes', 'Required by law')
+              : t('compliance.schedule.statutory.no', 'Not a statutory obligation')}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">{t('compliance.schedule.owner', 'Owner')}</dt>
+          <dd className="font-medium mt-0.5" data-testid="compliance-schedule-detail-owner">
+            {ownershipLabel(ownershipOf(requirement.owner_id, currentUserId))}
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">
@@ -117,6 +167,20 @@ export default function ComplianceScheduleDetail() {
           </dt>
           <dd className="font-medium mt-0.5">{requirement.regulatory_basis || '—'}</dd>
         </div>
+        {requirement.location_id != null && (
+          <div>
+            <dt className="text-muted-foreground">
+              {t('compliance.schedule.location', 'Location')}
+            </dt>
+            {/* The register has no name for this id without reaching into the
+                safety-assets module, which sits behind a different permission.
+                Showing the reference is honest; hiding a site-scoped obligation
+                would not be. */}
+            <dd className="font-medium mt-0.5" data-testid="compliance-schedule-detail-location">
+              #{requirement.location_id}
+            </dd>
+          </div>
+        )}
       </dl>
 
       <section className="rounded-lg border border-border bg-card">
