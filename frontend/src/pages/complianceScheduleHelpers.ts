@@ -47,6 +47,58 @@ export function ownershipOf(
   return currentUserId !== null && ownerId === currentUserId ? 'you' : 'other'
 }
 
+/**
+ * How often the obligation recurs.
+ *
+ * When both intervals are set the scheduler adds them — months first, then days
+ * (`compute_next_due` in compliance_schedule_policy.py) — so both are reported.
+ * Picking one and dropping the other would understate the real interval.
+ *
+ * Returns null when no interval is recorded, so callers can distinguish "does
+ * not recur on a fixed interval" from a frequency of zero.
+ */
+export function frequencyLabel(
+  months: number | null | undefined,
+  days: number | null | undefined,
+): string | null {
+  const m = typeof months === 'number' && months > 0 ? months : null
+  const d = typeof days === 'number' && days > 0 ? days : null
+  if (m === null && d === null) return null
+
+  const parts: string[] = []
+  if (m !== null) parts.push(m === 1 ? '1 month' : `${m} months`)
+  if (d !== null) parts.push(d === 1 ? '1 day' : `${d} days`)
+  return `Every ${parts.join(' and ')}`
+}
+
+export type ComplianceAnchor = 'completion' | 'schedule'
+
+/**
+ * The raw anchor values are `schedule` and `completion`, which say nothing to
+ * the person reading the record about which date the next one is measured from.
+ */
+export function anchorLabel(anchor: ComplianceAnchor | null | undefined): string {
+  switch (anchor) {
+    case 'completion':
+      return 'From completion'
+    case 'schedule':
+      return 'Fixed schedule'
+    default:
+      return '—'
+  }
+}
+
+export function anchorHint(anchor: ComplianceAnchor | null | undefined): string | null {
+  switch (anchor) {
+    case 'completion':
+      return 'The next date is measured from the day the work is done, so completing late pushes the whole schedule back.'
+    case 'schedule':
+      return 'The next date is measured from the current due date, so the anniversary holds even if the work is done late.'
+    default:
+      return null
+  }
+}
+
 export function deriveStatusFromDue(
   nextDue: string | null | undefined,
   now: Date = new Date(),

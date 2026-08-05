@@ -12,7 +12,8 @@ import type {
   ComplianceScheduleStats,
   ComplianceStatus,
 } from '../api/complianceScheduleClient'
-import { ownershipOf, statusChipClass, statusLabel, type Ownership } from './complianceScheduleHelpers'
+import { ownershipOf, statusChipClass, statusLabel } from './complianceScheduleHelpers'
+import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceSchedule() {
@@ -25,12 +26,7 @@ export default function ComplianceSchedule() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activating, setActivating] = useState<string | null>(null)
   const currentUserId = useMemo(() => getCurrentUserId(), [])
-
-  const ownershipLabel = (ownership: Ownership): string => {
-    if (ownership === 'you') return t('compliance.schedule.owner.you', 'Owned by you')
-    if (ownership === 'other') return t('compliance.schedule.owner.other', 'Owned by someone else')
-    return t('compliance.schedule.owner.unassigned', 'Unassigned')
-  }
+  const ownershipLabel = useOwnershipLabel()
 
   const load = useCallback(async () => {
     setLoading(true)

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import en from '../../i18n/locales/en.json'
 import cy from '../../i18n/locales/cy.json'
-import { ownershipOf, statusLabel } from '../complianceScheduleHelpers'
+import {
+  anchorHint,
+  anchorLabel,
+  frequencyLabel,
+  ownershipOf,
+  statusLabel,
+} from '../complianceScheduleHelpers'
 
 describe('Compliance Schedule copy', () => {
   it('never uses Expired in en/cy schedule keys', () => {
@@ -51,5 +57,55 @@ describe('ownershipOf', () => {
 
   it('does not treat owner 0 as unowned', () => {
     expect(ownershipOf(0, 0)).toBe('you')
+  })
+})
+
+describe('frequencyLabel', () => {
+  it('reports a month interval', () => {
+    expect(frequencyLabel(12, null)).toBe('Every 12 months')
+    expect(frequencyLabel(1, null)).toBe('Every 1 month')
+  })
+
+  it('reports a day interval', () => {
+    expect(frequencyLabel(null, 30)).toBe('Every 30 days')
+    expect(frequencyLabel(null, 1)).toBe('Every 1 day')
+  })
+
+  it('reports both intervals when both are set, because the scheduler adds them', () => {
+    // compute_next_due adds the months first and then the days, so reporting
+    // only the months would understate the real gap between occurrences.
+    expect(frequencyLabel(6, 15)).toBe('Every 6 months and 15 days')
+    expect(frequencyLabel(1, 1)).toBe('Every 1 month and 1 day')
+  })
+
+  it('returns null when no interval is recorded, rather than inventing one', () => {
+    expect(frequencyLabel(null, null)).toBeNull()
+    expect(frequencyLabel(undefined, undefined)).toBeNull()
+  })
+
+  it('treats zero and negative intervals as absent', () => {
+    // The API enforces ge=1, so these only arrive from bad data. Rendering
+    // "Every 0 months" would be worse than admitting there is no interval.
+    expect(frequencyLabel(0, 0)).toBeNull()
+    expect(frequencyLabel(-3, null)).toBeNull()
+    expect(frequencyLabel(0, 14)).toBe('Every 14 days')
+  })
+})
+
+describe('anchorLabel', () => {
+  it('translates the stored anchor into which date the next one is measured from', () => {
+    expect(anchorLabel('schedule')).toBe('Fixed schedule')
+    expect(anchorLabel('completion')).toBe('From completion')
+  })
+
+  it('falls back to an em dash for an unset anchor', () => {
+    expect(anchorLabel(null)).toBe('—')
+    expect(anchorLabel(undefined)).toBe('—')
+  })
+
+  it('explains each anchor, and explains nothing when there is no anchor', () => {
+    expect(anchorHint('schedule')).toMatch(/current due date/)
+    expect(anchorHint('completion')).toMatch(/day the work is done/)
+    expect(anchorHint(null)).toBeNull()
   })
 })
