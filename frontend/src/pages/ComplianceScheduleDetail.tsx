@@ -18,6 +18,7 @@ import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { RecordCompletionSheet } from './compliance/RecordCompletionSheet'
 import { RequirementFormDialog } from './compliance/RequirementFormDialog'
 import { RequirementLifecycleControls } from './compliance/RequirementLifecycleControls'
+import { RecordEvidenceSection } from './compliance/RecordEvidenceSection'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceScheduleDetail() {
@@ -218,9 +219,17 @@ export default function ComplianceScheduleDetail() {
           {t('compliance.schedule.records', 'Occurrence records')}
         </div>
         {records.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground" data-testid="compliance-schedule-records-empty">
-            {t('compliance.schedule.records.empty', 'No completed or missed occurrences yet.')}
-          </p>
+          <div className="p-6 text-sm text-muted-foreground space-y-1">
+            <p data-testid="compliance-schedule-records-empty">
+              {t('compliance.schedule.records.empty', 'No completed or missed occurrences yet.')}
+            </p>
+            <p data-testid="compliance-schedule-evidence-needs-record">
+              {t(
+                'compliance.schedule.evidence.needs_record',
+                'Evidence attaches to an occurrence once one is recorded — not to the obligation itself.',
+              )}
+            </p>
+          </div>
         ) : (
           <ul className="divide-y divide-border" data-testid="compliance-schedule-records">
             {records.map((rec) => (
@@ -230,10 +239,9 @@ export default function ComplianceScheduleDetail() {
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {t('compliance.schedule.due', 'Due')} {rec.due_date}
-                  {rec.completed_at
-                    ? ` · ${new Date(rec.completed_at).toLocaleString()}`
-                    : ''}
+                  {rec.completed_at ? ` · ${new Date(rec.completed_at).toLocaleString()}` : ''}
                 </div>
+                <RecordEvidenceSection recordId={rec.id} referenceNumber={rec.reference_number} />
               </li>
             ))}
           </ul>
