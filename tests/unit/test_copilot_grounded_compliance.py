@@ -158,11 +158,38 @@ def test_compliance_intents_are_matched(message, expected):
 
 
 @pytest.mark.parametrize(
+    "message",
+    [
+        # "compliance" next to a due-date word, but about certification rather than
+        # the register. These are the cases that separate a matcher requiring the
+        # register's vocabulary from one that fires on the word "compliance" — the
+        # earlier ISO cases do not, because none of them asks about a date.
+        "is our iso 9001 compliance overdue for review?",
+        "when is our compliance certification coming up",
+        "has our compliance audit expired",
+    ],
+)
+def test_certification_questions_are_not_hijacked_by_the_register(message):
+    """An ISO-status question must keep reaching the simulator's ISO refusal.
+
+    Answering "is our ISO 9001 compliance overdue for review?" with a count of fire
+    risk assessments would be a confidently wrong answer to a different question.
+    """
+    assert detect_grounded_intent(message) is None
+
+
+@pytest.mark.parametrize(
     "message,expected",
     [
         # "action" keeps its existing owner, exactly as before this intent existed.
         ("Show overdue compliance actions", "overdue_actions"),
         ("which compliance actions are past due?", "overdue_actions"),
+        # These two are where the rule *order* decides, rather than the matcher: they
+        # satisfy the overdue_actions rule AND name the register. The two above do not
+        # ("compliance actions" is not register vocabulary), so they would resolve the
+        # same way whichever rule ran first and cannot pin the precedence on their own.
+        ("which actions are overdue on our compliance obligations?", "overdue_actions"),
+        ("are there overdue actions against any statutory requirements?", "overdue_actions"),
         # Overdue is asked first, so a question asking both resolves one way, always.
         ("which compliance obligations are overdue or due soon?", "compliance_overdue"),
         # The four original intents are untouched.
