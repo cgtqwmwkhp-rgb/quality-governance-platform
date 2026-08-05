@@ -76,12 +76,15 @@ class TestAuditsAPI:
         auth_headers: dict,
     ):
         """Test listing audit templates."""
+        # auth_headers JWT is tenant_id=1; test_user is on a fresh tenant fixture.
+        # List applies apply_tenant_filter, so seeds must match the JWT tenant.
         templates = [
             AuditTemplate(
                 name=f"Template {i}",
                 category="Safety",
                 audit_type="inspection",
-                created_by_id=test_user.id,
+                created_by_id=1,
+                tenant_id=1,
                 reference_number=generate_test_reference("TPL"),
             )
             for i in range(1, 4)
@@ -98,6 +101,8 @@ class TestAuditsAPI:
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
+        names = {item["name"] for item in data["items"]}
+        assert {"Template 1", "Template 2", "Template 3"}.issubset(names)
         assert len(data["items"]) >= 3
         assert data.get("total", 0) >= 3
 
@@ -569,21 +574,24 @@ class TestAuditsAPI:
                 name="Safety 1",
                 category="Safety",
                 audit_type="inspection",
-                created_by_id=test_user.id,
+                created_by_id=1,
+                tenant_id=1,
                 reference_number=generate_test_reference("TPL"),
             ),
             AuditTemplate(
                 name="Safety 2",
                 category="Safety",
                 audit_type="inspection",
-                created_by_id=test_user.id,
+                created_by_id=1,
+                tenant_id=1,
                 reference_number=generate_test_reference("TPL"),
             ),
             AuditTemplate(
                 name="Quality 1",
                 category="Quality",
                 audit_type="audit",
-                created_by_id=test_user.id,
+                created_by_id=1,
+                tenant_id=1,
                 reference_number=generate_test_reference("TPL"),
             ),
         ]

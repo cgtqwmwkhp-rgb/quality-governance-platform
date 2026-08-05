@@ -578,10 +578,19 @@ jobs:
           path: installed-from-lock.txt
           retention-days: 90
 
-  integration-tests:
-    name: Integration Tests
+  # Integration tests are sharded across matrix legs for wall-clock. Branch
+  # protection requires a check named exactly "Integration Tests". Matrix jobs
+  # would publish "Integration Tests (1)", "(2)", … and detach that required
+  # context — so shards use a different name, and a thin aggregator below keeps
+  # the exact required name and fails closed if any shard failed/cancelled.
+  integration-test-shards:
+    name: Integration Test Shard
     runs-on: ubuntu-latest
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
     services:
       postgres:
         image: postgres:16
@@ -605,7 +614,7 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -644,16 +653,150 @@ jobs:
         run: |
           python3 scripts/validate_quarantine.py
 
-      - name: Run integration tests
+      - name: Select shard files and run integration tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           REDIS_URL: redis://localhost:6379/0
           TESTING: "1"
+          SHARD: ${{ matrix.shard }}
+          SHARD_COUNT: "4"
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=43 --junit-xml=junit-integration.xml
-          # EG-05: maintained at 43% (actual integration coverage 43.48%; full-suite 70% target in pyproject.toml)
+          set -euo pipefail
+          # Deterministic round-robin over sorted test file paths — no pytest-split /
+          # xdist dependency. File count balance is even; runtime balance is unknown
+          # until the first sharded CI run.
+          mapfile -t ALL_FILES < <(find tests/integration -name 'test_*.py' | LC_ALL=C sort)
+          SELECTED=()
+          for i in "${!ALL_FILES[@]}"; do
+            if (( (i % SHARD_COUNT) + 1 == SHARD )); then
+              SELECTED+=("${ALL_FILES[$i]}")
+            fi
+          done
+          echo "Shard ${SHARD}/${SHARD_COUNT}: ${#SELECTED[@]} of ${#ALL_FILES[@]} files"
+          printf '  %s\n' "${SELECTED[@]}"
+          if [ "${#SELECTED[@]}" -eq 0 ]; then
+            echo "::error::Shard ${SHARD} selected zero test files"
+            exit 1
+          fi
+          # Per-shard coverage cannot meet the suite floor; the aggregator combines
+          # .coverage data and enforces --fail-under=43 (EG-05).
+          pytest "${SELECTED[@]}" -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=0 --junit-xml=junit-integration.xml
+          mv .coverage ".coverage.shard${SHARD}"
 
-      - name: Upload coverage reports
+      - name: Upload shard coverage data
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-integration-${{ matrix.shard }}
+          path: .coverage.shard${{ matrix.shard }}
+          # Dotfiles are omitted unless this is set — without it the aggregator
+          # sees zero coverage artifacts and fails EG-05 combine.
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+        if: always()
+
+      - name: Upload shard JUnit XML
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-integration-tests-${{ matrix.shard }}
+          path: junit-integration.xml
+          retention-days: 30
+          if-no-files-found: warn
+        if: always()
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [integration-test-shards]
+    # always() so the required check named "Integration Tests" still reports when
+    # shards fail (a skipped required check can read as success to branch protection).
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download shard JUnit artifacts
+        if: always()
+        uses: actions/download-artifact@v8
+        with:
+          pattern: junit-integration-tests-*
+          merge-multiple: true
+          path: junit-shards
+
+      - name: Merge JUnit XML for quality-trend
+        if: always()
+        run: |
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          shard_dir = Path("junit-shards")
+          files = sorted(shard_dir.glob("*.xml")) if shard_dir.is_dir() else []
+          if not files:
+              print("No shard JUnit files found; writing empty aggregate", file=sys.stderr)
+              root = ET.Element("testsuites")
+          else:
+              root = ET.Element("testsuites")
+              for path in files:
+                  parsed = ET.parse(path).getroot()
+                  if parsed.tag == "testsuites":
+                      for child in list(parsed):
+                          root.append(child)
+                  else:
+                      root.append(parsed)
+          ET.ElementTree(root).write("junit-integration.xml", encoding="UTF-8", xml_declaration=True)
+          print(f"Merged {len(files)} JUnit file(s) -> junit-integration.xml")
+          PY
+
+      - name: Upload merged JUnit XML (Stage 2.0)
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-integration-tests
+          path: junit-integration.xml
+          retention-days: 30
+          if-no-files-found: warn
+        if: always()
+
+      - name: Download shard coverage data
+        if: always()
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-integration-*
+          merge-multiple: true
+          path: coverage-shards
+
+      - name: Combine coverage and enforce EG-05 floor
+        if: always()
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install 'coverage>=7'
+          shopt -s nullglob
+          files=(coverage-shards/.coverage.*)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No shard coverage data to combine"
+            echo "Downloaded tree:"
+            find coverage-shards -type f -print 2>/dev/null || echo "(coverage-shards missing)"
+            exit 1
+          fi
+          cp "${files[@]}" .
+          coverage combine
+          # EG-05: integration floor stays 43%. Do not use bare `coverage xml` here —
+          # it inherits pyproject fail_under=70 (full-suite target) and fails after a
+          # successful 47% combine. Keep the global 70 floor intact for other jobs.
+          coverage xml -o coverage.xml --fail-under=0
+          coverage report --fail-under=43
+
+      - name: Upload combined coverage reports
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
@@ -661,13 +804,16 @@ jobs:
           name: codecov-umbrella
         if: always()
 
-      - name: Upload JUnit XML (Stage 2.0)
-        uses: actions/upload-artifact@v7
-        with:
-          name: junit-integration-tests
-          path: junit-integration.xml
-          retention-days: 30
+      - name: Fail closed if any shard failed or was cancelled
         if: always()
+        run: |
+          set -euo pipefail
+          result="${{ needs.integration-test-shards.result }}"
+          echo "integration-test-shards result: ${result}"
+          if [ "${result}" != "success" ]; then
+            echo "::error::Integration Test Shard matrix did not succeed (result=${result}). Required check Integration Tests fails closed."
+            exit 1
+          fi
 
   security-scan:
     name: Security Scan
