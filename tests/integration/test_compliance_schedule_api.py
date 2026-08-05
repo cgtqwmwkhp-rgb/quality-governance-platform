@@ -272,9 +272,8 @@ async def test_a_refused_duplicate_leaves_exactly_one_obligation(
     # the harness wipes between tests, and the test would only fail on
     # PostgreSQL, where rows persist across a session. It did exactly that.
     other = await _seed_template(test_session)
-    assert (
-        await _activate(client, superuser_auth_headers, other.template_key)
-    ).status_code == 201
+    confounder = await _activate(client, superuser_auth_headers, other.template_key)
+    assert confounder.status_code == 201
 
     listing = await client.get(
         "/api/v1/compliance-schedule/requirements",
