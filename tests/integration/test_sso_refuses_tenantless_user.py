@@ -16,7 +16,8 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.exc import MissingGreenlet
+
+from src.infrastructure.database import async_session_maker
 
 from src.domain.models.tenant import TenantUser
 from src.domain.models.user import User
@@ -108,34 +109,35 @@ async def test_non_production_still_provisions_and_records_membership(test_sessi
 
 
 @pytest.mark.asyncio
-async def test_an_existing_user_is_not_refused_by_the_new_user_guard(test_session, monkeypatch):
+async def test_an_existing_user_signs_in_again_in_production(monkeypatch):
     """AC-05: bound the blast radius. Only brand-new accounts reach the new refusal.
 
     Someone who already has an account must keep signing in even in production, or this
     change would lock out every existing SSO user.
 
-    This cannot assert all the way to a token, because the existing-user path then calls
-    ``_stamp_last_login``, whose ``db.refresh`` drops the eagerly loaded ``roles``
-    collection and makes the subsequent token build a lazy load. That raises
-    MissingGreenlet on an async session, and it does so on unmodified main as well as
-    here — a pre-existing defect being investigated separately, deliberately not fixed in
-    this PR. What matters for *this* change is the refusal, so assert on that precisely.
+    Each sign-in gets its own session, because that is what ``get_db`` hands each request.
+    Sharing one session across both is not merely unrealistic, it changes the outcome:
+    ``refresh`` re-applies eager-load options only for an instance that entered the identity
+    map via a query, so a shared session hands the second sign-in the INSERT-created
+    instance and produces a MissingGreenlet that no real request can reach.
     """
     email = f"existing-{uuid.uuid4().hex[:10]}@example.com"
     oid = uuid.uuid4().hex[:32]
 
-    # First sign-in outside production creates and places the account.
-    created, _, _ = await _exchange(test_session, monkeypatch, email=email, production=False, azure_oid=oid)
-    assert created.id is not None
-
-    # Second sign-in, now in production. The new-user guard must not fire.
-    try:
-        _again, access_token, _refresh = await _exchange(
-            test_session, monkeypatch, email=email, production=True, azure_oid=oid
+    async with async_session_maker() as first_request:
+        created, first_token, _ = await _exchange(
+            first_request, monkeypatch, email=email, production=False, azure_oid=oid
         )
-    except TenantProvisioningRequiredError:  # pragma: no cover - the regression this guards
-        pytest.fail("an existing SSO user was refused by the new-user provisioning guard")
-    except MissingGreenlet:
-        pytest.xfail("pre-existing: _stamp_last_login's refresh un-loads User.roles")
-    else:
-        assert access_token
+        created_id = created.id
+        assert first_token, "a brand-new user must receive a token, not a lazy-load 500"
+
+    async with async_session_maker() as second_request:
+        try:
+            again, access_token, _refresh = await _exchange(
+                second_request, monkeypatch, email=email, production=True, azure_oid=oid
+            )
+        except TenantProvisioningRequiredError:  # pragma: no cover - the regression guarded
+            pytest.fail("an existing SSO user was refused by the new-user provisioning guard")
+
+    assert again.id == created_id
+    assert access_token
