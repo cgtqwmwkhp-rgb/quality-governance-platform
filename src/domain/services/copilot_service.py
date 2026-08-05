@@ -400,6 +400,7 @@ class CopilotService:
             history,
             context,
             tenant_id=tenant_id,
+            user_id=user_id,
         )
         latency_ms = int((time.time() - start_time) * 1000)
 
@@ -439,9 +440,13 @@ class CopilotService:
         context: dict,
         *,
         tenant_id: int,
+        user_id: Optional[int] = None,
     ) -> tuple[str, Optional[dict], str]:
         """Generate AI response — grounded when the inference flag is on and the
         question matches a closed intent; otherwise the honesty simulator.
+
+        ``user_id`` is forwarded because some grounded intents are permission-gated
+        and the tenant alone does not say whether this caller may see the figure.
         """
         if copilot_inference_is_enabled():
             from src.domain.services.copilot_grounding import CopilotGroundingService
@@ -449,6 +454,7 @@ class CopilotService:
             outcome = await CopilotGroundingService(self.db).try_answer(
                 user_message,
                 tenant_id=tenant_id,
+                user_id=user_id,
             )
             if outcome.kind == "answered" and outcome.content is not None:
                 return outcome.content, None, outcome.model_used or "grounded-facts"

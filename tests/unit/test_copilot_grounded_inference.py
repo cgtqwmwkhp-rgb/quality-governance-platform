@@ -175,7 +175,9 @@ async def test_citation_failure_returns_honesty_refusal(monkeypatch):
         def __init__(self, db):
             pass
 
-        async def try_answer(self, question, *, tenant_id):
+        # Signature mirrors CopilotGroundingService.try_answer, which now also
+        # receives the caller's user_id for its permission-gated intents.
+        async def try_answer(self, question, *, tenant_id, user_id=None):
             return CITATION_REFUSED
 
     monkeypatch.setattr(

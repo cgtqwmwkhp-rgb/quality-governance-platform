@@ -68,6 +68,26 @@ async def compliance_schedule_is_open(session_factory: SessionFactory) -> bool:
     return not await compliance_schedule_kill_switch_engaged(session_factory)
 
 
+def compliance_schedule_is_open_last_known() -> bool:
+    """``compliance_schedule_is_open`` for callers that must not perform I/O.
+
+    Same composition and the same direction of each input, but it reads the cached
+    kill verdict instead of refreshing it, so it never opens a session. That matters
+    for a caller running on someone else's transaction: a failed read there would
+    leave that session unusable for the caller's own work. This is the posture
+    ``copilot_service.send_message`` already takes with its own switch.
+
+    The cost is that a process which has never refreshed the verdict sees no kill.
+    That is the subtract-only direction failing safe-for-availability, not
+    safe-for-closure, and it is why the configuration opener is checked first and
+    is the gate that must be relied on: ``compliance_schedule_enabled`` is read from
+    configuration on every call and cannot be stale.
+    """
+    if not settings.compliance_schedule_enabled:
+        return False
+    return not compliance_schedule_kill_switch_last_known()
+
+
 async def compliance_schedule_kill_switch_engaged(session_factory: SessionFactory) -> bool:
     """Whether an operator has closed Compliance Schedule. Refreshes at most once per TTL.
 
