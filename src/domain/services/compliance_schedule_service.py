@@ -177,6 +177,45 @@ class ComplianceScheduleService:
                 code="ENTITY_NOT_FOUND",
             )
 
+    async def _assert_template_not_already_active(
+        self,
+        template_id: int,
+        *,
+        tenant_id: int,
+        location_id: Optional[int],
+    ) -> None:
+        """Refuse a second live copy of the same template at the same place.
+
+        Activation had no idempotency check, so pressing Activate twice — or
+        double-clicking it once — produced two identical obligations, both on the
+        register and both notifying their owner on the same schedule.
+
+        Scoped to location because the same template legitimately applies at
+        several sites: a fire risk assessment per building is not a duplicate.
+        Retired and soft-deleted rows are excluded so that retiring an obligation
+        and later activating the template afresh remains a clean cycle rather
+        than a permanent block.
+        """
+        query = select(ComplianceRequirement.id, ComplianceRequirement.reference_number).where(
+            ComplianceRequirement.template_id == template_id,
+            ComplianceRequirement.is_active.is_(True),
+            ComplianceRequirement.deleted_at.is_(None),
+        )
+        query = _tenant_filter(query, ComplianceRequirement, tenant_id)
+        if location_id is None:
+            query = query.where(ComplianceRequirement.location_id.is_(None))
+        else:
+            query = query.where(ComplianceRequirement.location_id == location_id)
+
+        existing = (await self.db.execute(query)).first()
+        if existing is None:
+            return
+        raise ConflictError(
+            f"This obligation is already on the register as {existing.reference_number}",
+            code="DUPLICATE_ENTITY",
+            details={"requirement_id": existing.id, "reference_number": existing.reference_number},
+        )
+
     # ------------------------------------------------------------------
     # Catalogue
     # ------------------------------------------------------------------
@@ -207,6 +246,11 @@ class ComplianceScheduleService:
         template = await self._get_template_by_key(template_key)
         await self._assert_location_in_tenant(location_id, tenant_id=tenant_id)
         await self._assert_owner_in_tenant(owner_id, tenant_id=tenant_id)
+        await self._assert_template_not_already_active(
+            template.id,
+            tenant_id=tenant_id,
+            location_id=location_id,
+        )
 
         clock = _as_utc(now)
         due = next_due_date or clock.date()

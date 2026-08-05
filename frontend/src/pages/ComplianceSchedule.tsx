@@ -82,8 +82,17 @@ export default function ComplianceSchedule() {
       })
       toast.success(t('compliance.schedule.activate.success', 'Requirement activated'))
       await load()
-    } catch {
-      toast.error(t('compliance.schedule.activate.error', 'Could not activate template'))
+    } catch (err) {
+      // Activation now refuses a template already live at this location, and the
+      // refusal names the obligation that already covers it. A fixed string here
+      // would discard that and leave the user pressing a button that keeps
+      // failing for reasons the server has already explained.
+      toast.error(
+        getApiErrorMessage(
+          err,
+          t('compliance.schedule.activate.error', 'Could not activate template'),
+        ),
+      )
     } finally {
       setActivating(null)
     }

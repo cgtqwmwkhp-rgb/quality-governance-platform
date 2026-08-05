@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -182,3 +183,165 @@ async def test_create_with_due_overrides(
     assert body["next_due_date"] == "2026-06-15"
     assert body["last_completed_at"] is not None
     assert body["anchor"] == "completion"
+
+
+# ---------------------------------------------------------------------------
+# Duplicate activation
+# ---------------------------------------------------------------------------
+#
+# These exercise the real SQL rather than a mocked session, because what is
+# being asserted is the shape of the WHERE clause — which rows count as an
+# existing activation — and a mock can only replay whatever it was told to
+# return.
+#
+# Each test seeds its own uniquely-keyed template. The integration harness only
+# drops tables on SQLite, so on PostgreSQL rows persist between tests in a
+# session; a shared template key would collide and `_get_template_by_key` would
+# raise on the second reader.
+
+
+async def _seed_template(test_session) -> ComplianceRequirementTemplate:
+    template = ComplianceRequirementTemplate(
+        tenant_id=None,
+        template_key=f"dup-{uuid4().hex[:12]}",
+        title="Fire Risk Assessment",
+        taxonomy_id="HS-01",
+        description=None,
+        regulatory_basis=None,
+        frequency_months=12,
+        frequency_days=None,
+        anchor=ComplianceScheduleAnchor.SCHEDULE,
+        statutory=True,
+        is_active=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+    return template
+
+
+@pytest.fixture
+async def unique_template(test_session):
+    return await _seed_template(test_session)
+
+
+async def _activate(client, headers, key, **body):
+    return await client.post(
+        f"/api/v1/compliance-schedule/catalogue/{key}/activate",
+        headers=headers,
+        json={"next_due_date": "2026-04-01", **body},
+    )
+
+
+@pytest.mark.asyncio
+async def test_activating_the_same_template_twice_conflicts(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    superuser_auth_headers: dict,
+):
+    key = unique_template.template_key
+    first = await _activate(client, superuser_auth_headers, key)
+    assert first.status_code == 201, first.text
+
+    second = await _activate(client, superuser_auth_headers, key)
+    assert second.status_code == 409, second.text
+
+    body = second.json()
+    # The user needs to know which obligation already covers this, not merely
+    # that something does.
+    assert first.json()["reference_number"] in str(body)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_duplicate_leaves_exactly_one_obligation(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    superuser_auth_headers: dict,
+    test_session,
+):
+    key = unique_template.template_key
+    first = await _activate(client, superuser_auth_headers, key)
+    assert first.status_code == 201
+    assert (await _activate(client, superuser_auth_headers, key)).status_code == 409
+
+    # A second, different template that happens to share the title. This is here
+    # so the assertion below has to be scoped by template rather than by title:
+    # without a confounding row the two are indistinguishable on SQLite, which
+    # the harness wipes between tests, and the test would only fail on
+    # PostgreSQL, where rows persist across a session. It did exactly that.
+    other = await _seed_template(test_session)
+    confounder = await _activate(client, superuser_auth_headers, other.template_key)
+    assert confounder.status_code == 201
+
+    listing = await client.get(
+        "/api/v1/compliance-schedule/requirements",
+        headers=superuser_auth_headers,
+        params={"page_size": 100},
+    )
+    assert listing.status_code == 200
+    items = listing.json()["items"]
+
+    same_template = [i for i in items if i["template_id"] == unique_template.id]
+    assert len(same_template) == 1
+
+    # The confounder is genuinely present, so the scoping above is doing work
+    # rather than passing by coincidence.
+    same_title = [i for i in items if i["title"] == unique_template.title]
+    assert len(same_title) >= 2
+
+
+@pytest.mark.asyncio
+async def test_retiring_an_obligation_frees_the_template_again(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    superuser_auth_headers: dict,
+):
+    key = unique_template.template_key
+    first = await _activate(client, superuser_auth_headers, key)
+    assert first.status_code == 201
+    first_id = first.json()["id"]
+
+    retire = await client.post(
+        f"/api/v1/compliance-schedule/requirements/{first_id}/deactivate",
+        headers=superuser_auth_headers,
+    )
+    assert retire.status_code == 200, retire.text
+
+    again = await _activate(client, superuser_auth_headers, key)
+    assert again.status_code == 201, again.text
+    # A fresh obligation, not the retired one silently revived: reactivation is
+    # a different operation with a different audit trail.
+    assert again.json()["id"] != first_id
+
+
+@pytest.mark.asyncio
+async def test_the_same_template_at_two_sites_is_not_a_duplicate(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    superuser_auth_headers: dict,
+    test_session,
+):
+    from src.domain.models.location import Location, LocationKind
+
+    sites = []
+    for name in ("Depot A", "Depot B"):
+        site = Location(tenant_id=1, name=f"{name} {uuid4().hex[:6]}", kind=LocationKind.SITE)
+        test_session.add(site)
+        sites.append(site)
+    await test_session.commit()
+    for site in sites:
+        await test_session.refresh(site)
+
+    key = unique_template.template_key
+    a = await _activate(client, superuser_auth_headers, key, location_id=sites[0].id)
+    assert a.status_code == 201, a.text
+    b = await _activate(client, superuser_auth_headers, key, location_id=sites[1].id)
+    assert b.status_code == 201, b.text
+
+    # ...but a second one at the same site still is.
+    again = await _activate(client, superuser_auth_headers, key, location_id=sites[0].id)
+    assert again.status_code == 409, again.text
