@@ -19,6 +19,7 @@ from src.domain.exceptions import BadRequestError
 from src.domain.models.audit import AuditRun
 from src.domain.models.capa import CAPAAction
 from src.domain.models.complaint import Complaint
+from src.domain.models.compliance_schedule import ComplianceRequirement
 from src.domain.models.document import Document
 from src.domain.models.incident import Incident
 from src.domain.models.risk import Risk
@@ -35,6 +36,7 @@ SUPPORTED_MODULES = (
     "audits",
     "actions",
     "documents",
+    "compliance_schedule",
 )
 
 SUPPORTED_FORMATS = ("csv",)
@@ -153,6 +155,18 @@ def _document_row(row: Document) -> list[str]:
         _enum_str(row.status),
         _s(row.file_name),
         _dt_str(getattr(row, "created_at", None)),
+    ]
+
+
+def _compliance_schedule_row(row: ComplianceRequirement) -> list[str]:
+    return [
+        str(row.id),
+        _s(row.reference_number),
+        _s(row.title),
+        _s(row.next_due_date),
+        _s(row.owner_id),
+        _s(row.is_active),
+        _s(row.statutory),
     ]
 
 
@@ -275,6 +289,23 @@ _MODULE_SPECS: dict[str, _ModuleSpec] = {
         ],
         row_mapper=_document_row,
         order_by=Document.id.desc(),
+    ),
+    "compliance_schedule": _ModuleSpec(
+        id="compliance_schedule",
+        name="Compliance Schedule",
+        description="Tenant compliance requirements register (CSV sync)",
+        model=ComplianceRequirement,
+        columns=[
+            "id",
+            "reference_number",
+            "title",
+            "next_due_date",
+            "owner",
+            "is_active",
+            "statutory",
+        ],
+        row_mapper=_compliance_schedule_row,
+        order_by=ComplianceRequirement.id.desc(),
     ),
 }
 
