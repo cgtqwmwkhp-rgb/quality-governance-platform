@@ -23,7 +23,7 @@ class _Result:
 
 @pytest.mark.asyncio
 async def test_location_coverage_gaps_marks_missing_fra_and_drill():
-    loc_a = SimpleNamespace(id=1, name="Depot A", kind=SimpleNamespace(value="site"), is_active=True)
+    loc_a = SimpleNamespace(id=1, name="Depot A", kind=SimpleNamespace(value="premises"), is_active=True)
     loc_b = SimpleNamespace(id=2, name="Office B", kind=SimpleNamespace(value="office"), is_active=True)
 
     fra_req = SimpleNamespace(id=10, location_id=1)
@@ -69,3 +69,29 @@ async def test_location_coverage_gaps_fail_closed_without_tenant():
     data = await service.get_location_coverage_gaps(tenant_id=None)  # type: ignore[arg-type]
     assert data["total_locations"] == 0
     assert data["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_location_coverage_gaps_inactive_requirement_is_not_cover():
+    """Retired / inactive requirements stay out of the match set (service query)."""
+    loc = SimpleNamespace(id=3, name="Depot C", kind=SimpleNamespace(value="premises"), is_active=True)
+    # Simulate the DB already applying is_active + deleted_at filters: empty match set.
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _Result([loc]),
+            MagicMock(all=MagicMock(return_value=[])),
+        ]
+    )
+    service = ComplianceScheduleService(db)
+    data = await service.get_location_coverage_gaps(tenant_id=7)
+    assert data["missing_fra"] == 1
+    assert data["missing_fire_drill"] == 1
+    assert data["items"][0]["missing_fra"] is True
+
+
+@pytest.mark.asyncio
+async def test_coverage_location_kinds_are_premises_and_office_only():
+    kinds = ComplianceScheduleService.COVERAGE_LOCATION_KINDS
+    values = {k.value if hasattr(k, "value") else str(k) for k in kinds}
+    assert values == {"premises", "office"}

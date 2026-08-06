@@ -34,7 +34,7 @@
 | Permission / flag boundary | N/A for this report | Same `compliance_schedule:read` + module enable/kill-switch as other CS routes |
 
 ## 4) Acceptance Criteria (AC)
-- [x] AC-01: `GET /api/v1/compliance-schedule/coverage/location-gaps` returns active locations with `has_fra` / `has_fire_drill` and aggregate missing counts, gated by CS enable + kill switch + `compliance_schedule:read`
+- [x] AC-01: `GET /api/v1/compliance-schedule/coverage/location-gaps` returns active **premises/office** locations with `has_fra` / `has_fire_drill` and aggregate missing counts, gated by CS enable + kill switch + `compliance_schedule:read` (site/workshop excluded from denominator)
 - [x] AC-02: Organisation-wide FRA/drill requirements (`location_id IS NULL`) do not mark any location as covered
 - [x] AC-03: Compliance Schedule page shows a coverage panel with totals and per-location gap/ok labels; coverage fetch failure does not blank the register
 - [x] AC-04: Unit tests prove gap marking + org-wide exclusion; client path test exercises the versioned `/coverage/location-gaps` URL

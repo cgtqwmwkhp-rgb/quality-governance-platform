@@ -24,7 +24,7 @@ from src.domain.models.compliance_schedule import (
     ComplianceScheduleAnchor,
 )
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
-from src.domain.models.location import Location
+from src.domain.models.location import Location, LocationKind
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_auto_service import CAPAAutoService
@@ -870,22 +870,28 @@ class ComplianceScheduleService:
 
     FRA_TEMPLATE_KEY = "fire_risk_assessment"
     DRILL_TEMPLATE_KEY = "fire_drill_evacuation"
+    # Catalogue FRA / drill copy is "per premises"; W1 premises + office are the
+    # statutory denominator. site/workshop stay out so CES plant sites do not
+    # inflate false gaps.
+    COVERAGE_LOCATION_KINDS = (LocationKind.PREMISES, LocationKind.OFFICE)
 
     async def get_location_coverage_gaps(
         self,
         *,
         tenant_id: int,
     ) -> dict[str, Any]:
-        """Report active locations missing an active FRA or fire-drill obligation.
+        """Report active premises/offices missing an active FRA or fire-drill obligation.
 
         A gap means there is no **active, non-deleted** requirement for this tenant
         whose ``location_id`` equals the location and whose catalogue
         ``template_key`` is ``fire_risk_assessment`` or ``fire_drill_evacuation``.
         Organisation-wide rows (``location_id IS NULL``) do not cover a site —
-        they are omitted from the match set on purpose.
+        they are omitted from the match set on purpose. Only ``premises`` and
+        ``office`` kinds enter the denominator.
         """
         loc_query = select(Location).where(
             Location.is_active.is_(True),
+            Location.kind.in_(self.COVERAGE_LOCATION_KINDS),
         )
         loc_query = _tenant_filter(loc_query, Location, tenant_id)
         locations = list((await self.db.execute(loc_query)).scalars().all())

@@ -278,7 +278,7 @@ export default function ComplianceSchedule() {
                 <p className="text-xs text-muted-foreground mt-1">
                   {t(
                     'compliance.schedule.coverage.subtitle',
-                    'Active locations missing an active Fire Risk Assessment or Fire Drill obligation. Organisation-wide rows do not count as site coverage.',
+                    'Active premises and offices missing an active Fire Risk Assessment or Fire Drill obligation. Organisation-wide rows do not count as site coverage.',
                   )}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -304,7 +304,7 @@ export default function ComplianceSchedule() {
                 <p className="px-4 py-6 text-sm text-muted-foreground">
                   {t(
                     'compliance.schedule.coverage.empty_locations',
-                    'No active locations to assess.',
+                    'No active premises or offices to assess.',
                   )}
                 </p>
               ) : (
