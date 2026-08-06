@@ -363,6 +363,7 @@ KNOWN_ASYMMETRIC_RESPONSE_FIELDS: dict[str, tuple[str, ...]] = {
     "IncidentResponse": (
         "immediate_actions",
         "investigator_id",
+        "is_psif",
         "is_sif",
         "life_altering_potential",
         "linked_risk_ids",
