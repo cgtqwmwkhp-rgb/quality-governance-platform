@@ -4,7 +4,7 @@ import logging
 from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -448,6 +448,8 @@ async def raise_risk_from_incident(
 
 class FraSignificantChangeRequest(BaseModel):
     """Activate or link a site-scoped FRA after an incident significant change."""
+
+    model_config = ConfigDict(extra="forbid")
 
     location_id: int = Field(..., ge=1, description="Premises or office location id")
 
