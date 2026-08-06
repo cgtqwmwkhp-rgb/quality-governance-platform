@@ -15,6 +15,7 @@ type ExportModuleId =
   | 'audits'
   | 'actions'
   | 'documents'
+  | 'compliance_schedule'
 
 interface ExportModule {
   id: ExportModuleId

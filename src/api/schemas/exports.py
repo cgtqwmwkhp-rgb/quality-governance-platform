@@ -14,6 +14,7 @@ ExportModuleId = Literal[
     "audits",
     "actions",
     "documents",
+    "compliance_schedule",
 ]
 
 ExportFormat = Literal["csv"]
