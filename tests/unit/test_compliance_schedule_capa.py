@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -25,6 +26,9 @@ from src.domain.services.capa_auto_service import CAPAAutoService, compliance_re
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 
 NOW = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
+# What lands in capa_actions.due_date: the same instant, offset stripped, because
+# the column is TIMESTAMP WITHOUT TIME ZONE.
+NAIVE_NOW = NOW.replace(tzinfo=None)
 
 
 def _result(scalar=None, scalars_all=None):
@@ -145,9 +149,56 @@ async def test_statutory_obligation_gets_the_shorter_fuse(db):
         )
 
     assert statutory.priority == CAPAPriority.CRITICAL
-    assert statutory.due_date == NOW + timedelta(days=7)
+    assert statutory.due_date == NAIVE_NOW + timedelta(days=7)
     assert discretionary.priority == CAPAPriority.HIGH
-    assert discretionary.due_date == NOW + timedelta(days=30)
+    assert discretionary.due_date == NAIVE_NOW + timedelta(days=30)
+
+
+@pytest.mark.asyncio
+async def test_due_date_is_stored_naive_because_the_column_is_naive(db):
+    """``capa_actions.due_date`` is TIMESTAMP WITHOUT TIME ZONE.
+
+    asyncpg refuses an aware datetime for such a column outright, while SQLite
+    accepts either — so without this assertion the regression is invisible until
+    a PostgreSQL run, which is exactly how it got here the first time.
+    """
+    db.execute = AsyncMock(return_value=_result(None))
+    with patch(
+        "src.domain.services.capa_auto_service.ReferenceNumberService.generate",
+        new=AsyncMock(return_value="CAPA-2026-0013"),
+    ):
+        capa = await CAPAAutoService.create_from_compliance_record(
+            db,
+            record=_record(),
+            requirement=_requirement(),
+            created_by_id=9,
+            now=NOW,
+        )
+
+    assert capa.due_date.tzinfo is None
+    assert capa.due_date == NAIVE_NOW + timedelta(days=7)
+
+
+@pytest.mark.asyncio
+async def test_the_offset_is_dropped_after_conversion_not_before(db):
+    """Otherwise a non-UTC clock would quietly store a different instant."""
+    db.execute = AsyncMock(return_value=_result(None))
+    sydney = NOW.astimezone(ZoneInfo("Australia/Sydney"))
+    assert sydney.utcoffset() != timedelta(0)
+
+    with patch(
+        "src.domain.services.capa_auto_service.ReferenceNumberService.generate",
+        new=AsyncMock(return_value="CAPA-2026-0014"),
+    ):
+        capa = await CAPAAutoService.create_from_compliance_record(
+            db,
+            record=_record(),
+            requirement=_requirement(),
+            created_by_id=9,
+            now=sydney,
+        )
+
+    assert capa.due_date == NAIVE_NOW + timedelta(days=7)
 
 
 @pytest.mark.asyncio

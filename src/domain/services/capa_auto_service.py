@@ -32,6 +32,23 @@ def compliance_requirement_source_reference(requirement_id: int) -> str:
     return f"{COMPLIANCE_REQUIREMENT_SOURCE_PREFIX}:{int(requirement_id)}"
 
 
+def _naive_utc(value: datetime) -> datetime:
+    """Normalise to UTC, then drop the offset.
+
+    ``capa_actions.due_date`` is ``DateTime`` with no ``timezone=True``, so on
+    PostgreSQL it is TIMESTAMP WITHOUT TIME ZONE and asyncpg refuses an aware
+    datetime for it outright. SQLite accepts either, so a unit run against a
+    mocked or SQLite session cannot show the difference — only an integration run
+    on PostgreSQL does.
+
+    Converting before stripping matters: dropping the offset off a non-UTC aware
+    value would silently store a different instant.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 class CAPAAutoService:
     """Automatically generates CAPA actions from WDP outcomes."""
 
@@ -215,7 +232,8 @@ class CAPAAutoService:
         Due dates run from wall-clock now, not from ``completed_at``. Historical
         occurrences are entered against past due dates during onboarding, and
         anchoring the CAPA to those would open it already overdue — an artefact
-        of when the data was typed rather than a real breach.
+        of when the data was typed rather than a real breach. They are stored
+        naive; see :func:`_naive_utc` for why the column leaves no choice.
         """
         tenant_id = record.tenant_id
         if tenant_id is None:
@@ -273,7 +291,7 @@ class CAPAAutoService:
             # unassigned rather than parking it on whoever filed the record.
             assigned_to_id=requirement.owner_id,
             created_by_id=created_by_id,
-            due_date=clock + timedelta(days=due_days),
+            due_date=_naive_utc(clock + timedelta(days=due_days)),
             tenant_id=tenant_id,
         )
         db.add(capa)
