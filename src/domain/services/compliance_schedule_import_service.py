@@ -249,194 +249,28 @@ class ComplianceScheduleImportService:
         seen_keys: set[tuple[str, int]] = set()
 
         for index, raw in enumerate(rows, start=2):  # header is row 1
-            row_errors: list[RowError] = []
-            template_key = (raw.get("template_key") or "").strip()
-            location_id_raw = (raw.get("location_id") or "").strip()
-            location_name_raw = (raw.get("location_name") or "").strip()
-            due_raw = (raw.get("next_due_date") or "").strip()
-            completed_raw = (raw.get("last_completed_at") or "").strip()
-            owner_raw = (raw.get("owner_id") or "").strip()
-
-            if not template_key:
-                row_errors.append(RowError(index, "REQUIRED", "template_key is required", "template_key"))
-
-            if location_id_raw and location_name_raw:
-                row_errors.append(
-                    RowError(
-                        index,
-                        "LOCATION_XOR",
-                        "Provide location_id or location_name, not both",
-                        "location_id",
-                    )
-                )
-            if not location_id_raw and not location_name_raw:
-                row_errors.append(
-                    RowError(
-                        index,
-                        "REQUIRED",
-                        "location_id or location_name is required (org-wide rows are not allowed)",
-                        "location_id",
-                    )
-                )
-
-            template = None
-            if template_key and not any(e.field == "template_key" for e in row_errors):
-                try:
-                    template = await self.cs._get_template_by_key(template_key)
-                except NotFoundError:
-                    row_errors.append(
-                        RowError(
-                            index,
-                            "TEMPLATE_NOT_FOUND",
-                            f"Catalogue template '{template_key}' not found or inactive",
-                            "template_key",
-                        )
-                    )
-
-            location_id: Optional[int] = None
-            location_name = ""
-            if location_id_raw and not any(e.code == "LOCATION_XOR" for e in row_errors):
-                try:
-                    location_id = int(location_id_raw)
-                except ValueError:
-                    row_errors.append(
-                        RowError(index, "LOCATION_NOT_FOUND", "location_id must be an integer", "location_id")
-                    )
-                else:
-                    loc = await self._get_location_by_id(location_id, tenant_id=tenant_id)
-                    if loc is None:
-                        row_errors.append(
-                            RowError(
-                                index,
-                                "LOCATION_NOT_FOUND",
-                                f"Location {location_id} not found",
-                                "location_id",
-                            )
-                        )
-                    else:
-                        location_name = loc.name or ""
-            elif location_name_raw and not any(e.code == "LOCATION_XOR" for e in row_errors):
-                matches = await self._find_locations_by_name(location_name_raw, tenant_id=tenant_id)
-                if len(matches) == 0:
-                    row_errors.append(
-                        RowError(
-                            index,
-                            "LOCATION_NOT_FOUND",
-                            f"Location name {location_name_raw!r} not found",
-                            "location_name",
-                        )
-                    )
-                elif len(matches) > 1:
-                    row_errors.append(
-                        RowError(
-                            index,
-                            "AMBIGUOUS_LOCATION",
-                            f"Location name {location_name_raw!r} matches {len(matches)} locations",
-                            "location_name",
-                        )
-                    )
-                else:
-                    location_id = matches[0].id
-                    location_name = matches[0].name or location_name_raw
-
-            next_due: Optional[date] = None
-            if due_raw:
-                try:
-                    next_due = _parse_date(due_raw)
-                except ValueError:
-                    row_errors.append(
-                        RowError(index, "INVALID_DATE", f"Invalid next_due_date: {due_raw}", "next_due_date")
-                    )
-
-            last_completed: Optional[datetime] = None
-            if completed_raw:
-                try:
-                    last_completed = _parse_datetime(completed_raw)
-                except ValueError:
-                    row_errors.append(
-                        RowError(
-                            index,
-                            "INVALID_DATE",
-                            f"Invalid last_completed_at: {completed_raw}",
-                            "last_completed_at",
-                        )
-                    )
-
-            owner_id: Optional[int] = default_owner_id
-            if owner_raw:
-                try:
-                    owner_id = int(owner_raw)
-                except ValueError:
-                    row_errors.append(RowError(index, "OWNER_NOT_FOUND", "owner_id must be an integer", "owner_id"))
-                    owner_id = None
-                else:
-                    try:
-                        await self.cs._assert_owner_in_tenant(owner_id, tenant_id=tenant_id)
-                    except NotFoundError:
-                        row_errors.append(
-                            RowError(
-                                index,
-                                "OWNER_NOT_FOUND",
-                                f"User {owner_id} not found",
-                                "owner_id",
-                            )
-                        )
-
-            if template is not None and location_id is not None and not row_errors:
-                pair = (template_key, location_id)
-                if pair in seen_keys:
-                    row_errors.append(
-                        RowError(
-                            index,
-                            "DUPLICATE_IN_FILE",
-                            f"Duplicate {template_key} for location {location_id} in this file",
-                            "template_key",
-                        )
-                    )
-                else:
-                    seen_keys.add(pair)
-                    try:
-                        await self.cs._assert_template_not_already_active(
-                            template.id,
-                            tenant_id=tenant_id,
-                            location_id=location_id,
-                        )
-                    except ConflictError as exc:
-                        row_errors.append(
-                            RowError(
-                                index,
-                                "DUPLICATE_ENTITY",
-                                str(exc),
-                                "template_key",
-                            )
-                        )
-
+            item, row_errors = await self._validate_row(
+                index,
+                raw,
+                tenant_id=tenant_id,
+                default_owner_id=default_owner_id,
+                seen_keys=seen_keys,
+            )
             if row_errors:
                 errors.extend(row_errors)
                 continue
-
-            assert template is not None and location_id is not None
-            item = ValidatedImportRow(
-                row=index,
-                template_key=template_key,
-                location_id=location_id,
-                location_name=location_name,
-                title=template.title,
-                next_due_date=next_due,
-                last_completed_at=last_completed,
-                owner_id=owner_id,
-            )
+            assert item is not None
             validated.append(item)
             preview.append(
                 {
-                    "row": index,
+                    "row": item.row,
                     "action": "create",
-                    "template_key": template_key,
-                    "location_id": location_id,
-                    "location_name": location_name,
-                    "title": template.title,
-                    "next_due_date": next_due.isoformat() if next_due else None,
-                    "owner_id": owner_id,
+                    "template_key": item.template_key,
+                    "location_id": item.location_id,
+                    "location_name": item.location_name,
+                    "title": item.title,
+                    "next_due_date": item.next_due_date.isoformat() if item.next_due_date else None,
+                    "owner_id": item.owner_id,
                 }
             )
 
@@ -456,6 +290,238 @@ class ComplianceScheduleImportService:
             report.errors.append(RowError(1, "REQUIRED", "CSV has no data rows", None))
             report.error_rows = 1
         return report, validated
+
+    async def _validate_row(
+        self,
+        index: int,
+        raw: dict[str, str],
+        *,
+        tenant_id: int,
+        default_owner_id: int,
+        seen_keys: set[tuple[str, int]],
+    ) -> tuple[Optional[ValidatedImportRow], list[RowError]]:
+        row_errors: list[RowError] = []
+        template_key = (raw.get("template_key") or "").strip()
+        location_id_raw = (raw.get("location_id") or "").strip()
+        location_name_raw = (raw.get("location_name") or "").strip()
+
+        if not template_key:
+            row_errors.append(RowError(index, "REQUIRED", "template_key is required", "template_key"))
+        row_errors.extend(self._location_required_errors(index, location_id_raw, location_name_raw))
+
+        template = await self._resolve_template(index, template_key, row_errors)
+        location_id, location_name = await self._resolve_location(
+            index, location_id_raw, location_name_raw, tenant_id=tenant_id, row_errors=row_errors
+        )
+        next_due = self._resolve_due(index, (raw.get("next_due_date") or "").strip(), row_errors)
+        last_completed = self._resolve_completed(index, (raw.get("last_completed_at") or "").strip(), row_errors)
+        owner_id = await self._resolve_owner(
+            index,
+            (raw.get("owner_id") or "").strip(),
+            tenant_id=tenant_id,
+            default_owner_id=default_owner_id,
+            row_errors=row_errors,
+        )
+
+        if template is not None and location_id is not None and not row_errors:
+            await self._check_duplicates(
+                index,
+                template_key,
+                template.id,
+                location_id,
+                tenant_id=tenant_id,
+                seen_keys=seen_keys,
+                row_errors=row_errors,
+            )
+
+        if row_errors or template is None or location_id is None:
+            return None, row_errors
+
+        return (
+            ValidatedImportRow(
+                row=index,
+                template_key=template_key,
+                location_id=location_id,
+                location_name=location_name,
+                title=template.title,
+                next_due_date=next_due,
+                last_completed_at=last_completed,
+                owner_id=owner_id,
+            ),
+            [],
+        )
+
+    @staticmethod
+    def _location_required_errors(index: int, location_id_raw: str, location_name_raw: str) -> list[RowError]:
+        errors: list[RowError] = []
+        if location_id_raw and location_name_raw:
+            errors.append(
+                RowError(
+                    index,
+                    "LOCATION_XOR",
+                    "Provide location_id or location_name, not both",
+                    "location_id",
+                )
+            )
+        if not location_id_raw and not location_name_raw:
+            errors.append(
+                RowError(
+                    index,
+                    "REQUIRED",
+                    "location_id or location_name is required (org-wide rows are not allowed)",
+                    "location_id",
+                )
+            )
+        return errors
+
+    async def _resolve_template(self, index: int, template_key: str, row_errors: list[RowError]) -> Any:
+        if not template_key or any(e.field == "template_key" for e in row_errors):
+            return None
+        try:
+            return await self.cs._get_template_by_key(template_key)
+        except NotFoundError:
+            row_errors.append(
+                RowError(
+                    index,
+                    "TEMPLATE_NOT_FOUND",
+                    f"Catalogue template '{template_key}' not found or inactive",
+                    "template_key",
+                )
+            )
+            return None
+
+    async def _resolve_location(
+        self,
+        index: int,
+        location_id_raw: str,
+        location_name_raw: str,
+        *,
+        tenant_id: int,
+        row_errors: list[RowError],
+    ) -> tuple[Optional[int], str]:
+        if any(e.code == "LOCATION_XOR" for e in row_errors):
+            return None, ""
+        if location_id_raw:
+            try:
+                location_id = int(location_id_raw)
+            except ValueError:
+                row_errors.append(
+                    RowError(index, "LOCATION_NOT_FOUND", "location_id must be an integer", "location_id")
+                )
+                return None, ""
+            loc = await self._get_location_by_id(location_id, tenant_id=tenant_id)
+            if loc is None:
+                row_errors.append(
+                    RowError(index, "LOCATION_NOT_FOUND", f"Location {location_id} not found", "location_id")
+                )
+                return None, ""
+            return location_id, loc.name or ""
+        if location_name_raw:
+            matches = await self._find_locations_by_name(location_name_raw, tenant_id=tenant_id)
+            if len(matches) == 0:
+                row_errors.append(
+                    RowError(
+                        index,
+                        "LOCATION_NOT_FOUND",
+                        f"Location name {location_name_raw!r} not found",
+                        "location_name",
+                    )
+                )
+                return None, ""
+            if len(matches) > 1:
+                row_errors.append(
+                    RowError(
+                        index,
+                        "AMBIGUOUS_LOCATION",
+                        f"Location name {location_name_raw!r} matches {len(matches)} locations",
+                        "location_name",
+                    )
+                )
+                return None, ""
+            return matches[0].id, matches[0].name or location_name_raw
+        return None, ""
+
+    @staticmethod
+    def _resolve_due(index: int, due_raw: str, row_errors: list[RowError]) -> Optional[date]:
+        if not due_raw:
+            return None
+        try:
+            return _parse_date(due_raw)
+        except ValueError:
+            row_errors.append(RowError(index, "INVALID_DATE", f"Invalid next_due_date: {due_raw}", "next_due_date"))
+            return None
+
+    @staticmethod
+    def _resolve_completed(index: int, completed_raw: str, row_errors: list[RowError]) -> Optional[datetime]:
+        if not completed_raw:
+            return None
+        try:
+            return _parse_datetime(completed_raw)
+        except ValueError:
+            row_errors.append(
+                RowError(
+                    index,
+                    "INVALID_DATE",
+                    f"Invalid last_completed_at: {completed_raw}",
+                    "last_completed_at",
+                )
+            )
+            return None
+
+    async def _resolve_owner(
+        self,
+        index: int,
+        owner_raw: str,
+        *,
+        tenant_id: int,
+        default_owner_id: int,
+        row_errors: list[RowError],
+    ) -> Optional[int]:
+        if not owner_raw:
+            return default_owner_id
+        try:
+            owner_id = int(owner_raw)
+        except ValueError:
+            row_errors.append(RowError(index, "OWNER_NOT_FOUND", "owner_id must be an integer", "owner_id"))
+            return None
+        try:
+            await self.cs._assert_owner_in_tenant(owner_id, tenant_id=tenant_id)
+        except NotFoundError:
+            row_errors.append(RowError(index, "OWNER_NOT_FOUND", f"User {owner_id} not found", "owner_id"))
+            return None
+        return owner_id
+
+    async def _check_duplicates(
+        self,
+        index: int,
+        template_key: str,
+        template_id: int,
+        location_id: int,
+        *,
+        tenant_id: int,
+        seen_keys: set[tuple[str, int]],
+        row_errors: list[RowError],
+    ) -> None:
+        pair = (template_key, location_id)
+        if pair in seen_keys:
+            row_errors.append(
+                RowError(
+                    index,
+                    "DUPLICATE_IN_FILE",
+                    f"Duplicate {template_key} for location {location_id} in this file",
+                    "template_key",
+                )
+            )
+            return
+        seen_keys.add(pair)
+        try:
+            await self.cs._assert_template_not_already_active(
+                template_id,
+                tenant_id=tenant_id,
+                location_id=location_id,
+            )
+        except ConflictError as exc:
+            row_errors.append(RowError(index, "DUPLICATE_ENTITY", str(exc), "template_key"))
 
     async def _get_location_by_id(self, location_id: int, *, tenant_id: int) -> Optional[Location]:
         result = await self.db.execute(
