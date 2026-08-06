@@ -186,6 +186,7 @@ class IncidentResponse(BaseModel):
     riddor_rationale: Optional[str] = None
     lessons_learnt: Optional[str] = None
     is_sif: Optional[bool] = None
+    is_psif: Optional[bool] = None
     life_altering_potential: Optional[bool] = None
     reporter_submission: Optional[dict[str, Any]] = None
     closed_at: Optional[datetime] = None

@@ -54,6 +54,7 @@ export interface Incident {
   riddor_classification?: string | null
   riddor_rationale?: string | null
   is_sif?: boolean | null
+  is_psif?: boolean | null
   life_altering_potential?: boolean | null
   reporter_submission?: Record<string, unknown> | null
   closed_at?: string | null

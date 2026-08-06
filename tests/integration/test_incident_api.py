@@ -38,6 +38,7 @@ async def test_get_incident_by_id(client: AsyncClient, auth_headers: dict, test_
         title="Get Test Incident",
         description="Test Description",
         reference_number=f"INC-2026-{uuid.uuid4().hex[:8]}",
+        is_psif=True,
     )
     test_session.add(incident)
     await test_session.commit()
@@ -46,6 +47,7 @@ async def test_get_incident_by_id(client: AsyncClient, auth_headers: dict, test_
     response = await client.get(f"/api/v1/incidents/{incident.id}", headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["title"] == "Get Test Incident"
+    assert response.json()["is_psif"] is True
 
 
 @pytest.mark.asyncio
