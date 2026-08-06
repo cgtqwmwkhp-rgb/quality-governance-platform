@@ -18,6 +18,8 @@ vi.mock('../../api/client', () => ({
     listRequirements: mockListRequirements,
     getStats: mockGetStats,
     getLocationCoverageGaps: vi.fn().mockResolvedValue({ data: { total_locations: 0, missing_fra: 0, missing_fire_drill: 0, missing_both: 0, items: [] } }),
+    importDryRun: vi.fn(),
+    importCommit: vi.fn(),
     listCatalogue: mockListCatalogue,
     activateCatalogue: vi.fn(),
   },
