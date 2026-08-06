@@ -15,6 +15,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   capa: 'CAPA',
   assessment: 'Assessment',
   induction: 'Induction',
+  compliance_record: 'Compliance record',
 }
 
 /** True when a source reference looks like an internal storage key (`investigation:6`). */

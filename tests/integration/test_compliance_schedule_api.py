@@ -669,3 +669,161 @@ async def _retirement_audit_events(requirement_id: int) -> list:
         entries = list(result.scalars().all())
 
     return [e for e in entries if "is_active" in (e.changed_fields or [])]
+
+
+# ---------------------------------------------------------------------------
+# A failed check owes a corrective action (W18)
+# ---------------------------------------------------------------------------
+#
+# The unit tests for this path drive a mocked session, so they prove the service
+# asks for the right row and never that the row can be written. These go through
+# the API to a real schema: capa_actions.tenant_id and created_by_id are both NOT
+# NULL, source_type is a database enum that had to gain the compliance_record
+# label in 20260913_cs_wave0, and none of that is visible to a mock.
+
+
+async def _compliance_capas_for(record_id: int) -> list:
+    """CAPA rows raised for one compliance occurrence, on their own connection."""
+    from src.domain.models.capa import CAPAAction, CAPASource
+    from src.infrastructure.database import async_session_maker
+
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(CAPAAction)
+            .where(
+                CAPAAction.source_type == CAPASource.COMPLIANCE_RECORD,
+                CAPAAction.source_id == record_id,
+            )
+            .order_by(CAPAAction.id)
+        )
+        return list(result.scalars().all())
+
+
+@pytest.mark.asyncio
+async def test_a_failed_check_raises_one_capa_for_the_completing_tenant(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+):
+    from src.domain.models.capa import CAPAPriority, CAPAStatus
+
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+
+    completed = await _complete(
+        client,
+        superuser_auth_headers,
+        requirement_id,
+        check_passed=False,
+        notes="Two fire doors failed inspection.",
+    )
+    assert completed.status_code == 201, completed.text
+    record_id = completed.json()["id"]
+
+    capas = await _compliance_capas_for(record_id)
+    assert len(capas) == 1, [c.reference_number for c in capas]
+    capa = capas[0]
+    assert capa.tenant_id == 1
+    # The occurrence identifies the failure; the obligation is the page to open.
+    assert capa.source_id == record_id
+    assert capa.source_reference == f"compliance_requirement:{requirement_id}"
+    assert capa.status == CAPAStatus.OPEN
+    # The seeded template is statutory, so this is the short-fuse branch.
+    assert capa.priority == CAPAPriority.CRITICAL
+    assert capa.reference_number.startswith("CAPA-")
+
+
+@pytest.mark.asyncio
+async def test_a_passed_check_raises_nothing(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+):
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+
+    completed = await _complete(client, superuser_auth_headers, requirement_id, check_passed=True)
+    assert completed.status_code == 201, completed.text
+
+    assert await _compliance_capas_for(completed.json()["id"]) == []
+
+
+@pytest.mark.asyncio
+async def test_an_unrecorded_check_raises_nothing(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+):
+    """A null check is "no pass/fail dimension", not a failure."""
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+
+    completed = await _complete(client, superuser_auth_headers, requirement_id, check_passed=None)
+    assert completed.status_code == 201, completed.text
+
+    assert await _compliance_capas_for(completed.json()["id"]) == []
+
+
+@pytest.mark.asyncio
+async def test_the_raised_capa_is_reachable_from_the_actions_register(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+):
+    """A CAPA nobody can find on the Actions board is not a corrective action.
+
+    ``compliance_record`` had to be added to ``CAPA_ONLY_API_SOURCE_TYPES`` for
+    this filter to reach capa_actions at all; without it the register answered
+    an empty page and the Compliance schedule filter would have been a lie.
+    """
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+    completed = await _complete(
+        client,
+        superuser_auth_headers,
+        requirement_id,
+        check_passed=False,
+    )
+    assert completed.status_code == 201, completed.text
+    record_id = completed.json()["id"]
+
+    listing = await client.get(
+        "/api/v1/actions/",
+        headers=superuser_auth_headers,
+        params={"source_type": "compliance_record", "page_size": 100},
+    )
+    assert listing.status_code == 200, listing.text
+    items = listing.json()["items"]
+    mine = [item for item in items if item["source_id"] == record_id]
+    assert len(mine) == 1, items
+    assert mine[0]["source_type"] == "compliance_record"
+    # The obligation id survives hydration; the row needs it to build its link.
+    assert mine[0]["source_reference"] == f"compliance_requirement:{requirement_id}"
+
+
+@pytest.mark.asyncio
+async def test_two_concurrent_failed_completions_raise_exactly_one_capa(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    superuser_auth_headers: dict,
+    test_session,
+):
+    """One failure owes one corrective action, however many writers race for it.
+
+    The loser is refused either by the duplicate check (nothing pending yet) or
+    by the unique constraint (rolled back with its CAPA still in the session).
+    Two CAPAs for one occurrence would mean the same remediation chased twice.
+    """
+    requirement_id = await _requirement_for_completion(client, superuser_auth_headers, test_session)
+
+    first, second = await asyncio.gather(
+        _complete(client, superuser_auth_headers, requirement_id, check_passed=False),
+        _complete(client, superuser_auth_headers, requirement_id, check_passed=False),
+    )
+
+    assert sorted([first.status_code, second.status_code]) == [201, 409], (first.text, second.text)
+
+    records = await _records_for(requirement_id)
+    assert len(records) == 1, [r.reference_number for r in records]
+    capas = await _compliance_capas_for(records[0].id)
+    assert len(capas) == 1, [c.reference_number for c in capas]

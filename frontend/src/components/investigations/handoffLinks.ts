@@ -88,6 +88,29 @@ export type ActionSourceLink = {
   labelFallback: string
 }
 
+/** `compliance_requirement:42` — how a compliance CAPA carries its obligation id. */
+const COMPLIANCE_REQUIREMENT_REF = /^compliance_requirement:(\d+)$/i
+
+/**
+ * The obligation id behind a compliance CAPA, or null when it is not there.
+ *
+ * Compliance actions are the one source whose `source_id` is not the thing to
+ * open: it is the occurrence (the record), because that is what distinguishes
+ * one failure from the next, while the page worth landing on is the obligation.
+ * The obligation id therefore rides in `source_reference`, and an action written
+ * before that convention existed — or by anything that skipped it — has to
+ * resolve to no link at all rather than to `/compliance-schedule/{record id}`,
+ * which is a real route that would open somebody else's obligation.
+ */
+export function parseComplianceRequirementId(
+  sourceReference: string | null | undefined,
+): number | null {
+  const match = COMPLIANCE_REQUIREMENT_REF.exec((sourceReference || '').trim())
+  if (!match) return null
+  const id = Number(match[1])
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
 /**
  * Honest reverse deep-link from a unified action (incl. capa_actions) back to its source.
  * Returns null when source_id is missing/non-positive or the type has no known detail route.
@@ -95,10 +118,20 @@ export type ActionSourceLink = {
 export function getActionSourceLink(
   sourceType: string | null | undefined,
   sourceId: number | null | undefined,
+  sourceReference?: string | null,
 ): ActionSourceLink | null {
   if (sourceId == null || !Number.isFinite(sourceId) || sourceId <= 0) return null
   const kind = (sourceType || '').trim().toLowerCase()
 
+  if (kind === 'compliance_record') {
+    const requirementId = parseComplianceRequirementId(sourceReference)
+    if (requirementId == null) return null
+    return {
+      href: `/compliance-schedule/${requirementId}`,
+      labelKey: 'actions.view_compliance_requirement',
+      labelFallback: 'View obligation',
+    }
+  }
   if (kind === 'incident' || kind === 'capa_incident') {
     return {
       href: `/incidents/${sourceId}`,

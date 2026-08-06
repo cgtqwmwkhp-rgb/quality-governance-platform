@@ -1,7 +1,8 @@
-"""Automatic CAPA generation from assessment and induction outcomes.
+"""Automatic CAPA generation from assessment, induction and compliance outcomes.
 
-When an assessment fails or an induction has "Not Yet Competent" items,
-this service auto-creates CAPA actions linked to the source run.
+When an assessment fails, an induction has "Not Yet Competent" items, or a
+compliance obligation is closed with a failed check, this service auto-creates
+CAPA actions linked to the source run or record.
 """
 
 import logging
@@ -12,9 +13,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
+from src.domain.models.compliance_schedule import ComplianceRecord, ComplianceRequirement
 from src.domain.services.reference_number import ReferenceNumberService
 
 logger = logging.getLogger(__name__)
+
+# ``source_id`` holds the occurrence (the record), because that is what makes one
+# failure distinct from the next and is therefore what deduplication has to key
+# on. The obligation the failure belongs to is the thing a reader wants to open,
+# so it travels in ``source_reference`` as a storage key rather than a display
+# string — the same shape as ``investigation:6``, which the Actions surfaces
+# already recognise as internal and refuse to print (isInternalSourceReference).
+COMPLIANCE_REQUIREMENT_SOURCE_PREFIX = "compliance_requirement"
+
+
+def compliance_requirement_source_reference(requirement_id: int) -> str:
+    """Storage key pointing a compliance CAPA back at its obligation."""
+    return f"{COMPLIANCE_REQUIREMENT_SOURCE_PREFIX}:{int(requirement_id)}"
 
 
 class CAPAAutoService:
@@ -174,6 +189,101 @@ class CAPAAutoService:
             )
 
         return created
+
+    @staticmethod
+    async def create_from_compliance_record(
+        db: AsyncSession,
+        *,
+        record: ComplianceRecord,
+        requirement: ComplianceRequirement,
+        created_by_id: int,
+        now: Optional[datetime] = None,
+    ) -> CAPAAction:
+        """Raise the corrective action owed by a failed compliance check.
+
+        Takes the two rows rather than loose ids so tenancy is derived here from
+        the record itself and cross-checked against the obligation, instead of
+        being asserted by whichever caller happens to be writing. ``capa_actions``
+        is under ``tenant_isolation`` with FORCE, so a wrong tenant id would not
+        silently cross customers — it would fail the policy's WITH CHECK and
+        abort the completion. Refusing it in this frame says why.
+
+        Idempotent per occurrence: a second call for the same record returns the
+        CAPA already raised rather than a duplicate, matching the assessment and
+        induction paths.
+
+        Due dates run from wall-clock now, not from ``completed_at``. Historical
+        occurrences are entered against past due dates during onboarding, and
+        anchoring the CAPA to those would open it already overdue — an artefact
+        of when the data was typed rather than a real breach.
+        """
+        tenant_id = record.tenant_id
+        if tenant_id is None:
+            raise ValueError("compliance record has no tenant; refusing to raise an untenanted CAPA")
+        if requirement.tenant_id != tenant_id:
+            raise ValueError(
+                f"compliance record {record.id} (tenant {tenant_id}) does not belong to "
+                f"requirement {requirement.id} (tenant {requirement.tenant_id})"
+            )
+        if record.requirement_id != requirement.id:
+            raise ValueError(
+                f"compliance record {record.id} belongs to requirement "
+                f"{record.requirement_id}, not {requirement.id}"
+            )
+        if record.id is None:
+            raise ValueError("compliance record must be flushed before a CAPA can reference it")
+
+        source_reference = compliance_requirement_source_reference(requirement.id)
+        existing = await CAPAAutoService._existing_action(
+            db,
+            source_type=CAPASource.COMPLIANCE_RECORD,
+            source_reference=source_reference,
+            source_id=record.id,
+            tenant_id=tenant_id,
+        )
+        if existing is not None:
+            return existing
+
+        statutory = bool(requirement.statutory)
+        priority = CAPAPriority.CRITICAL if statutory else CAPAPriority.HIGH
+        due_days = 7 if statutory else 30
+        clock = now or datetime.now(timezone.utc)
+
+        ref = await ReferenceNumberService.generate(db, "capa", CAPAAction)
+        capa = CAPAAction(
+            reference_number=ref,
+            title=f"Compliance Check Failed: {requirement.title[:200]}",
+            description=(
+                f"Occurrence of {requirement.reference_number} was closed with a FAILED check.\n\n"
+                f"Obligation: {requirement.title}\n"
+                f"Occurrence due: {record.due_date.isoformat()}\n"
+                f"Statutory: {'yes' if statutory else 'no'}\n"
+                f"Notes: {record.notes or 'None provided'}\n\n"
+                f"Compliance Record: {record.reference_number}"
+            ),
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            source_type=CAPASource.COMPLIANCE_RECORD,
+            source_id=record.id,
+            source_reference=source_reference,
+            priority=priority,
+            # The obligation owner is already refused unless they belong to this
+            # tenant (ComplianceScheduleService._assert_owner_in_tenant), so it is
+            # safe to carry through; unowned obligations leave the CAPA
+            # unassigned rather than parking it on whoever filed the record.
+            assigned_to_id=requirement.owner_id,
+            created_by_id=created_by_id,
+            due_date=clock + timedelta(days=due_days),
+            tenant_id=tenant_id,
+        )
+        db.add(capa)
+        logger.info(
+            "CAPA created for failed compliance check: record=%s requirement=%s tenant=%s",
+            record.reference_number,
+            requirement.reference_number,
+            tenant_id,
+        )
+        return capa
 
     @staticmethod
     async def create_from_loler(
