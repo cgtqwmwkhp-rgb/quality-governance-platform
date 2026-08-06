@@ -38,7 +38,7 @@
 - [x] AC-02: Organisation-wide FRA/drill requirements (`location_id IS NULL`) do not mark any location as covered
 - [x] AC-03: Compliance Schedule page shows a coverage panel with totals and per-location gap/ok labels; coverage fetch failure does not blank the register
 - [x] AC-04: Unit tests prove gap marking + org-wide exclusion; client path test exercises the versioned `/coverage/location-gaps` URL
-- [x] AC-05: en/cy keys exist for coverage copy (with English fallbacks in the page)
+- [x] AC-05: Coverage panel en/cy copy lives in the Compliance Schedule route chunk (`complianceScheduleCoverageI18n.ts`) so shell `en.json`/`cy.json` (index budget) do not grow
 
 ## 5) Testing Evidence (link to runs)
 - [x] Lint — `black` / `isort` clean on touched Python

@@ -16,10 +16,12 @@ import type {
 import { ownershipOf, statusChipClass, statusLabel } from './complianceScheduleHelpers'
 import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { RequirementFormDialog } from './compliance/RequirementFormDialog'
+import { coverageCopy } from './complianceScheduleCoverageI18n'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceSchedule() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const cov = coverageCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
   const [stats, setStats] = useState<ComplianceScheduleStats | null>(null)
   const [coverage, setCoverage] = useState<LocationCoverageGaps | null>(null)
@@ -269,44 +271,25 @@ export default function ComplianceSchedule() {
               data-testid="compliance-schedule-coverage-gaps"
             >
               <div className="border-b border-border px-4 py-3">
-                <div className="font-medium">
-                  {t(
-                    'compliance.schedule.coverage.title',
-                    'Location FRA / fire-drill coverage',
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t(
-                    'compliance.schedule.coverage.subtitle',
-                    'Active premises and offices missing an active Fire Risk Assessment or Fire Drill obligation. Organisation-wide rows do not count as site coverage.',
-                  )}
-                </p>
+                <div className="font-medium">{cov.title}</div>
+                <p className="text-xs text-muted-foreground mt-1">{cov.subtitle}</p>
                 <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                   <span>
-                    {t('compliance.schedule.coverage.locations', 'Locations')}:{' '}
-                    {coverage.total_locations}
+                    {cov.locations}: {coverage.total_locations}
                   </span>
                   <span>
-                    {t('compliance.schedule.coverage.missing_fra', 'Missing FRA')}:{' '}
-                    {coverage.missing_fra}
+                    {cov.missingFra}: {coverage.missing_fra}
                   </span>
                   <span>
-                    {t('compliance.schedule.coverage.missing_drill', 'Missing drill')}:{' '}
-                    {coverage.missing_fire_drill}
+                    {cov.missingDrill}: {coverage.missing_fire_drill}
                   </span>
                   <span>
-                    {t('compliance.schedule.coverage.missing_both', 'Missing both')}:{' '}
-                    {coverage.missing_both}
+                    {cov.missingBoth}: {coverage.missing_both}
                   </span>
                 </div>
               </div>
               {coverage.items.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-muted-foreground">
-                  {t(
-                    'compliance.schedule.coverage.empty_locations',
-                    'No active premises or offices to assess.',
-                  )}
-                </p>
+                <p className="px-4 py-6 text-sm text-muted-foreground">{cov.emptyLocations}</p>
               ) : (
                 <ul className="divide-y divide-border">
                   {coverage.items.map((row) => (
@@ -329,9 +312,7 @@ export default function ComplianceSchedule() {
                               : 'rounded bg-muted px-2 py-0.5 text-muted-foreground'
                           }
                         >
-                          {row.missing_fra
-                            ? t('compliance.schedule.coverage.gap_fra', 'No FRA')
-                            : t('compliance.schedule.coverage.ok_fra', 'FRA covered')}
+                          {row.missing_fra ? cov.gapFra : cov.okFra}
                         </span>
                         <span
                           className={
@@ -340,9 +321,7 @@ export default function ComplianceSchedule() {
                               : 'rounded bg-muted px-2 py-0.5 text-muted-foreground'
                           }
                         >
-                          {row.missing_fire_drill
-                            ? t('compliance.schedule.coverage.gap_drill', 'No fire drill')
-                            : t('compliance.schedule.coverage.ok_drill', 'Drill covered')}
+                          {row.missing_fire_drill ? cov.gapDrill : cov.okDrill}
                         </span>
                       </div>
                     </li>
