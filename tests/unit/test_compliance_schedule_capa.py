@@ -21,10 +21,7 @@ from src.domain.models.compliance_schedule import (
     ComplianceRequirement,
     ComplianceScheduleAnchor,
 )
-from src.domain.services.capa_auto_service import (
-    CAPAAutoService,
-    compliance_requirement_source_reference,
-)
+from src.domain.services.capa_auto_service import CAPAAutoService, compliance_requirement_source_reference
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 
 NOW = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
