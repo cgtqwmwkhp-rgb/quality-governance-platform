@@ -10,13 +10,15 @@ import math
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from src.api.dependencies import DbSession, require_permission
 from src.api.schemas.compliance_schedule import (
     CatalogueActivateRequest,
     CatalogueListResponse,
     CatalogueTemplateResponse,
+    ComplianceImportCommitResponse,
+    ComplianceImportValidationReportResponse,
     ComplianceScheduleStatsResponse,
     LocationCoverageGapsResponse,
     RecordCompleteRequest,
@@ -31,10 +33,12 @@ from src.api.schemas.compliance_schedule import (
     RequirementUpdate,
 )
 from src.api.utils.tenant import require_tenant_id
+from src.domain.exceptions import BadRequestError
 from src.domain.models.user import User
 from src.domain.services.compliance_schedule_filing_service import (
     file_record_to_library as file_record_to_library_service,
 )
+from src.domain.services.compliance_schedule_import_service import ComplianceScheduleImportService
 from src.domain.services.compliance_schedule_policy import derive_status
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 from src.infrastructure.database import async_session_maker
@@ -173,6 +177,63 @@ async def get_location_coverage_gaps(
     service = ComplianceScheduleService(db)
     data = await service.get_location_coverage_gaps(tenant_id=tenant_id)
     return LocationCoverageGapsResponse(**data)
+
+
+async def _read_csv_upload(file: UploadFile) -> bytes:
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise BadRequestError("File must be a CSV (.csv extension)")
+    content = await file.read()
+    if not content:
+        raise BadRequestError("CSV file is empty")
+    if len(content) > 2 * 1024 * 1024:
+        raise BadRequestError("CSV file exceeds 2 MiB limit")
+    return content
+
+
+@_enabled_router.post(
+    "/import/dry-run",
+    response_model=ComplianceImportValidationReportResponse,
+    summary="Dry-run Compliance Schedule CSV import",
+)
+async def dry_run_compliance_schedule_import(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:create"))],
+    file: UploadFile = File(...),
+):
+    """Validate catalogue-activate CSV without writing obligations."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    content = await _read_csv_upload(file)
+    service = ComplianceScheduleImportService(db)
+    report = await service.dry_run(
+        content,
+        tenant_id=tenant_id,
+        default_owner_id=current_user.id,
+    )
+    return ComplianceImportValidationReportResponse.model_validate(report.to_dict())
+
+
+@_enabled_router.post(
+    "/import/commit",
+    response_model=ComplianceImportCommitResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Commit Compliance Schedule CSV import",
+)
+async def commit_compliance_schedule_import(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:create"))],
+    file: UploadFile = File(...),
+):
+    """Re-validate and activate catalogue obligations from CSV."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    content = await _read_csv_upload(file)
+    service = ComplianceScheduleImportService(db)
+    result = await service.commit(
+        content,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        default_owner_id=current_user.id,
+    )
+    return ComplianceImportCommitResponse.model_validate(result.to_dict())
 
 
 # ---------------------------------------------------------------------------

@@ -281,3 +281,49 @@ class LocationCoverageGapsResponse(BaseModel):
     missing_fire_drill: int
     missing_both: int
     items: List[LocationCoverageGapItem]
+
+
+class ComplianceImportRowError(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row: int
+    code: str
+    message: str
+    field: Optional[str] = None
+
+
+class ComplianceImportPreviewRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row: int
+    action: str
+    template_key: str
+    location_id: int
+    location_name: str
+    title: str
+    next_due_date: Optional[str] = None
+    owner_id: Optional[int] = None
+
+
+class ComplianceImportValidationReportResponse(BaseModel):
+    """Dry-run / commit validation report for CS CSV import."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dry_run: bool
+    total_rows: int
+    valid_rows: int
+    error_rows: int
+    creates: int
+    skips: int
+    ok: bool
+    errors: List[ComplianceImportRowError] = Field(default_factory=list)
+    preview: List[ComplianceImportPreviewRow] = Field(default_factory=list)
+
+
+class ComplianceImportCommitResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    created_count: int
+    created_requirement_ids: List[int]
+    report: ComplianceImportValidationReportResponse

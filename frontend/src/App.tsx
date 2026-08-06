@@ -64,6 +64,7 @@ const PortalWork = lazy(() => import('./pages/PortalWork'))
 const PortalReading = lazy(() => import('./pages/PortalReading'))
 const PortalMyTools = lazy(() => import('./pages/PortalMyTools'))
 const PortalMyVan = lazy(() => import('./pages/PortalMyVan'))
+const PortalFireDrill = lazy(() => import('./pages/PortalFireDrill'))
 const PortalIncidentForm = lazy(() => import('./pages/PortalIncidentForm'))
 const PortalRTAForm = lazy(() => import('./pages/PortalRTAForm'))
 const PortalNearMissForm = lazy(() => import('./pages/PortalNearMissForm'))
@@ -308,6 +309,7 @@ function App() {
               <Route path="reading" element={<PortalReading />} />
               <Route path="tools" element={<PortalMyTools />} />
               <Route path="van" element={<PortalMyVan />} />
+              <Route path="fire-drill" element={<PortalFireDrill />} />
               <Route path="help" element={<PortalHelp />} />
               <Route path="*" element={<PortalNotFound />} />
             </Route>

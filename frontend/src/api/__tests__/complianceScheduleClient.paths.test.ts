@@ -53,6 +53,8 @@ function callEveryMethod(client: ReturnType<typeof createComplianceScheduleApi>)
     activateCatalogue: () => client.activateCatalogue('fire-risk-assessment'),
     getStats: () => client.getStats(),
     getLocationCoverageGaps: () => client.getLocationCoverageGaps(),
+    importDryRun: () => client.importDryRun(new File(['x'], 't.csv', { type: 'text/csv' })),
+    importCommit: () => client.importCommit(new File(['x'], 't.csv', { type: 'text/csv' })),
     fileRecordToLibrary: () =>
       client.fileRecordToLibrary(11, { evidence_asset_id: 5, category_id: 3 }),
   }
