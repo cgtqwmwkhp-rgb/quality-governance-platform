@@ -11,6 +11,13 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
+
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({ testId = 'engineer-people-picker' }: { testId?: string }) => (
+    <input data-testid={testId} aria-label="Assign to" />
+  ),
+}))
+
 vi.mock('../../contexts/ToastContext', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))

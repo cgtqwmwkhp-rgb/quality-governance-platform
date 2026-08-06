@@ -35,6 +35,11 @@ vi.mock('../../components/ui/Breadcrumbs', () => ({
   Breadcrumbs: () => <nav aria-label="Breadcrumb" data-testid="breadcrumbs" />,
 }))
 
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({ testId = 'engineer-people-picker' }: { testId?: string }) => (
+    <div data-testid={testId} />
+  ),
+}))
 vi.mock('../../components/UserEmailSearch', () => ({
   UserEmailSearch: () => <div data-testid="user-email-search" />,
 }))
