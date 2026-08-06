@@ -9,12 +9,16 @@ vi.mock('../api/client', () => ({
   },
 }))
 
-const asset = (id: number, filename: string): EvidenceAsset => ({
+const asset = (
+  id: number,
+  filename: string,
+  contentType = 'image/jpeg',
+): EvidenceAsset => ({
   id,
   storage_key: `evidence/incident/1/${filename}`,
   original_filename: filename,
-  content_type: 'image/jpeg',
-  asset_type: 'photo',
+  content_type: contentType,
+  asset_type: contentType.startsWith('image/') ? 'photo' : 'document',
   source_module: 'incident',
   source_id: 1,
   visibility: 'internal_customer',
@@ -84,5 +88,43 @@ describe('EvidenceGallery', () => {
     await waitFor(() => {
       expect(within(dialog).getByAltText('second.jpg')).not.toBeNull()
     })
+  })
+
+  it('previews PDFs in the lightbox instead of download-only copy', async () => {
+    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
+      data: { signed_url: 'https://example.test/report.pdf' },
+    } as never)
+
+    render(<EvidenceGallery assets={[asset(9, 'report.pdf', 'application/pdf')]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview report.pdf' }))
+    const dialog = await screen.findByRole('dialog')
+
+    await waitFor(() => {
+      expect(within(dialog).getByTestId('document-preview-pdf')).not.toBeNull()
+    })
+    expect(within(dialog).getByTitle('Preview of report.pdf').getAttribute('src')).toBe(
+      'https://example.test/report.pdf',
+    )
+    expect(within(dialog).queryByText(/cannot be previewed here/i)).toBeNull()
+    expect(within(dialog).getByRole('button', { name: /download/i })).toBeInTheDocument()
+    expect(evidenceAssetsApi.getSignedUrl).toHaveBeenCalledWith(9, undefined, 'inline')
+  })
+
+  it('previews video in the lightbox with download as a secondary CTA', async () => {
+    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
+      data: { signed_url: 'https://example.test/clip.mp4' },
+    } as never)
+
+    render(<EvidenceGallery assets={[asset(3, 'clip.mp4', 'video/mp4')]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview clip.mp4' }))
+    const dialog = await screen.findByRole('dialog')
+
+    await waitFor(() => {
+      expect(within(dialog).getByTestId('document-preview-video')).not.toBeNull()
+    })
+    expect(within(dialog).queryByText(/cannot be previewed here/i)).toBeNull()
+    expect(within(dialog).getByRole('button', { name: /download/i })).toBeInTheDocument()
   })
 })
