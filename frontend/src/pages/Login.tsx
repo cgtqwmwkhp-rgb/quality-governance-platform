@@ -51,6 +51,39 @@ const isAzureConfigured = () => {
   )
 }
 
+/**
+ * Pull a human-readable message out of a token-exchange error body.
+ * Supports FastAPI `{ detail: { code, message } }`, plain `{ detail: string }`,
+ * top-level `{ message }`, and `{ error: { message } }`.
+ */
+function messageFromTokenExchangeBody(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null
+  const record = body as Record<string, unknown>
+
+  const detail = record.detail
+  if (typeof detail === 'string' && detail.trim()) return detail.trim()
+  if (detail && typeof detail === 'object') {
+    const nested = (detail as Record<string, unknown>).message
+    if (typeof nested === 'string' && nested.trim()) return nested.trim()
+  }
+
+  if (typeof record.message === 'string' && record.message.trim()) {
+    return record.message.trim()
+  }
+
+  const envelope = record.error
+  if (envelope && typeof envelope === 'object') {
+    const nested = (envelope as Record<string, unknown>).message
+    if (typeof nested === 'string' && nested.trim()) return nested.trim()
+  }
+
+  return null
+}
+
+type TokenExchangeResult =
+  | { ok: true; accessToken: string; refreshToken?: string }
+  | { ok: false; message: string | null }
+
 // ============ Login State Machine (LOGIN_UX_CONTRACT.md) ============
 type LoginState =
   | 'idle'
@@ -105,9 +138,7 @@ export default function Login({ onLogin }: LoginProps) {
   const slowWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Exchange Azure AD id_token for platform JWT (with retry for cold-start resilience)
-  const exchangeToken = async (
-    idToken: string,
-  ): Promise<{ accessToken: string; refreshToken?: string } | null> => {
+  const exchangeToken = async (idToken: string): Promise<TokenExchangeResult> => {
     const MAX_ATTEMPTS = 3
     const TIMEOUT_MS = 30_000
 
@@ -125,21 +156,41 @@ export default function Login({ onLogin }: LoginProps) {
         if (response.ok) {
           const data = await response.json()
           return {
+            ok: true,
             accessToken: data.access_token,
             refreshToken: data.refresh_token,
           }
         }
 
-        // 4xx errors (except 408/429) are not retryable
-        if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
-          if (import.meta.env.DEV) {
-            console.error(`[AdminAuth] Token exchange rejected (${response.status}), not retrying`)
+        // 4xx errors (except 408/429) are not retryable — surface the body (#1588 refusals)
+        if (
+          response.status >= 400 &&
+          response.status < 500 &&
+          response.status !== 408 &&
+          response.status !== 429
+        ) {
+          let serverMessage: string | null = null
+          try {
+            serverMessage = messageFromTokenExchangeBody(await response.json())
+          } catch {
+            // Non-JSON body (HTML gateway page, empty) — fall through to generic copy
           }
-          return null
+          if (import.meta.env.DEV) {
+            console.error(
+              `[AdminAuth] Token exchange rejected (${response.status}), not retrying`,
+              serverMessage,
+            )
+          }
+          return { ok: false, message: serverMessage }
         }
 
+        // Drain so a failed attempt cannot leave the response stream in flight
+        await response.text().catch(() => undefined)
+
         if (import.meta.env.DEV) {
-          console.warn(`[AdminAuth] Token exchange attempt ${attempt}/${MAX_ATTEMPTS} failed: ${response.status}`)
+          console.warn(
+            `[AdminAuth] Token exchange attempt ${attempt}/${MAX_ATTEMPTS} failed: ${response.status}`,
+          )
         }
       } catch (err) {
         if (import.meta.env.DEV) {
@@ -155,7 +206,7 @@ export default function Login({ onLogin }: LoginProps) {
       }
     }
 
-    return null
+    return { ok: false, message: null }
   }
 
   // Handle OAuth callback (check URL for tokens)
@@ -173,7 +224,10 @@ export default function Login({ onLogin }: LoginProps) {
       window.history.replaceState(null, '', window.location.pathname)
 
       if (errorParam) {
-        setSsoError(errorDesc || 'Microsoft authentication failed')
+        setSsoError(
+          errorDesc ||
+            t('login.sso.error.microsoft_failed', 'Microsoft authentication failed'),
+        )
         setSsoLoading(false)
         return false
       }
@@ -182,30 +236,43 @@ export default function Login({ onLogin }: LoginProps) {
       sessionStorage.removeItem('oauth_state')
       sessionStorage.removeItem('oauth_nonce')
       if (!state || !expectedState || state !== expectedState) {
-        setSsoError('Microsoft authentication state could not be verified. Please try again.')
+        setSsoError(
+          t(
+            'login.sso.error.state_mismatch',
+            'Microsoft authentication state could not be verified. Please try again.',
+          ),
+        )
         setSsoLoading(false)
         return false
       }
 
       if (idToken) {
-        const tokens = await exchangeToken(idToken)
+        const result = await exchangeToken(idToken)
 
-        if (tokens) {
+        if (result.ok) {
           const durationMs = Date.now() - (requestStartRef.current || Date.now())
           emitLoginTelemetry('success', durationMs)
           setLoginState('success')
-          onLogin(tokens.accessToken, tokens.refreshToken)
+          onLogin(result.accessToken, result.refreshToken)
           setSsoLoading(false)
           return true
-        } else {
-          setSsoError('Failed to authenticate with platform. Please try again.')
-          setSsoLoading(false)
-          return false
         }
+
+        // Prefer the API refusal/error body (e.g. TENANT_ACCESS_DENIED from #1588)
+        // over a generic "failed to authenticate" that hides why sign-in was refused.
+        setSsoError(
+          result.message ||
+            t(
+              'login.sso.error.exchange_failed',
+              'Failed to authenticate with platform. Please try again.',
+            ),
+        )
+        setSsoLoading(false)
+        return false
       }
     }
     return false
-  }, [onLogin])
+  }, [onLogin, t])
 
   // Pre-warm the backend on mount so cold-start latency is absorbed before
   // the user actually submits credentials or returns from SSO redirect.
@@ -260,10 +327,12 @@ export default function Login({ onLogin }: LoginProps) {
     if (!ssoLoading) return
     const recovery = setTimeout(() => {
       setSsoLoading(false)
-      setSsoError('Microsoft sign-in timed out. Please try again.')
+      setSsoError(
+        t('login.sso.error.timeout', 'Microsoft sign-in timed out. Please try again.'),
+      )
     }, 100_000)
     return () => clearTimeout(recovery)
-  }, [ssoLoading])
+  }, [ssoLoading, t])
 
   // Microsoft SSO login
   const handleMicrosoftLogin = () => {
@@ -272,7 +341,10 @@ export default function Login({ onLogin }: LoginProps) {
 
     if (!isAzureConfigured()) {
       setSsoError(
-        'Microsoft login is not configured. Please use email/password or contact your administrator.',
+        t(
+          'login.sso.error.not_configured',
+          'Microsoft login is not configured. Please use email/password or contact your administrator.',
+        ),
       )
       setSsoLoading(false)
       return
