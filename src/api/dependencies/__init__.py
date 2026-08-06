@@ -71,10 +71,21 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
-    """Get the current authenticated user from JWT token."""
+    """Get the current authenticated user from JWT token.
+
+    Partner ``qgp_pt_`` bearers are rejected here (fail-closed). Partner-callable
+    routes must opt in via :mod:`src.api.dependencies.partner`.
+    """
     credentials_exception = _credentials_exception()
 
     token = credentials.credentials
+    if token.startswith("qgp_pt_"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Partner API tokens are not valid for this endpoint",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     payload = decode_token(token)
 
     if payload is None:

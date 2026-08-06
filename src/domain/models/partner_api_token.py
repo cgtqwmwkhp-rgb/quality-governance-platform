@@ -16,7 +16,17 @@ from src.domain.models.base import Base, TimestampMixin
 PARTNER_API_SCOPES: tuple[str, ...] = (
     "webhooks:manage",
     "inspections:read",
+    "documents:read",
+    "search:read",
+    "policies:read",
 )
+
+# Partner OAuth-style scopes → platform RBAC tokens used by existing
+# ``require_permission`` / ``User.has_permission`` call sites on gated routes.
+PARTNER_SCOPE_TO_PERMISSIONS: dict[str, frozenset[str]] = {
+    "documents:read": frozenset({"document:read"}),
+    "policies:read": frozenset({"policy:read"}),
+}
 
 
 class PartnerApiToken(Base, TimestampMixin):

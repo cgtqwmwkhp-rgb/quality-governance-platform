@@ -20,7 +20,13 @@ MIGRATION = Path("alembic/versions/20260717_partner_api_tokens.py")
 
 
 def test_partner_api_scopes_v1():
-    assert PARTNER_API_SCOPES == ("webhooks:manage", "inspections:read")
+    assert PARTNER_API_SCOPES == (
+        "webhooks:manage",
+        "inspections:read",
+        "documents:read",
+        "search:read",
+        "policies:read",
+    )
 
 
 def test_partner_api_token_orm_columns():

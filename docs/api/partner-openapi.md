@@ -12,7 +12,7 @@ Partner API token CRUD requires an authenticated tenant admin JWT with `admin:ma
 Authorization: Bearer <session_jwt>
 ```
 
-### Partner bearer token (future inbound API)
+### Partner bearer token (inbound API)
 
 Tokens created via `/partner-auth/tokens` use the `qgp_pt_` prefix. Store the plaintext secret immediately — it is shown **once** on create.
 
@@ -26,6 +26,24 @@ Supported scopes:
 |-------|---------|
 | `webhooks:manage` | Manage webhook subscriptions |
 | `inspections:read` | Read inspection data (reserved for R6+ emitters) |
+| `documents:read` | Read library documents + signed URLs; document content/semantic search |
+| `search:read` | Call global search (`GET /api/v1/search/`) and interpret |
+| `policies:read` | Reserved for policy-register read (allowlisted; route wiring TBD) |
+
+Partner bearers are **fail-closed**: `qgp_pt_` tokens are rejected on JWT-only dependencies. Only routes that opt in via partner scope gates accept them. Existing tokens without the new scopes keep working for prior surfaces; the new routes return `403` until those scopes are granted.
+
+#### Inbound routes gated by partner scope
+
+| Method | Path | Required partner scope |
+|--------|------|------------------------|
+| `GET` | `/api/v1/search/` | `search:read` |
+| `POST` | `/api/v1/search/interpret` | `search:read` |
+| `GET` | `/api/v1/documents/search/semantic` | `documents:read` |
+| `GET` | `/api/v1/documents/search/content` | `documents:read` |
+| `GET` | `/api/v1/documents/{id}` | `documents:read` |
+| `GET` | `/api/v1/documents/{id}/signed-url` | `documents:read` |
+
+JWT session callers on those routes keep their existing authz (`document:read` where already required; authenticated-only elsewhere).
 
 ---
 
@@ -42,7 +60,7 @@ POST /api/v1/partner-auth/tokens
 ```json
 {
   "name": "Acme ERP integration",
-  "scopes": ["webhooks:manage", "inspections:read"]
+  "scopes": ["documents:read", "search:read"]
 }
 ```
 
@@ -54,7 +72,7 @@ POST /api/v1/partner-auth/tokens
   "tenant_id": 3,
   "name": "Acme ERP integration",
   "token_prefix": "qgp_pt_AbCdEfGh",
-  "scopes": ["webhooks:manage", "inspections:read"],
+  "scopes": ["documents:read", "search:read"],
   "is_active": true,
   "last_used_at": null,
   "revoked_at": null,
@@ -209,7 +227,7 @@ Validation and not-found errors use the platform standard:
 {
   "detail": {
     "code": "VALIDATION_ERROR",
-    "message": "Unsupported scope(s): foo:bar. Allowed: webhooks:manage, inspections:read"
+    "message": "Unsupported scope(s): foo:bar. Allowed: webhooks:manage, inspections:read, documents:read, search:read, policies:read"
   }
 }
 ```

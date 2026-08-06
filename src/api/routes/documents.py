@@ -19,6 +19,11 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.dependencies.partner import (
+    PartnerCaller,
+    require_auth_or_partner_scope,
+    require_permission_or_partner_scope,
+)
 from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
@@ -1331,9 +1336,12 @@ async def list_documents(
 async def get_document(
     document_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[PartnerCaller, Depends(require_auth_or_partner_scope("documents:read"))],
 ):
-    """Get document details."""
+    """Get document details.
+
+    Partner bearers require ``documents:read``. JWT callers keep authenticated-only.
+    """
 
     document = await _get_document_or_404(db, document_id, current_user)
 
@@ -1407,11 +1415,14 @@ async def _read_and_validate_revision_file(
 async def get_document_signed_url(
     document_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[PartnerCaller, Depends(require_auth_or_partner_scope("documents:read"))],
     expires_in: int = Query(3600, ge=60, le=86400),
     download: bool = Query(True, description="Set attachment disposition when true."),
 ):
-    """Get a signed document URL for inline viewing or download."""
+    """Get a signed document URL for inline viewing or download.
+
+    Partner bearers require ``documents:read``. JWT callers keep authenticated-only.
+    """
     document = await _get_document_or_404(db, document_id, current_user)
     document.download_count += 1
     document.last_accessed_at = datetime.now(timezone.utc)
@@ -1743,11 +1754,16 @@ async def spawn_reack_campaign(
 @router.get("/search/content", response_model=SearchResponse)
 async def search_document_content(
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:read"))],
+    current_user: Annotated[
+        PartnerCaller, Depends(require_permission_or_partner_scope("document:read", "documents:read"))
+    ],
     q: str = Query(..., min_length=1, max_length=200),
     top_k: int = Query(10, ge=1, le=50),
 ):
-    """Full-text search over document chunk body text (RBAC-scoped)."""
+    """Full-text search over document chunk body text (RBAC-scoped).
+
+    JWT callers need ``document:read``; partner bearers need ``documents:read``.
+    """
     import time
 
     from src.domain.services.search_service import SearchService
@@ -1796,14 +1812,17 @@ async def search_document_content(
 @router.get("/search/semantic", response_model=SearchResponse)
 async def semantic_search(
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:read"))],
+    current_user: Annotated[
+        PartnerCaller, Depends(require_permission_or_partner_scope("document:read", "documents:read"))
+    ],
     q: str = Query(..., min_length=3),
     top_k: int = Query(10, ge=1, le=50),
     document_type: Optional[str] = None,
 ):
     """Semantic search across documents using AI embeddings.
 
-    Gated on ``document:read``, the token ``list_documents`` and
+    Gated on ``document:read`` for JWT callers (and ``documents:read`` for
+    partner bearers), the token ``list_documents`` and
     ``search_document_content`` already require. It was left on bare
     authentication, so a caller with no library permission at all could reach
     the whole non-restricted library of their tenant by phrase — the two

@@ -4,12 +4,13 @@ Thin controller layer — all business logic lives in SearchService / interpret 
 """
 
 import logging
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import DbSession
+from src.api.dependencies.partner import PartnerCaller, require_auth_or_partner_scope
 from src.api.dependencies.request_context import get_request_id
 from src.domain.services.search_interpret_service import interpret_search_query
 from src.domain.services.search_service import SearchService
@@ -17,6 +18,7 @@ from src.domain.services.search_service import SearchService
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+_PartnerSearchUser = Annotated[PartnerCaller, Depends(require_auth_or_partner_scope("search:read"))]
 
 
 class SearchResultItem(BaseModel):
@@ -58,7 +60,7 @@ class InterpretResponse(BaseModel):
 @router.get("", response_model=SearchResponse, include_in_schema=False)
 @router.get("/", response_model=SearchResponse)
 async def global_search(
-    current_user: CurrentUser,
+    current_user: _PartnerSearchUser,
     db: DbSession,
     q: str = Query(..., min_length=1, max_length=200),
     module: Optional[str] = Query(None),
@@ -69,7 +71,11 @@ async def global_search(
     page_size: int = Query(20, ge=1, le=100),
     request_id: str = Depends(get_request_id),
 ) -> SearchResponse:
-    """Unified search across all modules."""
+    """Unified search across all modules.
+
+    Partner bearers require ``search:read``. JWT session callers keep the
+    existing authenticated-only posture.
+    """
     service = SearchService(db)
     result = await service.search(
         query=q,
@@ -89,9 +95,12 @@ async def global_search(
 @router.post("/interpret", response_model=InterpretResponse)
 async def interpret_search(
     body: InterpretRequest,
-    current_user: CurrentUser,
+    current_user: _PartnerSearchUser,
 ) -> InterpretResponse:
-    """Interpret natural-language search into structured FTS filters (fail-closed)."""
+    """Interpret natural-language search into structured FTS filters (fail-closed).
+
+    Partner bearers require ``search:read`` (same gate as ``GET /search/``).
+    """
     _ = current_user
     intent = await interpret_search_query(body.q)
     return InterpretResponse(**intent)
