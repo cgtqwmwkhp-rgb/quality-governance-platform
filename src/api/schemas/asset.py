@@ -12,7 +12,10 @@ class LocationBase(BaseModel):
     """Base schema for Location."""
 
     name: str = Field(..., min_length=1, max_length=200)
-    kind: str = Field(..., description="Location kind: site | workshop")
+    kind: str = Field(
+        ...,
+        description="Location kind: site | workshop | premises | office",
+    )
     parent_id: Optional[int] = None
     is_active: bool = True
 

@@ -24,6 +24,10 @@ vi.mock('../../../api/client', () => ({
     err instanceof Error ? err.message : fallback || 'error',
 }))
 
+const mockCreateLocation = vi.fn()
+const mockCreateAssetType = vi.fn()
+const mockPreviewSafetyLookup = vi.fn()
+
 vi.mock('../../../api/safetyAssetsClient', () => ({
   safetyAssetsApi: {
     listPendingSafetyLookups: (...args: unknown[]) => mockListPendingSafetyLookups(...args),
@@ -36,9 +40,9 @@ vi.mock('../../../api/safetyAssetsClient', () => ({
       const res = await mockListAssetTypes({ page: 1, page_size: 500 })
       return { items: res.data.items ?? [], total: res.data.total ?? 0 }
     },
-    previewSafetyLookup: vi.fn(),
-    createAssetType: vi.fn(),
-    createLocation: vi.fn(),
+    previewSafetyLookup: (...args: unknown[]) => mockPreviewSafetyLookup(...args),
+    createAssetType: (...args: unknown[]) => mockCreateAssetType(...args),
+    createLocation: (...args: unknown[]) => mockCreateLocation(...args),
   },
 }))
 
@@ -70,9 +74,16 @@ describe('LookupTables configure CTA', () => {
     mockMergeSafetyLookup.mockReset()
     mockRejectSafetyLookup.mockReset()
     mockListLocations.mockReset()
+    mockCreateLocation.mockReset()
+    mockCreateAssetType.mockReset()
+    mockPreviewSafetyLookup.mockReset()
     mockListPendingSafetyLookups.mockResolvedValue({ data: { items: [], total: 0 } })
     mockRejectSafetyLookup.mockResolvedValue({ data: { approval_status: 'rejected' } })
     mockListLocations.mockResolvedValue({ data: { items: [], total: 0 } })
+    mockPreviewSafetyLookup.mockResolvedValue({
+      data: { intent: 'create', similar_matches: [], blocked_exact_duplicate: false },
+    })
+    mockCreateLocation.mockResolvedValue({ data: { id: 1 } })
     mockList.mockImplementation(async (category: string) => {
       if (
         category === 'workforce_roles' ||
@@ -355,6 +366,28 @@ describe('LookupTables configure CTA', () => {
 
     await waitFor(() => {
       expect(mockMergeSafetyLookup).toHaveBeenCalledWith('location', 9, 3)
+    })
+  })
+
+  it('creates a location with premises kind from the kind select (W1)', async () => {
+    const user = userEvent.setup()
+    renderLookups(<LookupTables />, '/admin/lookups?pending=safety')
+
+    await user.click(await screen.findByRole('button', { name: 'Add location' }))
+    const kindSelect = await screen.findByTestId('safety-create-location-kind')
+    expect(kindSelect).toHaveValue('site')
+    await user.selectOptions(kindSelect, 'premises')
+    expect(kindSelect).toHaveValue('premises')
+
+    await user.type(screen.getByLabelText('Safety lookup name'), 'Main Premises')
+    await user.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(mockCreateLocation).toHaveBeenCalledWith({
+        name: 'Main Premises',
+        kind: 'premises',
+        force: false,
+      })
     })
   })
 })
