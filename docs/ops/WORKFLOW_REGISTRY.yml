@@ -3,7 +3,7 @@
 # P0 workflows must complete successfully for production readiness
 
 version: "1.0"
-last_updated: "2026-07-26"
+last_updated: "2026-08-06"
 
 # ==============================================================================
 # P0 CRITICAL WORKFLOWS - Must Pass for Production
@@ -346,6 +346,30 @@ p1_workflows:
       - GET /api/v1/search
     max_duration_seconds: 20
 
+  # Compliance Schedule register
+  - workflowId: compliance-schedule
+    name: "Admin Views Compliance Schedule"
+    description: "Admin navigates to the compliance schedule obligation register"
+    criticality: P1
+    auth_type: jwt_admin
+    steps:
+      - stepId: 1
+        action: "Navigate to compliance schedule"
+        route: /compliance-schedule
+        exit_criteria: "Compliance schedule page loads"
+
+      - stepId: 2
+        action: "Verify register surface"
+        selector: "[data-testid='compliance-schedule-page']"
+        exit_criteria: "Page root visible with list, empty state, or catalogue"
+
+    success_terminal_state: "Compliance schedule register rendered"
+    recovery_path: "Error banner if API fails"
+    expected_apis:
+      - GET /api/v1/compliance-schedule/requirements
+      - GET /api/v1/compliance-schedule/stats
+    max_duration_seconds: 20
+
 # ==============================================================================
 # P2 OPTIONAL WORKFLOWS - Can Degrade
 # ==============================================================================
@@ -393,7 +417,7 @@ p2_workflows:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_workflows: 11
+  total_workflows: 12
   p0_workflows: 5
-  p1_workflows: 4
+  p1_workflows: 5
   p2_workflows: 2
