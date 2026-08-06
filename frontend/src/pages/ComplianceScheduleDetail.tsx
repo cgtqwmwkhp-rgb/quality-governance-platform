@@ -19,6 +19,7 @@ import { RecordCompletionSheet } from './compliance/RecordCompletionSheet'
 import { RequirementFormDialog } from './compliance/RequirementFormDialog'
 import { RequirementLifecycleControls } from './compliance/RequirementLifecycleControls'
 import { RecordEvidenceSection } from './compliance/RecordEvidenceSection'
+import { RecordFilingControl } from './compliance/RecordFilingControl'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceScheduleDetail() {
@@ -242,6 +243,7 @@ export default function ComplianceScheduleDetail() {
                   {rec.completed_at ? ` · ${new Date(rec.completed_at).toLocaleString()}` : ''}
                 </div>
                 <RecordEvidenceSection recordId={rec.id} referenceNumber={rec.reference_number} />
+                <RecordFilingControl record={rec} onFiled={() => void load()} />
               </li>
             ))}
           </ul>

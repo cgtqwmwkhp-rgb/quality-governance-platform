@@ -20,6 +20,8 @@ from src.api.schemas.compliance_schedule import (
     ComplianceScheduleStatsResponse,
     RecordCompleteRequest,
     RecordEvidenceAttachRequest,
+    RecordFileRequest,
+    RecordFilingResponse,
     RecordListResponse,
     RecordResponse,
     RequirementCreate,
@@ -29,6 +31,9 @@ from src.api.schemas.compliance_schedule import (
 )
 from src.api.utils.tenant import require_tenant_id
 from src.domain.models.user import User
+from src.domain.services.compliance_schedule_filing_service import (
+    file_record_to_library as file_record_to_library_service,
+)
 from src.domain.services.compliance_schedule_policy import derive_status
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 from src.infrastructure.database import async_session_maker
@@ -361,6 +366,51 @@ async def attach_record_evidence(
         evidence_asset_ids=data.evidence_asset_ids,
     )
     return RecordResponse.model_validate(record)
+
+
+@_enabled_router.post(
+    "/records/{record_id}/file",
+    response_model=RecordFilingResponse,
+    dependencies=[Depends(require_permission("document:create"))],
+)
+async def file_record_to_library(
+    record_id: int,
+    data: RecordFileRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:update"))],
+):
+    """File this occurrence's evidence into the Governance Library.
+
+    ADR-0020: filing is its own step. Recording a completion files nothing, and
+    this is the only route that sets ``library_document_id`` — a record can be
+    complete and unfiled indefinitely, which is a state the register is meant to
+    be able to show.
+
+    ``document:create`` is required for both modes, including the link mode that
+    creates no document. Linking publishes a Library document's id onto the
+    occurrence, and the narrower alternative — branching the permission on which
+    mode the body selected — makes what a caller may do depend on what they
+    asked for, which is the harder thing to reason about when it is wrong.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    result = await file_record_to_library_service(
+        db,
+        record_id=record_id,
+        tenant_id=tenant_id,
+        user=current_user,
+        evidence_asset_id=data.evidence_asset_id,
+        category_id=data.category_id,
+        library_document_id=data.library_document_id,
+        title=data.title,
+    )
+    return RecordFilingResponse(
+        record=RecordResponse.model_validate(result.record),
+        library_document_id=result.document.id,
+        pel_doc_ref=getattr(result.document, "pel_doc_ref", None),
+        linked_existing=result.linked_existing,
+        duplicate_warning=result.duplicate_warning,
+        duplicate_warning_detail=result.duplicate_warning_detail,
+    )
 
 
 router.include_router(_enabled_router)
