@@ -50,7 +50,7 @@ export function IncidentFraSignificantChangePanel({
   flagEnabled,
 }: IncidentFraSignificantChangePanelProps) {
   const { i18n } = useTranslation()
-  const copy = fraSigChangeCopy(i18n.language)
+  const copy = fraSigChangeCopy(i18n?.language)
   const navigate = useNavigate()
 
   const [dismissed, setDismissed] = useState(() =>
