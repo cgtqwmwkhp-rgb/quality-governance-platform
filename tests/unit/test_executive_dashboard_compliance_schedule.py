@@ -146,9 +146,7 @@ def test_open_to_helper_requires_permission_and_flag(monkeypatch):
         "src.domain.services.compliance_schedule_kill_switch.compliance_schedule_kill_switch_last_known",
         return_value=False,
     ):
-        assert ExecutiveDashboardService._compliance_schedule_open_to(
-            _PermUser(perms={"compliance_schedule:read"})
-        )
+        assert ExecutiveDashboardService._compliance_schedule_open_to(_PermUser(perms={"compliance_schedule:read"}))
         assert not ExecutiveDashboardService._compliance_schedule_open_to(_PermUser(perms=set()))
         assert not ExecutiveDashboardService._compliance_schedule_open_to(None)
         assert not ExecutiveDashboardService._compliance_schedule_open_to(SimpleNamespace())

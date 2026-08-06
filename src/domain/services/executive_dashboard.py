@@ -450,9 +450,7 @@ class ExecutiveDashboardService:
         clients omit the tile rather than publishing zeros.
         """
         from src.core.config import settings
-        from src.domain.services.compliance_schedule_kill_switch import (
-            compliance_schedule_kill_switch_last_known,
-        )
+        from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_kill_switch_last_known
 
         if user is None:
             return False
@@ -487,7 +485,6 @@ class ExecutiveDashboardService:
             "overdue": stats["overdue"],
             "href": "/compliance-schedule",
         }
-
 
     async def _get_incident_summary(self, cutoff: datetime) -> Dict[str, Any]:
         """Get incident summary statistics."""

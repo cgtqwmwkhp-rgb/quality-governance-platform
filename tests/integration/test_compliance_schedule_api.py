@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -53,6 +53,14 @@ def _cs_headers(permissions: str) -> dict[str, str]:
         is_superuser=False,
         permissions=permissions,
     )
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _tenant_headers(tenant_id: int, user_id: str = "1") -> dict[str, str]:
+    """Admin headers scoped to a named tenant, for cross-tenant assertions."""
+    from tests.integration.conftest import _generate_test_jwt
+
+    token = _generate_test_jwt(user_id=user_id, tenant_id=tenant_id, role="admin", is_superuser=False)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -145,6 +153,54 @@ async def test_happy_path_activate_complete(
     body = stats.json()
     assert body["total_active"] >= 1
     assert set(body) >= {"total_active", "current", "due_soon", "overdue"}
+
+
+@pytest.mark.asyncio
+async def test_stats_are_scoped_to_the_callers_tenant(
+    client: AsyncClient,
+    enable_compliance_schedule,
+):
+    """An obligation raised in one tenant must not move another tenant's counts.
+
+    These four counts are now published on the executive dashboard's Compliance
+    Schedule tile, where they read as the whole organisation's obligation
+    position. Asserted as a before/after delta on the second tenant rather than
+    as "must be zero", so the test states tenant isolation itself and does not
+    quietly become a check that the database happened to be empty.
+    """
+    tenant_a = _tenant_headers(1)
+    tenant_b = _tenant_headers(2, user_id="2")
+
+    def _counts(response) -> dict[str, int]:
+        assert response.status_code == 200, response.text
+        body = response.json()
+        return {key: body[key] for key in ("total_active", "current", "due_soon", "overdue")}
+
+    before_a = _counts(await client.get("/api/v1/compliance-schedule/stats", headers=tenant_a))
+    before_b = _counts(await client.get("/api/v1/compliance-schedule/stats", headers=tenant_b))
+
+    # Well beyond derive_status's 30-day due_soon horizon, computed rather than
+    # written as a literal so the "current" assertion below does not expire.
+    next_due = datetime.now(timezone.utc).date() + timedelta(days=400)
+    created = await client.post(
+        "/api/v1/compliance-schedule/requirements",
+        headers=tenant_a,
+        json={
+            "title": "Tenant A only fire alarm test",
+            "taxonomy_id": "HS-03",
+            "frequency_months": 12,
+            "next_due_date": next_due.isoformat(),
+            "statutory": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    after_a = _counts(await client.get("/api/v1/compliance-schedule/stats", headers=tenant_a))
+    after_b = _counts(await client.get("/api/v1/compliance-schedule/stats", headers=tenant_b))
+
+    assert after_a["total_active"] == before_a["total_active"] + 1
+    assert after_a["current"] == before_a["current"] + 1
+    assert after_b == before_b
 
 
 @pytest.mark.asyncio
