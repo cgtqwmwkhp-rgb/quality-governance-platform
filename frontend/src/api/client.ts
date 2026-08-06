@@ -2483,6 +2483,20 @@ export interface ExecutiveDashboardData {
     title: string
     triggered_at: string
   }[]
+  /**
+   * Compliance Schedule obligations from the same get_stats SSOT as
+   * GET /api/v1/compliance-schedule/stats. `null`/absent when the module is
+   * closed to this caller (flag, kill switch, or missing read permission).
+   * When present with available=false, the register could not be read.
+   */
+  compliance_schedule?: {
+    available: boolean
+    total_active: number | null
+    current: number | null
+    due_soon: number | null
+    overdue: number | null
+    href?: string
+  } | null
 }
 
 export const executiveDashboardApi = {

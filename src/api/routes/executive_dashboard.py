@@ -45,7 +45,7 @@ async def get_executive_dashboard(
     - Active alerts requiring attention
     """
     service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
-    dashboard = await service.get_full_dashboard(period_days)
+    dashboard = await service.get_full_dashboard(period_days, user=current_user)
     return ExecutiveDashboardResponse.model_validate(dashboard)
 
 

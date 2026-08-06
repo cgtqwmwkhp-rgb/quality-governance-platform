@@ -206,6 +206,23 @@ class ActiveAlert(BaseModel):
     triggered_at: str
 
 
+class ComplianceScheduleSummary(BaseModel):
+    """Compliance Schedule obligation counts for the executive surface.
+
+    Absent (``None`` on the parent) when the module is closed to the caller —
+    deployment flag off, kill switch engaged, or missing ``compliance_schedule:read``.
+    When present, ``available`` is False only if the register could not be read,
+    so the tile can show unavailable rather than a fabricated empty estate.
+    """
+
+    available: bool = False
+    total_active: Optional[int] = None
+    current: Optional[int] = None
+    due_soon: Optional[int] = None
+    overdue: Optional[int] = None
+    href: str = "/compliance-schedule"
+
+
 class SafetyInsightsSummary(BaseModel):
     """Latest Safety Insights Analyst snapshot for the executive surface."""
 
@@ -236,6 +253,7 @@ class ExecutiveDashboardResponse(BaseModel):
     trends: TrendData
     alerts: List[ActiveAlert]
     safety_insights: SafetyInsightsSummary = Field(default_factory=SafetyInsightsSummary)
+    compliance_schedule: Optional[ComplianceScheduleSummary] = None
 
 
 class VehicleGovernanceSummary(BaseModel):

@@ -296,6 +296,8 @@ class ExecutiveDashboardService:
     async def get_full_dashboard(
         self,
         period_days: int = 30,
+        *,
+        user: Any = None,
     ) -> Dict[str, Any]:
         """Get complete executive dashboard with all KPIs."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
@@ -369,6 +371,23 @@ class ExecutiveDashboardService:
             self._get_safety_insights_summary(), {}, name="safety_insights", unavailable=unavailable
         )
 
+        # None when closed to this caller; unavailable-shaped payload when open but unread.
+        compliance_schedule = None
+        if self._compliance_schedule_open_to(user):
+            compliance_schedule = await self._safe_call(
+                self._get_compliance_schedule_summary(),
+                {
+                    "available": False,
+                    "total_active": None,
+                    "current": None,
+                    "due_soon": None,
+                    "overdue": None,
+                    "href": "/compliance-schedule",
+                },
+                name="compliance_schedule",
+                unavailable=unavailable,
+            )
+
         # Ensure all sparkline series keys exist even if a partial trends dict is returned.
         trends = {**dict(_EMPTY_TRENDS), **trends}
 
@@ -389,6 +408,7 @@ class ExecutiveDashboardService:
             "trends": trends,
             "alerts": alerts,
             "safety_insights": safety_insights,
+            "compliance_schedule": compliance_schedule,
             "unavailable": unavailable,
         }
 
@@ -419,6 +439,55 @@ class ExecutiveDashboardService:
             "ratios": (payload.get("ratios") or {}).get("corpus"),
             "href": "/analytics/safety-insights",
         }
+
+    @staticmethod
+    def _compliance_schedule_open_to(user: Any) -> bool:
+        """Whether the Compliance Schedule tile may appear for this caller.
+
+        Mirrors search / meta features: deployment opener, subtract-only kill
+        switch (last known — no I/O on the shared dashboard session), and
+        ``compliance_schedule:read``. Closed means the field stays ``None`` so
+        clients omit the tile rather than publishing zeros.
+        """
+        from src.core.config import settings
+        from src.domain.services.compliance_schedule_kill_switch import (
+            compliance_schedule_kill_switch_last_known,
+        )
+
+        if user is None:
+            return False
+        if not settings.compliance_schedule_enabled:
+            return False
+        if compliance_schedule_kill_switch_last_known():
+            return False
+        has_permission = getattr(user, "has_permission", None)
+        if not callable(has_permission):
+            return False
+        return bool(has_permission("compliance_schedule:read"))
+
+    async def _get_compliance_schedule_summary(self) -> Dict[str, Any]:
+        """Reuse ComplianceScheduleService.get_stats — same counts as GET /stats."""
+        if self.tenant_id is None:
+            return {
+                "available": False,
+                "total_active": None,
+                "current": None,
+                "due_soon": None,
+                "overdue": None,
+                "href": "/compliance-schedule",
+            }
+        from src.domain.services.compliance_schedule_service import ComplianceScheduleService
+
+        stats = await ComplianceScheduleService(self.db).get_stats(tenant_id=self.tenant_id)
+        return {
+            "available": True,
+            "total_active": stats["total_active"],
+            "current": stats["current"],
+            "due_soon": stats["due_soon"],
+            "overdue": stats["overdue"],
+            "href": "/compliance-schedule",
+        }
+
 
     async def _get_incident_summary(self, cutoff: datetime) -> Dict[str, Any]:
         """Get incident summary statistics."""
