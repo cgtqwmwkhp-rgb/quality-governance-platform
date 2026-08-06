@@ -1112,6 +1112,7 @@ export default function IncidentDetail() {
       ) : null}
 
       <IncidentFraSignificantChangePanel
+        key={incident.id}
         incident={incident}
         flagEnabled={complianceScheduleEnabled}
       />

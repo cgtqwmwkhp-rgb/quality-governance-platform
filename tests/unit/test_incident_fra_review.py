@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.api.routes.incidents import FraSignificantChangeRequest, fra_significant_change_from_incident
 from src.domain.exceptions import BadRequestError, ConflictError, ValidationError
+from src.domain.models.incident import IncidentStatus
 from src.domain.models.location import LocationKind
 from src.domain.services.incident_fra_review import (
     FRA_TEMPLATE_KEY,
@@ -224,3 +226,106 @@ async def test_activate_or_link_treats_conflict_as_existing():
 
     assert result.created is False
     assert result.requirement is raced
+
+
+def _fra_route_user():
+    return SimpleNamespace(
+        id=9,
+        tenant_id=1,
+        is_superuser=False,
+        has_permission=MagicMock(return_value=True),
+    )
+
+
+@pytest.mark.asyncio
+async def test_fra_route_rejects_open_incident_before_side_effects():
+    incident = SimpleNamespace(
+        id=12,
+        tenant_id=1,
+        status=IncidentStatus.REPORTED,
+        emergency_services=["fire"],
+        incident_type="injury",
+        severity="low",
+        is_sif=False,
+        is_psif=False,
+    )
+    db = MagicMock()
+
+    with (
+        patch("src.api.routes.incidents.IncidentService") as service_cls,
+        patch(
+            "src.api.routes.incidents.resolve_suggested_location_id",
+            new_callable=AsyncMock,
+        ) as resolve_suggested,
+        patch(
+            "src.api.routes.incidents.activate_or_link_fra_significant_change",
+            new_callable=AsyncMock,
+        ) as activate,
+    ):
+        service_cls.return_value.get_incident = AsyncMock(return_value=incident)
+
+        with pytest.raises(BadRequestError, match="must be closed"):
+            await fra_significant_change_from_incident(
+                incident_id=incident.id,
+                body=FraSignificantChangeRequest(location_id=3),
+                db=db,
+                current_user=_fra_route_user(),
+                _cs_open=None,
+            )
+
+        resolve_suggested.assert_not_awaited()
+        activate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fra_route_accepts_closed_incident():
+    incident = SimpleNamespace(
+        id=12,
+        tenant_id=1,
+        status=IncidentStatus.CLOSED,
+        emergency_services=["fire"],
+        incident_type="injury",
+        severity="low",
+        is_sif=False,
+        is_psif=False,
+    )
+    requirement = SimpleNamespace(
+        id=42,
+        reference_number="CSR-42",
+        location_id=3,
+    )
+    activation = SimpleNamespace(created=True, requirement=requirement)
+    db = MagicMock()
+
+    with (
+        patch("src.api.routes.incidents.IncidentService") as service_cls,
+        patch(
+            "src.api.routes.incidents.resolve_suggested_location_id",
+            new_callable=AsyncMock,
+            return_value=3,
+        ),
+        patch(
+            "src.api.routes.incidents.activate_or_link_fra_significant_change",
+            new_callable=AsyncMock,
+            return_value=activation,
+        ) as activate,
+    ):
+        service_cls.return_value.get_incident = AsyncMock(return_value=incident)
+
+        response = await fra_significant_change_from_incident(
+            incident_id=incident.id,
+            body=FraSignificantChangeRequest(location_id=3),
+            db=db,
+            current_user=_fra_route_user(),
+            _cs_open=None,
+        )
+
+    assert response.created is True
+    assert response.requirement_id == requirement.id
+    activate.assert_awaited_once_with(
+        db,
+        incident=incident,
+        tenant_id=1,
+        user_id=9,
+        location_id=3,
+    )

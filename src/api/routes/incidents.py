@@ -20,7 +20,7 @@ from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
-from src.domain.models.incident import Incident, IncidentRunningSheetEntry
+from src.domain.models.incident import Incident, IncidentRunningSheetEntry, IncidentStatus
 from src.domain.models.user import User
 from src.domain.services.api_idempotency_service import (
     SCOPE_INCIDENT_CREATE,
@@ -501,6 +501,9 @@ async def fra_significant_change_from_incident(
         )
     except LookupError:
         raise NotFoundError(f"Incident {incident_id} not found")
+
+    if incident.status != IncidentStatus.CLOSED:
+        raise BadRequestError("Incident must be closed before creating an FRA significant change")
 
     if not incident_suggests_fra_significant_change(incident):
         raise BadRequestError("Incident does not indicate an FRA significant change")
