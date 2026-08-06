@@ -29,6 +29,11 @@ import {
   WORKFORCE_ROLE_CODE_HINTS,
   workforceRoleHintCodes,
 } from './workforceRolesCatalog'
+import {
+  LOCATION_KIND_VALUES,
+  LOCATION_KIND_LABEL_KEYS,
+  type LocationKindValue,
+} from '../safetyAssets/locationKindLabels'
 
 const LOOKUP_CATEGORIES = [
   { key: 'incident_types', label: 'Incident Types' },
@@ -99,6 +104,8 @@ export default function LookupTables() {
   const [pendingBusyId, setPendingBusyId] = useState<string | null>(null)
   const [safetyCreateKind, setSafetyCreateKind] = useState<'asset_type' | 'location' | null>(null)
   const [safetyCreateName, setSafetyCreateName] = useState('')
+  const [safetyCreateLocationKind, setSafetyCreateLocationKind] =
+    useState<LocationKindValue>('site')
   const [safetyCreatePreview, setSafetyCreatePreview] = useState<{
     intent: string
     similar_matches: { id: number; name: string; score: number }[]
@@ -441,13 +448,14 @@ export default function LookupTables() {
       } else {
         await safetyAssetsApi.createLocation({
           name: safetyCreateName.trim(),
-          kind: 'site',
+          kind: safetyCreateLocationKind,
           force,
         })
       }
       toast.success('Safety lookup created')
       setSafetyCreateKind(null)
       setSafetyCreateName('')
+      setSafetyCreateLocationKind('site')
       setSafetyCreatePreview(null)
       await refreshPendingSafety()
     } catch (err) {
@@ -499,6 +507,7 @@ export default function LookupTables() {
                 onClick={() => {
                   setSafetyCreateKind('location')
                   setSafetyCreateName('')
+                  setSafetyCreateLocationKind('site')
                   setSafetyCreatePreview(null)
                 }}
               >
@@ -667,6 +676,7 @@ export default function LookupTables() {
           if (!open) {
             setSafetyCreateKind(null)
             setSafetyCreatePreview(null)
+            setSafetyCreateLocationKind('site')
           }
         }}
       >
@@ -677,6 +687,32 @@ export default function LookupTables() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {safetyCreateKind === 'location' ? (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="safety-create-location-kind"
+                  className="text-sm font-medium text-foreground"
+                >
+                  {t('admin.lookups.location_kind_label', 'Location kind')}
+                </label>
+                <select
+                  id="safety-create-location-kind"
+                  value={safetyCreateLocationKind}
+                  onChange={(e) =>
+                    setSafetyCreateLocationKind(e.target.value as LocationKindValue)
+                  }
+                  aria-label={t('admin.lookups.location_kind_label', 'Location kind')}
+                  data-testid="safety-create-location-kind"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                >
+                  {LOCATION_KIND_VALUES.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {t(LOCATION_KIND_LABEL_KEYS[kind].key, LOCATION_KIND_LABEL_KEYS[kind].fallback)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <Input
               value={safetyCreateName}
               onChange={(e) => void runSafetyCreatePreview(e.target.value)}

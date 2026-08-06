@@ -17,6 +17,7 @@ import {
 } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { isOpaqueIdentifier } from '../helpers/displayLabels'
+import { locationKindI18n } from './safetyAssets/locationKindLabels'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Card, CardContent } from '../components/ui/Card'
 import {
@@ -260,7 +261,10 @@ export default function SafetyAssetDetail() {
     : location
       ? t('safetyAssets.detail.assignment_location', '{{name}} ({{kind}})', {
           name: location.name,
-          kind: location.kind,
+          kind: (() => {
+            const label = locationKindI18n(location.kind)
+            return String(t(label.key, label.fallback))
+          })(),
         })
       : asset.location_id
         ? t('safetyAssets.detail.assignment_location_id', 'Location #{{id}}', {

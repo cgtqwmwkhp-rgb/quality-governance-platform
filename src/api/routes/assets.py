@@ -91,7 +91,7 @@ async def create_location(
     user: CurrentUser,
     _: Annotated[User, Depends(require_permission("asset:create"))],
 ):
-    """Create a site or workshop location."""
+    """Create a location (site, workshop, premises, or office)."""
     service = AssetService(db)
     payload = data.model_dump(exclude_unset=True)
     force = bool(payload.pop("force", False))
