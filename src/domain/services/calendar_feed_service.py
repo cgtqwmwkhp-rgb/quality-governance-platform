@@ -21,6 +21,7 @@ CALENDAR_FEED_SOURCES = (
     "assessments",
     "inductions",
     "enterprise_risks",
+    "compliance_requirements",
 )
 
 
@@ -104,6 +105,7 @@ class CalendarFeedService:
             ("assessments", self._load_assessments),
             ("inductions", self._load_inductions),
             ("enterprise_risks", self._load_enterprise_risks),
+            ("compliance_requirements", self._load_compliance_requirements),
         ]
         for name, loader in loaders:
             try:
@@ -380,6 +382,50 @@ class CalendarFeedService:
                     "source_id": str(row.id),
                     "href": f"/risk-register/{row.id}",
                     "description": row.reference,
+                }
+            )
+        return out
+
+    async def _load_compliance_requirements(
+        self, start_dt: datetime, end_dt: datetime, today: date
+    ) -> list[dict[str, Any]]:
+        """Emit one deadline per active requirement from ``next_due_date`` (ADR-0020).
+
+        Does not materialise future occurrences — the requirement row is the schedule.
+        """
+        from src.domain.models.compliance_schedule import ComplianceRequirement
+
+        start_d = start_dt.date()
+        end_d = end_dt.date()
+        stmt = select(ComplianceRequirement).where(
+            ComplianceRequirement.is_active == True,  # noqa: E712
+            ComplianceRequirement.deleted_at.is_(None),
+            ComplianceRequirement.next_due_date >= start_d,
+            ComplianceRequirement.next_due_date <= end_d,
+        )
+        if self.tenant_id is not None:
+            stmt = stmt.where(ComplianceRequirement.tenant_id == self.tenant_id)
+        result = await self.db.execute(stmt.limit(500))
+        rows = list(result.scalars().all())
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            when = row.next_due_date
+            if when is None:
+                continue
+            when_dt = datetime.combine(when, time.min, tzinfo=timezone.utc)
+            out.append(
+                {
+                    "id": f"compliance_requirement:{row.id}",
+                    "title": row.title or row.reference_number or f"Requirement #{row.id}",
+                    "type": "deadline",
+                    "date": _iso_date(when_dt),
+                    "status": _status_for(when_dt, None, today=today),
+                    "priority": "high" if bool(getattr(row, "statutory", False)) else "medium",
+                    "owner": None,
+                    "source_module": "compliance_requirement",
+                    "source_id": str(row.id),
+                    "href": f"/compliance-schedule/{row.id}",
+                    "description": row.reference_number,
                 }
             )
         return out

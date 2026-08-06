@@ -158,3 +158,75 @@ async def test_enterprise_risk_review_overdue_and_closed_status() -> None:
     assert by_id["1"]["status"] == "overdue"
     assert by_id["1"]["priority"] == "high"
     assert by_id["2"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_compliance_requirement_deadline_event_shape_and_href() -> None:
+    db = AsyncMock()
+    due = date(2026, 7, 22)
+    req_row = MagicMock(
+        id=15,
+        title="Fire risk assessment",
+        reference_number="CSR-2026-0015",
+        next_due_date=due,
+        statutory=True,
+        is_active=True,
+        deleted_at=None,
+    )
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [req_row]
+    db.execute = AsyncMock(return_value=result)
+
+    service = CalendarFeedService(db, tenant_id=10)
+    events = await service._load_compliance_requirements(
+        datetime(2026, 7, 1, tzinfo=timezone.utc),
+        datetime(2026, 7, 31, tzinfo=timezone.utc),
+        date(2026, 7, 16),
+    )
+
+    assert len(events) == 1
+    event = events[0]
+    assert event["id"] == "compliance_requirement:15"
+    assert event["type"] == "deadline"
+    assert event["date"] == "2026-07-22"
+    assert event["href"] == "/compliance-schedule/15"
+    assert event["source_module"] == "compliance_requirement"
+    assert event["source_id"] == "15"
+    assert event["title"] == "Fire risk assessment"
+    assert event["description"] == "CSR-2026-0015"
+    assert event["status"] == "upcoming"
+    assert event["priority"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_compliance_requirement_overdue_non_statutory_priority() -> None:
+    db = AsyncMock()
+    overdue = date(2026, 7, 5)
+    req_row = MagicMock(
+        id=3,
+        title="GDPR review",
+        reference_number="CSR-2026-0003",
+        next_due_date=overdue,
+        statutory=False,
+        is_active=True,
+        deleted_at=None,
+    )
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [req_row]
+    db.execute = AsyncMock(return_value=result)
+
+    service = CalendarFeedService(db, tenant_id=10)
+    events = await service._load_compliance_requirements(
+        datetime(2026, 7, 1, tzinfo=timezone.utc),
+        datetime(2026, 7, 31, tzinfo=timezone.utc),
+        date(2026, 7, 16),
+    )
+
+    assert len(events) == 1
+    assert events[0]["status"] == "overdue"
+    assert events[0]["priority"] == "medium"
+
+
+@pytest.mark.asyncio
+async def test_compliance_requirements_in_calendar_feed_sources() -> None:
+    assert "compliance_requirements" in CALENDAR_FEED_SOURCES
