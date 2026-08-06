@@ -4,21 +4,20 @@ Thin controller layer — all business logic lives in SearchService / interpret 
 """
 
 import logging
-from typing import Annotated, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from src.api.dependencies import DbSession
-from src.api.dependencies.partner import PartnerCaller, require_auth_or_partner_scope
+from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.partner import is_partner_caller, partner_readable
 from src.api.dependencies.request_context import get_request_id
 from src.domain.services.search_interpret_service import interpret_search_query
-from src.domain.services.search_service import SearchService
+from src.domain.services.search_service import PARTNER_VISIBLE_MODULES, SearchService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-_PartnerSearchUser = Annotated[PartnerCaller, Depends(require_auth_or_partner_scope("search:read"))]
 
 
 class SearchResultItem(BaseModel):
@@ -57,10 +56,19 @@ class InterpretResponse(BaseModel):
     source: str = "keyword"
 
 
-@router.get("", response_model=SearchResponse, include_in_schema=False)
-@router.get("/", response_model=SearchResponse)
+@router.get(
+    "",
+    response_model=SearchResponse,
+    include_in_schema=False,
+    openapi_extra=partner_readable("search:read"),
+)
+@router.get(
+    "/",
+    response_model=SearchResponse,
+    openapi_extra=partner_readable("search:read"),
+)
 async def global_search(
-    current_user: _PartnerSearchUser,
+    current_user: CurrentUser,
     db: DbSession,
     q: str = Query(..., min_length=1, max_length=200),
     module: Optional[str] = Query(None),
@@ -73,8 +81,12 @@ async def global_search(
 ) -> SearchResponse:
     """Unified search across all modules.
 
-    Partner bearers require ``search:read``. JWT session callers keep the
-    existing authenticated-only posture.
+    A partner bearer holding ``search:read`` reaches the document modules only.
+    The registers this also spans — incidents, near misses, RTAs, complaints,
+    risks, audit findings, actions — are scoped by tenant but check no
+    permission, so serving them to a partner token would hand a static
+    credential held in another system's configuration the whole confidential
+    estate of the tenant. A session user's reach here is unchanged.
     """
     service = SearchService(db)
     result = await service.search(
@@ -88,6 +100,7 @@ async def global_search(
         page=page,
         page_size=page_size,
         request_id=request_id,
+        allowed_modules=PARTNER_VISIBLE_MODULES if is_partner_caller(current_user) else None,
     )
     return SearchResponse(**result)
 
@@ -95,12 +108,9 @@ async def global_search(
 @router.post("/interpret", response_model=InterpretResponse)
 async def interpret_search(
     body: InterpretRequest,
-    current_user: _PartnerSearchUser,
+    current_user: CurrentUser,
 ) -> InterpretResponse:
-    """Interpret natural-language search into structured FTS filters (fail-closed).
-
-    Partner bearers require ``search:read`` (same gate as ``GET /search/``).
-    """
+    """Interpret natural-language search into structured FTS filters (fail-closed)."""
     _ = current_user
     intent = await interpret_search_query(body.q)
     return InterpretResponse(**intent)

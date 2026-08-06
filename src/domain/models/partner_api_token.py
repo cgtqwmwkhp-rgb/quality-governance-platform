@@ -21,11 +21,18 @@ PARTNER_API_SCOPES: tuple[str, ...] = (
     "policies:read",
 )
 
-# Partner OAuth-style scopes → platform RBAC tokens used by existing
-# ``require_permission`` / ``User.has_permission`` call sites on gated routes.
+# Partner scopes → the platform RBAC tokens a partner caller holding that scope
+# satisfies, so the ``require_permission`` dependencies already on the gated
+# routes keep being the thing that decides.
+#
+# A scope absent from this mapping grants no RBAC permission at all. That is the
+# fail-closed half of the design and it is load-bearing for two scopes:
+# ``search:read`` gates only the routes that opt in by name, and
+# ``policies:read`` is allowlisted so a token can be minted for a future policy
+# surface but reaches nothing until one opts in. Mapping either of them here
+# would hand a partner token a permission on every route that already checks it.
 PARTNER_SCOPE_TO_PERMISSIONS: dict[str, frozenset[str]] = {
     "documents:read": frozenset({"document:read"}),
-    "policies:read": frozenset({"policy:read"}),
 }
 
 

@@ -1,161 +1,153 @@
-"""Partner bearer authentication dependencies (fail-closed inbound API).
+"""Inbound partner bearer authentication: the route opt-in and the principal.
 
-JWT session callers keep using :func:`get_current_user` /
-:func:`require_permission`. Partner ``qgp_pt_`` tokens are **rejected** by
-those helpers so authenticated-only routes stay closed to partners.
+How a ``qgp_pt_`` bearer reaches a handler
+------------------------------------------
+There is one identity dependency in this application, :func:`
+src.api.dependencies.get_current_user`, and everything downstream of it —
+``require_permission``, the library ACL, the tenant scoping helpers — reads the
+caller it returns. Partner support is therefore added *inside* that dependency
+rather than beside it. The alternative, a parallel
+``require_permission_or_partner_scope`` factory replacing the dependency on each
+partner-callable route, was tried first and is the wrong shape: it takes
+``get_current_user`` out of those routes' dependency graphs (so every test that
+overrides it stops applying), it duplicates the JWT path (so the two drift), and
+it reaches ``has_permission`` with a non-literal token, which
+``src.domain.authz.extraction`` refuses outright.
 
-Partner-callable routes must opt in via
-:func:`require_auth_or_partner_scope` or
-:func:`require_permission_or_partner_scope`.
+Default deny, and where it comes from
+-------------------------------------
+Accepting partner tokens in the one shared dependency would otherwise open every
+authenticated route in the app to them. So a route is partner-callable only if
+it says so, by carrying :data:`PARTNER_SCOPE_OPENAPI_KEY` in its
+``openapi_extra``:
+
+    @router.get("/search/content", openapi_extra=partner_readable("documents:read"))
+
+:func:`required_partner_scope` reads that marker back off the matched route. A
+route with no marker yields ``None``, and a ``None`` required scope refuses the
+token — which is exactly what happens today, since ``decode_token`` cannot read
+a ``qgp_pt_`` string either. The opt-in is read from the route object rather
+than from a sibling dependency on purpose: dependency *resolution order* is not
+a contract this repo should rest a security decision on, and a route that cannot
+be read at all yields ``None`` and denies.
+
+The marker is not decoration. It is the authorisation decision, so
+``tests/unit/test_partner_bearer_scopes.py`` pins the exact set of routes that
+carry one; adding a sixth cannot pass unnoticed.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Union
+from typing import Optional
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException, Request, status
 
-from src.api.dependencies import (
-    _bind_tenant_rls_guc,
-    _credentials_exception,
-    _enforce_access_token_not_revoked,
-    _resolve_user_tenant_context,
-    get_current_user,
-    security,
-)
-from src.domain.authz.census import AUTHENTICATION_KIND_ATTR, AuthenticationKind
-from src.domain.authz.extraction import REQUIRED_PERMISSION_ATTR
-from src.domain.models.user import User
 from src.domain.services.partner_auth_service import (
-    PARTNER_SCOPES_ATTR,
     PartnerAuthService,
     PartnerPrincipal,
     is_partner_bearer_token,
 )
-from src.infrastructure.database import get_db
 
-PartnerCaller = Union[User, PartnerPrincipal]
+#: OpenAPI operation extension naming the partner scope a route accepts. An
+#: ``x-`` extension is a legal operation field, so the opt-in also documents
+#: itself in the published schema instead of living only in Python.
+PARTNER_SCOPE_OPENAPI_KEY = "x-qgp-partner-scope"
 
 
-def _partner_scope_forbidden(scope: str) -> HTTPException:
+def partner_readable(scope: str) -> dict[str, str]:
+    """``openapi_extra`` marking a route callable with a partner token.
+
+    The single constructor for the marker, so every partner-callable route is
+    greppable by one name and the key is spelled in one place.
+    """
+    return {PARTNER_SCOPE_OPENAPI_KEY: scope}
+
+
+async def required_partner_scope(request: Request) -> Optional[str]:
+    """The partner scope this route accepts, or ``None`` if it accepts none.
+
+    ``None`` is the deny answer and is returned for every route that has not
+    opted in, as well as for anything about the request this cannot read. It is
+    also what a direct (non-FastAPI) call to ``get_current_user`` gets by
+    default, which keeps partner tokens refused in unit tests that construct the
+    dependency by hand.
+    """
+    route = request.scope.get("route")
+    extra = getattr(route, "openapi_extra", None)
+    if not isinstance(extra, dict):
+        return None
+    scope = extra.get(PARTNER_SCOPE_OPENAPI_KEY)
+    return scope if isinstance(scope, str) and scope else None
+
+
+def _partner_credentials_exception() -> HTTPException:
+    """401 for a partner bearer that is unusable, or used somewhere it may not be.
+
+    One message for "no such active token" and for "this route does not accept
+    partner tokens" deliberately: telling an unauthenticated caller which of the
+    two it hit turns the endpoint into an oracle for both the route list and the
+    validity of a guessed secret.
+    """
     return HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail=f"Partner scope '{scope}' required",
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
     )
 
 
-async def _authenticate_partner_principal(
+async def resolve_partner_principal(
     raw_token: str,
-    db: AsyncSession,
+    db,
+    *,
+    required_scope: Optional[str],
 ) -> PartnerPrincipal:
+    """Verify a partner bearer for this route and return the caller it proves.
+
+    Raises 401 when the route accepts no partner token or the credential matches
+    no active one, and 403 when a genuine token lacks the route's scope. The
+    caller is responsible for binding the tenant RLS GUC, so both the JWT and
+    partner paths bind it in the same place.
+    """
+    if required_scope is None:
+        raise _partner_credentials_exception()
+
     service = PartnerAuthService(db)
     token = await service.authenticate(raw_token)
     if token is None:
-        raise _credentials_exception()
+        raise _partner_credentials_exception()
+
     principal = PartnerPrincipal(token)
-    await _bind_tenant_rls_guc(db, principal)  # type: ignore[arg-type]
+    if not principal.has_partner_scope(required_scope):
+        # 403, not 401: the credential is good, the grant is missing. A 401 would
+        # tell the integrator to re-issue a token that is working fine.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Partner scope '{required_scope}' required",
+        )
+
+    # Scopes are already copied onto the principal, so recording usage cannot
+    # expire anything still needed. Deliberately after the scope check: this
+    # records use of the token, not attempts against it.
+    if principal.partner_token_id is not None:
+        await service.touch_last_used(principal.partner_token_id)
     return principal
 
 
-async def _authenticate_jwt_user(
-    raw_token: str,
-    db: AsyncSession,
-) -> User:
-    from src.core.security import decode_token
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
+def is_partner_caller(caller: object) -> bool:
+    """True when ``caller`` was established by a partner API token.
 
-    credentials_exception = _credentials_exception()
-    payload = decode_token(raw_token)
-    if payload is None:
-        raise credentials_exception
-    if payload.get("type") != "access":
-        raise credentials_exception
-    await _enforce_access_token_not_revoked(payload, db)
-    user_id_raw = payload.get("sub")
-    if user_id_raw is None:
-        raise credentials_exception
-    result = await db.execute(
-        select(User).where(User.id == int(user_id_raw)).options(selectinload(User.roles))
-    )
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise credentials_exception
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled",
-        )
-    await _resolve_user_tenant_context(db, user)
-    await _bind_tenant_rls_guc(db, user)
-    return user
-
-
-def require_auth_or_partner_scope(partner_scope: str):
-    """JWT session (unchanged) **or** partner bearer with ``partner_scope``.
-
-    Does not attach a RBAC permission token — use on authenticated-only routes
-    so census posture stays AUTHENTICATED_ONLY.
+    Handlers use this where a partner has to be served *less* than a session
+    user would be, rather than to decide whether to serve them at all — that
+    decision is already made by the time a handler runs.
     """
-
-    async def checker(
-        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-        db: Annotated[AsyncSession, Depends(get_db)],
-    ) -> PartnerCaller:
-        raw = credentials.credentials
-        if is_partner_bearer_token(raw):
-            principal = await _authenticate_partner_principal(raw, db)
-            if not principal.has_partner_scope(partner_scope):
-                raise _partner_scope_forbidden(partner_scope)
-            return principal
-        return await _authenticate_jwt_user(raw, db)
-
-    setattr(checker, AUTHENTICATION_KIND_ATTR, AuthenticationKind.REQUIRED.value)
-    return checker
+    return isinstance(caller, PartnerPrincipal)
 
 
-def require_permission_or_partner_scope(permission: str, partner_scope: str):
-    """JWT caller needs ``permission``; partner bearer needs ``partner_scope``.
-
-    Stamps :data:`REQUIRED_PERMISSION_ATTR` so the permission catalogue still
-    walks the JWT side of the gate.
-    """
-
-    async def checker(
-        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-        db: Annotated[AsyncSession, Depends(get_db)],
-    ) -> PartnerCaller:
-        raw = credentials.credentials
-        if is_partner_bearer_token(raw):
-            principal = await _authenticate_partner_principal(raw, db)
-            if not principal.has_partner_scope(partner_scope):
-                raise _partner_scope_forbidden(partner_scope)
-            return principal
-        user = await _authenticate_jwt_user(raw, db)
-        if not user.has_permission(permission):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission '{permission}' required",
-            )
-        return user
-
-    setattr(checker, REQUIRED_PERMISSION_ATTR, permission)
-    setattr(checker, AUTHENTICATION_KIND_ATTR, AuthenticationKind.REQUIRED.value)
-    return checker
-
-
-def is_partner_caller(user: object) -> bool:
-    """True when ``user`` was established by a partner API token."""
-    return getattr(user, PARTNER_SCOPES_ATTR, None) is not None
-
-
-# Re-export get_current_user for tests that patch the JWT path alongside partner deps.
 __all__ = [
-    "PartnerCaller",
+    "PARTNER_SCOPE_OPENAPI_KEY",
+    "is_partner_bearer_token",
     "is_partner_caller",
-    "require_auth_or_partner_scope",
-    "require_permission_or_partner_scope",
-    "get_current_user",
+    "partner_readable",
+    "required_partner_scope",
+    "resolve_partner_principal",
 ]
