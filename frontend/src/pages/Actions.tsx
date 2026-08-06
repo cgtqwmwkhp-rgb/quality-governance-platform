@@ -79,6 +79,7 @@ import {
   type ActionAssigneeDisplay,
 } from './actionsDisplayHelpers'
 import { isSafeReturnTo } from '../helpers/knowledgeExceptionsLinks'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
@@ -190,6 +191,7 @@ type SourceTypeFilter =
   | 'capa_incident'
   | 'capa_complaint'
   | 'regulatory_watch'
+  | 'compliance_record'
 type SortMode = 'newest' | 'due_first'
 
 // Form state type for creating actions
@@ -242,6 +244,7 @@ export default function Actions() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -1044,6 +1047,12 @@ export default function Actions() {
             <SelectItem value="capa_incident">CAPA (incident-linked)</SelectItem>
             <SelectItem value="capa_complaint">CAPA (complaint-linked)</SelectItem>
             <SelectItem value="regulatory_watch">Regulatory watch</SelectItem>
+            {/* Offered only where the module is on, for the same reason the nav
+                entry is: with the flag off no compliance record can exist, so
+                the option could only ever return an empty register. */}
+            {complianceScheduleEnabled || sourceTypeFilter === 'compliance_record' ? (
+              <SelectItem value="compliance_record">Compliance schedule</SelectItem>
+            ) : null}
           </SelectContent>
         </Select>
 
@@ -1294,7 +1303,7 @@ export default function Actions() {
               const overdue = isOverdue(action.due_date, action.display_status)
               const isOpen = expandedKey === action.action_key
               const sourceLink =
-                getActionSourceLink(action.source_type, action.source_id) ||
+                getActionSourceLink(action.source_type, action.source_id, action.source_reference) ||
                 getComplaintSourceLink(action.source_type, action.source_id)
               const hasAuditLinks =
                 action.source_type === 'audit_finding' &&

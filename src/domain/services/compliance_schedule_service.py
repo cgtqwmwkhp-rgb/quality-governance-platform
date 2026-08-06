@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, cast
 
 from sqlalchemy import false, func, select
 from sqlalchemy.exc import IntegrityError
@@ -27,6 +27,7 @@ from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
 from src.domain.models.location import Location
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.compliance_schedule_policy import Anchor, compute_next_due, derive_status
 from src.domain.services.reference_number import ReferenceNumberService
 
@@ -630,11 +631,20 @@ class ComplianceScheduleService:
     ) -> ComplianceRecord:
         """Close the current occurrence and roll ``next_due_date`` forward.
 
-        Atomic: record insert, requirement schedule update, and evidence rebind
-        share one transaction. Unique (tenant, requirement, due_date) prevents
+        Atomic: record insert, requirement schedule update, evidence rebind and —
+        when ``check_passed`` is False — the corrective action share one
+        transaction. Unique (tenant, requirement, due_date) prevents
         double-complete of the same occurrence — the check below reports it when
         the earlier record is already visible, and the constraint reports it when
         the two overlap. Both answer 409; see the handler for why.
+
+        The CAPA is not wrapped in a swallow. ``complete_assessment`` takes the
+        same line: a notification that fails is logged and the run still closes,
+        but a CAPA that fails takes the whole completion down with it. The reason
+        holds harder here — a compliance record that says the check failed, with
+        no corrective action anywhere, is precisely the hole an auditor looks
+        for, and it would be written silently. Failing the request instead leaves
+        the register unchanged and the operator able to retry.
         """
         requirement = await self.get_requirement(requirement_id, tenant_id=tenant_id)
         if not requirement.is_active:
@@ -689,6 +699,7 @@ class ComplianceScheduleService:
             updated_by_id=user_id,
         )
         self.db.add(record)
+        capa_reference: Optional[str] = None
 
         try:
             await self.db.flush()
@@ -703,6 +714,19 @@ class ComplianceScheduleService:
                     evidence_asset_ids=evidence_asset_ids,
                     tenant_id=tenant_id,
                 )
+
+            # ``is False`` and not falsiness: the column is nullable and None
+            # means the obligation has no pass/fail dimension at all (a drill was
+            # held, a certificate was renewed). Raising a corrective action for
+            # "not applicable" would fill the board with work nobody owes.
+            if check_passed is False:
+                capa = await CAPAAutoService.create_from_compliance_record(
+                    self.db,
+                    record=record,
+                    requirement=requirement,
+                    created_by_id=user_id,
+                )
+                capa_reference = cast(Optional[str], capa.reference_number)
 
             await record_audit_event(
                 db=self.db,
@@ -722,6 +746,7 @@ class ComplianceScheduleService:
                     "next_due_date": next_due.isoformat(),
                     "check_passed": check_passed,
                     "evidence_asset_ids": list(evidence_asset_ids or []),
+                    "capa_reference": capa_reference,
                 },
                 user_id=user_id,
                 actor_user_id=user_id,

@@ -30,6 +30,30 @@ describe('actionsDisplayHelpers', () => {
       }),
     ).toBe('Investigation #6')
   })
+
+  it('labels compliance actions without printing their storage key', () => {
+    // The obligation id rides in source_reference so the row can link to it;
+    // it is a routing detail and must never reach the register as text.
+    expect(isInternalSourceReference('compliance_requirement:10')).toBe(true)
+    expect(
+      formatActionSourceRef({
+        source_type: 'compliance_record',
+        source_id: 55,
+        source_reference: 'compliance_requirement:10',
+      }),
+    ).toBe('Compliance record #55')
+  })
+
+  it('still prefers a hydrated compliance reference when the API supplies one', () => {
+    expect(
+      formatActionSourceRef({
+        source_type: 'compliance_record',
+        source_id: 55,
+        source_reference: 'compliance_requirement:10',
+        source_title: 'Fire risk assessment — Wickford',
+      }),
+    ).toBe('Fire risk assessment — Wickford')
+  })
 })
 
 describe('resolveActionAssignee (PX-151)', () => {

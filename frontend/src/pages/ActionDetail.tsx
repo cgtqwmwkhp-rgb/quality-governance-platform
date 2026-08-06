@@ -444,7 +444,11 @@ export default function ActionDetail() {
   const titleDirty = titleDraft.trim() !== (action.title || '').trim()
   const dueDirty = dueDraft !== dueDateInputValue(action.due_date)
   const isCapa = action.action_key.startsWith('capa:') || action.source_type === 'capa'
-  const sourceLink = getActionSourceLink(action.source_type, action.source_id)
+  const sourceLink = getActionSourceLink(
+    action.source_type,
+    action.source_id,
+    action.source_reference,
+  )
   const currentOwner = resolveActionAssignee(action)
 
   return (
