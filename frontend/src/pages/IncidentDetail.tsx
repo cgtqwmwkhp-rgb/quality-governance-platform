@@ -17,6 +17,8 @@ import { resolveIncidentDetailTab } from './incidentStandardsTab'
 import { displayIncidentText } from './incidentTextDisplay'
 import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
 import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { IncidentFraSignificantChangePanel } from './IncidentFraSignificantChangePanel'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -205,6 +207,7 @@ function buildIncidentEditForm(data: Incident): IncidentUpdate {
 
 export default function IncidentDetail() {
   const { t } = useTranslation()
+  const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
   const { id } = useParams<{ id: string }>()
   const routeIncidentId = id && /^\d+$/.test(id) ? Number(id) : null
   const navigate = useNavigate()
@@ -1107,6 +1110,11 @@ export default function IncidentDetail() {
           {witnessSaveError}
         </FormNotice>
       ) : null}
+
+      <IncidentFraSignificantChangePanel
+        incident={incident}
+        flagEnabled={complianceScheduleEnabled}
+      />
 
       <CaseSummaryRail
         items={[

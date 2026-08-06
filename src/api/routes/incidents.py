@@ -35,6 +35,11 @@ from src.domain.services.case_closure import (
     validation_to_payload,
 )
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
+from src.domain.services.incident_fra_review import (
+    activate_or_link_fra_significant_change,
+    incident_suggests_fra_significant_change,
+    resolve_suggested_location_id,
+)
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
     create_enterprise_risk_from_incident,
@@ -438,6 +443,87 @@ async def raise_risk_from_incident(
         linked_risk_ids=incident.linked_risk_ids or str(risk.id),
         incident_href=incident_detail_href(incident.id),
         risk_register_href=risk_register_href(risk.id, incident_ref=incident.reference_number),
+    )
+
+
+class FraSignificantChangeRequest(BaseModel):
+    """Activate or link a site-scoped FRA after an incident significant change."""
+
+    location_id: int = Field(..., ge=1, description="Premises or office location id")
+
+
+class FraSignificantChangeResponse(BaseModel):
+    created: bool
+    requirement_id: int
+    reference_number: str
+    location_id: int
+    incident_id: int
+    suggested_location_id: Optional[int] = None
+    href: str
+
+
+async def _require_compliance_schedule_open_for_incident() -> None:
+    """404 when CS is disabled or kill-switched (same posture as CS routes)."""
+    from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_is_open as _domain_is_open
+    from src.infrastructure.database import async_session_maker
+
+    if not await _domain_is_open(async_session_maker):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance Schedule is not enabled in this environment.",
+        )
+
+
+@router.post(
+    "/{incident_id}/fra-significant-change",
+    response_model=FraSignificantChangeResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def fra_significant_change_from_incident(
+    incident_id: int,
+    body: FraSignificantChangeRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:create"))],
+    _cs_open: Annotated[None, Depends(_require_compliance_schedule_open_for_incident)],
+):
+    """Create or open a site FRA prompted by an incident significant change."""
+    if not current_user.has_permission("incident:read") and not current_user.is_superuser:
+        raise AuthorizationError("Permission 'incident:read' required")
+
+    svc = IncidentService(db)
+    try:
+        incident = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Incident {incident_id} not found")
+
+    if not incident_suggests_fra_significant_change(incident):
+        raise BadRequestError("Incident does not indicate an FRA significant change")
+
+    tenant_id = incident.tenant_id or current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Incident has no tenant; cannot activate an FRA.")
+
+    suggested = await resolve_suggested_location_id(db, incident, tenant_id=tenant_id)
+    result = await activate_or_link_fra_significant_change(
+        db,
+        incident=incident,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        location_id=body.location_id,
+    )
+    requirement = result.requirement
+    return FraSignificantChangeResponse(
+        created=result.created,
+        requirement_id=requirement.id,
+        reference_number=requirement.reference_number,
+        location_id=requirement.location_id or body.location_id,
+        incident_id=incident.id,
+        suggested_location_id=suggested,
+        href=f"/compliance-schedule/{requirement.id}",
     )
 
 
