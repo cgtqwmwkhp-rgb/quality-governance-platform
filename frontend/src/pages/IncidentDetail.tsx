@@ -105,6 +105,7 @@ import {
   linkedRiskDisplayLabel,
 } from '../components/register/caseRegisterHonesty'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
+import { PersonNameField } from '../components/PersonNameField'
 import { AssetPicker } from '../components/AssetPicker'
 import { getCapaLink } from '../components/investigations/handoffLinks'
 import {
@@ -206,7 +207,7 @@ function buildIncidentEditForm(data: Incident): IncidentUpdate {
 }
 
 export default function IncidentDetail() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
   const { id } = useParams<{ id: string }>()
   const routeIncidentId = id && /^\d+$/.test(id) ? Number(id) : null
@@ -1549,18 +1550,26 @@ export default function IncidentDetail() {
                           </div>
                         </div>
                         <div>
-                          <label
-                            htmlFor="incident-people-involved"
-                            className="text-sm font-medium text-muted-foreground"
-                          >
-                            {t('incidents.detail.people_involved', 'Person involved')}
-                          </label>
-                          <Input
+                          <PersonNameField
                             id="incident-people-involved"
                             className="mt-1"
-                            value={editForm.people_involved || ''}
-                            onChange={(e) =>
-                              setEditForm({ ...editForm, people_involved: e.target.value })
+                            mode="hybrid"
+                            lang={i18n?.language}
+                            label={t('incidents.detail.people_involved', 'Person involved')}
+                            testId="incident-people-involved"
+                            value={
+                              (editForm.people_involved ?? '').trim()
+                                ? {
+                                    displayName: editForm.people_involved ?? '',
+                                    engineerId: null,
+                                  }
+                                : null
+                            }
+                            onChange={(next) =>
+                              setEditForm({
+                                ...editForm,
+                                people_involved: next?.displayName ?? '',
+                              })
                             }
                           />
                         </div>
