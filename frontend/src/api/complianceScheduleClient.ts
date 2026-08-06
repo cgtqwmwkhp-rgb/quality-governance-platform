@@ -113,6 +113,42 @@ export interface LocationCoverageGaps {
   items: LocationCoverageGapItem[]
 }
 
+export interface ComplianceImportRowError {
+  row: number
+  code: string
+  message: string
+  field?: string | null
+}
+
+export interface ComplianceImportPreviewRow {
+  row: number
+  action: string
+  template_key: string
+  location_id: number
+  location_name: string
+  title: string
+  next_due_date?: string | null
+  owner_id?: number | null
+}
+
+export interface ComplianceImportValidationReport {
+  dry_run: boolean
+  total_rows: number
+  valid_rows: number
+  error_rows: number
+  creates: number
+  skips: number
+  ok: boolean
+  errors: ComplianceImportRowError[]
+  preview: ComplianceImportPreviewRow[]
+}
+
+export interface ComplianceImportCommitResult {
+  created_count: number
+  created_requirement_ids: number[]
+  report: ComplianceImportValidationReport
+}
+
 export interface Paginated<T> {
   items: T[]
   total: number
@@ -231,6 +267,22 @@ export function createComplianceScheduleApi(api: AxiosInstance) {
 
     getLocationCoverageGaps: () =>
       api.get<LocationCoverageGaps>(`${base}/coverage/location-gaps`),
+
+    importDryRun: (file: File) => {
+      const body = new FormData()
+      body.append('file', file)
+      return api.post<ComplianceImportValidationReport>(`${base}/import/dry-run`, body, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    },
+
+    importCommit: (file: File) => {
+      const body = new FormData()
+      body.append('file', file)
+      return api.post<ComplianceImportCommitResult>(`${base}/import/commit`, body, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    },
   }
 }
 

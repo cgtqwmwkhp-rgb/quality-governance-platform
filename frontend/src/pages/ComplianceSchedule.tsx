@@ -17,11 +17,16 @@ import { ownershipOf, statusChipClass, statusLabel } from './complianceScheduleH
 import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { RequirementFormDialog } from './compliance/RequirementFormDialog'
 import { coverageCopy } from './complianceScheduleCoverageI18n'
+import { importCopy } from './complianceScheduleImportI18n'
 import { toast } from '../contexts/ToastContext'
+import type {
+  ComplianceImportValidationReport,
+} from '../api/complianceScheduleClient'
 
 export default function ComplianceSchedule() {
   const { t, i18n } = useTranslation()
   const cov = coverageCopy(i18n.language)
+  const imp = importCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
   const [stats, setStats] = useState<ComplianceScheduleStats | null>(null)
   const [coverage, setCoverage] = useState<LocationCoverageGaps | null>(null)
@@ -31,6 +36,10 @@ export default function ComplianceSchedule() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activating, setActivating] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importReport, setImportReport] = useState<ComplianceImportValidationReport | null>(null)
+  const [importBusy, setImportBusy] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   // Active and retired obligations are two views rather than one mixed list,
   // because the API's is_active filter is a plain boolean defaulting to true —
   // there is no value that means "both", so a combined list is not available to
@@ -110,6 +119,43 @@ export default function ComplianceSchedule() {
     }
   }
 
+  const runImportDryRun = async () => {
+    if (!importFile) {
+      toast.error(imp.emptyFile)
+      return
+    }
+    setImportBusy(true)
+    try {
+      const res = await complianceScheduleApi.importDryRun(importFile)
+      setImportReport(res.data)
+      if (!res.data.ok) toast.error(imp.blocked)
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, imp.blocked))
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  const runImportCommit = async () => {
+    if (!importFile || !importReport?.ok) {
+      toast.error(imp.blocked)
+      return
+    }
+    setImportBusy(true)
+    try {
+      await complianceScheduleApi.importCommit(importFile)
+      toast.success(imp.success)
+      setImportOpen(false)
+      setImportFile(null)
+      setImportReport(null)
+      await load()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, imp.blocked))
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-6" data-testid="compliance-schedule-page">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -146,6 +192,19 @@ export default function ComplianceSchedule() {
           >
             {t('compliance.schedule.filter.inactive', 'Retired')}
           </Button>
+          {!showInactive && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setImportOpen(true)
+                setImportReport(null)
+              }}
+              data-testid="compliance-schedule-import-csv-button"
+            >
+              {imp.button}
+            </Button>
+          )}
           {!showInactive && (
             <Button
               size="sm"
@@ -374,6 +433,71 @@ export default function ComplianceSchedule() {
         onOpenChange={setFormOpen}
         onSaved={() => void load()}
       />
+
+      {importOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          data-testid="compliance-schedule-import-dialog"
+        >
+          <div className="w-full max-w-lg rounded-lg border border-border bg-card p-4 shadow-lg space-y-3">
+            <div className="font-medium">{imp.title}</div>
+            <p className="text-xs text-muted-foreground">{imp.subtitle}</p>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => {
+                setImportFile(e.target.files?.[0] ?? null)
+                setImportReport(null)
+              }}
+              data-testid="compliance-schedule-import-file"
+            />
+            {importReport && (
+              <div className="text-xs space-y-1 rounded border border-border p-2">
+                <div>
+                  {imp.creates}: {importReport.creates} · {imp.errors}:{' '}
+                  {importReport.error_rows}
+                </div>
+                {importReport.errors.slice(0, 5).map((err) => (
+                  <div key={`${err.row}-${err.code}`} className="text-destructive">
+                    Row {err.row}: {err.message}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={importBusy}
+                onClick={() => {
+                  setImportOpen(false)
+                  setImportFile(null)
+                  setImportReport(null)
+                }}
+              >
+                {imp.cancel}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={importBusy}
+                onClick={() => void runImportDryRun()}
+                data-testid="compliance-schedule-import-dry-run"
+              >
+                {imp.dryRun}
+              </Button>
+              <Button
+                size="sm"
+                disabled={importBusy || !importReport?.ok}
+                onClick={() => void runImportCommit()}
+                data-testid="compliance-schedule-import-commit"
+              >
+                {imp.commit}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
