@@ -417,4 +417,139 @@ describe('Dashboard (role-aware living dashboard)', () => {
       expect(screen.getByTestId('recent-cases-tab-rtas')).toBeInTheDocument()
     })
   })
+
+  // compliance_schedule on the executive-dashboard payload is null when the
+  // deployment opener is off, the kill switch is engaged, or the caller lacks
+  // compliance_schedule:read. The tile must be absent rather than empty.
+  describe('Compliance Schedule tile (flag + permission gated)', () => {
+    function withComplianceSchedule(
+      cs:
+        | {
+            available: boolean
+            total_active: number | null
+            current: number | null
+            due_soon: number | null
+            overdue: number | null
+            href?: string
+          }
+        | null
+        | undefined,
+    ) {
+      const weekSeries = Array.from({ length: 8 }, (_, i) => ({
+        week_start: `2026-05-${String(i + 1).padStart(2, '0')}`,
+        count: i,
+        value: i * 10,
+      }))
+      executiveDashboardApi.getDashboard.mockImplementation(async (days: number) => ({
+        data: {
+          incidents: { total_in_period: days === 7 ? 2 : 10 },
+          complaints: { total_in_period: days === 7 ? 1 : 4 },
+          near_misses: { total_in_period: days === 7 ? 3 : 8 },
+          trends: {
+            incidents_weekly: weekSeries,
+            complaints_weekly: weekSeries,
+            near_misses_weekly: weekSeries,
+            audits_weekly: weekSeries,
+            training_compliance_weekly: weekSeries,
+            tool_compliance_weekly: weekSeries,
+          },
+          compliance_schedule: cs,
+        },
+      }))
+    }
+
+    it('omits the tile entirely when the module is closed to the caller', async () => {
+      authMocks.hasRole.mockReturnValue(true)
+      withComplianceSchedule(null)
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+      await screen.findByTestId('org-command-strip')
+
+      expect(screen.queryByTestId('org-compliance-schedule-tile')).not.toBeInTheDocument()
+    })
+
+    it("shows the register's own counts when the module is open", async () => {
+      authMocks.hasRole.mockReturnValue(true)
+      withComplianceSchedule({
+        available: true,
+        total_active: 12,
+        current: 7,
+        due_soon: 3,
+        overdue: 2,
+        href: '/compliance-schedule',
+      })
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      const tile = await screen.findByTestId('org-compliance-schedule-tile')
+      expect(tile).toHaveAttribute('href', '/compliance-schedule')
+      expect(screen.getByTestId('org-compliance-schedule-value')).toHaveTextContent('12')
+      expect(tile).toHaveTextContent('2 overdue')
+      expect(tile).toHaveTextContent('3 due soon')
+      expect(tile).toHaveTextContent('7 current')
+    })
+
+    it('shows an unavailable dash, not a fabricated zero, when stats are unread', async () => {
+      authMocks.hasRole.mockReturnValue(true)
+      withComplianceSchedule({
+        available: false,
+        total_active: null,
+        current: null,
+        due_soon: null,
+        overdue: null,
+        href: '/compliance-schedule',
+      })
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      const tile = await screen.findByTestId('org-compliance-schedule-tile')
+      const value = screen.getByTestId('org-compliance-schedule-value')
+      expect(value).toHaveTextContent('—')
+      expect(value).not.toHaveTextContent('0')
+      expect(tile).toHaveTextContent('Metrics are currently unavailable.')
+      expect(tile).not.toHaveTextContent('overdue')
+    })
+
+    it('does not show the tile for a persona that has no org strip', async () => {
+      engineersApi.getByUserMe.mockResolvedValue({ data: { linked: true } })
+      authMocks.hasRole.mockReturnValue(false)
+      authMocks.isSuperuser.mockReturnValue(false)
+      withComplianceSchedule({
+        available: true,
+        total_active: 12,
+        current: 7,
+        due_soon: 3,
+        overdue: 2,
+      })
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByTestId('my-day-section')
+
+      expect(screen.queryByTestId('org-command-strip')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('org-compliance-schedule-tile')).not.toBeInTheDocument()
+    })
+  })
 })

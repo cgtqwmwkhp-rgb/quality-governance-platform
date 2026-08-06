@@ -63,6 +63,13 @@ export interface PulseData {
   auditSeries: Metric<SparkPoint[]>
 }
 
+export interface ComplianceScheduleTileStats {
+  total_active: number
+  current: number
+  due_soon: number
+  overdue: number
+}
+
 export interface OrgData {
   unassignedIncidents: Metric<number>
   unassignedComplaints: Metric<number>
@@ -72,6 +79,12 @@ export interface OrgData {
   riskOutsideAppetite: Metric<number>
   riskTrend: RiskTrendDirection
   assetHealth: Metric<AssetHealthSummary>
+  /**
+   * Compliance Schedule obligations from executive-dashboard payload, or
+   * `undefined` when the module is closed to this caller (tile must not render).
+   * 'unavailable' means the module is open but the register could not be read.
+   */
+  complianceSchedule?: Metric<ComplianceScheduleTileStats>
   /** @deprecated Prefer recentCases.incidents — kept for callers that still read it. */
   recentIncidents: Metric<Incident[]>
   recentCases: RecentCasesData
@@ -428,6 +441,28 @@ export function useDashboardData(): DashboardData {
               )
             : null,
         assetHealth: assetHealthMetric,
+        // Left undefined — not 'unavailable' — when the module is closed (null on
+        // the exec payload), so the Org strip omits the tile entirely.
+        complianceSchedule: (() => {
+          if (execDash7Metric.status !== 'ok') return undefined
+          const cs = execDash7Metric.value.compliance_schedule
+          if (cs == null) return undefined
+          if (
+            cs.available &&
+            typeof cs.total_active === 'number' &&
+            typeof cs.current === 'number' &&
+            typeof cs.due_soon === 'number' &&
+            typeof cs.overdue === 'number'
+          ) {
+            return metricOk({
+              total_active: cs.total_active,
+              current: cs.current,
+              due_soon: cs.due_soon,
+              overdue: cs.overdue,
+            })
+          }
+          return metricUnavailable()
+        })(),
         recentIncidents,
         recentCases,
       })
