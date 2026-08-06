@@ -18,6 +18,7 @@ vi.mock('react-i18next', () => ({
       }
       return key
     },
+    i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -94,6 +95,9 @@ vi.mock('../../api/client', () => ({
     list: vi.fn(),
     upload: vi.fn(),
     delete: vi.fn(),
+  },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
   getApiErrorMessage: (err: Error) => err.message,
 }))

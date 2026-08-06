@@ -57,6 +57,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
 import { Input } from '../components/ui/Input'
+import { PersonNameField } from '../components/PersonNameField'
 import { Switch } from '../components/ui/Switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
@@ -96,7 +97,7 @@ const SUPPORTED_EVIDENCE_MIME_PREFIXES = ['image/', 'video/']
 const SUPPORTED_EVIDENCE_MIME_TYPES = ['application/pdf']
 
 export default function RTADetail() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -200,6 +201,7 @@ export default function RTADetail() {
       is_riddor_reportable: data.is_riddor_reportable,
       asset_id: data.asset_id ?? null,
       driver_name: data.driver_name,
+      driver_id: data.driver_id,
       driver_statement: data.driver_statement,
       driver_injured: data.driver_injured,
       driver_injury_details: data.driver_injury_details,
@@ -1220,8 +1222,36 @@ export default function RTADetail() {
               {isEditing ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="rta-d1-name" className="text-sm font-medium text-muted-foreground">Driver Name</label>
-                    <Input id="rta-d1-name" value={editForm.driver_name || ''} onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })} className="mt-1" />
+                    <PersonNameField
+                      id="rta-d1-name"
+                      mode="hybrid"
+                      lang={i18n.language}
+                      label="Driver Name"
+                      value={
+                        editForm.driver_name
+                          ? {
+                              displayName: editForm.driver_name,
+                              engineerId: editForm.driver_id ?? null,
+                            }
+                          : null
+                      }
+                      onChange={(next) =>
+                        setEditForm((prev) => {
+                          const updated: RTAUpdate = {
+                            ...prev,
+                            driver_name: next?.displayName ?? '',
+                          }
+                          if (next?.engineerId != null) {
+                            updated.driver_id = next.engineerId
+                          } else {
+                            delete updated.driver_id
+                          }
+                          return updated
+                        })
+                      }
+                      testId="rta-edit-driver-name"
+                      className="mt-0"
+                    />
                   </div>
                   <div className="flex items-center gap-3 pt-6">
                     <Switch id="rta-d1-injured" checked={editForm.driver_injured || false} onCheckedChange={(c) => setEditForm({ ...editForm, driver_injured: c })} />
