@@ -31,8 +31,8 @@ import {
 } from './workforceRolesCatalog'
 import {
   LOCATION_KIND_VALUES,
+  LOCATION_KIND_LABEL_KEYS,
   type LocationKindValue,
-  locationKindLabel,
 } from '../safetyAssets/locationKindLabels'
 
 const LOOKUP_CATEGORIES = [
@@ -707,7 +707,7 @@ export default function LookupTables() {
                 >
                   {LOCATION_KIND_VALUES.map((kind) => (
                     <option key={kind} value={kind}>
-                      {locationKindLabel(kind, t)}
+                      {t(LOCATION_KIND_LABEL_KEYS[kind].key, LOCATION_KIND_LABEL_KEYS[kind].fallback)}
                     </option>
                   ))}
                 </select>

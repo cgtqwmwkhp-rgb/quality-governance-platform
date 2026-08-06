@@ -21,13 +21,10 @@ export function isLocationKindValue(value: string): value is LocationKindValue {
   return (LOCATION_KIND_VALUES as readonly string[]).includes(value)
 }
 
-export function locationKindLabel(
-  kind: string,
-  t: (key: string, fallback?: string) => string,
-): string {
+/** Resolve i18n key + English fallback for a kind (call site applies `t`). */
+export function locationKindI18n(kind: string): { key: string; fallback: string } {
   if (isLocationKindValue(kind)) {
-    const entry = LOCATION_KIND_LABEL_KEYS[kind]
-    return t(entry.key, entry.fallback)
+    return LOCATION_KIND_LABEL_KEYS[kind]
   }
-  return kind
+  return { key: kind, fallback: kind }
 }
