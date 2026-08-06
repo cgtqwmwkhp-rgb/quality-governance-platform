@@ -11,16 +11,20 @@ import type {
   ComplianceRequirement,
   ComplianceScheduleStats,
   ComplianceStatus,
+  LocationCoverageGaps,
 } from '../api/complianceScheduleClient'
 import { ownershipOf, statusChipClass, statusLabel } from './complianceScheduleHelpers'
 import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { RequirementFormDialog } from './compliance/RequirementFormDialog'
+import { coverageCopy } from './complianceScheduleCoverageI18n'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceSchedule() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const cov = coverageCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
   const [stats, setStats] = useState<ComplianceScheduleStats | null>(null)
+  const [coverage, setCoverage] = useState<LocationCoverageGaps | null>(null)
   const [catalogue, setCatalogue] = useState<CatalogueTemplate[]>([])
   const [statusFilter, setStatusFilter] = useState<ComplianceStatus | ''>('')
   const [loading, setLoading] = useState(true)
@@ -51,12 +55,20 @@ export default function ComplianceSchedule() {
       setItems(listRes.data.items)
       setStats(statsRes.data)
       setCatalogue(catRes.data.items)
+      try {
+        const coverageRes = await complianceScheduleApi.getLocationCoverageGaps()
+        setCoverage(coverageRes.data)
+      } catch {
+        // Soft-fail: coverage is additive Wave 3; do not blank the register.
+        setCoverage(null)
+      }
     } catch (err) {
       // Cleared so no stale register is left on screen under a failure notice,
       // which would misreport how many obligations there are.
       setItems([])
       setStats(null)
       setCatalogue([])
+      setCoverage(null)
       setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
@@ -252,6 +264,72 @@ export default function ComplianceSchedule() {
               </ul>
             )}
           </section>
+
+          {coverage && !showInactive && (
+            <section
+              className="rounded-lg border border-border bg-card"
+              data-testid="compliance-schedule-coverage-gaps"
+            >
+              <div className="border-b border-border px-4 py-3">
+                <div className="font-medium">{cov.title}</div>
+                <p className="text-xs text-muted-foreground mt-1">{cov.subtitle}</p>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  <span>
+                    {cov.locations}: {coverage.total_locations}
+                  </span>
+                  <span>
+                    {cov.missingFra}: {coverage.missing_fra}
+                  </span>
+                  <span>
+                    {cov.missingDrill}: {coverage.missing_fire_drill}
+                  </span>
+                  <span>
+                    {cov.missingBoth}: {coverage.missing_both}
+                  </span>
+                </div>
+              </div>
+              {coverage.items.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-muted-foreground">{cov.emptyLocations}</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {coverage.items.map((row) => (
+                    <li
+                      key={row.location_id}
+                      className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                      data-testid={`compliance-schedule-coverage-${row.location_id}`}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium">{row.location_name}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          #{row.location_id} · {row.location_kind}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <span
+                          className={
+                            row.missing_fra
+                              ? 'rounded bg-destructive/10 px-2 py-0.5 font-medium text-destructive'
+                              : 'rounded bg-muted px-2 py-0.5 text-muted-foreground'
+                          }
+                        >
+                          {row.missing_fra ? cov.gapFra : cov.okFra}
+                        </span>
+                        <span
+                          className={
+                            row.missing_fire_drill
+                              ? 'rounded bg-destructive/10 px-2 py-0.5 font-medium text-destructive'
+                              : 'rounded bg-muted px-2 py-0.5 text-muted-foreground'
+                          }
+                        >
+                          {row.missing_fire_drill ? cov.gapDrill : cov.okDrill}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
           {!showInactive && (
           <section className="rounded-lg border border-border bg-card">

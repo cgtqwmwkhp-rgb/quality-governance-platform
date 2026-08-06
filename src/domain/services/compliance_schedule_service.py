@@ -24,7 +24,7 @@ from src.domain.models.compliance_schedule import (
     ComplianceScheduleAnchor,
 )
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
-from src.domain.models.location import Location
+from src.domain.models.location import Location, LocationKind
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_auto_service import CAPAAutoService
@@ -862,6 +862,99 @@ class ComplianceScheduleService:
             "current": current,
             "due_soon": due_soon,
             "overdue": overdue,
+        }
+
+    # ------------------------------------------------------------------
+    # Wave 3 — location FRA / fire-drill coverage gaps
+    # ------------------------------------------------------------------
+
+    FRA_TEMPLATE_KEY = "fire_risk_assessment"
+    DRILL_TEMPLATE_KEY = "fire_drill_evacuation"
+    # Catalogue FRA / drill copy is "per premises"; W1 premises + office are the
+    # statutory denominator. site/workshop stay out so CES plant sites do not
+    # inflate false gaps.
+    COVERAGE_LOCATION_KINDS = (LocationKind.PREMISES, LocationKind.OFFICE)
+
+    async def get_location_coverage_gaps(
+        self,
+        *,
+        tenant_id: int,
+    ) -> dict[str, Any]:
+        """Report active premises/offices missing an active FRA or fire-drill obligation.
+
+        A gap means there is no **active, non-deleted** requirement for this tenant
+        whose ``location_id`` equals the location and whose catalogue
+        ``template_key`` is ``fire_risk_assessment`` or ``fire_drill_evacuation``.
+        Organisation-wide rows (``location_id IS NULL``) do not cover a site —
+        they are omitted from the match set on purpose. Only ``premises`` and
+        ``office`` kinds enter the denominator.
+        """
+        loc_query = select(Location).where(
+            Location.is_active.is_(True),
+            Location.kind.in_(self.COVERAGE_LOCATION_KINDS),
+        )
+        loc_query = _tenant_filter(loc_query, Location, tenant_id)
+        locations = list((await self.db.execute(loc_query)).scalars().all())
+
+        req_query = (
+            select(ComplianceRequirement, ComplianceRequirementTemplate.template_key)
+            .outerjoin(
+                ComplianceRequirementTemplate,
+                ComplianceRequirement.template_id == ComplianceRequirementTemplate.id,
+            )
+            .where(
+                ComplianceRequirement.deleted_at.is_(None),
+                ComplianceRequirement.is_active.is_(True),
+                ComplianceRequirement.location_id.is_not(None),
+            )
+        )
+        req_query = _tenant_filter(req_query, ComplianceRequirement, tenant_id)
+        covered_rows = list((await self.db.execute(req_query)).all())
+
+        fra_by_location: dict[int, int] = {}
+        drill_by_location: dict[int, int] = {}
+        for requirement, template_key in covered_rows:
+            loc_id = requirement.location_id
+            if loc_id is None:
+                continue
+            if template_key == self.FRA_TEMPLATE_KEY:
+                fra_by_location.setdefault(loc_id, requirement.id)
+            elif template_key == self.DRILL_TEMPLATE_KEY:
+                drill_by_location.setdefault(loc_id, requirement.id)
+
+        items: list[dict[str, Any]] = []
+        missing_fra = missing_drill = missing_both = 0
+        for loc in sorted(locations, key=lambda row: (row.name or "").lower()):
+            fra_id = fra_by_location.get(loc.id)
+            drill_id = drill_by_location.get(loc.id)
+            has_fra = fra_id is not None
+            has_drill = drill_id is not None
+            if not has_fra:
+                missing_fra += 1
+            if not has_drill:
+                missing_drill += 1
+            if not has_fra and not has_drill:
+                missing_both += 1
+            items.append(
+                {
+                    "location_id": loc.id,
+                    "location_name": loc.name,
+                    "location_kind": loc.kind.value if hasattr(loc.kind, "value") else str(loc.kind),
+                    "has_fra": has_fra,
+                    "has_fire_drill": has_drill,
+                    "fra_requirement_id": fra_id,
+                    "fire_drill_requirement_id": drill_id,
+                    "missing_fra": not has_fra,
+                    "missing_fire_drill": not has_drill,
+                }
+            )
+
+        return {
+            "total_locations": len(items),
+            "missing_fra": missing_fra,
+            "missing_fire_drill": missing_drill,
+            "missing_both": missing_both,
+            "items": items,
         }
 
 

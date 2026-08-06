@@ -18,6 +18,7 @@ from src.api.schemas.compliance_schedule import (
     CatalogueListResponse,
     CatalogueTemplateResponse,
     ComplianceScheduleStatsResponse,
+    LocationCoverageGapsResponse,
     RecordCompleteRequest,
     RecordEvidenceAttachRequest,
     RecordFileRequest,
@@ -157,6 +158,21 @@ async def get_stats(
     service = ComplianceScheduleService(db)
     data = await service.get_stats(tenant_id=tenant_id)
     return ComplianceScheduleStatsResponse(**data)
+
+
+@_enabled_router.get(
+    "/coverage/location-gaps",
+    response_model=LocationCoverageGapsResponse,
+)
+async def get_location_coverage_gaps(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:read"))],
+):
+    """Active premises/offices missing an active FRA and/or fire-drill (Wave 3)."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = ComplianceScheduleService(db)
+    data = await service.get_location_coverage_gaps(tenant_id=tenant_id)
+    return LocationCoverageGapsResponse(**data)
 
 
 # ---------------------------------------------------------------------------

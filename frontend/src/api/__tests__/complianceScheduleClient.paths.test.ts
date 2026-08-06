@@ -52,6 +52,7 @@ function callEveryMethod(client: ReturnType<typeof createComplianceScheduleApi>)
     listCatalogue: () => client.listCatalogue(),
     activateCatalogue: () => client.activateCatalogue('fire-risk-assessment'),
     getStats: () => client.getStats(),
+    getLocationCoverageGaps: () => client.getLocationCoverageGaps(),
     fileRecordToLibrary: () =>
       client.fileRecordToLibrary(11, { evidence_asset_id: 5, category_id: 3 }),
   }

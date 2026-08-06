@@ -17,6 +17,7 @@ vi.mock('../../api/client', () => ({
   complianceScheduleApi: {
     listRequirements: mockListRequirements,
     getStats: mockGetStats,
+    getLocationCoverageGaps: vi.fn().mockResolvedValue({ data: { total_locations: 0, missing_fra: 0, missing_fire_drill: 0, missing_both: 0, items: [] } }),
     listCatalogue: mockListCatalogue,
     activateCatalogue: mockActivate,
   },
