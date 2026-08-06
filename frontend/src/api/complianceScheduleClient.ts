@@ -93,6 +93,26 @@ export interface ComplianceScheduleStats {
   overdue: number
 }
 
+export interface LocationCoverageGapItem {
+  location_id: number
+  location_name: string
+  location_kind: string
+  has_fra: boolean
+  has_fire_drill: boolean
+  fra_requirement_id?: number | null
+  fire_drill_requirement_id?: number | null
+  missing_fra: boolean
+  missing_fire_drill: boolean
+}
+
+export interface LocationCoverageGaps {
+  total_locations: number
+  missing_fra: number
+  missing_fire_drill: number
+  missing_both: number
+  items: LocationCoverageGapItem[]
+}
+
 export interface Paginated<T> {
   items: T[]
   total: number
@@ -208,6 +228,9 @@ export function createComplianceScheduleApi(api: AxiosInstance) {
     ) => api.post<ComplianceRequirement>(`${base}/catalogue/${templateKey}/activate`, data ?? {}),
 
     getStats: () => api.get<ComplianceScheduleStats>(`${base}/stats`),
+
+    getLocationCoverageGaps: () =>
+      api.get<LocationCoverageGaps>(`${base}/coverage/location-gaps`),
   }
 }
 

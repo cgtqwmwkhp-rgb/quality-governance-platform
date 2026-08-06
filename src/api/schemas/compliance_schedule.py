@@ -253,3 +253,31 @@ class ComplianceScheduleStatsResponse(BaseModel):
     current: int
     due_soon: int
     overdue: int
+
+
+class LocationCoverageGapItem(BaseModel):
+    """One active location and whether FRA / fire-drill obligations cover it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: int
+    location_name: str
+    location_kind: str
+    has_fra: bool
+    has_fire_drill: bool
+    fra_requirement_id: Optional[int] = None
+    fire_drill_requirement_id: Optional[int] = None
+    missing_fra: bool
+    missing_fire_drill: bool
+
+
+class LocationCoverageGapsResponse(BaseModel):
+    """Wave 3 — locations missing active FRA and/or fire-drill obligations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_locations: int
+    missing_fra: int
+    missing_fire_drill: int
+    missing_both: int
+    items: List[LocationCoverageGapItem]

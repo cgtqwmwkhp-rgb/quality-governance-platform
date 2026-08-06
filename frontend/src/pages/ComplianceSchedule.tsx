@@ -11,6 +11,7 @@ import type {
   ComplianceRequirement,
   ComplianceScheduleStats,
   ComplianceStatus,
+  LocationCoverageGaps,
 } from '../api/complianceScheduleClient'
 import { ownershipOf, statusChipClass, statusLabel } from './complianceScheduleHelpers'
 import { useOwnershipLabel } from './compliance/useOwnershipLabel'
@@ -21,6 +22,7 @@ export default function ComplianceSchedule() {
   const { t } = useTranslation()
   const [items, setItems] = useState<ComplianceRequirement[]>([])
   const [stats, setStats] = useState<ComplianceScheduleStats | null>(null)
+  const [coverage, setCoverage] = useState<LocationCoverageGaps | null>(null)
   const [catalogue, setCatalogue] = useState<CatalogueTemplate[]>([])
   const [statusFilter, setStatusFilter] = useState<ComplianceStatus | ''>('')
   const [loading, setLoading] = useState(true)
@@ -51,12 +53,20 @@ export default function ComplianceSchedule() {
       setItems(listRes.data.items)
       setStats(statsRes.data)
       setCatalogue(catRes.data.items)
+      try {
+        const coverageRes = await complianceScheduleApi.getLocationCoverageGaps()
+        setCoverage(coverageRes.data)
+      } catch {
+        // Soft-fail: coverage is additive Wave 3; do not blank the register.
+        setCoverage(null)
+      }
     } catch (err) {
       // Cleared so no stale register is left on screen under a failure notice,
       // which would misreport how many obligations there are.
       setItems([])
       setStats(null)
       setCatalogue([])
+      setCoverage(null)
       setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
@@ -252,6 +262,95 @@ export default function ComplianceSchedule() {
               </ul>
             )}
           </section>
+
+          {coverage && !showInactive && (
+            <section
+              className="rounded-lg border border-border bg-card"
+              data-testid="compliance-schedule-coverage-gaps"
+            >
+              <div className="border-b border-border px-4 py-3">
+                <div className="font-medium">
+                  {t(
+                    'compliance.schedule.coverage.title',
+                    'Location FRA / fire-drill coverage',
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t(
+                    'compliance.schedule.coverage.subtitle',
+                    'Active locations missing an active Fire Risk Assessment or Fire Drill obligation. Organisation-wide rows do not count as site coverage.',
+                  )}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  <span>
+                    {t('compliance.schedule.coverage.locations', 'Locations')}:{' '}
+                    {coverage.total_locations}
+                  </span>
+                  <span>
+                    {t('compliance.schedule.coverage.missing_fra', 'Missing FRA')}:{' '}
+                    {coverage.missing_fra}
+                  </span>
+                  <span>
+                    {t('compliance.schedule.coverage.missing_drill', 'Missing drill')}:{' '}
+                    {coverage.missing_fire_drill}
+                  </span>
+                  <span>
+                    {t('compliance.schedule.coverage.missing_both', 'Missing both')}:{' '}
+                    {coverage.missing_both}
+                  </span>
+                </div>
+              </div>
+              {coverage.items.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-muted-foreground">
+                  {t(
+                    'compliance.schedule.coverage.empty_locations',
+                    'No active locations to assess.',
+                  )}
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {coverage.items.map((row) => (
+                    <li
+                      key={row.location_id}
+                      className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                      data-testid={`compliance-schedule-coverage-${row.location_id}`}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium">{row.location_name}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          #{row.location_id} · {row.location_kind}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <span
+                          className={
+                            row.missing_fra
+                              ? 'rounded bg-destructive/10 px-2 py-0.5 font-medium text-destructive'
+                              : 'rounded bg-muted px-2 py-0.5 text-muted-foreground'
+                          }
+                        >
+                          {row.missing_fra
+                            ? t('compliance.schedule.coverage.gap_fra', 'No FRA')
+                            : t('compliance.schedule.coverage.ok_fra', 'FRA covered')}
+                        </span>
+                        <span
+                          className={
+                            row.missing_fire_drill
+                              ? 'rounded bg-destructive/10 px-2 py-0.5 font-medium text-destructive'
+                              : 'rounded bg-muted px-2 py-0.5 text-muted-foreground'
+                          }
+                        >
+                          {row.missing_fire_drill
+                            ? t('compliance.schedule.coverage.gap_drill', 'No fire drill')
+                            : t('compliance.schedule.coverage.ok_drill', 'Drill covered')}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
           {!showInactive && (
           <section className="rounded-lg border border-border bg-card">
