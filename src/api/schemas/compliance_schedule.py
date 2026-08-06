@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.api.schemas.validators import sanitize_field
 from src.domain.models.compliance_schedule import (
@@ -153,6 +153,48 @@ class RecordEvidenceAttachRequest(BaseModel):
     evidence_asset_ids: List[int] = Field(..., min_length=1)
 
 
+class RecordFileRequest(BaseModel):
+    """Body for the explicit Library filing step (ADR-0020).
+
+    Exactly one mode per request:
+
+    * ``evidence_asset_id`` + ``category_id`` — copy an evidence asset already
+      attached to this occurrence into the Governance Library as a new draft
+      document under that taxonomy category.
+    * ``library_document_id`` — point the occurrence at a document that is
+      already in the Library.
+
+    The two are mutually exclusive rather than merged into one optional-field
+    soup because they authorise differently: one creates a document, the other
+    exposes an existing one. A request that supplies both is a caller who has
+    not decided which they meant, and guessing for them would file something.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_asset_id: Optional[int] = Field(None, ge=1)
+    category_id: Optional[int] = Field(None, ge=1)
+    library_document_id: Optional[int] = Field(None, ge=1)
+    title: Optional[str] = Field(None, min_length=1, max_length=500)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+    @model_validator(mode="after")
+    def _exactly_one_mode(self) -> "RecordFileRequest":
+        if (self.evidence_asset_id is None) == (self.library_document_id is None):
+            raise ValueError("Provide exactly one of evidence_asset_id or library_document_id")
+        if self.evidence_asset_id is not None and self.category_id is None:
+            raise ValueError("category_id is required when filing an evidence asset")
+        if self.library_document_id is not None and self.category_id is not None:
+            raise ValueError("category_id does not apply when linking an existing library document")
+        if self.library_document_id is not None and self.title is not None:
+            raise ValueError("title does not apply when linking an existing library document")
+        return self
+
+
 class RecordResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
@@ -171,6 +213,27 @@ class RecordResponse(BaseModel):
     filing_error: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class RecordFilingResponse(BaseModel):
+    """Outcome of one filing attempt.
+
+    Returns the updated occurrence so the caller needs no second read, plus the
+    parts of the outcome the occurrence has nowhere to hold: the allocated PEL
+    reference, and whether the Library already holds an approved document that
+    looks like this one. A duplicate does not block the filing — the occurrence
+    is still filed — so the warning has to travel back with the response or it
+    is lost.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    record: RecordResponse
+    library_document_id: int
+    pel_doc_ref: Optional[str] = None
+    linked_existing: bool
+    duplicate_warning: bool = False
+    duplicate_warning_detail: Optional[List[dict]] = None
 
 
 class RecordListResponse(BaseModel):

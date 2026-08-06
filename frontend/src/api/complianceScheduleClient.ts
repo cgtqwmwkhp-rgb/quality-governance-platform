@@ -47,6 +47,31 @@ export interface ComplianceRecord {
   updated_at?: string | null
 }
 
+/**
+ * Filing payload, mirroring `RecordFileRequest`.
+ *
+ * Exactly one of `evidence_asset_id` (with `category_id`) or
+ * `library_document_id` — the backend rejects a body that sets both or neither,
+ * because the two modes authorise differently and a guess would file something.
+ */
+export type RecordFilePayload =
+  | { evidence_asset_id: number; category_id: number; title?: string }
+  | { library_document_id: number }
+
+export interface RecordFilingResult {
+  record: ComplianceRecord
+  library_document_id: number
+  pel_doc_ref?: string | null
+  linked_existing: boolean
+  duplicate_warning: boolean
+  duplicate_warning_detail?: Array<{
+    document_id: number
+    title: string
+    reference_number: string
+    pel_doc_ref?: string | null
+  }> | null
+}
+
 export interface CatalogueTemplate {
   id: number
   template_key: string
@@ -156,6 +181,16 @@ export function createComplianceScheduleApi(api: AxiosInstance) {
 
     attachEvidence: (recordId: number, evidence_asset_ids: number[]) =>
       api.post<ComplianceRecord>(`${base}/records/${recordId}/evidence`, { evidence_asset_ids }),
+
+    /**
+     * File an occurrence's evidence into the Governance Library (ADR-0020).
+     *
+     * Deliberately not folded into `completeRequirement`: completing an
+     * occurrence records that the work happened and files nothing, and the two
+     * being one call is exactly the conflation the ADR forbids.
+     */
+    fileRecordToLibrary: (recordId: number, data: RecordFilePayload) =>
+      api.post<RecordFilingResult>(`${base}/records/${recordId}/file`, data),
 
     listCatalogue: (active_only = true) =>
       api.get<{ items: CatalogueTemplate[]; total: number }>(`${base}/catalogue`, {

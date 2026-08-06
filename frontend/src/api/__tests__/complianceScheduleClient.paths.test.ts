@@ -52,6 +52,8 @@ function callEveryMethod(client: ReturnType<typeof createComplianceScheduleApi>)
     listCatalogue: () => client.listCatalogue(),
     activateCatalogue: () => client.activateCatalogue('fire-risk-assessment'),
     getStats: () => client.getStats(),
+    fileRecordToLibrary: () =>
+      client.fileRecordToLibrary(11, { evidence_asset_id: 5, category_id: 3 }),
   }
 }
 
@@ -74,8 +76,8 @@ describe('complianceScheduleClient request paths', () => {
     const exercised = Object.keys(callEveryMethod(client))
     const exposed = Object.keys(client)
 
-    // Without this, a thirteenth method added later could reintroduce an
-    // unversioned path and the assertion above would pass without ever calling it.
+    // Without this, a method added later could reintroduce an unversioned path
+    // and the assertion above would pass without ever calling it.
     expect(exposed.filter((name) => !exercised.includes(name))).toEqual([])
   })
 

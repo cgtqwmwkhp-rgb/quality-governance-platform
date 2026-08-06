@@ -8,9 +8,16 @@ export interface TaxonomyOption {
   name: string
   /** Parent section name, shown so two similarly named leaves stay distinguishable. */
   sectionName: string
+  /**
+   * The category row's primary key. The schedule stores the two-part code, but
+   * Library filing addresses the category by id, so both are carried and
+   * consumers take the one their endpoint speaks.
+   */
+  id?: number
 }
 
 interface CategoryNode {
+  id?: number
   taxonomy_id?: string
   name?: string
   active?: boolean
@@ -37,6 +44,7 @@ export function flattenTaxonomy(sections: CategoryNode[]): TaxonomyOption[] {
         taxonomyId: child.taxonomy_id,
         name: child.name ?? child.taxonomy_id,
         sectionName,
+        id: child.id,
       })
     }
   }
