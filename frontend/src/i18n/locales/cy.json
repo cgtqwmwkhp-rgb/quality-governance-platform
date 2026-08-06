@@ -470,6 +470,8 @@
   "calendar.source_label.audit_runs": "Rhedeg archwiliadau",
   "calendar.source_label.capa_actions": "Gweithredoedd",
   "calendar.source_label.certificates": "Tystysgrifau",
+  "calendar.source_label.compliance_requirement": "Atodlen cydymffurfiaeth",
+  "calendar.source_label.compliance_requirements": "Atodlen cydymffurfiaeth",
   "calendar.source_label.inductions": "Cyflwyniadau",
   "calendar.source_label.scheduled_audits": "Archwiliadau wedi'u hamseru",
   "calendar.status.completed": "Wedi'i gwblhau",

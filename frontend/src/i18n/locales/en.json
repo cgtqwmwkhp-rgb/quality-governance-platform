@@ -610,6 +610,8 @@
   "calendar.source_label.audit_runs": "Audit runs",
   "calendar.source_label.capa_actions": "Actions",
   "calendar.source_label.certificates": "Certificates",
+  "calendar.source_label.compliance_requirement": "Compliance schedule",
+  "calendar.source_label.compliance_requirements": "Compliance schedule",
   "calendar.source_label.inductions": "Inductions",
   "calendar.source_label.scheduled_audits": "Scheduled audits",
   "calendar.status.completed": "Completed",
