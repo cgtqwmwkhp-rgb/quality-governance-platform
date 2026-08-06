@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import api, { getApiErrorMessage } from '../api/client'
+import { canPreviewInApp, DocumentPreview } from './DocumentPreview'
 import { Button } from './ui/Button'
 
 interface DocumentPdfPreviewProps {
@@ -9,6 +10,18 @@ interface DocumentPdfPreviewProps {
   fileName: string
 }
 
+function contentTypeForDocument(fileType: string, fileName: string): string {
+  const type = (fileType || '').toLowerCase().trim()
+  if (type.includes('/')) return type
+  if (type === 'pdf' || fileName.toLowerCase().endsWith('.pdf')) return 'application/pdf'
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(type)) return `image/${type === 'jpg' ? 'jpeg' : type}`
+  return type || 'application/octet-stream'
+}
+
+/**
+ * Thin host wrapper: document library signed URL → DocumentPreview for Tier 1
+ * consistency (PDF iframe / image). Non-previewable types keep open/download.
+ */
 export default function DocumentPdfPreview({
   documentId,
   fileType,
@@ -45,8 +58,8 @@ export default function DocumentPdfPreview({
     }
   }, [documentId])
 
-  const isPdf =
-    fileType.toLowerCase() === 'pdf' || fileName.toLowerCase().endsWith('.pdf')
+  const contentType = contentTypeForDocument(fileType, fileName)
+  const previewable = canPreviewInApp(contentType, fileName)
 
   if (loading) {
     return (
@@ -60,10 +73,10 @@ export default function DocumentPdfPreview({
     return <p className="text-sm text-destructive">{error ?? 'Preview unavailable'}</p>
   }
 
-  if (!isPdf) {
+  if (!previewable) {
     return (
       <div className="space-y-2 text-sm text-muted-foreground">
-        <p>Inline preview is available for PDF documents.</p>
+        <p>Inline preview is available for PDF and image documents.</p>
         <Button variant="outline" size="sm" asChild>
           <a href={url} target="_blank" rel="noopener noreferrer">
             Open {fileName}
@@ -74,11 +87,14 @@ export default function DocumentPdfPreview({
   }
 
   return (
-    <iframe
-      src={url}
-      title={`Preview of ${fileName}`}
-      className="w-full h-[min(70vh,640px)] rounded-lg border border-border bg-muted/20"
-      data-testid="document-pdf-preview"
-    />
+    <div data-testid="document-pdf-preview">
+      <DocumentPreview
+        url={url}
+        contentType={contentType}
+        fileName={fileName}
+        alt={fileName}
+        className="w-full h-[min(70vh,640px)] rounded-lg border border-border bg-muted/20"
+      />
+    </div>
   )
 }
