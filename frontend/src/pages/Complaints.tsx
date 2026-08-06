@@ -1079,9 +1079,7 @@ export default function Complaints() {
                   onChange={(next) =>
                     setFormData({
                       ...formData,
-                      // subject_user_id is a login user FK; PersonNameField only exposes
-                      // engineerId (roster PK) — drop engineerId and clear the user FK.
-                      subject_user_id: null,
+                      subject_user_id: next?.userId ?? null,
                       subject_name: next?.displayName ?? '',
                     })
                   }

@@ -21,6 +21,8 @@ import {
 export type PersonNameValue = {
   displayName: string
   engineerId?: number | null
+  /** Linked login user id when the selected engineer has `user_id` (for subject/owner FKs). */
+  userId?: number | null
 }
 
 export type PersonNameFieldMode = 'hybrid' | 'employeesOnly'
@@ -143,7 +145,11 @@ export function PersonNameField({
     const displayName = employeePrimaryLabel(eng)
     setQuery(displayName)
     setOpen(false)
-    onChange({ displayName, engineerId: eng.id })
+    onChange({
+      displayName,
+      engineerId: eng.id,
+      userId: eng.user_id ?? null,
+    })
   }
 
   const selectFreeText = (name: string) => {
@@ -156,7 +162,7 @@ export function PersonNameField({
     }
     setQuery(displayName)
     setOpen(false)
-    onChange({ displayName, engineerId: null })
+    onChange({ displayName, engineerId: null, userId: null })
   }
 
   const handleInputChange = (next: string) => {
@@ -168,7 +174,7 @@ export function PersonNameField({
       return
     }
     if (mode === 'hybrid') {
-      onChange({ displayName: next, engineerId: null })
+      onChange({ displayName: next, engineerId: null, userId: null })
     } else {
       onChange(null)
     }
