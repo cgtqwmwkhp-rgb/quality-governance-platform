@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -195,3 +196,52 @@ async def test_apply_hooks_invokes_tip_method_names() -> None:
     assert result.quiz_draft_invoked is True
     assert result.stale_count == 2
     assert result.quiz_draft == {"status": "draft"}
+
+
+@pytest.mark.asyncio
+async def test_run_library_publish_lifecycle_invokes_rematch(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle
+
+    calls: list[str] = []
+
+    class _Stub:
+        async def rematch_evidence_on_version(self, *args: Any, **kwargs: Any) -> list[str]:
+            calls.append(GKS_REMATCH_EVIDENCE_ON_VERSION)
+            return ["link"]
+
+        async def mark_quizzes_stale_for_document(self, *args: Any, **kwargs: Any) -> int:
+            calls.append(GKS_MARK_QUIZZES_STALE_FOR_DOCUMENT)
+            return 1
+
+        async def generate_quiz_draft(self, *args: Any, **kwargs: Any) -> dict[str, str]:
+            calls.append(GKS_GENERATE_QUIZ_DRAFT)
+            return {"status": "draft"}
+
+    async def _has_quizzes(*_a: Any, **_k: Any) -> bool:
+        return True
+
+    monkeypatch.setattr(
+        "src.domain.services.gkb_publish_lifecycle.document_has_quiz_drafts",
+        _has_quizzes,
+    )
+
+    doc = SimpleNamespace(
+        id=101,
+        tenant_id=7,
+        title="Policy",
+        description="Body",
+        ai_summary=None,
+        ai_tags=None,
+        document_type="policy",
+    )
+    result = await run_library_publish_lifecycle(
+        db=object(),
+        library_document=doc,
+        new_version="2.0",
+        user=object(),
+        service=_Stub(),
+    )
+
+    assert result.planned.denied is False
+    assert result.rematch_invoked is True
+    assert GKS_REMATCH_EVIDENCE_ON_VERSION in calls

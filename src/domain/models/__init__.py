@@ -112,6 +112,9 @@ from src.domain.models.document_control import (
     ObsoleteDocumentRecord,
 )
 
+# Doc Graph (ADR-0021 Wave 0)
+from src.domain.models.document_graph import DocumentEdge, DocumentEdgeMethod, DocumentEdgeStatus, DocumentEdgeType
+
 # Governance Library taxonomy (Wave W0)
 from src.domain.models.document_library import DocumentCategory, DocumentTag, PelDocRefCounter
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
@@ -431,6 +434,11 @@ __all__ = [
     "DocumentCategory",
     "DocumentTag",
     "PelDocRefCounter",
+    # Doc Graph (ADR-0021 Wave 0)
+    "DocumentEdge",
+    "DocumentEdgeType",
+    "DocumentEdgeStatus",
+    "DocumentEdgeMethod",
     # Governance Library review packs (Wave W3)
     "LibraryReviewPack",
     "LibraryRegulatoryFinding",

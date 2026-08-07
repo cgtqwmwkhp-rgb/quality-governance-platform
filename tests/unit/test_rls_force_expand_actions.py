@@ -37,7 +37,7 @@ def test_middleware_rls_tables_include_action_expansion():
     # 20260913_cs_wave0, plus sso_provisioning_requests (20261012_rls_sso_prov). This count is here so an expansion cannot
     # silently drop an earlier table on its way past; the registry-vs-migration
     # coverage check lives in tests/unit/test_run026_rls_least_privilege.py.
-    assert len(RLS_TABLES) == 26
+    assert len(RLS_TABLES) == 27
     for table in ("incident_actions", "complaint_actions", "rta_actions"):
         assert table in RLS_TABLES
     for table in ("policies", "audit_findings", "investigation_actions", "incidents"):

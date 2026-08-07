@@ -3,7 +3,7 @@
   "by_operation": {
     "AlterColumnOp": 431,
     "CreateForeignKeyOp": 102,
-    "CreateIndexOp": 248,
+    "CreateIndexOp": 249,
     "DropColumnOp": 38,
     "DropConstraintOp": 32,
     "DropIndexOp": 207
@@ -340,6 +340,9 @@
       "AlterColumnOp": 1,
       "CreateIndexOp": 3,
       "DropIndexOp": 2
+    },
+    "document_edges": {
+      "CreateIndexOp": 1
     },
     "document_quiz_drafts": {
       "AlterColumnOp": 2,
@@ -955,6 +958,6 @@
       "CreateForeignKeyOp": 1
     }
   },
-  "tables_with_drift": 209,
-  "total_operations": 1058
+  "tables_with_drift": 210,
+  "total_operations": 1059
 }

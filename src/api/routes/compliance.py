@@ -140,6 +140,8 @@ class EvidenceLinkResponse(BaseModel):
     confidence: Optional[float]
     title: Optional[str]
     notes: Optional[str]
+    document_version_id: Optional[int] = None
+    standard_edition: Optional[str] = None
     created_at: str
     created_by_email: Optional[str]
 
@@ -273,6 +275,8 @@ def _serialize_link(link: ComplianceEvidenceLink) -> EvidenceLinkResponse:
         confidence=link.confidence,
         title=link.title,
         notes=link.notes,
+        document_version_id=getattr(link, "document_version_id", None),
+        standard_edition=getattr(link, "standard_edition", None),
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
     )
@@ -500,6 +504,14 @@ async def link_evidence(
         link.confidence = request.confidence
         link.title = request.title
         link.notes = request.notes
+        if request.entity_type == "document":
+            from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+            await pin_evidence_link_document_version(
+                db,
+                link,
+                tenant_id=current_user.tenant_id,
+            )
         links_created.append(link)
 
     await db.commit()
