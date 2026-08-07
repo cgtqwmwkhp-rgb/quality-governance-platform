@@ -106,4 +106,12 @@ describe('createDocumentGraphApi', () => {
       '/api/v1/document-graph/clauses/9001-7.5/documents',
     )
   })
+
+  it('posts the Incident Management demo seed endpoint', () => {
+    const api = mockApi()
+    createDocumentGraphApi(api as never).seedIncidentManagementVertical()
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/v1/document-graph/demo/incident-management/seed',
+    )
+  })
 })

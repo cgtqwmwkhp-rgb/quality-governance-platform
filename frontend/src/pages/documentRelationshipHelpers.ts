@@ -278,6 +278,8 @@ export type DocumentRelationshipAmbientCounts = {
   inbound: number
   outbound: number
   peers: number
+  /** Sparse/empty coverage honesty headline when expected spine roles are missing. */
+  coverageHonesty?: string | null
 }
 
 /**
@@ -290,12 +292,14 @@ export function resolveDocumentRelationshipAmbientCounts(
   documentGraphEnabled: boolean,
   edgesError: string | null | undefined,
   summary: Pick<DocumentRelationshipSummary, 'inbound' | 'outbound' | 'peers'>,
+  coverageHonestyHeadline?: string | null,
 ): DocumentRelationshipAmbientCounts | null {
   if (!documentGraphEnabled || edgesError) return null
   return {
     inbound: summary.inbound,
     outbound: summary.outbound,
     peers: summary.peers,
+    ...(coverageHonestyHeadline ? { coverageHonesty: coverageHonestyHeadline } : {}),
   }
 }
 

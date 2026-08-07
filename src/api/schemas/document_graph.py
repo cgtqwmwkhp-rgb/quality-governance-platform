@@ -153,3 +153,35 @@ class ClauseDocumentsResponse(BaseModel):
     clause_id: str
     documents: List[ClauseDocumentFreshnessItem]
     total: int
+
+
+class ImSeedDocumentItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: str
+    document_id: int
+    title: str
+    created: bool
+
+
+class ImSeedEdgeItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    src_role: str
+    dst_role: str
+    edge_type: str
+    edge_id: int
+    created: bool
+
+
+class ImSeedResponse(BaseModel):
+    """Outcome of the Incident Management Doc Graph demo seed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    documents: List[ImSeedDocumentItem]
+    edges: List[ImSeedEdgeItem]
+    documents_created: int
+    documents_reused: int
+    edges_created: int
+    edges_reused: int

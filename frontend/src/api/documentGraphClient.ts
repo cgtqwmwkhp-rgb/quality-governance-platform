@@ -133,6 +133,31 @@ export interface ClauseDocumentsResponse {
   total: number
 }
 
+export interface ImSeedDocumentItem {
+  role: string
+  document_id: number
+  title: string
+  created: boolean
+}
+
+export interface ImSeedEdgeItem {
+  src_role: string
+  dst_role: string
+  edge_type: string
+  edge_id: number
+  created: boolean
+}
+
+/** Admin-only Incident Management Doc Graph demo seed outcome. */
+export interface ImSeedResponse {
+  documents: ImSeedDocumentItem[]
+  edges: ImSeedEdgeItem[]
+  documents_created: number
+  documents_reused: number
+  edges_created: number
+  edges_reused: number
+}
+
 export function createDocumentGraphApi(api: AxiosInstance) {
   const base = '/api/v1/document-graph'
 
@@ -175,6 +200,13 @@ export function createDocumentGraphApi(api: AxiosInstance) {
       api.get<ClauseDocumentsResponse>(
         `${base}/clauses/${encodeURIComponent(clauseId)}/documents`,
       ),
+
+    /**
+     * Admin-only Incident Management demo vertical seed. Requires master
+     * `document_graph` (404 when closed) and `admin:manage`.
+     */
+    seedIncidentManagementVertical: () =>
+      api.post<ImSeedResponse>(`${base}/demo/incident-management/seed`),
 
     /**
      * Confirm a queue of edges one at a time and report per-edge outcomes.

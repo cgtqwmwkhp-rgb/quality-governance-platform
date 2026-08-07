@@ -35,6 +35,10 @@ import {
   type DocumentEdgeDirection,
   type ResolvedDocumentEdge,
 } from './documentRelationshipHelpers'
+import {
+  buildDocumentRelationshipCoverageHonesty,
+  measureRelationshipRoleCoverage,
+} from './documentRelationshipCoverage'
 
 interface CounterpartDocument {
   id: number
@@ -47,6 +51,8 @@ interface CounterpartDocument {
 export interface DocumentRelationshipsPanelProps {
   documentId: number
   documentTitle: string
+  /** Library document_type — drives expected spine roles for coverage honesty. */
+  documentType?: string | null
   edges: DocumentEdge[]
   loading: boolean
   error: string | null
@@ -71,6 +77,7 @@ const statusBadge = (edge: DocumentEdge) => {
 export function DocumentRelationshipsPanel({
   documentId,
   documentTitle,
+  documentType = null,
   edges,
   loading,
   error,
@@ -104,6 +111,16 @@ export function DocumentRelationshipsPanel({
     () => summariseDocumentRelationships(documentId, edges),
     [documentId, edges],
   )
+  const coverageHonesty = useMemo(() => {
+    // After a listEdges failure (or while loading), edges may be empty — that is
+    // not evidence the spine is unrecorded. Stay quiet and let the error banner speak.
+    if (loading || error) {
+      return buildDocumentRelationshipCoverageHonesty(null)
+    }
+    return buildDocumentRelationshipCoverageHonesty(
+      measureRelationshipRoleCoverage(documentId, documentType, edges),
+    )
+  }, [documentId, documentType, edges, loading, error])
 
   const pending = useMemo(
     () => resolved.filter((item) => isPendingDocumentEdge(item.edge)),
@@ -535,6 +552,16 @@ export function DocumentRelationshipsPanel({
             ? ' Suggestions are proposed only — confirm before they drive impact.'
             : null}
         </p>
+        {coverageHonesty.hasGap ? (
+          <div
+            className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2"
+            data-testid="relationships-coverage-honesty"
+            role="status"
+          >
+            <p className="text-sm font-semibold text-foreground">{coverageHonesty.headline}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{coverageHonesty.detail}</p>
+          </div>
+        ) : null}
       </Card>
 
       {pending.length > 0 ? (
@@ -587,7 +614,11 @@ export function DocumentRelationshipsPanel({
         <EmptyState
           icon={<Link2 className="h-8 w-8 text-muted-foreground" />}
           title="No relationships recorded"
-          description={`Link ${documentTitle} to the documents it implements, the records it requires, or the documents it references. These links are separate from document control lineage.`}
+          description={
+            coverageHonesty.hasGap
+              ? `${coverageHonesty.headline}. Empty here does not mean no hierarchy exists — only that none of the expected relationship roles for this document type have been recorded yet. Link ${documentTitle} to the documents it implements, the records it requires, or the documents it relates to. These links are separate from document control lineage.`
+              : `Link ${documentTitle} to the documents it implements, the records it requires, or the documents it references. These links are separate from document control lineage.`
+          }
         />
       ) : null}
 

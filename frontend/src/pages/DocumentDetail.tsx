@@ -55,6 +55,10 @@ import {
   shouldShowDocumentRelationshipChips,
   summariseDocumentRelationships,
 } from './documentRelationshipHelpers'
+import {
+  buildDocumentRelationshipCoverageHonesty,
+  measureRelationshipRoleCoverage,
+} from './documentRelationshipCoverage'
 import { buildPublishImpactPreview, type PublishImpactPreview } from './documentPublishImpactHelpers'
 import { complianceClauseHref } from './complianceEvidenceHelpers'
 import { DocumentPublishImpactPreview } from './DocumentPublishImpactPreview'
@@ -350,6 +354,17 @@ export default function DocumentDetail() {
     () => summariseDocumentRelationships(documentId, edges),
     [documentId, edges],
   )
+
+  const relationshipCoverageHonesty = useMemo(() => {
+    // While edges are clearing/fetching, or after a listEdges failure, do not
+    // invent a sparse spine gap from a temporarily empty array.
+    if (!documentGraphEnabled || !document || edgesLoading || edgesError) {
+      return buildDocumentRelationshipCoverageHonesty(null)
+    }
+    return buildDocumentRelationshipCoverageHonesty(
+      measureRelationshipRoleCoverage(documentId, document.document_type, edges),
+    )
+  }, [documentGraphEnabled, document, documentId, edges, edgesLoading, edgesError])
 
   const confirmedEvidenceCount = useMemo(
     () => evidence.filter((link) => link.status === 'confirmed').length,
@@ -1148,6 +1163,7 @@ export default function DocumentDetail() {
             <DocumentRelationshipsPanel
               documentId={document.id}
               documentTitle={document.title}
+              documentType={document.document_type}
               edges={edges}
               loading={edgesLoading}
               error={edgesError}
@@ -1207,6 +1223,9 @@ export default function DocumentDetail() {
               documentGraphEnabled,
               edgesError,
               relationshipSummary,
+              relationshipCoverageHonesty.hasGap
+                ? relationshipCoverageHonesty.headline
+                : null,
             )}
           />
           <div className="flex justify-end">
