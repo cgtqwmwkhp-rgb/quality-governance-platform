@@ -5,7 +5,7 @@ import {
   DocumentPreview,
   isTier1Preview,
   resolvePreviewKind,
-} from './DocumentPreview'
+} from '../DocumentPreview'
 
 describe('resolvePreviewKind', () => {
   it('routes Tier 1 mime types and extensions', () => {
