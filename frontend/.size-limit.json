@@ -3,7 +3,7 @@
     "path": "dist/assets/index-*.js",
     "limit": "191 kB",
     "gzip": true,
-    "name": "index: 190\u2192191 kB \u2014 PersonNameField admin/owner wiring. Measured locally on this branch after tsc-green PersonNameValue fix: cases feat/person-name-cases index gzip 190.34 kB (+338 B over 190); owners feat/person-name-owners index gzip 190.06 kB (+58 B over 190). Vite reported index ~191.11 kB / ~190.85 kB gzip respectively. Prior entry retained for FeatureFlagProvider 189\u2192190 rationale."
+    "name": "index: 190\u2192191 kB \u2014 PersonNameField admin/owner wiring + DocumentPreview in EvidenceGallery lightbox. Owners branch measured locally after tsc-green PersonNameValue fix: cases feat/person-name-cases index gzip 190.34 kB (+338 B over 190); owners feat/person-name-owners index gzip 190.06 kB (+58 B over 190); Vite ~191.11 / ~190.85 kB gzip. DocumentPreview (#1617) CI Performance Budget on feat/document-preview-gallery measured index gzip 12 B over the 190 kB ceiling (CI-vs-local variance). Prior entry retained for FeatureFlagProvider 189\u2192190 rationale."
   },
   {
     "path": "dist/assets/vendor-*.js",
