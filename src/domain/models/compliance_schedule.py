@@ -349,6 +349,13 @@ class ComplianceScheduleOcrDraft(Base, TimestampMixin, AuditTrailMixin):
     source_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     source_checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     source_storage_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # When set, the draft reuses an occurrence EvidenceAsset blob and must not
+    # delete that blob on discard (or IntegrityError cleanup).
+    evidence_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("evidence_assets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     extraction_method: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     ocr_provider_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

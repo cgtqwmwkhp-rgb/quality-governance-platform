@@ -45,8 +45,12 @@ type Props = {
   enableUpload?: boolean
   uploadSourceModule?: string
   uploadSourceId?: number
-  /** Called after every upload attempt completes (success or partial failure) so the caller can refetch. */
-  onUploadComplete?: () => void | Promise<void>
+  /**
+   * Called after every upload attempt completes (success or partial failure) so the
+   * caller can refetch. Optional result lists asset ids that uploaded successfully —
+   * callers that ignore the argument keep working.
+   */
+  onUploadComplete?: (result?: { uploadedAssetIds: number[] }) => void | Promise<void>
   uploadLabel?: string
   uploadAccept?: string
   maxFileSizeBytes?: number
@@ -222,6 +226,7 @@ export function EvidenceGallery({
     setUploadError(null)
     setUploading(true)
     const failures: string[] = []
+    const uploadedAssetIds: number[] = []
     try {
       for (const file of files) {
         if (!isSupportedFileType(file, allowedMimePrefixes, allowedMimeTypes)) {
@@ -233,12 +238,15 @@ export function EvidenceGallery({
           continue
         }
         try {
-          await evidenceAssetsApi.upload(file, {
+          const response = await evidenceAssetsApi.upload(file, {
             source_module: uploadSourceModule,
             source_id: uploadSourceId,
             title: file.name,
             visibility: 'internal_customer',
           })
+          if (typeof response.data?.id === 'number') {
+            uploadedAssetIds.push(response.data.id)
+          }
         } catch {
           failures.push(`${file.name} could not be uploaded.`)
         }
@@ -246,7 +254,7 @@ export function EvidenceGallery({
       if (failures.length > 0) {
         setUploadError(failures.join(' '))
       }
-      await onUploadComplete?.()
+      await onUploadComplete?.({ uploadedAssetIds })
     } finally {
       setUploading(false)
     }

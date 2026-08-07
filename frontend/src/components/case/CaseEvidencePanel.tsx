@@ -29,6 +29,12 @@ export interface CaseEvidencePanelProps {
   className?: string
   /** Optional test id prefix, e.g. "incident" → incident-evidence-panel */
   testIdPrefix?: string
+  /**
+   * Optional post-upload hook. Gallery already reloads via this panel; the
+   * optional result lists successfully uploaded asset ids for callers that need
+   * them (e.g. FRA OCR from-evidence).
+   */
+  onUploadComplete?: (result?: { uploadedAssetIds: number[] }) => void | Promise<void>
 }
 
 /**
@@ -46,6 +52,7 @@ export function CaseEvidencePanel({
   pageSize = 50,
   className,
   testIdPrefix,
+  onUploadComplete,
 }: CaseEvidencePanelProps) {
   const { t } = useTranslation()
   const [assets, setAssets] = useState<EvidenceAsset[]>([])
@@ -72,6 +79,14 @@ export function CaseEvidencePanel({
   useEffect(() => {
     void load()
   }, [load])
+
+  const handleUploadComplete = useCallback(
+    async (result?: { uploadedAssetIds: number[] }) => {
+      await load()
+      await onUploadComplete?.(result)
+    },
+    [load, onUploadComplete],
+  )
 
   const handleDelete = async (assetId: number) => {
     try {
@@ -121,7 +136,7 @@ export function CaseEvidencePanel({
           uploadSourceModule={sourceType}
           uploadSourceId={sourceId}
           uploadLabel={t('case.evidence.upload', 'Upload evidence')}
-          onUploadComplete={load}
+          onUploadComplete={handleUploadComplete}
         />
       </CardContent>
     </Card>

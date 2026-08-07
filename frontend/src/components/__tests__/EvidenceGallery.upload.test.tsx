@@ -26,7 +26,7 @@ describe('EvidenceGallery upload', () => {
   })
 
   it('uploads a selected file and notifies the caller to refresh', async () => {
-    vi.mocked(evidenceAssetsApi.upload).mockResolvedValue({ data: {} } as never)
+    vi.mocked(evidenceAssetsApi.upload).mockResolvedValue({ data: { id: 44 } } as never)
     const onUploadComplete = vi.fn()
 
     render(
@@ -51,7 +51,9 @@ describe('EvidenceGallery upload', () => {
         visibility: 'internal_customer',
       }),
     )
-    await waitFor(() => expect(onUploadComplete).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(onUploadComplete).toHaveBeenCalledWith({ uploadedAssetIds: [44] }),
+    )
   })
 
   it('rejects unsupported file types without calling the upload API', async () => {

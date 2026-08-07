@@ -24,6 +24,7 @@ from src.domain.exceptions import ConflictError, ExternalServiceError, NotFoundE
 from src.domain.models.compliance_schedule import (
     ComplianceOcrDraftStatus,
     ComplianceOcrFilingStatus,
+    ComplianceRecord,
     ComplianceRequirement,
     ComplianceScheduleOcrDraft,
 )
@@ -31,7 +32,7 @@ from src.domain.models.document import Document, FileType, IndexJob
 from src.domain.models.enums import DocumentStatus, DocumentType
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.compliance_schedule_filing_service import FILING_ERROR_MAX_CHARS
+from src.domain.services.compliance_schedule_filing_service import FILING_ERROR_MAX_CHARS, _load_bound_evidence_asset
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 from src.domain.services.document_category_service import allocate_pel_doc_ref
 from src.domain.services.document_library_filing_service import (
@@ -48,6 +49,8 @@ from src.infrastructure.storage import StorageError, storage_service
 logger = logging.getLogger(__name__)
 
 _DUE_DATE_FLOOR = date(2000, 1, 1)
+FRA_OCR_MAX_PDF_BYTES = 25 * 1024 * 1024
+FRA_OCR_PDF_MAGIC = b"%PDF-"
 
 
 @dataclass(frozen=True)
@@ -184,6 +187,140 @@ class ComplianceScheduleFraOcrService:
             "method=%s provider_status=%s action_count=%s warning_count=%s",
             draft.id,
             requirement_id,
+            tenant_id,
+            draft.extraction_method,
+            draft.ocr_provider_status,
+            len(proposed.get("actions") or []),
+            len(draft.warnings_json or []),
+        )
+        return draft
+
+    async def create_draft_from_evidence_asset(
+        self,
+        *,
+        record_id: int,
+        evidence_asset_id: int,
+        tenant_id: int,
+        user_id: int,
+    ) -> ComplianceScheduleOcrDraft:
+        """Create a pending FRA OCR draft from an occurrence evidence PDF blob.
+
+        Reuses the EvidenceAsset storage key (no second upload). Sets
+        ``evidence_asset_id`` so discard / IntegrityError cleanup never deletes
+        the shared evidence blob.
+        """
+        record = await self._load_record(record_id=record_id, tenant_id=tenant_id)
+        asset = await _load_bound_evidence_asset(
+            self.db,
+            evidence_asset_id=evidence_asset_id,
+            record=record,
+            tenant_id=tenant_id,
+        )
+        requirement = await self._load_fra_requirement(
+            requirement_id=record.requirement_id,
+            tenant_id=tenant_id,
+            for_update=False,
+        )
+
+        if not asset.storage_key:
+            raise ValidationError(
+                "Evidence asset has no storage key to OCR",
+                code="VALIDATION_ERROR",
+                details={"evidence_asset_id": evidence_asset_id},
+            )
+        if not asset.checksum_sha256:
+            raise ValidationError(
+                "Evidence asset has no checksum to verify before OCR",
+                code="VALIDATION_ERROR",
+                details={"evidence_asset_id": evidence_asset_id},
+            )
+
+        try:
+            content = await storage_service().download(asset.storage_key)
+        except StorageError as exc:
+            logger.warning(
+                "fra_ocr from-evidence download failed tenant_id=%s record_id=%s " "evidence_asset_id=%s err=%s",
+                tenant_id,
+                record_id,
+                evidence_asset_id,
+                type(exc).__name__,
+            )
+            raise ExternalServiceError(
+                "Could not read the occurrence evidence PDF; try again shortly.",
+                code="EXTERNAL_SERVICE_ERROR",
+            ) from exc
+
+        if not content:
+            raise ValidationError("Evidence PDF is empty", code="VALIDATION_ERROR")
+        if len(content) > FRA_OCR_MAX_PDF_BYTES:
+            raise ValidationError(
+                "PDF file exceeds 25 MiB limit",
+                code="VALIDATION_ERROR",
+                details={"size_bytes": len(content), "max_bytes": FRA_OCR_MAX_PDF_BYTES},
+            )
+        if not content.startswith(FRA_OCR_PDF_MAGIC):
+            raise ValidationError(
+                "File does not look like a PDF",
+                code="VALIDATION_ERROR",
+                details={"evidence_asset_id": evidence_asset_id},
+            )
+
+        checksum = hashlib.sha256(content).hexdigest()
+        if checksum != asset.checksum_sha256:
+            raise ValidationError(
+                "Evidence blob checksum does not match the EvidenceAsset record",
+                code="VALIDATION_ERROR",
+                details={"evidence_asset_id": evidence_asset_id},
+            )
+
+        filename = asset.original_filename or asset.title or f"evidence-{asset.id}.pdf"
+        content_type = asset.content_type or "application/pdf"
+        extraction = await self._ocr.extract(
+            content=content,
+            filename=filename,
+            content_type=content_type,
+        )
+        proposed = extraction.to_proposed_json()
+        draft = ComplianceScheduleOcrDraft(
+            tenant_id=tenant_id,
+            requirement_id=requirement.id,
+            purpose=FRA_OCR_PURPOSE,
+            status=ComplianceOcrDraftStatus.PENDING,
+            source_filename=filename,
+            source_content_type=content_type,
+            source_size_bytes=len(content),
+            source_checksum_sha256=checksum,
+            source_storage_key=asset.storage_key,
+            evidence_asset_id=asset.id,
+            extraction_method=extraction.extraction_method,
+            ocr_provider_status=extraction.ocr_provider_status,
+            page_count=extraction.page_count,
+            proposed_json=proposed,
+            warnings_json=list(extraction.warnings),
+            filing_status=ComplianceOcrFilingStatus.NOT_FILED,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+        )
+        self.db.add(draft)
+        try:
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            # Must NOT delete asset.storage_key — the occurrence still owns it.
+            raise ConflictError(
+                "A pending FRA OCR draft already exists for this PDF on this obligation.",
+                code="DUPLICATE_ENTITY",
+            ) from exc
+
+        await self.db.refresh(draft)
+        logger.info(
+            "fra_ocr draft created from evidence draft_id=%s requirement_id=%s "
+            "record_id=%s evidence_asset_id=%s tenant_id=%s method=%s "
+            "provider_status=%s action_count=%s warning_count=%s",
+            draft.id,
+            requirement.id,
+            record_id,
+            evidence_asset_id,
             tenant_id,
             draft.extraction_method,
             draft.ocr_provider_status,
@@ -381,7 +518,11 @@ class ComplianceScheduleFraOcrService:
                 code="DUPLICATE_ENTITY",
             )
 
+        # From-evidence drafts share the occurrence EvidenceAsset blob — never
+        # delete it on discard. Upload-created drafts (evidence_asset_id is None)
+        # still own their staging blob and clean it up.
         storage_key = draft.source_storage_key
+        owns_source_blob = draft.evidence_asset_id is None
         draft.status = ComplianceOcrDraftStatus.DISCARDED
         draft.discarded_at = clock
         draft.updated_by_id = user_id
@@ -402,6 +543,8 @@ class ComplianceScheduleFraOcrService:
                 "draft_id": draft.id,
                 "requirement_id": draft.requirement_id,
                 "has_reason": bool(reason),
+                "evidence_asset_id": draft.evidence_asset_id,
+                "deleted_source_blob": bool(owns_source_blob and storage_key),
             },
             user_id=user_id,
             actor_user_id=user_id,
@@ -411,7 +554,7 @@ class ComplianceScheduleFraOcrService:
         await self.db.commit()
         await self.db.refresh(draft)
 
-        if storage_key:
+        if owns_source_blob and storage_key:
             try:
                 await storage_service().delete(storage_key)
             except Exception:  # noqa: BLE001
@@ -654,6 +797,23 @@ class ComplianceScheduleFraOcrService:
         draft.updated_by_id = user_id
         await self.db.commit()
 
+    async def _load_record(
+        self,
+        *,
+        record_id: int,
+        tenant_id: Optional[int],
+    ) -> ComplianceRecord:
+        query = select(ComplianceRecord).where(ComplianceRecord.id == record_id)
+        query = query.where(false()) if tenant_id is None else query.where(ComplianceRecord.tenant_id == tenant_id)
+        result = await self.db.execute(query)
+        record = result.scalar_one_or_none()
+        if record is None:
+            raise NotFoundError(
+                f"Compliance record {record_id} not found",
+                code="ENTITY_NOT_FOUND",
+            )
+        return record
+
     async def _load_draft(
         self,
         *,
@@ -785,6 +945,7 @@ def draft_to_response_dict(draft: ComplianceScheduleOcrDraft) -> dict[str, Any]:
         "source_filename": draft.source_filename,
         "source_size_bytes": draft.source_size_bytes,
         "source_checksum_sha256": draft.source_checksum_sha256,
+        "evidence_asset_id": draft.evidence_asset_id,
         "extraction_method": draft.extraction_method,
         "ocr_provider_status": draft.ocr_provider_status,
         "page_count": draft.page_count,

@@ -43,6 +43,8 @@ def _pending_draft(**overrides):
         "extraction_method": "pdfplumber",
         "source_checksum_sha256": "abc",
         "source_storage_key": "compliance-schedule/fra-ocr/1/x/a.pdf",
+        # None = upload-owned staging blob; set for from-evidence drafts.
+        "evidence_asset_id": None,
         "proposed_json": {"actions": []},
         "warnings_json": [],
         "confirmed_json": None,
@@ -52,6 +54,36 @@ def _pending_draft(**overrides):
         "discarded_at": None,
         "updated_by_id": None,
         "filing_error": None,
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _extraction(**overrides):
+    base = {
+        "extraction_method": "pdfplumber",
+        "ocr_provider_status": "skipped",
+        "page_count": 1,
+        "warnings": [],
+        "to_proposed_json": MagicMock(return_value={"actions": []}),
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _evidence_asset(**overrides):
+    import hashlib
+
+    content = overrides.pop("content", b"%PDF-1.4 minimal")
+    checksum = hashlib.sha256(content).hexdigest()
+    base = {
+        "id": 99,
+        "storage_key": "evidence/compliance_record/55/fra.pdf",
+        "checksum_sha256": checksum,
+        "original_filename": "fra.pdf",
+        "title": "FRA",
+        "content_type": "application/pdf",
+        "_content": content,
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -177,6 +209,220 @@ async def test_discard_pending_draft() -> None:
     assert out.status == ComplianceOcrDraftStatus.DISCARDED
     assert out.discarded_at is not None
     storage.delete.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_discard_must_not_delete_evidence_blob_when_evidence_asset_id_set() -> None:
+    """From-evidence drafts share the occurrence blob — discard must leave it intact."""
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db)
+    evidence_key = "evidence/compliance_record/55/fra.pdf"
+    draft = _pending_draft(
+        evidence_asset_id=99,
+        source_storage_key=evidence_key,
+    )
+
+    async def _load_draft(**kwargs):
+        return draft
+
+    service._load_draft = _load_draft  # type: ignore[method-assign]
+
+    storage = MagicMock()
+    storage.delete = AsyncMock(return_value=True)
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.record_audit_event",
+            new_callable=AsyncMock,
+        ) as audit,
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.storage_service",
+            return_value=storage,
+        ),
+    ):
+        out = await service.discard_draft(draft_id=7, tenant_id=1, user_id=42, reason="not needed")
+
+    assert out.status == ComplianceOcrDraftStatus.DISCARDED
+    storage.delete.assert_not_awaited()
+    assert audit.await_count == 1
+    payload = audit.await_args.kwargs["payload"]
+    assert payload["evidence_asset_id"] == 99
+    assert payload["deleted_source_blob"] is False
+
+
+@pytest.mark.asyncio
+async def test_create_draft_from_evidence_asset_happy_path() -> None:
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    db.add = MagicMock()
+    service = ComplianceScheduleFraOcrService(db, ocr_service=MagicMock())
+    service._ocr.extract = AsyncMock(return_value=_extraction())
+
+    record = SimpleNamespace(id=55, requirement_id=10, tenant_id=1, reference_number="CRC-1")
+    asset = _evidence_asset()
+    requirement = _fra_requirement()
+
+    async def _load_record(**kwargs):
+        return record
+
+    async def _load_req(**kwargs):
+        return requirement
+
+    service._load_record = _load_record  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    storage = MagicMock()
+    storage.download = AsyncMock(return_value=asset._content)
+    storage.delete = AsyncMock()
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service._load_bound_evidence_asset",
+            new_callable=AsyncMock,
+            return_value=asset,
+        ),
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.storage_service",
+            return_value=storage,
+        ),
+    ):
+        draft = await service.create_draft_from_evidence_asset(
+            record_id=55,
+            evidence_asset_id=99,
+            tenant_id=1,
+            user_id=42,
+        )
+
+    assert draft.evidence_asset_id == 99
+    assert draft.source_storage_key == asset.storage_key
+    assert draft.source_checksum_sha256 == asset.checksum_sha256
+    storage.delete.assert_not_awaited()
+    db.add.assert_called_once()
+    db.commit.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_draft_from_evidence_rejects_non_pdf_magic() -> None:
+    db = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db, ocr_service=MagicMock())
+    record = SimpleNamespace(id=55, requirement_id=10, tenant_id=1, reference_number="CRC-1")
+    asset = _evidence_asset(content=b"NOT-A-PDF", checksum_sha256="deadbeef")
+
+    async def _load_record(**kwargs):
+        return record
+
+    async def _load_req(**kwargs):
+        return _fra_requirement()
+
+    service._load_record = _load_record  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    storage = MagicMock()
+    storage.download = AsyncMock(return_value=b"NOT-A-PDF")
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service._load_bound_evidence_asset",
+            new_callable=AsyncMock,
+            return_value=asset,
+        ),
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.storage_service",
+            return_value=storage,
+        ),
+        pytest.raises(ValidationError, match="does not look like a PDF"),
+    ):
+        await service.create_draft_from_evidence_asset(
+            record_id=55,
+            evidence_asset_id=99,
+            tenant_id=1,
+            user_id=42,
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_draft_from_evidence_rejects_over_25mib() -> None:
+    from src.domain.services.compliance_schedule_fra_ocr_service import FRA_OCR_MAX_PDF_BYTES
+
+    db = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db, ocr_service=MagicMock())
+    record = SimpleNamespace(id=55, requirement_id=10, tenant_id=1, reference_number="CRC-1")
+    huge = b"%PDF-" + (b"x" * (FRA_OCR_MAX_PDF_BYTES))
+    asset = _evidence_asset(content=huge)
+
+    async def _load_record(**kwargs):
+        return record
+
+    async def _load_req(**kwargs):
+        return _fra_requirement()
+
+    service._load_record = _load_record  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    storage = MagicMock()
+    storage.download = AsyncMock(return_value=huge)
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service._load_bound_evidence_asset",
+            new_callable=AsyncMock,
+            return_value=asset,
+        ),
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.storage_service",
+            return_value=storage,
+        ),
+        pytest.raises(ValidationError, match="25 MiB"),
+    ):
+        await service.create_draft_from_evidence_asset(
+            record_id=55,
+            evidence_asset_id=99,
+            tenant_id=1,
+            user_id=42,
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_draft_from_evidence_rejects_checksum_mismatch() -> None:
+    db = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db, ocr_service=MagicMock())
+    record = SimpleNamespace(id=55, requirement_id=10, tenant_id=1, reference_number="CRC-1")
+    content = b"%PDF-1.4 ok"
+    asset = _evidence_asset(content=content, checksum_sha256="0" * 64)
+
+    async def _load_record(**kwargs):
+        return record
+
+    async def _load_req(**kwargs):
+        return _fra_requirement()
+
+    service._load_record = _load_record  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    storage = MagicMock()
+    storage.download = AsyncMock(return_value=content)
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service._load_bound_evidence_asset",
+            new_callable=AsyncMock,
+            return_value=asset,
+        ),
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.storage_service",
+            return_value=storage,
+        ),
+        pytest.raises(ValidationError, match="checksum"),
+    ):
+        await service.create_draft_from_evidence_asset(
+            record_id=55,
+            evidence_asset_id=99,
+            tenant_id=1,
+            user_id=42,
+        )
 
 
 @pytest.mark.asyncio
