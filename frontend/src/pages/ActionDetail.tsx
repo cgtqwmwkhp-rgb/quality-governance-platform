@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Copy,
   Download,
+  Eye,
   ExternalLink,
   Link2,
   Loader2,
@@ -37,6 +38,7 @@ import {
 } from '../components/ui/Select'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
+import { EvidenceAssetPreviewDialog } from '../components/EvidenceAssetPreviewDialog'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath, parseActionDetailId } from './actionLinks'
 import { resolveActionAssignee } from './actionsDisplayHelpers'
@@ -132,6 +134,7 @@ export default function ActionDetail() {
   const [evidenceLoading, setEvidenceLoading] = useState(false)
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [evidenceSort, setEvidenceSort] = useState<'uploaded' | 'name'>('uploaded')
+  const [previewAsset, setPreviewAsset] = useState<EvidenceAsset | null>(null)
   const [copyFlash, setCopyFlash] = useState<'key' | 'link' | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const notesListRef = useRef<HTMLUListElement>(null)
@@ -362,7 +365,7 @@ export default function ActionDetail() {
   const downloadAsset = async (assetId: number) => {
     setInlineMessage(null)
     try {
-      const res = await evidenceAssetsApi.getSignedUrl(assetId)
+      const res = await evidenceAssetsApi.getSignedUrl(assetId, undefined, 'attachment')
       window.open(res.data.signed_url, '_blank', 'noopener,noreferrer')
     } catch (e: unknown) {
       setInlineMessage({
@@ -804,7 +807,18 @@ export default function ActionDetail() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        aria-label={`Preview ${a.title || a.original_filename || 'attachment'}`}
+                        data-testid={`action-evidence-preview-${a.id}`}
+                        onClick={() => setPreviewAsset(a)}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         aria-label={`Download ${a.title || a.original_filename || 'attachment'}`}
+                        data-testid={`action-evidence-download-${a.id}`}
                         onClick={() => downloadAsset(a.id)}
                       >
                         <Download className="w-4 h-4" />
@@ -994,6 +1008,14 @@ export default function ActionDetail() {
           </div>
         </CardContent>
       </Card>
+
+      <EvidenceAssetPreviewDialog
+        asset={previewAsset}
+        open={previewAsset !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewAsset(null)
+        }}
+      />
     </div>
   )
 }

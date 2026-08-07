@@ -3203,6 +3203,7 @@
   "safetyAssets.detail.open_actions_placeholder": "No open actions shown. Linking corrective actions to an asset is not available yet.",
   "safetyAssets.detail.photo": "Photo evidence",
   "safetyAssets.detail.photo_alt": "Asset photo",
+  "safetyAssets.detail.photo_preview": "Preview asset photo",
   "safetyAssets.detail.photo_failed": "Photo upload failed.",
   "safetyAssets.detail.photo_id": "Evidence #{{id}}",
   "safetyAssets.detail.photo_no_id": "Upload succeeded but no evidence id returned.",

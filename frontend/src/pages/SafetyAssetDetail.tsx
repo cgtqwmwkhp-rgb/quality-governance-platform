@@ -18,8 +18,16 @@ import {
 import { toast } from '../contexts/ToastContext'
 import { isOpaqueIdentifier } from '../helpers/displayLabels'
 import { locationKindI18n } from './safetyAssets/locationKindLabels'
+import { DocumentPreview } from '../components/DocumentPreview'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Card, CardContent } from '../components/ui/Card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/Dialog'
 import {
   Select,
   SelectContent,
@@ -70,6 +78,7 @@ export default function SafetyAssetDetail() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
+  const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false)
   const [competencyRequirements, setCompetencyRequirements] = useState<
     CompetencyRequirement[] | null
   >(null)
@@ -133,7 +142,11 @@ export default function SafetyAssetDetail() {
 
       if (next.photo_evidence_id != null) {
         try {
-          const signed = await evidenceAssetsApi.getSignedUrl(next.photo_evidence_id)
+          const signed = await evidenceAssetsApi.getSignedUrl(
+            next.photo_evidence_id,
+            undefined,
+            'inline',
+          )
           setPhotoPreviewUrl(signed.data?.signed_url ?? null)
         } catch {
           setPhotoPreviewUrl(null)
@@ -202,7 +215,7 @@ export default function SafetyAssetDetail() {
       })
       setAsset(updated.data)
       try {
-        const signed = await evidenceAssetsApi.getSignedUrl(evidenceId)
+        const signed = await evidenceAssetsApi.getSignedUrl(evidenceId, undefined, 'inline')
         setPhotoPreviewUrl(signed.data?.signed_url ?? null)
       } catch {
         setPhotoPreviewUrl(null)
@@ -548,11 +561,19 @@ export default function SafetyAssetDetail() {
               {t('safetyAssets.detail.photo', 'Photo evidence')}
             </h2>
             {photoPreviewUrl ? (
-              <img
-                src={photoPreviewUrl}
-                alt={t('safetyAssets.detail.photo_alt', 'Asset photo')}
-                className="max-h-48 rounded-lg border border-border object-contain"
-              />
+              <button
+                type="button"
+                className="block max-w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setPhotoLightboxOpen(true)}
+                aria-label={t('safetyAssets.detail.photo_preview', 'Preview asset photo')}
+                data-testid="safety-asset-photo-preview"
+              >
+                <img
+                  src={photoPreviewUrl}
+                  alt={t('safetyAssets.detail.photo_alt', 'Asset photo')}
+                  className="max-h-48 rounded-lg border border-border object-contain"
+                />
+              </button>
             ) : asset.photo_evidence_id != null ? (
               <p className="text-sm text-muted-foreground">
                 {t('safetyAssets.detail.photo_id', 'Evidence #{{id}}', {
@@ -588,6 +609,28 @@ export default function SafetyAssetDetail() {
                 />
               </label>
             </div>
+
+            <Dialog open={photoLightboxOpen} onOpenChange={setPhotoLightboxOpen}>
+              {photoPreviewUrl ? (
+                <DialogContent className="max-w-4xl" data-testid="safety-asset-photo-dialog">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {t('safetyAssets.detail.photo', 'Photo evidence')}
+                    </DialogTitle>
+                    <DialogDescription>image/*</DialogDescription>
+                  </DialogHeader>
+                  <div className="flex min-h-64 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                    <DocumentPreview
+                      url={photoPreviewUrl}
+                      contentType="image/jpeg"
+                      fileName="asset-photo.jpg"
+                      alt={t('safetyAssets.detail.photo_alt', 'Asset photo')}
+                      className="w-full"
+                    />
+                  </div>
+                </DialogContent>
+              ) : null}
+            </Dialog>
           </CardContent>
         </Card>
       </div>
