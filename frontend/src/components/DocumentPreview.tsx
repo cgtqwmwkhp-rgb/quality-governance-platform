@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { FileText, ImageOff, Loader2 } from 'lucide-react'
 import { cn } from '../helpers/utils'
 
@@ -136,6 +136,24 @@ function TextPreview({ url, fileName }: { url: string; fileName?: string }) {
 }
 
 /**
+ * Attach native media/image error via DOM listeners — not JSX onError —
+ * so jsx-a11y/no-noninteractive-element-interactions stays quiet (max-warnings 0).
+ */
+function useNativeLoadError(
+  elementRef: RefObject<HTMLElement | null>,
+  url: string,
+  onLoadError?: () => void,
+) {
+  useEffect(() => {
+    const el = elementRef.current
+    if (!el || !onLoadError) return
+    const handler = () => onLoadError()
+    el.addEventListener('error', handler)
+    return () => el.removeEventListener('error', handler)
+  }, [elementRef, url, onLoadError])
+}
+
+/**
  * Native in-app document preview for EvidenceGallery lightbox and similar hosts.
  * Prefer iframe / media elements over download-only for Tier 1 mime types.
  */
@@ -151,6 +169,13 @@ export function DocumentPreview({
 }: DocumentPreviewProps) {
   const kind = resolvePreviewKind(contentType, fileName)
   const label = alt || fileName || 'Evidence preview'
+  const imageRef = useRef<HTMLImageElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  useNativeLoadError(imageRef, url || '', onLoadError)
+  useNativeLoadError(videoRef, url || '', onLoadError)
+  useNativeLoadError(audioRef, url || '', onLoadError)
 
   if (loading) {
     return (
@@ -190,10 +215,10 @@ export function DocumentPreview({
     return (
       <div className={cn('flex min-h-64 items-center justify-center', className)} data-testid="document-preview-image">
         <img
+          ref={imageRef}
           src={url}
           alt={label}
           className="max-h-[60vh] max-w-full object-contain"
-          onError={onLoadError}
         />
       </div>
     )
@@ -215,10 +240,10 @@ export function DocumentPreview({
     return (
       <div className={cn('flex min-h-64 w-full items-center justify-center', className)} data-testid="document-preview-video">
         <video
+          ref={videoRef}
           src={url}
           controls
           className="max-h-[60vh] max-w-full"
-          onError={onLoadError}
         >
           Your browser does not support video playback.
         </video>
@@ -231,7 +256,7 @@ export function DocumentPreview({
       <div className={cn('flex min-h-64 w-full flex-col items-center justify-center gap-3 p-8', className)} data-testid="document-preview-audio">
         <FileText className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
         <p className="text-sm text-muted-foreground">{label}</p>
-        <audio src={url} controls className="w-full max-w-md" onError={onLoadError}>
+        <audio ref={audioRef} src={url} controls className="w-full max-w-md">
           Your browser does not support audio playback.
         </audio>
       </div>
