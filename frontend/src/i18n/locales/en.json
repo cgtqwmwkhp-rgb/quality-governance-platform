@@ -4106,5 +4106,16 @@
   "compliance.schedule.filing.submit": "File to Library",
   "compliance.schedule.filing.success": "Filed to the Library",
   "compliance.schedule.filing.success_ref": "Filed to the Library as {{ref}}",
-  "compliance.schedule.filing.duplicate_warning": "The Library already holds an approved document that looks like this one. Check before relying on it."
+  "compliance.schedule.filing.duplicate_warning": "The Library already holds an approved document that looks like this one. Check before relying on it.",
+  "compliance.schedule.regulatory_ai.suggest": "Suggest with AI",
+  "compliance.schedule.regulatory_ai.suggesting": "Suggesting…",
+  "compliance.schedule.regulatory_ai.clarify_heading": "A few questions to narrow this down",
+  "compliance.schedule.regulatory_ai.resubmit": "Re-suggest with answers",
+  "compliance.schedule.regulatory_ai.skip": "Skip questions",
+  "compliance.schedule.regulatory_ai.candidates_heading": "Suggested regulatory bases",
+  "compliance.schedule.regulatory_ai.select_hint": "Review a suggestion, then Accept to fill the field. Nothing is applied until you accept.",
+  "compliance.schedule.regulatory_ai.accept": "Accept",
+  "compliance.schedule.regulatory_ai.discard": "Discard",
+  "compliance.schedule.regulatory_ai.linked": "Linked to Standards",
+  "compliance.schedule.regulatory_ai.remove_link": "Remove link"
 }
