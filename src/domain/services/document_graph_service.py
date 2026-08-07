@@ -126,7 +126,7 @@ class DocumentGraphService:
                 DocumentEdge.deleted_at.is_(None),
             )
         )
-        return result.scalars().first()
+        return result.scalar_one_or_none()
 
     @staticmethod
     def _duplicate_edge_error(

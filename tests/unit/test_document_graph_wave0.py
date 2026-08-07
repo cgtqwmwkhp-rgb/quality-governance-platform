@@ -114,6 +114,8 @@ async def test_create_implements_rejects_cycle():
             pel_doc_ref=None,
         )
     )
+    # No live row in the unique slot — cycle check is what must fire.
+    service._find_live_edge_id = AsyncMock(return_value=None)  # type: ignore[method-assign]
     service.would_create_implements_cycle = AsyncMock(return_value=True)  # type: ignore[method-assign]
 
     with pytest.raises(ConflictError) as exc_info:
@@ -127,6 +129,36 @@ async def test_create_implements_rejects_cycle():
         )
 
     assert exc_info.value.code == "DOCUMENT_GRAPH_IMPLEMENTS_CYCLE"
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_edge_rejects_live_duplicate():
+    """A live (including rejected) row already occupies the unique slot → 409."""
+    db = AsyncMock()
+    service = DocumentGraphService(db)
+    service._get_document_or_404 = AsyncMock(  # type: ignore[method-assign]
+        side_effect=lambda **kwargs: SimpleNamespace(
+            id=kwargs["document_id"],
+            pel_doc_ref=None,
+        )
+    )
+    service._find_live_edge_id = AsyncMock(return_value=99)  # type: ignore[method-assign]
+    service.would_create_implements_cycle = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    with pytest.raises(ConflictError) as exc_info:
+        await service.create_edge(
+            tenant_id=1,
+            src_document_id=10,
+            dst_document_id=20,
+            edge_type=DocumentEdgeType.REFERENCES,
+            actor_id=5,
+            commit=False,
+        )
+
+    assert exc_info.value.code == "DOCUMENT_GRAPH_EDGE_EXISTS"
+    assert exc_info.value.details["edge_id"] == 99
+    service.would_create_implements_cycle.assert_not_called()
     db.add.assert_not_called()
 
 
