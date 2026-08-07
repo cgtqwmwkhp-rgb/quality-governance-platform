@@ -51,7 +51,6 @@ import {
   MicOff,
   Calendar,
   Clock,
-  User,
   Check,
   ChevronRight,
   ChevronLeft,
@@ -72,6 +71,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import { PersonNameField } from '../components/PersonNameField'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -143,6 +143,8 @@ interface ThirdParty {
 
 interface FormData {
   employeeName: string
+  /** UI-only roster link; never sent on portal submit. */
+  employeeEngineerId: number | null
   peVehicle: string
   peVehicleOther: string
   hasPassengers: boolean | null
@@ -201,7 +203,7 @@ export function portalRtaCanProceed(step: Step, formData: FormData): boolean {
 }
 
 export default function PortalRTAForm() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { user } = usePortalAuth()
   const [step, setStep] = useState<Step>(1)
@@ -223,6 +225,7 @@ export default function PortalRTAForm() {
 
   const [formData, setFormData] = useState<FormData>({
     employeeName: '',
+    employeeEngineerId: null,
     peVehicle: '',
     peVehicleOther: '',
     hasPassengers: null,
@@ -512,28 +515,30 @@ Anyone injured in our vehicle: ${
               <p className="text-muted-foreground text-sm">{t('portal.driver_vehicle_info')}</p>
             </div>
 
-            <div>
-              <label
-                htmlFor="portalrtaform-field-0"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('portal.your_name_label')} *
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="portalrtaform-field-0"
-                  data-testid="rta-employee-name"
-                  value={formData.employeeName}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, employeeName: e.target.value }))
-                  }
-                  placeholder={t('portal.full_name_placeholder')}
-                  className="pl-10"
-                  {...portalRequiredProps(true)}
-                />
-              </div>
-            </div>
+            <PersonNameField
+              id="portalrtaform-field-0"
+              testId="rta-employee-name"
+              mode="hybrid"
+              lang={i18n.language}
+              label={t('portal.your_name_label')}
+              placeholder={t('portal.full_name_placeholder')}
+              required
+              value={
+                formData.employeeName
+                  ? {
+                      displayName: formData.employeeName,
+                      engineerId: formData.employeeEngineerId,
+                    }
+                  : null
+              }
+              onChange={(next) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  employeeName: next?.displayName?.trim() ?? '',
+                  employeeEngineerId: next?.engineerId ?? null,
+                }))
+              }
+            />
 
             <FuzzySearchDropdown
               id="portalrtaform-field-pe-vehicle"

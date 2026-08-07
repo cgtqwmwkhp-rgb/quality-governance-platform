@@ -123,6 +123,16 @@ closure does not support what production publicly claims on the strength of it.*
 > him. It needs either a named human signature in its own right, or `_DPIA_STATUS` needs
 > to stop claiming `signed`.
 
+
+> **UPDATE 2026-08-06 — OCR/AI DPIA v2.0 residual risk.** David Harris (DPO / Privacy lead)
+> accepted **HIGH** residual risk for the expanded §2.0a processor set (Anthropic, OpenAI,
+> Voyage AI, Pinecone, plus the previously accepted Mistral / Gemini / Azure DI set), as
+> recorded in `docs/compliance/dpia-ocr-ai-import.md` §8. This closes the *OCR/AI import
+> DPIA v2.0 residual-risk acceptance* gap called out on 2026-07-28. It does **not** by
+> itself resolve the separate challenge above about platform-wide `_DPIA_STATUS` /
+> READY-FOR-SIGNATURE dating, nor does it close §7 organisational follow-ons (vendor DPAs,
+> region establishment, vector-delete reconciliation).
+
 **Blocking score uplift:** D07 WCS 8.6 → 9.5 (partial — EA-01/02/04 still open)
 
 **Deliverable (complete):**

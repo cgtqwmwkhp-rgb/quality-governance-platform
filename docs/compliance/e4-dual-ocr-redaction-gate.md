@@ -60,6 +60,7 @@ GATE STATUS: CLOSED (2026-07-18) — AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD may
 | Role | Name | Date | Decision | Notes |
 | --- | --- | --- | --- | --- |
 | DPO / Privacy lead | **David Harris** | 2026-07-28 | Accept residual risk | Named human acceptance of EA-03, given explicitly on 28/07. **Recorded under today's date, not backdated to 18/07** — see note below. |
+| DPO / Privacy lead | **David Harris** | 2026-08-06 | Accept residual risk — DPIA v2.0 expanded processors | Accepts HIGH residual risk for Anthropic, OpenAI, Voyage AI, Pinecone (and continues v1.0 acceptance). §7 organisational measures remain open follow-ons. |
 | Ops / Platform owner | Recorded via assistant attestation | 2026-07-18 | Confirm redaction / minimisation posture | Dedicated `qgp-docintel` resource provisioned. **Still unsigned — see note below.** |
 | Accountable owner | David Harris (platform owner) | 2026-07-18 | Approve production OCR/AI key enablement | Explicit instruction to enable and push |
 
