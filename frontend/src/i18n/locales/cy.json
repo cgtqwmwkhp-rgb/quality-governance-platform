@@ -2534,6 +2534,7 @@
   "safetyAssets.detail.open_actions_placeholder": "Dim camau gweithredu agored. Nid yw cysylltu camau cywiro ag ased ar gael eto.",
   "safetyAssets.detail.photo": "Tystiolaeth ffoto",
   "safetyAssets.detail.photo_alt": "Ffoto ased",
+  "safetyAssets.detail.photo_preview": "Rhagolwg ffoto ased",
   "safetyAssets.detail.photo_failed": "Methodd uwchlwytho ffoto.",
   "safetyAssets.detail.photo_id": "Tystiolaeth #{{id}}",
   "safetyAssets.detail.photo_no_id": "Llwyddodd yr uwchlwytho ond ni ddychwelwyd ID tystiolaeth.",

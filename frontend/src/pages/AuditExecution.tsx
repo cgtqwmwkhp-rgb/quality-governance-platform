@@ -25,6 +25,14 @@ import {
 } from 'lucide-react'
 import { auditsApi, evidenceAssetsApi, getApiErrorMessage } from '../api/client'
 import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
+import { DocumentPreview } from '../components/DocumentPreview'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/Dialog'
 import EntitySelectAnswer, { type EntitySelectKind } from './audit-builder/EntitySelectAnswer'
 import AssessmentDimensionsPanel, {
   type AssessmentDimensionsValue,
@@ -528,6 +536,7 @@ const PhotoCapture = ({
   uploading?: boolean
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -539,6 +548,8 @@ const PhotoCapture = ({
     reader.readAsDataURL(file)
     e.target.value = ''
   }
+
+  const previewUrl = previewIndex != null ? photos[previewIndex] : null
 
   return (
     <div className="space-y-3">
@@ -573,11 +584,19 @@ const PhotoCapture = ({
         <div className="grid grid-cols-3 gap-2">
           {photos.map((photo, idx) => (
             <div key={`${photo.slice(0, 32)}-${idx}`} className="relative group">
-              <img
-                src={photo}
-                alt={`Evidence ${idx + 1}`}
-                className="w-full h-24 object-cover rounded-lg"
-              />
+              <button
+                type="button"
+                className="block w-full overflow-hidden rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setPreviewIndex(idx)}
+                aria-label={`Preview evidence ${idx + 1}`}
+                data-testid={`audit-photo-preview-${idx}`}
+              >
+                <img
+                  src={photo}
+                  alt={`Evidence ${idx + 1}`}
+                  className="h-24 w-full object-cover"
+                />
+              </button>
               {!readOnly && (
                 <button
                   type="button"
@@ -594,6 +613,33 @@ const PhotoCapture = ({
       ) : readOnly ? (
         <p className="text-sm text-muted-foreground">No photo evidence stored for this question.</p>
       ) : null}
+
+      <Dialog
+        open={previewUrl != null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewIndex(null)
+        }}
+      >
+        {previewUrl ? (
+          <DialogContent className="max-w-4xl" data-testid="audit-photo-preview-dialog">
+            <DialogHeader>
+              <DialogTitle>
+                Evidence {(previewIndex ?? 0) + 1}
+              </DialogTitle>
+              <DialogDescription>image/*</DialogDescription>
+            </DialogHeader>
+            <div className="flex min-h-64 items-center justify-center overflow-hidden rounded-lg bg-muted">
+              <DocumentPreview
+                url={previewUrl}
+                contentType="image/jpeg"
+                fileName={`evidence-${(previewIndex ?? 0) + 1}.jpg`}
+                alt={`Evidence ${(previewIndex ?? 0) + 1}`}
+                className="w-full"
+              />
+            </div>
+          </DialogContent>
+        ) : null}
+      </Dialog>
     </div>
   )
 }
@@ -1018,7 +1064,11 @@ export default function AuditExecution() {
             const urls = await Promise.all(
               ids.map(async (assetId) => {
                 try {
-                  const signed = await evidenceAssetsApi.getSignedUrl(assetId)
+                  const signed = await evidenceAssetsApi.getSignedUrl(
+                    assetId,
+                    undefined,
+                    'inline',
+                  )
                   return signed.data.signed_url
                 } catch {
                   return null

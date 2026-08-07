@@ -48,7 +48,6 @@ import {
   actionsApi,
   evidenceAssetsApi,
   Action,
-  UserSearchResult,
   getApiErrorMessage,
   CreateFromRecordError,
 } from '../api/client'
@@ -58,6 +57,7 @@ import { Badge } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
 import { Input } from '../components/ui/Input'
 import { PersonNameField } from '../components/PersonNameField'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { Switch } from '../components/ui/Switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
@@ -86,7 +86,6 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
-import { UserEmailSearch } from '../components/UserEmailSearch'
 import { getCapaLink } from '../components/investigations/handoffLinks'
 import { CaseCapaActionsPanel } from '../components/case/CaseCapaActionsPanel'
 import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
@@ -483,9 +482,6 @@ export default function RTADetail() {
     }
   }
 
-  const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
-    setActionForm({ ...actionForm, assigned_to: email })
-  }
 
   const ACTION_STATUS_OPTIONS = [
     { value: 'open', label: 'Open', className: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
@@ -1550,7 +1546,23 @@ export default function RTADetail() {
               <label htmlFor="rta-action-title" className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.action_title_required')}</label>
               <Input id="rta-action-title" value={actionForm.title} onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })} placeholder={t('rtas.detail.action_title_placeholder')} required />
             </div>
-            <UserEmailSearch label={t('rtas.detail.assign_to')} value={actionForm.assigned_to} onChange={handleAssigneeChange} placeholder={t('rtas.detail.search_by_email')} required />
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-foreground">
+                {t('rtas.detail.assign_to')}
+              </span>
+              <EngineerPeoplePicker
+                valueLabel={actionForm.assigned_to}
+                requireLogin
+                onChange={(selection) =>
+                  setActionForm({
+                    ...actionForm,
+                    assigned_to: selection?.user?.email || selection?.label || '',
+                  })
+                }
+                placeholder={t('rtas.detail.search_employees', 'Search active employees…')}
+                testId="rta-action-assignee-picker"
+              />
+            </div>
             <div>
               <label htmlFor="rta-action-priority" className="block text-sm font-medium text-foreground mb-1">{t('common.priority')}</label>
               <Select value={actionForm.priority} onValueChange={(v) => setActionForm({ ...actionForm, priority: v })}>
