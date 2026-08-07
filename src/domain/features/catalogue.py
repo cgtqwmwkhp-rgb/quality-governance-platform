@@ -191,6 +191,106 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
             "propose only — never auto-confirm impact-driving edges (ADR-0021)."
         ),
     ),
+    # X-0 programme flags — registered default-off so later slices do not thrash this file.
+    ClientFeature(
+        ui_key="document_graph_thread_ambient",
+        settings_attr="document_graph_thread_ambient_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates ambient Doc Graph thread UI on Document Detail. Default off; API thread "
+            "walk remains behind master document_graph (ADR-0021 X-0)."
+        ),
+    ),
+    ClientFeature(
+        ui_key="document_graph_map_view",
+        settings_attr="document_graph_map_view_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates Doc Graph map visualisation UI. Default off; pre-registered for later "
+            "map-view slices without thrashing the catalogue (ADR-0021)."
+        ),
+    ),
+    ClientFeature(
+        ui_key="document_graph_dnd_propose",
+        settings_attr="document_graph_dnd_propose_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates drag-and-drop Doc Graph edge proposals. Default off; proposals only — "
+            "never auto-confirm impact-driving edges (ADR-0021)."
+        ),
+    ),
+    ClientFeature(
+        ui_key="document_graph_structure_map",
+        settings_attr="document_graph_structure_map_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates Doc Graph structure-map surfaces. Default off; pre-registered for later "
+            "structure-map slices (ADR-0021)."
+        ),
+    ),
+    ClientFeature(
+        ui_key="graph_coach",
+        settings_attr="graph_coach_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates Graph Coach guidance UX. Default off; pre-registered so later coach "
+            "slices do not thrash the client feature catalogue."
+        ),
+    ),
+    ClientFeature(
+        ui_key="entity_360",
+        settings_attr="entity_360_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates Entity 360 composer shell. Default off; pre-registered for later 360 "
+            "slices — not implemented in X-0."
+        ),
+    ),
+    ClientFeature(
+        ui_key="entity_360_satellites",
+        settings_attr="entity_360_satellites_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates Entity 360 satellite panels. Default off; pre-registered so satellite "
+            "slices do not thrash the catalogue."
+        ),
+    ),
+    ClientFeature(
+        ui_key="job_lifecycle",
+        settings_attr="job_lifecycle_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates Job lifecycle surfaces. Default off; pre-registered for later job "
+            "lifecycle slices — not implemented in X-0."
+        ),
+    ),
+    ClientFeature(
+        ui_key="job_cell_links",
+        settings_attr="job_cell_links_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates Job cell-link surfaces. Default off; pre-registered so later cell-link "
+            "slices do not thrash the client feature catalogue."
+        ),
+    ),
 )
 
 #: Lookup by the name the frontend uses.

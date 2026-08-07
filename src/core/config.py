@@ -358,6 +358,17 @@ class Settings(BaseSettings):
     document_graph_heuristic_propose_enabled: bool = False
     document_graph_impact_propagation_enabled: bool = False
     document_graph_llm_propose_enabled: bool = False
+    # X-0 programme flags (default off) — pre-registered so later slices do not
+    # thrash config / catalogue / FE defaults. Master document_graph still gates API.
+    document_graph_thread_ambient_enabled: bool = False
+    document_graph_map_view_enabled: bool = False
+    document_graph_dnd_propose_enabled: bool = False
+    document_graph_structure_map_enabled: bool = False
+    graph_coach_enabled: bool = False
+    entity_360_enabled: bool = False
+    entity_360_satellites_enabled: bool = False
+    job_lifecycle_enabled: bool = False
+    job_cell_links_enabled: bool = False
 
     # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
     library_horizon_provider: str = "stub"
