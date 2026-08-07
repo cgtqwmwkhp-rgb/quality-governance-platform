@@ -260,6 +260,39 @@ export function findConflictingEdge(
   )
 }
 
+export type DocumentRelationshipAmbientCounts = {
+  inbound: number
+  outbound: number
+  peers: number
+}
+
+/**
+ * Ambient chips / VersionControlBar counts must not survive a listEdges failure.
+ * Passing null (or hiding chips) avoids misleading zeros after an error — and
+ * after a successful clear-before-fetch, zeros are honest only while loading
+ * the *current* document, never another document's leftover edges.
+ */
+export function resolveDocumentRelationshipAmbientCounts(
+  documentGraphEnabled: boolean,
+  edgesError: string | null | undefined,
+  summary: Pick<DocumentRelationshipSummary, 'inbound' | 'outbound' | 'peers'>,
+): DocumentRelationshipAmbientCounts | null {
+  if (!documentGraphEnabled || edgesError) return null
+  return {
+    inbound: summary.inbound,
+    outbound: summary.outbound,
+    peers: summary.peers,
+  }
+}
+
+/** Header chips follow the same honesty rule as ambient bar counts. */
+export function shouldShowDocumentRelationshipChips(
+  documentGraphEnabled: boolean,
+  edgesError: string | null | undefined,
+): boolean {
+  return Boolean(documentGraphEnabled) && !edgesError
+}
+
 /** Counterpart ids the tab still needs a title for, deduped and self excluded. */
 export function counterpartDocumentIds(documentId: number, edges: DocumentEdge[]): number[] {
   const ids = new Set<number>()

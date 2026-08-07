@@ -8,6 +8,8 @@ import {
   isActiveDocumentEdge,
   isPendingDocumentEdge,
   resolveDocumentEdge,
+  resolveDocumentRelationshipAmbientCounts,
+  shouldShowDocumentRelationshipChips,
   summariseDocumentRelationships,
 } from '../documentRelationshipHelpers'
 
@@ -281,5 +283,36 @@ describe('counterpartDocumentIds', () => {
       edge({ id: 3, src_document_id: 30, dst_document_id: 10 }),
     ])
     expect(ids).toEqual([20, 30])
+  })
+})
+
+describe('resolveDocumentRelationshipAmbientCounts', () => {
+  const summary = { inbound: 2, outbound: 1, peers: 3 }
+
+  it('returns ambient counts when the Doc Graph flag is on and listEdges succeeded', () => {
+    expect(resolveDocumentRelationshipAmbientCounts(true, null, summary)).toEqual(summary)
+  })
+
+  it('hides ambient counts when listEdges failed (even if summary still has zeros)', () => {
+    expect(
+      resolveDocumentRelationshipAmbientCounts(true, 'Failed to load relationships', {
+        inbound: 0,
+        outbound: 0,
+        peers: 0,
+      }),
+    ).toBeNull()
+  })
+
+  it('stays hidden when the Doc Graph flag is closed', () => {
+    expect(resolveDocumentRelationshipAmbientCounts(false, null, summary)).toBeNull()
+  })
+})
+
+describe('shouldShowDocumentRelationshipChips', () => {
+  it('shows header chips only while the flag is on and there is no listEdges error', () => {
+    expect(shouldShowDocumentRelationshipChips(true, null)).toBe(true)
+    expect(shouldShowDocumentRelationshipChips(true, undefined)).toBe(true)
+    expect(shouldShowDocumentRelationshipChips(true, 'boom')).toBe(false)
+    expect(shouldShowDocumentRelationshipChips(false, null)).toBe(false)
   })
 })

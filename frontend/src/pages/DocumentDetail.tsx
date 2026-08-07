@@ -42,7 +42,11 @@ import {
   resolveDocumentDetailTab,
   shouldScrollToProposedEvidence,
 } from './documentEvidenceTab'
-import { summariseDocumentRelationships } from './documentRelationshipHelpers'
+import {
+  resolveDocumentRelationshipAmbientCounts,
+  shouldShowDocumentRelationshipChips,
+  summariseDocumentRelationships,
+} from './documentRelationshipHelpers'
 import { DocumentRelationshipChips } from './DocumentRelationshipChips'
 import { DocumentRelationshipsPanel } from './DocumentRelationshipsPanel'
 import {
@@ -312,8 +316,10 @@ export default function DocumentDetail() {
       return
     }
     if (!documentId || Number.isNaN(documentId)) return
-    setEdgesLoading(true)
+    // Drop prior document's edges before fetch so chips/counts never flash stale rows.
+    setEdges([])
     setEdgesError(null)
+    setEdgesLoading(true)
     try {
       const response = await documentGraphApi.listEdges(documentId)
       setEdges(response.data.items)
@@ -714,7 +720,7 @@ export default function DocumentDetail() {
             {document.document_type}
             {document.category ? ` · ${document.category}` : ''} · v{document.version}
           </p>
-          {documentGraphEnabled ? (
+          {shouldShowDocumentRelationshipChips(documentGraphEnabled, edgesError) ? (
             <DocumentRelationshipChips
               documentId={document.id}
               summary={relationshipSummary}
@@ -1108,15 +1114,11 @@ export default function DocumentDetail() {
             publishing={publishing}
             onRevise={handleReviseVersion}
             onPublish={handlePublishVersion}
-            relationshipCounts={
-              documentGraphEnabled
-                ? {
-                    inbound: relationshipSummary.inbound,
-                    outbound: relationshipSummary.outbound,
-                    peers: relationshipSummary.peers,
-                  }
-                : null
-            }
+            relationshipCounts={resolveDocumentRelationshipAmbientCounts(
+              documentGraphEnabled,
+              edgesError,
+              relationshipSummary,
+            )}
           />
           <div className="flex justify-end">
             <Button variant="outline" size="sm" asChild>
