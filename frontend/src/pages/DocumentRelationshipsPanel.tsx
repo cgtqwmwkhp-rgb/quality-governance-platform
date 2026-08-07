@@ -111,13 +111,16 @@ export function DocumentRelationshipsPanel({
     () => summariseDocumentRelationships(documentId, edges),
     [documentId, edges],
   )
-  const coverageHonesty = useMemo(
-    () =>
-      buildDocumentRelationshipCoverageHonesty(
-        measureRelationshipRoleCoverage(documentId, documentType, edges),
-      ),
-    [documentId, documentType, edges],
-  )
+  const coverageHonesty = useMemo(() => {
+    // After a listEdges failure (or while loading), edges may be empty — that is
+    // not evidence the spine is unrecorded. Stay quiet and let the error banner speak.
+    if (loading || error) {
+      return buildDocumentRelationshipCoverageHonesty(null)
+    }
+    return buildDocumentRelationshipCoverageHonesty(
+      measureRelationshipRoleCoverage(documentId, documentType, edges),
+    )
+  }, [documentId, documentType, edges, loading, error])
 
   const pending = useMemo(
     () => resolved.filter((item) => isPendingDocumentEdge(item.edge)),

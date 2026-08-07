@@ -165,6 +165,60 @@ async def test_im_seed_skips_doc_create_when_disabled():
 
 
 @pytest.mark.asyncio
+async def test_ensure_confirmed_edge_upgrades_proposed_live_row():
+    db = AsyncMock()
+    service = DocumentGraphImSeedService(db)
+    graph = service.graph
+    graph._find_live_edge_id = AsyncMock(return_value=55)  # type: ignore[method-assign]
+    graph._get_edge_or_404 = AsyncMock(  # type: ignore[method-assign]
+        return_value=SimpleNamespace(id=55, status=DocumentEdgeStatus.PROPOSED)
+    )
+    graph.confirm = AsyncMock(return_value=SimpleNamespace(id=55))  # type: ignore[method-assign]
+    graph.create_edge = AsyncMock()  # type: ignore[method-assign]
+
+    edge_id, created = await service._ensure_confirmed_edge(
+        tenant_id=1,
+        actor_id=9,
+        src_document_id=10,
+        dst_document_id=20,
+        edge_type=DocumentEdgeType.IMPLEMENTS,
+        is_primary_parent=True,
+    )
+
+    assert edge_id == 55
+    assert created is True
+    graph.confirm.assert_awaited_once()
+    graph.create_edge.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ensure_confirmed_edge_replaces_rejected_live_row():
+    db = AsyncMock()
+    service = DocumentGraphImSeedService(db)
+    graph = service.graph
+    graph._find_live_edge_id = AsyncMock(return_value=77)  # type: ignore[method-assign]
+    graph._get_edge_or_404 = AsyncMock(  # type: ignore[method-assign]
+        return_value=SimpleNamespace(id=77, status=DocumentEdgeStatus.REJECTED)
+    )
+    graph.soft_delete = AsyncMock()  # type: ignore[method-assign]
+    graph.create_edge = AsyncMock(return_value=SimpleNamespace(id=88))  # type: ignore[method-assign]
+
+    edge_id, created = await service._ensure_confirmed_edge(
+        tenant_id=1,
+        actor_id=9,
+        src_document_id=10,
+        dst_document_id=20,
+        edge_type=DocumentEdgeType.RELATED_TO,
+        is_primary_parent=False,
+    )
+
+    assert edge_id == 88
+    assert created is True
+    graph.soft_delete.assert_awaited_once()
+    graph.create_edge.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_seed_route_dependency_404_when_flag_off(monkeypatch):
     monkeypatch.setattr(settings, "document_graph_enabled", False)
     with pytest.raises(HTTPException) as exc_info:

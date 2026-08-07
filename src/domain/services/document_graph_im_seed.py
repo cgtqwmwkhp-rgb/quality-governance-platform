@@ -297,7 +297,28 @@ class DocumentGraphImSeedService:
             edge_type=edge_type,
         )
         if existing_id is not None:
-            return existing_id, False
+            existing = await self.graph._get_edge_or_404(  # noqa: SLF001 — seed shares tenant slot
+                tenant_id=tenant_id,
+                edge_id=existing_id,
+            )
+            if existing.status == DocumentEdgeStatus.CONFIRMED:
+                return existing_id, False
+            if existing.status == DocumentEdgeStatus.REJECTED:
+                # Rejected rows still hold the unique slot — free it, then create.
+                await self.graph.soft_delete(
+                    tenant_id=tenant_id,
+                    edge_id=existing_id,
+                    commit=False,
+                )
+            else:
+                # proposed / needs_review → confirm so the demo spine is actually confirmed.
+                confirmed = await self.graph.confirm(
+                    tenant_id=tenant_id,
+                    edge_id=existing_id,
+                    actor_id=actor_id or 0,
+                    commit=False,
+                )
+                return confirmed.id, True
 
         edge = await self.graph.create_edge(
             tenant_id=tenant_id,

@@ -356,13 +356,15 @@ export default function DocumentDetail() {
   )
 
   const relationshipCoverageHonesty = useMemo(() => {
-    if (!documentGraphEnabled || !document) {
+    // While edges are clearing/fetching, or after a listEdges failure, do not
+    // invent a sparse spine gap from a temporarily empty array.
+    if (!documentGraphEnabled || !document || edgesLoading || edgesError) {
       return buildDocumentRelationshipCoverageHonesty(null)
     }
     return buildDocumentRelationshipCoverageHonesty(
       measureRelationshipRoleCoverage(documentId, document.document_type, edges),
     )
-  }, [documentGraphEnabled, document, documentId, edges])
+  }, [documentGraphEnabled, document, documentId, edges, edgesLoading, edgesError])
 
   const confirmedEvidenceCount = useMemo(
     () => evidence.filter((link) => link.status === 'confirmed').length,

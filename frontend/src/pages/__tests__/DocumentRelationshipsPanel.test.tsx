@@ -188,6 +188,38 @@ describe('DocumentRelationshipsPanel', () => {
     expect(screen.queryByTestId('relationships-coverage-honesty')).not.toBeInTheDocument()
   })
 
+  it('does not invent a spine gap while edges are loading or after a load error', () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <DocumentRelationshipsPanel
+          documentId={10}
+          documentTitle="Incident Management Policy"
+          documentType="policy"
+          edges={[]}
+          loading
+          error={null}
+          onChanged={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByTestId('relationships-coverage-honesty')).not.toBeInTheDocument()
+
+    rerender(
+      <MemoryRouter>
+        <DocumentRelationshipsPanel
+          documentId={10}
+          documentTitle="Incident Management Policy"
+          documentType="policy"
+          edges={[]}
+          loading={false}
+          error="Failed to load relationships"
+          onChanged={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByTestId('relationships-coverage-honesty')).not.toBeInTheDocument()
+  })
+
   it('confirms a proposed edge and refreshes', async () => {
     graph.confirmEdge.mockResolvedValue({ data: edge({ id: 1, status: 'confirmed' }) })
     const { onChanged } = renderPanel([edge({ id: 1, status: 'proposed' })])
