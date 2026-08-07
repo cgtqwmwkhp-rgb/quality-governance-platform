@@ -1,8 +1,9 @@
-"""Doc Graph domain service (ADR-0021 Wave 0 + X-0 thread contract).
+"""Doc Graph domain service (ADR-0021 Wave 0 + X-0 / X-0b).
 
 create / list / confirm / reject / soft_delete / primary-implements thread walk,
-plus cycle detection on ``implements``, AuditLog on graph mutations, and
-confirmed-only ambient thread (opt-in proposed via ``include_proposed``).
+plus cycle detection on ``implements``, one-primary-parent enforcement (service
+guard + ``ux_document_edges_one_primary_parent``), AuditLog on graph mutations,
+and confirmed-only ambient thread (opt-in proposed via ``include_proposed``).
 """
 
 from __future__ import annotations
@@ -210,7 +211,14 @@ class DocumentGraphService:
         child_document_id: int,
         exclude_edge_id: Optional[int] = None,
     ) -> Optional[int]:
-        """Live primary ``implements`` parent for this child, if any (excluding one edge)."""
+        """Live primary ``implements`` parent for this child, if any (excluding one edge).
+
+        Status is deliberately not filtered: ``ux_document_edges_one_primary_parent``
+        is partial on ``is_primary_parent AND edge_type='implements' AND deleted_at
+        IS NULL`` only. A rejected primary that still carries the flag would occupy
+        the unique slot; matching that predicate here refuses before IntegrityError.
+        ``reject`` clears ``is_primary_parent`` so the slot frees intentionally.
+        """
         query = (
             select(DocumentEdge.id)
             .where(
@@ -219,7 +227,6 @@ class DocumentGraphService:
                 DocumentEdge.edge_type == DocumentEdgeType.IMPLEMENTS,
                 DocumentEdge.is_primary_parent.is_(True),
                 DocumentEdge.deleted_at.is_(None),
-                DocumentEdge.status.in_(_ACTIVE_STATUSES),
             )
             .order_by(DocumentEdge.id.asc())
             .limit(1)
@@ -518,9 +525,10 @@ class DocumentGraphService:
             else:
                 await self.db.flush()
         except IntegrityError as exc:
-            # The pre-check above closes the ordinary case; a concurrent writer can
-            # still win the race. Roll back, then only claim a duplicate if one is
-            # actually there — other constraint violations must not be mislabelled.
+            # The pre-checks above close the ordinary case; a concurrent writer can
+            # still win either unique slot. Roll back, then only claim a conflict if
+            # one is actually there — other constraint violations must not be
+            # mislabelled.
             await self.db.rollback()
             duplicate_id = await self._find_live_edge_id(
                 tenant_id=tenant_id,
@@ -528,14 +536,28 @@ class DocumentGraphService:
                 dst_document_id=dst_document_id,
                 edge_type=edge_type_enum,
             )
-            if duplicate_id is None:
-                raise
-            raise self._duplicate_edge_error(
-                edge_id=duplicate_id,
-                src_document_id=src_document_id,
-                dst_document_id=dst_document_id,
-                edge_type=edge_type_enum,
-            ) from exc
+            if duplicate_id is not None:
+                raise self._duplicate_edge_error(
+                    edge_id=duplicate_id,
+                    src_document_id=src_document_id,
+                    dst_document_id=dst_document_id,
+                    edge_type=edge_type_enum,
+                ) from exc
+            if is_primary_parent and edge_type_enum == DocumentEdgeType.IMPLEMENTS:
+                existing_primary_id = await self._find_other_primary_parent_edge_id(
+                    tenant_id=tenant_id,
+                    child_document_id=src_document_id,
+                )
+                if existing_primary_id is not None:
+                    raise ConflictError(
+                        "Document already has a primary implements parent",
+                        code="DOCUMENT_GRAPH_SECOND_PRIMARY_PARENT",
+                        details={
+                            "child_document_id": src_document_id,
+                            "existing_edge_id": existing_primary_id,
+                        },
+                    ) from exc
+            raise
         return edge
 
     async def list_edges(
@@ -634,6 +656,10 @@ class DocumentGraphService:
         # Reject clears confirmation provenance; actor is attributed via AuditLog.
         edge.confirmed_by_id = None
         edge.confirmed_at = None
+        # Free the one-primary unique slot so a replacement primary can be created
+        # without soft-deleting this rejected implements edge.
+        if edge.is_primary_parent:
+            edge.is_primary_parent = False
         await self._audit_edge_mutation(
             tenant_id=tenant_id,
             edge=edge,
