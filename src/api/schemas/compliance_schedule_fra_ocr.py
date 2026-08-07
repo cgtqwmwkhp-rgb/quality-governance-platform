@@ -59,6 +59,7 @@ class FraOcrAppliedSummary(BaseModel):
     next_due_date_after: date
     actions_recorded: int
     actions_created: int = 0  # >0 only when COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED
+    risks_created: int = 0  # >0 only when COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED + operator scores
     changed_fields: List[str]
     warnings: List[str] = Field(default_factory=list)
 
@@ -126,6 +127,26 @@ class FraOcrConfirmedAction(BaseModel):
         return sanitize_field(v)
 
 
+class FraOcrRiskProposal(BaseModel):
+    """Operator-entered risk proposal at confirm time.
+
+    Likelihood and impact are required when this object is present — OCR never
+    invents scores. Absent ``risk`` on the confirm body means no risk row.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    inherent_likelihood: int = Field(..., ge=1, le=5)
+    inherent_impact: int = Field(..., ge=1, le=5)
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=4000)
+
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+
 class FraOcrDraftConfirmRequest(BaseModel):
     """The human gate. Nothing on the requirement moves without this body.
 
@@ -140,6 +161,7 @@ class FraOcrDraftConfirmRequest(BaseModel):
     acknowledged_warnings: bool = False
     actions: List[FraOcrConfirmedAction] = Field(default_factory=list, max_length=200)
     note: Optional[str] = Field(default=None, max_length=1000)
+    risk: Optional[FraOcrRiskProposal] = None
 
     @field_validator("note", mode="before")
     @classmethod

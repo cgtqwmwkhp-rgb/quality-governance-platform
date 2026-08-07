@@ -46,8 +46,16 @@ export interface FraOcrAppliedSummary {
   next_due_date_after: string
   actions_recorded: number
   actions_created: number
+  risks_created: number
   changed_fields: string[]
   warnings: string[]
+}
+
+export interface FraOcrRiskProposalPayload {
+  inherent_likelihood: number
+  inherent_impact: number
+  title?: string | null
+  description?: string | null
 }
 
 export interface FraOcrDraftResponse {
@@ -97,6 +105,7 @@ export interface FraOcrDraftConfirmPayload {
   acknowledged_warnings?: boolean
   actions?: FraOcrConfirmedActionPayload[]
   note?: string | null
+  risk?: FraOcrRiskProposalPayload | null
 }
 
 export interface FraOcrConfirmResponse {

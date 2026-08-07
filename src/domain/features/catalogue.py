@@ -109,6 +109,18 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         ),
     ),
     ClientFeature(
+        ui_key="compliance_schedule_fra_ocr_risk",
+        settings_attr="compliance_schedule_fra_ocr_risk_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="compliance_schedule:update",
+        reason=(
+            "Gates the optional risk proposal block on the FRA OCR confirm sheet. "
+            "Server refuses to create a risk without operator-entered likelihood/impact "
+            "even when this is on; OCR ratings alone never open a risk row."
+        ),
+    ),
+    ClientFeature(
         ui_key="compliance_schedule_regulatory_ai",
         settings_attr="compliance_schedule_regulatory_ai_enabled",
         kill_switch_key="compliance_schedule_kill_switch",

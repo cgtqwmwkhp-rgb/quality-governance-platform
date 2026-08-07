@@ -714,6 +714,7 @@ async def confirm_fra_ocr_draft(
         next_due_date=data.next_due_date,
         actions=[a.model_dump(mode="json") for a in data.actions],
         note=data.note,
+        risk=data.risk.model_dump(mode="json") if data.risk is not None else None,
         acknowledged_warnings=data.acknowledged_warnings,
     )
     applied_summary = dict(applied)

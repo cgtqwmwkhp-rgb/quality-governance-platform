@@ -2,8 +2,10 @@
 
 Confirm writes ``ComplianceRequirement.next_due_date`` after a human gate.
 Checked priority actions are recorded on the draft; CAPAs are created only when
-``COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED`` is on. Library filing is a
-separate step after confirm (ADR-0020 permission reasoning).
+``COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED`` is on. An optional risk proposal
+with operator-entered likelihood/impact creates one Enterprise Risk only when
+``COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED`` is on — never from OCR scores alone.
+Library filing is a separate step after confirm (ADR-0020 permission reasoning).
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from src.domain.models.compliance_schedule import (
 )
 from src.domain.models.document import Document, FileType, IndexJob
 from src.domain.models.enums import DocumentStatus, DocumentType
+from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_auto_service import CAPAAutoService
@@ -47,6 +50,7 @@ from src.domain.services.document_version_service import document_version_servic
 from src.domain.services.fra_pas79_ocr_service import FRA_OCR_PURPOSE, FRA_TAXONOMY_ID, FraPas79OcrService
 from src.domain.services.index_job_service import maybe_create_filing_index_job
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.risk_service import RiskService
 from src.infrastructure.storage import StorageError, storage_service
 
 logger = logging.getLogger(__name__)
@@ -388,6 +392,7 @@ class ComplianceScheduleFraOcrService:
         next_due_date: date,
         actions: list[dict[str, Any]] | None = None,
         note: str | None = None,
+        risk: dict[str, Any] | None = None,
         acknowledged_warnings: bool = False,
         now: datetime | None = None,
     ) -> tuple[ComplianceScheduleOcrDraft, ComplianceRequirement, dict[str, Any]]:
@@ -445,12 +450,28 @@ class ComplianceScheduleFraOcrService:
                 if getattr(capa, "reference_number", None)
             ]
 
+        risks_created = 0
+        risk_ref: str | None = None
+        risk_payload = dict(risk) if isinstance(risk, dict) else None
+        if settings.compliance_schedule_fra_ocr_risk_enabled and risk_payload:
+            risk_row = await self._create_risk_from_confirm(
+                draft=draft,
+                requirement=requirement,
+                risk=risk_payload,
+                user_id=user_id,
+                tenant_id=tenant_id,
+            )
+            if risk_row is not None:
+                risks_created = 1
+                risk_ref = str(getattr(risk_row, "reference", "") or "") or None
+
         summary = {
             "requirement_id": requirement.id,
             "next_due_date_before": before.isoformat(),
             "next_due_date_after": due.isoformat(),
             "actions_recorded": len(actions_list),
             "actions_created": actions_created,
+            "risks_created": risks_created,
             "changed_fields": changed_fields,
             "warnings": applied_warnings,
         }
@@ -463,6 +484,7 @@ class ComplianceScheduleFraOcrService:
             "acknowledged_warnings": acknowledged_warnings,
             "actions": actions_list,
             "note": note,
+            "risk": risk_payload,
         }
         draft.applied_json = summary
         draft.updated_by_id = user_id
@@ -501,6 +523,8 @@ class ComplianceScheduleFraOcrService:
                 "actions_recorded": len(actions_list),
                 "actions_created": actions_created,
                 "capa_reference_numbers": capa_refs,
+                "risks_created": risks_created,
+                "risk_reference": risk_ref,
                 "extraction_method": draft.extraction_method,
                 "source_checksum_sha256": draft.source_checksum_sha256,
             },
@@ -516,15 +540,89 @@ class ComplianceScheduleFraOcrService:
 
         logger.info(
             "fra_ocr draft confirmed draft_id=%s requirement_id=%s tenant_id=%s "
-            "actions_recorded=%s actions_created=%s changed_fields=%s",
+            "actions_recorded=%s actions_created=%s risks_created=%s changed_fields=%s",
             draft.id,
             requirement.id,
             tenant_id,
             len(actions_list),
             actions_created,
+            risks_created,
             changed_fields,
         )
         return draft, requirement, summary
+
+    async def _create_risk_from_confirm(
+        self,
+        *,
+        draft: ComplianceScheduleOcrDraft,
+        requirement: ComplianceRequirement,
+        risk: dict[str, Any],
+        user_id: int,
+        tenant_id: int,
+    ) -> EnterpriseRisk | None:
+        """Create one Enterprise Risk from operator-entered likelihood/impact.
+
+        Returns an existing row when a risk with ``source=fra_ocr_draft:{id}``
+        already exists (idempotent). Does not invent scores from OCR proposed
+        fields — both scores must be present in ``risk``.
+        """
+        try:
+            likelihood = int(risk["inherent_likelihood"])
+            impact = int(risk["inherent_impact"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValidationError(
+                "risk.inherent_likelihood and risk.inherent_impact are required (1-5)",
+                code="VALIDATION_ERROR",
+            ) from exc
+        if likelihood < 1 or likelihood > 5 or impact < 1 or impact > 5:
+            raise ValidationError(
+                "risk likelihood and impact must be integers from 1 to 5",
+                code="VALIDATION_ERROR",
+            )
+
+        source_key = f"fra_ocr_draft:{int(draft.id)}"
+        existing = (
+            await self.db.execute(
+                select(EnterpriseRisk).where(
+                    EnterpriseRisk.tenant_id == tenant_id,
+                    EnterpriseRisk.source == source_key,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        title = str(risk.get("title") or "").strip()
+        if not title:
+            title = f"FRA residual risk — {requirement.reference_number}"
+        description = str(risk.get("description") or "").strip()
+        if not description:
+            description = (
+                f"Risk proposed on confirm of FRA OCR draft {draft.id} for "
+                f"{requirement.reference_number} ({requirement.title}). "
+                "Likelihood and impact were entered by the operator."
+            )
+
+        service = RiskService(self.db)
+        return await service.create_risk(
+            {
+                "tenant_id": tenant_id,
+                "title": title[:255],
+                "description": description[:4000],
+                "category": "health_safety",
+                "source": source_key,
+                "context": f"compliance_requirement:{requirement.id}",
+                "inherent_likelihood": likelihood,
+                "inherent_impact": impact,
+                "residual_likelihood": likelihood,
+                "residual_impact": impact,
+                "risk_owner_id": requirement.owner_id,
+                "status": "active",
+                "treatment_strategy": "treat",
+            },
+            created_by=user_id,
+            commit=False,
+        )
 
     async def discard_draft(
         self,

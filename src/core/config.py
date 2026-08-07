@@ -340,6 +340,10 @@ class Settings(BaseSettings):
     # Confirm→CAPA for checked FRA OCR priority actions. Default off; persist via
     # deploy vars like COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED.
     compliance_schedule_fra_ocr_actions_enabled: bool = False
+    # Confirm→Risk proposal requires operator-entered likelihood/impact.
+    # Default off; persist via COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED.
+    # Never invents scores from OCR alone.
+    compliance_schedule_fra_ocr_risk_enabled: bool = False
     # When true, File-to-Library (occurrence + FRA OCR draft filing) creates an
     # IndexJob so filed drafts get chunks / Library search. Default off — Pinecone
     # spend and OCR load; flip via vars like COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED.
