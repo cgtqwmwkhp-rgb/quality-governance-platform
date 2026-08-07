@@ -16,6 +16,7 @@ import {
   Brain,
 } from 'lucide-react'
 import api, {
+  documentCampaignApi,
   documentGraphApi,
   getApiErrorMessage,
   knowledgeBankApi,
@@ -34,6 +35,13 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/Dialog'
 import { DocumentVersionControlBar } from '../components/DocumentVersionControlBar'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { cn } from '../helpers/utils'
@@ -47,6 +55,8 @@ import {
   shouldShowDocumentRelationshipChips,
   summariseDocumentRelationships,
 } from './documentRelationshipHelpers'
+import { buildPublishImpactPreview, type PublishImpactPreview } from './documentPublishImpactHelpers'
+import { DocumentPublishImpactPreview } from './DocumentPublishImpactPreview'
 import { DocumentRelationshipChips } from './DocumentRelationshipChips'
 import { DocumentRelationshipsPanel } from './DocumentRelationshipsPanel'
 import {
@@ -202,6 +212,10 @@ export default function DocumentDetail() {
   const [versionsError, setVersionsError] = useState<string | null>(null)
   const [revising, setRevising] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [publishPreviewOpen, setPublishPreviewOpen] = useState(false)
+  const [publishPreviewLoading, setPublishPreviewLoading] = useState(false)
+  const [publishPreviewError, setPublishPreviewError] = useState<string | null>(null)
+  const [publishPreview, setPublishPreview] = useState<PublishImpactPreview | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
   const [savingTitle, setSavingTitle] = useState(false)
   const [showInlinePreview, setShowInlinePreview] = useState(false)
@@ -413,18 +427,81 @@ export default function DocumentDetail() {
     }
   }
 
-  const handlePublishVersion = async () => {
+  const executePublishVersion = async () => {
     if (!documentId) return
     setPublishing(true)
     try {
       await api.post(`/api/v1/documents/${documentId}/publish`)
       toast.success('Version published')
+      setPublishPreviewOpen(false)
+      setPublishPreview(null)
       await loadVersions()
       await loadDocument()
     } catch (err) {
       reportFailure(err)
     } finally {
       setPublishing(false)
+    }
+  }
+
+  const handlePublishVersion = async () => {
+    if (!documentId) return
+    // Flag-off: publish immediately (prior behaviour). Flag-on: show the
+    // read-only impact checklist first so operators see rematch / dependents /
+    // campaigns before they commit.
+    if (!documentGraphEnabled) {
+      await executePublishVersion()
+      return
+    }
+
+    setPublishPreviewOpen(true)
+    setPublishPreviewLoading(true)
+    setPublishPreviewError(null)
+    setPublishPreview(null)
+    try {
+      const [threadResult, campaignsResult] = await Promise.allSettled([
+        documentGraphApi.getThread(documentId),
+        documentCampaignApi.listCompliance(),
+      ])
+
+      const thread =
+        threadResult.status === 'fulfilled' ? threadResult.value.data : null
+      const campaigns =
+        campaignsResult.status === 'fulfilled' ? campaignsResult.value.data.items : []
+      const quizCount = quizDraft ? 1 : 0
+
+      const failures = [threadResult, campaignsResult]
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map((r) => getApiErrorMessage(r.reason))
+      if (failures.length > 0) {
+        setPublishPreviewError(failures[0])
+      }
+
+      setPublishPreview(
+        buildPublishImpactPreview({
+          documentId,
+          edges,
+          thread,
+          evidence,
+          campaigns,
+          impacts,
+          quizCount,
+        }),
+      )
+    } catch (err) {
+      setPublishPreviewError(getApiErrorMessage(err))
+      setPublishPreview(
+        buildPublishImpactPreview({
+          documentId,
+          edges,
+          thread: null,
+          evidence,
+          campaigns: [],
+          impacts,
+        }),
+      )
+    } finally {
+      setPublishPreviewLoading(false)
     }
   }
 
@@ -1403,6 +1480,41 @@ export default function DocumentDetail() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={publishPreviewOpen}
+        onOpenChange={(open) => {
+          if (publishing) return
+          setPublishPreviewOpen(open)
+          if (!open) {
+            setPublishPreview(null)
+            setPublishPreviewError(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Publish impact preview</DialogTitle>
+            <DialogDescription>
+              Confirm side effects before publishing this library document version.
+            </DialogDescription>
+          </DialogHeader>
+          <DocumentPublishImpactPreview
+            documentTitle={document?.title || `Document #${documentId}`}
+            preview={publishPreview}
+            loading={publishPreviewLoading}
+            error={publishPreviewError}
+            publishing={publishing}
+            onCancel={() => {
+              if (publishing) return
+              setPublishPreviewOpen(false)
+              setPublishPreview(null)
+              setPublishPreviewError(null)
+            }}
+            onConfirm={() => void executePublishVersion()}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
