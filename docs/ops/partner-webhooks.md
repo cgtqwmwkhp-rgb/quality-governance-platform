@@ -31,8 +31,11 @@ GET /api/v1/partner-webhooks/events
 
 - Tokens use prefix `qgp_pt_`; only SHA-256 hash is stored.
 - Plaintext secret returned **once** on create.
-- Scopes: `webhooks:manage`, `inspections:read`.
+- Scopes: `webhooks:manage`, `inspections:read`, `documents:read`, `search:read`, `policies:read`.
 - Revoke is idempotent (`is_active=false`, `revoked_at` set).
+- Inbound partner bearer auth is fail-closed: a route accepts `qgp_pt_` tokens only
+  if it opts in by declaring the scope it requires, and `search:read` reaches the
+  document modules of global search only (see `docs/api/partner-openapi.md`).
 
 See `docs/api/partner-openapi.md` for example payloads.
 
@@ -100,5 +103,5 @@ Migrations (in order):
 ## Future (R6+)
 
 - Wire event emitters from inspection/finding/CAPA domain services
-- Partner bearer auth middleware for inbound partner API routes
+- Wire `policies:read` onto policy-register read routes (allowlisted today, reaches nothing)
 - Dead-letter queue integration for exhausted retries

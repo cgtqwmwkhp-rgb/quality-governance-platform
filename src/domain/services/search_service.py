@@ -38,6 +38,28 @@ PERM_COMPLIANCE_SCHEDULE_READ = "compliance_schedule:read"
 
 COMPLIANCE_SCHEDULE_MODULE = "Compliance Schedule"
 
+#: Module labels, named once so the gate in :meth:`SearchService.search` and the
+#: results the helpers emit cannot disagree by a typo.
+INCIDENTS_MODULE = "Incidents"
+NEAR_MISSES_MODULE = "Near Misses"
+RTAS_MODULE = "RTAs"
+COMPLAINTS_MODULE = "Complaints"
+RISKS_MODULE = "Risks"
+AUDITS_MODULE = "Audits"
+ACTIONS_MODULE = "Actions"
+DOCUMENTS_MODULE = "Documents"
+DOCUMENT_CONTENT_MODULE = "Document Content"
+
+#: What a partner API token may reach through global search.
+#:
+#: Every other module above is scoped by tenant but gated by no permission, so a
+#: permissionless caller sees the tenant's whole register. That is the platform's
+#: existing posture for a *session* user and is not changed here; it is not a
+#: posture to extend to a long-lived bearer token held in a third-party system.
+#: An allowlist rather than a denylist so a module added later is out until
+#: someone decides otherwise.
+PARTNER_VISIBLE_MODULES: frozenset[str] = frozenset({DOCUMENTS_MODULE, DOCUMENT_CONTENT_MODULE})
+
 
 class SearchResultItem:
     """Lightweight container for a search result."""
@@ -118,26 +140,49 @@ class SearchService:
         page: int = 1,
         page_size: int = 20,
         request_id: str | None = None,
+        allowed_modules: frozenset[str] | None = None,
     ) -> dict[str, Any]:
         """Execute a cross-module search.
 
         Returns dict with results, total, query, and facets.
+
+        ``allowed_modules`` restricts which modules are searched at all.
+        ``None`` — the default, and what every session caller passes — searches
+        all of them, so this is inert for them. A restricted caller's excluded
+        modules are never queried rather than filtered afterwards: a row that is
+        not read cannot reach a response through a later mistake, and the
+        embedding and FTS work for it is not paid for either. Distinct from
+        ``module``, which is the caller's own facet choice within what they may
+        reach.
         """
         track_metric("search.query", 1, {"module": module or "all"})
         track_metric("search.executed", 1)
 
+        def _may_search(module_label: str) -> bool:
+            return allowed_modules is None or module_label in allowed_modules
+
         all_results: list[SearchResultItem] = []
 
-        all_results.extend(await self._search_incidents(query, tenant_id, request_id))
-        all_results.extend(await self._search_near_misses(query, tenant_id, request_id))
-        all_results.extend(await self._search_rtas(query, tenant_id, request_id))
-        all_results.extend(await self._search_complaints(query, tenant_id, request_id))
-        all_results.extend(await self._search_risks(query, tenant_id, request_id))
-        all_results.extend(await self._search_audits(query, tenant_id, request_id))
-        all_results.extend(await self._search_actions(query, tenant_id, request_id))
-        all_results.extend(await self._search_documents(query, tenant_id, request_id, user=user))
-        all_results.extend(await self._search_document_content(query, user, request_id))
-        all_results.extend(await self._search_compliance_requirements(query, tenant_id, request_id, user=user))
+        if _may_search(INCIDENTS_MODULE):
+            all_results.extend(await self._search_incidents(query, tenant_id, request_id))
+        if _may_search(NEAR_MISSES_MODULE):
+            all_results.extend(await self._search_near_misses(query, tenant_id, request_id))
+        if _may_search(RTAS_MODULE):
+            all_results.extend(await self._search_rtas(query, tenant_id, request_id))
+        if _may_search(COMPLAINTS_MODULE):
+            all_results.extend(await self._search_complaints(query, tenant_id, request_id))
+        if _may_search(RISKS_MODULE):
+            all_results.extend(await self._search_risks(query, tenant_id, request_id))
+        if _may_search(AUDITS_MODULE):
+            all_results.extend(await self._search_audits(query, tenant_id, request_id))
+        if _may_search(ACTIONS_MODULE):
+            all_results.extend(await self._search_actions(query, tenant_id, request_id))
+        if _may_search(DOCUMENTS_MODULE):
+            all_results.extend(await self._search_documents(query, tenant_id, request_id, user=user))
+        if _may_search(DOCUMENT_CONTENT_MODULE):
+            all_results.extend(await self._search_document_content(query, user, request_id))
+        if _may_search(COMPLIANCE_SCHEDULE_MODULE):
+            all_results.extend(await self._search_compliance_requirements(query, tenant_id, request_id, user=user))
 
         if module:
             all_results = [r for r in all_results if r.module.lower() == module.lower()]
@@ -343,7 +388,7 @@ class SearchService:
                         type="incident",
                         title=inc.title or "Untitled Incident",
                         description=(inc.description or "")[:200],
-                        module="Incidents",
+                        module=INCIDENTS_MODULE,
                         status=inc.status or "Open",
                         date=str(inc.incident_date or inc.created_at or ""),
                         relevance=relevance,
@@ -406,7 +451,7 @@ class SearchService:
                         type="near_miss",
                         title=f"Near miss — {(nm.location or 'Unknown location')[:80]}",
                         description=desc,
-                        module="Near Misses",
+                        module=NEAR_MISSES_MODULE,
                         status=nm.status or "Open",
                         date=str(nm.event_date or nm.created_at or ""),
                         relevance=relevance,
@@ -461,7 +506,7 @@ class SearchService:
                         type="rta",
                         title=f"RTA - {rta.location or 'Unknown Location'}",
                         description=(rta.description or "")[:200],
-                        module="RTAs",
+                        module=RTAS_MODULE,
                         status=rta.status or "Open",
                         date=str(rta.collision_date or rta.created_at or ""),
                         relevance=relevance,
@@ -519,7 +564,7 @@ class SearchService:
                         title=cmp.title or "Untitled Complaint",
                         entity_id=cmp.id,
                         description=(cmp.description or "")[:200],
-                        module="Complaints",
+                        module=COMPLAINTS_MODULE,
                         status=cmp.status or "Open",
                         date=str(cmp.created_at or ""),
                         relevance=relevance,
@@ -572,7 +617,7 @@ class SearchService:
                         type="risk",
                         title=risk.title or "Untitled Risk",
                         description=(risk.description or "")[:200],
-                        module="Risks",
+                        module=RISKS_MODULE,
                         status=risk.status or "Open",
                         date=str(risk.created_at or ""),
                         relevance=relevance,
@@ -610,7 +655,7 @@ class SearchService:
                         type="audit",
                         title=finding.title or "Untitled Audit Finding",
                         description=(finding.description or "")[:200],
-                        module="Audits",
+                        module=AUDITS_MODULE,
                         status=str(
                             finding.status.value if hasattr(finding.status, "value") else finding.status or "Open"
                         ),
@@ -693,7 +738,7 @@ class SearchService:
                             type="action",
                             title=action.title or "Untitled Action",
                             description=(action.description or "")[:200],
-                            module="Actions",
+                            module=ACTIONS_MODULE,
                             status=str(
                                 action.status.value if hasattr(action.status, "value") else action.status or "Open"
                             ),
@@ -773,7 +818,7 @@ class SearchService:
                         type="document",
                         title=document.title or "Untitled Document",
                         description=((document.ai_summary or document.description or "")[:200]),
-                        module="Documents",
+                        module=DOCUMENTS_MODULE,
                         status=str(
                             document.status.value
                             if hasattr(document.status, "value")
@@ -882,7 +927,7 @@ class SearchService:
                         type="document_content",
                         title=document.title or "Untitled Document",
                         description=description,
-                        module="Document Content",
+                        module=DOCUMENT_CONTENT_MODULE,
                         status=str(
                             document.status.value
                             if hasattr(document.status, "value")
