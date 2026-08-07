@@ -90,6 +90,29 @@ export interface BulkConfirmDocumentEdgesResult {
   failed: { edge_id: number; error: unknown }[]
 }
 
+export interface HeuristicProposeResponse {
+  created: DocumentEdge[]
+  created_count: number
+  skipped_existing: number
+  skipped_unresolved: number
+  sources: Record<string, number>
+}
+
+export type CitationStalenessStatus =
+  | 'unchanged'
+  | 'moved'
+  | 'text_changed'
+  | 'not_found'
+
+export interface CitationStalenessResponse {
+  edge_id: number
+  status: CitationStalenessStatus
+  quote_hash?: string | null
+  chunk_id?: number | null
+  char_start?: number | null
+  char_end?: number | null
+}
+
 export function createDocumentGraphApi(api: AxiosInstance) {
   const base = '/api/v1/document-graph'
 
@@ -112,6 +135,17 @@ export function createDocumentGraphApi(api: AxiosInstance) {
       api.post<DocumentEdge>(`${base}/edges/${edgeId}/reject`, payload ?? {}),
 
     deleteEdge: (edgeId: number) => api.delete<DocumentEdge>(`${base}/edges/${edgeId}`),
+
+    /**
+     * Non-LLM heuristic / regex / vector proposals. Requires
+     * `document_graph_heuristic_propose` (and master `document_graph`). Always
+     * creates proposed edges only — never auto-confirms impact-driving types.
+     */
+    proposeHeuristics: (documentId: number) =>
+      api.post<HeuristicProposeResponse>(`${base}/documents/${documentId}/propose`),
+
+    getCitationStaleness: (edgeId: number) =>
+      api.get<CitationStalenessResponse>(`${base}/edges/${edgeId}/citation-staleness`),
 
     /**
      * Confirm a queue of edges one at a time and report per-edge outcomes.

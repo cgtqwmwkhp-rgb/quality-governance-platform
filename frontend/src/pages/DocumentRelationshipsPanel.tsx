@@ -6,12 +6,17 @@ import {
   Link2,
   Loader2,
   Search,
+  Sparkles,
   Trash2,
   XCircle,
 } from 'lucide-react'
 import api, { documentGraphApi, getApiErrorMessage, type DocumentEdge } from '../api/client'
-import type { DocumentEdgeType } from '../api/documentGraphClient'
+import type {
+  CitationStalenessStatus,
+  DocumentEdgeType,
+} from '../api/documentGraphClient'
 import { toast } from '../contexts/ToastContext'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -73,6 +78,7 @@ export function DocumentRelationshipsPanel({
 }: DocumentRelationshipsPanelProps) {
   const [counterparts, setCounterparts] = useState<Record<number, CounterpartDocument | null>>({})
   const requestedRef = useRef<Set<number>>(new Set())
+  const stalenessRequestedRef = useRef<Set<number>>(new Set())
 
   const [busyEdgeId, setBusyEdgeId] = useState<number | null>(null)
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<number[]>([])
@@ -87,6 +93,11 @@ export function DocumentRelationshipsPanel({
   const [isPrimaryParent, setIsPrimaryParent] = useState(true)
   const [rationale, setRationale] = useState('')
   const [linking, setLinking] = useState(false)
+  const [proposing, setProposing] = useState(false)
+  const [stalenessByEdgeId, setStalenessByEdgeId] = useState<
+    Record<number, CitationStalenessStatus>
+  >({})
+  const heuristicProposeEnabled = useFeatureFlag('document_graph_heuristic_propose')
 
   const resolved = useMemo(() => resolveDocumentEdges(documentId, edges), [documentId, edges])
   const summary = useMemo(
@@ -109,8 +120,10 @@ export function DocumentRelationshipsPanel({
 
   useEffect(() => {
     requestedRef.current = new Set()
+    stalenessRequestedRef.current = new Set()
     setCounterparts({})
     setSelectedEdgeIds([])
+    setStalenessByEdgeId({})
   }, [documentId])
 
   // Edge payloads carry ids, not titles. Resolve each counterpart once through the
@@ -142,6 +155,44 @@ export function DocumentRelationshipsPanel({
       cancelled = true
     }
   }, [documentId, edges])
+
+  // quote_hash citation staleness for references edges (best-effort; soft-fail).
+  useEffect(() => {
+    const cited = edges.filter(
+      (edge) =>
+        edge.edge_type === 'references' &&
+        Boolean(edge.quote_hash) &&
+        !edge.deleted_at &&
+        !stalenessRequestedRef.current.has(edge.id),
+    )
+    if (cited.length === 0) return
+    cited.forEach((edge) => stalenessRequestedRef.current.add(edge.id))
+
+    let cancelled = false
+    void (async () => {
+      const entries = await Promise.all(
+        cited.map(async (edge) => {
+          try {
+            const response = await documentGraphApi.getCitationStaleness(edge.id)
+            return [edge.id, response.data.status] as const
+          } catch {
+            return null
+          }
+        }),
+      )
+      if (cancelled) return
+      const next: Record<number, CitationStalenessStatus> = {}
+      for (const entry of entries) {
+        if (entry) next[entry[0]] = entry[1]
+      }
+      if (Object.keys(next).length === 0) return
+      setStalenessByEdgeId((prev) => ({ ...prev, ...next }))
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [edges])
 
   useEffect(() => {
     const term = search.trim()
@@ -253,6 +304,26 @@ export function DocumentRelationshipsPanel({
     }
   }
 
+  const handleProposeHeuristics = async () => {
+    setProposing(true)
+    try {
+      const response = await documentGraphApi.proposeHeuristics(documentId)
+      const created = response.data.created_count
+      if (created > 0) {
+        toast.success(
+          `Proposed ${created} relationship${created === 1 ? '' : 's'} — confirm before they drive impact`,
+        )
+      } else {
+        toast.success('No new heuristic proposals (existing links skipped)')
+      }
+      await onChanged()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setProposing(false)
+    }
+  }
+
   const handleLink = async () => {
     if (!draftPayload || duplicateEdge) return
     setLinking(true)
@@ -308,6 +379,20 @@ export function DocumentRelationshipsPanel({
               {edge.is_primary_parent ? <Badge variant="secondary">Primary parent</Badge> : null}
               {edge.created_method !== 'manual' ? (
                 <Badge variant="outline">{edge.created_method}</Badge>
+              ) : null}
+              {stalenessByEdgeId[edge.id] ? (
+                <Badge
+                  variant={
+                    stalenessByEdgeId[edge.id] === 'unchanged'
+                      ? 'success'
+                      : stalenessByEdgeId[edge.id] === 'moved'
+                        ? 'warning'
+                        : 'destructive'
+                  }
+                  data-testid={`relationship-citation-staleness-${edge.id}`}
+                >
+                  Citation {stalenessByEdgeId[edge.id].replace('_', ' ')}
+                </Badge>
               ) : null}
             </div>
             <p className="font-medium text-foreground truncate">
@@ -405,29 +490,50 @@ export function DocumentRelationshipsPanel({
       ) : null}
 
       <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <span className="flex items-center gap-2 font-medium text-foreground">
-            <Link2 className="h-4 w-4 text-primary" />
-            {summary.confirmed} confirmed relationship{summary.confirmed === 1 ? '' : 's'}
-          </span>
-          <span className="text-muted-foreground" data-testid="relationships-breakdown">
-            {summary.outbound} from this document · {summary.inbound} to this document ·{' '}
-            {summary.peers} peer
-          </span>
-          {summary.pending > 0 ? (
-            <Badge variant="warning" data-testid="relationships-pending-count">
-              {summary.pending} awaiting confirmation
-            </Badge>
-          ) : null}
-          {summary.conflicts > 0 ? (
-            <Badge variant="destructive" data-testid="relationships-conflict-count">
-              {summary.conflicts} conflict{summary.conflicts === 1 ? '' : 's'}
-            </Badge>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <span className="flex items-center gap-2 font-medium text-foreground">
+              <Link2 className="h-4 w-4 text-primary" />
+              {summary.confirmed} confirmed relationship{summary.confirmed === 1 ? '' : 's'}
+            </span>
+            <span className="text-muted-foreground" data-testid="relationships-breakdown">
+              {summary.outbound} from this document · {summary.inbound} to this document ·{' '}
+              {summary.peers} peer
+            </span>
+            {summary.pending > 0 ? (
+              <Badge variant="warning" data-testid="relationships-pending-count">
+                {summary.pending} awaiting confirmation
+              </Badge>
+            ) : null}
+            {summary.conflicts > 0 ? (
+              <Badge variant="destructive" data-testid="relationships-conflict-count">
+                {summary.conflicts} conflict{summary.conflicts === 1 ? '' : 's'}
+              </Badge>
+            ) : null}
+          </div>
+          {heuristicProposeEnabled ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={proposing}
+              onClick={() => void handleProposeHeuristics()}
+              data-testid="relationships-propose-heuristics"
+            >
+              {proposing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              Suggest relationships
+            </Button>
           ) : null}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Coverage is only what has been recorded here. An empty or thin list means this
           document&rsquo;s place in the governance hierarchy is unknown, not that it has none.
+          {heuristicProposeEnabled
+            ? ' Suggestions are proposed only — confirm before they drive impact.'
+            : null}
         </p>
       </Card>
 

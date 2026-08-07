@@ -1,6 +1,7 @@
-"""Doc Graph API routes (ADR-0021 Wave 0).
+"""Doc Graph API routes (ADR-0021 Wave 0 + Wave 1 heuristic propose).
 
 Gated by ``settings.document_graph_enabled``. When closed, every route returns 404.
+Heuristic propose additionally requires ``document_graph_heuristic_propose_enabled``.
 """
 
 from __future__ import annotations
@@ -11,19 +12,23 @@ from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import DbSession, require_permission
 from src.api.schemas.document_graph import (
+    CitationStalenessResponse,
     DocumentEdgeCreate,
     DocumentEdgeListResponse,
     DocumentEdgeRejectRequest,
     DocumentEdgeResponse,
     DocumentThreadResponse,
+    HeuristicProposeResponse,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
 from src.domain.models.document_graph import DocumentEdgeStatus, DocumentEdgeType
 from src.domain.models.user import User
+from src.domain.services.document_graph_heuristic_propose import DocumentGraphHeuristicProposeService
 from src.domain.services.document_graph_service import DocumentGraphService
 
 DISABLED_DETAIL = "Doc Graph is not enabled in this environment."
+HEURISTIC_DISABLED_DETAIL = "Doc Graph heuristic propose is not enabled in this environment."
 
 router = APIRouter()
 
@@ -35,7 +40,17 @@ async def require_document_graph_enabled() -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=DISABLED_DETAIL)
 
 
+async def require_document_graph_heuristic_propose_enabled() -> None:
+    from fastapi import HTTPException
+
+    if not settings.document_graph_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=DISABLED_DETAIL)
+    if not settings.document_graph_heuristic_propose_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=HEURISTIC_DISABLED_DETAIL)
+
+
 _enabled_router = APIRouter(dependencies=[Depends(require_document_graph_enabled)])
+_heuristic_router = APIRouter(dependencies=[Depends(require_document_graph_heuristic_propose_enabled)])
 
 
 @_enabled_router.get(
@@ -169,4 +184,48 @@ async def delete_document_edge(
     return DocumentEdgeResponse.model_validate(edge)
 
 
+@_enabled_router.get(
+    "/edges/{edge_id}/citation-staleness",
+    response_model=CitationStalenessResponse,
+)
+async def get_citation_staleness(
+    edge_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+):
+    """Evaluate quote_hash freshness for a references edge (flag-on Doc Graph)."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = DocumentGraphHeuristicProposeService(db)
+    payload = await service.citation_staleness_for_edge(tenant_id=tenant_id, edge_id=edge_id)
+    return CitationStalenessResponse.model_validate(payload)
+
+
+@_heuristic_router.post(
+    "/documents/{document_id}/propose",
+    response_model=HeuristicProposeResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def propose_document_edges(
+    document_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Heuristic / regex / vector proposals. Always proposed; never auto-applied."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = DocumentGraphHeuristicProposeService(db)
+    result = await service.propose_for_document(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        actor_id=current_user.id,
+    )
+    return HeuristicProposeResponse(
+        created=[DocumentEdgeResponse.model_validate(e) for e in result.created],
+        created_count=len(result.created),
+        skipped_existing=result.skipped_existing,
+        skipped_unresolved=result.skipped_unresolved,
+        sources=result.sources,
+    )
+
+
 router.include_router(_enabled_router)
+router.include_router(_heuristic_router)

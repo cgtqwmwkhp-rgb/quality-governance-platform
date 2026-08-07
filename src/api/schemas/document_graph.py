@@ -109,3 +109,24 @@ class DocumentThreadResponse(BaseModel):
     ancestors: List[DocumentThreadHop]
     descendants: List[DocumentThreadHop]
     max_depth: int
+
+
+class HeuristicProposeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    created: List[DocumentEdgeResponse]
+    created_count: int
+    skipped_existing: int
+    skipped_unresolved: int
+    sources: dict[str, int]
+
+
+class CitationStalenessResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    edge_id: int
+    status: str
+    quote_hash: Optional[str] = None
+    chunk_id: Optional[int] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
