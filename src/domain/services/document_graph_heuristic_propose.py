@@ -204,9 +204,7 @@ class DocumentGraphHeuristicProposeService:
             )
 
         # --- 4) Regex citations from chunks → references + quote_hash ---
-        citation_proposals, unresolved = await self._regex_citation_proposals(
-            source, tenant_id=tenant_id
-        )
+        citation_proposals, unresolved = await self._regex_citation_proposals(source, tenant_id=tenant_id)
         result.skipped_unresolved += unresolved
         for proposal in citation_proposals:
             await _try_create(

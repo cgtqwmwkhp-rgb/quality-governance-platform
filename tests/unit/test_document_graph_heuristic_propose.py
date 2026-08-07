@@ -283,9 +283,7 @@ async def test_vector_peers_skip_bad_metadata_ids():
     db.execute = AsyncMock(return_value=live_result)
 
     service = DocumentGraphHeuristicProposeService(db)
-    with patch(
-        "src.domain.services.document_ai_service.VectorSearchService"
-    ) as vs_cls:
+    with patch("src.domain.services.document_ai_service.VectorSearchService") as vs_cls:
         vs = vs_cls.return_value
         vs.search = AsyncMock(
             return_value=[
