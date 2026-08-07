@@ -130,3 +130,26 @@ class CitationStalenessResponse(BaseModel):
     chunk_id: Optional[int] = None
     char_start: Optional[int] = None
     char_end: Optional[int] = None
+
+
+class ClauseDocumentFreshnessItem(BaseModel):
+    """One library document evidencing a clause, with CEL tip freshness."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: Optional[int] = None
+    title: Optional[str] = None
+    evidence_link_id: int
+    link_status: Optional[str] = None
+    pinned_document_version_id: Optional[int] = None
+    tip_document_version_id: Optional[int] = None
+    tip_version_number: Optional[str] = None
+    freshness: str
+
+
+class ClauseDocumentsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    clause_id: str
+    documents: List[ClauseDocumentFreshnessItem]
+    total: int

@@ -113,6 +113,26 @@ export interface CitationStalenessResponse {
   char_end?: number | null
 }
 
+/** CEL tip freshness for a library document evidencing an ISO clause. */
+export type ClauseDocumentFreshness = 'current' | 'stale' | 'unpinned' | 'unknown'
+
+export interface ClauseDocumentFreshnessItem {
+  document_id: number | null
+  title: string | null
+  evidence_link_id: number
+  link_status?: string | null
+  pinned_document_version_id?: number | null
+  tip_document_version_id?: number | null
+  tip_version_number?: string | null
+  freshness: ClauseDocumentFreshness
+}
+
+export interface ClauseDocumentsResponse {
+  clause_id: string
+  documents: ClauseDocumentFreshnessItem[]
+  total: number
+}
+
 export function createDocumentGraphApi(api: AxiosInstance) {
   const base = '/api/v1/document-graph'
 
@@ -146,6 +166,15 @@ export function createDocumentGraphApi(api: AxiosInstance) {
 
     getCitationStaleness: (edgeId: number) =>
       api.get<CitationStalenessResponse>(`${base}/edges/${edgeId}/citation-staleness`),
+
+    /**
+     * ISO reverse: library documents evidencing a clause, with CEL tip freshness.
+     * Requires master `document_graph` (404 when closed).
+     */
+    listClauseDocuments: (clauseId: string) =>
+      api.get<ClauseDocumentsResponse>(
+        `${base}/clauses/${encodeURIComponent(clauseId)}/documents`,
+      ),
 
     /**
      * Confirm a queue of edges one at a time and report per-edge outcomes.
