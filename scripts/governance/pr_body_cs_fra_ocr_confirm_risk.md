@@ -13,6 +13,7 @@
 - **APIs:** Additive optional `risk` on confirm; additive `risks_created` on applied summary
 - **Database:** None
 - **Config/env/flags:** config + deploy-staging/production + env-vars.json
+- **Dependencies:** `pypdf` 6.14.2 → 6.15.0 (CVE-2026-71852 Security Scan gate)
 - **Tests:** flag-off/on confirm tests; `_create_risk_from_confirm` validation; empty-actions test unchanged
 
 ## 3) Compatibility & Data Safety
