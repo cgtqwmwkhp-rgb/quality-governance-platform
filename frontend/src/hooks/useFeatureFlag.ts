@@ -41,6 +41,16 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   document_graph_heuristic_propose: false,
   document_graph_impact_propagation: false,
   document_graph_llm_propose: false,
+  // X-0 programme flags — pre-registered default-off (later slices)
+  document_graph_thread_ambient: false,
+  document_graph_map_view: false,
+  document_graph_dnd_propose: false,
+  document_graph_structure_map: false,
+  graph_coach: false,
+  entity_360: false,
+  entity_360_satellites: false,
+  job_lifecycle: false,
+  job_cell_links: false,
 
   // Other feature flags can be added here
   portal_offline_mode: false,

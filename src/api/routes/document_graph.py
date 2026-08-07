@@ -92,10 +92,18 @@ async def get_document_thread(
     document_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("document:read"))],
+    include_proposed: bool = Query(
+        False,
+        description="When true, include PROPOSED/NEEDS_REVIEW primary edges. Default ambient thread is confirmed-only.",
+    ),
 ):
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     service = DocumentGraphService(db)
-    payload = await service.get_thread(tenant_id=tenant_id, document_id=document_id)
+    payload = await service.get_thread(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        include_proposed=include_proposed,
+    )
     return DocumentThreadResponse.model_validate(payload)
 
 
@@ -186,7 +194,11 @@ async def delete_document_edge(
 ):
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     service = DocumentGraphService(db)
-    edge = await service.soft_delete(tenant_id=tenant_id, edge_id=edge_id)
+    edge = await service.soft_delete(
+        tenant_id=tenant_id,
+        edge_id=edge_id,
+        actor_id=current_user.id,
+    )
     return DocumentEdgeResponse.model_validate(edge)
 
 

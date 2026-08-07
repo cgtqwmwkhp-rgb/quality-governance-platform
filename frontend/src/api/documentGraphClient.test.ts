@@ -31,6 +31,14 @@ describe('createDocumentGraphApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/document-graph/documents/42/thread')
   })
 
+  it('passes include_proposed on the thread walk when requested', () => {
+    const api = mockApi()
+    createDocumentGraphApi(api as never).getThread(42, { include_proposed: true })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-graph/documents/42/thread', {
+      params: { include_proposed: true },
+    })
+  })
+
   it('creates an edge from the given payload', () => {
     const api = mockApi()
     const payload = {

@@ -94,12 +94,24 @@ class DocumentEdgeListResponse(BaseModel):
 
 
 class DocumentThreadHop(BaseModel):
+    """One hop on a Doc Graph primary-implements thread (ambient-renderable).
+
+    Enriched so the UI can render without N+1 document fetches. Aligns with
+    RiskUpstreamItem spirit (title / reference / href) for document-centric hops.
+    Doc Graph is not the Golden Thread.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     document_id: int
     edge_id: int
     depth: int
     direction: str
+    title: Optional[str] = None
+    reference: Optional[str] = None
+    href: str
+    origin: str = "graph"
+    status: str
 
 
 class DocumentThreadResponse(BaseModel):

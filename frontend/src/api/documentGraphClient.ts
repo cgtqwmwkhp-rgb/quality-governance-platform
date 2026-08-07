@@ -56,6 +56,16 @@ export interface DocumentThreadHop {
   edge_id: number
   depth: number
   direction: 'parent' | 'child'
+  /** Library document title (enriched; avoids N+1). */
+  title?: string | null
+  /** Preferred PEL ref, else library reference_number. */
+  reference?: string | null
+  /** SPA deep-link, e.g. `/documents/42`. */
+  href: string
+  /** Hop provenance — Doc Graph threads use `graph`. */
+  origin: string
+  /** Edge status at walk time (`confirmed` by default ambient). */
+  status: DocumentEdgeStatus | string
 }
 
 export interface DocumentThreadResponse {
@@ -168,8 +178,11 @@ export function createDocumentGraphApi(api: AxiosInstance) {
     listEdges: (documentId: number, params?: DocumentEdgeQuery) =>
       api.get<DocumentEdgeListResponse>(`${base}/documents/${documentId}/edges`, { params }),
 
-    getThread: (documentId: number) =>
-      api.get<DocumentThreadResponse>(`${base}/documents/${documentId}/thread`),
+    getThread: (documentId: number, params?: { include_proposed?: boolean }) =>
+      api.get<DocumentThreadResponse>(
+        `${base}/documents/${documentId}/thread`,
+        params ? { params } : undefined,
+      ),
 
     createEdge: (payload: CreateDocumentEdgePayload) =>
       api.post<DocumentEdge>(`${base}/edges`, payload),

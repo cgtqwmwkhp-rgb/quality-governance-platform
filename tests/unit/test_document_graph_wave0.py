@@ -6,7 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -196,11 +196,19 @@ async def test_confirm_stamps_actor_and_timestamp():
         status=DocumentEdgeStatus.PROPOSED,
         confirmed_by_id=None,
         confirmed_at=None,
+        is_primary_parent=False,
+        edge_type=DocumentEdgeType.REFERENCES,
+        src_document_id=10,
+        dst_document_id=20,
     )
     service = DocumentGraphService(db)
     service._get_edge_or_404 = AsyncMock(return_value=edge)  # type: ignore[method-assign]
 
-    result = await service.confirm(tenant_id=1, edge_id=7, actor_id=42, commit=False)
+    with patch(
+        "src.domain.services.document_graph_service.record_audit_event",
+        new_callable=AsyncMock,
+    ):
+        result = await service.confirm(tenant_id=1, edge_id=7, actor_id=42, commit=False)
 
     assert result.status == DocumentEdgeStatus.CONFIRMED
     assert result.confirmed_by_id == 42
