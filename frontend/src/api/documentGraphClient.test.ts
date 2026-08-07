@@ -87,4 +87,15 @@ describe('createDocumentGraphApi', () => {
     expect(result).toEqual({ confirmed: [], failed: [] })
     expect(api.post).not.toHaveBeenCalled()
   })
+
+  it('posts heuristic propose and reads citation staleness', () => {
+    const api = mockApi()
+    const client = createDocumentGraphApi(api as never)
+
+    client.proposeHeuristics(42)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/document-graph/documents/42/propose')
+
+    client.getCitationStaleness(9)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-graph/edges/9/citation-staleness')
+  })
 })

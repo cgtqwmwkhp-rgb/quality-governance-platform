@@ -1102,10 +1102,13 @@ export const complianceScheduleFraOcrApi = createComplianceScheduleFraOcrApi(api
 export const documentGraphApi = createDocumentGraphApi(api)
 export type {
   CreateDocumentEdgePayload,
+  CitationStalenessResponse,
+  CitationStalenessStatus,
   DocumentEdge,
   DocumentEdgeMethod,
   DocumentEdgeStatus,
   DocumentEdgeType,
+  HeuristicProposeResponse,
 } from './documentGraphClient'
 
 // ============ Case closure validation (shared by the four registers) ============

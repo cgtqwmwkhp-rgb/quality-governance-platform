@@ -25,6 +25,21 @@ from src.domain.models.document_graph import (
 
 THREAD_MAX_DEPTH = 4
 
+# ADR-0021: AI/heuristic must never auto-confirm edges that drive publish impact.
+IMPACT_DRIVING_EDGE_TYPES = frozenset(
+    {
+        DocumentEdgeType.IMPLEMENTS,
+        DocumentEdgeType.REQUIRES_RECORD,
+        DocumentEdgeType.CONFLICTS_WITH,
+    }
+)
+_NO_AUTO_CONFIRM_METHODS = frozenset(
+    {
+        DocumentEdgeMethod.AI,
+        DocumentEdgeMethod.HEURISTIC,
+    }
+)
+
 # Statuses that participate in cycle / thread walks (rejected edges are inert).
 _ACTIVE_STATUSES = (
     DocumentEdgeStatus.PROPOSED,
@@ -245,6 +260,20 @@ class DocumentGraphService:
             raise ValidationError(
                 "confidence must be between 0 and 1",
                 code="DOCUMENT_GRAPH_INVALID_CONFIDENCE",
+            )
+
+        if (
+            created_method in _NO_AUTO_CONFIRM_METHODS
+            and edge_type_enum in IMPACT_DRIVING_EDGE_TYPES
+            and status_enum == DocumentEdgeStatus.CONFIRMED
+        ):
+            raise ValidationError(
+                "AI/heuristic must not auto-confirm impact-driving edges",
+                code="DOCUMENT_GRAPH_HEURISTIC_NO_AUTO_CONFIRM",
+                details={
+                    "edge_type": edge_type_enum.value,
+                    "created_method": created_method.value,
+                },
             )
 
         src_document_id, dst_document_id = canonicalize_endpoints(edge_type_enum, src_document_id, dst_document_id)

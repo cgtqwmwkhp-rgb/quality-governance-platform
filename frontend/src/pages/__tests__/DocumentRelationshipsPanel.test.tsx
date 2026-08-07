@@ -11,6 +11,8 @@ const graph = {
   rejectEdge: vi.fn(),
   deleteEdge: vi.fn(),
   confirmEdges: vi.fn(),
+  proposeHeuristics: vi.fn(),
+  getCitationStaleness: vi.fn(),
 }
 
 vi.mock('../../api/client', () => ({
@@ -21,12 +23,18 @@ vi.mock('../../api/client', () => ({
     rejectEdge: (...args: unknown[]) => graph.rejectEdge(...args),
     deleteEdge: (...args: unknown[]) => graph.deleteEdge(...args),
     confirmEdges: (...args: unknown[]) => graph.confirmEdges(...args),
+    proposeHeuristics: (...args: unknown[]) => graph.proposeHeuristics(...args),
+    getCitationStaleness: (...args: unknown[]) => graph.getCitationStaleness(...args),
   },
   getApiErrorMessage: (err: unknown) => (err as Error)?.message ?? 'error',
 }))
 
 vi.mock('../../contexts/ToastContext', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
+}))
+
+vi.mock('../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: (key: string) => key === 'document_graph_heuristic_propose',
 }))
 
 function edge(overrides: Partial<DocumentEdge> & { id: number }): DocumentEdge {
@@ -66,6 +74,10 @@ describe('DocumentRelationshipsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     apiGet.mockResolvedValue({ data: { id: 20, title: 'Incident Reporting SOP' } })
+    graph.getCitationStaleness.mockResolvedValue({ data: { edge_id: 1, status: 'unchanged' } })
+    graph.proposeHeuristics.mockResolvedValue({
+      data: { created: [], created_count: 0, skipped_existing: 0, skipped_unresolved: 0, sources: {} },
+    })
   })
 
   it('resolves counterpart titles and shows the confirmed list', async () => {
@@ -77,6 +89,42 @@ describe('DocumentRelationshipsPanel', () => {
     expect(screen.getByTestId('relationships-breakdown')).toHaveTextContent(
       '1 from this document',
     )
+  })
+
+  it('offers suggest relationships when heuristic propose flag is on', async () => {
+    graph.proposeHeuristics.mockResolvedValue({
+      data: {
+        created: [edge({ id: 9, status: 'proposed', created_method: 'heuristic', edge_type: 'related_to' })],
+        created_count: 1,
+        skipped_existing: 0,
+        skipped_unresolved: 0,
+        sources: { category_pel_siblings: 1 },
+      },
+    })
+    const { onChanged } = renderPanel([])
+
+    fireEvent.click(screen.getByTestId('relationships-propose-heuristics'))
+    await waitFor(() => expect(graph.proposeHeuristics).toHaveBeenCalledWith(10))
+    await waitFor(() => expect(onChanged).toHaveBeenCalled())
+  })
+
+  it('shows citation staleness for references edges with quote_hash', async () => {
+    graph.getCitationStaleness.mockResolvedValue({
+      data: { edge_id: 7, status: 'moved', quote_hash: 'abc' },
+    })
+    renderPanel([
+      edge({
+        id: 7,
+        edge_type: 'references',
+        quote_hash: 'abc',
+        citation_text: 'DOC-2026-0042',
+      }),
+    ])
+
+    expect(await screen.findByTestId('relationship-citation-staleness-7')).toHaveTextContent(
+      'Citation moved',
+    )
+    expect(graph.getCitationStaleness).toHaveBeenCalledWith(7)
   })
 
   it('says so plainly when a counterpart is not readable instead of guessing a title', async () => {
