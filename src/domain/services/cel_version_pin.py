@@ -41,13 +41,15 @@ async def pin_evidence_link_document_version(
     db: AsyncSession,
     link: Any,
     *,
-    tenant_id: int,
+    tenant_id: int | None,
     force: bool = False,
 ) -> Optional[int]:
     """Set ``link.document_version_id`` from the library tip when applicable.
 
     Returns the pinned version id (existing or newly resolved), else None.
     """
+    if tenant_id is None:
+        return None
     if getattr(link, "entity_type", None) != "document":
         return None
     existing = getattr(link, "document_version_id", None)
