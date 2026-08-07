@@ -3,6 +3,7 @@ import { portalRtaCanProceed } from '../PortalRTAForm'
 
 const step5Base = {
   employeeName: 'Alex Engineer',
+  employeeEngineerId: null,
   peVehicle: 'HV72ZUA',
   peVehicleOther: '',
   hasPassengers: false,

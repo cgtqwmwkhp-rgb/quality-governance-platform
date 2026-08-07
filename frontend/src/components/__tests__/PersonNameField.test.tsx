@@ -83,7 +83,6 @@ describe('PersonNameField', () => {
       expect(onChange).toHaveBeenCalledWith({
         displayName: 'Harris, D',
         engineerId: 12,
-        userId: 4,
       }),
     )
     expect(screen.getByTestId('person-name-field-linked')).toHaveTextContent('Linked employee')
@@ -114,7 +113,6 @@ describe('PersonNameField', () => {
         expect(onChange).toHaveBeenLastCalledWith({
           displayName: 'Jane External',
           engineerId: null,
-          userId: null,
         }),
       )
 
@@ -123,7 +121,6 @@ describe('PersonNameField', () => {
         expect(onChange).toHaveBeenLastCalledWith({
           displayName: 'Jane External',
           engineerId: null,
-          userId: null,
         }),
       )
       expect(screen.getByTestId('person-name-field-free-text')).toHaveTextContent(
@@ -144,7 +141,6 @@ describe('PersonNameField', () => {
         expect(onChange).toHaveBeenLastCalledWith({
           displayName: 'Walk-in witness',
           engineerId: null,
-          userId: null,
         }),
       )
     })
@@ -176,7 +172,6 @@ describe('PersonNameField', () => {
         expect(onChange).toHaveBeenCalledWith({
           displayName: 'Warwick, C',
           engineerId: 31,
-          userId: null,
         }),
       )
     })

@@ -79,6 +79,7 @@ import {
   CircleAlert,
 } from 'lucide-react'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import { PersonNameField } from '../components/PersonNameField'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -120,6 +121,8 @@ const SEVERITY_LEVELS = [
 
 interface FormData {
   reporterName: string
+  /** UI-only roster link; never sent on portal submit. */
+  reporterEngineerId: number | null
   reporterEmail: string
   reporterPhone: string
   reporterRole: string
@@ -147,7 +150,7 @@ interface FormData {
 type Step = 1 | 2 | 3 | 4
 
 export default function PortalNearMissForm() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { user, platformToken } = usePortalAuth()
   const [step, setStep] = useState<Step>(1)
@@ -185,6 +188,7 @@ export default function PortalNearMissForm() {
 
   const [formData, setFormData] = useState<FormData>({
     reporterName: '',
+    reporterEngineerId: null,
     reporterEmail: '',
     reporterPhone: '',
     reporterRole: '',
@@ -487,26 +491,30 @@ export default function PortalNearMissForm() {
               <p className="text-muted-foreground text-sm">{t('portal.who_reporting')}</p>
             </div>
 
-            <div>
-              <label
-                htmlFor="portalnearmissform-field-0"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('portal.your_name_label')} *
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="portalnearmissform-field-0"
-                  value={formData.reporterName}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, reporterName: e.target.value }))
-                  }
-                  placeholder={t('portal.full_name_placeholder')}
-                  className="pl-10"
-                />
-              </div>
-            </div>
+            <PersonNameField
+              id="portalnearmissform-field-0"
+              testId="portal-near-miss-reporter-name"
+              mode="hybrid"
+              lang={i18n.language}
+              label={t('portal.your_name_label')}
+              placeholder={t('portal.full_name_placeholder')}
+              required
+              value={
+                formData.reporterName
+                  ? {
+                      displayName: formData.reporterName,
+                      engineerId: formData.reporterEngineerId,
+                    }
+                  : null
+              }
+              onChange={(next) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  reporterName: next?.displayName?.trim() ?? '',
+                  reporterEngineerId: next?.engineerId ?? null,
+                }))
+              }
+            />
 
             <div>
               <span className="block text-sm font-medium text-foreground mb-2">

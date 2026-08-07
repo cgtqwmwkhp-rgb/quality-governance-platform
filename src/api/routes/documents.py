@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.dependencies.partner import partner_readable
 from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
@@ -1327,7 +1328,11 @@ async def list_documents(
     )
 
 
-@router.get("/{document_id}", response_model=DocumentResponse)
+@router.get(
+    "/{document_id}",
+    response_model=DocumentResponse,
+    openapi_extra=partner_readable("documents:read"),
+)
 async def get_document(
     document_id: int,
     db: DbSession,
@@ -1403,7 +1408,11 @@ async def _read_and_validate_revision_file(
     return content, file_name, file_type, safe_filename
 
 
-@router.get("/{document_id}/signed-url", response_model=DocumentSignedUrlResponse)
+@router.get(
+    "/{document_id}/signed-url",
+    response_model=DocumentSignedUrlResponse,
+    openapi_extra=partner_readable("documents:read"),
+)
 async def get_document_signed_url(
     document_id: int,
     db: DbSession,
@@ -1740,7 +1749,11 @@ async def spawn_reack_campaign(
 # =============================================================================
 
 
-@router.get("/search/content", response_model=SearchResponse)
+@router.get(
+    "/search/content",
+    response_model=SearchResponse,
+    openapi_extra=partner_readable("documents:read"),
+)
 async def search_document_content(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("document:read"))],
@@ -1793,7 +1806,11 @@ async def search_document_content(
     )
 
 
-@router.get("/search/semantic", response_model=SearchResponse)
+@router.get(
+    "/search/semantic",
+    response_model=SearchResponse,
+    openapi_extra=partner_readable("documents:read"),
+)
 async def semantic_search(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("document:read"))],
