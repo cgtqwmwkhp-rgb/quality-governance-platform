@@ -19,6 +19,7 @@ import { formatDisplayDate, formatReference } from '../helpers/formatters'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
+import { PersonNameField } from '../components/PersonNameField'
 import { Input } from '../components/ui/Input'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { AsyncState } from '../components/ui/async'
@@ -81,7 +82,7 @@ function buildNearMissesListSearch(params: {
 export default function NearMisses() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const registerLabels = useCaseRegisterLabels()
   const [nearMisses, setNearMisses] = useState<NearMiss[]>([])
   const [loading, setLoading] = useState(true)
@@ -522,21 +523,27 @@ export default function NearMisses() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="near-miss-reporter-name"
-                  className="text-sm font-medium text-muted-foreground"
-                >
-                  {t('near_misses.form.reporter_name', 'Reporter name')}
-                </label>
-                <Input
-                  id="near-miss-reporter-name"
-                  value={formData.reporter_name}
-                  onChange={(e) => setFormData({ ...formData, reporter_name: e.target.value })}
-                  className="mt-1"
-                  required
-                />
-              </div>
+              <PersonNameField
+                id="near-miss-reporter-name"
+                mode="hybrid"
+                required
+                lang={i18n.language}
+                label={t('near_misses.form.reporter_name', 'Reporter name')}
+                value={
+                  formData.reporter_name
+                    ? { displayName: formData.reporter_name, engineerId: null }
+                    : null
+                }
+                onChange={(next) =>
+                  setFormData({
+                    ...formData,
+                    // NearMissCreate has no reporter engineer/user FK — persist display name only.
+                    reporter_name: next?.displayName ?? '',
+                  })
+                }
+                testId="near-miss-reporter-name-field"
+                className="mt-0"
+              />
               <div data-testid="near-miss-contract">
                 <FuzzySearchDropdown
                   label={`${t('near_misses.form.contract', 'Customer')} *`}

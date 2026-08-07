@@ -38,7 +38,7 @@ import {
   CaseCapaActionsPanel,
   CaseCapaHeaderButton,
 } from '../components/case/CaseCapaActionsPanel'
-import { UserEmailSearch } from '../components/UserEmailSearch'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import {
   Select,
   SelectContent,
@@ -1116,13 +1116,26 @@ export default function NearMissDetail() {
                 required
               />
             </div>
-            <UserEmailSearch
-              label={t('near_misses.detail.assign_to', 'Assign to')}
-              value={actionForm.assigned_to}
-              onChange={(email) => setActionForm({ ...actionForm, assigned_to: email })}
-              placeholder={t('near_misses.detail.search_by_email', 'Search by email')}
-              required
-            />
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-foreground">
+                {t('near_misses.detail.assign_to', 'Assign to')}
+              </span>
+              <EngineerPeoplePicker
+                valueLabel={actionForm.assigned_to}
+                requireLogin
+                onChange={(selection) =>
+                  setActionForm({
+                    ...actionForm,
+                    assigned_to: selection?.user?.email || selection?.label || '',
+                  })
+                }
+                placeholder={t(
+                  'near_misses.detail.search_employees',
+                  'Search active employees…',
+                )}
+                testId="near-miss-action-assignee-picker"
+              />
+            </div>
             <div>
               <label htmlFor="near-miss-action-priority" className="block text-sm font-medium text-foreground mb-1">
                 {t('common.priority', 'Priority')}

@@ -48,6 +48,41 @@ vi.mock('../../api/client', () => ({
     error instanceof Error ? error.message : fallback,
 }))
 
+
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({
+    testId = 'engineer-people-picker',
+    valueLabel = '',
+    onChange,
+  }: {
+    testId?: string
+    valueLabel?: string
+    onChange: (
+      selection: {
+        engineerId: number
+        label: string
+        hasLogin: boolean
+        user?: { id: number; email: string; full_name: string }
+      } | null,
+    ) => void
+  }) => (
+    <input
+      data-testid={testId}
+      aria-label="Assignee owner responsible"
+      value={valueLabel}
+      onChange={(e) =>
+        onChange({
+          engineerId: 1,
+          label: e.target.value,
+          hasLogin: true,
+          user: { id: 1, email: e.target.value, full_name: e.target.value },
+        })
+      }
+    />
+  ),
+}))
+
+
 const auditFindingAction = {
   id: 9,
   reference_number: 'ACT-0009',

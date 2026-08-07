@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import { type EvidenceAsset, evidenceAssetsApi } from '../../api/client'
 import { trackError } from '../../utils/errorTracker'
+import { canPreviewInApp } from '../../components/DocumentPreview'
+import { EvidenceAssetPreviewDialog } from '../../components/EvidenceAssetPreviewDialog'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -67,6 +69,20 @@ export default function InvestigationEvidence({
   const { t } = useTranslation()
   const [uploadVisibility, setUploadVisibility] = useState('internal_customer')
   const [updatingVisibilityId, setUpdatingVisibilityId] = useState<number | null>(null)
+  const [previewAsset, setPreviewAsset] = useState<EvidenceAsset | null>(null)
+
+  const downloadEvidence = async (asset: EvidenceAsset) => {
+    try {
+      const response = await evidenceAssetsApi.getSignedUrl(asset.id, undefined, 'attachment')
+      window.open(response.data.signed_url, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      trackError(err, {
+        component: 'InvestigationEvidence',
+        action: 'downloadEvidence',
+      })
+      onSetEvidenceError('Failed to get download URL')
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -194,18 +210,32 @@ export default function InvestigationEvidence({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={async () => {
-                            try {
-                              const response = await evidenceAssetsApi.getSignedUrl(asset.id)
-                              window.open(response.data.signed_url, '_blank')
-                            } catch (err) {
-                              trackError(err, {
-                                component: 'InvestigationEvidence',
-                                action: 'downloadEvidence',
-                              })
-                              onSetEvidenceError('Failed to get download URL')
-                            }
-                          }}
+                          aria-label={`Preview ${asset.title || asset.original_filename || 'evidence'}`}
+                          data-testid={`evidence-preview-${asset.id}`}
+                          onClick={() => setPreviewAsset(asset)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {canPreviewInApp(
+                          asset.content_type,
+                          asset.original_filename || asset.title,
+                        )
+                          ? 'Preview'
+                          : 'Open'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Download ${asset.title || asset.original_filename || 'evidence'}`}
+                          data-testid={`evidence-download-${asset.id}`}
+                          onClick={() => void downloadEvidence(asset)}
                         >
                           <Download className="w-4 h-4" />
                         </Button>
@@ -277,6 +307,14 @@ export default function InvestigationEvidence({
           ))}
         </div>
       )}
+
+      <EvidenceAssetPreviewDialog
+        asset={previewAsset}
+        open={previewAsset !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewAsset(null)
+        }}
+      />
     </div>
   )
 }

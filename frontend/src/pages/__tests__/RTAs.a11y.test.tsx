@@ -29,6 +29,9 @@ vi.mock('../../api/client', () => ({
     list: (...args: unknown[]) => mockList(...args),
     create: vi.fn(),
   },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
 }))

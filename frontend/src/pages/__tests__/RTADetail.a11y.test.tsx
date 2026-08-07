@@ -35,6 +35,11 @@ vi.mock('../../components/ui/Breadcrumbs', () => ({
   Breadcrumbs: () => <nav aria-label="Breadcrumb" data-testid="breadcrumbs" />,
 }))
 
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({ testId = 'engineer-people-picker' }: { testId?: string }) => (
+    <div data-testid={testId} />
+  ),
+}))
 vi.mock('../../components/UserEmailSearch', () => ({
   UserEmailSearch: () => <div data-testid="user-email-search" />,
 }))
@@ -51,6 +56,9 @@ vi.mock('../../api/client', () => ({
   investigationsApi: { createFromRecord: vi.fn() },
   actionsApi: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
   evidenceAssetsApi: { list: vi.fn(), upload: vi.fn(), delete: vi.fn() },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
 }))

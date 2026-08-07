@@ -18,6 +18,7 @@ vi.mock('react-i18next', () => ({
       }
       return key
     },
+    i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -46,6 +47,11 @@ vi.mock('../../components/ui/Breadcrumbs', () => ({
   Breadcrumbs: () => <div data-testid="breadcrumbs" />,
 }))
 
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({ testId = 'engineer-people-picker' }: { testId?: string }) => (
+    <div data-testid={testId} />
+  ),
+}))
 vi.mock('../../components/UserEmailSearch', () => ({
   UserEmailSearch: () => <div data-testid="user-email-search" />,
 }))
@@ -94,6 +100,9 @@ vi.mock('../../api/client', () => ({
     list: vi.fn(),
     upload: vi.fn(),
     delete: vi.fn(),
+  },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
   getApiErrorMessage: (err: Error) => err.message,
 }))
