@@ -37,6 +37,9 @@ vi.mock('../../api/client', () => ({
   contractsApi: {
     list: (...args: unknown[]) => mockContractsList(...args),
   },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
   getApiErrorMessage: (error: unknown) =>
     error instanceof Error ? error.message : 'Something went wrong',
 }))
@@ -131,6 +134,13 @@ describe('Near Misses page accessibility (real page /near-misses)', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    // Dialog autofocus opens the PersonNameField combobox listbox; close it so
+    // axe does not flag a transient empty listbox (aria-required-children).
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     })
 
     await expectNoA11yViolations(baseElement)

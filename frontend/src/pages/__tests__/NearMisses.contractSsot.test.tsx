@@ -50,6 +50,9 @@ vi.mock('../../api/client', () => ({
   contractsApi: {
     list: (...args: unknown[]) => mockContractsList(...args),
   },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
 }))
@@ -126,7 +129,7 @@ describe('NearMisses contract SSOT create form', () => {
   it('resolves contract_id from the selected customer on create', async () => {
     await openDialogAndWait()
 
-    fireEvent.change(screen.getByLabelText('Reporter name'), { target: { value: 'Alex' } })
+    fireEvent.change(screen.getByTestId('near-miss-reporter-name-field').querySelector('input')!, { target: { value: 'Alex' } })
     fireEvent.change(screen.getByTestId('fuzzy-Search customer…'), {
       target: { value: 'ukpn' },
     })
@@ -147,7 +150,7 @@ describe('NearMisses contract SSOT create form', () => {
   it('blocks create when no customer is selected', async () => {
     await openDialogAndWait()
 
-    fireEvent.change(screen.getByLabelText('Reporter name'), { target: { value: 'Alex' } })
+    fireEvent.change(screen.getByTestId('near-miss-reporter-name-field').querySelector('input')!, { target: { value: 'Alex' } })
     fireEvent.change(screen.getByLabelText('common.location'), { target: { value: 'Yard' } })
     fireEvent.change(screen.getByLabelText('common.description'), {
       target: { value: 'A pallet nearly fell over.' },

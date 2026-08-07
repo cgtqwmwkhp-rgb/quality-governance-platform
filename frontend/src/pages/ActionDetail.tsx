@@ -42,6 +42,7 @@ import { EvidenceAssetPreviewDialog } from '../components/EvidenceAssetPreviewDi
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath, parseActionDetailId } from './actionLinks'
 import { resolveActionAssignee } from './actionsDisplayHelpers'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 /** Matches `ActionOwnerNoteCreate.body` max_length on the API. */
@@ -990,18 +991,27 @@ export default function ActionDetail() {
                 }
               }}
             >
-              <Input
-                id="action-detail-assignee"
-                name="email"
-                type="email"
-                placeholder="user@company.com"
-                className="flex-1"
-                value={assigneeDraft}
-                onChange={(e) => setAssigneeDraft(e.target.value)}
-                aria-label="Assignee owner responsible"
-                data-testid="action-detail-assignee"
-              />
-              <Button type="submit" variant="secondary" disabled={saving} aria-label="Assign owner">
+              <div className="flex-1 min-w-0">
+                <span className="sr-only" id="action-detail-assignee-label">
+                  Assignee owner responsible
+                </span>
+                <EngineerPeoplePicker
+                  valueLabel={assigneeDraft}
+                  requireLogin
+                  onChange={(selection) =>
+                    setAssigneeDraft(selection?.user?.email || selection?.label || '')
+                  }
+                  placeholder="Search active employees…"
+                  testId="action-detail-assignee"
+                  className="w-full"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={saving || !assigneeDraft.trim()}
+                aria-label="Assign owner"
+              >
                 Assign
               </Button>
             </form>

@@ -43,6 +43,7 @@ import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { cn } from '../helpers/utils'
 import { formatDisplayDate, NOT_PROVIDED } from '../helpers/formatters'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { PersonNameField } from '../components/PersonNameField'
 import {
   RiskHeatMap,
   type HeatMapData as InteractiveHeatMapData,
@@ -2062,17 +2063,16 @@ export default function RiskRegister() {
                 data-testid="risk-detail-description"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="risk-detail-owner">Owner name</Label>
-              <Input
-                id="risk-detail-owner"
-                value={ownerDraft}
-                onChange={(e) => setOwnerDraft(e.target.value)}
-                placeholder="e.g. Jane Smith"
-                disabled={detailSaving}
-                data-testid="risk-detail-owner"
-              />
-            </div>
+            <PersonNameField
+              id="risk-detail-owner"
+              mode="hybrid"
+              label="Owner name"
+              value={ownerDraft ? { displayName: ownerDraft, engineerId: null } : null}
+              onChange={(next) => setOwnerDraft(next?.displayName ?? '')}
+              placeholder="Search employees or type a name…"
+              disabled={detailSaving}
+              testId="risk-detail-owner"
+            />
             <div className="space-y-1.5">
               <Label htmlFor="risk-detail-category">Category</Label>
               <select
