@@ -1,0 +1,15 @@
+FIRE RISK ASSESSMENT
+
+Report Reference: FRA-LMH-0001
+Premises: Sample Warehouse
+Assessing Company: Example Fire Ltd
+Fire Risk Assessor: Jo Bloggs
+
+Date of Assessment: 01/02/2026
+Date of Next Review: 01/02/2027
+Reviewed every 12 months.
+
+Overall fire risk rating: Medium
+
+PRIORITY ACTION PLAN
+1    High       Fit self-closers to two storey exit doors                       15/03/2026

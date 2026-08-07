@@ -27,6 +27,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   // Compliance Schedule (Wave 1) — opener mirrors COMPLIANCE_SCHEDULE_ENABLED
   compliance_schedule: false,
 
+  // Wave 3 FRA / PAS79 OCR ingest — mirrors COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED
+  compliance_schedule_fra_ocr: false,
+
   // Track C: AI regulatory-basis assist (requires CS open + this flag)
   compliance_schedule_regulatory_ai: false,
 

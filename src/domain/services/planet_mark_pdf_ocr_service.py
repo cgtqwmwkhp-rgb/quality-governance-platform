@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol
 
 from src.domain.services.document_intelligence_service import DocumentIntelligenceService
+from src.domain.services.ocr_field_extraction import CONFIDENCE_HIGH, CONFIDENCE_MEDIUM, CONFIDENCE_NONE, ExtractedField
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,6 @@ class _AzureDiEnrichmentClient(Protocol):
 
 PROVENANCE_MEASUREMENT_REPORT = "ocr_measurement_report"
 PROVENANCE_CERTIFICATE = "ocr_certificate"
-
-CONFIDENCE_HIGH = "high"
-CONFIDENCE_MEDIUM = "medium"
-CONFIDENCE_NONE = "none"
 
 DOCUMENT_KIND_MEASUREMENT_REPORT = "measurement_report"
 DOCUMENT_KIND_CERTIFICATE = "certificate"
@@ -67,20 +64,6 @@ _XLSX_PROTECTED_FIELDS = {"total_co2e_tonnes", "co2e_per_fte", "average_fte"}
 def _normalize_unit_text(text: str) -> str:
     normalized = text.replace("CO₂e", "CO2e").replace("co₂e", "co2e").replace("CO₂", "CO2").replace("co₂", "co2")
     return re.sub(r"t\s*CO2e", "tCO2e", normalized, flags=re.IGNORECASE)
-
-
-@dataclass(frozen=True)
-class ExtractedField:
-    value: Optional[str] = None
-    confidence: str = CONFIDENCE_NONE
-    raw_snippet: Optional[str] = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    @property
-    def is_extracted(self) -> bool:
-        return self.value is not None and self.confidence != CONFIDENCE_NONE
 
 
 @dataclass

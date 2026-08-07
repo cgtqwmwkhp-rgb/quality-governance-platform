@@ -67,11 +67,14 @@ from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.models.compliance_schedule import (
     ComplianceFilingStatus,
+    ComplianceOcrDraftStatus,
+    ComplianceOcrFilingStatus,
     ComplianceRecord,
     ComplianceRecordOutcome,
     ComplianceRequirement,
     ComplianceRequirementTemplate,
     ComplianceScheduleAnchor,
+    ComplianceScheduleOcrDraft,
 )
 
 # Digital Signatures (Tier 2)
@@ -336,6 +339,9 @@ __all__ = [
     "ComplianceScheduleAnchor",
     "ComplianceFilingStatus",
     "ComplianceRecordOutcome",
+    "ComplianceOcrDraftStatus",
+    "ComplianceOcrFilingStatus",
+    "ComplianceScheduleOcrDraft",
     "SSOProvisioningRequest",
     "SSOProvisioningStatus",
     "SSOProvisioningMatchBasis",
