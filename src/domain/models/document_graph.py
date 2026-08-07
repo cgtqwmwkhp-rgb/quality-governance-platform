@@ -99,6 +99,15 @@ class DocumentEdge(Base, TimestampMixin):
             postgresql_where=text("deleted_at IS NULL"),
             sqlite_where=text("deleted_at IS NULL"),
         ),
+        # X-0b: at most one live primary implements parent per child document.
+        Index(
+            "ux_document_edges_one_primary_parent",
+            "tenant_id",
+            "src_document_id",
+            unique=True,
+            postgresql_where=text("is_primary_parent AND edge_type = 'implements' AND deleted_at IS NULL"),
+            sqlite_where=text("is_primary_parent AND edge_type = 'implements' AND deleted_at IS NULL"),
+        ),
         Index("ix_document_edges_tenant_src", "tenant_id", "src_document_id"),
         Index("ix_document_edges_tenant_dst", "tenant_id", "dst_document_id"),
         Index("ix_document_edges_tenant_type_status", "tenant_id", "edge_type", "status"),
