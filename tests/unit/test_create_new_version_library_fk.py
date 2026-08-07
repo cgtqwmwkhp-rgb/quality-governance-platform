@@ -145,9 +145,7 @@ async def test_create_new_version_source_still_resolves_library_only_on_publish_
     """Regression: revise path must not OR-match library title/reference inline."""
     tree = ast.parse(Path("src/api/routes/document_control.py").read_text())
     fn = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "create_new_version"
+        node for node in tree.body if isinstance(node, ast.AsyncFunctionDef) and node.name == "create_new_version"
     )
     source = ast.get_source_segment(Path("src/api/routes/document_control.py").read_text(), fn)
     assert source is not None
@@ -156,9 +154,7 @@ async def test_create_new_version_source_still_resolves_library_only_on_publish_
     assert "run_controlled_publish_lifecycle" not in source
 
     publish_fn = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "publish_document"
+        node for node in tree.body if isinstance(node, ast.AsyncFunctionDef) and node.name == "publish_document"
     )
     publish_source = ast.get_source_segment(Path("src/api/routes/document_control.py").read_text(), publish_fn)
     assert publish_source is not None

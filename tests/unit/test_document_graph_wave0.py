@@ -80,7 +80,9 @@ def test_authored_edge_types_exclude_lifecycle_derived():
 def test_partial_unique_live_index_declared():
     names = {idx.name for idx in DocumentEdge.__table__.indexes}
     assert "ux_document_edges_tenant_src_dst_type_live" in names
-    live = next(idx for idx in DocumentEdge.__table__.indexes if idx.name == "ux_document_edges_tenant_src_dst_type_live")
+    live = next(
+        idx for idx in DocumentEdge.__table__.indexes if idx.name == "ux_document_edges_tenant_src_dst_type_live"
+    )
     assert live.unique is True
     assert live.dialect_options["postgresql"]["where"].text == "deleted_at IS NULL"
     assert live.dialect_options["sqlite"]["where"].text == "deleted_at IS NULL"

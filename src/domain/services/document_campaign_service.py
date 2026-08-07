@@ -1337,12 +1337,11 @@ class DocumentCampaignService:
 
         assignment.status = AssignmentStatus.COMPLETED
         assignment.completed_at = datetime.now(timezone.utc)
-        assignment.acknowledged_version_id = (
-            getattr(campaign, "document_version_id", None)
-            or await self._resolve_tip_document_version_id(
-                tenant_id=assignment.tenant_id,
-                document_id=campaign.document_id,
-            )
+        assignment.acknowledged_version_id = getattr(
+            campaign, "document_version_id", None
+        ) or await self._resolve_tip_document_version_id(
+            tenant_id=assignment.tenant_id,
+            document_id=campaign.document_id,
         )
         assignment.acceptance_statement = acceptance_statement
         assignment.signature_data = signature_data if has_signature else None

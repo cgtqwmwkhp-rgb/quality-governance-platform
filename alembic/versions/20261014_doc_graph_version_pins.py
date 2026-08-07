@@ -50,7 +50,7 @@ def upgrade() -> None:
         ondelete="SET NULL",
     )
     op.create_index(
-        "ix_cel_document_version_id",
+        "ix_compliance_evidence_links_document_version_id",
         "compliance_evidence_links",
         ["document_version_id"],
     )
@@ -175,7 +175,7 @@ def downgrade() -> None:
     )
     op.drop_column("document_campaigns", "document_version_id")
 
-    op.drop_index("ix_cel_document_version_id", table_name="compliance_evidence_links")
+    op.drop_index("ix_compliance_evidence_links_document_version_id", table_name="compliance_evidence_links")
     op.drop_constraint(
         "fk_cel_document_version_id",
         "compliance_evidence_links",

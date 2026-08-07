@@ -341,6 +341,9 @@
       "CreateIndexOp": 3,
       "DropIndexOp": 2
     },
+    "document_edges": {
+      "CreateIndexOp": 1
+    },
     "document_quiz_drafts": {
       "AlterColumnOp": 2,
       "CreateIndexOp": 3,

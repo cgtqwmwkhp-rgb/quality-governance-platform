@@ -202,9 +202,7 @@ class DocumentGraphService:
                 code="DOCUMENT_GRAPH_INVALID_CONFIDENCE",
             )
 
-        src_document_id, dst_document_id = canonicalize_endpoints(
-            edge_type_enum, src_document_id, dst_document_id
-        )
+        src_document_id, dst_document_id = canonicalize_endpoints(edge_type_enum, src_document_id, dst_document_id)
 
         if src_document_id == dst_document_id:
             raise ValidationError(

@@ -86,7 +86,8 @@ def _assert_policies_match(tables: Sequence[str], expected_fragment: str) -> Non
     """Re-read pg_policy and raise unless every table really carries the predicate."""
     bind = op.get_bind()
     rows = bind.execute(
-        sa.text("""
+        sa.text(
+            """
             SELECT c.relname AS table_name,
                    c.relrowsecurity AS enabled,
                    c.relforcerowsecurity AS forced,
@@ -96,7 +97,8 @@ def _assert_policies_match(tables: Sequence[str], expected_fragment: str) -> Non
             JOIN pg_namespace AS n ON n.oid = c.relnamespace
             LEFT JOIN pg_policy AS p ON p.polrelid = c.oid AND p.polname = 'tenant_isolation'
             WHERE n.nspname = current_schema() AND c.relname = ANY(:tables)
-            """),
+            """
+        ),
         {"tables": list(tables)},
     ).mappings()
     state = {row["table_name"]: row for row in rows}
@@ -176,8 +178,7 @@ def _create_table() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
-            "edge_type IN ('implements', 'requires_record', 'references', "
-            "'related_to', 'conflicts_with')",
+            "edge_type IN ('implements', 'requires_record', 'references', " "'related_to', 'conflicts_with')",
             name="ck_document_edges_edge_type",
         ),
         sa.CheckConstraint(
