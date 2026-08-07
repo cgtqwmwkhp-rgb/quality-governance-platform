@@ -318,6 +318,7 @@ class ComplianceScheduleOcrDraft(Base, TimestampMixin, AuditTrailMixin):
             sqlite_where=text("status = 'pending'"),
         ),
         Index("ix_cs_ocr_drafts_tenant_status", "tenant_id", "status"),
+        Index("ix_cs_ocr_drafts_evidence_asset_id", "evidence_asset_id"),
     )
     __data_classification__ = DataClassification.C3_CONFIDENTIAL
 
@@ -354,7 +355,6 @@ class ComplianceScheduleOcrDraft(Base, TimestampMixin, AuditTrailMixin):
     evidence_asset_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("evidence_assets.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     extraction_method: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

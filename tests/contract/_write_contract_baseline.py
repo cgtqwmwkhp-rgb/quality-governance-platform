@@ -414,6 +414,27 @@ KNOWN_ASYMMETRIC_RESPONSE_FIELDS: dict[str, tuple[str, ...]] = {
     # fields are written by the Wave 2 library-filing bridge, not by a client.
     # ``external_id`` follows AssetResponse/AuditTemplateResponse: server-minted.
     "RecordResponse": ("external_id", "filing_error", "filing_status", "library_document_id", "outcome"),
+    # FRA OCR draft: create writers are upload (multipart, not in OpenAPI body
+    # discovery) or from-evidence (only evidence_asset_id). Remaining response
+    # fields are server-minted from OCR/parse/confirm/file lifecycle.
+    "FraOcrDraftResponse": (
+        "applied",
+        "external_id",
+        "extraction_method",
+        "filing_error",
+        "filing_status",
+        "library_document_id",
+        "ocr_provider_status",
+        "proposed",
+        "proposed_actions",
+        "purpose",
+        "requirement_id",
+        "source_checksum_sha256",
+        "source_filename",
+        "source_size_bytes",
+        "status",
+        "warnings",
+    ),
     # ``status`` is derived from next_due_date per ADR-0020 (Current / Due soon /
     # Overdue / Missed), so it is computed on read and cannot be set.
     # ``fra_ocr_eligible`` is server-computed from template key / taxonomy +
