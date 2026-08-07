@@ -204,8 +204,19 @@ class RiskService:
         self.db = db
         self.scoring = RiskScoringEngine()
 
-    async def create_risk(self, data: dict, created_by: Optional[int] = None) -> EnterpriseRisk:
-        """Create a new risk with automatic scoring"""
+    async def create_risk(
+        self,
+        data: dict,
+        created_by: Optional[int] = None,
+        *,
+        commit: bool = True,
+    ) -> EnterpriseRisk:
+        """Create a new risk with automatic scoring.
+
+        ``commit=False`` flushes the risk (+ assessment history) into the caller's
+        transaction without committing — used by FRA OCR confirm so due-date,
+        CAPAs and the risk share one commit.
+        """
         stmt = select(func.count(EnterpriseRisk.id))
         if data.get("tenant_id") is not None:
             stmt = stmt.where(EnterpriseRisk.tenant_id == data["tenant_id"])
@@ -232,6 +243,8 @@ class RiskService:
             description=data.get("description", ""),
             category=data.get("category", "operational"),
             subcategory=data.get("subcategory"),
+            source=data.get("source"),
+            context=data.get("context"),
             department=data.get("department"),
             location=data.get("location"),
             process=data.get("process"),
@@ -258,14 +271,17 @@ class RiskService:
         risk.next_review_date = naive_utc_now() + timedelta(days=risk.review_frequency_days)
 
         self.db.add(risk)
-        await self.db.commit()
-        await self.db.refresh(risk)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(risk)
+        else:
+            await self.db.flush()
 
         from src.infrastructure.monitoring.azure_monitor import record_risk_created
 
         record_risk_created()
 
-        await self._record_assessment(risk)
+        await self._record_assessment(risk, assessed_by=created_by, commit=commit)
 
         return risk
 
@@ -664,11 +680,17 @@ class RiskService:
         risk: EnterpriseRisk,
         assessed_by: Optional[int] = None,
         notes: Optional[str] = None,
+        *,
+        commit: bool = True,
     ) -> None:
-        """Record assessment in history (create path; separate commit)."""
+        """Record assessment in history (create path).
+
+        When ``commit=False``, only adds the history row for the caller's transaction.
+        """
         history = self._build_assessment_history(risk, assessed_by=assessed_by, notes=notes)
         self.db.add(history)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
 
     @staticmethod
     def resolve_score_trend(

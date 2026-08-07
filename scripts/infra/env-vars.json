@@ -91,5 +91,11 @@
     "description": "When true, confirming an FRA OCR draft creates CAPA actions for operator-checked priority rows only (ANDed with FRA OCR ingest). Default false; persist via deploy vars like FRA OCR.",
     "default": "false",
     "example": "false"
+  },
+  "COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED": {
+    "required": false,
+    "description": "When true, confirming an FRA OCR draft may create one Enterprise Risk when the operator supplies likelihood and impact (never from OCR alone). Default false; persist via deploy vars like FRA OCR actions.",
+    "default": "false",
+    "example": "false"
   }
 }

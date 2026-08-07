@@ -131,6 +131,41 @@ class TestRiskService:
         assert risk.next_review_date.tzinfo is None
 
     @pytest.mark.asyncio
+    async def test_create_risk_persists_source_and_context(self, service):
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 0
+
+        appetite_result = MagicMock()
+        appetite_result.scalar_one_or_none.return_value = None
+
+        service.db.execute = AsyncMock(side_effect=[count_result, appetite_result])
+        service.db.refresh = AsyncMock()
+        service._record_assessment = AsyncMock()
+
+        created_kwargs = {}
+
+        def capture_risk(**kwargs):
+            created_kwargs.update(kwargs)
+            mock = MagicMock()
+            mock.review_frequency_days = 90
+            for k, v in kwargs.items():
+                setattr(mock, k, v)
+            return mock
+
+        with patch("src.domain.services.risk_service.EnterpriseRisk", side_effect=capture_risk):
+            await service.create_risk(
+                {
+                    "title": "FRA OCR risk",
+                    "tenant_id": 1,
+                    "source": "fra_ocr_draft:42",
+                    "context": "compliance_schedule:7",
+                }
+            )
+
+        assert created_kwargs["source"] == "fra_ocr_draft:42"
+        assert created_kwargs["context"] == "compliance_schedule:7"
+
+    @pytest.mark.asyncio
     async def test_update_risk_assessment_not_found(self, service):
         result = MagicMock()
         result.scalar_one_or_none.return_value = None

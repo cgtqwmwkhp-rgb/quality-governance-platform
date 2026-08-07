@@ -633,3 +633,145 @@ async def test_apply_confirmed_plan_flag_on_empty_actions_creates_zero(monkeypat
     assert summary["actions_recorded"] == 0
     assert summary["actions_created"] == 0
     create_capas.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apply_confirmed_plan_flag_off_records_risk_without_creating(monkeypatch) -> None:
+    """RISK flag off: operator scores are recorded, no Enterprise Risk is created."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "compliance_schedule_fra_ocr_risk_enabled", False)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db)
+    requirement = _fra_requirement()
+    draft = _pending_draft()
+
+    async def _load_draft(**kwargs):
+        return draft
+
+    async def _load_req(**kwargs):
+        return requirement
+
+    service._load_draft = _load_draft  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.record_audit_event",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            service,
+            "_create_risk_from_confirm",
+            new_callable=AsyncMock,
+        ) as create_risk,
+    ):
+        _d, _r, summary = await service.apply_confirmed_plan(
+            draft_id=7,
+            tenant_id=1,
+            user_id=42,
+            next_due_date=date(2027, 3, 14),
+            actions=[],
+            risk={"inherent_likelihood": 4, "inherent_impact": 5, "title": "Fire spread"},
+            now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+
+    assert summary["risks_created"] == 0
+    assert draft.confirmed_json["risk"]["inherent_likelihood"] == 4
+    create_risk.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apply_confirmed_plan_flag_on_creates_risk_with_operator_scores(monkeypatch) -> None:
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "compliance_schedule_fra_ocr_risk_enabled", True)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db)
+    requirement = _fra_requirement()
+    draft = _pending_draft()
+
+    async def _load_draft(**kwargs):
+        return draft
+
+    async def _load_req(**kwargs):
+        return requirement
+
+    service._load_draft = _load_draft  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.record_audit_event",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            service,
+            "_create_risk_from_confirm",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(reference="RISK-0007"),
+        ) as create_risk,
+    ):
+        _d, _r, summary = await service.apply_confirmed_plan(
+            draft_id=7,
+            tenant_id=1,
+            user_id=42,
+            next_due_date=date(2027, 3, 14),
+            actions=[],
+            risk={"inherent_likelihood": 3, "inherent_impact": 4},
+            now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+
+    assert summary["risks_created"] == 1
+    create_risk.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_apply_confirmed_plan_flag_on_without_risk_creates_zero(monkeypatch) -> None:
+    """Flag on must not invent a risk from OCR alone when the operator sends none."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "compliance_schedule_fra_ocr_risk_enabled", True)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db)
+    requirement = _fra_requirement()
+    draft = _pending_draft()
+
+    async def _load_draft(**kwargs):
+        return draft
+
+    async def _load_req(**kwargs):
+        return requirement
+
+    service._load_draft = _load_draft  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.record_audit_event",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            service,
+            "_create_risk_from_confirm",
+            new_callable=AsyncMock,
+        ) as create_risk,
+    ):
+        _d, _r, summary = await service.apply_confirmed_plan(
+            draft_id=7,
+            tenant_id=1,
+            user_id=42,
+            next_due_date=date(2027, 3, 14),
+            actions=[],
+            risk=None,
+            now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+
+    assert summary["risks_created"] == 0
+    create_risk.assert_not_called()

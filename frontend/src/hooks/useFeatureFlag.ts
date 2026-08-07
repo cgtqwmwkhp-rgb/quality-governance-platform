@@ -30,6 +30,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   // Wave 3 FRA / PAS79 OCR ingest — mirrors COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED
   compliance_schedule_fra_ocr: false,
 
+  // Slice 6: FRA OCR confirm → risk proposal (operator likelihood/impact)
+  compliance_schedule_fra_ocr_risk: false,
+
   // Track C: AI regulatory-basis assist (requires CS open + this flag)
   compliance_schedule_regulatory_ai: false,
 

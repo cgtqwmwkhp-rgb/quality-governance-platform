@@ -21,6 +21,7 @@ import type {
 } from '../../api/complianceScheduleFraOcrClient'
 import type { ComplianceRequirement } from '../../api/complianceScheduleClient'
 import { toast } from '../../contexts/ToastContext'
+import { useFeatureFlag } from '../../hooks/useFeatureFlag'
 import { confidenceChipClass, proposeNextDueDate } from './fraOcrHelpers'
 
 const SELECT_CLASS =
@@ -88,7 +89,12 @@ export function FraOcrReviewSheet({
   const [dueDateTouched, setDueDateTouched] = useState(false)
   const [actions, setActions] = useState<EditableAction[]>([])
   const [note, setNote] = useState('')
+  const [proposeRisk, setProposeRisk] = useState(false)
+  const [riskLikelihood, setRiskLikelihood] = useState('')
+  const [riskImpact, setRiskImpact] = useState('')
+  const [riskTitle, setRiskTitle] = useState('')
   const [busy, setBusy] = useState(false)
+  const riskEnabled = useFeatureFlag('compliance_schedule_fra_ocr_risk')
 
   useEffect(() => {
     if (!open || !draft) return
@@ -96,13 +102,32 @@ export function FraOcrReviewSheet({
     setDueDateTouched(false)
     setActions(toEditableActions(draft.proposed_actions ?? []))
     setNote('')
+    setProposeRisk(false)
+    setRiskLikelihood('')
+    setRiskImpact('')
+    setRiskTitle('')
     setBusy(false)
   }, [open, draft])
 
-  const canConfirm = useMemo(
-    () => Boolean(nextDueDate) && dueDateTouched && !busy,
-    [nextDueDate, dueDateTouched, busy],
-  )
+  const canConfirm = useMemo(() => {
+    if (!nextDueDate || !dueDateTouched || busy) return false
+    if (riskEnabled && proposeRisk) {
+      const l = Number(riskLikelihood)
+      const i = Number(riskImpact)
+      if (!Number.isInteger(l) || !Number.isInteger(i) || l < 1 || l > 5 || i < 1 || i > 5) {
+        return false
+      }
+    }
+    return true
+  }, [
+    nextDueDate,
+    dueDateTouched,
+    busy,
+    riskEnabled,
+    proposeRisk,
+    riskLikelihood,
+    riskImpact,
+  ])
 
   const updateAction = (index: number, patch: Partial<EditableAction>) => {
     setActions((prev) => prev.map((row) => (row.index === index ? { ...row, ...patch } : row)))
@@ -122,11 +147,20 @@ export function FraOcrReviewSheet({
             : {}),
           ...(row.target_date ? { target_date: row.target_date } : {}),
         }))
+      const riskPayload =
+        riskEnabled && proposeRisk
+          ? {
+              inherent_likelihood: Number(riskLikelihood),
+              inherent_impact: Number(riskImpact),
+              ...(riskTitle.trim() ? { title: riskTitle.trim() } : {}),
+            }
+          : undefined
       const response = await complianceScheduleFraOcrApi.confirmDraft(draft.id, {
         next_due_date: nextDueDate,
         acknowledged_warnings: (draft.warnings?.length ?? 0) > 0,
         actions: selected,
         ...(note.trim() ? { note: note.trim() } : {}),
+        ...(riskPayload ? { risk: riskPayload } : {}),
       })
       toast.success(
         t('compliance.schedule.fra_ocr.confirm.success', 'FRA proposal applied to the obligation'),
@@ -320,6 +354,102 @@ export function FraOcrReviewSheet({
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>
+                </section>
+              )}
+
+
+              {riskEnabled && (
+                <section className="space-y-3" data-testid="fra-ocr-risk-proposal">
+                  <h3 className="text-sm font-medium">
+                    {t('compliance.schedule.fra_ocr.review.risk', 'Propose risk (optional)')}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'compliance.schedule.fra_ocr.review.risk_hint',
+                      'Enter likelihood and impact yourself — OCR ratings are never used as scores.',
+                    )}
+                  </p>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={proposeRisk}
+                      disabled={busy}
+                      data-testid="fra-ocr-risk-enable"
+                      onChange={(e) => setProposeRisk(e.target.checked)}
+                    />
+                    <span>
+                      {t(
+                        'compliance.schedule.fra_ocr.review.risk_enable',
+                        'Create a risk register entry on confirm',
+                      )}
+                    </span>
+                  </label>
+                  {proposeRisk && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="block space-y-1">
+                          <span className="text-xs text-muted-foreground">
+                            {t(
+                              'compliance.schedule.fra_ocr.review.risk_likelihood',
+                              'Likelihood (1–5)',
+                            )}
+                          </span>
+                          <select
+                            className={SELECT_CLASS}
+                            value={riskLikelihood}
+                            disabled={busy}
+                            data-testid="fra-ocr-risk-likelihood"
+                            onChange={(e) => setRiskLikelihood(e.target.value)}
+                          >
+                            <option value="">—</option>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <option key={n} value={String(n)}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-xs text-muted-foreground">
+                            {t(
+                              'compliance.schedule.fra_ocr.review.risk_impact',
+                              'Impact (1–5)',
+                            )}
+                          </span>
+                          <select
+                            className={SELECT_CLASS}
+                            value={riskImpact}
+                            disabled={busy}
+                            data-testid="fra-ocr-risk-impact"
+                            onChange={(e) => setRiskImpact(e.target.value)}
+                          >
+                            <option value="">—</option>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <option key={n} value={String(n)}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="fra-ocr-risk-title">
+                          {t(
+                            'compliance.schedule.fra_ocr.review.risk_title',
+                            'Risk title (optional)',
+                          )}
+                        </Label>
+                        <Input
+                          id="fra-ocr-risk-title"
+                          value={riskTitle}
+                          disabled={busy}
+                          data-testid="fra-ocr-risk-title"
+                          onChange={(e) => setRiskTitle(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </section>
               )}
 
