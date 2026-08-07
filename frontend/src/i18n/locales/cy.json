@@ -3835,5 +3835,17 @@
   "compliance.schedule.complete.submit": "Cwblhau'r digwyddiad",
   "compliance.schedule.complete.success": "Digwyddiad wedi'i gofnodi",
   "compliance.schedule.complete.error": "Methu cwblhau'r digwyddiad hwn",
-  "compliance.automation.audits.open_compliance_schedule": "Agor Atodlen Cydymffurfiaeth"
+  "compliance.automation.audits.open_compliance_schedule": "Agor Atodlen Cydymffurfiaeth",
+  "compliance.schedule.complete.evidence": "Uwchlwytho prawf o gwblhau",
+  "compliance.schedule.complete.evidence_add": "Uwchlwytho ffeiliau prawf",
+  "compliance.schedule.complete.cta_evidence_hint": "Gall cofnodi cwblhau atodi ffeiliau prawf. Ar gyfer digwyddiad hŷn isod, defnyddiwch Uwchlwytho dogfennau ar y rhes honno.",
+  "compliance.schedule.records.evidence_hint": "Mae gan bob digwyddiad yn y gorffennol ei reolaeth Uwchlwytho dogfennau ei hun ar gyfer tystysgrifau ac adroddiadau.",
+  "compliance.schedule.evidence.upload_cta": "Uwchlwytho dogfennau ar gyfer y digwyddiad hwn yn y gorffennol",
+  "compliance.schedule.form.historical_toggle": "Mae gennyf brawf o gwblhau yn y gorffennol",
+  "compliance.schedule.form.historical_hint": "Dewisol. Ar ôl creu'r rhwymedigaeth, caiff digwyddiad yn y gorffennol ei gofnodi gydag unrhyw ffeiliau a atodwch.",
+  "compliance.schedule.form.historical_completed_at": "Cwblhawyd am",
+  "compliance.schedule.form.historical_evidence_label": "Ychwanegu tystiolaeth hanesyddol",
+  "compliance.schedule.form.historical_evidence_add": "Ychwanegu ffeiliau tystiolaeth",
+  "compliance.schedule.form.historical_complete_error": "Crëwyd y rhwymedigaeth, ond methodd cofnodi'r cwblhau yn y gorffennol neu atodi tystiolaeth. Agorwch y rhwymedigaeth i geisio eto o Gofnodi cwblhau.",
+  "compliance.schedule.form.historical_open_detail": "Agor rhwymedigaeth i ailgeisio tystiolaeth"
 }

@@ -117,6 +117,17 @@ export default function ComplianceScheduleDetail() {
             <RequirementLifecycleControls requirement={requirement} onChanged={() => void load()} />
           </div>
         </div>
+        {requirement.is_active ? (
+          <p
+            className="mt-2 text-xs text-muted-foreground max-w-2xl"
+            data-testid="compliance-schedule-complete-evidence-hint"
+          >
+            {t(
+              'compliance.schedule.complete.cta_evidence_hint',
+              'Record completion can attach proof files. For an older occurrence already listed below, use Upload documents on that row.',
+            )}
+          </p>
+        ) : null}
       </div>
 
       {!requirement.is_active && (
@@ -225,8 +236,19 @@ export default function ComplianceScheduleDetail() {
       />
 
       <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border px-4 py-3 font-medium">
-          {t('compliance.schedule.records', 'Occurrence records')}
+        <div className="border-b border-border px-4 py-3">
+          <div className="font-medium">
+            {t('compliance.schedule.records', 'Occurrence records')}
+          </div>
+          <p
+            className="mt-1 text-xs text-muted-foreground font-normal"
+            data-testid="compliance-schedule-records-evidence-hint"
+          >
+            {t(
+              'compliance.schedule.records.evidence_hint',
+              'Each past occurrence has its own Upload documents control for certificates and reports.',
+            )}
+          </p>
         </div>
         {records.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground space-y-1">

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -30,7 +31,12 @@ import {
   type FieldSpecs,
 } from '../../components/ui/form'
 import { UserEmailSearch } from '../../components/UserEmailSearch'
-import { complianceScheduleApi, getApiErrorMessage, type UserSearchResult } from '../../api/client'
+import {
+  complianceScheduleApi,
+  evidenceAssetsApi,
+  getApiErrorMessage,
+  type UserSearchResult,
+} from '../../api/client'
 import type {
   ComplianceRequirement,
   RequirementCreatePayload,
@@ -73,6 +79,13 @@ const CONTROL_IDS: Record<FieldName, string> = {
   owner: 'requirement-form-owner',
   frequency_months: 'requirement-form-frequency-months',
   frequency_days: 'requirement-form-frequency-days',
+}
+
+/** Same staging module as RecordCompletionSheet — complete rebinds onto the occurrence. */
+const STAGING_SOURCE_MODULE = 'induction'
+
+function nowLocalInputValue() {
+  return new Date().toISOString().slice(0, 16)
 }
 
 function emptyState(): FormState {
@@ -138,6 +151,10 @@ export interface RequirementFormDialogProps {
  * payload shape are identical — the only differences are which endpoint runs and
  * whether untouched fields are sent at all. Splitting it would have meant two
  * copies of the same eleven-field form drifting apart.
+ *
+ * On create only, an optional historical-evidence section can stage files and
+ * call completeRequirement after create succeeds (occurrence evidence stays on
+ * the compliance_record — never an obligation-level attachment).
  */
 export function RequirementFormDialog({
   open,
@@ -155,6 +172,12 @@ export function RequirementFormDialog({
   const [ownerQuery, setOwnerQuery] = useState('')
   const [ownerUser, setOwnerUser] = useState<UserSearchResult | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [addHistoricalEvidence, setAddHistoricalEvidence] = useState(false)
+  const [historicalCompletedAt, setHistoricalCompletedAt] = useState(nowLocalInputValue)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [createdRequirementId, setCreatedRequirementId] = useState<number | null>(null)
+  const [historicalEvidenceError, setHistoricalEvidenceError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Reopening must not show the last attempt's typing. RecordCompletionSheet
   // resets only one field on success, so a reopened sheet still carries the
@@ -166,12 +189,31 @@ export function RequirementFormDialog({
     setOwnerQuery('')
     setOwnerUser(null)
     setDirty(false)
+    setAddHistoricalEvidence(false)
+    setHistoricalCompletedAt(nowLocalInputValue())
+    setPendingFiles([])
+    setCreatedRequirementId(null)
+    setHistoricalEvidenceError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }, [open, requirement])
 
   const update = useCallback((patch: Partial<FormState>) => {
     setForm((prev) => ({ ...prev, ...patch }))
     setDirty(true)
   }, [])
+
+  const handleFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : []
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (files.length === 0) return
+    setPendingFiles((prev) => [...prev, ...files])
+    setDirty(true)
+  }
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index))
+    setDirty(true)
+  }
 
   /**
    * Ignore the empty value Radix reports when the current code has no matching
@@ -277,6 +319,9 @@ export function RequirementFormDialog({
   }, [onOpenChange])
 
   const submit = useCallback(async () => {
+    // After a create succeeded but historical complete failed, do not create again.
+    if (createdRequirementId != null) return
+
     const months = parseInterval(form.frequency_months)
     const days = parseInterval(form.frequency_days)
     // Validation already rejects these, so reaching here means the guard above
@@ -305,21 +350,82 @@ export function RequirementFormDialog({
       // edit of the title from clearing the owner.
       if (ownerUser) payload.owner_id = ownerUser.id
       await complianceScheduleApi.updateRequirement(requirement.id, payload)
-    } else {
-      const payload: RequirementCreatePayload = {
-        ...shared,
-        // Same reasoning as activation: an obligation created with no owner
-        // falls through to the admin role, and where nobody holds it the
-        // reminder reaches no one. Whoever creates it is the safe default, and
-        // the register shows who so it can be reassigned.
-        owner_id: ownerUser?.id ?? currentUserId ?? null,
-      }
-      await complianceScheduleApi.createRequirement(payload)
+      onSaved()
+      close()
+      return
     }
 
-    onSaved()
-    close()
-  }, [form, ownerUser, currentUserId, requirement, onSaved, close])
+    const payload: RequirementCreatePayload = {
+      ...shared,
+      // Same reasoning as activation: an obligation created with no owner
+      // falls through to the admin role, and where nobody holds it the
+      // reminder reaches no one. Whoever creates it is the safe default, and
+      // the register shows who so it can be reassigned.
+      owner_id: ownerUser?.id ?? currentUserId ?? null,
+    }
+    const created = await complianceScheduleApi.createRequirement(payload)
+    const newId = created.data.id
+
+    if (!addHistoricalEvidence) {
+      onSaved()
+      close()
+      return
+    }
+
+    // Historical completion: stage as induction then rebind via complete
+    // (same pattern as RecordCompletionSheet). Obligation already exists —
+    // complete failure must not look like create failed.
+    const stagedIds: number[] = []
+    try {
+      for (const file of pendingFiles) {
+        const uploaded = await evidenceAssetsApi.upload(file, {
+          source_module: STAGING_SOURCE_MODULE,
+          source_id: newId,
+          title: file.name,
+          description: `compliance-schedule-create-staging:${newId}`,
+          visibility: 'internal_customer',
+        })
+        stagedIds.push(uploaded.data.id)
+      }
+      await complianceScheduleApi.completeRequirement(newId, {
+        completed_at: historicalCompletedAt
+          ? new Date(historicalCompletedAt).toISOString()
+          : undefined,
+        check_passed: true,
+        evidence_asset_ids: stagedIds.length > 0 ? stagedIds : undefined,
+      })
+      onSaved()
+      close()
+    } catch {
+      if (stagedIds.length > 0) {
+        await Promise.allSettled(stagedIds.map((id) => evidenceAssetsApi.delete(id)))
+      }
+      setCreatedRequirementId(newId)
+      setPendingFiles([])
+      setDirty(false)
+      setHistoricalEvidenceError(
+        t(
+          'compliance.schedule.form.historical_complete_error',
+          'The obligation was created, but recording the past completion or attaching evidence failed. Open the obligation to retry from Record completion.',
+        ),
+      )
+      onSaved()
+      // Keep the dialog open so the operator sees the error and the detail link.
+      // dirty cleared: obligation already persisted — unsaved-changes guard must not block close.
+    }
+  }, [
+    form,
+    ownerUser,
+    currentUserId,
+    requirement,
+    onSaved,
+    close,
+    addHistoricalEvidence,
+    pendingFiles,
+    historicalCompletedAt,
+    createdRequirementId,
+    t,
+  ])
 
   const controller = useFormController<FieldName>({
     fields,
@@ -372,6 +478,25 @@ export function RequirementFormDialog({
               </FormNotice>
             ) : null}
 
+            {historicalEvidenceError && createdRequirementId != null ? (
+              <FormNotice tone="error" data-testid="requirement-form-historical-error">
+                <p>{historicalEvidenceError}</p>
+                <p className="mt-2">
+                  <Link
+                    to={`/compliance-schedule/${createdRequirementId}`}
+                    className="underline font-medium"
+                    data-testid="requirement-form-historical-retry-link"
+                    onClick={close}
+                  >
+                    {t(
+                      'compliance.schedule.form.historical_open_detail',
+                      'Open obligation to retry evidence',
+                    )}
+                  </Link>
+                </p>
+              </FormNotice>
+            ) : null}
+
             <FormField {...controller.fieldProps('title')}>
               {(control) => (
                 <Input
@@ -381,6 +506,7 @@ export function RequirementFormDialog({
                   onChange={(e) => update({ title: e.target.value })}
                   error={Boolean(controller.errors.title)}
                   data-testid="requirement-form-title-input"
+                  disabled={createdRequirementId != null}
                 />
               )}
             </FormField>
@@ -401,7 +527,9 @@ export function RequirementFormDialog({
                 <Select
                   value={form.taxonomy_id}
                   onValueChange={handleTaxonomyChange}
-                  disabled={taxonomy.loading || taxonomy.failed}
+                  disabled={
+                    taxonomy.loading || taxonomy.failed || createdRequirementId != null
+                  }
                 >
                   <SelectTrigger {...control} data-testid="requirement-form-taxonomy-trigger">
                     <SelectValue
@@ -433,6 +561,7 @@ export function RequirementFormDialog({
                   onChange={(e) => update({ next_due_date: e.target.value })}
                   error={Boolean(controller.errors.next_due_date)}
                   data-testid="requirement-form-next-due-input"
+                  disabled={createdRequirementId != null}
                 />
               )}
             </FormField>
@@ -481,6 +610,7 @@ export function RequirementFormDialog({
                     onChange={(e) => update({ frequency_months: e.target.value })}
                     error={Boolean(controller.errors.frequency_months)}
                     data-testid="requirement-form-months-input"
+                    disabled={createdRequirementId != null}
                   />
                 )}
               </FormField>
@@ -496,6 +626,7 @@ export function RequirementFormDialog({
                     onChange={(e) => update({ frequency_days: e.target.value })}
                     error={Boolean(controller.errors.frequency_days)}
                     data-testid="requirement-form-days-input"
+                    disabled={createdRequirementId != null}
                   />
                 )}
               </FormField>
@@ -523,6 +654,7 @@ export function RequirementFormDialog({
                   onValueChange={(value) =>
                     update({ anchor: value as 'completion' | 'schedule' })
                   }
+                  disabled={createdRequirementId != null}
                 >
                   <SelectTrigger {...control} data-testid="requirement-form-anchor-trigger">
                     <SelectValue />
@@ -545,6 +677,7 @@ export function RequirementFormDialog({
                 checked={form.statutory}
                 onCheckedChange={(checked) => update({ statutory: checked === true })}
                 data-testid="requirement-form-statutory"
+                disabled={createdRequirementId != null}
               />
               <div>
                 <Label htmlFor="requirement-form-statutory" className="text-sm font-medium">
@@ -582,6 +715,7 @@ export function RequirementFormDialog({
                       'e.g. Regulatory Reform (Fire Safety) Order 2005',
                     )}
                     data-testid="requirement-form-basis-input"
+                    disabled={createdRequirementId != null}
                   />
                   {form.regulatory_standard_id != null ? (
                     <div
@@ -610,6 +744,7 @@ export function RequirementFormDialog({
                           })
                         }
                         data-testid="requirement-form-basis-unlink"
+                        disabled={createdRequirementId != null}
                       >
                         {t(
                           'compliance.schedule.regulatory_ai.remove_link',
@@ -647,24 +782,159 @@ export function RequirementFormDialog({
                   value={form.description}
                   onChange={(e) => update({ description: e.target.value })}
                   data-testid="requirement-form-description-input"
+                  disabled={createdRequirementId != null}
                 />
               )}
             </FormField>
 
-            <DialogFooter className="gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={guard.requestClose}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <SubmitButton
-                submitting={controller.submitting}
-                submittingLabel={t('common.saving', 'Saving…')}
-                disabled={taxonomy.failed}
-                data-testid="requirement-form-submit"
+            {!isEdit && createdRequirementId == null ? (
+              <div
+                className="space-y-3 rounded-lg border border-border p-4"
+                data-testid="requirement-form-historical-evidence"
               >
-                {isEdit
-                  ? t('compliance.schedule.form.save', 'Save changes')
-                  : t('compliance.schedule.form.create', 'Add obligation')}
-              </SubmitButton>
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="requirement-form-historical-toggle"
+                    checked={addHistoricalEvidence}
+                    onCheckedChange={(checked) => {
+                      setAddHistoricalEvidence(checked === true)
+                      setDirty(true)
+                    }}
+                    data-testid="requirement-form-historical-toggle"
+                  />
+                  <div>
+                    <Label
+                      htmlFor="requirement-form-historical-toggle"
+                      className="text-sm font-medium"
+                    >
+                      {t(
+                        'compliance.schedule.form.historical_toggle',
+                        'I have proof from a past completion',
+                      )}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t(
+                        'compliance.schedule.form.historical_hint',
+                        'Optional. After the obligation is created, a past occurrence is recorded with any files you attach.',
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {addHistoricalEvidence ? (
+                  <div className="space-y-3 pl-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="requirement-form-historical-completed-at">
+                        {t(
+                          'compliance.schedule.form.historical_completed_at',
+                          'Completed at',
+                        )}
+                      </Label>
+                      <Input
+                        id="requirement-form-historical-completed-at"
+                        type="datetime-local"
+                        value={historicalCompletedAt}
+                        onChange={(e) => {
+                          setHistoricalCompletedAt(e.target.value)
+                          setDirty(true)
+                        }}
+                        data-testid="requirement-form-historical-completed-at"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="requirement-form-historical-files">
+                        {t(
+                          'compliance.schedule.form.historical_evidence_label',
+                          'Add historical evidence',
+                        )}
+                      </Label>
+                      <input
+                        ref={fileInputRef}
+                        id="requirement-form-historical-files"
+                        type="file"
+                        multiple
+                        className="hidden"
+                        data-testid="requirement-form-historical-files-input"
+                        onChange={handleFilesSelected}
+                        disabled={controller.submitting}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        data-testid="requirement-form-historical-files-add"
+                        disabled={controller.submitting}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {t(
+                          'compliance.schedule.form.historical_evidence_add',
+                          'Add evidence files',
+                        )}
+                      </Button>
+                      {pendingFiles.length > 0 ? (
+                        <ul
+                          className="space-y-1 text-sm"
+                          data-testid="requirement-form-historical-files-list"
+                        >
+                          {pendingFiles.map((file, index) => (
+                            <li
+                              key={`${file.name}-${file.size}-${index}`}
+                              className="flex items-center justify-between gap-2"
+                            >
+                              <span className="truncate">{file.name}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto shrink-0 px-2 py-1 text-xs"
+                                data-testid={`requirement-form-historical-files-remove-${index}`}
+                                disabled={controller.submitting}
+                                onClick={() => removePendingFile(index)}
+                              >
+                                {t('common.remove', 'Remove')}
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <DialogFooter className="gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={guard.requestClose}
+                data-testid="requirement-form-cancel"
+              >
+                {createdRequirementId != null
+                  ? t('common.close', 'Close')
+                  : t('common.cancel', 'Cancel')}
+              </Button>
+              {createdRequirementId != null ? (
+                <Button asChild data-testid="requirement-form-open-created">
+                  <Link to={`/compliance-schedule/${createdRequirementId}`} onClick={close}>
+                    {t(
+                      'compliance.schedule.form.historical_open_detail',
+                      'Open obligation to retry evidence',
+                    )}
+                  </Link>
+                </Button>
+              ) : (
+                <SubmitButton
+                  submitting={controller.submitting}
+                  submittingLabel={t('common.saving', 'Saving…')}
+                  disabled={taxonomy.failed}
+                  data-testid="requirement-form-submit"
+                >
+                  {isEdit
+                    ? t('compliance.schedule.form.save', 'Save changes')
+                    : t('compliance.schedule.form.create', 'Add obligation')}
+                </SubmitButton>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>
