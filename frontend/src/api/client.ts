@@ -23,6 +23,7 @@ import { createAuditChallengeApi } from './auditChallengeClient'
 import { createComplaintsApi } from './complaintsClient'
 import { createNearMissesApi } from './nearMissesClient'
 import { createComplianceScheduleApi } from './complianceScheduleClient'
+import { createComplianceScheduleFraOcrApi } from './complianceScheduleFraOcrClient'
 import { createCaseClosureApi } from './caseClosureClient'
 import { createRisksApi } from './risksClient'
 import { createStandardsApi } from './standardsClient'
@@ -1094,6 +1095,7 @@ export const nearMissesApi = createNearMissesApi(api)
 
 // ============ Compliance Schedule API ============
 export const complianceScheduleApi = createComplianceScheduleApi(api)
+export const complianceScheduleFraOcrApi = createComplianceScheduleFraOcrApi(api)
 
 // ============ Case closure validation (shared by the four registers) ============
 export const caseClosureApi = createCaseClosureApi(api)

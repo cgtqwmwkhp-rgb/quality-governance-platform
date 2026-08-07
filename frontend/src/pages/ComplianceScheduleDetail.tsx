@@ -20,6 +20,7 @@ import { RequirementFormDialog } from './compliance/RequirementFormDialog'
 import { RequirementLifecycleControls } from './compliance/RequirementLifecycleControls'
 import { RecordEvidenceSection } from './compliance/RecordEvidenceSection'
 import { RecordFilingControl } from './compliance/RecordFilingControl'
+import { FraOcrPanel } from './compliance/FraOcrPanel'
 import { toast } from '../contexts/ToastContext'
 
 export default function ComplianceScheduleDetail() {
@@ -214,6 +215,14 @@ export default function ComplianceScheduleDetail() {
           </div>
         )}
       </dl>
+
+      <FraOcrPanel
+        requirement={requirement}
+        onRequirementUpdated={(r) => {
+          setRequirement(r)
+          void load()
+        }}
+      />
 
       <section className="rounded-lg border border-border bg-card">
         <div className="border-b border-border px-4 py-3 font-medium">
