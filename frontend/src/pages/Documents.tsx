@@ -223,6 +223,7 @@ export default function Documents() {
     id: number
     title: string
   } | null>(null)
+  const [relationshipBusy, setRelationshipBusy] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -547,9 +548,12 @@ export default function Documents() {
   }
 
   const closeUploadModal = () => {
-    if (uploading) return
+    // Block dismiss while the file is uploading or an edge create is in flight
+    // so Skip/Done/X cannot unmount the step mid-request (Bugbot).
+    if (uploading || relationshipBusy) return
     setShowUploadModal(false)
     setUploadRelationshipDoc(null)
+    setRelationshipBusy(false)
     setUploadError(null)
   }
 
@@ -1261,6 +1265,12 @@ export default function Documents() {
           onDragLeave={uploadRelationshipDoc ? undefined : handleDrag}
           onDragOver={uploadRelationshipDoc ? undefined : handleDrag}
           onDrop={uploadRelationshipDoc ? undefined : handleDrop}
+          onInteractOutside={(event) => {
+            if (uploading || relationshipBusy) event.preventDefault()
+          }}
+          onEscapeKeyDown={(event) => {
+            if (uploading || relationshipBusy) event.preventDefault()
+          }}
         >
           <DialogHeader>
             <DialogTitle>
@@ -1279,6 +1289,7 @@ export default function Documents() {
                 documentId={uploadRelationshipDoc.id}
                 documentTitle={uploadRelationshipDoc.title}
                 onDone={closeUploadModal}
+                onBusyChange={setRelationshipBusy}
               />
             ) : (
               <>

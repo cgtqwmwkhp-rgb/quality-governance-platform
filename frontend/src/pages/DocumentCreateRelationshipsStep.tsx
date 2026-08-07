@@ -33,12 +33,15 @@ export interface DocumentCreateRelationshipsStepProps {
   documentId: number
   documentTitle: string
   onDone: () => void
+  /** Notify parent when an edge create is in flight so the upload dialog cannot dismiss mid-request. */
+  onBusyChange?: (busy: boolean) => void
 }
 
 export function DocumentCreateRelationshipsStep({
   documentId,
   documentTitle,
   onDone,
+  onBusyChange,
 }: DocumentCreateRelationshipsStepProps) {
   const [edges, setEdges] = useState<DocumentEdge[]>([])
   const [search, setSearch] = useState('')
@@ -53,6 +56,14 @@ export function DocumentCreateRelationshipsStep({
   const [recorded, setRecorded] = useState<
     { edge: DocumentEdge; counterpartTitle: string; relationLabel: string }[]
   >([])
+
+  useEffect(() => {
+    onBusyChange?.(linking)
+    return () => {
+      // Clear busy if the step unmounts mid-request so the parent does not stay locked.
+      if (linking) onBusyChange?.(false)
+    }
+  }, [linking, onBusyChange])
 
   const meta = DOCUMENT_EDGE_TYPE_META[edgeType]
 
@@ -327,6 +338,7 @@ export function DocumentCreateRelationshipsStep({
         <Button
           variant="secondary"
           onClick={onDone}
+          disabled={linking}
           data-testid="documents-create-rel-done"
         >
           {recorded.length > 0 ? 'Done' : 'Skip for now'}

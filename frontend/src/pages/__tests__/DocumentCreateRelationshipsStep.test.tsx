@@ -100,4 +100,59 @@ describe('DocumentCreateRelationshipsStep', () => {
     expect(onDone).toHaveBeenCalled()
     expect(createEdge).not.toHaveBeenCalled()
   })
+
+  it('disables Skip/Done and reports busy while createEdge is in flight', async () => {
+    let resolveCreate: ((value: unknown) => void) | undefined
+    createEdge.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve
+        }),
+    )
+    const onDone = vi.fn()
+    const onBusyChange = vi.fn()
+    render(
+      <MemoryRouter>
+        <DocumentCreateRelationshipsStep
+          documentId={99}
+          documentTitle="Incident Reporting SOP"
+          onDone={onDone}
+          onBusyChange={onBusyChange}
+        />
+      </MemoryRouter>,
+    )
+
+    fireEvent.change(screen.getByTestId('documents-create-rel-search'), {
+      target: { value: 'Incident' },
+    })
+    expect(await screen.findByTestId('documents-create-rel-result-20')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('documents-create-rel-result-20'))
+    fireEvent.click(screen.getByTestId('documents-create-rel-submit'))
+
+    await waitFor(() => {
+      expect(onBusyChange).toHaveBeenCalledWith(true)
+    })
+    expect(screen.getByTestId('documents-create-rel-done')).toBeDisabled()
+    fireEvent.click(screen.getByTestId('documents-create-rel-done'))
+    expect(onDone).not.toHaveBeenCalled()
+
+    resolveCreate?.({
+      data: {
+        id: 7,
+        tenant_id: 1,
+        src_document_id: 99,
+        dst_document_id: 20,
+        edge_type: 'implements',
+        is_primary_parent: true,
+        status: 'confirmed',
+        created_method: 'manual',
+        created_at: '2026-08-07T12:00:00Z',
+        updated_at: '2026-08-07T12:00:00Z',
+      },
+    })
+    await waitFor(() => {
+      expect(onBusyChange).toHaveBeenCalledWith(false)
+    })
+    expect(screen.getByTestId('documents-create-rel-done')).not.toBeDisabled()
+  })
 })
