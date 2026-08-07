@@ -24,6 +24,7 @@ import { createComplaintsApi } from './complaintsClient'
 import { createNearMissesApi } from './nearMissesClient'
 import { createComplianceScheduleApi } from './complianceScheduleClient'
 import { createComplianceScheduleFraOcrApi } from './complianceScheduleFraOcrClient'
+import { createDocumentGraphApi } from './documentGraphClient'
 import { createCaseClosureApi } from './caseClosureClient'
 import { createRisksApi } from './risksClient'
 import { createStandardsApi } from './standardsClient'
@@ -1096,6 +1097,16 @@ export const nearMissesApi = createNearMissesApi(api)
 // ============ Compliance Schedule API ============
 export const complianceScheduleApi = createComplianceScheduleApi(api)
 export const complianceScheduleFraOcrApi = createComplianceScheduleFraOcrApi(api)
+
+// ============ Doc Graph API (ADR-0021 — not the Golden Thread) ============
+export const documentGraphApi = createDocumentGraphApi(api)
+export type {
+  CreateDocumentEdgePayload,
+  DocumentEdge,
+  DocumentEdgeMethod,
+  DocumentEdgeStatus,
+  DocumentEdgeType,
+} from './documentGraphClient'
 
 // ============ Case closure validation (shared by the four registers) ============
 export const caseClosureApi = createCaseClosureApi(api)

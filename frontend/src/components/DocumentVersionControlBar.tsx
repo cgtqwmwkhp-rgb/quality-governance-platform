@@ -26,6 +26,16 @@ export interface VersionHistoryItem {
   published_at?: string | null
 }
 
+/** Confirmed Doc Graph edge counts shown on the Versions tab (flag-gated by caller). */
+export interface DocumentRelationshipAmbientCounts {
+  /** Confirmed edges pointing at this document. */
+  inbound: number
+  /** Confirmed edges pointing away from this document. */
+  outbound: number
+  /** Confirmed undirected peers (related_to / conflicts_with). */
+  peers?: number
+}
+
 export interface DocumentVersionControlBarProps {
   documentLabel?: string
   currentVersion: string
@@ -41,6 +51,12 @@ export interface DocumentVersionControlBarProps {
   publishing?: boolean
   onRevise?: (changeSummary: string, isMajor: boolean, file?: File | null) => Promise<void> | void
   onPublish?: () => Promise<void> | void
+  /**
+   * When set (caller has `document_graph` open), show inbound/outbound confirmed
+   * Doc Graph counts beside published/working metadata. Omitted when the flag is
+   * closed so the bar stays unchanged for everyone else.
+   */
+  relationshipCounts?: DocumentRelationshipAmbientCounts | null
   className?: string
 }
 
@@ -77,6 +93,7 @@ export function DocumentVersionControlBar({
   publishing = false,
   onRevise,
   onPublish,
+  relationshipCounts = null,
   className,
 }: DocumentVersionControlBarProps) {
   const [showRevise, setShowRevise] = useState(false)
@@ -149,6 +166,27 @@ export function DocumentVersionControlBar({
                   {workingVersion ? `v${workingVersion}` : '— none'}
                 </strong>
               </span>
+              {relationshipCounts ? (
+                <span
+                  className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"
+                  data-testid="version-relationship-counts"
+                >
+                  <span data-testid="version-relationship-inbound">
+                    Inbound:{' '}
+                    <strong className="text-foreground">{relationshipCounts.inbound}</strong>
+                  </span>
+                  <span data-testid="version-relationship-outbound">
+                    Outbound:{' '}
+                    <strong className="text-foreground">{relationshipCounts.outbound}</strong>
+                  </span>
+                  {typeof relationshipCounts.peers === 'number' ? (
+                    <span data-testid="version-relationship-peers">
+                      Peers:{' '}
+                      <strong className="text-foreground">{relationshipCounts.peers}</strong>
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
             </div>
             <p className="text-xs text-muted-foreground max-w-2xl">
               Published versions are immutable. Revise opens a draft tip; publish freezes it and

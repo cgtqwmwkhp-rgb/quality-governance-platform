@@ -69,6 +69,47 @@ describe('DocumentVersionControlBar', () => {
     expect(screen.getByTestId('version-revise-btn')).not.toBeDisabled()
   })
 
+  it('shows inbound/outbound confirmed Doc Graph counts when provided', () => {
+    render(
+      <DocumentVersionControlBar
+        currentVersion="1.0"
+        status="published"
+        publishedVersion="1.0"
+        workingVersion={null}
+        versions={[
+          {
+            id: 1,
+            version_number: '1.0',
+            status: 'published',
+            change_summary: 'Initial',
+            is_immutable: true,
+            read_only: true,
+            created_at: '2026-07-01T10:00:00Z',
+          },
+        ]}
+        relationshipCounts={{ inbound: 2, outbound: 1, peers: 3 }}
+      />,
+    )
+
+    expect(screen.getByTestId('version-relationship-counts')).toBeInTheDocument()
+    expect(screen.getByTestId('version-relationship-inbound')).toHaveTextContent('Inbound: 2')
+    expect(screen.getByTestId('version-relationship-outbound')).toHaveTextContent('Outbound: 1')
+    expect(screen.getByTestId('version-relationship-peers')).toHaveTextContent('Peers: 3')
+  })
+
+  it('hides relationship counts when the Doc Graph flag is closed', () => {
+    render(
+      <DocumentVersionControlBar
+        currentVersion="1.0"
+        status="draft"
+        publishedVersion={null}
+        workingVersion="1.0"
+        versions={[]}
+      />,
+    )
+    expect(screen.queryByTestId('version-relationship-counts')).not.toBeInTheDocument()
+  })
+
   it('submits revise with change summary when no open draft', async () => {
     const onRevise = vi.fn().mockResolvedValue(undefined)
     render(

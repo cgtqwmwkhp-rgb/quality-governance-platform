@@ -16,10 +16,12 @@ import {
   Brain,
 } from 'lucide-react'
 import api, {
+  documentGraphApi,
   getApiErrorMessage,
   knowledgeBankApi,
   type DiscussionMessage,
   type DiscussionThread,
+  type DocumentEdge,
   type KnowledgeEvidenceLink,
   type QuizDraft,
   type RegulatoryImpact,
@@ -33,12 +35,16 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { DocumentVersionControlBar } from '../components/DocumentVersionControlBar'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { cn } from '../helpers/utils'
 import {
   PROPOSED_EVIDENCE_ANCHOR_ID,
   resolveDocumentDetailTab,
   shouldScrollToProposedEvidence,
 } from './documentEvidenceTab'
+import { summariseDocumentRelationships } from './documentRelationshipHelpers'
+import { DocumentRelationshipChips } from './DocumentRelationshipChips'
+import { DocumentRelationshipsPanel } from './DocumentRelationshipsPanel'
 import {
   buildDocumentDownstreamView,
   buildDocumentsExceptionsHref,
@@ -150,7 +156,8 @@ export default function DocumentDetail() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const documentId = Number(id)
-  const defaultTab = resolveDocumentDetailTab(searchParams.get('tab'))
+  const documentGraphEnabled = useFeatureFlag('document_graph')
+  const defaultTab = resolveDocumentDetailTab(searchParams.get('tab'), { documentGraphEnabled })
   const campaignIdParam = Number(searchParams.get('campaignId'))
   const initialCampaignId =
     Number.isFinite(campaignIdParam) && campaignIdParam > 0 ? campaignIdParam : null
@@ -197,6 +204,10 @@ export default function DocumentDetail() {
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
   const [campaignOffer, setCampaignOffer] = useState<CampaignOffer | null>(null)
   const [offeringCampaign, setOfferingCampaign] = useState(false)
+
+  const [edges, setEdges] = useState<DocumentEdge[]>([])
+  const [edgesLoading, setEdgesLoading] = useState(false)
+  const [edgesError, setEdgesError] = useState<string | null>(null)
 
   const questionCount = useMemo(
     () => sanitizeQuestionCount(questionCountInput),
@@ -292,6 +303,38 @@ export default function DocumentDetail() {
     }
   }, [documentId])
 
+  // Doc Graph edges load only while the flag is open; the routes 404 when closed,
+  // so calling them anyway would surface a phantom error on every document.
+  const loadEdges = useCallback(async () => {
+    if (!documentGraphEnabled) {
+      setEdges([])
+      setEdgesError(null)
+      return
+    }
+    if (!documentId || Number.isNaN(documentId)) return
+    setEdgesLoading(true)
+    setEdgesError(null)
+    try {
+      const response = await documentGraphApi.listEdges(documentId)
+      setEdges(response.data.items)
+    } catch (err) {
+      setEdges([])
+      setEdgesError(getApiErrorMessage(err))
+    } finally {
+      setEdgesLoading(false)
+    }
+  }, [documentId, documentGraphEnabled])
+
+  const relationshipSummary = useMemo(
+    () => summariseDocumentRelationships(documentId, edges),
+    [documentId, edges],
+  )
+
+  const confirmedEvidenceCount = useMemo(
+    () => evidence.filter((link) => link.status === 'confirmed').length,
+    [evidence],
+  )
+
   useEffect(() => {
     if (document) setTitleDraft(document.title)
   }, [document])
@@ -309,7 +352,8 @@ export default function DocumentDetail() {
     void loadThreads()
     void loadImpacts()
     void loadVersions()
-  }, [loadDocument, loadEvidence, loadThreads, loadImpacts, loadVersions])
+    void loadEdges()
+  }, [loadDocument, loadEvidence, loadThreads, loadImpacts, loadVersions, loadEdges])
 
   useEffect(() => {
     if (activeThreadId == null) return
@@ -670,6 +714,13 @@ export default function DocumentDetail() {
             {document.document_type}
             {document.category ? ` · ${document.category}` : ''} · v{document.version}
           </p>
+          {documentGraphEnabled ? (
+            <DocumentRelationshipChips
+              documentId={document.id}
+              summary={relationshipSummary}
+              evidenceCount={confirmedEvidenceCount}
+            />
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           {['draft', 'indexed', 'rejected'].includes(docStatus) ? (
@@ -730,6 +781,12 @@ export default function DocumentDetail() {
         <TabsList className="flex flex-wrap h-auto gap-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="evidence">Standards & Evidence</TabsTrigger>
+          {documentGraphEnabled ? (
+            <TabsTrigger value="relationships" data-testid="document-relationships-tab">
+              Relationships
+              {relationshipSummary.pending > 0 ? ` (${relationshipSummary.pending})` : ''}
+            </TabsTrigger>
+          ) : null}
           <TabsTrigger value="versions">Versions</TabsTrigger>
           <TabsTrigger value="quiz">{t('documents.detail.tab_share_quiz_compliance')}</TabsTrigger>
           <TabsTrigger value="campaign-results">
@@ -991,6 +1048,19 @@ export default function DocumentDetail() {
           )}
         </TabsContent>
 
+        {documentGraphEnabled ? (
+          <TabsContent value="relationships" className="mt-4 space-y-4">
+            <DocumentRelationshipsPanel
+              documentId={document.id}
+              documentTitle={document.title}
+              edges={edges}
+              loading={edgesLoading}
+              error={edgesError}
+              onChanged={loadEdges}
+            />
+          </TabsContent>
+        ) : null}
+
         <TabsContent value="versions" className="mt-4 space-y-4">
           {canEditTitle && (
             <Card className="p-4 space-y-3" data-testid="document-title-edit">
@@ -1038,6 +1108,15 @@ export default function DocumentDetail() {
             publishing={publishing}
             onRevise={handleReviseVersion}
             onPublish={handlePublishVersion}
+            relationshipCounts={
+              documentGraphEnabled
+                ? {
+                    inbound: relationshipSummary.inbound,
+                    outbound: relationshipSummary.outbound,
+                    peers: relationshipSummary.peers,
+                  }
+                : null
+            }
           />
           <div className="flex justify-end">
             <Button variant="outline" size="sm" asChild>
