@@ -126,6 +126,9 @@ class RequirementResponse(BaseModel):
     status: Optional[ComplianceStatusLiteral] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    # Server-authoritative FRA OCR eligibility (template key OR custom 03.01).
+    # Do not re-derive from taxonomy alone on the client.
+    fra_ocr_eligible: bool = False
 
 
 class RegulatoryBasisSuggestRequest(BaseModel):

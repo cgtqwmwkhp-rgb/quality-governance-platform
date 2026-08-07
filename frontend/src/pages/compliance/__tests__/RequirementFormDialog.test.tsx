@@ -144,6 +144,7 @@ const EXISTING: ComplianceRequirement = {
   is_active: true,
   status: 'due_soon',
   created_at: '2026-01-01T00:00:00Z',
+  fra_ocr_eligible: true,
 }
 
 function renderForm(props: Partial<React.ComponentProps<typeof RequirementFormDialog>> = {}) {

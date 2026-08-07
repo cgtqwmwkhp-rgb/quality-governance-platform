@@ -142,6 +142,7 @@ def _requirement_response(row, *, now: Optional[datetime] = None) -> Requirement
         status=status_value,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        fra_ocr_eligible=ComplianceScheduleFraOcrService.is_fra_ocr_eligible(row),
     )
 
 

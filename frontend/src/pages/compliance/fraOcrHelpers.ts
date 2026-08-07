@@ -7,23 +7,20 @@ import type {
   FraOcrDraftResponse,
 } from '../../api/complianceScheduleFraOcrClient'
 
-/** Catalogue / Library taxonomy for Fire Risk Assessment. */
+/** Catalogue / Library taxonomy for Fire Risk Assessment (filing categories). */
 export const FRA_TAXONOMY_ID = '03.01'
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 /**
- * Site-scoped active FRA obligations only. Org-wide or non-FRA rows cannot
- * accept an FRA OCR draft (backend rejects them too).
+ * Prefer the server-authoritative ``fra_ocr_eligible`` flag (template key OR
+ * custom taxonomy 03.01, plus active + site-scoped). Taxonomy-only clientside
+ * checks miss catalogue FRA rows whose taxonomy was edited away from 03.01.
  */
 export function isFraOcrEligible(
-  requirement: Pick<ComplianceRequirement, 'is_active' | 'location_id' | 'taxonomy_id'>,
+  requirement: Pick<ComplianceRequirement, 'fra_ocr_eligible'>,
 ): boolean {
-  return (
-    requirement.is_active === true &&
-    requirement.location_id != null &&
-    requirement.taxonomy_id === FRA_TAXONOMY_ID
-  )
+  return requirement.fra_ocr_eligible === true
 }
 
 /**
