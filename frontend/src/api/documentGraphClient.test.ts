@@ -98,4 +98,12 @@ describe('createDocumentGraphApi', () => {
     client.getCitationStaleness(9)
     expect(api.get).toHaveBeenCalledWith('/api/v1/document-graph/edges/9/citation-staleness')
   })
+
+  it('lists clause documents for ISO reverse freshness', () => {
+    const api = mockApi()
+    createDocumentGraphApi(api as never).listClauseDocuments('9001-7.5')
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/document-graph/clauses/9001-7.5/documents',
+    )
+  })
 })

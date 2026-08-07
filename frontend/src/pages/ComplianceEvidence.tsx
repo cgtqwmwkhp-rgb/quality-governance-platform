@@ -67,6 +67,7 @@ import { toast } from '../contexts/ToastContext'
 import {
   COMPLIANCE_EVIDENCE_DEFAULT_SECTION,
   COMPLIANCE_EVIDENCE_SECTIONS,
+  complianceEvidenceEntityRoute,
   complianceEvidenceSectionQueryValue,
   parseComplianceEvidenceSection,
   type ComplianceEvidenceSectionId,
@@ -76,50 +77,8 @@ import {
   standardCoverageState,
   standardProvenanceLabel,
 } from './compliance/standardCoverageHonesty'
-
-/**
- * Maps entity_type values (as stored in ComplianceEvidenceLink) to valid SPA routes.
- *
- * For `audit_finding` we deep-link to the Audits Findings tab pre-filtered by
- * the specific finding ID (?view=findings&findingId=N) so the user lands on the
- * exact finding rather than the general audit board.
- *
- * Using a naive `/${entity_type}s` template produces broken routes such as:
- *   audit_finding → /audit_findings (no route)
- *   policy        → /policys        (no route)
- *   training      → /trainings      (no route — correct is /workforce/training)
- */
-const ENTITY_TYPE_ROUTE: Record<string, string> = {
-  audit: '/audits',
-  incident: '/incidents',
-  complaint: '/complaints',
-  near_miss: '/near-misses',
-  action: '/actions',
-  risk: '/risk-register',
-  policy: '/policies',
-  document: '/documents',
-  training: '/workforce/training',
-}
-
-const getEntityRoute = (entityType: string, entityId?: string): string => {
-  if (entityType === 'audit_finding' && entityId) {
-    return `/audits?view=findings&findingId=${encodeURIComponent(entityId)}`
-  }
-  if (entityType === 'audit_finding') return '/audits?view=findings'
-  if (entityType === 'audit' && entityId) {
-    return `/audits?runId=${encodeURIComponent(entityId)}`
-  }
-  if (entityType === 'action' && entityId) {
-    return `/actions?sourceId=${encodeURIComponent(entityId)}`
-  }
-  if (entityType === 'incident' && entityId) {
-    return `/incidents?id=${encodeURIComponent(entityId)}`
-  }
-  if (entityType === 'risk' && entityId) {
-    return `/risk-register?id=${encodeURIComponent(entityId)}`
-  }
-  return ENTITY_TYPE_ROUTE[entityType] ?? `/${entityType}s`
-}
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { ClauseDocumentsFreshnessPanel } from './ClauseDocumentsFreshnessPanel'
 
 /** Surface operator-visible failures (banner + toast). Never silent. */
 const reportFailure = (
@@ -218,6 +177,7 @@ const standardProgressClass: Record<string, string> = {
 export default function ComplianceEvidence() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const documentGraphEnabled = useFeatureFlag('document_graph')
   const clauseFromUrl = (searchParams.get('clause') || '').trim()
   const standardFromUrl = (searchParams.get('standard') || '').trim()
   const section = parseComplianceEvidenceSection(searchParams.get('section'))
@@ -1169,7 +1129,11 @@ export default function ComplianceEvidence() {
                                 {new Date(evidence.created_at).toLocaleDateString()}
                               </span>
                               <Link
-                                to={getEntityRoute(evidence.entity_type, evidence.entity_id)}
+                                to={complianceEvidenceEntityRoute(
+                                  evidence.entity_type,
+                                  evidence.entity_id,
+                                  { documentGraphEnabled },
+                                )}
                                 className="p-1 rounded text-primary hover:text-primary/80 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ml-1"
                                 aria-label={`View ${config.label}`}
                               >
@@ -1522,6 +1486,11 @@ export default function ComplianceEvidence() {
                     </div>
                   </div>
 
+                  <ClauseDocumentsFreshnessPanel
+                    clauseId={selectedClause.id}
+                    enabled={documentGraphEnabled}
+                  />
+
                   {/* Linked Evidence */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -1536,7 +1505,11 @@ export default function ComplianceEvidence() {
                           const config =
                             evidenceTypeConfig[evidence.entity_type] ?? evidenceTypeConfig.document
                           const Icon = config.icon
-                          const route = getEntityRoute(evidence.entity_type, evidence.entity_id)
+                          const route = complianceEvidenceEntityRoute(
+                            evidence.entity_type,
+                            evidence.entity_id,
+                            { documentGraphEnabled },
+                          )
                           const isDeleting = deletingLinkId === evidence.id
                           return (
                             <div
