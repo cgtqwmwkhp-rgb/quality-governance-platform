@@ -13,14 +13,23 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal, Optional
 
-from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
-
 from src.domain.services.document_intelligence_service import DocumentIntelligenceService
 from src.domain.services.ocr_field_extraction import CONFIDENCE_HIGH, CONFIDENCE_MEDIUM, CONFIDENCE_NONE, ExtractedField
 
 logger = logging.getLogger(__name__)
 
 FRA_OCR_PURPOSE: Literal["fra_pas79"] = "fra_pas79"
+
+
+def _add_months(value: date, months: int) -> date:
+    """Add calendar months without python-dateutil (keeps type-ignore budget)."""
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
 FRA_TAXONOMY_ID = "03.01"
 EVIDENCE_SNIPPET_MAX = 200
 ACTION_TEXT_MAX = 2000
@@ -513,7 +522,7 @@ def parse_fields_from_text(text: str) -> tuple[dict[str, Any], list[FraProposedA
         try:
             assessed = date.fromisoformat(assessment_date.value or "")
             months = int(review_interval.value or "0")
-            derived = assessed + relativedelta(months=months)
+            derived = _add_months(assessed, months)
         except (TypeError, ValueError):
             derived = None
         if derived is not None:
