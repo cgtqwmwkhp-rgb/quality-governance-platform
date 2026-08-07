@@ -1,13 +1,16 @@
 """Compliance Schedule: nullable regulatory standard/clause FKs on requirements.
 
 Revision ID: 20261013_cs_reg_link
-Revises: 20261012_rls_sso_prov
+Revises: 20261015_document_edges
 Create Date: 2026-10-13
 
 Adds ``regulatory_standard_id`` and ``regulatory_clause_id`` to
 ``compliance_requirements`` so an accepted AI (or manual) regulatory-basis
 suggestion can persist a structured link into the Standards module while the
 free-text ``regulatory_basis`` column remains the human-readable citation.
+
+Chained after Doc Graph P0 (``20261015_document_edges``) so this PR and main
+share a single Alembic head. FRA OCR may later chain after this revision.
 
 No RLS change is required: ``tenant_isolation`` on ``compliance_requirements``
 keys off ``tenant_id``, which is untouched. Adding nullable FK columns needs
@@ -22,7 +25,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20261013_cs_reg_link"
-down_revision: Union[str, Sequence[str], None] = "20261012_rls_sso_prov"
+down_revision: Union[str, Sequence[str], None] = "20261015_document_edges"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
