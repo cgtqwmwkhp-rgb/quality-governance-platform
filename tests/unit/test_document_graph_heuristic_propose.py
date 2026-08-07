@@ -244,7 +244,6 @@ async def test_citation_staleness_for_edge_uses_chunk():
     assert payload["edge_id"] == 9
 
 
-
 def test_coerce_document_id_rejects_invalid_metadata():
     from src.domain.services.document_graph_heuristic_propose import _coerce_document_id
 
