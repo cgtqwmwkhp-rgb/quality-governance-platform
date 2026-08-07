@@ -16,6 +16,8 @@ export interface ComplianceRequirement {
   taxonomy_id: string
   description?: string | null
   regulatory_basis?: string | null
+  regulatory_standard_id?: number | null
+  regulatory_clause_id?: number | null
   frequency_months?: number | null
   frequency_days?: number | null
   anchor: 'completion' | 'schedule'
@@ -180,6 +182,8 @@ export interface RequirementCreatePayload {
   next_due_date: string
   description?: string | null
   regulatory_basis?: string | null
+  regulatory_standard_id?: number | null
+  regulatory_clause_id?: number | null
   frequency_months?: number | null
   frequency_days?: number | null
   anchor?: 'completion' | 'schedule'
@@ -196,6 +200,44 @@ export interface RequirementCreatePayload {
  */
 export type RequirementUpdatePayload = Partial<RequirementCreatePayload> & {
   is_active?: boolean
+}
+
+export interface RegulatoryBasisSuggestPayload {
+  title: string
+  taxonomy_id: string
+  description?: string | null
+  statutory?: boolean
+  requirement_id?: number
+}
+
+export interface RegulatoryBasisClarifyPayload extends RegulatoryBasisSuggestPayload {
+  answers: Array<{ question_id: string; answer: string }>
+}
+
+export interface RegulatoryBasisCandidate {
+  label: string
+  regulation_or_standard_code: string
+  standard_id?: number | null
+  clause_ids: number[]
+  confidence: number
+  rationale: string
+  source: string
+}
+
+export interface RegulatoryBasisQuestion {
+  id: string
+  question: string
+  options: string[]
+  why: string
+}
+
+export interface RegulatoryBasisSuggestResult {
+  candidates: RegulatoryBasisCandidate[]
+  needs_clarification: boolean
+  clarifying_questions: RegulatoryBasisQuestion[]
+  confidence_threshold: number
+  ai_available: boolean
+  notice?: string | null
 }
 
 export function createComplianceScheduleApi(api: AxiosInstance) {
@@ -224,6 +266,12 @@ export function createComplianceScheduleApi(api: AxiosInstance) {
 
     deactivateRequirement: (id: number) =>
       api.post<ComplianceRequirement>(`${base}/requirements/${id}/deactivate`),
+
+    suggestRegulatoryBasis: (data: RegulatoryBasisSuggestPayload) =>
+      api.post<RegulatoryBasisSuggestResult>(`${base}/regulatory-basis/suggest`, data),
+
+    clarifyRegulatoryBasis: (data: RegulatoryBasisClarifyPayload) =>
+      api.post<RegulatoryBasisSuggestResult>(`${base}/regulatory-basis/clarify`, data),
 
     listRecords: (requirementId: number, params?: { page?: number; page_size?: number }) =>
       api.get<Paginated<ComplianceRecord>>(`${base}/requirements/${requirementId}/records`, {

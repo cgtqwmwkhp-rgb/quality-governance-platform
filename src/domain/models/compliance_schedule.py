@@ -144,6 +144,18 @@ class ComplianceRequirement(Base, TimestampMixin, SoftDeleteMixin, AuditTrailMix
     taxonomy_id: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     regulatory_basis: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Structured Standards link (AI assist Accept). Free-text basis remains the citation.
+    # No ORM relationships: `_requirement_response` is sync and must not lazy-load under asyncio.
+    regulatory_standard_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("standards.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    regulatory_clause_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("clauses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     frequency_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     frequency_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

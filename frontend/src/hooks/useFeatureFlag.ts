@@ -27,6 +27,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   // Compliance Schedule (Wave 1) — opener mirrors COMPLIANCE_SCHEDULE_ENABLED
   compliance_schedule: false,
 
+  // Track C: AI regulatory-basis assist (requires CS open + this flag)
+  compliance_schedule_regulatory_ai: false,
+
   // Other feature flags can be added here
   portal_offline_mode: false,
   admin_ai_copilot: false,

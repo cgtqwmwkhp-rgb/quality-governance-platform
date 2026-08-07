@@ -27,12 +27,18 @@ from src.api.schemas.compliance_schedule import (
     RecordFilingResponse,
     RecordListResponse,
     RecordResponse,
+    RegulatoryBasisCandidateResponse,
+    RegulatoryBasisClarifyRequest,
+    RegulatoryBasisQuestionResponse,
+    RegulatoryBasisSuggestRequest,
+    RegulatoryBasisSuggestResponse,
     RequirementCreate,
     RequirementListResponse,
     RequirementResponse,
     RequirementUpdate,
 )
 from src.api.utils.tenant import require_tenant_id
+from src.core.config import settings
 from src.domain.exceptions import BadRequestError
 from src.domain.models.user import User
 from src.domain.services.compliance_schedule_filing_service import (
@@ -40,10 +46,14 @@ from src.domain.services.compliance_schedule_filing_service import (
 )
 from src.domain.services.compliance_schedule_import_service import ComplianceScheduleImportService
 from src.domain.services.compliance_schedule_policy import derive_status
+from src.domain.services.compliance_schedule_regulatory_ai_service import (
+    ComplianceScheduleRegulatoryAiService,
+)
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 from src.infrastructure.database import async_session_maker
 
 DISABLED_DETAIL = "Compliance Schedule is not enabled in this environment."
+REGULATORY_AI_DISABLED_DETAIL = "AI regulatory-basis suggestions are not enabled in this environment."
 
 router = APIRouter()
 
@@ -67,6 +77,18 @@ async def require_compliance_schedule_enabled() -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=DISABLED_DETAIL)
 
 
+async def require_compliance_schedule_regulatory_ai_enabled() -> None:
+    """Flag gate layered on the module gate ``_enabled_router`` already applies.
+
+    404 rather than 403, matching ``require_compliance_schedule_enabled``: a
+    feature that is off does not disclose that it exists.
+    """
+    from fastapi import HTTPException
+
+    if not settings.compliance_schedule_regulatory_ai_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=REGULATORY_AI_DISABLED_DETAIL)
+
+
 _enabled_router = APIRouter(dependencies=[Depends(require_compliance_schedule_enabled)])
 
 
@@ -84,6 +106,8 @@ def _requirement_response(row, *, now: Optional[datetime] = None) -> Requirement
         taxonomy_id=row.taxonomy_id,
         description=row.description,
         regulatory_basis=row.regulatory_basis,
+        regulatory_standard_id=getattr(row, "regulatory_standard_id", None),
+        regulatory_clause_id=getattr(row, "regulatory_clause_id", None),
         frequency_months=row.frequency_months,
         frequency_days=row.frequency_days,
         anchor=row.anchor,
@@ -95,6 +119,36 @@ def _requirement_response(row, *, now: Optional[datetime] = None) -> Requirement
         status=status_value,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+def _regulatory_suggestion_response(result) -> RegulatoryBasisSuggestResponse:
+    return RegulatoryBasisSuggestResponse(
+        candidates=[
+            RegulatoryBasisCandidateResponse(
+                label=c.label,
+                regulation_or_standard_code=c.regulation_or_standard_code,
+                standard_id=c.standard_id,
+                clause_ids=list(c.clause_ids),
+                confidence=c.confidence,
+                rationale=c.rationale,
+                source=c.source,
+            )
+            for c in result.candidates
+        ],
+        needs_clarification=result.needs_clarification,
+        clarifying_questions=[
+            RegulatoryBasisQuestionResponse(
+                id=q.id,
+                question=q.question,
+                options=list(q.options),
+                why=q.why,
+            )
+            for q in result.clarifying_questions
+        ],
+        confidence_threshold=result.confidence_threshold,
+        ai_available=result.ai_available,
+        notice=result.notice,
     )
 
 
@@ -293,6 +347,8 @@ async def create_requirement(
         anchor=data.anchor.value if hasattr(data.anchor, "value") else str(data.anchor),
         description=data.description,
         regulatory_basis=data.regulatory_basis,
+        regulatory_standard_id=data.regulatory_standard_id,
+        regulatory_clause_id=data.regulatory_clause_id,
         statutory=data.statutory,
         location_id=data.location_id,
         owner_id=data.owner_id,
@@ -488,6 +544,59 @@ async def file_record_to_library(
         duplicate_warning=result.duplicate_warning,
         duplicate_warning_detail=result.duplicate_warning_detail,
     )
+
+
+# ---------------------------------------------------------------------------
+# Regulatory basis AI assist (Track C)
+# ---------------------------------------------------------------------------
+
+
+@_enabled_router.post(
+    "/regulatory-basis/suggest",
+    response_model=RegulatoryBasisSuggestResponse,
+    dependencies=[Depends(require_compliance_schedule_regulatory_ai_enabled)],
+)
+async def suggest_regulatory_basis(
+    data: RegulatoryBasisSuggestRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:update"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = ComplianceScheduleRegulatoryAiService(db)
+    result = await service.suggest(
+        tenant_id=tenant_id,
+        title=data.title,
+        taxonomy_id=data.taxonomy_id,
+        description=data.description,
+        statutory=data.statutory,
+        requirement_id=data.requirement_id,
+    )
+    return _regulatory_suggestion_response(result)
+
+
+@_enabled_router.post(
+    "/regulatory-basis/clarify",
+    response_model=RegulatoryBasisSuggestResponse,
+    dependencies=[Depends(require_compliance_schedule_regulatory_ai_enabled)],
+)
+async def clarify_regulatory_basis(
+    data: RegulatoryBasisClarifyRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:update"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    answers = {item.question_id: item.answer for item in data.answers}
+    service = ComplianceScheduleRegulatoryAiService(db)
+    result = await service.suggest(
+        tenant_id=tenant_id,
+        title=data.title,
+        taxonomy_id=data.taxonomy_id,
+        description=data.description,
+        statutory=data.statutory,
+        answers=answers,
+        requirement_id=data.requirement_id,
+    )
+    return _regulatory_suggestion_response(result)
 
 
 router.include_router(_enabled_router)
