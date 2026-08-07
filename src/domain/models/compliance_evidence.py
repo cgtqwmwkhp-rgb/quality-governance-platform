@@ -78,6 +78,16 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     )
     entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
 
+    # ADR-0021 P0: pin document evidence to a library DocumentVersion tip when known.
+    document_version_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("document_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Optional ISO/standards catalogue edition for clause_id (nullable; not Doc Graph edges).
+    standard_edition: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     clause_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
 
     linked_by: Mapped[EvidenceLinkMethod] = mapped_column(

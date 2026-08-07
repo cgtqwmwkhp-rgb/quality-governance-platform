@@ -30,6 +30,12 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   // Wave 3 FRA / PAS79 OCR ingest — mirrors COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED
   compliance_schedule_fra_ocr: false,
 
+  // Doc Graph (ADR-0021) — openers mirror DOCUMENT_GRAPH_*_ENABLED settings
+  document_graph: false,
+  document_graph_heuristic_propose: false,
+  document_graph_impact_propagation: false,
+  document_graph_llm_propose: false,
+
   // Other feature flags can be added here
   portal_offline_mode: false,
   admin_ai_copilot: false,

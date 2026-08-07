@@ -1,7 +1,7 @@
 """Create compliance_schedule_ocr_drafts + ENABLE/FORCE tenant_isolation.
 
 Revision ID: 20261013_cs_fra_ocr
-Revises: 20261012_rls_sso_prov
+Revises: 20261015_document_edges
 Create Date: 2026-10-13
 
 Wave 3 FRA / PAS 79 OCR propose→confirm drafts. Tenant-scoped; brought under
@@ -19,7 +19,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "20261013_cs_fra_ocr"
-down_revision: Union[str, Sequence[str], None] = "20261012_rls_sso_prov"
+down_revision: Union[str, Sequence[str], None] = "20261015_document_edges"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

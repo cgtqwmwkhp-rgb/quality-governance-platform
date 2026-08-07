@@ -93,6 +93,9 @@ _LITERAL_RE = re.compile(r"'([^']+)'")
 #: ``unseedable`` report rather than quietly narrowing its coverage.
 SEED_OVERRIDES: dict[str, dict[str, Any]] = {
     "compliance_requirements": {"frequency_months": 12},
+    # Generic int filler uses the same seq for every NOT NULL int column; that
+    # would set src_document_id == dst_document_id and trip ck_document_edges_no_self_loop.
+    "document_edges": {"src_document_id": 910001, "dst_document_id": 910002},
 }
 
 

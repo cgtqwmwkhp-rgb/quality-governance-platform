@@ -52,6 +52,7 @@ def _stub_reference_mint(service, reference="CAM-2026-0001"):
     TestCampaignReference.
     """
     service._mint_campaign_reference = AsyncMock(return_value=reference)
+    service._resolve_tip_document_version_id = AsyncMock(return_value=None)
     return service
 
 

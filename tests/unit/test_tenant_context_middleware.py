@@ -57,6 +57,7 @@ def test_rls_tables_match_policy_migration():
     assert "compliance_records" in RLS_TABLES
     assert "sso_provisioning_requests" in RLS_TABLES
     assert "compliance_schedule_ocr_drafts" in RLS_TABLES
+    assert "document_edges" in RLS_TABLES
     # Deliberately absent: its tenant_id is always NULL, so tenant_isolation would
     # hide the global catalogue from every tenant instead of isolating anything.
     assert "compliance_requirement_templates" not in RLS_TABLES

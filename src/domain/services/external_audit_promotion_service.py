@@ -883,6 +883,9 @@ class ExternalAuditPromotionService:
                 link.deleted_at = None
             link.linked_by = EvidenceLinkMethod.AUTO
             link.title = title or f"Imported audit source document {asset_id}"
+            from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+            await pin_evidence_link_document_version(self.db, link, tenant_id=tenant_id)
         await self.db.flush()
 
     def _count_findings(self, drafts: list[ExternalAuditDraft]) -> tuple[int, int, int, int]:

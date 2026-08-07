@@ -1595,12 +1595,26 @@ async def approve_document_version(
 ):
     """Approve under-review document (no self-approve); supersedes prior PEL ref matches."""
     document = await _get_document_or_404(db, document_id, current_user, enforce_acl=False)
-    await approve_document(
+    version = await approve_document(
         db,
         document,
         approved_by_id=current_user.id,
         version_id=version_id,
     )
+    try:
+        from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle
+
+        await run_library_publish_lifecycle(
+            db=db,
+            library_document=document,
+            new_version=version.version_number,
+            user=current_user,
+        )
+    except Exception:
+        logger.exception(
+            "Governed KB publish lifecycle failed after library approve for document %s",
+            document_id,
+        )
     await db.commit()
     await db.refresh(document)
     versions = await document_version_service.list_library_versions(
@@ -1688,12 +1702,26 @@ async def publish_document_version(
 ):
     """Publish working draft; supersede prior published tip (immutable)."""
     document = await _get_document_or_404(db, document_id, current_user)
-    await document_version_service.publish_library(
+    version = await document_version_service.publish_library(
         db,
         document,
         published_by_id=current_user.id,
         version_id=version_id,
     )
+    try:
+        from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle
+
+        await run_library_publish_lifecycle(
+            db=db,
+            library_document=document,
+            new_version=version.version_number,
+            user=current_user,
+        )
+    except Exception:
+        logger.exception(
+            "Governed KB publish lifecycle failed after library publish for document %s",
+            document_id,
+        )
     try:
         campaign_service = DocumentCampaignService(db)
         await campaign_service.spawn_reack_campaign(

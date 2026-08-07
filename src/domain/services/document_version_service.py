@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import BadRequestError, NotFoundError
@@ -363,6 +363,29 @@ class DocumentVersionService:
             stmt = stmt.where(DocumentVersion.tenant_id == tenant_id)
         result = await db.execute(stmt.order_by(DocumentVersion.created_at.desc()))
         return list(result.scalars().all())
+
+    async def resolve_tip_library_version(
+        self,
+        db: AsyncSession,
+        *,
+        document_id: int,
+        tenant_id: int,
+    ) -> DocumentVersion | None:
+        """Return the current published (else approved) tip library version, if any."""
+        return await db.scalar(
+            select(DocumentVersion)
+            .where(
+                DocumentVersion.document_id == document_id,
+                DocumentVersion.tenant_id == tenant_id,
+                DocumentVersion.status.in_(("published", "approved")),
+            )
+            .order_by(
+                case((DocumentVersion.status == "published", 0), else_=1),
+                DocumentVersion.published_at.desc().nulls_last(),
+                DocumentVersion.id.desc(),
+            )
+            .limit(1)
+        )
 
     async def revise_library(
         self,
