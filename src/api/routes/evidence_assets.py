@@ -26,6 +26,7 @@ from src.api.schemas.evidence_asset import (
     EvidenceAssetUpdate,
     EvidenceAssetUploadResponse,
 )
+from src.api.utils.evidence_disposition import resolve_evidence_signed_url_disposition
 from src.core.config import settings
 from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
 from src.domain.models.evidence_asset import (
@@ -617,14 +618,17 @@ async def get_signed_download_url(
     expires_in: int = Query(3600, ge=60, le=86400, description="URL expiry in seconds (1min to 24hrs)"),
     disposition: Literal["attachment", "inline"] = Query(
         "attachment",
-        description="Content disposition; inline is available only for images",
+        description=(
+            "Content disposition; inline is honoured only for preview-safe types "
+            "(image/*, application/pdf, video/*, audio/*)"
+        ),
     ),
 ):
     """Get a signed URL for downloading or previewing an evidence asset.
 
-    Returns a time-limited signed URL for secure download. Image assets may be
-    requested inline for authenticated browser previews; all other assets are
-    served as attachments.
+    Returns a time-limited signed URL for secure download. Preview-safe assets
+    (images, PDF, video, audio) may be requested inline for authenticated browser
+    previews; all other assets are served as attachments even if inline is asked.
     """
     # Get asset — scoped to tenant
     query = select(EvidenceAsset).where(
@@ -642,9 +646,7 @@ async def get_signed_download_url(
     from src.infrastructure.storage import storage_service
 
     filename = asset.original_filename or "download"
-    effective_disposition = (
-        "inline" if disposition == "inline" and (asset.content_type or "").startswith("image/") else "attachment"
-    )
+    effective_disposition = resolve_evidence_signed_url_disposition(disposition, asset.content_type)
     content_disposition = f'{effective_disposition}; filename="{filename}"'
     signed_url = storage_service().get_signed_url(
         storage_key=asset.storage_key,
