@@ -16,7 +16,7 @@ from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -554,24 +554,15 @@ async def create_new_version(
 
     new_version_number = version.version_number
 
-    # AI-first version lifecycle: rematch evidence + stale quizzes (best-effort)
+    # AI-first version lifecycle: rematch evidence + stale quizzes (best-effort).
+    # Hard FK / resolve_library_for_controlled only — never title/reference fuzzy match
+    # (ADR-0021: Golden Thread = library_document_id). Soft candidates must not mutate.
     try:
-        from src.domain.models.document import Document as LibraryDocument
+        from src.domain.services.gkb_control_library_link import resolve_library_for_controlled
         from src.domain.services.governed_knowledge_service import governed_knowledge_service
 
-        lib = await db.execute(
-            select(LibraryDocument)
-            .where(
-                LibraryDocument.tenant_id == tenant_id,
-                or_(
-                    LibraryDocument.title == document.title,
-                    LibraryDocument.reference_number == document.document_number,
-                ),
-            )
-            .limit(1)
-        )
-        library_doc = lib.scalar_one_or_none()
-        if library_doc is not None:
+        library_doc, match = await resolve_library_for_controlled(db, document, tenant_id=tenant_id)
+        if match.relationship_state == "linked" and library_doc is not None:
             content = " ".join(
                 filter(
                     None,

@@ -335,6 +335,13 @@ class Settings(BaseSettings):
     # can only subtract (see compliance_schedule_kill_switch).
     compliance_schedule_enabled: bool = False
 
+    # Doc Graph (ADR-0021). Closed until explicitly opted in; sub-flags stay off
+    # even if the master gate opens so propose/impact can roll out independently.
+    document_graph_enabled: bool = False
+    document_graph_heuristic_propose_enabled: bool = False
+    document_graph_impact_propagation_enabled: bool = False
+    document_graph_llm_propose_enabled: bool = False
+
     # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
     library_horizon_provider: str = "stub"
     perplexity_api_key: str = ""
