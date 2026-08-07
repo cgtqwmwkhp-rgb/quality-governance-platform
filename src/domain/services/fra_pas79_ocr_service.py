@@ -265,7 +265,7 @@ def _extract_review_interval(text: str) -> ExtractedField:
     match = _REVIEW_INTERVAL_RE.search(text)
     if not match:
         return ExtractedField()
-    months_group, annually_group, years_group = match.group(1), match.group(2), match.group(3)
+    months_group, annual_group, years_group = match.group(1), match.group(2), match.group(3)
     if months_group:
         months = int(months_group)
     elif annual_group:
