@@ -1,8 +1,9 @@
 """Compliance Schedule FRA / PAS 79 OCR draft lifecycle (propose → confirm → file).
 
-Confirm writes only ``ComplianceRequirement.next_due_date`` after a human gate.
-Actions are stored on the draft; CAPAs are not created in this PR. Library
-filing is a separate step after confirm (ADR-0020 permission reasoning).
+Confirm writes ``ComplianceRequirement.next_due_date`` after a human gate.
+Checked priority actions are recorded on the draft; CAPAs are created only when
+``COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED`` is on. Library filing is a
+separate step after confirm (ADR-0020 permission reasoning).
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.core.config import settings
 from src.domain.exceptions import ConflictError, ExternalServiceError, NotFoundError, ValidationError
 from src.domain.models.compliance_schedule import (
     ComplianceOcrDraftStatus,
@@ -32,6 +34,7 @@ from src.domain.models.document import Document, FileType, IndexJob
 from src.domain.models.enums import DocumentStatus, DocumentType
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.compliance_schedule_filing_service import FILING_ERROR_MAX_CHARS, _load_bound_evidence_asset
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 from src.domain.services.document_category_service import allocate_pel_doc_ref
@@ -423,12 +426,31 @@ class ComplianceScheduleFraOcrService:
             changed_fields = ["next_due_date"]
         requirement.updated_by_id = user_id
 
+        actions_list = list(actions or [])
+        actions_created = 0
+        capa_refs: list[str] = []
+        if settings.compliance_schedule_fra_ocr_actions_enabled and actions_list:
+            capas = await CAPAAutoService.create_from_fra_ocr_actions(
+                self.db,
+                draft_id=draft.id,
+                requirement=requirement,
+                actions=actions_list,
+                created_by_id=user_id,
+                now=clock,
+            )
+            actions_created = len(capas)
+            capa_refs = [
+                str(getattr(capa, "reference_number", "") or "")
+                for capa in capas
+                if getattr(capa, "reference_number", None)
+            ]
+
         summary = {
             "requirement_id": requirement.id,
             "next_due_date_before": before.isoformat(),
             "next_due_date_after": due.isoformat(),
-            "actions_recorded": len(actions or []),
-            "actions_created": 0,
+            "actions_recorded": len(actions_list),
+            "actions_created": actions_created,
             "changed_fields": changed_fields,
             "warnings": applied_warnings,
         }
@@ -439,7 +461,7 @@ class ComplianceScheduleFraOcrService:
         draft.confirmed_json = {
             "next_due_date": due.isoformat(),
             "acknowledged_warnings": acknowledged_warnings,
-            "actions": list(actions or []),
+            "actions": actions_list,
             "note": note,
         }
         draft.applied_json = summary
@@ -476,7 +498,9 @@ class ComplianceScheduleFraOcrService:
                 "requirement_id": requirement.id,
                 "next_due_date_before": before.isoformat(),
                 "next_due_date_after": due.isoformat(),
-                "actions_recorded": len(actions or []),
+                "actions_recorded": len(actions_list),
+                "actions_created": actions_created,
+                "capa_reference_numbers": capa_refs,
                 "extraction_method": draft.extraction_method,
                 "source_checksum_sha256": draft.source_checksum_sha256,
             },
@@ -492,11 +516,12 @@ class ComplianceScheduleFraOcrService:
 
         logger.info(
             "fra_ocr draft confirmed draft_id=%s requirement_id=%s tenant_id=%s "
-            "actions_recorded=%s changed_fields=%s",
+            "actions_recorded=%s actions_created=%s changed_fields=%s",
             draft.id,
             requirement.id,
             tenant_id,
-            len(actions or []),
+            len(actions_list),
+            actions_created,
             changed_fields,
         )
         return draft, requirement, summary

@@ -19,10 +19,12 @@ def _fra_requirement(**overrides):
         "id": 10,
         "tenant_id": 1,
         "reference_number": "CSR-2026-0001",
+        "title": "Fire risk assessment — Site A",
         "location_id": 5,
         "taxonomy_id": "03.01",
         "template_id": 99,
         "is_active": True,
+        "owner_id": 42,
         "next_due_date": date(2026, 3, 14),
         "updated_by_id": None,
         "template": SimpleNamespace(template_key=ComplianceScheduleService.FRA_TEMPLATE_KEY),
@@ -478,3 +480,156 @@ def test_is_fra_ocr_eligible_matches_load_gate() -> None:
         template=SimpleNamespace(template_key="something_else"),
     )
     assert ComplianceScheduleFraOcrService.is_fra_ocr_eligible(other) is False
+
+
+@pytest.mark.asyncio
+async def test_apply_confirmed_plan_flag_off_records_actions_without_capas(monkeypatch) -> None:
+    """ACTIONS flag default/off: checked rows are recorded, CAPAs are not created."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "compliance_schedule_fra_ocr_actions_enabled", False)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db)
+    requirement = _fra_requirement()
+    draft = _pending_draft()
+
+    async def _load_draft(**kwargs):
+        return draft
+
+    async def _load_req(**kwargs):
+        return requirement
+
+    service._load_draft = _load_draft  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.record_audit_event",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.CAPAAutoService.create_from_fra_ocr_actions",
+            new_callable=AsyncMock,
+        ) as create_capas,
+    ):
+        _draft, _req, summary = await service.apply_confirmed_plan(
+            draft_id=7,
+            tenant_id=1,
+            user_id=42,
+            next_due_date=date(2027, 3, 14),
+            actions=[
+                {"index": 0, "text": "Replace fire door seals", "priority_normalised": "high"},
+                {"index": 1, "text": "Update escape signage", "priority_normalised": "medium"},
+            ],
+            now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+
+    assert summary["actions_recorded"] == 2
+    assert summary["actions_created"] == 0
+    create_capas.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apply_confirmed_plan_flag_on_creates_capas_for_checked_rows(monkeypatch) -> None:
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "compliance_schedule_fra_ocr_actions_enabled", True)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db)
+    requirement = _fra_requirement()
+    draft = _pending_draft()
+
+    async def _load_draft(**kwargs):
+        return draft
+
+    async def _load_req(**kwargs):
+        return requirement
+
+    service._load_draft = _load_draft  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    fake_capas = [
+        SimpleNamespace(reference_number="CAPA-1"),
+        SimpleNamespace(reference_number="CAPA-2"),
+    ]
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.record_audit_event",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.CAPAAutoService.create_from_fra_ocr_actions",
+            new_callable=AsyncMock,
+            return_value=fake_capas,
+        ) as create_capas,
+    ):
+        _draft, _req, summary = await service.apply_confirmed_plan(
+            draft_id=7,
+            tenant_id=1,
+            user_id=42,
+            next_due_date=date(2027, 3, 14),
+            actions=[
+                {"index": 0, "text": "Replace fire door seals", "priority_normalised": "high"},
+                {"index": 1, "text": "Update escape signage", "priority_normalised": "medium"},
+            ],
+            now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+
+    assert summary["actions_recorded"] == 2
+    assert summary["actions_created"] == 2
+    create_capas.assert_awaited_once()
+    kwargs = create_capas.await_args.kwargs
+    assert kwargs["draft_id"] == 7
+    assert kwargs["created_by_id"] == 42
+    assert len(kwargs["actions"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_apply_confirmed_plan_flag_on_empty_actions_creates_zero(monkeypatch) -> None:
+    """Flag on must not invent CAPAs when the operator checked no rows."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "compliance_schedule_fra_ocr_actions_enabled", True)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    service = ComplianceScheduleFraOcrService(db)
+    requirement = _fra_requirement()
+    draft = _pending_draft()
+
+    async def _load_draft(**kwargs):
+        return draft
+
+    async def _load_req(**kwargs):
+        return requirement
+
+    service._load_draft = _load_draft  # type: ignore[method-assign]
+    service._load_fra_requirement = _load_req  # type: ignore[method-assign]
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.record_audit_event",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "src.domain.services.compliance_schedule_fra_ocr_service.CAPAAutoService.create_from_fra_ocr_actions",
+            new_callable=AsyncMock,
+        ) as create_capas,
+    ):
+        _draft, _req, summary = await service.apply_confirmed_plan(
+            draft_id=7,
+            tenant_id=1,
+            user_id=42,
+            next_due_date=date(2027, 3, 14),
+            actions=[],
+            now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+
+    assert summary["actions_recorded"] == 0
+    assert summary["actions_created"] == 0
+    create_capas.assert_not_called()

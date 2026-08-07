@@ -337,6 +337,9 @@ class Settings(BaseSettings):
     # FRA / PAS 79 OCR ingest (Wave 3). ANDed with compliance_schedule_enabled at
     # the nested FRA OCR router — closed until bake sign-off.
     compliance_schedule_fra_ocr_enabled: bool = False
+    # Confirm→CAPA for checked FRA OCR priority actions. Default off; persist via
+    # deploy vars like COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED.
+    compliance_schedule_fra_ocr_actions_enabled: bool = False
     # When true, File-to-Library (occurrence + FRA OCR draft filing) creates an
     # IndexJob so filed drafts get chunks / Library search. Default off — Pinecone
     # spend and OCR load; flip via vars like COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED.
