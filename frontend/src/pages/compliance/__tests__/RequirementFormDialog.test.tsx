@@ -3,21 +3,34 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComplianceRequirement } from '../../../api/complianceScheduleClient'
 
-const { mockCreate, mockUpdate, mockGet, mockCurrentUserId } = vi.hoisted(() => ({
-  mockCreate: vi.fn(),
-  mockUpdate: vi.fn(),
-  mockGet: vi.fn(),
-  mockCurrentUserId: vi.fn(),
-}))
+const { mockCreate, mockUpdate, mockGet, mockCurrentUserId, mockSuggest, flagValues } = vi.hoisted(
+  () => ({
+    mockCreate: vi.fn(),
+    mockUpdate: vi.fn(),
+    mockGet: vi.fn(),
+    mockCurrentUserId: vi.fn(),
+    mockSuggest: vi.fn(),
+    flagValues: {
+      compliance_schedule: true,
+      compliance_schedule_regulatory_ai: true,
+    } as Record<string, boolean>,
+  }),
+)
 
 vi.mock('../../../api/client', () => ({
   default: { get: mockGet },
   complianceScheduleApi: {
     createRequirement: mockCreate,
     updateRequirement: mockUpdate,
+    suggestRegulatoryBasis: mockSuggest,
+    clarifyRegulatoryBasis: vi.fn(),
   },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
+}))
+
+vi.mock('../../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: (name: string) => flagValues[name] ?? false,
 }))
 
 vi.mock('../../../utils/auth', () => ({
@@ -341,5 +354,95 @@ describe('RequirementFormDialog — category list', () => {
     expect(screen.queryByText(/category list could not be loaded/i)).not.toBeInTheDocument()
     resolve(CATEGORIES)
     await waitFor(() => expect(screen.getByTestId('requirement-form-submit')).toBeEnabled())
+  })
+})
+
+describe('RequirementFormDialog — regulatory basis AI accept', () => {
+  it('sends regulatory_standard_id after Accept then submit', async () => {
+    mockSuggest.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            label: 'Regulatory Reform (Fire Safety) Order 2005',
+            regulation_or_standard_code: 'FSO2005',
+            standard_id: 55,
+            clause_ids: [9],
+            confidence: 0.94,
+            rationale: 'Matched curated UK regulation map',
+            source: 'curated_uk_map',
+          },
+        ],
+        needs_clarification: false,
+        clarifying_questions: [],
+        confidence_threshold: 0.7,
+        ai_available: false,
+        notice: null,
+      },
+    })
+
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequiredCreateFields(user)
+
+    await user.click(screen.getByTestId('regulatory-basis-suggest-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('regulatory-basis-accept')).toBeInTheDocument()
+    })
+    await user.click(screen.getByTestId('regulatory-basis-accept'))
+
+    expect(screen.getByTestId('requirement-form-basis-input')).toHaveValue(
+      'Regulatory Reform (Fire Safety) Order 2005',
+    )
+    expect(screen.getByTestId('requirement-form-basis-link-chip')).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('requirement-form-submit'))
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled())
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({
+      regulatory_basis: 'Regulatory Reform (Fire Safety) Order 2005',
+      regulatory_standard_id: 55,
+      regulatory_clause_id: 9,
+    })
+  })
+
+  it('clears the structured link when the basis text is hand-edited', async () => {
+    mockSuggest.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            label: 'Regulatory Reform (Fire Safety) Order 2005',
+            regulation_or_standard_code: 'FSO2005',
+            standard_id: 55,
+            clause_ids: [],
+            confidence: 0.94,
+            rationale: 'Matched',
+            source: 'curated_uk_map',
+          },
+        ],
+        needs_clarification: false,
+        clarifying_questions: [],
+        confidence_threshold: 0.7,
+        ai_available: false,
+        notice: null,
+      },
+    })
+
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequiredCreateFields(user)
+    await user.click(screen.getByTestId('regulatory-basis-suggest-button'))
+    await waitFor(() => screen.getByTestId('regulatory-basis-accept'))
+    await user.click(screen.getByTestId('regulatory-basis-accept'))
+
+    const basis = screen.getByTestId('requirement-form-basis-input')
+    await user.clear(basis)
+    await user.type(basis, 'Something typed by hand')
+    await user.click(screen.getByTestId('requirement-form-submit'))
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled())
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({
+      regulatory_basis: 'Something typed by hand',
+      regulatory_standard_id: null,
+      regulatory_clause_id: null,
+    })
   })
 })

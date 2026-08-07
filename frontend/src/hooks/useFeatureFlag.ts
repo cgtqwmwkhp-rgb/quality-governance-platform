@@ -27,6 +27,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   // Compliance Schedule (Wave 1) — opener mirrors COMPLIANCE_SCHEDULE_ENABLED
   compliance_schedule: false,
 
+  // Track C: AI regulatory-basis assist (requires CS open + this flag)
+  compliance_schedule_regulatory_ai: false,
+
   // Doc Graph (ADR-0021) — openers mirror DOCUMENT_GRAPH_*_ENABLED settings
   document_graph: false,
   document_graph_heuristic_propose: false,

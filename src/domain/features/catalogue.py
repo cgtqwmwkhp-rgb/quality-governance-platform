@@ -94,6 +94,20 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         ),
     ),
     ClientFeature(
+        ui_key="compliance_schedule_regulatory_ai",
+        settings_attr="compliance_schedule_regulatory_ai_enabled",
+        kill_switch_key="compliance_schedule_kill_switch",
+        enabling_flag_key=None,
+        required_permission="compliance_schedule:update",
+        reason=(
+            "Gates the 'Suggest with AI' button beside Regulatory basis on the obligation form. "
+            "Deliberately borrows Compliance Schedule's own kill switch rather than declaring a "
+            "second one: the suggest routes sit on the module's enabled router, so closing the "
+            "module already 404s them, and a separate switch would let the nav and the endpoint "
+            "disagree. Reported to a browser only to hide a button the API would refuse."
+        ),
+    ),
+    ClientFeature(
         ui_key="admin_user_management",
         settings_attr=None,
         kill_switch_key=None,

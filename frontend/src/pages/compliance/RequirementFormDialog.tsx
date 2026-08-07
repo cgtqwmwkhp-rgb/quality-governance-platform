@@ -40,6 +40,9 @@ import { getCurrentUserId } from '../../utils/auth'
 import { ownershipOf } from '../complianceScheduleHelpers'
 import { useOwnershipLabel } from './useOwnershipLabel'
 import { useTaxonomyOptions } from './useTaxonomyOptions'
+import { RegulatoryBasisAssist } from './RegulatoryBasisAssist'
+import { regulatoryBasisAssistCopy } from './regulatoryBasisAssistI18n'
+import type { RegulatoryBasisCandidate } from './regulatoryBasisAssistMachine'
 
 type FieldName =
   | 'title'
@@ -55,6 +58,8 @@ interface FormState {
   next_due_date: string
   description: string
   regulatory_basis: string
+  regulatory_standard_id: number | null
+  regulatory_clause_id: number | null
   frequency_months: string
   frequency_days: string
   anchor: 'completion' | 'schedule'
@@ -77,6 +82,8 @@ function emptyState(): FormState {
     next_due_date: '',
     description: '',
     regulatory_basis: '',
+    regulatory_standard_id: null,
+    regulatory_clause_id: null,
     frequency_months: '',
     frequency_days: '',
     anchor: 'schedule',
@@ -91,6 +98,8 @@ function stateFrom(requirement: ComplianceRequirement): FormState {
     next_due_date: requirement.next_due_date ?? '',
     description: requirement.description ?? '',
     regulatory_basis: requirement.regulatory_basis ?? '',
+    regulatory_standard_id: requirement.regulatory_standard_id ?? null,
+    regulatory_clause_id: requirement.regulatory_clause_id ?? null,
     frequency_months:
       requirement.frequency_months != null ? String(requirement.frequency_months) : '',
     frequency_days: requirement.frequency_days != null ? String(requirement.frequency_days) : '',
@@ -281,6 +290,8 @@ export function RequirementFormDialog({
       next_due_date: form.next_due_date,
       description: form.description.trim() || null,
       regulatory_basis: form.regulatory_basis.trim() || null,
+      regulatory_standard_id: form.regulatory_standard_id,
+      regulatory_clause_id: form.regulatory_clause_id,
       frequency_months: months,
       frequency_days: days,
       anchor: form.anchor,
@@ -553,17 +564,75 @@ export function RequirementFormDialog({
               label={t('compliance.schedule.regulatory_basis', 'Regulatory basis')}
             >
               {(control) => (
-                <Input
-                  {...control}
-                  type="text"
-                  value={form.regulatory_basis}
-                  onChange={(e) => update({ regulatory_basis: e.target.value })}
-                  placeholder={t(
-                    'compliance.schedule.form.regulatory_basis_placeholder',
-                    'e.g. Regulatory Reform (Fire Safety) Order 2005',
-                  )}
-                  data-testid="requirement-form-basis-input"
-                />
+                <div className="space-y-2">
+                  <Input
+                    {...control}
+                    type="text"
+                    value={form.regulatory_basis}
+                    onChange={(e) =>
+                      update({
+                        regulatory_basis: e.target.value,
+                        // Hand-editing must clear the structured link or text and FK disagree.
+                        regulatory_standard_id: null,
+                        regulatory_clause_id: null,
+                      })
+                    }
+                    placeholder={t(
+                      'compliance.schedule.form.regulatory_basis_placeholder',
+                      'e.g. Regulatory Reform (Fire Safety) Order 2005',
+                    )}
+                    data-testid="requirement-form-basis-input"
+                  />
+                  {form.regulatory_standard_id != null ? (
+                    <div
+                      className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+                      data-testid="requirement-form-basis-link-chip"
+                    >
+                      <span>
+                        {t(
+                          'compliance.schedule.regulatory_ai.linked',
+                          regulatoryBasisAssistCopy.linkedChip,
+                        )}{' '}
+                        #{form.regulatory_standard_id}
+                        {form.regulatory_clause_id != null
+                          ? ` / clause #${form.regulatory_clause_id}`
+                          : ''}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() =>
+                          update({
+                            regulatory_standard_id: null,
+                            regulatory_clause_id: null,
+                          })
+                        }
+                        data-testid="requirement-form-basis-unlink"
+                      >
+                        {t(
+                          'compliance.schedule.regulatory_ai.remove_link',
+                          regulatoryBasisAssistCopy.removeLink,
+                        )}
+                      </Button>
+                    </div>
+                  ) : null}
+                  <RegulatoryBasisAssist
+                    title={form.title}
+                    taxonomyId={form.taxonomy_id}
+                    description={form.description}
+                    statutory={form.statutory}
+                    requirementId={requirement?.id}
+                    onAccept={(candidate: RegulatoryBasisCandidate) =>
+                      update({
+                        regulatory_basis: candidate.label.slice(0, 255),
+                        regulatory_standard_id: candidate.standard_id ?? null,
+                        regulatory_clause_id: candidate.clause_ids[0] ?? null,
+                      })
+                    }
+                  />
+                </div>
               )}
             </FormField>
 
