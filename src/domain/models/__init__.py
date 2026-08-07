@@ -113,12 +113,7 @@ from src.domain.models.document_control import (
 )
 
 # Doc Graph (ADR-0021 Wave 0)
-from src.domain.models.document_graph import (
-    DocumentEdge,
-    DocumentEdgeMethod,
-    DocumentEdgeStatus,
-    DocumentEdgeType,
-)
+from src.domain.models.document_graph import DocumentEdge, DocumentEdgeMethod, DocumentEdgeStatus, DocumentEdgeType
 
 # Governance Library taxonomy (Wave W0)
 from src.domain.models.document_library import DocumentCategory, DocumentTag, PelDocRefCounter

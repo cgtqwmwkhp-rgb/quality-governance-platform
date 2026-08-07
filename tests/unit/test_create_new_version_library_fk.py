@@ -164,10 +164,7 @@ async def test_create_new_version_source_still_resolves_library_only_on_publish_
 @pytest.mark.asyncio
 async def test_soft_library_candidate_still_skipped_on_publish(monkeypatch):
     """Publish lifecycle denies when Golden Thread is not hard-linked."""
-    from src.domain.services.gkb_publish_lifecycle import (
-        PublishLifecycleDenyReason,
-        run_controlled_publish_lifecycle,
-    )
+    from src.domain.services.gkb_publish_lifecycle import PublishLifecycleDenyReason, run_controlled_publish_lifecycle
 
     controlled = SimpleNamespace(id=11, library_document_id=None, title="Collision")
     resolve = AsyncMock(

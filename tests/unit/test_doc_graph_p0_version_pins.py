@@ -10,10 +10,7 @@ import pytest
 
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink
 from src.domain.models.document_campaign import CampaignAssignment, DocumentCampaign
-from src.domain.services.cel_version_pin import (
-    parse_document_entity_id,
-    pin_evidence_link_document_version,
-)
+from src.domain.services.cel_version_pin import parse_document_entity_id, pin_evidence_link_document_version
 from src.domain.services.document_campaign_service import DocumentCampaignService
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

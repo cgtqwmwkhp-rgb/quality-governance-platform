@@ -15,12 +15,7 @@ from fastapi.testclient import TestClient
 from src.api.routes import document_graph as document_graph_routes
 from src.core.config import settings
 from src.domain.exceptions import ConflictError
-from src.domain.models.document_graph import (
-    DocumentEdge,
-    DocumentEdgeMethod,
-    DocumentEdgeStatus,
-    DocumentEdgeType,
-)
+from src.domain.models.document_graph import DocumentEdge, DocumentEdgeMethod, DocumentEdgeStatus, DocumentEdgeType
 from src.domain.services.document_graph_service import DocumentGraphService, canonicalize_endpoints
 from src.infrastructure.middleware.tenant_context import RLS_TABLES, TENANT_ISOLATION_PREDICATE
 
