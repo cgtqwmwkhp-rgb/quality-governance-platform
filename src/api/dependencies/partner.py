@@ -42,11 +42,7 @@ from typing import Optional
 
 from fastapi import HTTPException, Request, status
 
-from src.domain.services.partner_auth_service import (
-    PartnerAuthService,
-    PartnerPrincipal,
-    is_partner_bearer_token,
-)
+from src.domain.services.partner_auth_service import PartnerAuthService, PartnerPrincipal, is_partner_bearer_token
 
 #: OpenAPI operation extension naming the partner scope a route accepts. An
 #: ``x-`` extension is a legal operation field, so the opt-in also documents

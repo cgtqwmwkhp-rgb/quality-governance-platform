@@ -9,11 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies.partner import (
-    is_partner_bearer_token,
-    required_partner_scope,
-    resolve_partner_principal,
-)
+from src.api.dependencies.partner import is_partner_bearer_token, required_partner_scope, resolve_partner_principal
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.core.config import settings

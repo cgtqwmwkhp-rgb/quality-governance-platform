@@ -12,11 +12,7 @@ from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.partner_api_token import (
-    PARTNER_API_SCOPES,
-    PARTNER_SCOPE_TO_PERMISSIONS,
-    PartnerApiToken,
-)
+from src.domain.models.partner_api_token import PARTNER_API_SCOPES, PARTNER_SCOPE_TO_PERMISSIONS, PartnerApiToken
 
 _TOKEN_PREFIX = "qgp_pt_"
 

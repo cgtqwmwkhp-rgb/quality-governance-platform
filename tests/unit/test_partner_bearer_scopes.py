@@ -34,11 +34,7 @@ from src.api.dependencies.partner import (
     required_partner_scope,
 )
 from src.api.routes import documents, global_search
-from src.domain.models.partner_api_token import (
-    PARTNER_API_SCOPES,
-    PARTNER_SCOPE_TO_PERMISSIONS,
-    PartnerApiToken,
-)
+from src.domain.models.partner_api_token import PARTNER_API_SCOPES, PARTNER_SCOPE_TO_PERMISSIONS, PartnerApiToken
 from src.domain.services.partner_auth_service import (
     PartnerAuthService,
     PartnerPrincipal,
@@ -48,6 +44,14 @@ from src.domain.services.partner_auth_service import (
 )
 from src.domain.services.search_service import PARTNER_VISIBLE_MODULES, SearchService
 from src.infrastructure.database import get_db
+
+try:  # FastAPI >= 0.137.2
+    from fastapi.routing import iter_route_contexts as _iter_route_contexts
+except ImportError:  # FastAPI < 0.137, where include_router flattened routes onto the app
+
+    def _iter_route_contexts(routes: Any) -> Any:
+        return routes
+
 
 TENANT_ID = 99
 
@@ -248,22 +252,36 @@ EXPECTED_PARTNER_ROUTES = {
 }
 
 
-def _marked_routes(node: Any, seen: Optional[set] = None) -> set:
+def _marked_routes(app: FastAPI) -> set:
+    """Every marked route in ``app``, at the path a partner would actually call.
+
+    The path has to be the mounted one — ``/api/v1/documents/{document_id}`` and
+    not the ``/{document_id}`` its router declares — because the mounted path is
+    what the allowlist above is a statement about, and the only thing an
+    integrator can send.
+
+    Walking ``app.routes`` by hand does not give that. FastAPI 0.137 stopped
+    cloning a child router's routes onto its parent and keeps the router
+    instead, so ``app.routes`` is now a tree: the interior nodes carry the
+    prefixes and the leaves are the routers' own route objects, still holding
+    router-relative paths. A hand-rolled walk reports ``/{document_id}``, which
+    is how this test first failed. ``iter_route_contexts`` is the accessor
+    FastAPI added for this in 0.137.2 — the same one its own OpenAPI generation
+    uses — and it yields every leaf with its prefixes already applied.
+
+    Below 0.137 ``app.routes`` is itself the flat, fully prefixed list that
+    helper now returns, so it is read directly. Between the two — 0.137.0 and
+    0.137.1 — neither holds, and that combination under-reports rather than
+    over-reports: the pinned set below then fails loudly instead of quietly
+    tolerating a route nobody meant to open.
+    """
     found: set = set()
-    seen = seen if seen is not None else set()
-    if id(node) in seen:
-        return found
-    seen.add(id(node))
-    extra = getattr(node, "openapi_extra", None)
-    if isinstance(extra, dict) and PARTNER_SCOPE_OPENAPI_KEY in extra:
-        for method in sorted(getattr(node, "methods", None) or ()):
-            found.add((method, getattr(node, "path", "?"), extra[PARTNER_SCOPE_OPENAPI_KEY]))
-    for child in getattr(node, "routes", None) or ():
-        found |= _marked_routes(child, seen)
-    for attribute in ("original_router", "original_route", "app"):
-        nested = getattr(node, attribute, None)
-        if nested is not None:
-            found |= _marked_routes(nested, seen)
+    for route in _iter_route_contexts(app.routes):
+        extra = getattr(route, "openapi_extra", None)
+        if not isinstance(extra, dict) or PARTNER_SCOPE_OPENAPI_KEY not in extra:
+            continue
+        for method in sorted(getattr(route, "methods", None) or ()):
+            found.add((method, getattr(route, "path", "?"), extra[PARTNER_SCOPE_OPENAPI_KEY]))
     return found
 
 
