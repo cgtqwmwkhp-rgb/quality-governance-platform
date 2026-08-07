@@ -462,7 +462,30 @@ class DocumentGraphHeuristicProposeService:
         if not chunks:
             return []
 
-        # Resolve DOC / PEL refs in one pass.
+        staged, doc_refs, pel_refs, path_ids = self._stage_citation_matches(chunks)
+        ref_to_id, pel_to_id, live_path_ids = await self._resolve_citation_lookups(
+            tenant_id=tenant_id,
+            doc_refs=doc_refs,
+            pel_refs=pel_refs,
+            path_ids=path_ids,
+        )
+        tip_version = await self._tip_versions_for_targets(
+            tenant_id=tenant_id,
+            target_ids=set(ref_to_id.values()) | set(pel_to_id.values()) | live_path_ids,
+        )
+        return self._assemble_citation_proposals(
+            source_id=source.id,
+            staged=staged,
+            ref_to_id=ref_to_id,
+            pel_to_id=pel_to_id,
+            live_path_ids=live_path_ids,
+            tip_version=tip_version,
+        )
+
+    @staticmethod
+    def _stage_citation_matches(
+        chunks: Sequence[DocumentChunk],
+    ) -> tuple[list[tuple[DocumentChunk, Any]], set[str], set[str], set[int]]:
         doc_refs: set[str] = set()
         pel_refs: set[str] = set()
         path_ids: set[int] = set()
@@ -476,7 +499,16 @@ class DocumentGraphHeuristicProposeService:
                     pel_refs.add(match.resolved_reference.upper())
                 elif match.kind == "document_path" and match.resolved_document_id:
                     path_ids.add(match.resolved_document_id)
+        return staged, doc_refs, pel_refs, path_ids
 
+    async def _resolve_citation_lookups(
+        self,
+        *,
+        tenant_id: int,
+        doc_refs: set[str],
+        pel_refs: set[str],
+        path_ids: set[int],
+    ) -> tuple[dict[str, int], dict[str, int], set[int]]:
         ref_to_id: dict[str, int] = {}
         if doc_refs:
             result = await self.db.execute(
@@ -511,22 +543,40 @@ class DocumentGraphHeuristicProposeService:
             )
             live_path_ids = set(int(i) for i in result.scalars().all())
 
-        # Tip version numbers for cited targets (best-effort).
-        target_ids = set(ref_to_id.values()) | set(pel_to_id.values()) | live_path_ids
-        tip_version: dict[int, tuple[int, str]] = {}
-        if target_ids:
-            result = await self.db.execute(
-                select(DocumentVersion.id, DocumentVersion.document_id, DocumentVersion.version_number)
-                .where(
-                    DocumentVersion.tenant_id == tenant_id,
-                    DocumentVersion.document_id.in_(target_ids),
-                )
-                .order_by(DocumentVersion.id.desc())
-            )
-            for version_id, doc_id, version_number in result.all():
-                if int(doc_id) not in tip_version:
-                    tip_version[int(doc_id)] = (int(version_id), str(version_number))
+        return ref_to_id, pel_to_id, live_path_ids
 
+    async def _tip_versions_for_targets(
+        self,
+        *,
+        tenant_id: int,
+        target_ids: set[int],
+    ) -> dict[int, tuple[int, str]]:
+        tip_version: dict[int, tuple[int, str]] = {}
+        if not target_ids:
+            return tip_version
+        result = await self.db.execute(
+            select(DocumentVersion.id, DocumentVersion.document_id, DocumentVersion.version_number)
+            .where(
+                DocumentVersion.tenant_id == tenant_id,
+                DocumentVersion.document_id.in_(target_ids),
+            )
+            .order_by(DocumentVersion.id.desc())
+        )
+        for version_id, doc_id, version_number in result.all():
+            if int(doc_id) not in tip_version:
+                tip_version[int(doc_id)] = (int(version_id), str(version_number))
+        return tip_version
+
+    @staticmethod
+    def _assemble_citation_proposals(
+        *,
+        source_id: int,
+        staged: list[tuple[DocumentChunk, Any]],
+        ref_to_id: dict[str, int],
+        pel_to_id: dict[str, int],
+        live_path_ids: set[int],
+        tip_version: dict[int, tuple[int, str]],
+    ) -> list[dict[str, Any]]:
         proposals: list[dict[str, Any]] = []
         seen_dst: set[int] = set()
         for chunk, match in staged:
@@ -539,7 +589,7 @@ class DocumentGraphHeuristicProposeService:
                 if match.resolved_document_id in live_path_ids:
                     dst_id = match.resolved_document_id
 
-            if dst_id is None or dst_id == source.id or dst_id in seen_dst:
+            if dst_id is None or dst_id == source_id or dst_id in seen_dst:
                 continue
             seen_dst.add(dst_id)
 
