@@ -1,10 +1,6 @@
 """Unit tests for the curated UK regulatory basis map."""
 
-from src.domain.data.uk_regulatory_basis_map import (
-    UK_REGULATORY_BASIS_MAP,
-    assert_map_integrity,
-    match_uk_regulations,
-)
+from src.domain.data.uk_regulatory_basis_map import UK_REGULATORY_BASIS_MAP, assert_map_integrity, match_uk_regulations
 
 
 def test_map_integrity() -> None:

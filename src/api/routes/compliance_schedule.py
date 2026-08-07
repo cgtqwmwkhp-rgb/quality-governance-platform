@@ -46,9 +46,7 @@ from src.domain.services.compliance_schedule_filing_service import (
 )
 from src.domain.services.compliance_schedule_import_service import ComplianceScheduleImportService
 from src.domain.services.compliance_schedule_policy import derive_status
-from src.domain.services.compliance_schedule_regulatory_ai_service import (
-    ComplianceScheduleRegulatoryAiService,
-)
+from src.domain.services.compliance_schedule_regulatory_ai_service import ComplianceScheduleRegulatoryAiService
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 from src.infrastructure.database import async_session_maker
 

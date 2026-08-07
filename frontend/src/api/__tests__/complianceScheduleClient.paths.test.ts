@@ -57,6 +57,14 @@ function callEveryMethod(client: ReturnType<typeof createComplianceScheduleApi>)
     importCommit: () => client.importCommit(new File(['x'], 't.csv', { type: 'text/csv' })),
     fileRecordToLibrary: () =>
       client.fileRecordToLibrary(11, { evidence_asset_id: 5, category_id: 3 }),
+    suggestRegulatoryBasis: () =>
+      client.suggestRegulatoryBasis({ title: 'Fire risk assessment', taxonomy_id: 'fire' }),
+    clarifyRegulatoryBasis: () =>
+      client.clarifyRegulatoryBasis({
+        title: 'Fire risk assessment',
+        taxonomy_id: 'fire',
+        answers: [{ question_id: 'q1', answer: 'workplace' }],
+      }),
   }
 }
 

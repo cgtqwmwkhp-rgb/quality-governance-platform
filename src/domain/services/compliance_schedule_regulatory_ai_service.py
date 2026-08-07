@@ -21,10 +21,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
-from src.domain.data.uk_regulatory_basis_map import (
-    lookup_by_code,
-    match_uk_regulations,
-)
+from src.domain.data.uk_regulatory_basis_map import lookup_by_code, match_uk_regulations
 from src.domain.models.governed_knowledge import AiDecisionLog
 from src.domain.models.standard import Clause, Standard
 from src.domain.services.ai_models import AIConfig, get_ai_client
