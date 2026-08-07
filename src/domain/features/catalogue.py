@@ -94,6 +94,21 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         ),
     ),
     ClientFeature(
+        ui_key="compliance_schedule_fra_ocr",
+        settings_attr="compliance_schedule_fra_ocr_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="compliance_schedule:update",
+        reason=(
+            "Gates the FRA OCR upload and review panel on the Compliance Schedule detail "
+            "page. No kill switch of its own: the routes hang off the module's enabled "
+            "router, so compliance_schedule_kill_switch already closes them, and a second "
+            "switch would need a reader in features/evaluator.py that reports nothing the "
+            "first does not. Permission-gated on :update rather than :read because a "
+            "read-only user can do nothing with the panel but look at it."
+        ),
+    ),
+    ClientFeature(
         ui_key="admin_user_management",
         settings_attr=None,
         kill_switch_key=None,

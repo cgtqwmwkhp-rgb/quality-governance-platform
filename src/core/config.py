@@ -334,6 +334,9 @@ class Settings(BaseSettings):
     # Compliance Schedule (Wave 0). Closed until explicitly opted in; kill switch
     # can only subtract (see compliance_schedule_kill_switch).
     compliance_schedule_enabled: bool = False
+    # FRA / PAS 79 OCR ingest (Wave 3). ANDed with compliance_schedule_enabled at
+    # the nested FRA OCR router — closed until bake sign-off.
+    compliance_schedule_fra_ocr_enabled: bool = False
 
     # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
     library_horizon_provider: str = "stub"

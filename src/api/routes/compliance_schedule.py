@@ -32,11 +32,26 @@ from src.api.schemas.compliance_schedule import (
     RequirementResponse,
     RequirementUpdate,
 )
+from src.api.schemas.compliance_schedule_fra_ocr import (
+    FraOcrConfirmResponse,
+    FraOcrDiscardRequest,
+    FraOcrDraftListResponse,
+    FraOcrDraftConfirmRequest,
+    FraOcrDraftResponse,
+    FraOcrFileRequest,
+    FraOcrFilingResponse,
+)
 from src.api.utils.tenant import require_tenant_id
+from src.core.config import settings
 from src.domain.exceptions import BadRequestError
 from src.domain.models.user import User
 from src.domain.services.compliance_schedule_filing_service import (
     file_record_to_library as file_record_to_library_service,
+)
+from src.domain.services.compliance_schedule_fra_ocr_service import (
+    ComplianceScheduleFraOcrService,
+    draft_to_response_dict,
+    pages_for,
 )
 from src.domain.services.compliance_schedule_import_service import ComplianceScheduleImportService
 from src.domain.services.compliance_schedule_policy import derive_status
@@ -44,6 +59,7 @@ from src.domain.services.compliance_schedule_service import ComplianceScheduleSe
 from src.infrastructure.database import async_session_maker
 
 DISABLED_DETAIL = "Compliance Schedule is not enabled in this environment."
+FRA_OCR_DISABLED_DETAIL = "FRA OCR ingest is not enabled in this environment."
 
 router = APIRouter()
 
@@ -67,7 +83,15 @@ async def require_compliance_schedule_enabled() -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=DISABLED_DETAIL)
 
 
+async def require_fra_ocr_enabled() -> None:
+    from fastapi import HTTPException
+
+    if not settings.compliance_schedule_fra_ocr_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=FRA_OCR_DISABLED_DETAIL)
+
+
 _enabled_router = APIRouter(dependencies=[Depends(require_compliance_schedule_enabled)])
+_fra_ocr_router = APIRouter(dependencies=[Depends(require_fra_ocr_enabled)])
 
 
 def _requirement_response(row, *, now: Optional[datetime] = None) -> RequirementResponse:
@@ -490,4 +514,167 @@ async def file_record_to_library(
     )
 
 
+# ---------------------------------------------------------------------------
+# FRA / PAS 79 OCR (Wave 3) — nested under the module enabled router
+# ---------------------------------------------------------------------------
+
+
+async def _read_fra_pdf_upload(file: UploadFile) -> bytes:
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise BadRequestError("File must be a PDF (.pdf extension)")
+    content = await file.read()
+    if not content:
+        raise BadRequestError("PDF file is empty")
+    if len(content) > 25 * 1024 * 1024:
+        raise BadRequestError("PDF file exceeds 25 MiB limit")
+    if not content.startswith(b"%PDF-"):
+        raise BadRequestError("File does not look like a PDF")
+    return content
+
+
+def _fra_draft_response(draft) -> FraOcrDraftResponse:
+    return FraOcrDraftResponse.model_validate(draft_to_response_dict(draft))
+
+
+@_fra_ocr_router.post(
+    "/requirements/{requirement_id}/fra-ocr/drafts",
+    response_model=FraOcrDraftResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_fra_ocr_draft(
+    requirement_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:update"))],
+    file: UploadFile = File(...),
+):
+    """Upload a PAS 79-style FRA PDF and create a pending OCR draft."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    content = await _read_fra_pdf_upload(file)
+    service = ComplianceScheduleFraOcrService(db)
+    draft = await service.create_draft_from_upload(
+        requirement_id=requirement_id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        content=content,
+        filename=file.filename or "fra.pdf",
+        content_type=file.content_type or "application/pdf",
+    )
+    return _fra_draft_response(draft)
+
+
+@_fra_ocr_router.get(
+    "/requirements/{requirement_id}/fra-ocr/drafts",
+    response_model=FraOcrDraftListResponse,
+)
+async def list_fra_ocr_drafts(
+    requirement_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:read"))],
+    status_filter: Optional[str] = Query(None, alias="status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = ComplianceScheduleFraOcrService(db)
+    items, total = await service.list_drafts(
+        requirement_id=requirement_id,
+        tenant_id=tenant_id,
+        status=status_filter,
+        page=page,
+        page_size=page_size,
+    )
+    return FraOcrDraftListResponse(
+        items=[_fra_draft_response(d) for d in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages_for(total, page_size),
+    )
+
+
+@_fra_ocr_router.get("/fra-ocr/drafts/{draft_id}", response_model=FraOcrDraftResponse)
+async def get_fra_ocr_draft(
+    draft_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:read"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = ComplianceScheduleFraOcrService(db)
+    draft = await service.get_draft(draft_id=draft_id, tenant_id=tenant_id)
+    return _fra_draft_response(draft)
+
+
+@_fra_ocr_router.post("/fra-ocr/drafts/{draft_id}/confirm", response_model=FraOcrConfirmResponse)
+async def confirm_fra_ocr_draft(
+    draft_id: int,
+    data: FraOcrDraftConfirmRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:update"))],
+):
+    """Human gate: write ``next_due_date`` and record confirmed actions on the draft."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = ComplianceScheduleFraOcrService(db)
+    draft, requirement, applied = await service.apply_confirmed_plan(
+        draft_id=draft_id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        payload=data,
+    )
+    return FraOcrConfirmResponse(
+        draft=_fra_draft_response(draft),
+        requirement=_requirement_response(requirement),
+        applied=applied,
+    )
+
+
+@_fra_ocr_router.post(
+    "/fra-ocr/drafts/{draft_id}/file",
+    response_model=FraOcrFilingResponse,
+    dependencies=[Depends(require_permission("document:create"))],
+)
+async def file_fra_ocr_draft(
+    draft_id: int,
+    data: FraOcrFileRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:update"))],
+):
+    """File a confirmed FRA OCR source PDF into the Governance Library (taxonomy 03.01)."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = ComplianceScheduleFraOcrService(db)
+    result = await service.file_draft_to_library(
+        draft_id=draft_id,
+        tenant_id=tenant_id,
+        user=current_user,
+        category_id=data.category_id,
+        title=data.title,
+    )
+    return FraOcrFilingResponse(
+        draft=_fra_draft_response(result.draft),
+        library_document_id=result.document.id,
+        pel_doc_ref=getattr(result.document, "pel_doc_ref", None),
+        duplicate_warning=result.duplicate_warning,
+        duplicate_warning_detail=result.duplicate_warning_detail,
+    )
+
+
+@_fra_ocr_router.post("/fra-ocr/drafts/{draft_id}/discard", response_model=FraOcrDraftResponse)
+async def discard_fra_ocr_draft(
+    draft_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:update"))],
+    body: FraOcrDiscardRequest | None = None,
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    payload = body or FraOcrDiscardRequest()
+    service = ComplianceScheduleFraOcrService(db)
+    draft = await service.discard_draft(
+        draft_id=draft_id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        reason=payload.reason,
+    )
+    return _fra_draft_response(draft)
+
+
+_enabled_router.include_router(_fra_ocr_router)
 router.include_router(_enabled_router)

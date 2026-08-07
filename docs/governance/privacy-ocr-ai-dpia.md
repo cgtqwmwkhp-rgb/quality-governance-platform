@@ -17,6 +17,10 @@ Scope as of DPIA v2.0 (2026-07-28) is wider than OCR: Mistral OCR/analysis, Gemi
 4. DPO residual-risk acceptance against EA-03 is recorded for **v2.0** (David Harris, 2026-08-06) in [`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md) §8 and [`../evidence/external-attestation-tracker.md`](../evidence/external-attestation-tracker.md). Continue chasing §7 organisational follow-ons (DPA schedule, regions, Pinecone preview necessity).
 5. When adding any new AI provider credential, declare it in [`../../src/core/ai_provider_disclosure.py`](../../src/core/ai_provider_disclosure.py) and the register; the build fails otherwise.
 
+### FRA / PAS 79 ingest
+
+Compliance Schedule Wave 3 adds purpose `fra_pas79` on the shared document-intelligence spine. Personal data that may reach the OCR provider includes the assessor's name and any named responsible person printed in the report body. There is no automated decision: `next_due_date` on a site-scoped FRA obligation moves only when an operator explicitly confirms a draft. Retention follows the OCR draft row and any later Library filing under taxonomy 03.01. Pre-egress redaction remains a known deferred residual (DPIA E4 / #1619), not claimed shipped with this feature.
+
 ## Runtime privacy disclosure
 
 | Surface | Path |

@@ -16,9 +16,9 @@ from src.infrastructure.storage import storage_service
 
 logger = logging.getLogger(__name__)
 
-Purpose = Literal["library", "planet_mark", "external_audit", "uvdb", "customer_audit"]
+Purpose = Literal["library", "planet_mark", "external_audit", "uvdb", "customer_audit", "fra_pas79"]
 
-_AUDIT_MERGE_PURPOSES = frozenset({"planet_mark", "external_audit", "uvdb", "customer_audit"})
+_AUDIT_MERGE_PURPOSES = frozenset({"planet_mark", "external_audit", "uvdb", "customer_audit", "fra_pas79"})
 
 # Native text below this word count is treated as thin/empty for library OCR fallback.
 LIBRARY_THIN_NATIVE_WORD_THRESHOLD = 25
