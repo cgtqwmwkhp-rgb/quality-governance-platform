@@ -97,6 +97,38 @@ describe('DocumentVersionControlBar', () => {
     expect(screen.getByTestId('version-relationship-peers')).toHaveTextContent('Peers: 3')
   })
 
+  it('shows sparse coverage honesty beside ambient relationship counts', () => {
+    render(
+      <DocumentVersionControlBar
+        currentVersion="1.0"
+        status="published"
+        publishedVersion="1.0"
+        workingVersion={null}
+        versions={[
+          {
+            id: 1,
+            version_number: '1.0',
+            status: 'published',
+            change_summary: 'Initial',
+            is_immutable: true,
+            read_only: true,
+            created_at: '2026-07-01T10:00:00Z',
+          },
+        ]}
+        relationshipCounts={{
+          inbound: 0,
+          outbound: 0,
+          peers: 0,
+          coverageHonesty: '0 of 4 expected relationship roles recorded',
+        }}
+      />,
+    )
+
+    expect(screen.getByTestId('version-relationship-coverage-honesty')).toHaveTextContent(
+      '0 of 4 expected relationship roles recorded',
+    )
+  })
+
   it('hides relationship counts when the Doc Graph flag is closed', () => {
     render(
       <DocumentVersionControlBar
@@ -108,6 +140,7 @@ describe('DocumentVersionControlBar', () => {
       />,
     )
     expect(screen.queryByTestId('version-relationship-counts')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('version-relationship-coverage-honesty')).not.toBeInTheDocument()
   })
 
   it('submits revise with change summary when no open draft', async () => {

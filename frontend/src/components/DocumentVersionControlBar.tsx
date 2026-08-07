@@ -34,6 +34,12 @@ export interface DocumentRelationshipAmbientCounts {
   outbound: number
   /** Confirmed undirected peers (related_to / conflicts_with). */
   peers?: number
+  /**
+   * Quantitative coverage honesty when the graph is empty/sparse for this
+   * document's type (e.g. "0 of 4 expected relationship roles recorded").
+   * Never an ISO coverage percentage.
+   */
+  coverageHonesty?: string | null
 }
 
 export interface DocumentVersionControlBarProps {
@@ -183,6 +189,14 @@ export function DocumentVersionControlBar({
                     <span data-testid="version-relationship-peers">
                       Peers:{' '}
                       <strong className="text-foreground">{relationshipCounts.peers}</strong>
+                    </span>
+                  ) : null}
+                  {relationshipCounts.coverageHonesty ? (
+                    <span
+                      className="text-amber-700 dark:text-amber-400"
+                      data-testid="version-relationship-coverage-honesty"
+                    >
+                      {relationshipCounts.coverageHonesty}
                     </span>
                   ) : null}
                 </span>

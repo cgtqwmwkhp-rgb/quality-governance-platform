@@ -306,6 +306,20 @@ describe('resolveDocumentRelationshipAmbientCounts', () => {
     expect(resolveDocumentRelationshipAmbientCounts(true, null, summary)).toEqual(summary)
   })
 
+  it('attaches coverage honesty when the spine is sparse', () => {
+    expect(
+      resolveDocumentRelationshipAmbientCounts(
+        true,
+        null,
+        summary,
+        '0 of 4 expected relationship roles recorded',
+      ),
+    ).toEqual({
+      ...summary,
+      coverageHonesty: '0 of 4 expected relationship roles recorded',
+    })
+  })
+
   it('hides ambient counts when listEdges failed (even if summary still has zeros)', () => {
     expect(
       resolveDocumentRelationshipAmbientCounts(true, 'Failed to load relationships', {
@@ -318,6 +332,14 @@ describe('resolveDocumentRelationshipAmbientCounts', () => {
 
   it('stays hidden when the Doc Graph flag is closed', () => {
     expect(resolveDocumentRelationshipAmbientCounts(false, null, summary)).toBeNull()
+    expect(
+      resolveDocumentRelationshipAmbientCounts(
+        false,
+        null,
+        summary,
+        '0 of 4 expected relationship roles recorded',
+      ),
+    ).toBeNull()
   })
 })
 

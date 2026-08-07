@@ -20,12 +20,16 @@ from src.api.schemas.document_graph import (
     DocumentEdgeResponse,
     DocumentThreadResponse,
     HeuristicProposeResponse,
+    ImSeedDocumentItem,
+    ImSeedEdgeItem,
+    ImSeedResponse,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
 from src.domain.models.document_graph import DocumentEdgeStatus, DocumentEdgeType
 from src.domain.models.user import User
 from src.domain.services.document_graph_heuristic_propose import DocumentGraphHeuristicProposeService
+from src.domain.services.document_graph_im_seed import DocumentGraphImSeedService
 from src.domain.services.document_graph_iso_reverse import DocumentGraphIsoReverseService
 from src.domain.services.document_graph_service import DocumentGraphService
 
@@ -242,6 +246,50 @@ async def propose_document_edges(
         skipped_existing=result.skipped_existing,
         skipped_unresolved=result.skipped_unresolved,
         sources=result.sources,
+    )
+
+
+@_enabled_router.post(
+    "/demo/incident-management/seed",
+    response_model=ImSeedResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def seed_incident_management_vertical(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("admin:manage"))],
+):
+    """Admin-only: idempotently seed the Incident Management Doc Graph demo vertical.
+
+    Finds-or-creates library documents in the caller's tenant and confirms the
+    IM spine edges. Does not invent tenants. Re-runs reuse existing rows/edges.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = DocumentGraphImSeedService(db)
+    result = await service.seed(tenant_id=tenant_id, actor_id=current_user.id)
+    return ImSeedResponse(
+        documents=[
+            ImSeedDocumentItem(
+                role=d.role,
+                document_id=d.document_id,
+                title=d.title,
+                created=d.created,
+            )
+            for d in result.documents
+        ],
+        edges=[
+            ImSeedEdgeItem(
+                src_role=e.src_role,
+                dst_role=e.dst_role,
+                edge_type=e.edge_type,
+                edge_id=e.edge_id,
+                created=e.created,
+            )
+            for e in result.edges
+        ],
+        documents_created=result.documents_created,
+        documents_reused=result.documents_reused,
+        edges_created=result.edges_created,
+        edges_reused=result.edges_reused,
     )
 
 

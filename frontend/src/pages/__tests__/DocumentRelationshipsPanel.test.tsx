@@ -140,6 +140,54 @@ describe('DocumentRelationshipsPanel', () => {
     expect(screen.queryByTestId('relationships-confirm-queue')).not.toBeInTheDocument()
   })
 
+  it('shows quantitative coverage honesty when a typed spine is empty', () => {
+    render(
+      <MemoryRouter>
+        <DocumentRelationshipsPanel
+          documentId={10}
+          documentTitle="Incident Management Policy"
+          documentType="policy"
+          edges={[]}
+          loading={false}
+          error={null}
+          onChanged={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByTestId('relationships-coverage-honesty')).toHaveTextContent(
+      '0 of 4 expected relationship roles recorded',
+    )
+    expect(screen.getByText('No relationships recorded')).toBeInTheDocument()
+    expect(screen.getByText(/Empty here does not mean no hierarchy exists/)).toBeInTheDocument()
+  })
+
+  it('hides coverage honesty when expected roles are fully recorded', async () => {
+    render(
+      <MemoryRouter>
+        <DocumentRelationshipsPanel
+          documentId={10}
+          documentTitle="Incident Report Form"
+          documentType="form"
+          edges={[
+            edge({
+              id: 1,
+              src_document_id: 1,
+              dst_document_id: 10,
+              edge_type: 'requires_record',
+            }),
+          ]}
+          loading={false}
+          error={null}
+          onChanged={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('relationships-confirmed-list')).toBeInTheDocument()
+    expect(screen.queryByTestId('relationships-coverage-honesty')).not.toBeInTheDocument()
+  })
+
   it('confirms a proposed edge and refreshes', async () => {
     graph.confirmEdge.mockResolvedValue({ data: edge({ id: 1, status: 'confirmed' }) })
     const { onChanged } = renderPanel([edge({ id: 1, status: 'proposed' })])
