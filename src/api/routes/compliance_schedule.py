@@ -63,6 +63,7 @@ from src.domain.services.compliance_schedule_import_service import ComplianceSch
 from src.domain.services.compliance_schedule_policy import derive_status
 from src.domain.services.compliance_schedule_regulatory_ai_service import ComplianceScheduleRegulatoryAiService
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
+from src.domain.services.index_job_service import dispatch_or_process_committed_index_job
 from src.infrastructure.database import async_session_maker
 
 DISABLED_DETAIL = "Compliance Schedule is not enabled in this environment."
@@ -558,6 +559,14 @@ async def file_record_to_library(
         library_document_id=data.library_document_id,
         title=data.title,
     )
+    if result.index_job is not None:
+        # Service already committed Document + IndexJob; dispatch after commit.
+        await dispatch_or_process_committed_index_job(
+            db,
+            result.index_job,
+            result.document,
+            current_user=current_user,
+        )
     return RecordFilingResponse(
         record=RecordResponse.model_validate(result.record),
         library_document_id=result.document.id,
@@ -565,6 +574,7 @@ async def file_record_to_library(
         linked_existing=result.linked_existing,
         duplicate_warning=result.duplicate_warning,
         duplicate_warning_detail=result.duplicate_warning_detail,
+        index_job_id=result.index_job.id if result.index_job is not None else None,
     )
 
 
@@ -710,12 +720,20 @@ async def file_fra_ocr_draft(
         category_id=data.category_id,
         title=data.title,
     )
+    if result.index_job is not None:
+        await dispatch_or_process_committed_index_job(
+            db,
+            result.index_job,
+            result.document,
+            current_user=current_user,
+        )
     return FraOcrFilingResponse(
         draft=_fra_draft_response(result.draft),
         library_document_id=result.document.id,
         pel_doc_ref=getattr(result.document, "pel_doc_ref", None),
         duplicate_warning=result.duplicate_warning,
         duplicate_warning_detail=result.duplicate_warning_detail,
+        index_job_id=result.index_job.id if result.index_job is not None else None,
     )
 
 

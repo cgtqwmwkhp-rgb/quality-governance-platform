@@ -79,5 +79,11 @@
     "description": "Enable FRA/PAS79 OCR ingest on Compliance Schedule (ANDed with COMPLIANCE_SCHEDULE_ENABLED). Default false in code; set true to open.",
     "default": "false",
     "example": "true"
+  },
+  "COMPLIANCE_FILING_INDEX_ENABLED": {
+    "required": false,
+    "description": "When true, Compliance Schedule File-to-Library (occurrence filing and FRA OCR draft filing) creates an IndexJob so the filed DRAFT is chunked and searchable. Default false; governance status stays DRAFT (not auto-APPROVED). Persist via deploy vars like FRA OCR.",
+    "default": "false",
+    "example": "false"
   }
 }

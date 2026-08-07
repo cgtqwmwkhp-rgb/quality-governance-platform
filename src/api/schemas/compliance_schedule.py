@@ -303,6 +303,7 @@ class RecordFilingResponse(BaseModel):
     linked_existing: bool
     duplicate_warning: bool = False
     duplicate_warning_detail: Optional[List[dict]] = None
+    index_job_id: Optional[int] = None
 
 
 class RecordListResponse(BaseModel):

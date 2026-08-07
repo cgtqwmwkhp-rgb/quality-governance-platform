@@ -27,7 +27,7 @@ from src.domain.models.compliance_schedule import (
     ComplianceRequirement,
     ComplianceScheduleOcrDraft,
 )
-from src.domain.models.document import Document, FileType
+from src.domain.models.document import Document, FileType, IndexJob
 from src.domain.models.enums import DocumentStatus, DocumentType
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
@@ -41,6 +41,7 @@ from src.domain.services.document_library_filing_service import (
 )
 from src.domain.services.document_version_service import document_version_service
 from src.domain.services.fra_pas79_ocr_service import FRA_OCR_PURPOSE, FRA_TAXONOMY_ID, FraPas79OcrService
+from src.domain.services.index_job_service import maybe_create_filing_index_job
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.storage import StorageError, storage_service
 
@@ -55,6 +56,7 @@ class FraOcrFilingOutcome:
     document: Document
     duplicate_warning: bool
     duplicate_warning_detail: Optional[list[dict]]
+    index_job: Optional[IndexJob] = None
 
 
 def _safe_storage_filename(filename: Optional[str]) -> str:
@@ -586,6 +588,13 @@ class ComplianceScheduleFraOcrService:
                 code="EXTERNAL_SERVICE_ERROR",
             ) from exc
 
+        # Same commit as the Document row — Celery must not see the job early.
+        index_job = await maybe_create_filing_index_job(
+            self.db,
+            document=document,
+            created_by_id=user.id,
+        )
+
         draft.library_document_id = document.id
         draft.filing_status = ComplianceOcrFilingStatus.FILED
         draft.filing_error = None
@@ -604,6 +613,7 @@ class ComplianceScheduleFraOcrService:
                 "pel_doc_ref": getattr(document, "pel_doc_ref", None),
                 "category_id": category_id,
                 "requirement_id": requirement.id,
+                "index_job_id": index_job.id if index_job is not None else None,
             },
             user_id=user.id,
             actor_user_id=user.id,
@@ -618,6 +628,7 @@ class ComplianceScheduleFraOcrService:
             document=document,
             duplicate_warning=bool(duplicates),
             duplicate_warning_detail=duplicate_warning_detail,
+            index_job=index_job,
         )
 
     async def _mark_filing_failed(
