@@ -35,6 +35,7 @@ CAPA_ONLY_API_SOURCE_TYPES: frozenset[str] = frozenset(
         "rta",
         "investigation",
         "compliance_record",
+        "fra_ocr",
     }
 )
 

@@ -99,3 +99,16 @@ async def test_create_from_fra_ocr_actions_idempotent_per_index() -> None:
 
     assert created == [existing]
     db.add.assert_not_called()
+
+
+def test_unified_actions_recognises_fra_ocr_source() -> None:
+    """Without this the Actions filter would hide FRA OCR CAPAs."""
+    from src.api.routes._action_unified import (
+        CAPA_ONLY_API_SOURCE_TYPES,
+        capa_api_source_type,
+        capa_enum_from_api_filter,
+    )
+
+    assert "fra_ocr" in CAPA_ONLY_API_SOURCE_TYPES
+    assert capa_enum_from_api_filter("fra_ocr") == CAPASource.FRA_OCR
+    assert capa_api_source_type(CAPASource.FRA_OCR) == "fra_ocr"
