@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   PROPOSED_EVIDENCE_ANCHOR_ID,
   documentEvidenceHref,
+  documentRelationshipsHref,
   resolveDocumentDetailTab,
   shouldScrollToProposedEvidence,
 } from '../documentEvidenceTab'
@@ -19,11 +20,29 @@ describe('resolveDocumentDetailTab', () => {
     expect(resolveDocumentDetailTab(null)).toBe('overview')
     expect(resolveDocumentDetailTab('nope')).toBe('overview')
   })
+
+  it('opens Relationships when Doc Graph is open', () => {
+    expect(resolveDocumentDetailTab('relationships', { documentGraphEnabled: true })).toBe(
+      'relationships',
+    )
+  })
+
+  it('falls back to overview when Doc Graph is closed, so the deep link cannot land on a missing tab', () => {
+    expect(resolveDocumentDetailTab('relationships', { documentGraphEnabled: false })).toBe(
+      'overview',
+    )
+  })
 })
 
 describe('documentEvidenceHref', () => {
   it('deep-links to Standards & Evidence tab', () => {
     expect(documentEvidenceHref(42)).toBe('/documents/42?tab=evidence')
+  })
+})
+
+describe('documentRelationshipsHref', () => {
+  it('deep-links to the Relationships tab', () => {
+    expect(documentRelationshipsHref(42)).toBe('/documents/42?tab=relationships')
   })
 })
 

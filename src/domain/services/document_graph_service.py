@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional, Sequence
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
@@ -101,6 +102,50 @@ class DocumentGraphService:
                 details={"edge_id": edge_id},
             )
         return edge
+
+    async def _find_live_edge_id(
+        self,
+        *,
+        tenant_id: int,
+        src_document_id: int,
+        dst_document_id: int,
+        edge_type: DocumentEdgeType,
+    ) -> Optional[int]:
+        """Id of the row already holding this pair's unique slot, if any.
+
+        ``ux_document_edges_tenant_src_dst_type_live`` is partial on
+        ``deleted_at IS NULL``, so a *rejected* edge still occupies the slot.
+        Status is deliberately not filtered here.
+        """
+        result = await self.db.execute(
+            select(DocumentEdge.id).where(
+                DocumentEdge.tenant_id == tenant_id,
+                DocumentEdge.src_document_id == src_document_id,
+                DocumentEdge.dst_document_id == dst_document_id,
+                DocumentEdge.edge_type == edge_type,
+                DocumentEdge.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _duplicate_edge_error(
+        *,
+        edge_id: int,
+        src_document_id: int,
+        dst_document_id: int,
+        edge_type: DocumentEdgeType,
+    ) -> ConflictError:
+        return ConflictError(
+            "A live edge of this type already exists between these documents",
+            code="DOCUMENT_GRAPH_EDGE_EXISTS",
+            details={
+                "edge_id": edge_id,
+                "src_document_id": src_document_id,
+                "dst_document_id": dst_document_id,
+                "edge_type": edge_type.value,
+            },
+        )
 
     async def would_create_implements_cycle(
         self,
@@ -213,6 +258,22 @@ class DocumentGraphService:
         src_doc = await self._get_document_or_404(tenant_id=tenant_id, document_id=src_document_id)
         dst_doc = await self._get_document_or_404(tenant_id=tenant_id, document_id=dst_document_id)
 
+        # Refuse the duplicate here rather than letting the partial unique index
+        # surface as a 500 on a route an operator can reach from the UI.
+        duplicate_id = await self._find_live_edge_id(
+            tenant_id=tenant_id,
+            src_document_id=src_document_id,
+            dst_document_id=dst_document_id,
+            edge_type=edge_type_enum,
+        )
+        if duplicate_id is not None:
+            raise self._duplicate_edge_error(
+                edge_id=duplicate_id,
+                src_document_id=src_document_id,
+                dst_document_id=dst_document_id,
+                edge_type=edge_type_enum,
+            )
+
         if edge_type_enum == DocumentEdgeType.IMPLEMENTS:
             if await self.would_create_implements_cycle(
                 tenant_id=tenant_id,
@@ -257,11 +318,31 @@ class DocumentGraphService:
             cited_version=cited_version,
         )
         self.db.add(edge)
-        if commit:
-            await self.db.commit()
-            await self.db.refresh(edge)
-        else:
-            await self.db.flush()
+        try:
+            if commit:
+                await self.db.commit()
+                await self.db.refresh(edge)
+            else:
+                await self.db.flush()
+        except IntegrityError as exc:
+            # The pre-check above closes the ordinary case; a concurrent writer can
+            # still win the race. Roll back, then only claim a duplicate if one is
+            # actually there — other constraint violations must not be mislabelled.
+            await self.db.rollback()
+            duplicate_id = await self._find_live_edge_id(
+                tenant_id=tenant_id,
+                src_document_id=src_document_id,
+                dst_document_id=dst_document_id,
+                edge_type=edge_type_enum,
+            )
+            if duplicate_id is None:
+                raise
+            raise self._duplicate_edge_error(
+                edge_id=duplicate_id,
+                src_document_id=src_document_id,
+                dst_document_id=dst_document_id,
+                edge_type=edge_type_enum,
+            ) from exc
         return edge
 
     async def list_edges(
