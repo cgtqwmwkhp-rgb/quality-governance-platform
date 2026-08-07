@@ -27,12 +27,14 @@ import {
 } from 'lucide-react'
 import api, { documentCampaignApi, getApiErrorMessage, type CampaignComplianceRow } from '../api/client'
 import { toast } from '../contexts/ToastContext'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/Dialog'
+import { DocumentCreateRelationshipsStep } from './DocumentCreateRelationshipsStep'
 import {
   Select,
   SelectContent,
@@ -207,6 +209,7 @@ export default function Documents() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const documentGraphEnabled = useFeatureFlag('document_graph')
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -216,6 +219,11 @@ export default function Documents() {
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadRelationshipDoc, setUploadRelationshipDoc] = useState<{
+    id: number
+    title: string
+  } | null>(null)
+  const [relationshipBusy, setRelationshipBusy] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -505,10 +513,13 @@ export default function Documents() {
 
       setUploadProgress(100)
       toast.success('Document uploaded')
+      const uploadedId = response.data.id as number
+      const uploadedTitle =
+        (response.data.title as string) || file.name.replace(/\.[^/.]+$/, '')
       setUploadDownstreamNotice({
-        id: response.data.id as number,
+        id: uploadedId,
         reference_number: response.data.reference_number as string,
-        title: (response.data.title as string) || file.name.replace(/\.[^/.]+$/, ''),
+        title: uploadedTitle,
         status: (response.data.status as string) || 'processing',
       })
 
@@ -518,7 +529,14 @@ export default function Documents() {
         page,
         filterCategory === ALL_CATEGORIES_VALUE ? undefined : filterCategory,
       )
-      setShowUploadModal(false)
+      // Flag-off: close as before. Flag-on: stay in the modal for the authorship
+      // relationship step so coverage starts at create, not only on Detail.
+      if (documentGraphEnabled) {
+        setUploadRelationshipDoc({ id: uploadedId, title: uploadedTitle })
+      } else {
+        setUploadRelationshipDoc(null)
+        setShowUploadModal(false)
+      }
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'upload' })
       reportFailure(err, setUploadError)
@@ -527,6 +545,16 @@ export default function Documents() {
       setUploading(false)
       setUploadProgress(0)
     }
+  }
+
+  const closeUploadModal = () => {
+    // Block dismiss while the file is uploading or an edge create is in flight
+    // so Skip/Done/X cannot unmount the step mid-request (Bugbot).
+    if (uploading || relationshipBusy) return
+    setShowUploadModal(false)
+    setUploadRelationshipDoc(null)
+    setRelationshipBusy(false)
+    setUploadError(null)
   }
 
   const resolveSignedUrl = useCallback(async (documentId: number, download = true) => {
@@ -605,7 +633,13 @@ export default function Documents() {
                 {t('nav.document_campaigns', { defaultValue: 'Document campaigns' })}
               </Link>
             </Button>
-            <Button onClick={() => setShowUploadModal(true)}>
+            <Button
+              onClick={() => {
+                setUploadRelationshipDoc(null)
+                setUploadError(null)
+                setShowUploadModal(true)
+              }}
+            >
               <Upload size={20} />
               {t('documents.upload')}
             </Button>
@@ -1214,76 +1248,105 @@ export default function Documents() {
         </Card>
       )}
 
-      {/* Upload Modal */}
+      {/* Upload Modal (+ optional Doc Graph relationship step when flag on) */}
       <Dialog
         open={showUploadModal}
-        onOpenChange={(open) => !uploading && setShowUploadModal(open)}
+        onOpenChange={(open) => {
+          if (open) {
+            setShowUploadModal(true)
+            return
+          }
+          closeUploadModal()
+        }}
       >
         <DialogContent
-          className={cn(dragActive && 'border-primary bg-primary/5')}
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
+          className={cn(dragActive && !uploadRelationshipDoc && 'border-primary bg-primary/5')}
+          onDragEnter={uploadRelationshipDoc ? undefined : handleDrag}
+          onDragLeave={uploadRelationshipDoc ? undefined : handleDrag}
+          onDragOver={uploadRelationshipDoc ? undefined : handleDrag}
+          onDrop={uploadRelationshipDoc ? undefined : handleDrop}
+          onInteractOutside={(event) => {
+            if (uploading || relationshipBusy) event.preventDefault()
+          }}
+          onEscapeKeyDown={(event) => {
+            if (uploading || relationshipBusy) event.preventDefault()
+          }}
         >
           <DialogHeader>
-            <DialogTitle>{t('documents.upload')}</DialogTitle>
-            <DialogDescription>Upload governance evidence for durable storage and semantic indexing.</DialogDescription>
+            <DialogTitle>
+              {uploadRelationshipDoc ? 'Document relationships' : t('documents.upload')}
+            </DialogTitle>
+            <DialogDescription>
+              {uploadRelationshipDoc
+                ? 'Optionally record what this library document implements, requires, relates to, or conflicts with.'
+                : 'Upload governance evidence for durable storage and semantic indexing.'}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="py-4">
-            {uploadError && !uploading ? (
-              <div
-                role="alert"
-                className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                data-testid="documents-upload-error"
-              >
-                {uploadError}
-              </div>
-            ) : null}
-            {uploading ? (
-              <div className="text-center py-8">
-                <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
-                <p className="text-foreground mb-2">{t('documents.processing')}</p>
-                <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-brand transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Storing file, then extracting metadata and indexing…
-                </p>
-              </div>
+            {uploadRelationshipDoc ? (
+              <DocumentCreateRelationshipsStep
+                documentId={uploadRelationshipDoc.id}
+                documentTitle={uploadRelationshipDoc.title}
+                onDone={closeUploadModal}
+                onBusyChange={setRelationshipBusy}
+              />
             ) : (
-              <div
-                className={cn(
-                  'border-2 border-dashed rounded-2xl p-12 text-center transition-colors',
-                  dragActive
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-muted-foreground',
+              <>
+                {uploadError && !uploading ? (
+                  <div
+                    role="alert"
+                    className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                    data-testid="documents-upload-error"
+                  >
+                    {uploadError}
+                  </div>
+                ) : null}
+                {uploading ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
+                    <p className="text-foreground mb-2">{t('documents.processing')}</p>
+                    <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-brand transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Storing file, then extracting metadata and indexing…
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    className={cn(
+                      'border-2 border-dashed rounded-2xl p-12 text-center transition-colors',
+                      dragActive
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-muted-foreground',
+                    )}
+                  >
+                    <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      PDF, Word, Excel, CSV, Markdown, Text, or images (max 50 MB)
+                    </p>
+                    <label>
+                      <Button asChild>
+                        <span className="cursor-pointer">
+                          <Plus size={16} />
+                          {t('documents.browse_files')}
+                        </span>
+                      </Button>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.md,.txt,.png,.jpg,.jpeg"
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                      />
+                    </label>
+                  </div>
                 )}
-              >
-                <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  PDF, Word, Excel, CSV, Markdown, Text, or images (max 50 MB)
-                </p>
-                <label>
-                  <Button asChild>
-                    <span className="cursor-pointer">
-                      <Plus size={16} />
-                      {t('documents.browse_files')}
-                    </span>
-                  </Button>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.md,.txt,.png,.jpg,.jpeg"
-                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-                  />
-                </label>
-              </div>
+              </>
             )}
           </div>
         </DialogContent>

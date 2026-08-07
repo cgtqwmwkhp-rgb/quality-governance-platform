@@ -23,6 +23,20 @@ export const DOCUMENT_EDGE_TYPES: readonly DocumentEdgeType[] = [
   'conflicts_with',
 ]
 
+/**
+ * Create-wizard / post-upload authorship step (Wave 1 PR-C).
+ *
+ * Captures the spine + obligation + peer + conflict types operators choose when
+ * a library document is first authored. `references` stays on the detail tab —
+ * citations usually need the text of an existing version, not an empty upload.
+ */
+export const CREATE_WIZARD_DOCUMENT_EDGE_TYPES: readonly DocumentEdgeType[] = [
+  'implements',
+  'requires_record',
+  'related_to',
+  'conflicts_with',
+]
+
 /** Peer types the API stores canonically (src id < dst id), so they read the same both ways. */
 const UNDIRECTED_EDGE_TYPES: readonly DocumentEdgeType[] = ['related_to', 'conflicts_with']
 

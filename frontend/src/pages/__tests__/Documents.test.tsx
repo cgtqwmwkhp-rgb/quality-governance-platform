@@ -49,7 +49,15 @@ vi.mock('../../api/client', () => ({
   documentCampaignApi: {
     listCompliance: (...args: unknown[]) => mockListCompliance(...args),
   },
+  documentGraphApi: {
+    createEdge: vi.fn(),
+  },
   getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'Request failed'),
+}))
+
+const mockUseFeatureFlag = vi.fn(() => false)
+vi.mock('../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: (...args: unknown[]) => mockUseFeatureFlag(...args),
 }))
 const sampleDoc = {
   id: 11,
@@ -96,6 +104,7 @@ function mockHappyPath() {
 describe('Documents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseFeatureFlag.mockReturnValue(false)
     mockHappyPath()
     mockListCompliance.mockResolvedValue({
       data: {
@@ -419,6 +428,34 @@ describe('Documents', () => {
     expect(await screen.findByTestId('documents-upload-downstream-notice')).toBeInTheDocument()
     expect(screen.getByTestId('documents-upload-indexing-note')).toBeInTheDocument()
     expect(screen.queryByTestId('documents-upload-exceptions-link')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('documents-create-relationships-step')).not.toBeInTheDocument()
+  })
+
+  it('opens the Doc Graph relationship step after upload when document_graph is on', async () => {
+    mockUseFeatureFlag.mockImplementation((flag: unknown) => flag === 'document_graph')
+    mockPost.mockResolvedValue({
+      data: { id: 99, reference_number: 'DOC-99', title: 'upload', status: 'processing' },
+    })
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('documents-live-badge')
+    fireEvent.click(screen.getByRole('button', { name: /documents\.upload/i }))
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['hello'], 'policy.pdf', { type: 'application/pdf' })
+    fireEvent.change(fileInput, { target: { files: [file] } })
+
+    expect(await screen.findByTestId('documents-create-relationships-step')).toBeInTheDocument()
+    expect(screen.getByTestId('documents-upload-downstream-notice')).toBeInTheDocument()
+    // Flag-on path keeps the modal open — closing via Skip finishes authorship.
+    fireEvent.click(screen.getByTestId('documents-create-rel-done'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('documents-create-relationships-step')).not.toBeInTheDocument()
+    })
   })
 
   it('hydrates q/status/type filters from shareable URL', async () => {

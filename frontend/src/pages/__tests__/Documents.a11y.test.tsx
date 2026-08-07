@@ -31,8 +31,22 @@ vi.mock('../../api/client', () => ({
     post: (...args: unknown[]) => mockPost(...args),
     defaults: { baseURL: 'https://api.example.test' },
   },
+  documentCampaignApi: {
+    listCompliance: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
+  documentGraphApi: {
+    createEdge: vi.fn(),
+  },
   getApiErrorMessage: (error: unknown) =>
     error instanceof Error ? error.message : 'Request failed',
+}))
+
+vi.mock('../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: () => false,
+}))
+
+vi.mock('../../contexts/ToastContext', () => ({
+  toast: { error: vi.fn(), warning: vi.fn(), success: vi.fn(), info: vi.fn() },
 }))
 
 function Wrapper({ children }: { children: ReactNode }) {
