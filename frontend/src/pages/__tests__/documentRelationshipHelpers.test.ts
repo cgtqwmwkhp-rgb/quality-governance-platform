@@ -3,6 +3,7 @@ import type { DocumentEdge, DocumentEdgeType } from '../../api/documentGraphClie
 import {
   buildDocumentEdgePayload,
   counterpartDocumentIds,
+  CREATE_WIZARD_DOCUMENT_EDGE_TYPES,
   DOCUMENT_EDGE_TYPE_META,
   findConflictingEdge,
   isActiveDocumentEdge,
@@ -27,6 +28,18 @@ function edge(overrides: Partial<DocumentEdge> & { id: number }): DocumentEdge {
     ...overrides,
   }
 }
+
+describe('CREATE_WIZARD_DOCUMENT_EDGE_TYPES', () => {
+  it('offers authorship types without references (citations stay on detail)', () => {
+    expect([...CREATE_WIZARD_DOCUMENT_EDGE_TYPES]).toEqual([
+      'implements',
+      'requires_record',
+      'related_to',
+      'conflicts_with',
+    ])
+    expect(CREATE_WIZARD_DOCUMENT_EDGE_TYPES).not.toContain('references')
+  })
+})
 
 describe('resolveDocumentEdge', () => {
   it('reads a directed edge from the source side', () => {
