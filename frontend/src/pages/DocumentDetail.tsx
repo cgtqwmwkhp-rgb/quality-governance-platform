@@ -56,6 +56,7 @@ import {
   summariseDocumentRelationships,
 } from './documentRelationshipHelpers'
 import { buildPublishImpactPreview, type PublishImpactPreview } from './documentPublishImpactHelpers'
+import { complianceClauseHref } from './complianceEvidenceHelpers'
 import { DocumentPublishImpactPreview } from './DocumentPublishImpactPreview'
 import { DocumentRelationshipChips } from './DocumentRelationshipChips'
 import { DocumentRelationshipsPanel } from './DocumentRelationshipsPanel'
@@ -1064,9 +1065,20 @@ export default function DocumentDetail() {
                           {link.scheme && (
                             <Badge variant="outline">{link.scheme}</Badge>
                           )}
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {link.clause_id}
-                          </span>
+                          {documentGraphEnabled ? (
+                            <Link
+                              to={complianceClauseHref(link.clause_id)}
+                              className="font-mono text-xs text-primary hover:underline"
+                              data-testid="document-clause-compliance-link"
+                              title="Open clause on Compliance Evidence"
+                            >
+                              {link.clause_id}
+                            </Link>
+                          ) : (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {link.clause_id}
+                            </span>
+                          )}
                         </div>
                         {link.title && (
                           <p className="font-medium text-foreground">{link.title}</p>

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, status
 from src.api.dependencies import DbSession, require_permission
 from src.api.schemas.document_graph import (
     CitationStalenessResponse,
+    ClauseDocumentsResponse,
     DocumentEdgeCreate,
     DocumentEdgeListResponse,
     DocumentEdgeRejectRequest,
@@ -25,6 +26,7 @@ from src.core.config import settings
 from src.domain.models.document_graph import DocumentEdgeStatus, DocumentEdgeType
 from src.domain.models.user import User
 from src.domain.services.document_graph_heuristic_propose import DocumentGraphHeuristicProposeService
+from src.domain.services.document_graph_iso_reverse import DocumentGraphIsoReverseService
 from src.domain.services.document_graph_service import DocumentGraphService
 
 DISABLED_DETAIL = "Doc Graph is not enabled in this environment."
@@ -198,6 +200,22 @@ async def get_citation_staleness(
     service = DocumentGraphHeuristicProposeService(db)
     payload = await service.citation_staleness_for_edge(tenant_id=tenant_id, edge_id=edge_id)
     return CitationStalenessResponse.model_validate(payload)
+
+
+@_enabled_router.get(
+    "/clauses/{clause_id}/documents",
+    response_model=ClauseDocumentsResponse,
+)
+async def list_clause_documents(
+    clause_id: str,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+):
+    """ISO reverse: library documents evidencing a clause, with CEL tip freshness."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = DocumentGraphIsoReverseService(db)
+    payload = await service.list_documents_for_clause(tenant_id=tenant_id, clause_id=clause_id)
+    return ClauseDocumentsResponse.model_validate(payload)
 
 
 @_heuristic_router.post(
