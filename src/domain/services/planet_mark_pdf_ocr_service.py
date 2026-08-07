@@ -19,12 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol
 
 from src.domain.services.document_intelligence_service import DocumentIntelligenceService
-from src.domain.services.ocr_field_extraction import (
-    CONFIDENCE_HIGH,
-    CONFIDENCE_MEDIUM,
-    CONFIDENCE_NONE,
-    ExtractedField,
-)
+from src.domain.services.ocr_field_extraction import CONFIDENCE_HIGH, CONFIDENCE_MEDIUM, CONFIDENCE_NONE, ExtractedField
 
 logger = logging.getLogger(__name__)
 

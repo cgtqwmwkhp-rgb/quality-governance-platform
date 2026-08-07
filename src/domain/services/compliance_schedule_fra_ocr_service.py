@@ -40,11 +40,7 @@ from src.domain.services.document_library_filing_service import (
     load_filing_category,
 )
 from src.domain.services.document_version_service import document_version_service
-from src.domain.services.fra_pas79_ocr_service import (
-    FRA_OCR_PURPOSE,
-    FRA_TAXONOMY_ID,
-    FraPas79OcrService,
-)
+from src.domain.services.fra_pas79_ocr_service import FRA_OCR_PURPOSE, FRA_TAXONOMY_ID, FraPas79OcrService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.storage import StorageError, storage_service
 

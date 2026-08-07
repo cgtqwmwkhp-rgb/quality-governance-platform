@@ -9,13 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.domain.exceptions import ConflictError, ValidationError
-from src.domain.models.compliance_schedule import (
-    ComplianceOcrDraftStatus,
-    ComplianceOcrFilingStatus,
-)
-from src.domain.services.compliance_schedule_fra_ocr_service import (
-    ComplianceScheduleFraOcrService,
-)
+from src.domain.models.compliance_schedule import ComplianceOcrDraftStatus, ComplianceOcrFilingStatus
+from src.domain.services.compliance_schedule_fra_ocr_service import ComplianceScheduleFraOcrService
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
 
 

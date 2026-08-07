@@ -35,8 +35,8 @@ from src.api.schemas.compliance_schedule import (
 from src.api.schemas.compliance_schedule_fra_ocr import (
     FraOcrConfirmResponse,
     FraOcrDiscardRequest,
-    FraOcrDraftListResponse,
     FraOcrDraftConfirmRequest,
+    FraOcrDraftListResponse,
     FraOcrDraftResponse,
     FraOcrFileRequest,
     FraOcrFilingResponse,
