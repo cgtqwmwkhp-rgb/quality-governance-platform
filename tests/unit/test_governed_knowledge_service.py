@@ -229,6 +229,11 @@ class TestMapDocumentToSchemes:
             patch.object(svc, "_map_iso_schemes", new_callable=AsyncMock) as mock_iso,
             patch.object(svc, "_map_uvdb_schemes", new_callable=AsyncMock, return_value=[]),
             patch.object(svc, "_map_planet_mark_schemes", return_value=[]),
+            patch(
+                "src.domain.services.cel_version_pin.pin_evidence_link_document_version",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             from src.domain.services.governed_knowledge_service import SchemeMapping
 
@@ -276,6 +281,11 @@ class TestMapDocumentToSchemes:
             patch.object(svc, "_map_iso_schemes", new_callable=AsyncMock) as mock_iso,
             patch.object(svc, "_map_uvdb_schemes", new_callable=AsyncMock, return_value=[]),
             patch.object(svc, "_map_planet_mark_schemes", return_value=[]),
+            patch(
+                "src.domain.services.cel_version_pin.pin_evidence_link_document_version",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             from src.domain.services.governed_knowledge_service import SchemeMapping
 

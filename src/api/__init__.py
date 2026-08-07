@@ -29,6 +29,7 @@ from src.api.routes import (
     document_campaign,
     document_categories,
     document_control,
+    document_graph,
     documents,
     drivers,
     employee_portal,
@@ -122,6 +123,11 @@ router.include_router(investigations.router, prefix="/investigations", tags=["In
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
+router.include_router(
+    document_graph.router,
+    prefix="/document-graph",
+    tags=["Document Relationship Graph"],
+)
 # Export Center — sync CSV catalog + download (PX-160). No export_jobs this wave.
 router.include_router(exports.router, prefix="/exports", tags=["Export Center"])
 # Governance Library taxonomy (Wave W0) — category tree + tag vocabulary

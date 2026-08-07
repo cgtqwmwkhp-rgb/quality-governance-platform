@@ -16,7 +16,7 @@ from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -554,65 +554,8 @@ async def create_new_version(
 
     new_version_number = version.version_number
 
-    # AI-first version lifecycle: rematch evidence + stale quizzes (best-effort)
-    try:
-        from src.domain.models.document import Document as LibraryDocument
-        from src.domain.services.governed_knowledge_service import governed_knowledge_service
-
-        lib = await db.execute(
-            select(LibraryDocument)
-            .where(
-                LibraryDocument.tenant_id == tenant_id,
-                or_(
-                    LibraryDocument.title == document.title,
-                    LibraryDocument.reference_number == document.document_number,
-                ),
-            )
-            .limit(1)
-        )
-        library_doc = lib.scalar_one_or_none()
-        if library_doc is not None:
-            content = " ".join(
-                filter(
-                    None,
-                    [
-                        library_doc.title or "",
-                        library_doc.description or "",
-                        library_doc.ai_summary or "",
-                        " ".join(library_doc.ai_tags or []) if library_doc.ai_tags else "",
-                    ],
-                )
-            )
-            await governed_knowledge_service.rematch_evidence_on_version(
-                db,
-                library_doc.id,
-                content,
-                library_doc.document_type,
-                tenant_id,
-                current_user,
-            )
-            await governed_knowledge_service.mark_quizzes_stale_for_document(
-                db,
-                document_id=library_doc.id,
-                tenant_id=tenant_id,
-                new_version=new_version_number,
-            )
-            await governed_knowledge_service.generate_quiz_draft(
-                db,
-                document_id=library_doc.id,
-                content=content or library_doc.title or document.title,
-                version=new_version_number,
-                tenant_id=tenant_id,
-                user=current_user,
-                question_count=5,
-                include_open=True,
-                include_mcq=True,
-                pass_mark=70,
-                auto_approve_if_quality=True,
-            )
-            await db.commit()
-    except Exception:
-        logger.exception("Governed KB rematch/quiz stale failed for controlled doc %s", document_id)
+    # ADR-0021 P0: opening a revise draft must NOT rematch evidence / mark quizzes
+    # stale. Those hooks run on publish (see publish_document + gkb_publish_lifecycle).
 
     return {
         "id": version.id,
@@ -654,6 +597,22 @@ async def publish_document(
     )
     await db.commit()
     await db.refresh(version)
+
+    # ADR-0021 P0: rematch / quiz stale / quiz draft on publish (not revise draft).
+    try:
+        from src.domain.services.gkb_publish_lifecycle import run_controlled_publish_lifecycle
+
+        result = await run_controlled_publish_lifecycle(
+            db=db,
+            controlled_document=document,
+            new_version=version.version_number,
+            user=current_user,
+            tenant_id=tenant_id,
+        )
+        if result.rematch_invoked or result.quizzes_stale_invoked or result.quiz_draft_invoked:
+            await db.commit()
+    except Exception:
+        logger.exception("Governed KB publish lifecycle failed for controlled doc %s", document_id)
 
     return {
         "id": document.id,

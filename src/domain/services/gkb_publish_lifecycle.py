@@ -1,4 +1,4 @@
-"""GKB WL3 publish lifecycle orchestrator (scaffold).
+"""GKB WL3 publish lifecycle orchestrator.
 
 Documents and decides post-publish steps for governed knowledge documents:
 
@@ -7,16 +7,18 @@ Documents and decides post-publish steps for governed knowledge documents:
 3. Generate quiz draft — ``GovernedKnowledgeService.generate_quiz_draft``
 4. Require re-ack when ``PolicyAcknowledgmentRequirement.re_acknowledge_on_update``
 
-This module is deliberately unwired from publish routes. Callers receive a
-deny-safe plan and may optionally invoke thin wrappers that no-op when the
-GovernedKnowledgeService dependency is absent (unit tests / partial inject).
+Wired from controlled **publish** and library **approve/publish** paths.
+Opening a controlled revise draft must not invoke these hooks (ADR-0021 P0).
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Optional, Protocol
+
+from sqlalchemy import select
 
 # Stable tip method names (GovernedKnowledgeService on origin/main).
 GKS_REMATCH_EVIDENCE_ON_VERSION = "rematch_evidence_on_version"
@@ -25,6 +27,8 @@ GKS_GENERATE_QUIZ_DRAFT = "generate_quiz_draft"
 
 # Tip model field used for re-ack decisions.
 PAR_RE_ACKNOWLEDGE_ON_UPDATE = "re_acknowledge_on_update"
+
+logger = logging.getLogger(__name__)
 
 
 class PublishLifecycleStep(StrEnum):
@@ -190,6 +194,36 @@ class PublishLifecycleExecutionResult:
     quiz_draft: Any = None
 
 
+def library_document_hook_content(document: Any) -> str:
+    """Build rematch/quiz content from library Document fields (best-effort)."""
+    tags = getattr(document, "ai_tags", None) or []
+    return " ".join(
+        filter(
+            None,
+            [
+                getattr(document, "title", None) or "",
+                getattr(document, "description", None) or "",
+                getattr(document, "ai_summary", None) or "",
+                " ".join(tags) if tags else "",
+            ],
+        )
+    )
+
+
+async def document_has_quiz_drafts(db: Any, *, document_id: int, tenant_id: int) -> bool:
+    from src.domain.models.governed_knowledge import DocumentQuizDraft
+
+    result = await db.execute(
+        select(DocumentQuizDraft.id)
+        .where(
+            DocumentQuizDraft.document_id == document_id,
+            DocumentQuizDraft.tenant_id == tenant_id,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def apply_publish_lifecycle_hooks(
     plan: PublishLifecyclePlan,
     *,
@@ -269,4 +303,93 @@ async def apply_publish_lifecycle_hooks(
         rematch_result=rematch_result,
         stale_count=stale_count,
         quiz_draft=quiz_draft,
+    )
+
+
+async def run_library_publish_lifecycle(
+    *,
+    db: Any,
+    library_document: Any,
+    new_version: str,
+    user: Any,
+    service: SupportsGovernedKnowledgePublishHooks | None = None,
+) -> PublishLifecycleExecutionResult:
+    """Decide + apply rematch/quiz hooks for a library approve or publish."""
+    if service is None:
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        service = governed_knowledge_service
+
+    tenant_id = getattr(library_document, "tenant_id", None)
+    document_id = getattr(library_document, "id", None)
+    content = library_document_hook_content(library_document)
+    has_quizzes = False
+    if tenant_id is not None and document_id is not None:
+        try:
+            has_quizzes = await document_has_quiz_drafts(
+                db,
+                document_id=int(document_id),
+                tenant_id=int(tenant_id),
+            )
+        except Exception:
+            logger.exception(
+                "quiz draft presence check failed for library document %s",
+                document_id,
+            )
+
+    plan = decide_publish_lifecycle(
+        PublishLifecycleContext(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            new_version=new_version,
+            has_library_document=True,
+            has_content=bool(content.strip()),
+            has_existing_quizzes=has_quizzes,
+        )
+    )
+    return await apply_publish_lifecycle_hooks(
+        plan,
+        service=service,
+        db=db,
+        document_id=document_id,
+        content=content or (getattr(library_document, "title", None) or ""),
+        doc_type=getattr(library_document, "document_type", None),
+        tenant_id=tenant_id,
+        user=user,
+        new_version=new_version,
+    )
+
+
+async def run_controlled_publish_lifecycle(
+    *,
+    db: Any,
+    controlled_document: Any,
+    new_version: str,
+    user: Any,
+    tenant_id: int,
+    service: SupportsGovernedKnowledgePublishHooks | None = None,
+) -> PublishLifecycleExecutionResult:
+    """Decide + apply rematch/quiz hooks after controlled publish (hard FK only)."""
+    from src.domain.services.gkb_control_library_link import resolve_library_for_controlled
+
+    if service is None:
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        service = governed_knowledge_service
+
+    library_doc, match = await resolve_library_for_controlled(
+        db,
+        controlled_document,
+        tenant_id=tenant_id,
+    )
+    if match.relationship_state != "linked" or library_doc is None:
+        plan = _denied(PublishLifecycleDenyReason.LIBRARY_DOCUMENT_REQUIRED)
+        return PublishLifecycleExecutionResult(planned=plan)
+
+    return await run_library_publish_lifecycle(
+        db=db,
+        library_document=library_doc,
+        new_version=new_version,
+        user=user,
+        service=service,
     )

@@ -74,6 +74,7 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("document_approval_workflows", "document_approval_instances"),
         ("document_categories", "pel_doc_ref_counters"),
         ("document_discussion_threads", "document_discussion_messages"),
+        ("documents", "document_edges"),
         ("documents", "library_document_access_logs"),
         ("documents", "library_review_packs"),
         ("driver_profiles", "driver_acknowledgements"),

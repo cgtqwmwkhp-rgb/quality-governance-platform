@@ -262,6 +262,11 @@ class GovernedKnowledgeService:
         elif entity_type == "document" and not link.signal_type:
             link.signal_type = EvidenceSignalType.EVIDENCE.value
 
+        if entity_type == "document":
+            from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+            await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
+
         await self._log_ai_decision(
             db,
             tenant_id=tenant_id,

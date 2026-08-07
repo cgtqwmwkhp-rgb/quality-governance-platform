@@ -106,6 +106,50 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
             "failure while protecting nothing."
         ),
     ),
+    ClientFeature(
+        ui_key="document_graph",
+        settings_attr="document_graph_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates Doc Graph UI surfaces and /api/v1/document-graph. Default off (ADR-0021); "
+            "API will 404 when closed so the flag discloses only that the module exists."
+        ),
+    ),
+    ClientFeature(
+        ui_key="document_graph_heuristic_propose",
+        settings_attr="document_graph_heuristic_propose_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates non-LLM Doc Graph edge proposals. Default off; propose→confirm only — "
+            "never auto-confirms impact-driving edges (ADR-0021)."
+        ),
+    ),
+    ClientFeature(
+        ui_key="document_graph_impact_propagation",
+        settings_attr="document_graph_impact_propagation_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates publish-time Doc Graph impact assessments. Separate from the master graph "
+            "flag so edges can ship before impact propagation opens (ADR-0021)."
+        ),
+    ),
+    ClientFeature(
+        ui_key="document_graph_llm_propose",
+        settings_attr="document_graph_llm_propose_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="document:read",
+        reason=(
+            "Gates LLM Doc Graph edge proposals. Default off and DPIA-gated later; AI may "
+            "propose only — never auto-confirm impact-driving edges (ADR-0021)."
+        ),
+    ),
 )
 
 #: Lookup by the name the frontend uses.

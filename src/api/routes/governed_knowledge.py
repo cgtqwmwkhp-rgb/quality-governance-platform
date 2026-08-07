@@ -49,6 +49,8 @@ class EvidenceLinkDetailResponse(BaseModel):
     title: Optional[str]
     notes: Optional[str]
     signal_type: Optional[str] = None
+    document_version_id: Optional[int] = None
+    standard_edition: Optional[str] = None
     created_at: str
     created_by_email: Optional[str]
 
@@ -226,6 +228,8 @@ def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetail
         title=link.title,
         notes=link.notes,
         signal_type=link.signal_type,
+        document_version_id=getattr(link, "document_version_id", None),
+        standard_edition=getattr(link, "standard_edition", None),
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
     )
@@ -422,6 +426,10 @@ async def confirm_evidence_link(
     prior = link.effective_status.value
     link.status = EvidenceLinkStatus.CONFIRMED
     link.auto_applied = False
+    if link.entity_type == "document":
+        from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+        await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
     db.add(
         AiDecisionLog(
             tenant_id=tenant_id,
@@ -436,6 +444,7 @@ async def confirm_evidence_link(
                 "prior_status": prior,
                 "actor_email": getattr(current_user, "email", None),
                 "actor_id": getattr(current_user, "id", None),
+                "document_version_id": link.document_version_id,
             },
         )
     )
@@ -532,6 +541,10 @@ async def bulk_confirm_evidence(
         for link in links:
             link.status = EvidenceLinkStatus.CONFIRMED
             link.auto_applied = False
+            if link.entity_type == "document":
+                from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+                await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
             gap = await competence_gap_service.from_evidence_link(
                 db,
                 link=link,
@@ -546,6 +559,10 @@ async def bulk_confirm_evidence(
         for link in links:
             link.status = EvidenceLinkStatus.CONFIRMED
             link.auto_applied = False
+            if link.entity_type == "document":
+                from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+                await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
     await db.commit()
     return {
         "status": "confirmed",

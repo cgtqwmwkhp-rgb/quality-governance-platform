@@ -234,6 +234,7 @@ def readable_resources() -> tuple[Resource, ...]:
 # exemption is a visible, reviewable act.
 SERVER_OWNED_FIELDS = frozenset(
     {
+        "confirmed_by_id",  # Doc Graph edge confirm actor (server-set)
         "id",
         "tenant_id",
         "created_at",
