@@ -243,6 +243,8 @@ class RiskService:
             description=data.get("description", ""),
             category=data.get("category", "operational"),
             subcategory=data.get("subcategory"),
+            source=data.get("source"),
+            context=data.get("context"),
             department=data.get("department"),
             location=data.get("location"),
             process=data.get("process"),
