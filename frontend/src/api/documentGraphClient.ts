@@ -179,10 +179,14 @@ export function createDocumentGraphApi(api: AxiosInstance) {
       api.get<DocumentEdgeListResponse>(`${base}/documents/${documentId}/edges`, { params }),
 
     getThread: (documentId: number, params?: { include_proposed?: boolean }) =>
-      api.get<DocumentThreadResponse>(
-        `${base}/documents/${documentId}/thread`,
-        params ? { params } : undefined,
-      ),
+      params
+        ? api.get<DocumentThreadResponse>(
+            `${base}/documents/${documentId}/thread`,
+            { params },
+          )
+        : api.get<DocumentThreadResponse>(
+            `${base}/documents/${documentId}/thread`,
+          ),
 
     createEdge: (payload: CreateDocumentEdgePayload) =>
       api.post<DocumentEdge>(`${base}/edges`, payload),
