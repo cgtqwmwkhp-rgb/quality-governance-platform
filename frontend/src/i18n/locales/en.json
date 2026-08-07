@@ -4148,5 +4148,16 @@
   "compliance.schedule.fra_ocr.confirm.cta": "Confirm",
   "compliance.schedule.fra_ocr.upload.success": "FRA report uploaded — review the proposal",
   "compliance.schedule.fra_ocr.upload.busy": "Uploading…",
-  "compliance.schedule.fra_ocr.upload.cta": "Ingest FRA report"
+  "compliance.schedule.fra_ocr.upload.cta": "Ingest FRA report",
+  "compliance.schedule.regulatory_ai.suggest": "Suggest with AI",
+  "compliance.schedule.regulatory_ai.suggesting": "Suggesting…",
+  "compliance.schedule.regulatory_ai.clarify_heading": "A few questions to narrow this down",
+  "compliance.schedule.regulatory_ai.resubmit": "Re-suggest with answers",
+  "compliance.schedule.regulatory_ai.skip": "Skip questions",
+  "compliance.schedule.regulatory_ai.candidates_heading": "Suggested regulatory bases",
+  "compliance.schedule.regulatory_ai.select_hint": "Review a suggestion, then Accept to fill the field. Nothing is applied until you accept.",
+  "compliance.schedule.regulatory_ai.accept": "Accept",
+  "compliance.schedule.regulatory_ai.discard": "Discard",
+  "compliance.schedule.regulatory_ai.linked": "Linked to Standards",
+  "compliance.schedule.regulatory_ai.remove_link": "Remove link"
 }

@@ -56,6 +56,8 @@ class RequirementCreate(BaseModel):
     taxonomy_id: str = Field(..., min_length=1, max_length=20)
     description: Optional[str] = None
     regulatory_basis: Optional[str] = Field(None, max_length=255)
+    regulatory_standard_id: Optional[int] = Field(None, ge=1)
+    regulatory_clause_id: Optional[int] = Field(None, ge=1)
     frequency_months: Optional[int] = Field(None, ge=1)
     frequency_days: Optional[int] = Field(None, ge=1)
     anchor: ComplianceScheduleAnchor = ComplianceScheduleAnchor.SCHEDULE
@@ -80,6 +82,8 @@ class RequirementUpdate(BaseModel):
     taxonomy_id: Optional[str] = Field(None, min_length=1, max_length=20)
     description: Optional[str] = None
     regulatory_basis: Optional[str] = Field(None, max_length=255)
+    regulatory_standard_id: Optional[int] = Field(None, ge=1)
+    regulatory_clause_id: Optional[int] = Field(None, ge=1)
     frequency_months: Optional[int] = Field(None, ge=1)
     frequency_days: Optional[int] = Field(None, ge=1)
     anchor: Optional[ComplianceScheduleAnchor] = None
@@ -109,6 +113,8 @@ class RequirementResponse(BaseModel):
     taxonomy_id: str
     description: Optional[str] = None
     regulatory_basis: Optional[str] = None
+    regulatory_standard_id: Optional[int] = None
+    regulatory_clause_id: Optional[int] = None
     frequency_months: Optional[int] = None
     frequency_days: Optional[int] = None
     anchor: ComplianceScheduleAnchor
@@ -120,6 +126,69 @@ class RequirementResponse(BaseModel):
     status: Optional[ComplianceStatusLiteral] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class RegulatoryBasisSuggestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(..., min_length=1, max_length=255)
+    taxonomy_id: str = Field(..., min_length=1, max_length=20)
+    description: Optional[str] = Field(None, max_length=4000)
+    statutory: bool = False
+    requirement_id: Optional[int] = Field(None, ge=1)
+
+    @field_validator("title", "taxonomy_id", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+
+class RegulatoryBasisClarifyAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str = Field(..., min_length=1, max_length=64)
+    answer: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("question_id", "answer", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+
+class RegulatoryBasisClarifyRequest(RegulatoryBasisSuggestRequest):
+    answers: List[RegulatoryBasisClarifyAnswer] = Field(..., min_length=1, max_length=4)
+
+
+class RegulatoryBasisCandidateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str
+    regulation_or_standard_code: str
+    standard_id: Optional[int] = None
+    clause_ids: List[int] = Field(default_factory=list)
+    confidence: float
+    rationale: str
+    source: str
+
+
+class RegulatoryBasisQuestionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    question: str
+    options: List[str] = Field(default_factory=list)
+    why: str = ""
+
+
+class RegulatoryBasisSuggestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: List[RegulatoryBasisCandidateResponse]
+    needs_clarification: bool
+    clarifying_questions: List[RegulatoryBasisQuestionResponse] = Field(default_factory=list)
+    confidence_threshold: float
+    ai_available: bool
+    notice: Optional[str] = None
 
 
 class RequirementListResponse(BaseModel):

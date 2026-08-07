@@ -19,7 +19,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "20261013_cs_fra_ocr"
-down_revision: Union[str, Sequence[str], None] = "20261015_document_edges"
+down_revision: Union[str, Sequence[str], None] = "20261013_cs_reg_link"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

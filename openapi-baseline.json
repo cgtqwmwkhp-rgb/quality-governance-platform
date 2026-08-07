@@ -9862,6 +9862,20 @@
         "title": "Body_commit_ces_asset_import_api_v1_asset_imports_ces_commit_post",
         "type": "object"
       },
+      "Body_commit_compliance_schedule_import_api_v1_compliance_schedule_import_commit_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_commit_compliance_schedule_import_api_v1_compliance_schedule_import_commit_post",
+        "type": "object"
+      },
       "Body_commit_hs_excel_import_api_v1_hs_imports_excel_commit_post": {
         "properties": {
           "file": {
@@ -9951,6 +9965,20 @@
           "file"
         ],
         "title": "Body_dry_run_ces_asset_import_api_v1_asset_imports_ces_dry_run_post",
+        "type": "object"
+      },
+      "Body_dry_run_compliance_schedule_import_api_v1_compliance_schedule_import_dry_run_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_dry_run_compliance_schedule_import_api_v1_compliance_schedule_import_dry_run_post",
         "type": "object"
       },
       "Body_dry_run_hs_excel_import_api_v1_hs_imports_excel_dry_run_post": {
@@ -15196,6 +15224,187 @@
         "title": "ComplianceGateResponse",
         "type": "object"
       },
+      "ComplianceImportCommitResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "created_count": {
+            "title": "Created Count",
+            "type": "integer"
+          },
+          "created_requirement_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Created Requirement Ids",
+            "type": "array"
+          },
+          "report": {
+            "$ref": "#/components/schemas/ComplianceImportValidationReportResponse"
+          }
+        },
+        "required": [
+          "created_count",
+          "created_requirement_ids",
+          "report"
+        ],
+        "title": "ComplianceImportCommitResponse",
+        "type": "object"
+      },
+      "ComplianceImportPreviewRow": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "location_id": {
+            "title": "Location Id",
+            "type": "integer"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "next_due_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due Date"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "template_key": {
+            "title": "Template Key",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "action",
+          "template_key",
+          "location_id",
+          "location_name",
+          "title"
+        ],
+        "title": "ComplianceImportPreviewRow",
+        "type": "object"
+      },
+      "ComplianceImportRowError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row",
+          "code",
+          "message"
+        ],
+        "title": "ComplianceImportRowError",
+        "type": "object"
+      },
+      "ComplianceImportValidationReportResponse": {
+        "additionalProperties": false,
+        "description": "Dry-run / commit validation report for CS CSV import.",
+        "properties": {
+          "creates": {
+            "title": "Creates",
+            "type": "integer"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "error_rows": {
+            "title": "Error Rows",
+            "type": "integer"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceImportRowError"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "preview": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceImportPreviewRow"
+            },
+            "title": "Preview",
+            "type": "array"
+          },
+          "skips": {
+            "title": "Skips",
+            "type": "integer"
+          },
+          "total_rows": {
+            "title": "Total Rows",
+            "type": "integer"
+          },
+          "valid_rows": {
+            "title": "Valid Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "total_rows",
+          "valid_rows",
+          "error_rows",
+          "creates",
+          "skips",
+          "ok"
+        ],
+        "title": "ComplianceImportValidationReportResponse",
+        "type": "object"
+      },
       "ComplianceOverviewResponse": {
         "properties": {
           "active_campaigns": {
@@ -15469,6 +15678,67 @@
           "overdue"
         ],
         "title": "ComplianceScheduleStatsResponse",
+        "type": "object"
+      },
+      "ComplianceScheduleSummary": {
+        "description": "Compliance Schedule obligation counts for the executive surface.\n\nAbsent (``None`` on the parent) when the module is closed to the caller \u2014\ndeployment flag off, kill switch engaged, or missing ``compliance_schedule:read``.\nWhen present, ``available`` is False only if the register could not be read,\nso the tile can show unavailable rather than a fabricated empty estate.",
+        "properties": {
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "due_soon": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Soon"
+          },
+          "href": {
+            "default": "/compliance-schedule",
+            "title": "Href",
+            "type": "string"
+          },
+          "overdue": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overdue"
+          },
+          "total_active": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Active"
+          }
+        },
+        "title": "ComplianceScheduleSummary",
         "type": "object"
       },
       "ComplianceScoreResponse": {
@@ -16562,7 +16832,8 @@
               "risks",
               "audits",
               "actions",
-              "documents"
+              "documents",
+              "compliance_schedule"
             ],
             "title": "Module",
             "type": "string"
@@ -21903,6 +22174,16 @@
           "compliance": {
             "$ref": "#/components/schemas/ComplianceSummary"
           },
+          "compliance_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComplianceScheduleSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "generated_at": {
             "title": "Generated At",
             "type": "string"
@@ -22033,7 +22314,8 @@
               "risks",
               "audits",
               "actions",
-              "documents"
+              "documents",
+              "compliance_schedule"
             ],
             "title": "Id",
             "type": "string"
@@ -24892,6 +25174,72 @@
         "title": "FormTemplateUpdate",
         "type": "object"
       },
+      "FraSignificantChangeRequest": {
+        "additionalProperties": false,
+        "description": "Activate or link a site-scoped FRA after an incident significant change.",
+        "properties": {
+          "location_id": {
+            "description": "Premises or office location id",
+            "minimum": 1.0,
+            "title": "Location Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "location_id"
+        ],
+        "title": "FraSignificantChangeRequest",
+        "type": "object"
+      },
+      "FraSignificantChangeResponse": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "href": {
+            "title": "Href",
+            "type": "string"
+          },
+          "incident_id": {
+            "title": "Incident Id",
+            "type": "integer"
+          },
+          "location_id": {
+            "title": "Location Id",
+            "type": "integer"
+          },
+          "reference_number": {
+            "title": "Reference Number",
+            "type": "string"
+          },
+          "requirement_id": {
+            "title": "Requirement Id",
+            "type": "integer"
+          },
+          "suggested_location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Location Id"
+          }
+        },
+        "required": [
+          "created",
+          "requirement_id",
+          "reference_number",
+          "location_id",
+          "incident_id",
+          "href"
+        ],
+        "title": "FraSignificantChangeResponse",
+        "type": "object"
+      },
       "FromSignalRequest": {
         "properties": {
           "confidence": {
@@ -26269,6 +26617,17 @@
             "title": "Is Minor Injury",
             "type": "boolean"
           },
+          "is_psif": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Psif"
+          },
           "is_riddor_reportable": {
             "anyOf": [
               {
@@ -26654,6 +27013,17 @@
             "default": false,
             "title": "Is Minor Injury",
             "type": "boolean"
+          },
+          "is_psif": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Psif"
           },
           "is_riddor_reportable": {
             "anyOf": [
@@ -30411,6 +30781,111 @@
         "title": "LinkedUserSummary",
         "type": "object"
       },
+      "LocationCoverageGapItem": {
+        "additionalProperties": false,
+        "description": "One active location and whether FRA / fire-drill obligations cover it.",
+        "properties": {
+          "fire_drill_requirement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fire Drill Requirement Id"
+          },
+          "fra_requirement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fra Requirement Id"
+          },
+          "has_fire_drill": {
+            "title": "Has Fire Drill",
+            "type": "boolean"
+          },
+          "has_fra": {
+            "title": "Has Fra",
+            "type": "boolean"
+          },
+          "location_id": {
+            "title": "Location Id",
+            "type": "integer"
+          },
+          "location_kind": {
+            "title": "Location Kind",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "missing_fire_drill": {
+            "title": "Missing Fire Drill",
+            "type": "boolean"
+          },
+          "missing_fra": {
+            "title": "Missing Fra",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "location_id",
+          "location_name",
+          "location_kind",
+          "has_fra",
+          "has_fire_drill",
+          "missing_fra",
+          "missing_fire_drill"
+        ],
+        "title": "LocationCoverageGapItem",
+        "type": "object"
+      },
+      "LocationCoverageGapsResponse": {
+        "additionalProperties": false,
+        "description": "Wave 3 \u2014 locations missing active FRA and/or fire-drill obligations.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LocationCoverageGapItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "missing_both": {
+            "title": "Missing Both",
+            "type": "integer"
+          },
+          "missing_fire_drill": {
+            "title": "Missing Fire Drill",
+            "type": "integer"
+          },
+          "missing_fra": {
+            "title": "Missing Fra",
+            "type": "integer"
+          },
+          "total_locations": {
+            "title": "Total Locations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_locations",
+          "missing_fra",
+          "missing_fire_drill",
+          "missing_both",
+          "items"
+        ],
+        "title": "LocationCoverageGapsResponse",
+        "type": "object"
+      },
       "LocationCreate": {
         "description": "Schema for creating a Location.",
         "properties": {
@@ -30425,7 +30900,7 @@
             "type": "boolean"
           },
           "kind": {
-            "description": "Location kind: site | workshop",
+            "description": "Location kind: site | workshop | premises | office",
             "title": "Kind",
             "type": "string"
           },
@@ -34272,6 +34747,255 @@
           "linked"
         ],
         "title": "PortalDriverMeResponse",
+        "type": "object"
+      },
+      "PortalFireDrillCompleteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "check_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Passed"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "evidence_asset_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Asset Ids"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "title": "PortalFireDrillCompleteRequest",
+        "type": "object"
+      },
+      "PortalFireDrillCompleteResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "check_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Passed"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "reference_number": {
+            "title": "Reference Number",
+            "type": "string"
+          },
+          "requirement_id": {
+            "title": "Requirement Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "reference_number",
+          "requirement_id",
+          "due_date"
+        ],
+        "title": "PortalFireDrillCompleteResponse",
+        "type": "object"
+      },
+      "PortalFireDrillItem": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Completed At"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "next_due_date": {
+            "format": "date",
+            "title": "Next Due Date",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "reference_number": {
+            "title": "Reference Number",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "current",
+                  "due_soon",
+                  "overdue"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "reference_number",
+          "next_due_date"
+        ],
+        "title": "PortalFireDrillItem",
+        "type": "object"
+      },
+      "PortalFireDrillListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_capture_supported": {
+            "default": false,
+            "title": "Evidence Capture Supported",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PortalFireDrillItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PortalFireDrillListResponse",
         "type": "object"
       },
       "PortalMyComplianceResponse": {
@@ -38694,6 +39418,118 @@
         "title": "RecordEvidenceAttachRequest",
         "type": "object"
       },
+      "RecordFileRequest": {
+        "additionalProperties": false,
+        "description": "Body for the explicit Library filing step (ADR-0020).\n\nExactly one mode per request:\n\n* ``evidence_asset_id`` + ``category_id`` \u2014 copy an evidence asset already\n  attached to this occurrence into the Governance Library as a new draft\n  document under that taxonomy category.\n* ``library_document_id`` \u2014 point the occurrence at a document that is\n  already in the Library.\n\nThe two are mutually exclusive rather than merged into one optional-field\nsoup because they authorise differently: one creates a document, the other\nexposes an existing one. A request that supplies both is a caller who has\nnot decided which they meant, and guessing for them would file something.",
+        "properties": {
+          "category_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "evidence_asset_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Asset Id"
+          },
+          "library_document_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Document Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "RecordFileRequest",
+        "type": "object"
+      },
+      "RecordFilingResponse": {
+        "additionalProperties": false,
+        "description": "Outcome of one filing attempt.\n\nReturns the updated occurrence so the caller needs no second read, plus the\nparts of the outcome the occurrence has nowhere to hold: the allocated PEL\nreference, and whether the Library already holds an approved document that\nlooks like this one. A duplicate does not block the filing \u2014 the occurrence\nis still filed \u2014 so the warning has to travel back with the response or it\nis lost.",
+        "properties": {
+          "duplicate_warning": {
+            "default": false,
+            "title": "Duplicate Warning",
+            "type": "boolean"
+          },
+          "duplicate_warning_detail": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Warning Detail"
+          },
+          "library_document_id": {
+            "title": "Library Document Id",
+            "type": "integer"
+          },
+          "linked_existing": {
+            "title": "Linked Existing",
+            "type": "boolean"
+          },
+          "pel_doc_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pel Doc Ref"
+          },
+          "record": {
+            "$ref": "#/components/schemas/RecordResponse"
+          }
+        },
+        "required": [
+          "record",
+          "library_document_id",
+          "linked_existing"
+        ],
+        "title": "RecordFilingResponse",
+        "type": "object"
+      },
       "RecordListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -38865,6 +39701,276 @@
           "refresh_token"
         ],
         "title": "RefreshTokenRequest",
+        "type": "object"
+      },
+      "RegulatoryBasisCandidateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "clause_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Clause Ids",
+            "type": "array"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "regulation_or_standard_code": {
+            "title": "Regulation Or Standard Code",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "standard_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Id"
+          }
+        },
+        "required": [
+          "label",
+          "regulation_or_standard_code",
+          "confidence",
+          "rationale",
+          "source"
+        ],
+        "title": "RegulatoryBasisCandidateResponse",
+        "type": "object"
+      },
+      "RegulatoryBasisClarifyAnswer": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Answer",
+            "type": "string"
+          },
+          "question_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Question Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question_id",
+          "answer"
+        ],
+        "title": "RegulatoryBasisClarifyAnswer",
+        "type": "object"
+      },
+      "RegulatoryBasisClarifyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/RegulatoryBasisClarifyAnswer"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Answers",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "requirement_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Id"
+          },
+          "statutory": {
+            "default": false,
+            "title": "Statutory",
+            "type": "boolean"
+          },
+          "taxonomy_id": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Taxonomy Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "taxonomy_id",
+          "answers"
+        ],
+        "title": "RegulatoryBasisClarifyRequest",
+        "type": "object"
+      },
+      "RegulatoryBasisQuestionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "why": {
+            "default": "",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "question"
+        ],
+        "title": "RegulatoryBasisQuestionResponse",
+        "type": "object"
+      },
+      "RegulatoryBasisSuggestRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "requirement_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Id"
+          },
+          "statutory": {
+            "default": false,
+            "title": "Statutory",
+            "type": "boolean"
+          },
+          "taxonomy_id": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Taxonomy Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "taxonomy_id"
+        ],
+        "title": "RegulatoryBasisSuggestRequest",
+        "type": "object"
+      },
+      "RegulatoryBasisSuggestResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ai_available": {
+            "title": "Ai Available",
+            "type": "boolean"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/RegulatoryBasisCandidateResponse"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "clarifying_questions": {
+            "items": {
+              "$ref": "#/components/schemas/RegulatoryBasisQuestionResponse"
+            },
+            "title": "Clarifying Questions",
+            "type": "array"
+          },
+          "confidence_threshold": {
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "needs_clarification": {
+            "title": "Needs Clarification",
+            "type": "boolean"
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          }
+        },
+        "required": [
+          "candidates",
+          "needs_clarification",
+          "confidence_threshold",
+          "ai_available"
+        ],
+        "title": "RegulatoryBasisSuggestResponse",
         "type": "object"
       },
       "RegulatoryImpactResponse": {
@@ -39401,6 +40507,30 @@
             ],
             "title": "Regulatory Basis"
           },
+          "regulatory_clause_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Clause Id"
+          },
+          "regulatory_standard_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Standard Id"
+          },
           "statutory": {
             "default": false,
             "title": "Statutory",
@@ -39584,6 +40714,28 @@
               }
             ],
             "title": "Regulatory Basis"
+          },
+          "regulatory_clause_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Clause Id"
+          },
+          "regulatory_standard_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Standard Id"
           },
           "status": {
             "anyOf": [
@@ -39773,6 +40925,30 @@
               }
             ],
             "title": "Regulatory Basis"
+          },
+          "regulatory_clause_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Clause Id"
+          },
+          "regulatory_standard_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Standard Id"
           },
           "statutory": {
             "anyOf": [
@@ -61876,7 +63052,7 @@
         ]
       },
       "post": {
-        "description": "Create a site or workshop location.",
+        "description": "Create a location (site, workshop, premises, or office).",
         "operationId": "create_location_api_v1_assets_locations_post",
         "requestBody": {
           "content": {
@@ -69594,6 +70770,127 @@
         ]
       }
     },
+    "/api/v1/compliance-schedule/coverage/location-gaps": {
+      "get": {
+        "description": "Active premises/offices missing an active FRA and/or fire-drill (Wave 3).",
+        "operationId": "get_location_coverage_gaps_api_v1_compliance_schedule_coverage_location_gaps_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationCoverageGapsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Location Coverage Gaps",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/import/commit": {
+      "post": {
+        "description": "Re-validate and activate catalogue obligations from CSV.",
+        "operationId": "commit_compliance_schedule_import_api_v1_compliance_schedule_import_commit_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_commit_compliance_schedule_import_api_v1_compliance_schedule_import_commit_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Commit Compliance Schedule CSV import",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/import/dry-run": {
+      "post": {
+        "description": "Validate catalogue-activate CSV without writing obligations.",
+        "operationId": "dry_run_compliance_schedule_import_api_v1_compliance_schedule_import_dry_run_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_dry_run_compliance_schedule_import_api_v1_compliance_schedule_import_dry_run_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceImportValidationReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dry-run Compliance Schedule CSV import",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
     "/api/v1/compliance-schedule/records/{record_id}": {
       "get": {
         "operationId": "get_record_api_v1_compliance_schedule_records__record_id__get",
@@ -69694,6 +70991,156 @@
           }
         ],
         "summary": "Attach Record Evidence",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/records/{record_id}/file": {
+      "post": {
+        "description": "File this occurrence's evidence into the Governance Library.\n\nADR-0020: filing is its own step. Recording a completion files nothing, and\nthis is the only route that sets ``library_document_id`` \u2014 a record can be\ncomplete and unfiled indefinitely, which is a state the register is meant to\nbe able to show.\n\n``document:create`` is required for both modes, including the link mode that\ncreates no document. Linking publishes a Library document's id onto the\noccurrence, and the narrower alternative \u2014 branching the permission on which\nmode the body selected \u2014 makes what a caller may do depend on what they\nasked for, which is the harder thing to reason about when it is wrong.",
+        "operationId": "file_record_to_library_api_v1_compliance_schedule_records__record_id__file_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordFilingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "File Record To Library",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/regulatory-basis/clarify": {
+      "post": {
+        "operationId": "clarify_regulatory_basis_api_v1_compliance_schedule_regulatory_basis_clarify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegulatoryBasisClarifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatoryBasisSuggestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clarify Regulatory Basis",
+        "tags": [
+          "Compliance Schedule"
+        ]
+      }
+    },
+    "/api/v1/compliance-schedule/regulatory-basis/suggest": {
+      "post": {
+        "operationId": "suggest_regulatory_basis_api_v1_compliance_schedule_regulatory_basis_suggest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegulatoryBasisSuggestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatoryBasisSuggestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Suggest Regulatory Basis",
         "tags": [
           "Compliance Schedule"
         ]
@@ -74766,7 +76213,8 @@
         "summary": "Search Document Content",
         "tags": [
           "Document Library"
-        ]
+        ],
+        "x-qgp-partner-scope": "documents:read"
       }
     },
     "/api/v1/documents/search/semantic": {
@@ -74843,7 +76291,8 @@
         "summary": "Semantic Search",
         "tags": [
           "Document Library"
-        ]
+        ],
+        "x-qgp-partner-scope": "documents:read"
       }
     },
     "/api/v1/documents/stats/overview": {
@@ -74963,7 +76412,8 @@
         "summary": "Get Document",
         "tags": [
           "Document Library"
-        ]
+        ],
+        "x-qgp-partner-scope": "documents:read"
       },
       "patch": {
         "description": "Update title/description on draft/working rows without opening a new version.",
@@ -75491,7 +76941,8 @@
         "summary": "Get Document Signed Url",
         "tags": [
           "Document Library"
-        ]
+        ],
+        "x-qgp-partner-scope": "documents:read"
       }
     },
     "/api/v1/documents/{document_id}/spawn-reack-campaign": {
@@ -80300,6 +81751,64 @@
           }
         ],
         "summary": "Get Incident Closure Validation",
+        "tags": [
+          "Incidents"
+        ]
+      }
+    },
+    "/api/v1/incidents/{incident_id}/fra-significant-change": {
+      "post": {
+        "description": "Create or open a site FRA prompted by an incident significant change.",
+        "operationId": "fra_significant_change_from_incident_api_v1_incidents__incident_id__fra_significant_change_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "title": "Incident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FraSignificantChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FraSignificantChangeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Fra Significant Change From Incident",
         "tags": [
           "Incidents"
         ]
@@ -91942,6 +93451,91 @@
         ]
       }
     },
+    "/api/v1/portal/fire-drills": {
+      "get": {
+        "description": "Active fire-drill obligations owned by the caller.",
+        "operationId": "list_fire_drills_api_v1_portal_fire_drills_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalFireDrillListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Fire Drills",
+        "tags": [
+          "Employee Portal"
+        ]
+      }
+    },
+    "/api/v1/portal/fire-drills/{requirement_id}/complete": {
+      "post": {
+        "description": "Complete an owned fire-drill occurrence (notes + check_passed for v1).",
+        "operationId": "complete_fire_drill_api_v1_portal_fire_drills__requirement_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "requirement_id",
+            "required": true,
+            "schema": {
+              "title": "Requirement Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalFireDrillCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalFireDrillCompleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Fire Drill",
+        "tags": [
+          "Employee Portal"
+        ]
+      }
+    },
     "/api/v1/portal/my-compliance": {
       "get": {
         "description": "Landing one-shot: clear-to-work state + tool/van badges (self only).",
@@ -97485,7 +99079,7 @@
     },
     "/api/v1/search/": {
       "get": {
-        "description": "Unified search across all modules.",
+        "description": "Unified search across all modules.\n\nA partner bearer holding ``search:read`` reaches the document modules only.\nThe registers this also spans \u2014 incidents, near misses, RTAs, complaints,\nrisks, audit findings, actions \u2014 are scoped by tenant but check no\npermission, so serving them to a partner token would hand a static\ncredential held in another system's configuration the whole confidential\nestate of the tenant. A session user's reach here is unchanged.",
         "operationId": "global_search_api_v1_search__get",
         "parameters": [
           {
@@ -97617,7 +99211,8 @@
         "summary": "Global Search",
         "tags": [
           "Global Search"
-        ]
+        ],
+        "x-qgp-partner-scope": "search:read"
       }
     },
     "/api/v1/search/interpret": {

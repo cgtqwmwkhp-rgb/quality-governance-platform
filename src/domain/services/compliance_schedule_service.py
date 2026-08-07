@@ -10,7 +10,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Any, Optional, Sequence, cast
 
-from sqlalchemy import false, func, select
+from sqlalchemy import false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from src.domain.models.compliance_schedule import (
 )
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
 from src.domain.models.location import Location, LocationKind
+from src.domain.models.standard import Clause, Standard
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_auto_service import CAPAAutoService
@@ -168,6 +169,53 @@ class ComplianceScheduleService:
             # Fail closed: do not leak whether the location exists elsewhere.
             raise NotFoundError(
                 f"Location {location_id} not found",
+                code="ENTITY_NOT_FOUND",
+            )
+
+    async def _assert_regulatory_link_in_tenant(
+        self,
+        standard_id: Optional[int],
+        clause_id: Optional[int],
+        *,
+        tenant_id: int,
+    ) -> None:
+        """Refuse a Standards link that is missing, inactive, or cross-tenant.
+
+        A clause without a standard is unrenderable. Cross-tenant standards are
+        treated as not found — same fail-closed pattern as location ownership.
+        """
+        if standard_id is None and clause_id is None:
+            return
+        if clause_id is not None and standard_id is None:
+            raise ValidationError(
+                "regulatory_clause_id requires regulatory_standard_id",
+                code="VALIDATION_ERROR",
+            )
+        result = await self.db.execute(
+            select(Standard).where(
+                Standard.id == standard_id,
+                Standard.is_active.is_(True),
+                or_(Standard.tenant_id.is_(None), Standard.tenant_id == tenant_id),
+            )
+        )
+        standard = result.scalar_one_or_none()
+        if standard is None:
+            raise NotFoundError(
+                f"Standard {standard_id} not found",
+                code="ENTITY_NOT_FOUND",
+            )
+        if clause_id is None:
+            return
+        clause_result = await self.db.execute(
+            select(Clause).where(
+                Clause.id == clause_id,
+                Clause.is_active.is_(True),
+                Clause.standard_id == standard_id,
+            )
+        )
+        if clause_result.scalar_one_or_none() is None:
+            raise NotFoundError(
+                f"Clause {clause_id} not found",
                 code="ENTITY_NOT_FOUND",
             )
 
@@ -378,6 +426,8 @@ class ComplianceScheduleService:
         anchor: str = "schedule",
         description: Optional[str] = None,
         regulatory_basis: Optional[str] = None,
+        regulatory_standard_id: Optional[int] = None,
+        regulatory_clause_id: Optional[int] = None,
         statutory: bool = False,
         location_id: Optional[int] = None,
         owner_id: Optional[int] = None,
@@ -395,6 +445,11 @@ class ComplianceScheduleService:
 
         await self._assert_location_in_tenant(location_id, tenant_id=tenant_id)
         await self._assert_owner_in_tenant(owner_id, tenant_id=tenant_id)
+        await self._assert_regulatory_link_in_tenant(
+            regulatory_standard_id,
+            regulatory_clause_id,
+            tenant_id=tenant_id,
+        )
 
         return await self._create_requirement_row(
             tenant_id=tenant_id,
@@ -403,6 +458,8 @@ class ComplianceScheduleService:
             taxonomy_id=taxonomy_id,
             description=description,
             regulatory_basis=regulatory_basis,
+            regulatory_standard_id=regulatory_standard_id,
+            regulatory_clause_id=regulatory_clause_id,
             frequency_months=frequency_months,
             frequency_days=frequency_days,
             anchor=anchor,
@@ -434,6 +491,8 @@ class ComplianceScheduleService:
         owner_id: Optional[int],
         template_id: Optional[int],
         is_active: bool = True,
+        regulatory_standard_id: Optional[int] = None,
+        regulatory_clause_id: Optional[int] = None,
     ) -> ComplianceRequirement:
         ref = await ReferenceNumberService.generate(self.db, "compliance_requirement", ComplianceRequirement)
         requirement = ComplianceRequirement(
@@ -445,6 +504,8 @@ class ComplianceScheduleService:
             taxonomy_id=taxonomy_id,
             description=description,
             regulatory_basis=regulatory_basis,
+            regulatory_standard_id=regulatory_standard_id,
+            regulatory_clause_id=regulatory_clause_id,
             frequency_months=frequency_months,
             frequency_days=frequency_days,
             anchor=ComplianceScheduleAnchor(anchor),
@@ -496,6 +557,23 @@ class ComplianceScheduleService:
         if "owner_id" in updates:
             await self._assert_owner_in_tenant(updates["owner_id"], tenant_id=tenant_id)
 
+        if "regulatory_standard_id" in updates or "regulatory_clause_id" in updates:
+            effective_standard = (
+                updates["regulatory_standard_id"]
+                if "regulatory_standard_id" in updates
+                else requirement.regulatory_standard_id
+            )
+            effective_clause = (
+                updates["regulatory_clause_id"]
+                if "regulatory_clause_id" in updates
+                else requirement.regulatory_clause_id
+            )
+            await self._assert_regulatory_link_in_tenant(
+                effective_standard,
+                effective_clause,
+                tenant_id=tenant_id,
+            )
+
         if "anchor" in updates and updates["anchor"] is not None:
             anchor = updates["anchor"]
             if anchor not in {"completion", "schedule"}:
@@ -507,6 +585,8 @@ class ComplianceScheduleService:
             if value is None and key not in {
                 "description",
                 "regulatory_basis",
+                "regulatory_standard_id",
+                "regulatory_clause_id",
                 "location_id",
                 "owner_id",
                 "last_completed_at",

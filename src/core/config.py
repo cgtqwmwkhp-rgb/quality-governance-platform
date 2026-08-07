@@ -337,6 +337,9 @@ class Settings(BaseSettings):
     # FRA / PAS 79 OCR ingest (Wave 3). ANDed with compliance_schedule_enabled at
     # the nested FRA OCR router — closed until bake sign-off.
     compliance_schedule_fra_ocr_enabled: bool = False
+    # Track C: AI regulatory-basis assist on Add/Edit obligation. Requires CS open.
+    compliance_schedule_regulatory_ai_enabled: bool = False
+    compliance_schedule_regulatory_ai_confidence_threshold: float = 0.7
 
     # Doc Graph (ADR-0021). Closed until explicitly opted in; sub-flags stay off
     # even if the master gate opens so propose/impact can roll out independently.
