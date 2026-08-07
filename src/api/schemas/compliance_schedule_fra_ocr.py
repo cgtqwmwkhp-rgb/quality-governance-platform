@@ -166,6 +166,7 @@ class FraOcrFilingResponse(BaseModel):
     pel_doc_ref: Optional[str] = None
     duplicate_warning: bool = False
     duplicate_warning_detail: Optional[List[dict]] = None
+    index_job_id: Optional[int] = None
 
 
 class FraOcrDiscardRequest(BaseModel):

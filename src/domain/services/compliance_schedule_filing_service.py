@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import ConflictError, ExternalServiceError, NotFoundError, ValidationError
 from src.domain.models.compliance_schedule import ComplianceFilingStatus, ComplianceRecord, ComplianceRequirement
-from src.domain.models.document import Document, FileType
+from src.domain.models.document import Document, FileType, IndexJob
 from src.domain.models.document_library import DocumentCategory
 from src.domain.models.enums import DocumentStatus, DocumentType
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
@@ -46,6 +46,7 @@ from src.domain.services.document_library_filing_service import (
     load_filing_category,
 )
 from src.domain.services.document_version_service import document_version_service
+from src.domain.services.index_job_service import maybe_create_filing_index_job
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.storage import StorageError, storage_service
 
@@ -64,6 +65,10 @@ class FilingResult:
     ``duplicate_warning`` is carried out to the caller rather than stored on the
     occurrence: it describes the Library document, and the occurrence already
     has somewhere to point at that document.
+
+    ``index_job`` is set only when File mode created a new Library document and
+    ``COMPLIANCE_FILING_INDEX_ENABLED`` is on. Link mode never indexes. The
+    caller must dispatch after commit (this service commits before returning).
     """
 
     record: ComplianceRecord
@@ -71,6 +76,7 @@ class FilingResult:
     duplicate_warning: bool
     duplicate_warning_detail: Optional[list[dict]]
     linked_existing: bool
+    index_job: Optional[IndexJob] = None
 
 
 def _safe_storage_filename(filename: Optional[str]) -> str:
@@ -278,6 +284,7 @@ async def file_record_to_library(
         duplicate_warning = False
         duplicate_warning_detail: Optional[list[dict]] = None
         linked_existing = True
+        index_job = None
     else:
         if evidence_asset_id is None or category_id is None:
             raise ValidationError(
@@ -294,6 +301,12 @@ async def file_record_to_library(
             title=title,
         )
         linked_existing = False
+        # Same commit as the Document row — Celery must not see the job early.
+        index_job = await maybe_create_filing_index_job(
+            db,
+            document=document,
+            created_by_id=user.id,
+        )
 
     record.library_document_id = document.id
     record.filing_status = ComplianceFilingStatus.FILED
@@ -317,6 +330,7 @@ async def file_record_to_library(
             "evidence_asset_id": evidence_asset_id,
             "category_id": category_id,
             "linked_existing": linked_existing,
+            "index_job_id": index_job.id if index_job is not None else None,
         },
         user_id=user.id,
         actor_user_id=user.id,
@@ -332,6 +346,7 @@ async def file_record_to_library(
         duplicate_warning=duplicate_warning,
         duplicate_warning_detail=duplicate_warning_detail,
         linked_existing=linked_existing,
+        index_job=index_job,
     )
 
 

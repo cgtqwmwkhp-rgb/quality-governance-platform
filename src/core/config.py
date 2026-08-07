@@ -337,6 +337,10 @@ class Settings(BaseSettings):
     # FRA / PAS 79 OCR ingest (Wave 3). ANDed with compliance_schedule_enabled at
     # the nested FRA OCR router — closed until bake sign-off.
     compliance_schedule_fra_ocr_enabled: bool = False
+    # When true, File-to-Library (occurrence + FRA OCR draft filing) creates an
+    # IndexJob so filed drafts get chunks / Library search. Default off — Pinecone
+    # spend and OCR load; flip via vars like COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED.
+    compliance_filing_index_enabled: bool = False
     # Track C: AI regulatory-basis assist on Add/Edit obligation. Requires CS open.
     compliance_schedule_regulatory_ai_enabled: bool = False
     compliance_schedule_regulatory_ai_confidence_threshold: float = 0.7

@@ -329,8 +329,16 @@ class IndexJobService:
                 text_content = extraction.text.strip()
                 if extraction.hard_ocr_failure or not text_content:
                     if extraction.hard_ocr_failure:
-                        document.status = DocumentStatus.FAILED
                         document.indexing_error = extraction.note or "OCR extraction failed"
+                        # Filed / taxonomy documents must not flip to FAILED — that would
+                        # erase the governance lifecycle (DRAFT → review → approve) because
+                        # a scan was unreadable. Record indexing_error only and restore DRAFT
+                        # when we had moved the row to PROCESSING for this job.
+                        if getattr(document, "category_id", None) is not None:
+                            if document.status == DocumentStatus.PROCESSING:
+                                document.status = DocumentStatus.DRAFT
+                        else:
+                            document.status = DocumentStatus.FAILED
                     else:
                         _apply_post_index_status(document, DocumentStatus.APPROVED)
                     await self._append_error(
@@ -491,9 +499,77 @@ def dispatch_index_job(job_id: int, tenant_id: int | None, user_id: int | None =
         return False
 
 
+async def maybe_create_filing_index_job(
+    db: AsyncSession,
+    *,
+    document: Document,
+    created_by_id: int | None,
+) -> IndexJob | None:
+    """Create a pending IndexJob for a newly filed Library document when gated on.
+
+    Callers must commit the job row before ``dispatch_index_job`` (commit-then-
+    dispatch). Returns None when ``COMPLIANCE_FILING_INDEX_ENABLED`` is off.
+    """
+    if not settings.compliance_filing_index_enabled:
+        return None
+    if document.id is None:
+        raise ValueError("document must be flushed before creating an index job")
+    service = IndexJobService(db)
+    return await service.create_job(
+        document_ids=[document.id],
+        job_type="single",
+        tenant_id=document.tenant_id,
+        created_by_id=created_by_id,
+    )
+
+
+async def dispatch_or_process_committed_index_job(
+    db: AsyncSession,
+    job: IndexJob,
+    document: Document,
+    *,
+    current_user: User | None = None,
+    content: bytes | None = None,
+) -> bool:
+    """Dispatch an already-committed index job; sync-process if Celery is down.
+
+    Mirrors ``documents._dispatch_single_index_job`` for Compliance Schedule
+    filing routes so a flag-on file is never left permanently PENDING when the
+    broker is unavailable in test/dev.
+    """
+    user_id = current_user.id if current_user is not None else None
+    dispatched = dispatch_index_job(job.id, document.tenant_id, user_id)
+    if dispatched:
+        return True
+    logger.warning(
+        "Celery dispatch unavailable for filing index job %s; falling back to synchronous processing",
+        job.id,
+    )
+    try:
+        index_service = IndexJobService(db)
+        content_cache = {document.id: content} if content is not None else None
+        await index_service.process_job(
+            job.id,
+            tenant_id=document.tenant_id,
+            content_cache=content_cache,
+            current_user=current_user,
+        )
+        await db.commit()
+        await index_service.delete_pending_stale_vectors()
+    except Exception:
+        logger.warning(
+            "Synchronous fallback processing failed for filing index job %s; leaving job pending",
+            job.id,
+            exc_info=True,
+        )
+    return False
+
+
 __all__ = [
     "DEFAULT_BULK_REPROCESS_STATUSES",
     "IndexJobService",
     "dispatch_index_job",
+    "dispatch_or_process_committed_index_job",
+    "maybe_create_filing_index_job",
     "vector_index_configured",
 ]
