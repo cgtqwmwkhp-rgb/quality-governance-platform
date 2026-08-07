@@ -1,29 +1,46 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import type { ComplianceRequirement } from '../../../api/complianceScheduleClient'
 
-const { mockCreate, mockUpdate, mockGet, mockCurrentUserId, mockSuggest, flagValues } = vi.hoisted(
-  () => ({
-    mockCreate: vi.fn(),
-    mockUpdate: vi.fn(),
-    mockGet: vi.fn(),
-    mockCurrentUserId: vi.fn(),
-    mockSuggest: vi.fn(),
-    flagValues: {
-      compliance_schedule: true,
-      compliance_schedule_regulatory_ai: true,
-    } as Record<string, boolean>,
-  }),
-)
+const {
+  mockCreate,
+  mockUpdate,
+  mockComplete,
+  mockUpload,
+  mockDelete,
+  mockGet,
+  mockCurrentUserId,
+  mockSuggest,
+  flagValues,
+} = vi.hoisted(() => ({
+  mockCreate: vi.fn(),
+  mockUpdate: vi.fn(),
+  mockComplete: vi.fn(),
+  mockUpload: vi.fn(),
+  mockDelete: vi.fn(),
+  mockGet: vi.fn(),
+  mockCurrentUserId: vi.fn(),
+  mockSuggest: vi.fn(),
+  flagValues: {
+    compliance_schedule: true,
+    compliance_schedule_regulatory_ai: true,
+  } as Record<string, boolean>,
+}))
 
 vi.mock('../../../api/client', () => ({
   default: { get: mockGet },
   complianceScheduleApi: {
     createRequirement: mockCreate,
     updateRequirement: mockUpdate,
+    completeRequirement: mockComplete,
     suggestRegulatoryBasis: mockSuggest,
     clarifyRegulatoryBasis: vi.fn(),
+  },
+  evidenceAssetsApi: {
+    upload: mockUpload,
+    delete: mockDelete,
   },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
@@ -131,12 +148,14 @@ const EXISTING: ComplianceRequirement = {
 
 function renderForm(props: Partial<React.ComponentProps<typeof RequirementFormDialog>> = {}) {
   return render(
-    <RequirementFormDialog
-      open
-      onOpenChange={props.onOpenChange ?? vi.fn()}
-      requirement={props.requirement}
-      onSaved={props.onSaved ?? vi.fn()}
-    />,
+    <MemoryRouter>
+      <RequirementFormDialog
+        open
+        onOpenChange={props.onOpenChange ?? vi.fn()}
+        requirement={props.requirement}
+        onSaved={props.onSaved ?? vi.fn()}
+      />
+    </MemoryRouter>,
   )
 }
 
@@ -155,6 +174,11 @@ beforeEach(() => {
   mockCurrentUserId.mockReturnValue(9)
   mockCreate.mockResolvedValue({ data: { ...EXISTING, id: 11 } })
   mockUpdate.mockResolvedValue({ data: EXISTING })
+  mockComplete.mockResolvedValue({ data: { id: 99 } })
+  mockUpload.mockImplementation(async (_file: File) => ({
+    data: { id: mockUpload.mock.calls.length + 200 },
+  }))
+  mockDelete.mockResolvedValue({})
 })
 
 describe('RequirementFormDialog — create', () => {
@@ -236,6 +260,84 @@ describe('RequirementFormDialog — create', () => {
       'Owner is not in this tenant',
     )
     expect(screen.getByTestId('requirement-form-title-input')).toHaveValue('Sprinkler service')
+  })
+
+  it('offers historical evidence on create and withholds it on edit', () => {
+    const { unmount } = renderForm()
+    expect(screen.getByTestId('requirement-form-historical-evidence')).toBeInTheDocument()
+    unmount()
+
+    renderForm({ requirement: EXISTING })
+    expect(screen.queryByTestId('requirement-form-historical-evidence')).not.toBeInTheDocument()
+  })
+
+  it('creates then completes with staged evidence when historical proof is attached', async () => {
+    const user = userEvent.setup()
+    const onSaved = vi.fn()
+    const onOpenChange = vi.fn()
+    renderForm({ onSaved, onOpenChange })
+    await fillRequiredCreateFields(user)
+
+    await user.click(screen.getByTestId('requirement-form-historical-toggle'))
+    expect(screen.getByTestId('requirement-form-historical-completed-at')).toBeInTheDocument()
+
+    const input = screen.getByTestId('requirement-form-historical-files-input')
+    const file = new File(['proof'], 'past-cert.pdf', { type: 'application/pdf' })
+    await user.upload(input, file)
+    expect(screen.getByTestId('requirement-form-historical-files-list')).toHaveTextContent(
+      'past-cert.pdf',
+    )
+
+    await user.click(screen.getByTestId('requirement-form-submit'))
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(mockUpload).toHaveBeenCalledWith(
+        file,
+        expect.objectContaining({
+          source_module: 'induction',
+          source_id: 11,
+          title: 'past-cert.pdf',
+        }),
+      )
+      expect(mockComplete).toHaveBeenCalledWith(
+        11,
+        expect.objectContaining({
+          check_passed: true,
+          evidence_asset_ids: [201],
+          completed_at: expect.any(String),
+        }),
+      )
+    })
+    expect(onSaved).toHaveBeenCalled()
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+
+  it('keeps the obligation and shows a retry path when historical complete fails', async () => {
+    mockComplete.mockRejectedValueOnce(new Error('complete failed'))
+    mockUpload.mockResolvedValueOnce({ data: { id: 55 } })
+    const user = userEvent.setup()
+    const onSaved = vi.fn()
+    const onOpenChange = vi.fn()
+    renderForm({ onSaved, onOpenChange })
+    await fillRequiredCreateFields(user)
+    await user.click(screen.getByTestId('requirement-form-historical-toggle'))
+    await user.upload(
+      screen.getByTestId('requirement-form-historical-files-input'),
+      new File(['x'], 'photo.jpg', { type: 'image/jpeg' }),
+    )
+    await user.click(screen.getByTestId('requirement-form-submit'))
+
+    expect(await screen.findByTestId('requirement-form-historical-error')).toBeInTheDocument()
+    expect(screen.getByTestId('requirement-form-historical-retry-link')).toHaveAttribute(
+      'href',
+      '/compliance-schedule/11',
+    )
+    expect(mockDelete).toHaveBeenCalledWith(55)
+    expect(onSaved).toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
+    expect(screen.queryByTestId('requirement-form-submit')).not.toBeInTheDocument()
   })
 })
 

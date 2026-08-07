@@ -46,6 +46,19 @@ describe('RecordEvidenceSection', () => {
     render(<RecordEvidenceSection recordId={9} referenceNumber="CRC-1" />)
     expect(screen.queryByTestId('compliance-record-9-evidence-panel')).not.toBeInTheDocument()
     expect(mockList).not.toHaveBeenCalled()
+    expect(
+      screen.getByTestId('compliance-schedule-record-evidence-upload-cta-9'),
+    ).toHaveTextContent('Upload documents for this past occurrence')
+  })
+
+  it('opens the panel from the visible upload CTA without using the muted toggle', async () => {
+    const user = userEvent.setup()
+    render(<RecordEvidenceSection recordId={9} referenceNumber="CRC-1" />)
+    await user.click(screen.getByTestId('compliance-schedule-record-evidence-upload-cta-9'))
+    expect(await screen.findByTestId('compliance-record-9-evidence-panel')).toBeInTheDocument()
+    expect(mockList).toHaveBeenCalledWith(
+      expect.objectContaining({ source_module: 'compliance_record', source_id: 9 }),
+    )
   })
 
   it('loads compliance_record evidence for that occurrence when opened', async () => {

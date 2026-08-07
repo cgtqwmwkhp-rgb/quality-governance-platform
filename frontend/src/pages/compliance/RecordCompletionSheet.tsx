@@ -167,7 +167,7 @@ export function RecordCompletionSheet({
           </div>
           <div className="space-y-2" data-testid="compliance-schedule-complete-evidence">
             <Label htmlFor="cs-evidence">
-              {t('compliance.schedule.complete.evidence', 'Evidence (optional)')}
+              {t('compliance.schedule.complete.evidence', 'Upload proof of completion')}
             </Label>
             <p className="text-xs text-muted-foreground">
               {t(
@@ -193,7 +193,7 @@ export function RecordCompletionSheet({
               disabled={submitting}
               onClick={() => fileInputRef.current?.click()}
             >
-              {t('compliance.schedule.complete.evidence_add', 'Add evidence files')}
+              {t('compliance.schedule.complete.evidence_add', 'Upload proof files')}
             </Button>
             {pendingFiles.length > 0 && (
               <ul className="space-y-1 text-sm" data-testid="compliance-schedule-complete-evidence-list">

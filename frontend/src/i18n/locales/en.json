@@ -4045,9 +4045,9 @@
   "compliance.schedule.complete.submit": "Complete occurrence",
   "compliance.schedule.complete.success": "Occurrence recorded",
   "compliance.schedule.complete.error": "Could not complete this occurrence",
-  "compliance.schedule.complete.evidence": "Evidence (optional)",
+  "compliance.schedule.complete.evidence": "Upload proof of completion",
   "compliance.schedule.complete.evidence_hint": "Attach certificates, reports, or photos now. They are linked to this occurrence when you complete it.",
-  "compliance.schedule.complete.evidence_add": "Add evidence files",
+  "compliance.schedule.complete.evidence_add": "Upload proof files",
   "compliance.schedule.complete.evidence_error": "Could not complete this occurrence. Staged evidence was discarded — try again.",
   "compliance.automation.audits.open_compliance_schedule": "Open Compliance Schedule",
   "compliance.schedule.form.create_title": "Add obligation",
@@ -4159,5 +4159,15 @@
   "compliance.schedule.regulatory_ai.accept": "Accept",
   "compliance.schedule.regulatory_ai.discard": "Discard",
   "compliance.schedule.regulatory_ai.linked": "Linked to Standards",
-  "compliance.schedule.regulatory_ai.remove_link": "Remove link"
+  "compliance.schedule.regulatory_ai.remove_link": "Remove link",
+  "compliance.schedule.complete.cta_evidence_hint": "Record completion can attach proof files. For an older occurrence already listed below, use Upload documents on that row.",
+  "compliance.schedule.records.evidence_hint": "Each past occurrence has its own Upload documents control for certificates and reports.",
+  "compliance.schedule.evidence.upload_cta": "Upload documents for this past occurrence",
+  "compliance.schedule.form.historical_toggle": "I have proof from a past completion",
+  "compliance.schedule.form.historical_hint": "Optional. After the obligation is created, a past occurrence is recorded with any files you attach.",
+  "compliance.schedule.form.historical_completed_at": "Completed at",
+  "compliance.schedule.form.historical_evidence_label": "Add historical evidence",
+  "compliance.schedule.form.historical_evidence_add": "Add evidence files",
+  "compliance.schedule.form.historical_complete_error": "The obligation was created, but recording the past completion or attaching evidence failed. Open the obligation to retry from Record completion.",
+  "compliance.schedule.form.historical_open_detail": "Open obligation to retry evidence"
 }
