@@ -93,6 +93,9 @@ _LITERAL_RE = re.compile(r"'([^']+)'")
 #: ``unseedable`` report rather than quietly narrowing its coverage.
 SEED_OVERRIDES: dict[str, dict[str, Any]] = {
     "compliance_requirements": {"frequency_months": 12},
+    # Generic int filler uses the same seq for every NOT NULL int column; that
+    # would set src_document_id == dst_document_id and trip ck_document_edges_no_self_loop.
+    "document_edges": {"src_document_id": 910001, "dst_document_id": 910002},
 }
 
 
@@ -131,7 +134,11 @@ async def deployed_policies(pg_engine) -> dict[str, dict[str, Any]]:
     create a policy and did not, that shows up here as an absence.
     """
     async with pg_engine.connect() as conn:
-        rows = (await conn.execute(sa.text("""
+        rows = (
+            (
+                await conn.execute(
+                    sa.text(
+                        """
                     SELECT c.relname AS table_name,
                            c.relrowsecurity AS enabled,
                            c.relforcerowsecurity AS forced,
@@ -141,7 +148,13 @@ async def deployed_policies(pg_engine) -> dict[str, dict[str, Any]]:
                     JOIN pg_namespace AS n ON n.oid = c.relnamespace
                     JOIN pg_policy AS p ON p.polrelid = c.oid
                     WHERE n.nspname = 'public' AND p.polname = 'tenant_isolation'
-                    """))).mappings().all()
+                    """
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
     if not rows:
         pytest.skip("No tenant_isolation policies in this database — alembic chain not applied.")
     return {row["table_name"]: dict(row) for row in rows}
@@ -579,7 +592,8 @@ async def test_app_role_can_reach_every_table_and_sequence(pg_engine, app_role_p
         missing_tables = (
             (
                 await conn.execute(
-                    sa.text("""
+                    sa.text(
+                        """
                     SELECT t.table_name
                     FROM information_schema.tables AS t
                     WHERE t.table_schema = 'public'
@@ -595,7 +609,8 @@ async def test_app_role_can_reach_every_table_and_sequence(pg_engine, app_role_p
                             )
                       )
                     ORDER BY t.table_name
-                    """),
+                    """
+                    ),
                     {"required": list(REQUIRED_PRIVILEGES), "role": APP_ROLE},
                 )
             )
