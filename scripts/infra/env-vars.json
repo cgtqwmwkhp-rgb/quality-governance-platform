@@ -97,5 +97,17 @@
     "description": "When true, confirming an FRA OCR draft may create one Enterprise Risk when the operator supplies likelihood and impact (never from OCR alone). Default false; persist via deploy vars like FRA OCR actions.",
     "default": "false",
     "example": "false"
+  },
+  "DOCUMENT_GRAPH_ENABLED": {
+    "required": false,
+    "description": "Enable Library Document Relationship Graph (ADR-0021). Default false; never conflate with Golden Thread. Persist via deploy vars like FRA OCR.",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED": {
+    "required": false,
+    "description": "Enable non-LLM Doc Graph heuristic propose (ANDed with DOCUMENT_GRAPH_ENABLED). Default false. Keep IMPACT/LLM propose off for Wave 1 bake.",
+    "default": "false",
+    "example": "true"
   }
 }
