@@ -20,19 +20,19 @@ class FraExtractedField(BaseModel):
 
     value: Optional[str] = None
     confidence: FraFieldConfidence = "none"
-    evidence_snippet: Optional[str] = Field(None, max_length=200)
+    evidence_snippet: Optional[str] = Field(default=None, max_length=200)
 
 
 class FraProposedAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     index: int = Field(..., ge=0)
-    source_ref: Optional[str] = Field(None, max_length=20)
+    source_ref: Optional[str] = Field(default=None, max_length=20)
     text: str = Field(..., min_length=1, max_length=2000)
-    priority_raw: Optional[str] = Field(None, max_length=40)
+    priority_raw: Optional[str] = Field(default=None, max_length=40)
     priority_normalised: Optional[FraActionPriority] = None
     target_date: Optional[date] = None
-    target_date_raw: Optional[str] = Field(None, max_length=60)
+    target_date_raw: Optional[str] = Field(default=None, max_length=60)
     confidence: FraFieldConfidence = "none"
     needs_review: bool = False
 
@@ -40,14 +40,14 @@ class FraProposedAction(BaseModel):
 class FraProposedFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    assessment_date: FraExtractedField = Field(default_factory=FraExtractedField)
-    next_review_date: FraExtractedField = Field(default_factory=FraExtractedField)
-    review_interval_months: FraExtractedField = Field(default_factory=FraExtractedField)
-    assessor_name: FraExtractedField = Field(default_factory=FraExtractedField)
-    assessor_organisation: FraExtractedField = Field(default_factory=FraExtractedField)
-    premises_name: FraExtractedField = Field(default_factory=FraExtractedField)
-    pas79_reference: FraExtractedField = Field(default_factory=FraExtractedField)
-    overall_risk_rating: FraExtractedField = Field(default_factory=FraExtractedField)
+    assessment_date: FraExtractedField = Field(default_factory=lambda: FraExtractedField())
+    next_review_date: FraExtractedField = Field(default_factory=lambda: FraExtractedField())
+    review_interval_months: FraExtractedField = Field(default_factory=lambda: FraExtractedField())
+    assessor_name: FraExtractedField = Field(default_factory=lambda: FraExtractedField())
+    assessor_organisation: FraExtractedField = Field(default_factory=lambda: FraExtractedField())
+    premises_name: FraExtractedField = Field(default_factory=lambda: FraExtractedField())
+    pas79_reference: FraExtractedField = Field(default_factory=lambda: FraExtractedField())
+    overall_risk_rating: FraExtractedField = Field(default_factory=lambda: FraExtractedField())
     risk_vocabulary: Optional[FraRiskVocabulary] = None
 
 
@@ -130,7 +130,7 @@ class FraOcrDraftConfirmRequest(BaseModel):
     next_due_date: date
     acknowledged_warnings: bool = False
     actions: List[FraOcrConfirmedAction] = Field(default_factory=list, max_length=200)
-    note: Optional[str] = Field(None, max_length=1000)
+    note: Optional[str] = Field(default=None, max_length=1000)
 
     @field_validator("note", mode="before")
     @classmethod
@@ -150,7 +150,7 @@ class FraOcrFileRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category_id: int = Field(..., ge=1)
-    title: Optional[str] = Field(None, min_length=1, max_length=500)
+    title: Optional[str] = Field(default=None, min_length=1, max_length=500)
 
     @field_validator("title", mode="before")
     @classmethod
@@ -171,4 +171,4 @@ class FraOcrFilingResponse(BaseModel):
 class FraOcrDiscardRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    reason: Optional[str] = Field(None, max_length=500)
+    reason: Optional[str] = Field(default=None, max_length=500)

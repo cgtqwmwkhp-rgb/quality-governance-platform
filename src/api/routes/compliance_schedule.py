@@ -7,7 +7,7 @@ Gated by ``settings.compliance_schedule_enabled`` then the kill switch
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
@@ -33,6 +33,7 @@ from src.api.schemas.compliance_schedule import (
     RequirementUpdate,
 )
 from src.api.schemas.compliance_schedule_fra_ocr import (
+    FraOcrAppliedSummary,
     FraOcrConfirmResponse,
     FraOcrDiscardRequest,
     FraOcrDraftConfirmRequest,
@@ -623,10 +624,15 @@ async def confirm_fra_ocr_draft(
         note=data.note,
         acknowledged_warnings=data.acknowledged_warnings,
     )
+    applied_summary = dict(applied)
+    for key in ("next_due_date_before", "next_due_date_after"):
+        value = applied_summary.get(key)
+        if isinstance(value, str):
+            applied_summary[key] = date.fromisoformat(value)
     return FraOcrConfirmResponse(
         draft=_fra_draft_response(draft),
         requirement=_requirement_response(requirement),
-        applied=applied,
+        applied=FraOcrAppliedSummary.model_validate(applied_summary),
     )
 
 

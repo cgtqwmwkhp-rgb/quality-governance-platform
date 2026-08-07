@@ -11,16 +11,16 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 
 from src.domain.services.document_intelligence_service import DocumentIntelligenceService
 from src.domain.services.ocr_field_extraction import CONFIDENCE_HIGH, CONFIDENCE_MEDIUM, CONFIDENCE_NONE, ExtractedField
 
 logger = logging.getLogger(__name__)
 
-FRA_OCR_PURPOSE = "fra_pas79"
+FRA_OCR_PURPOSE: Literal["fra_pas79"] = "fra_pas79"
 FRA_TAXONOMY_ID = "03.01"
 EVIDENCE_SNIPPET_MAX = 200
 ACTION_TEXT_MAX = 2000
@@ -210,10 +210,11 @@ def _parse_uk_date(raw: str) -> date | None:
     )
     if text_form:
         day = int(text_form.group(1))
-        month = _MONTHS.get(text_form.group(2).lower().rstrip("."))
+        month_num = _MONTHS.get(text_form.group(2).lower().rstrip("."))
         year = int(text_form.group(3))
-        if month is None:
+        if month_num is None:
             return None
+        month = month_num
         try:
             return date(year, month, day)
         except ValueError:
@@ -225,11 +226,12 @@ def _parse_uk_date(raw: str) -> date | None:
         re.IGNORECASE,
     )
     if mtext:
-        month = _MONTHS.get(mtext.group(1).lower().rstrip("."))
+        month_num = _MONTHS.get(mtext.group(1).lower().rstrip("."))
         day = int(mtext.group(2))
         year = int(mtext.group(3))
-        if month is None:
+        if month_num is None:
             return None
+        month = month_num
         try:
             return date(year, month, day)
         except ValueError:
