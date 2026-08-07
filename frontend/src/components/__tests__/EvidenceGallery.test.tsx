@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { evidenceAssetsApi, type EvidenceAsset } from '../../api/client'
 import { EvidenceGallery } from '../EvidenceGallery'
 
-vi.mock('../api/client', () => ({
+vi.mock('../../api/client', () => ({
   evidenceAssetsApi: {
     getSignedUrl: vi.fn(),
   },

@@ -1,12 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { EvidenceAsset } from '../api/client'
-import { EvidenceAssetPreviewDialog } from './EvidenceAssetPreviewDialog'
+import type { EvidenceAsset } from '../../api/client'
+import { EvidenceAssetPreviewDialog } from '../EvidenceAssetPreviewDialog'
 
 const mockGetSignedUrl = vi.fn()
 
-vi.mock('../api/client', () => ({
+vi.mock('../../api/client', () => ({
   evidenceAssetsApi: {
     getSignedUrl: (...args: unknown[]) => mockGetSignedUrl(...args),
   },
