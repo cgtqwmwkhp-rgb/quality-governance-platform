@@ -211,3 +211,24 @@ def test_is_fra_requirement_helpers() -> None:
         template=SimpleNamespace(template_key="something_else"),
     )
     assert ComplianceScheduleFraOcrService._is_fra_requirement(other) is False
+
+
+def test_is_fra_ocr_eligible_matches_load_gate() -> None:
+    """Template-keyed FRA stays eligible even when taxonomy is not 03.01."""
+    template_fra = _fra_requirement(taxonomy_id="03.02")
+    assert ComplianceScheduleFraOcrService.is_fra_ocr_eligible(template_fra) is True
+
+    custom = _fra_requirement(template_id=None, template=None, taxonomy_id="03.01")
+    assert ComplianceScheduleFraOcrService.is_fra_ocr_eligible(custom) is True
+
+    inactive = _fra_requirement(is_active=False)
+    assert ComplianceScheduleFraOcrService.is_fra_ocr_eligible(inactive) is False
+
+    org_wide = _fra_requirement(location_id=None)
+    assert ComplianceScheduleFraOcrService.is_fra_ocr_eligible(org_wide) is False
+
+    other = _fra_requirement(
+        taxonomy_id="01.01",
+        template=SimpleNamespace(template_key="something_else"),
+    )
+    assert ComplianceScheduleFraOcrService.is_fra_ocr_eligible(other) is False

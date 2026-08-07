@@ -416,7 +416,10 @@ KNOWN_ASYMMETRIC_RESPONSE_FIELDS: dict[str, tuple[str, ...]] = {
     "RecordResponse": ("external_id", "filing_error", "filing_status", "library_document_id", "outcome"),
     # ``status`` is derived from next_due_date per ADR-0020 (Current / Due soon /
     # Overdue / Missed), so it is computed on read and cannot be set.
-    "RequirementResponse": ("external_id", "status"),
+    # ``fra_ocr_eligible`` is server-computed from template key / taxonomy +
+    # active + site-scoped (matches FRA OCR draft create gate); clients must
+    # not send it on create/update.
+    "RequirementResponse": ("external_id", "status", "fra_ocr_eligible"),
     "RTAActionResponse": ("status",),
     "RTAResponse": ("reporter_submission",),
     "RiskActionItem": ("href", "source_id", "source_type", "status"),

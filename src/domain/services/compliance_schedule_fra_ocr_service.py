@@ -727,6 +727,20 @@ class ComplianceScheduleFraOcrService:
             return True
         return False
 
+    @staticmethod
+    def is_fra_ocr_eligible(requirement: ComplianceRequirement) -> bool:
+        """Site-scoped active FRA obligation — same gate as draft create/upload.
+
+        Mirrors ``_load_fra_requirement`` predicates (active + location +
+        ``_is_fra_requirement``). Safe for response mapping when ``template`` is
+        already loaded or explicitly assigned; callers must not rely on lazy IO.
+        """
+        if not requirement.is_active:
+            return False
+        if requirement.location_id is None:
+            return False
+        return ComplianceScheduleFraOcrService._is_fra_requirement(requirement)
+
 
 def draft_to_response_dict(draft: ComplianceScheduleOcrDraft) -> dict[str, Any]:
     """Map an ORM draft to the FraOcrDraftResponse shape (without pydantic)."""

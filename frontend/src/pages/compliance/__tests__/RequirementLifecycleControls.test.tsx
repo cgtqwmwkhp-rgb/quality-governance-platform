@@ -61,6 +61,7 @@ function requirement(overrides: Partial<ComplianceRequirement> = {}) {
     is_active: true,
     status: 'current',
     created_at: '2026-08-05T09:00:00Z',
+    fra_ocr_eligible: false,
     ...overrides,
   } as unknown as ComplianceRequirement
 }

@@ -13,6 +13,7 @@ from typing import Any, Optional, Sequence, cast
 from sqlalchemy import false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from src.domain.models.compliance_schedule import (
@@ -108,9 +109,13 @@ class ComplianceScheduleService:
         tenant_id: int,
         include_inactive: bool = True,
     ) -> ComplianceRequirement:
-        query = select(ComplianceRequirement).where(
-            ComplianceRequirement.id == requirement_id,
-            ComplianceRequirement.deleted_at.is_(None),
+        query = (
+            select(ComplianceRequirement)
+            .options(selectinload(ComplianceRequirement.template))
+            .where(
+                ComplianceRequirement.id == requirement_id,
+                ComplianceRequirement.deleted_at.is_(None),
+            )
         )
         query = _tenant_filter(query, ComplianceRequirement, tenant_id)
         if not include_inactive:
@@ -358,6 +363,8 @@ class ComplianceScheduleService:
             owner_id=owner_id,
             template_id=template.id,
         )
+        # Avoid lazy-load under asyncio in ``_requirement_response``.
+        requirement.template = template
         return requirement
 
     # ------------------------------------------------------------------
@@ -375,7 +382,11 @@ class ComplianceScheduleService:
         page_size: int = 50,
         now: Optional[datetime] = None,
     ) -> tuple[list[ComplianceRequirement], int]:
-        query = select(ComplianceRequirement).where(ComplianceRequirement.deleted_at.is_(None))
+        query = (
+            select(ComplianceRequirement)
+            .options(selectinload(ComplianceRequirement.template))
+            .where(ComplianceRequirement.deleted_at.is_(None))
+        )
         query = _tenant_filter(query, ComplianceRequirement, tenant_id)
         if is_active is not None:
             query = query.where(ComplianceRequirement.is_active.is_(is_active))
@@ -541,6 +552,8 @@ class ComplianceScheduleService:
         )
         await self.db.commit()
         await self.db.refresh(requirement)
+        # Eager template for ``fra_ocr_eligible`` (avoids async lazy IO).
+        await self.db.refresh(requirement, attribute_names=["template"])
         return requirement
 
     async def update_requirement(
@@ -629,6 +642,7 @@ class ComplianceScheduleService:
 
         await self.db.commit()
         await self.db.refresh(requirement)
+        await self.db.refresh(requirement, attribute_names=["template"])
         return requirement
 
     async def deactivate_requirement(

@@ -29,6 +29,8 @@ export interface ComplianceRequirement {
   status?: ComplianceStatus | null
   created_at: string
   updated_at?: string | null
+  /** Server: active + site-scoped + FRA template key or custom taxonomy 03.01 */
+  fra_ocr_eligible: boolean
 }
 
 export interface ComplianceRecord {

@@ -9,11 +9,9 @@ import type { ComplianceRequirement } from '../../../api/complianceScheduleClien
 
 function requirement(
   overrides: Partial<ComplianceRequirement> = {},
-): Pick<ComplianceRequirement, 'is_active' | 'location_id' | 'taxonomy_id'> {
+): Pick<ComplianceRequirement, 'fra_ocr_eligible'> {
   return {
-    is_active: true,
-    location_id: 12,
-    taxonomy_id: '03.01',
+    fra_ocr_eligible: true,
     ...overrides,
   }
 }
@@ -50,20 +48,12 @@ function draft(overrides: Partial<FraOcrDraftResponse> = {}): FraOcrDraftRespons
 }
 
 describe('isFraOcrEligible', () => {
-  it('requires active, site-scoped, taxonomy 03.01', () => {
-    expect(isFraOcrEligible(requirement())).toBe(true)
+  it('trusts server fra_ocr_eligible=true (incl. template-keyed non-03.01)', () => {
+    expect(isFraOcrEligible(requirement({ fra_ocr_eligible: true }))).toBe(true)
   })
 
-  it('rejects inactive obligations', () => {
-    expect(isFraOcrEligible(requirement({ is_active: false }))).toBe(false)
-  })
-
-  it('rejects org-wide (no location) obligations', () => {
-    expect(isFraOcrEligible(requirement({ location_id: null }))).toBe(false)
-  })
-
-  it('rejects non-FRA taxonomy', () => {
-    expect(isFraOcrEligible(requirement({ taxonomy_id: '03.02' }))).toBe(false)
+  it('trusts server fra_ocr_eligible=false', () => {
+    expect(isFraOcrEligible(requirement({ fra_ocr_eligible: false }))).toBe(false)
   })
 })
 

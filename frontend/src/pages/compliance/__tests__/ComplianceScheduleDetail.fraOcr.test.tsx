@@ -69,6 +69,7 @@ function requirement(overrides: Record<string, unknown> = {}) {
     is_active: true,
     status: 'current',
     created_at: '2026-08-05T09:00:00Z',
+    fra_ocr_eligible: true,
     ...overrides,
   }
 }

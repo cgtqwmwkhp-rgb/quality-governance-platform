@@ -17,8 +17,8 @@ interface FraOcrPanelProps {
 }
 
 /**
- * Obligation-detail Ingest panel for site-scoped FRA (03.01) when the FRA OCR
- * feature flag is on. Hidden otherwise — no empty chrome for ineligible rows.
+ * Obligation-detail Ingest panel when the FRA OCR flag is on and the server
+ * marks the requirement ``fra_ocr_eligible``. Hidden otherwise — no empty chrome.
  */
 export function FraOcrPanel({ requirement, onRequirementUpdated }: FraOcrPanelProps) {
   const { t } = useTranslation()
