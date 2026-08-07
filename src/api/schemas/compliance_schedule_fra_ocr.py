@@ -58,7 +58,7 @@ class FraOcrAppliedSummary(BaseModel):
     next_due_date_before: date
     next_due_date_after: date
     actions_recorded: int
-    actions_created: int = 0  # always 0 in PR 1 — CAPA create is a follow-up
+    actions_created: int = 0  # >0 only when COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED
     changed_fields: List[str]
     warnings: List[str] = Field(default_factory=list)
 

@@ -1,12 +1,13 @@
 """Automatic CAPA generation from assessment, induction and compliance outcomes.
 
-When an assessment fails, an induction has "Not Yet Competent" items, or a
-compliance obligation is closed with a failed check, this service auto-creates
-CAPA actions linked to the source run or record.
+When an assessment fails, an induction has "Not Yet Competent" items, a
+compliance obligation is closed with a failed check, or an operator confirms
+checked FRA OCR priority actions, this service creates CAPA actions linked to
+the source run, record, or draft.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -30,6 +31,14 @@ COMPLIANCE_REQUIREMENT_SOURCE_PREFIX = "compliance_requirement"
 def compliance_requirement_source_reference(requirement_id: int) -> str:
     """Storage key pointing a compliance CAPA back at its obligation."""
     return f"{COMPLIANCE_REQUIREMENT_SOURCE_PREFIX}:{int(requirement_id)}"
+
+
+FRA_OCR_DRAFT_SOURCE_PREFIX = "fra_ocr_draft"
+
+
+def fra_ocr_draft_source_reference(draft_id: int) -> str:
+    """Storage key pointing a FRA OCR CAPA back at its draft."""
+    return f"{FRA_OCR_DRAFT_SOURCE_PREFIX}:{int(draft_id)}"
 
 
 def _naive_utc(value: datetime) -> datetime:
@@ -345,5 +354,123 @@ class CAPAAutoService:
             )
             db.add(capa)
             created.append(capa)
+
+        return created
+
+    @staticmethod
+    async def create_from_fra_ocr_actions(
+        db: AsyncSession,
+        *,
+        draft_id: int,
+        requirement: ComplianceRequirement,
+        actions: list,
+        created_by_id: int,
+        now: Optional[datetime] = None,
+    ) -> list:
+        """Raise CAPAs for operator-checked FRA OCR priority action rows.
+
+        The caller must already have filtered to the checked rows — this method
+        never invents actions from the OCR proposal. Empty ``actions`` returns
+        ``[]`` without touching the session.
+
+        Idempotent per ``(draft_id, action index)``: a second confirm of the same
+        draft/index returns the existing CAPA rather than a duplicate.
+        """
+        if not actions:
+            return []
+
+        tenant_id = requirement.tenant_id
+        if tenant_id is None:
+            raise ValueError("compliance requirement has no tenant; refusing untenanted FRA OCR CAPA")
+        if draft_id is None or int(draft_id) <= 0:
+            raise ValueError("FRA OCR draft id is required before CAPAs can reference it")
+
+        source_reference = fra_ocr_draft_source_reference(int(draft_id))
+        clock = now or datetime.now(timezone.utc)
+        priority_map = {
+            "high": CAPAPriority.HIGH,
+            "medium": CAPAPriority.MEDIUM,
+            "low": CAPAPriority.LOW,
+        }
+        due_days = {"high": 7, "medium": 30, "low": 60}
+        created: list = []
+
+        for action in actions:
+            if not isinstance(action, dict):
+                continue
+            raw_index = action.get("index")
+            if raw_index is None:
+                continue
+            try:
+                index = int(raw_index)
+            except (TypeError, ValueError):
+                continue
+            if index < 0:
+                continue
+            text_value = str(action.get("text") or "").strip()
+            if not text_value:
+                continue
+
+            existing = await CAPAAutoService._existing_action(
+                db,
+                source_type=CAPASource.FRA_OCR,
+                source_reference=source_reference,
+                source_id=index,
+                tenant_id=tenant_id,
+            )
+            if existing is not None:
+                created.append(existing)
+                continue
+
+            priority_key = str(action.get("priority_normalised") or "medium").lower()
+            priority = priority_map.get(priority_key, CAPAPriority.MEDIUM)
+
+            target_raw = action.get("target_date")
+            due_date: datetime
+            if target_raw:
+                if isinstance(target_raw, date) and not isinstance(target_raw, datetime):
+                    due_date = datetime(target_raw.year, target_raw.month, target_raw.day)
+                elif isinstance(target_raw, datetime):
+                    due_date = target_raw
+                elif isinstance(target_raw, str) and target_raw.strip():
+                    parsed = date.fromisoformat(target_raw.strip()[:10])
+                    due_date = datetime(parsed.year, parsed.month, parsed.day)
+                else:
+                    due_date = clock + timedelta(days=due_days.get(priority_key, 30))
+            else:
+                due_date = clock + timedelta(days=due_days.get(priority_key, 30))
+
+            ref = await ReferenceNumberService.generate(db, "capa", CAPAAction)
+            description = (
+                f"Priority action confirmed from FRA / PAS 79 OCR draft {draft_id}.\n\n"
+                f"Obligation: {requirement.reference_number} — {requirement.title}\n"
+                f"Action index: {index}\n"
+                f"Priority: {priority_key}\n\n"
+                f"{text_value}"
+            )
+            capa = CAPAAction(
+                reference_number=ref,
+                title=f"FRA Priority Action: {text_value[:200]}",
+                description=description,
+                capa_type=CAPAType.CORRECTIVE,
+                status=CAPAStatus.OPEN,
+                source_type=CAPASource.FRA_OCR,
+                source_id=index,
+                source_reference=source_reference,
+                priority=priority,
+                assigned_to_id=requirement.owner_id,
+                created_by_id=created_by_id,
+                due_date=_naive_utc(due_date),
+                tenant_id=tenant_id,
+            )
+            db.add(capa)
+            created.append(capa)
+            logger.info(
+                "CAPA created for FRA OCR draft=%s action_index=%s requirement=%s tenant=%s",
+                draft_id,
+                index,
+                requirement.reference_number,
+                tenant_id,
+            )
 
         return created
