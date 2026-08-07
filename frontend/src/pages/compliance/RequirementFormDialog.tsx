@@ -402,6 +402,7 @@ export function RequirementFormDialog({
       }
       setCreatedRequirementId(newId)
       setPendingFiles([])
+      setDirty(false)
       setHistoricalEvidenceError(
         t(
           'compliance.schedule.form.historical_complete_error',
@@ -410,6 +411,7 @@ export function RequirementFormDialog({
       )
       onSaved()
       // Keep the dialog open so the operator sees the error and the detail link.
+      // dirty cleared: obligation already persisted — unsaved-changes guard must not block close.
     }
   }, [
     form,
@@ -902,7 +904,12 @@ export function RequirementFormDialog({
             ) : null}
 
             <DialogFooter className="gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={guard.requestClose}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={guard.requestClose}
+                data-testid="requirement-form-cancel"
+              >
                 {createdRequirementId != null
                   ? t('common.close', 'Close')
                   : t('common.cancel', 'Cancel')}

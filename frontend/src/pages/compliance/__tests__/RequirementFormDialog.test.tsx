@@ -338,6 +338,11 @@ describe('RequirementFormDialog — create', () => {
     expect(onSaved).toHaveBeenCalled()
     expect(onOpenChange).not.toHaveBeenCalledWith(false)
     expect(screen.queryByTestId('requirement-form-submit')).not.toBeInTheDocument()
+
+    // Closing must not trip the unsaved-changes guard — obligation already exists.
+    await user.click(screen.getByTestId('requirement-form-cancel'))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(screen.queryByTestId('requirement-form-unsaved')).not.toBeInTheDocument()
   })
 })
 
