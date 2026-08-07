@@ -129,9 +129,7 @@ _ACTION_ROW_PRIORITY_LAST_RE = re.compile(
     re.IGNORECASE,
 )
 
-_ACTION_ROW_BARE_RE = re.compile(
-    r"^[ \t]*(?P<ref>\d{1,3}(?:\.\d{1,2})?)[.)|\t ]+(?P<text>.{15,})[ \t]*$"
-)
+_ACTION_ROW_BARE_RE = re.compile(r"^[ \t]*(?P<ref>\d{1,3}(?:\.\d{1,2})?)[.)|\t ]+(?P<text>.{15,})[ \t]*$")
 
 _PRIORITY_MAP = {
     "immediate": "high",
@@ -157,14 +155,8 @@ _POSTNOMINAL_RE = re.compile(
     re.IGNORECASE,
 )
 
-_MONTHS = {
-    name.lower(): index
-    for index, name in enumerate(calendar.month_name)
-    if name
-} | {
-    name.lower(): index
-    for index, name in enumerate(calendar.month_abbr)
-    if name
+_MONTHS = {name.lower(): index for index, name in enumerate(calendar.month_name) if name} | {
+    name.lower(): index for index, name in enumerate(calendar.month_abbr) if name
 }
 
 _BARE_NUMERIC_RE = re.compile(r"^\d[\d\s.,]*$")
@@ -449,9 +441,7 @@ def _extract_action_plan(text: str) -> tuple[list[FraProposedAction], list[str]]
 
         dedupe_key = (ref or "", text_body[:60])
         if dedupe_key in seen:
-            warnings.append(
-                f"Duplicate action {ref or '?'} was skipped (same reference and opening text)."
-            )
+            warnings.append(f"Duplicate action {ref or '?'} was skipped (same reference and opening text).")
             last_matched = False
             continue
         seen.add(dedupe_key)
@@ -488,9 +478,7 @@ def _extract_action_plan(text: str) -> tuple[list[FraProposedAction], list[str]]
         last_matched = True
 
     if true_count > ACTION_ROW_LIMIT:
-        warnings.append(
-            f"Action plan had {true_count} rows; only the first {ACTION_ROW_LIMIT} were kept."
-        )
+        warnings.append(f"Action plan had {true_count} rows; only the first {ACTION_ROW_LIMIT} were kept.")
     if start and not actions:
         warnings.append("An action plan section was found but no rows could be read from it.")
 
@@ -625,8 +613,7 @@ class FraPas79OcrService:
 
         char_count = len(text)
         logger.info(
-            "fra_pas79 extract complete filename_len=%s method=%s provider_status=%s "
-            "page_count=%s char_count=%s",
+            "fra_pas79 extract complete filename_len=%s method=%s provider_status=%s " "page_count=%s char_count=%s",
             len(filename or ""),
             extraction_method,
             spine.ocr_provider_status,

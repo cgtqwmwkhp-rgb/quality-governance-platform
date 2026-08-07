@@ -618,7 +618,10 @@ async def confirm_fra_ocr_draft(
         draft_id=draft_id,
         tenant_id=tenant_id,
         user_id=current_user.id,
-        payload=data,
+        next_due_date=data.next_due_date,
+        actions=[a.model_dump(mode="json") for a in data.actions],
+        note=data.note,
+        acknowledged_warnings=data.acknowledged_warnings,
     )
     return FraOcrConfirmResponse(
         draft=_fra_draft_response(draft),

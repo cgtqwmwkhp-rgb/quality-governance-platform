@@ -63,6 +63,7 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("carbon_reporting_year", "utility_meter_reading"),
         ("competency_areas", "auditor_competencies"),
         ("complaints", "complaint_running_sheet_entries"),
+        ("compliance_requirements", "compliance_schedule_ocr_drafts"),
         ("controlled_documents", "controlled_document_versions"),
         ("controlled_documents", "document_access_logs"),
         ("controlled_documents", "document_approval_instances"),

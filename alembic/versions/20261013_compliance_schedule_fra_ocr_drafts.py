@@ -16,6 +16,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "20261013_cs_fra_ocr"
 down_revision: Union[str, Sequence[str], None] = "20261012_rls_sso_prov"
@@ -123,10 +124,10 @@ def _create_drafts() -> None:
         sa.Column("extraction_method", sa.String(length=64), nullable=True),
         sa.Column("ocr_provider_status", sa.String(length=50), nullable=True),
         sa.Column("page_count", sa.Integer(), nullable=True),
-        sa.Column("proposed_json", sa.JSON(), nullable=False),
-        sa.Column("warnings_json", sa.JSON(), nullable=True),
-        sa.Column("confirmed_json", sa.JSON(), nullable=True),
-        sa.Column("applied_json", sa.JSON(), nullable=True),
+        sa.Column("proposed_json", postgresql.JSONB().with_variant(sa.JSON(), "sqlite"), nullable=False),
+        sa.Column("warnings_json", postgresql.JSONB().with_variant(sa.JSON(), "sqlite"), nullable=True),
+        sa.Column("confirmed_json", postgresql.JSONB().with_variant(sa.JSON(), "sqlite"), nullable=True),
+        sa.Column("applied_json", postgresql.JSONB().with_variant(sa.JSON(), "sqlite"), nullable=True),
         sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("confirmed_by_id", sa.Integer(), nullable=True),
         sa.Column("discarded_at", sa.DateTime(timezone=True), nullable=True),

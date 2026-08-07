@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.api.schemas.compliance_schedule_fra_ocr import FraOcrDraftConfirmRequest
 from src.domain.exceptions import ConflictError, ValidationError
 from src.domain.models.compliance_schedule import (
     ComplianceOcrDraftStatus,
@@ -90,10 +89,8 @@ async def test_apply_confirmed_plan_updates_next_due_date_only() -> None:
             draft_id=7,
             tenant_id=1,
             user_id=42,
-            payload=FraOcrDraftConfirmRequest(
-                next_due_date=date(2027, 3, 14),
-                actions=[],
-            ),
+            next_due_date=date(2027, 3, 14),
+            actions=[],
             now=datetime(2026, 6, 1, tzinfo=timezone.utc),
         )
 
@@ -121,7 +118,7 @@ async def test_apply_confirmed_plan_refuses_non_pending() -> None:
             draft_id=7,
             tenant_id=1,
             user_id=42,
-            payload=FraOcrDraftConfirmRequest(next_due_date=date(2027, 1, 1)),
+            next_due_date=date(2027, 1, 1),
         )
 
 
@@ -150,7 +147,7 @@ async def test_apply_confirmed_plan_refuses_org_wide() -> None:
             draft_id=7,
             tenant_id=1,
             user_id=42,
-            payload=FraOcrDraftConfirmRequest(next_due_date=date(2027, 1, 1)),
+            next_due_date=date(2027, 1, 1),
         )
 
 

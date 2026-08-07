@@ -20,10 +20,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.schemas.compliance_schedule_fra_ocr import (
-    FraOcrDraftConfirmRequest,
-    FraProposedFields,
-)
 from src.domain.exceptions import ConflictError, ExternalServiceError, NotFoundError, ValidationError
 from src.domain.models.compliance_schedule import (
     ComplianceOcrDraftStatus,
@@ -251,7 +247,10 @@ class ComplianceScheduleFraOcrService:
         draft_id: int,
         tenant_id: int,
         user_id: int,
-        payload: FraOcrDraftConfirmRequest,
+        next_due_date: date,
+        actions: list[dict[str, Any]] | None = None,
+        note: str | None = None,
+        acknowledged_warnings: bool = False,
         now: datetime | None = None,
     ) -> tuple[ComplianceScheduleOcrDraft, ComplianceRequirement, dict[str, Any]]:
         clock = _utc_now(now)
@@ -269,7 +268,7 @@ class ComplianceScheduleFraOcrService:
         )
 
         today = clock.date()
-        due = payload.next_due_date
+        due = next_due_date
         if due < _DUE_DATE_FLOOR or due > today + timedelta(days=365 * 10):
             raise ValidationError(
                 "next_due_date must be between 2000-01-01 and today + 10 years",
@@ -293,7 +292,7 @@ class ComplianceScheduleFraOcrService:
             "requirement_id": requirement.id,
             "next_due_date_before": before.isoformat(),
             "next_due_date_after": due.isoformat(),
-            "actions_recorded": len(payload.actions),
+            "actions_recorded": len(actions or []),
             "actions_created": 0,
             "changed_fields": changed_fields,
             "warnings": applied_warnings,
@@ -302,7 +301,12 @@ class ComplianceScheduleFraOcrService:
         draft.status = ComplianceOcrDraftStatus.CONFIRMED
         draft.confirmed_at = clock
         draft.confirmed_by_id = user_id
-        draft.confirmed_json = payload.model_dump(mode="json")
+        draft.confirmed_json = {
+            "next_due_date": due.isoformat(),
+            "acknowledged_warnings": acknowledged_warnings,
+            "actions": list(actions or []),
+            "note": note,
+        }
         draft.applied_json = summary
         draft.updated_by_id = user_id
 
@@ -337,7 +341,7 @@ class ComplianceScheduleFraOcrService:
                 "requirement_id": requirement.id,
                 "next_due_date_before": before.isoformat(),
                 "next_due_date_after": due.isoformat(),
-                "actions_recorded": len(payload.actions),
+                "actions_recorded": len(actions or []),
                 "extraction_method": draft.extraction_method,
                 "source_checksum_sha256": draft.source_checksum_sha256,
             },
@@ -357,7 +361,7 @@ class ComplianceScheduleFraOcrService:
             draft.id,
             requirement.id,
             tenant_id,
-            len(payload.actions),
+            len(actions or []),
             changed_fields,
         )
         return draft, requirement, summary
@@ -651,7 +655,11 @@ class ComplianceScheduleFraOcrService:
         for_update: bool,
     ) -> ComplianceScheduleOcrDraft:
         query = select(ComplianceScheduleOcrDraft).where(ComplianceScheduleOcrDraft.id == draft_id)
-        query = query.where(false()) if tenant_id is None else query.where(ComplianceScheduleOcrDraft.tenant_id == tenant_id)
+        query = (
+            query.where(false())
+            if tenant_id is None
+            else query.where(ComplianceScheduleOcrDraft.tenant_id == tenant_id)
+        )
         if for_update:
             query = query.with_for_update()
         result = await self.db.execute(query)
@@ -676,11 +684,7 @@ class ComplianceScheduleFraOcrService:
             .options(selectinload(ComplianceRequirement.template))
             .where(ComplianceRequirement.id == requirement_id)
         )
-        query = (
-            query.where(false())
-            if tenant_id is None
-            else query.where(ComplianceRequirement.tenant_id == tenant_id)
-        )
+        query = query.where(false()) if tenant_id is None else query.where(ComplianceRequirement.tenant_id == tenant_id)
         if for_update:
             query = query.with_for_update()
         result = await self.db.execute(query)
@@ -720,20 +724,27 @@ class ComplianceScheduleFraOcrService:
 def draft_to_response_dict(draft: ComplianceScheduleOcrDraft) -> dict[str, Any]:
     """Map an ORM draft to the FraOcrDraftResponse shape (without pydantic)."""
     fields_raw, actions = _split_proposed(draft.proposed_json if isinstance(draft.proposed_json, dict) else {})
-    # Validate/normalise proposed fields through the schema so missing keys default.
-    proposed = FraProposedFields.model_validate(
-        {
-            "assessment_date": fields_raw.get("assessment_date") or {},
-            "next_review_date": fields_raw.get("next_review_date") or {},
-            "review_interval_months": fields_raw.get("review_interval_months") or {},
-            "assessor_name": fields_raw.get("assessor_name") or {},
-            "assessor_organisation": fields_raw.get("assessor_organisation") or {},
-            "premises_name": fields_raw.get("premises_name") or {},
-            "pas79_reference": fields_raw.get("pas79_reference") or {},
-            "overall_risk_rating": fields_raw.get("overall_risk_rating") or {},
-            "risk_vocabulary": fields_raw.get("risk_vocabulary"),
+
+    def _field(raw: Any) -> dict[str, Any]:
+        if not isinstance(raw, dict):
+            raw = {}
+        return {
+            "value": raw.get("value"),
+            "confidence": raw.get("confidence") or "none",
+            "evidence_snippet": raw.get("evidence_snippet"),
         }
-    )
+
+    proposed = {
+        "assessment_date": _field(fields_raw.get("assessment_date")),
+        "next_review_date": _field(fields_raw.get("next_review_date")),
+        "review_interval_months": _field(fields_raw.get("review_interval_months")),
+        "assessor_name": _field(fields_raw.get("assessor_name")),
+        "assessor_organisation": _field(fields_raw.get("assessor_organisation")),
+        "premises_name": _field(fields_raw.get("premises_name")),
+        "pas79_reference": _field(fields_raw.get("pas79_reference")),
+        "overall_risk_rating": _field(fields_raw.get("overall_risk_rating")),
+        "risk_vocabulary": fields_raw.get("risk_vocabulary"),
+    }
     applied = None
     if draft.applied_json:
         applied_raw = dict(draft.applied_json)
@@ -756,16 +767,14 @@ def draft_to_response_dict(draft: ComplianceScheduleOcrDraft) -> dict[str, Any]:
         "extraction_method": draft.extraction_method,
         "ocr_provider_status": draft.ocr_provider_status,
         "page_count": draft.page_count,
-        "proposed": proposed.model_dump(),
+        "proposed": proposed,
         "proposed_actions": actions,
         "warnings": list(draft.warnings_json or []),
         "confirmed_at": draft.confirmed_at,
         "confirmed_by_id": draft.confirmed_by_id,
         "applied": applied,
         "library_document_id": draft.library_document_id,
-        "filing_status": (
-            draft.filing_status.value if hasattr(draft.filing_status, "value") else draft.filing_status
-        ),
+        "filing_status": (draft.filing_status.value if hasattr(draft.filing_status, "value") else draft.filing_status),
         "filing_error": draft.filing_error,
         "created_at": draft.created_at,
         "updated_at": draft.updated_at,
