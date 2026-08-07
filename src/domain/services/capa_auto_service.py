@@ -398,8 +398,11 @@ class CAPAAutoService:
         for action in actions:
             if not isinstance(action, dict):
                 continue
+            raw_index = action.get("index")
+            if raw_index is None:
+                continue
             try:
-                index = int(action.get("index"))
+                index = int(raw_index)
             except (TypeError, ValueError):
                 continue
             if index < 0:
