@@ -64,6 +64,7 @@ import { complianceClauseHref } from './complianceEvidenceHelpers'
 import { DocumentPublishImpactPreview } from './DocumentPublishImpactPreview'
 import { DocumentRelationshipChips } from './DocumentRelationshipChips'
 import { DocumentRelationshipsPanel } from './DocumentRelationshipsPanel'
+import { DocumentThreadStrip } from '../components/graph/DocumentThreadStrip'
 import {
   buildDocumentDownstreamView,
   buildDocumentsExceptionsHref,
@@ -818,6 +819,14 @@ export default function DocumentDetail() {
               documentId={document.id}
               summary={relationshipSummary}
               evidenceCount={confirmedEvidenceCount}
+            />
+          ) : null}
+          {documentGraphEnabled ? (
+            <DocumentThreadStrip
+              documentId={document.id}
+              documentTitle={document.title}
+              documentReference={document.reference_number}
+              documentGraphEnabled={documentGraphEnabled}
             />
           ) : null}
         </div>

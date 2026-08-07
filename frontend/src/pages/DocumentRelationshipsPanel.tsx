@@ -39,6 +39,12 @@ import {
   buildDocumentRelationshipCoverageHonesty,
   measureRelationshipRoleCoverage,
 } from './documentRelationshipCoverage'
+import { RelationshipsMapView } from '../components/graph/RelationshipsMapView'
+import {
+  resolveRelationshipsPanelView,
+  shouldShowRelationshipsMapToggle,
+  type RelationshipsPanelViewMode,
+} from '../components/graph/relationshipsMapHelpers'
 
 interface CounterpartDocument {
   id: number
@@ -105,8 +111,18 @@ export function DocumentRelationshipsPanel({
     Record<number, CitationStalenessStatus>
   >({})
   const heuristicProposeEnabled = useFeatureFlag('document_graph_heuristic_propose')
+  const mapViewEnabled = useFeatureFlag('document_graph_map_view')
+  const [panelView, setPanelView] = useState<RelationshipsPanelViewMode>('list')
+  const activeView = resolveRelationshipsPanelView(mapViewEnabled, panelView)
 
   const resolved = useMemo(() => resolveDocumentEdges(documentId, edges), [documentId, edges])
+  const counterpartLabels = useMemo(() => {
+    const labels: Record<number, string | null | undefined> = {}
+    for (const [id, doc] of Object.entries(counterparts)) {
+      labels[Number(id)] = doc?.title ?? null
+    }
+    return labels
+  }, [counterparts])
   const summary = useMemo(
     () => summariseDocumentRelationships(documentId, edges),
     [documentId, edges],
@@ -528,22 +544,51 @@ export function DocumentRelationshipsPanel({
               </Badge>
             ) : null}
           </div>
-          {heuristicProposeEnabled ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={proposing}
-              onClick={() => void handleProposeHeuristics()}
-              data-testid="relationships-propose-heuristics"
-            >
-              {proposing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
-              )}
-              Suggest relationships
-            </Button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {shouldShowRelationshipsMapToggle(mapViewEnabled) ? (
+              <div
+                className="inline-flex rounded-md border border-border p-0.5"
+                role="group"
+                aria-label="Relationships view"
+                data-testid="relationships-view-toggle"
+              >
+                <Button
+                  size="sm"
+                  variant={activeView === 'list' ? 'default' : 'ghost'}
+                  onClick={() => setPanelView('list')}
+                  data-testid="relationships-view-list"
+                  aria-pressed={activeView === 'list'}
+                >
+                  List
+                </Button>
+                <Button
+                  size="sm"
+                  variant={activeView === 'map' ? 'default' : 'ghost'}
+                  onClick={() => setPanelView('map')}
+                  data-testid="relationships-view-map"
+                  aria-pressed={activeView === 'map'}
+                >
+                  Map
+                </Button>
+              </div>
+            ) : null}
+            {heuristicProposeEnabled ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={proposing}
+                onClick={() => void handleProposeHeuristics()}
+                data-testid="relationships-propose-heuristics"
+              >
+                {proposing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-2 h-4 w-4" />
+                )}
+                Suggest relationships
+              </Button>
+            ) : null}
+          </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Coverage is only what has been recorded here. An empty or thin list means this
@@ -610,7 +655,19 @@ export function DocumentRelationshipsPanel({
         </Card>
       ) : null}
 
-      {confirmed.length === 0 && pending.length === 0 ? (
+      {activeView === 'map' ? (
+        <Card className="p-4 space-y-2" data-testid="relationships-map-panel">
+          <h4 className="font-medium text-foreground">Relationship map</h4>
+          <RelationshipsMapView
+            documentId={documentId}
+            documentTitle={documentTitle}
+            edges={edges}
+            labels={counterpartLabels}
+          />
+        </Card>
+      ) : null}
+
+      {activeView === 'list' && confirmed.length === 0 && pending.length === 0 ? (
         <EmptyState
           icon={<Link2 className="h-8 w-8 text-muted-foreground" />}
           title="No relationships recorded"
@@ -622,7 +679,7 @@ export function DocumentRelationshipsPanel({
         />
       ) : null}
 
-      {confirmed.length > 0 ? (
+      {activeView === 'list' && confirmed.length > 0 ? (
         <Card className="p-4 space-y-2" data-testid="relationships-confirmed-list">
           <h4 className="font-medium text-foreground">Confirmed relationships</h4>
           <div className="space-y-2">{confirmed.map((item) => renderRow(item))}</div>
