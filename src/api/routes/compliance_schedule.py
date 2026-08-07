@@ -46,6 +46,7 @@ from src.api.schemas.compliance_schedule_fra_ocr import (
     FraOcrDraftResponse,
     FraOcrFileRequest,
     FraOcrFilingResponse,
+    FraOcrFromEvidenceRequest,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
@@ -623,6 +624,33 @@ async def create_fra_ocr_draft(
         content=content,
         filename=file.filename or "fra.pdf",
         content_type=file.content_type or "application/pdf",
+    )
+    return _fra_draft_response(draft)
+
+
+@_fra_ocr_router.post(
+    "/records/{record_id}/fra-ocr/drafts/from-evidence",
+    response_model=FraOcrDraftResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_fra_ocr_draft_from_evidence(
+    record_id: int,
+    data: FraOcrFromEvidenceRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:update"))],
+):
+    """Create a pending FRA OCR draft from an occurrence evidence PDF already stored.
+
+    Resolves the obligation via the record, reuses the EvidenceAsset blob, and
+    leaves that blob owned by the occurrence (discard must not delete it).
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = ComplianceScheduleFraOcrService(db)
+    draft = await service.create_draft_from_evidence_asset(
+        record_id=record_id,
+        evidence_asset_id=data.evidence_asset_id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
     )
     return _fra_draft_response(draft)
 

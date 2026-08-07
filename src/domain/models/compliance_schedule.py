@@ -318,6 +318,7 @@ class ComplianceScheduleOcrDraft(Base, TimestampMixin, AuditTrailMixin):
             sqlite_where=text("status = 'pending'"),
         ),
         Index("ix_cs_ocr_drafts_tenant_status", "tenant_id", "status"),
+        Index("ix_cs_ocr_drafts_evidence_asset_id", "evidence_asset_id"),
     )
     __data_classification__ = DataClassification.C3_CONFIDENTIAL
 
@@ -349,6 +350,12 @@ class ComplianceScheduleOcrDraft(Base, TimestampMixin, AuditTrailMixin):
     source_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     source_checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     source_storage_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # When set, the draft reuses an occurrence EvidenceAsset blob and must not
+    # delete that blob on discard (or IntegrityError cleanup).
+    evidence_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("evidence_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     extraction_method: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     ocr_provider_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

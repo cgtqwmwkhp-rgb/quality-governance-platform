@@ -34,6 +34,7 @@ export default function ComplianceScheduleDetail() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [fraOcrRefreshKey, setFraOcrRefreshKey] = useState(0)
 
   const load = useCallback(async () => {
     if (!Number.isFinite(requirementId)) return
@@ -228,6 +229,7 @@ export default function ComplianceScheduleDetail() {
       </dl>
 
       <FraOcrPanel
+        key={`fra-ocr-${fraOcrRefreshKey}`}
         requirement={requirement}
         onRequirementUpdated={(r) => {
           setRequirement(r)
@@ -273,7 +275,12 @@ export default function ComplianceScheduleDetail() {
                   {t('compliance.schedule.due', 'Due')} {rec.due_date}
                   {rec.completed_at ? ` · ${new Date(rec.completed_at).toLocaleString()}` : ''}
                 </div>
-                <RecordEvidenceSection recordId={rec.id} referenceNumber={rec.reference_number} />
+                <RecordEvidenceSection
+                  recordId={rec.id}
+                  referenceNumber={rec.reference_number}
+                  fraOcrEligible={requirement.fra_ocr_eligible === true}
+                  onFraOcrDraftCreated={() => setFraOcrRefreshKey((k) => k + 1)}
+                />
                 <RecordFilingControl record={rec} onFiled={() => void load()} />
               </li>
             ))}

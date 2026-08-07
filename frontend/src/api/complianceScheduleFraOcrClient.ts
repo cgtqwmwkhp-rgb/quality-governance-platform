@@ -60,6 +60,7 @@ export interface FraOcrDraftResponse {
   source_filename?: string | null
   source_size_bytes?: number | null
   source_checksum_sha256: string
+  evidence_asset_id?: number | null
   extraction_method?: string | null
   ocr_provider_status?: string | null
   page_count?: number | null
@@ -121,6 +122,10 @@ export interface FraOcrDiscardPayload {
   reason?: string | null
 }
 
+export interface FraOcrFromEvidencePayload {
+  evidence_asset_id: number
+}
+
 export function createComplianceScheduleFraOcrApi(api: AxiosInstance) {
   const base = '/api/v1/compliance-schedule'
 
@@ -134,6 +139,12 @@ export function createComplianceScheduleFraOcrApi(api: AxiosInstance) {
         { headers: { 'Content-Type': 'multipart/form-data' } },
       )
     },
+
+    createDraftFromEvidence: (recordId: number, data: FraOcrFromEvidencePayload) =>
+      api.post<FraOcrDraftResponse>(
+        `${base}/records/${recordId}/fra-ocr/drafts/from-evidence`,
+        data,
+      ),
 
     listDrafts: (
       requirementId: number,

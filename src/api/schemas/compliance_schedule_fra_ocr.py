@@ -75,6 +75,7 @@ class FraOcrDraftResponse(BaseModel):
     source_filename: Optional[str] = None
     source_size_bytes: Optional[int] = None
     source_checksum_sha256: str
+    evidence_asset_id: Optional[int] = None
     extraction_method: Optional[str] = None
     ocr_provider_status: Optional[str] = None
     page_count: Optional[int] = None
@@ -89,6 +90,14 @@ class FraOcrDraftResponse(BaseModel):
     filing_error: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class FraOcrFromEvidenceRequest(BaseModel):
+    """Create a pending FRA OCR draft from an occurrence evidence PDF already stored."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_asset_id: int = Field(..., ge=1)
 
 
 class FraOcrDraftListResponse(BaseModel):
