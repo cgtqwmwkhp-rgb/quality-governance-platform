@@ -159,7 +159,7 @@ async def test_propose_logs_ai_decision_auto_applied_false():
         patch.object(service, "_category_and_pel_siblings", AsyncMock(return_value=[])),
         patch.object(service, "_shared_cel_peers", AsyncMock(return_value=[])),
         patch.object(service, "_vector_or_ilike_peers", AsyncMock(return_value=[])),
-        patch.object(service, "_regex_citation_proposals", AsyncMock(return_value=[])),
+        patch.object(service, "_regex_citation_proposals", AsyncMock(return_value=([], 0))),
     ):
         result = await service.propose_for_document(tenant_id=1, document_id=10, actor_id=3, commit=False)
 
@@ -207,7 +207,7 @@ async def test_propose_creates_related_to_from_category_sibling():
         ),
         patch.object(service, "_shared_cel_peers", AsyncMock(return_value=[])),
         patch.object(service, "_vector_or_ilike_peers", AsyncMock(return_value=[])),
-        patch.object(service, "_regex_citation_proposals", AsyncMock(return_value=[])),
+        patch.object(service, "_regex_citation_proposals", AsyncMock(return_value=([], 0))),
     ):
         result = await service.propose_for_document(tenant_id=1, document_id=10, actor_id=3, commit=False)
 
@@ -242,6 +242,61 @@ async def test_citation_staleness_for_edge_uses_chunk():
     payload = await service.citation_staleness_for_edge(tenant_id=1, edge_id=9)
     assert payload["status"] == CitationStaleness.UNCHANGED.value
     assert payload["edge_id"] == 9
+
+
+
+def test_coerce_document_id_rejects_invalid_metadata():
+    from src.domain.services.document_graph_heuristic_propose import _coerce_document_id
+
+    assert _coerce_document_id(42) == 42
+    assert _coerce_document_id("99") == 99
+    assert _coerce_document_id(None) is None
+    assert _coerce_document_id(True) is None
+    assert _coerce_document_id("not-an-id") is None
+    assert _coerce_document_id(0) is None
+    assert _coerce_document_id(-3) is None
+
+
+def test_assemble_citation_proposals_counts_unresolved():
+    chunk = SimpleNamespace(id=1, content="See DOC-1999-0001 and DOC-2026-0042")
+    matches = extract_citation_matches(chunk.content)
+    staged = [(chunk, m) for m in matches if m.kind == "doc_ref"]
+    assert len(staged) >= 2
+    proposals, skipped = DocumentGraphHeuristicProposeService._assemble_citation_proposals(
+        source_id=10,
+        staged=staged,
+        ref_to_id={"DOC-2026-0042": 20},
+        pel_to_id={},
+        live_path_ids=set(),
+        tip_version={20: (7, "1.0")},
+    )
+    assert skipped >= 1
+    assert any(p["dst_document_id"] == 20 for p in proposals)
+
+
+@pytest.mark.asyncio
+async def test_vector_peers_skip_bad_metadata_ids():
+    db = MagicMock()
+    source = SimpleNamespace(id=10, title="Incident policy", ai_summary=None)
+    # live drop query
+    live_result = MagicMock()
+    live_result.scalars.return_value.all.return_value = [20]
+    db.execute = AsyncMock(return_value=live_result)
+
+    service = DocumentGraphHeuristicProposeService(db)
+    with patch(
+        "src.domain.services.document_ai_service.VectorSearchService"
+    ) as vs_cls:
+        vs = vs_cls.return_value
+        vs.search = AsyncMock(
+            return_value=[
+                {"metadata": {"document_id": "not-int"}, "score": 0.9},
+                {"metadata": {"document_id": True}, "score": 0.9},
+                {"metadata": {"document_id": 20}, "score": 0.8},
+            ]
+        )
+        peers = await service._vector_or_ilike_peers(source, tenant_id=1)
+    assert peers == [(20, 0.8, "Vector similarity to title/summary")]
 
 
 # ---------------------------------------------------------------------------

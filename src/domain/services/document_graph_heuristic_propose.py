@@ -46,6 +46,21 @@ RELATED_CONFIDENCE_ILIKE = 0.52
 REFERENCES_CONFIDENCE = 0.90
 
 
+def _coerce_document_id(value: Any) -> Optional[int]:
+    """Best-effort document id from vector metadata / DB scalars.
+
+    Pinecone (and similar) metadata is loosely typed — reject bools and
+    non-integral values instead of raising inside the propose loop.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        doc_id = int(value)
+    except (TypeError, ValueError):
+        return None
+    return doc_id if doc_id >= 1 else None
+
+
 @dataclass
 class HeuristicProposeResult:
     created: list[DocumentEdge] = field(default_factory=list)
@@ -189,7 +204,11 @@ class DocumentGraphHeuristicProposeService:
             )
 
         # --- 4) Regex citations from chunks → references + quote_hash ---
-        for proposal in await self._regex_citation_proposals(source, tenant_id=tenant_id):
+        citation_proposals, unresolved = await self._regex_citation_proposals(
+            source, tenant_id=tenant_id
+        )
+        result.skipped_unresolved += unresolved
+        for proposal in citation_proposals:
             await _try_create(
                 dst_id=proposal["dst_document_id"],
                 edge_type=DocumentEdgeType.REFERENCES,
@@ -400,13 +419,16 @@ class DocumentGraphHeuristicProposeService:
             raw: list[tuple[int, float]] = []
             for hit in vector_results:
                 metadata = hit.get("metadata") or {}
-                doc_id = metadata.get("document_id")
+                doc_id = _coerce_document_id(metadata.get("document_id"))
                 if doc_id is None:
                     continue
-                score = float(hit.get("score", 0.0))
+                try:
+                    score = float(hit.get("score", 0.0))
+                except (TypeError, ValueError):
+                    continue
                 # Pinecone scores are typically 0..1; clamp into confidence band.
                 confidence = max(RELATED_CONFIDENCE_VECTOR_FLOOR, min(0.85, score))
-                raw.append((int(doc_id), confidence))
+                raw.append((doc_id, confidence))
             live = await self._drop_orphaned(raw, tenant_id=tenant_id)
             for doc_id, conf in live:
                 if doc_id == source.id:
@@ -448,7 +470,7 @@ class DocumentGraphHeuristicProposeService:
         source: Document,
         *,
         tenant_id: int,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], int]:
         chunk_result = await self.db.execute(
             select(DocumentChunk)
             .where(
@@ -460,7 +482,7 @@ class DocumentGraphHeuristicProposeService:
         )
         chunks: Sequence[DocumentChunk] = list(chunk_result.scalars().all())
         if not chunks:
-            return []
+            return [], 0
 
         staged, doc_refs, pel_refs, path_ids = self._stage_citation_matches(chunks)
         ref_to_id, pel_to_id, live_path_ids = await self._resolve_citation_lookups(
@@ -576,9 +598,10 @@ class DocumentGraphHeuristicProposeService:
         pel_to_id: dict[str, int],
         live_path_ids: set[int],
         tip_version: dict[int, tuple[int, str]],
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], int]:
         proposals: list[dict[str, Any]] = []
         seen_dst: set[int] = set()
+        skipped_unresolved = 0
         for chunk, match in staged:
             dst_id: Optional[int] = None
             if match.kind == "doc_ref" and match.resolved_reference:
@@ -589,7 +612,11 @@ class DocumentGraphHeuristicProposeService:
                 if match.resolved_document_id in live_path_ids:
                     dst_id = match.resolved_document_id
 
-            if dst_id is None or dst_id == source_id or dst_id in seen_dst:
+            if dst_id is None:
+                # Citation extracted but no live library document resolved.
+                skipped_unresolved += 1
+                continue
+            if dst_id == source_id or dst_id in seen_dst:
                 continue
             seen_dst.add(dst_id)
 
@@ -610,7 +637,7 @@ class DocumentGraphHeuristicProposeService:
             )
             if len(proposals) >= 15:
                 break
-        return proposals
+        return proposals, skipped_unresolved
 
     async def _drop_orphaned(
         self,
