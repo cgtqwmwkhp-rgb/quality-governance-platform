@@ -76,7 +76,13 @@ class DocumentGraphIsoReverseService:
                 pinned_document_version_id=pinned_id,
                 tip_document_version_id=tip_id,
             )
-            status_val = link.status.value if hasattr(link.status, "value") else link.status
+            status = link.status
+            if status is None:
+                status_val = None
+            elif hasattr(status, "value"):
+                status_val = status.value
+            else:
+                status_val = status
             documents.append(
                 {
                     "document_id": doc_id,
