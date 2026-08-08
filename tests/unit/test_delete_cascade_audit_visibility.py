@@ -13,7 +13,7 @@ issues the per-row DELETE, which requires a mapped relationship whose cascade
 includes ``delete`` and which does not set ``passive_deletes=True``. Every pair
 below fails that test, so the removal happens with no Python event:
 
-* 73 pairs have no relationship mapped from the parent at all.
+* 82 pairs have no relationship mapped from the parent at all.
 * 5 have a relationship without ``delete`` in its cascade — SQLAlchemy will try
   to de-associate the children instead of deleting them, so still no per-child
   delete event (and on a NOT NULL foreign key that attempt errors).
@@ -76,6 +76,7 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("document_categories", "pel_doc_ref_counters"),
         ("document_discussion_threads", "document_discussion_messages"),
         ("documents", "document_edges"),
+        ("documents", "job_cell_documents"),
         ("documents", "library_document_access_logs"),
         ("documents", "library_review_packs"),
         ("driver_profiles", "driver_acknowledgements"),
@@ -97,6 +98,15 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         # so this census could not see it. 20260908_soa_align made the model say
         # what the database has always done, which is what surfaced the pair.
         ("iso27001_controls", "soa_control_entries"),
+        # JL-1 (ADR-0022) axes. The cells and their document memberships are
+        # derived structure, not authored records, so no relationship is mapped
+        # from the axis parents and PostgreSQL removes them on its own.
+        ("job_cells", "job_cell_documents"),
+        ("job_lanes", "job_cells"),
+        ("job_steps", "job_cells"),
+        ("job_types", "job_cells"),
+        ("job_types", "job_lanes"),
+        ("job_types", "job_steps"),
         ("management_reviews", "management_review_inputs"),
         ("near_misses", "near_miss_running_sheet_entries"),
         ("policies", "policy_acknowledgment_requirements"),
