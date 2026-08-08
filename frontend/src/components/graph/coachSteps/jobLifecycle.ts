@@ -19,7 +19,7 @@ export const JOB_LIFECYCLE_COACH: GraphCoachSurfaceDefinition = {
     {
       id: 'axes',
       title: 'Axes',
-      body: 'Confirm steps and departments (or start from a template). Cells hold library document references only — never a second document store.',
+      body: 'Confirm lanes and steps (or start from a template). Cells hold library document references only — never a second document store. Lanes are process axes, not departments.',
     },
     {
       id: 'attach',

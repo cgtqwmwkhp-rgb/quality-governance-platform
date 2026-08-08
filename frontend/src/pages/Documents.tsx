@@ -217,6 +217,7 @@ export default function Documents() {
   const documentGraphEnabled = useFeatureFlag('document_graph')
   const dndProposeEnabled = useFeatureFlag('document_graph_dnd_propose')
   const structureMapEnabled = useFeatureFlag('document_graph_structure_map')
+  const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
   const libraryDragEnabled = shouldEnableLibraryDocumentDrag(dndProposeEnabled)
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
@@ -652,6 +653,14 @@ export default function Documents() {
                 <Link to="/documents/structure" data-testid="documents-structure-map-cta">
                   <GitBranch size={18} className="mr-2" />
                   {t('nav.document_structure_map', { defaultValue: 'Structure map' })}
+                </Link>
+              </Button>
+            ) : null}
+            {jobLifecycleEnabled ? (
+              <Button variant="outline" asChild>
+                <Link to="/job-lifecycle" data-testid="documents-job-lifecycle-cta">
+                  <GitBranch size={18} className="mr-2" />
+                  {t('nav.job_lifecycle', { defaultValue: 'Job lifecycle' })}
                 </Link>
               </Button>
             ) : null}

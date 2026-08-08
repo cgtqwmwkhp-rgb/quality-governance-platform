@@ -26,6 +26,7 @@ import { createComplianceScheduleApi } from './complianceScheduleClient'
 import { createComplianceScheduleFraOcrApi } from './complianceScheduleFraOcrClient'
 import { createDocumentGraphApi } from './documentGraphClient'
 import { createEntity360Api } from './entity360Client'
+import { createJobLifecycleApi } from './jobLifecycleClient'
 import { createCaseClosureApi } from './caseClosureClient'
 import { createRisksApi } from './risksClient'
 import { createStandardsApi } from './standardsClient'
@@ -1123,6 +1124,15 @@ export type {
   Entity360SourceStatus,
   ImpactBundle,
 } from './entity360Client'
+
+// ============ Job Lifecycle API (JL-1 / JL-2 / ADR-0022) ============
+export const jobLifecycleApi = createJobLifecycleApi(api)
+export type {
+  JobCell,
+  JobLane,
+  JobStep,
+  JobType,
+} from './jobLifecycleClient'
 
 // ============ Case closure validation (shared by the four registers) ============
 export const caseClosureApi = createCaseClosureApi(api)

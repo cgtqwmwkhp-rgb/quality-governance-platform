@@ -173,7 +173,7 @@ describe('Layout', () => {
           '/compliance-automation',
         ],
       ],
-      ['nav.risk_improvement', ['/risk-register']],
+      ['nav.risk_improvement', ['/risk-register', '/job-lifecycle']],
       [
         'nav.insights',
         ['/analytics', '/calendar', '/exports'],
