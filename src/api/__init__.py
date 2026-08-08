@@ -55,6 +55,7 @@ from src.api.routes import (
     investigation_templates,
     investigations,
     iso27001,
+    job_lifecycle,
     kri,
     legal_holds,
     library_review,
@@ -133,6 +134,11 @@ router.include_router(
     entity_360.router,
     prefix="/entity-360",
     tags=["Entity 360"],
+)
+router.include_router(
+    job_lifecycle.router,
+    prefix="/job-lifecycle",
+    tags=["Job Lifecycle"],
 )
 # Export Center — sync CSV catalog + download (PX-160). No export_jobs this wave.
 router.include_router(exports.router, prefix="/exports", tags=["Export Center"])

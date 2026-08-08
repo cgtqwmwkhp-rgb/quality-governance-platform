@@ -118,6 +118,9 @@ from src.domain.models.document_control import (
 # Doc Graph (ADR-0021 Wave 0)
 from src.domain.models.document_graph import DocumentEdge, DocumentEdgeMethod, DocumentEdgeStatus, DocumentEdgeType
 
+# Job Lifecycle (ADR-0022 / JL-1)
+from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobLane, JobStep, JobType
+
 # Governance Library taxonomy (Wave W0)
 from src.domain.models.document_library import DocumentCategory, DocumentTag, PelDocRefCounter
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
@@ -445,6 +448,12 @@ __all__ = [
     "DocumentEdgeType",
     "DocumentEdgeStatus",
     "DocumentEdgeMethod",
+    # Job Lifecycle (ADR-0022 / JL-1)
+    "JobType",
+    "JobLane",
+    "JobStep",
+    "JobCell",
+    "JobCellDocument",
     # Governance Library review packs (Wave W3)
     "LibraryReviewPack",
     "LibraryRegulatoryFinding",
