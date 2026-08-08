@@ -176,6 +176,7 @@ def _create_tables() -> None:
         op.create_index("ix_job_types_tenant_id", "job_types", ["tenant_id"])
         op.create_index("ix_job_types_tenant_sort", "job_types", ["tenant_id", "sort_order"])
         op.create_index("ix_job_types_deleted_at", "job_types", ["deleted_at"])
+        op.create_index("ix_job_types_created_at", "job_types", ["created_at"])
 
     if not _table_exists("job_lanes"):
         op.create_table(
@@ -213,6 +214,7 @@ def _create_tables() -> None:
             ["tenant_id", "job_type_id", "sort_order"],
         )
         op.create_index("ix_job_lanes_deleted_at", "job_lanes", ["deleted_at"])
+        op.create_index("ix_job_lanes_created_at", "job_lanes", ["created_at"])
 
     if not _table_exists("job_steps"):
         op.create_table(
@@ -250,6 +252,7 @@ def _create_tables() -> None:
             ["tenant_id", "job_type_id", "sort_order"],
         )
         op.create_index("ix_job_steps_deleted_at", "job_steps", ["deleted_at"])
+        op.create_index("ix_job_steps_created_at", "job_steps", ["created_at"])
 
     if not _table_exists("job_cells"):
         op.create_table(
@@ -283,6 +286,7 @@ def _create_tables() -> None:
         op.create_index("ix_job_cells_tenant_lane", "job_cells", ["tenant_id", "lane_id"])
         op.create_index("ix_job_cells_tenant_step", "job_cells", ["tenant_id", "step_id"])
         op.create_index("ix_job_cells_deleted_at", "job_cells", ["deleted_at"])
+        op.create_index("ix_job_cells_created_at", "job_cells", ["created_at"])
 
     if not _table_exists("job_cell_documents"):
         op.create_table(
@@ -322,6 +326,7 @@ def _create_tables() -> None:
             "job_cell_documents",
             ["tenant_id", "cell_id", "sort_order"],
         )
+        op.create_index("ix_job_cell_documents_created_at", "job_cell_documents", ["created_at"])
 
 
 def upgrade() -> None:

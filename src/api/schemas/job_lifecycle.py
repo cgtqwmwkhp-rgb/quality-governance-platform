@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class JobTypeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     code: str = Field(..., min_length=1, max_length=64)
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -17,6 +19,8 @@ class JobTypeCreate(BaseModel):
 
 
 class JobTypeUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     sort_order: Optional[int] = None
@@ -43,6 +47,8 @@ class JobTypeListResponse(BaseModel):
 
 
 class JobLaneCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     code: str = Field(..., min_length=1, max_length=64)
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -51,6 +57,8 @@ class JobLaneCreate(BaseModel):
 
 
 class JobLaneUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     sort_order: Optional[int] = None
@@ -78,6 +86,8 @@ class JobLaneListResponse(BaseModel):
 
 
 class JobStepCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     code: str = Field(..., min_length=1, max_length=64)
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -86,6 +96,8 @@ class JobStepCreate(BaseModel):
 
 
 class JobStepUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     sort_order: Optional[int] = None
@@ -114,6 +126,8 @@ class JobStepListResponse(BaseModel):
 
 class JobCellDocumentsPut(BaseModel):
     """Replace the cell's ``library_document_id[]`` membership."""
+
+    model_config = ConfigDict(extra="forbid")
 
     library_document_ids: List[int] = Field(default_factory=list)
 

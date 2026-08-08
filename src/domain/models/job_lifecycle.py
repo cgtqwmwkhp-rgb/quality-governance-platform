@@ -184,10 +184,7 @@ class JobCell(Base, TimestampMixin):
         return self.deleted_at is not None
 
     def __repr__(self) -> str:
-        return (
-            f"<JobCell(id={self.id}, type={self.job_type_id}, "
-            f"lane={self.lane_id}, step={self.step_id})>"
-        )
+        return f"<JobCell(id={self.id}, type={self.job_type_id}, lane={self.lane_id}, step={self.step_id})>"
 
 
 class JobCellDocument(Base, TimestampMixin):
@@ -221,10 +218,7 @@ class JobCellDocument(Base, TimestampMixin):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
 
     def __repr__(self) -> str:
-        return (
-            f"<JobCellDocument(id={self.id}, cell={self.cell_id}, "
-            f"doc={self.library_document_id})>"
-        )
+        return f"<JobCellDocument(id={self.id}, cell={self.cell_id}, doc={self.library_document_id})>"
 
 
 __all__ = [

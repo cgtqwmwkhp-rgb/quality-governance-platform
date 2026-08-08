@@ -13,9 +13,9 @@ from src.core.config import settings
 from src.domain.authz.catalogue import ADMIN_ROLE_PERMISSIONS, ENFORCED_PERMISSIONS
 from src.domain.features.catalogue import CLIENT_FEATURES_BY_KEY
 from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobLane, JobStep, JobType
+from src.domain.services.entity_360.permissions import HOP_READ_PERMISSIONS
 from src.domain.services.entity_360.producers.job_lifecycle import JobLifecycleProducer
 from src.domain.services.entity_360.registry import all_producers, ensure_default_producers, reset_producers
-from src.domain.services.entity_360.permissions import HOP_READ_PERMISSIONS
 from src.infrastructure.middleware.tenant_context import RLS_TABLES
 
 

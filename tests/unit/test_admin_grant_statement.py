@@ -107,6 +107,7 @@ def test_the_document_includes_the_75_to_84_upgrade(document: str) -> None:
     assert "job:read" in document
     assert "job:author" in document
 
+
 def test_the_statement_grants_nothing_outside_the_catalogue(granted_tokens: list[str]) -> None:
     """A token nothing checks would make the role look more restricted than it is."""
     ungrantable = sorted(set(granted_tokens) - GRANTABLE_PERMISSIONS)
