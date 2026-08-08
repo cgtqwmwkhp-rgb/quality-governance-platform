@@ -274,10 +274,10 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         settings_attr="job_lifecycle_enabled",
         kill_switch_key=None,
         enabling_flag_key=None,
-        required_permission="document:read",
+        required_permission="job:read",
         reason=(
-            "Gates Job lifecycle surfaces. Default off; pre-registered for later job "
-            "lifecycle slices — not implemented in X-0."
+            "Gates Job Lifecycle axes API + surfaces (JL-1). Default off; "
+            "enable via deploy vars when baking — ADR-0022 process vocab."
         ),
     ),
     ClientFeature(

@@ -172,6 +172,8 @@ _ADMIN_PERMS = ",".join(
         "audit_template:read",
         "audit_template:update",
         "audit_template:delete",
+        "job:read",
+        "job:author",
     ]
 )
 

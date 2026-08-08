@@ -93,6 +93,8 @@ ENFORCED_PERMISSIONS: frozenset[str] = frozenset(
         "investigation:update",
         "investigations:comments:read_deleted",
         "investigations:view_all",
+        "job:author",
+        "job:read",
         "kri:create",
         "kri:delete",
         "kri:update",
