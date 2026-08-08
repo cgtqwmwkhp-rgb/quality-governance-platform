@@ -101,6 +101,7 @@ export default function Layout({
   const canManageUsers = isSuperuser()
   const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
   const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
+  const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
   const canAccessComplianceSchedule = complianceScheduleEnabled && canAccessAdvancedNav
 
   const hubs = [
@@ -229,7 +230,18 @@ export default function Layout({
       id: 'risk-improvement',
       title: t('nav.risk_improvement'),
       icon: Target,
-      items: [{ path: '/risk-register', icon: Target, label: t('nav.risk_register') }],
+      items: [
+        { path: '/risk-register', icon: Target, label: t('nav.risk_register') },
+        ...(jobLifecycleEnabled
+          ? [
+              {
+                path: '/job-lifecycle',
+                icon: GitBranch,
+                label: t('nav.job_lifecycle', { defaultValue: 'Job lifecycle' }),
+              },
+            ]
+          : []),
+      ],
     },
     {
       id: 'insights',
