@@ -528,8 +528,13 @@ class JobLifecycleService:
                     detail="audit_outcome link already exists for this finding on the cell",
                 )
         elif kind_n == "app":
+            if not entity_type or entity_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="app links require entity_type and entity_id",
+                )
             # Resolve once so unknown types still get a stable fallback href
-            _ = href_for(str(entity_type), int(entity_id))  # type: ignore[arg-type]
+            _ = href_for(entity_type, entity_id)
         row = JobCellLink(
             tenant_id=tenant_id,
             cell_id=cell.id,
