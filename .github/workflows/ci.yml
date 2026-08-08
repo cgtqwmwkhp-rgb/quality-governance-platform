@@ -2300,6 +2300,12 @@ jobs:
       - name: Forbid new owned nullable tenant_id (WCS C-01 Phase 1)
         run: python3 scripts/validate_tenant_id_not_null.py
 
+      # Library F-3 / L-49: fail parallel document homes, coverage/framework/scheme
+      # twins, documents-like free-text standards columns, and SPA document URLs
+      # built outside href_registry (baseline: docs/governance/library_anti_dupe_baseline.json).
+      - name: Library anti-dupe gate (F-3 / L-49)
+        run: python3 scripts/validate_library_anti_dupe.py
+
       # Board B-10 / w4-extra-forbid: pin write-schema extra="forbid" coverage.
       # Guard 2's KNOWN_LAX allowlist blocks unrecorded new open schemas; this
       # ratchet additionally fails when the forbid floor falls or the open

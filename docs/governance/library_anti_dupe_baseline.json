@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "gate": "F-3 / L-49",
+  "description": "Allowlists for the Library anti-dupe CI gate. New file-home tables, coverage/framework/scheme twin tables, documents-like free-text standards columns, and Python SPA document URL builders outside href_registry must not grow without an explicit baseline edit in the same PR.",
+  "file_home_tables": {
+    "carbon_evidence": "Planet Mark evidence home (converge later via F-7 / W-I′)",
+    "controlled_document_versions": "Control-layer version blobs (fold later; not a new SoT)",
+    "controlled_documents": "Control-layer file pointer (fold later; not a new SoT)",
+    "document_versions": "Library DocumentVersion file SoT",
+    "documents": "Library Document file SoT",
+    "evidence_assets": "Investigation / case evidence blobs (link via documents.id later)",
+    "policy_versions": "Legacy policy version file pointer (converge later)"
+  },
+  "coverage_twin_table_allowlist": {
+    "_comment": "Tables whose names match *coverage* / *framework* / *scheme*. Empty on tip — CEL SoT is compliance_evidence_links (does not match). Add only with owner + reason if a legitimate non-twin lands."
+  },
+  "documents_like_freetext_allowlist": {
+    "_comment": "table.column pairs of free-text standards/clause columns on documents-like models. Empty on tip — use CEL / clauses FK instead."
+  },
+  "document_url_builder_allowlist": [
+    "src/domain/services/href_registry.py",
+    "src/domain/services/search_paths.py",
+    "src/domain/services/assurance_cert_shelf_service.py"
+  ]
+}
