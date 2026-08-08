@@ -428,16 +428,20 @@ export default function JobLifecycle() {
         setFreshnessError(null)
       })
       .catch((err) => {
+        if (cancelled) return
         // Drop the claim on these ids so a later render can retry rather than
         // leaving them permanently blank.
         for (const id of wanted) freshnessAskedRef.current.delete(id)
-        if (!cancelled) setFreshnessError(getApiErrorMessage(err))
+        setFreshnessError(getApiErrorMessage(err))
       })
       .finally(() => {
         if (!cancelled) setFreshnessLoading(false)
       })
     return () => {
       cancelled = true
+      // The cancelled response is ignored, so release its ids for the next
+      // active effect to request again.
+      for (const id of wanted) freshnessAskedRef.current.delete(id)
     }
   }, [freshnessOn, shouldFetch, freshnessIds])
 
