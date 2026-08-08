@@ -6,6 +6,19 @@ export { RelationshipsMapView } from './RelationshipsMapView'
 export type { RelationshipsMapViewProps } from './RelationshipsMapView'
 export { GraphCoach } from './GraphCoach'
 export type { GraphCoachProps } from './GraphCoach'
+export {
+  STRUCTURE_MAP_DEFAULT_ORIENTATION,
+  buildStructureMapLabels,
+  buildStructureMapModel,
+  dedupeDocumentEdgesById,
+  filterConfirmedImplementsEdges,
+  findStructureMapRootIds,
+  resolveStructureMapFocusId,
+  shouldFetchDocumentStructureMap,
+  shouldShowDocumentStructureMap,
+  structureMapEmptyCopy,
+} from './documentStructureMapHelpers'
+export type { StructureMapDocumentRef } from './documentStructureMapHelpers'
 export { GraphOrientationToggle } from './GraphOrientationToggle'
 export type { GraphOrientationToggleProps } from './GraphOrientationToggle'
 export {
