@@ -22,6 +22,7 @@ const flagState: Record<string, boolean> = {
   document_graph_dnd_propose: false,
   graph_coach: false,
   entity_360: false,
+  job_cell_links: false,
 }
 
 vi.mock('../../api/client', () => ({
@@ -41,6 +42,10 @@ vi.mock('../../api/client', () => ({
 
 vi.mock('../../hooks/useFeatureFlag', () => ({
   useFeatureFlag: (key: string) => Boolean(flagState[key]),
+}))
+
+vi.mock('../../components/jobLifecycle/JobCellLinks', () => ({
+  default: () => <div data-testid="job-cell-links-stub" />,
 }))
 
 vi.mock('../../components/graph/Entity360Strip', () => ({
@@ -78,6 +83,7 @@ describe('JobLifecycle flag gating', () => {
     flagState.document_graph_dnd_propose = false
     flagState.graph_coach = false
     flagState.entity_360 = false
+    flagState.job_cell_links = false
     resetCoach('job_lifecycle', localStorage)
   })
 
