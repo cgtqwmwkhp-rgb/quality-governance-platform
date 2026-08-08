@@ -97,11 +97,17 @@ describe('graphCoachHelpers', () => {
 })
 
 describe('coachSteps registry', () => {
-  it('registers document_relationships and job_lifecycle surfaces', () => {
-    expect(GRAPH_COACH_SURFACES).toEqual(['document_relationships', 'job_lifecycle'])
+  it('registers document_relationships, structure map, and job_lifecycle surfaces', () => {
+    expect(GRAPH_COACH_SURFACES).toEqual([
+      'document_relationships',
+      'document_structure_map',
+      'job_lifecycle',
+    ])
     expect(getCoachSteps('document_relationships')).toHaveLength(5)
+    expect(getCoachSteps('document_structure_map')).toHaveLength(5)
     expect(getCoachSteps('job_lifecycle')).toHaveLength(5)
     expect(getCoachSurfaceDefinition('document_relationships').heading).toMatch(/Document/i)
+    expect(getCoachSurfaceDefinition('document_structure_map').heading).toMatch(/Structure/i)
   })
 
   it('never calls Doc Graph the golden thread', () => {

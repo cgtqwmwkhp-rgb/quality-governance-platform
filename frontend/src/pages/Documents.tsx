@@ -24,6 +24,7 @@ import {
   Brain,
   Zap,
   Megaphone,
+  GitBranch,
 } from 'lucide-react'
 import api, { documentCampaignApi, getApiErrorMessage, type CampaignComplianceRow } from '../api/client'
 import { toast } from '../contexts/ToastContext'
@@ -215,6 +216,7 @@ export default function Documents() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const documentGraphEnabled = useFeatureFlag('document_graph')
   const dndProposeEnabled = useFeatureFlag('document_graph_dnd_propose')
+  const structureMapEnabled = useFeatureFlag('document_graph_structure_map')
   const libraryDragEnabled = shouldEnableLibraryDocumentDrag(dndProposeEnabled)
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
@@ -645,6 +647,14 @@ export default function Documents() {
         activeView="documents"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {structureMapEnabled ? (
+              <Button variant="outline" asChild>
+                <Link to="/documents/structure" data-testid="documents-structure-map-cta">
+                  <GitBranch size={18} className="mr-2" />
+                  {t('nav.document_structure_map', { defaultValue: 'Structure map' })}
+                </Link>
+              </Button>
+            ) : null}
             <Button variant="outline" asChild>
               <Link to="/documents/campaigns" data-testid="documents-campaigns-cta">
                 <Megaphone size={18} className="mr-2" />

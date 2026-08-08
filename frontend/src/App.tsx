@@ -43,6 +43,7 @@ const Standards = lazy(() => import('./pages/Standards'))
 const Actions = lazy(() => import('./pages/Actions'))
 const ActionDetail = lazy(() => import('./pages/ActionDetail'))
 const Documents = lazy(() => import('./pages/Documents'))
+const DocumentStructureMap = lazy(() => import('./pages/DocumentStructureMap'))
 const DocumentDetail = lazy(() => import('./pages/DocumentDetail'))
 const DocumentControl = lazy(() => import('./pages/DocumentControl'))
 const MyReading = lazy(() => import('./pages/MyReading'))
@@ -412,6 +413,7 @@ function App() {
                     </RequireRole>
                   }
                 />
+                <Route path="documents/structure" element={<DocumentStructureMap />} />
                 <Route path="documents/:id" element={<DocumentDetail />} />
                 <Route path="document-control" element={<DocumentControl />} />
                 <Route path="my-reading" element={<MyReading />} />

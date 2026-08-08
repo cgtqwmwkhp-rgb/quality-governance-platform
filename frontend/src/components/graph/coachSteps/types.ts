@@ -5,7 +5,10 @@
  * the Golden Thread. Never auto-confirm edges or invent ISO coverage %.
  */
 
-export type GraphCoachSurface = 'document_relationships' | 'job_lifecycle'
+export type GraphCoachSurface =
+  | 'document_relationships'
+  | 'document_structure_map'
+  | 'job_lifecycle'
 
 export interface GraphCoachStep {
   id: string
