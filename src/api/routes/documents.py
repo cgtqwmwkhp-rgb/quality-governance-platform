@@ -37,7 +37,6 @@ from src.domain.models.document import (
     LibraryDocumentAccessLog,
     SensitivityLevel,
 )
-from src.infrastructure.file_validation import validate_upload as shared_validate_upload
 from src.domain.models.location import Location
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
@@ -65,6 +64,7 @@ from src.domain.services.document_version_service import (
 )
 from src.domain.services.index_job_service import IndexJobService, dispatch_index_job, vector_index_configured
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.file_validation import validate_upload as shared_validate_upload
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
 
