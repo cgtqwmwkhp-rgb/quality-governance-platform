@@ -2,7 +2,7 @@
  * DocumentStructureMap page — flag-off + coach/map mount smoke (DG-3).
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import DocumentStructureMap from '../../../pages/DocumentStructureMap'
 import { resetCoach } from '../graphCoachHelpers'
@@ -115,5 +115,112 @@ describe('DocumentStructureMap flag gating', () => {
       expect(listEdges).toHaveBeenCalled()
     })
     expect(await screen.findByTestId('relationships-map-view')).toBeInTheDocument()
+  })
+
+  it('loads every page with the API-supported page size', async () => {
+    flagState.document_graph = true
+    flagState.document_graph_structure_map = true
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      title: `Document ${index + 1}`,
+    }))
+    apiGet.mockImplementation((url: string) => {
+      if (url.includes('page=1&')) {
+        return Promise.resolve({
+          data: { items: firstPage, total: 101, page: 1, page_size: 100, pages: 2 },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          items: [{ id: 101, title: 'Document 101' }],
+          total: 101,
+          page: 2,
+          page_size: 100,
+          pages: 2,
+        },
+      })
+    })
+    listEdges.mockResolvedValue({ data: { items: [], total: 0 } })
+
+    renderAt()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('structure-map-doc-count')).toHaveTextContent('101 documents')
+    })
+    expect(apiGet).toHaveBeenNthCalledWith(1, '/api/v1/documents/?page=1&page_size=100')
+    expect(apiGet).toHaveBeenNthCalledWith(2, '/api/v1/documents/?page=2&page_size=100')
+    expect(screen.getByTestId('structure-map-doc-101')).toBeInTheDocument()
+  })
+
+  it('lists roots first and gives filtered-empty copy', async () => {
+    flagState.document_graph = true
+    flagState.document_graph_structure_map = true
+    apiGet.mockResolvedValue({
+      data: {
+        items: [
+          { id: 20, title: 'Reporting SOP' },
+          { id: 10, title: 'IM Policy' },
+        ],
+      },
+    })
+    listEdges.mockImplementation((documentId: number) =>
+      Promise.resolve({
+        data: {
+          items:
+            documentId === 20
+              ? [
+                  {
+                    id: 1,
+                    tenant_id: 1,
+                    src_document_id: 20,
+                    dst_document_id: 10,
+                    edge_type: 'implements',
+                    is_primary_parent: true,
+                    status: 'confirmed',
+                    created_method: 'manual',
+                    created_at: '2026-08-01T10:00:00Z',
+                    updated_at: '2026-08-01T10:00:00Z',
+                  },
+                ]
+              : [],
+          total: documentId === 20 ? 1 : 0,
+        },
+      }),
+    )
+
+    renderAt()
+
+    const list = await screen.findByTestId('structure-map-doc-list')
+    await waitFor(() => {
+      expect(list.querySelector('button')).toHaveAttribute('data-testid', 'structure-map-doc-10')
+    })
+    fireEvent.change(screen.getByTestId('structure-map-filter'), {
+      target: { value: 'does-not-exist' },
+    })
+    expect(await screen.findByText('No documents match your filter.')).toBeInTheDocument()
+  })
+
+  it('surfaces partial edge fetch failures without discarding successful results', async () => {
+    flagState.document_graph = true
+    flagState.document_graph_structure_map = true
+    apiGet.mockResolvedValue({
+      data: {
+        items: [
+          { id: 10, title: 'IM Policy' },
+          { id: 20, title: 'Reporting SOP' },
+        ],
+      },
+    })
+    listEdges.mockImplementation((documentId: number) => {
+      if (documentId === 20) return Promise.reject(new Error('edge service unavailable'))
+      return Promise.resolve({ data: { items: [], total: 0 } })
+    })
+
+    renderAt()
+
+    expect(await screen.findByTestId('structure-map-error')).toHaveTextContent(
+      'Failed to load confirmed implements edges for 1 of 2 documents: edge service unavailable',
+    )
+    expect(screen.getByTestId('structure-map-doc-10')).toBeInTheDocument()
   })
 })

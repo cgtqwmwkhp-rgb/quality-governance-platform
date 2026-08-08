@@ -15,11 +15,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Input } from '../components/ui/Input'
-import {
-  GraphCoach,
-  GraphOrientationToggle,
-  RelationshipsMapView,
-} from '../components/graph'
+import { GraphCoach, GraphOrientationToggle, RelationshipsMapView } from '../components/graph'
 import {
   STRUCTURE_MAP_DEFAULT_ORIENTATION,
   buildStructureMapLabels,
@@ -46,14 +42,19 @@ interface LibraryDocumentRow {
   document_type?: string | null
 }
 
+interface LibraryDocumentPage {
+  items?: LibraryDocumentRow[]
+  total?: number
+  page?: number
+  page_size?: number
+  pages?: number
+}
+
 export default function DocumentStructureMap() {
   const structureMapEnabled = useFeatureFlag('document_graph_structure_map')
   const documentGraphEnabled = useFeatureFlag('document_graph')
   const visible = shouldShowDocumentStructureMap(structureMapEnabled)
-  const shouldFetch = shouldFetchDocumentStructureMap(
-    documentGraphEnabled,
-    structureMapEnabled,
-  )
+  const shouldFetch = shouldFetchDocumentStructureMap(documentGraphEnabled, structureMapEnabled)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const focusParam = Number(searchParams.get('focus'))
@@ -91,12 +92,20 @@ export default function DocumentStructureMap() {
 
   const filteredDocuments = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    if (!q) return documents
-    return documents.filter((doc) => {
-      const hay = `${doc.title} ${doc.reference ?? ''} ${doc.documentType ?? ''}`.toLowerCase()
-      return hay.includes(q)
+    const filtered = q
+      ? documents.filter((doc) => {
+          const hay = `${doc.title} ${doc.reference ?? ''} ${doc.documentType ?? ''}`.toLowerCase()
+          return hay.includes(q)
+        })
+      : documents
+    const rootIdSet = new Set(rootIds)
+    return filtered.slice().sort((a, b) => {
+      const aIsRoot = rootIdSet.has(a.id)
+      const bIsRoot = rootIdSet.has(b.id)
+      if (aIsRoot === bIsRoot) return 0
+      return aIsRoot ? -1 : 1
     })
-  }, [documents, filter])
+  }, [documents, filter, rootIds])
 
   const loadLibrary = useCallback(async () => {
     if (!shouldFetch) {
@@ -111,12 +120,28 @@ export default function DocumentStructureMap() {
     setLoadingDocs(true)
     setError(null)
     try {
-      const response = await api.get<{ items?: LibraryDocumentRow[] } | LibraryDocumentRow[]>(
-        '/api/v1/documents/?page=1&page_size=200',
-      )
-      const raw = response.data
-      const items = Array.isArray(raw) ? raw : (raw.items ?? [])
-      const mapped: StructureMapDocumentRef[] = items.map((row) => ({
+      const allItems: LibraryDocumentRow[] = []
+      const pageSize = 100
+      let page = 1
+      while (true) {
+        const response = await api.get<LibraryDocumentPage | LibraryDocumentRow[]>(
+          `/api/v1/documents/?page=${page}&page_size=${pageSize}`,
+        )
+        const raw = response.data
+        const items = Array.isArray(raw) ? raw : (raw.items ?? [])
+        allItems.push(...items)
+
+        if (Array.isArray(raw)) break
+        const totalPages =
+          raw.pages ??
+          (raw.total != null
+            ? Math.ceil(raw.total / Math.max(1, raw.page_size ?? pageSize))
+            : undefined)
+        if (totalPages != null ? page >= totalPages : items.length < pageSize) break
+        page += 1
+      }
+
+      const mapped: StructureMapDocumentRef[] = allItems.map((row) => ({
         id: row.id,
         title: row.title?.trim() || `Document #${row.id}`,
         reference: row.reference_number ?? null,
@@ -150,10 +175,19 @@ export default function DocumentStructureMap() {
           ),
         )
         const collected: DocumentEdge[] = []
+        const failures: string[] = []
         for (const result of results) {
-          if (result.status !== 'fulfilled') continue
-          const items = result.value.data?.items ?? []
-          collected.push(...items)
+          if (result.status === 'fulfilled') {
+            const items = result.value.data?.items ?? []
+            collected.push(...items)
+          } else {
+            failures.push(getApiErrorMessage(result.reason))
+          }
+        }
+        if (failures.length > 0) {
+          setError(
+            `Failed to load confirmed implements edges for ${failures.length} of ${results.length} documents: ${failures[0]}`,
+          )
         }
         setEdges(dedupeDocumentEdgesById(filterConfirmedImplementsEdges(collected)))
       } catch (err) {
@@ -225,9 +259,8 @@ export default function DocumentStructureMap() {
             <Badge variant="outline">Confirmed implements</Badge>
           </div>
           <p className="text-muted-foreground max-w-2xl">
-            Whole-library implements explorer — pick a focus document to walk Policy →
-            Procedure → SOP on the shared map. Doc Graph spine, not document-control
-            lineage.
+            Whole-library implements explorer — pick a focus document to walk Policy → Procedure →
+            SOP on the shared map. Doc Graph spine, not document-control lineage.
           </p>
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             <span data-testid="structure-map-doc-count">{documents.length} documents</span>
@@ -280,10 +313,15 @@ export default function DocumentStructureMap() {
               aria-label="Filter library documents"
               data-testid="structure-map-filter"
             />
-            <ul className="max-h-[28rem] space-y-1 overflow-y-auto" data-testid="structure-map-doc-list">
+            <ul
+              className="max-h-[28rem] space-y-1 overflow-y-auto"
+              data-testid="structure-map-doc-list"
+            >
               {filteredDocuments.length === 0 ? (
                 <li className="text-sm text-muted-foreground px-1 py-2">
-                  {structureMapEmptyCopy(documents.length > 0)}
+                  {filter.trim()
+                    ? 'No documents match your filter.'
+                    : structureMapEmptyCopy(documents.length > 0)}
                 </li>
               ) : (
                 filteredDocuments.map((doc) => {
@@ -348,10 +386,7 @@ export default function DocumentStructureMap() {
             {focusDoc ? (
               <div className="pt-1">
                 <Button variant="outline" size="sm" asChild>
-                  <Link
-                    to={`/documents/${focusDoc.id}`}
-                    data-testid="structure-map-open-focus"
-                  >
+                  <Link to={`/documents/${focusDoc.id}`} data-testid="structure-map-open-focus">
                     Open {focusDoc.title} in Document Detail
                   </Link>
                 </Button>
