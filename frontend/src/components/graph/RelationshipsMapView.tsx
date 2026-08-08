@@ -5,8 +5,8 @@
  * Optional Library→hub DnD propose (flag-gated) never auto-confirms.
  * Never calls Doc Graph the Golden Thread.
  */
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useMemo, useState, type KeyboardEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import type { DocumentEdge } from '../../api/documentGraphClient'
 import {
   parseLibraryDocumentDrag,
@@ -47,6 +47,7 @@ export function RelationshipsMapView({
   orientation = DEFAULT_GRAPH_ORIENTATION,
 }: RelationshipsMapViewProps) {
   const [dropActive, setDropActive] = useState(false)
+  const navigate = useNavigate()
   const resolvedOrientation = resolveGraphOrientation(orientation)
 
   const model = useMemo(
@@ -122,10 +123,10 @@ export function RelationshipsMapView({
           <p className="mb-2 text-center text-xs text-muted-foreground" data-testid="relationships-map-drop-hint">
             {documentTitle} · hub · drop here to propose
           </p>
-          {renderMapBody({ model, nodeById, peerCount, documentTitle })}
+          {renderMapBody({ model, nodeById, peerCount, documentTitle, navigate })}
         </div>
       ) : (
-        renderMapBody({ model, nodeById, peerCount, documentTitle })
+        renderMapBody({ model, nodeById, peerCount, documentTitle, navigate })
       )}
 
       {peerCount > 0 ? (
@@ -160,11 +161,13 @@ function renderMapBody({
   nodeById,
   peerCount,
   documentTitle,
+  navigate,
 }: {
   model: ReturnType<typeof buildRelationshipMapModel>
   nodeById: Map<number, (typeof model.nodes)[number]>
   peerCount: number
   documentTitle: string
+  navigate: ReturnType<typeof useNavigate>
 }) {
   if (peerCount === 0) {
     return (
@@ -257,8 +260,21 @@ function renderMapBody({
                   ? 'relationships-map-hub'
                   : `relationships-map-node-${node.id}`
               }
+              {...(!node.isHub && {
+                onClick: () => navigate(node.href),
+                onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    navigate(node.href)
+                  }
+                },
+                role: 'link',
+                tabIndex: 0,
+                style: { cursor: 'pointer' },
+              })}
             >
-              {node.isHub ? body : <a href={node.href}><title>{node.label}</title>{body}</a>}
+              {!node.isHub ? <title>{node.label}</title> : null}
+              {body}
             </g>
           )
         })}
