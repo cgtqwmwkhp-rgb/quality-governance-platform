@@ -37,6 +37,8 @@ import {
   ShieldAlert,
   Webhook,
   Megaphone,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react'
 import { BrandMarkTile } from './BrandMark'
 import { useState, useEffect, useCallback, useRef, lazy, Suspense, Fragment } from 'react'
@@ -55,6 +57,7 @@ import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { isAICopilotDemoEnabled } from '../config/aiCopilotDemo'
 import { isAIIntelligenceRouteEnabled } from '../config/aiIntelligenceRoute'
 import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubHelpers'
+import { usePreferencesStore } from '../stores/usePreferencesStore'
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
@@ -95,7 +98,10 @@ export default function Layout({
   onExtendSession,
 }: LayoutProps) {
   const { t } = useTranslation()
+  const sidebarCollapsed = usePreferencesStore((state) => state.sidebarCollapsed)
+  const toggleSidebar = usePreferencesStore((state) => state.toggleSidebar)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
   const canAccessWorkforce = hasRole('admin', 'supervisor')
   const canAccessAdvancedNav = canAccessWorkforce || isSuperuser()
   const canManageUsers = isSuperuser()
@@ -237,7 +243,7 @@ export default function Layout({
               {
                 path: '/job-lifecycle',
                 icon: GitBranch,
-                label: t('nav.job_lifecycle', { defaultValue: 'Job lifecycle' }),
+                label: t('nav.job_lifecycle', { defaultValue: 'Job cycle' }),
               },
             ]
           : []),
@@ -344,6 +350,7 @@ export default function Layout({
   useEffect(() => {
     const mql = window.matchMedia(DESKTOP_MEDIA_QUERY)
     const sync = () => {
+      setIsDesktop(mql.matches)
       if (mql.matches) setSidebarOpen(false)
     }
     sync()
@@ -451,7 +458,10 @@ export default function Layout({
       <header
         aria-hidden={sidebarOpen || undefined}
         {...(sidebarOpen ? INERT_PROPS : {})}
-        className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6"
+        className={cn(
+          'fixed top-0 right-0 left-0 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6',
+          sidebarCollapsed ? 'lg:left-16' : 'lg:left-72',
+        )}
       >
         {/* Search Bar — opens overlay palette; does not navigate away */}
         <button
@@ -539,6 +549,7 @@ export default function Layout({
       <aside
         id={SIDEBAR_ID}
         ref={sidebarRef}
+        data-collapsed={sidebarCollapsed ? 'true' : undefined}
         // Only a dialog while it is the mobile drawer. On desktop it is
         // permanent navigation and must stay an ordinary complementary region.
         role={sidebarOpen ? 'dialog' : undefined}
@@ -547,6 +558,7 @@ export default function Layout({
         tabIndex={sidebarOpen ? -1 : undefined}
         className={cn(
           'fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border',
+          sidebarCollapsed && 'lg:w-16',
           'transform transition-transform duration-300 ease-in-out',
           'lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
@@ -554,10 +566,20 @@ export default function Layout({
       >
         <div className="flex flex-col h-full">
           {/* Brand — Option C: mark-dominant */}
-          <div className="p-5 border-b border-border">
-            <div className="flex items-center gap-3">
-              <BrandMarkTile size={56} />
-              <div className="min-w-0">
+          <div
+            className={cn(
+              'border-b border-border',
+              sidebarCollapsed ? 'p-3 lg:p-2' : 'p-5',
+            )}
+          >
+            <div
+              className={cn(
+                'flex items-center gap-3',
+                sidebarCollapsed && 'lg:flex-col lg:items-center lg:gap-2',
+              )}
+            >
+              <BrandMarkTile size={sidebarCollapsed ? 40 : 56} className="shrink-0" />
+              <div className={cn('min-w-0', sidebarCollapsed && 'lg:hidden')}>
                 {/* Not a heading: the shell renders on every route, so an <h1>
                     here collides with the page's own <h1> (PX-290). */}
                 <p className="text-sm font-bold text-foreground leading-snug">
@@ -567,19 +589,45 @@ export default function Layout({
                   {t('brand.company_line', 'Plantexpand Limited')}
                 </p>
               </div>
+              <button
+                type="button"
+                data-testid="nav-sidebar-collapse"
+                onClick={toggleSidebar}
+                className={cn(
+                  'hidden lg:inline-flex shrink-0 items-center justify-center rounded-lg p-2',
+                  'text-muted-foreground hover:text-foreground hover:bg-surface transition-colors',
+                  !sidebarCollapsed && 'ml-auto',
+                )}
+                {...iconOnlyControlProps(
+                  sidebarCollapsed
+                    ? t('a11y.expand_sidebar', { defaultValue: 'Expand sidebar' })
+                    : t('a11y.collapse_sidebar', { defaultValue: 'Collapse sidebar' }),
+                )}
+              >
+                {sidebarCollapsed ? (
+                  <PanelLeft className="w-5 h-5" aria-hidden="true" />
+                ) : (
+                  <PanelLeftClose className="w-5 h-5" aria-hidden="true" />
+                )}
+              </button>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 overflow-y-auto" aria-label={t('a11y.navigation_menu')}>
+          <nav
+            className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'p-2 lg:p-2' : 'p-4')}
+            aria-label={t('a11y.navigation_menu')}
+          >
             <div className="space-y-1">
               <NavLink
                 to="/dashboard"
                 onClick={() => setSidebarOpen(false)}
+                title={sidebarCollapsed ? t('nav.home') : undefined}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
                     'transition-all duration-200 group',
+                    sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
                     isActive
                       ? 'bg-primary/10 text-primary border border-primary/20'
                       : 'text-muted-foreground hover:text-foreground hover:bg-surface',
@@ -590,14 +638,22 @@ export default function Layout({
                   <>
                     <LayoutDashboard
                       className={cn(
-                        'w-5 h-5 transition-colors',
+                        'w-5 h-5 transition-colors shrink-0',
                         isActive
                           ? 'text-primary'
                           : 'text-muted-foreground group-hover:text-foreground',
                       )}
+                      aria-hidden="true"
                     />
-                    {t('nav.home')}
-                    {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                    <span className={cn(sidebarCollapsed && 'lg:sr-only')}>{t('nav.home')}</span>
+                    {isActive && (
+                      <div
+                        className={cn(
+                          'ml-auto w-1.5 h-1.5 rounded-full bg-primary',
+                          sidebarCollapsed && 'lg:hidden',
+                        )}
+                      />
+                    )}
                   </>
                 )}
               </NavLink>
@@ -611,18 +667,21 @@ export default function Layout({
                     <div className="w-full" data-testid={`nav-hub-${hub.id}`}>
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          if (sidebarCollapsed && isDesktop) return
                           setExpandedHubs((current) => ({
                             ...current,
                             [hub.id]: !expanded,
                           }))
-                        }
+                        }}
                         aria-expanded={expanded}
                         aria-controls={`nav-hub-${hub.id}`}
                         data-testid={`nav-hub-btn-${hub.id}`}
+                        title={sidebarCollapsed ? hub.title : undefined}
                         className={cn(
-                          'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-left',
+                          'relative flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-left',
                           'transition-all duration-200 group',
+                          sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
                           active
                             ? 'bg-primary/10 text-primary'
                             : 'text-muted-foreground hover:text-foreground hover:bg-surface',
@@ -635,11 +694,17 @@ export default function Layout({
                               ? 'text-primary'
                               : 'text-muted-foreground group-hover:text-foreground',
                           )}
+                          aria-hidden="true"
                         />
-                        <span className="min-w-0 flex-1 leading-snug">{hub.title}</span>
+                        <span className={cn('min-w-0 flex-1 leading-snug', sidebarCollapsed && 'lg:sr-only')}>
+                          {hub.title}
+                        </span>
                         {hub.id === 'admin' && pendingSafetyLookups > 0 ? (
                           <span
-                            className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground"
+                            className={cn(
+                              'inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground',
+                              sidebarCollapsed && 'lg:absolute lg:top-1 lg:right-1 lg:min-w-[0.625rem] lg:h-2.5 lg:w-2.5 lg:px-0 lg:py-0 lg:text-[0px]',
+                            )}
                             data-testid="nav-admin-pending-lookups-badge"
                             aria-label={`${pendingSafetyLookups} Safety lookups awaiting approval`}
                           >
@@ -650,12 +715,17 @@ export default function Layout({
                           className={cn(
                             'w-4 h-4 shrink-0 transition-transform',
                             expanded ? 'rotate-0' : '-rotate-90',
+                            sidebarCollapsed && 'lg:hidden',
                           )}
+                          aria-hidden="true"
                         />
                       </button>
 
                       {expanded && (
-                        <div id={`nav-hub-${hub.id}`} className="mt-1 space-y-1 pl-4">
+                        <div
+                          id={`nav-hub-${hub.id}`}
+                          className={cn('mt-1 space-y-1 pl-4', sidebarCollapsed && 'lg:hidden')}
+                        >
                           {hub.items.map((item) => {
                             const itemActive = navItemIsActive(
                               item.path,
@@ -709,9 +779,11 @@ export default function Layout({
                           to="/documents"
                           onClick={() => setSidebarOpen(false)}
                           aria-current={libraryNavActive ? 'page' : undefined}
+                          title={sidebarCollapsed ? t('nav.library') : undefined}
                           className={cn(
                             'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
                             'transition-all duration-200 group',
+                            sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
                             libraryNavActive
                               ? 'bg-primary/10 text-primary border border-primary/20'
                               : 'text-muted-foreground hover:text-foreground hover:bg-surface',
@@ -724,10 +796,18 @@ export default function Layout({
                                 ? 'text-primary'
                                 : 'text-muted-foreground group-hover:text-foreground',
                             )}
+                            aria-hidden="true"
                           />
-                          <span className="min-w-0 flex-1 leading-snug">{t('nav.library')}</span>
+                          <span className={cn('min-w-0 flex-1 leading-snug', sidebarCollapsed && 'lg:sr-only')}>
+                            {t('nav.library')}
+                          </span>
                           {libraryNavActive && (
-                            <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
+                            <div
+                              className={cn(
+                                'ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary',
+                                sidebarCollapsed && 'lg:hidden',
+                              )}
+                            />
                           )}
                         </Link>
                         <Link
@@ -735,9 +815,15 @@ export default function Layout({
                           onClick={() => setSidebarOpen(false)}
                           aria-current={documentCampaignsNavActive ? 'page' : undefined}
                           data-testid="nav-document-campaigns"
+                          title={
+                            sidebarCollapsed
+                              ? t('nav.document_campaigns', { defaultValue: 'Document campaigns' })
+                              : undefined
+                          }
                           className={cn(
                             'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
                             'transition-all duration-200 group',
+                            sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
                             documentCampaignsNavActive
                               ? 'bg-primary/10 text-primary border border-primary/20'
                               : 'text-muted-foreground hover:text-foreground hover:bg-surface',
@@ -750,12 +836,18 @@ export default function Layout({
                                 ? 'text-primary'
                                 : 'text-muted-foreground group-hover:text-foreground',
                             )}
+                            aria-hidden="true"
                           />
-                          <span className="min-w-0 flex-1 leading-snug">
+                          <span className={cn('min-w-0 flex-1 leading-snug', sidebarCollapsed && 'lg:sr-only')}>
                             {t('nav.document_campaigns', { defaultValue: 'Document campaigns' })}
                           </span>
                           {documentCampaignsNavActive && (
-                            <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
+                            <div
+                              className={cn(
+                                'ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary',
+                                sidebarCollapsed && 'lg:hidden',
+                              )}
+                            />
                           )}
                         </Link>
                       </>
@@ -767,16 +859,18 @@ export default function Layout({
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t border-border">
+          <div className={cn('border-t border-border', sidebarCollapsed ? 'p-2 lg:p-2' : 'p-4')}>
             <button
               onClick={onLogout}
+              title={sidebarCollapsed ? t('logout') : undefined}
               className={cn(
                 'flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium',
                 'text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200',
+                sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
               )}
             >
-              <LogOut size={20} />
-              {t('logout')}
+              <LogOut size={20} aria-hidden="true" />
+              <span className={cn(sidebarCollapsed && 'lg:sr-only')}>{t('logout')}</span>
             </button>
           </div>
         </div>
@@ -787,7 +881,7 @@ export default function Layout({
         id="main-content"
         aria-hidden={sidebarOpen || undefined}
         {...(sidebarOpen ? INERT_PROPS : {})}
-        className="lg:pl-72 pt-16"
+        className={cn('pt-16', sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-72')}
       >
         <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
           <Outlet />

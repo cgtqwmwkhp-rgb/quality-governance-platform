@@ -6,11 +6,11 @@
  * Connections reuse Entity360 (X-1); coach reuses GraphCoach surface
  * `job_lifecycle` (X-2). Never invents a second document SSOT or org chart.
  */
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { GitBranch, Loader2, Plus, Trash2 } from 'lucide-react'
 import api, { getApiErrorMessage, jobLifecycleApi } from '../api/client'
-import type { JobCell, JobLane, JobStep, JobType } from '../api/jobLifecycleClient'
+import type { JobCell, JobCellLink, JobLane, JobStep, JobType } from '../api/jobLifecycleClient'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -24,16 +24,23 @@ import {
   shouldEnableLibraryDocumentDrag,
 } from '../components/graph/documentGraphDndHelpers'
 import {
+  DEFAULT_JOB_LIFECYCLE_PANEL_WIDTHS,
   DEFAULT_JOB_LIFECYCLE_VIEW_MODE,
+  JOB_LIFECYCLE_PANEL_BOUNDS,
+  JOB_LIFECYCLE_PERMISSION_HEALTH_COPY,
   buildAxisCode,
   buildCellIndex,
   cellKey,
+  clampJobLifecyclePanelWidth,
   detachDocumentRef,
   emptyComposerCopy,
+  isForbiddenApiError,
   jobLifecycleViewModeLabel,
   libraryDocLabel,
+  readStoredJobLifecyclePanelWidths,
   readStoredJobLifecycleViewMode,
   resolveDndCellAttach,
+  resolveJobLifecyclePanelWidths,
   resolveJobLifecycleViewMode,
   resolveSelectedJobTypeId,
   resolveSelectedStepId,
@@ -41,8 +48,10 @@ import {
   shouldFetchJobLifecycle,
   shouldShowJobLifecycle,
   sortAxesByOrder,
+  writeStoredJobLifecyclePanelWidths,
   writeStoredJobLifecycleViewMode,
   type JobLifecycleLibraryDoc,
+  type JobLifecyclePanelWidths,
   type JobLifecycleViewMode,
 } from './jobLifecycleHelpers'
 
@@ -91,8 +100,77 @@ export default function JobLifecycle() {
   const [newLaneName, setNewLaneName] = useState('')
   const [newStepName, setNewStepName] = useState('')
   const [libraryFilter, setLibraryFilter] = useState('')
+  const [libraryPage, setLibraryPage] = useState(1)
+  const [libraryPages, setLibraryPages] = useState(1)
+  const [libraryLoadingMore, setLibraryLoadingMore] = useState(false)
+  const [permissionHealth, setPermissionHealth] = useState(false)
+  const [panelWidths, setPanelWidths] = useState<JobLifecyclePanelWidths>(() =>
+    resolveJobLifecyclePanelWidths(readStoredJobLifecyclePanelWidths(), DEFAULT_JOB_LIFECYCLE_PANEL_WIDTHS),
+  )
+  const resizeRef = useRef<{ side: 'left' | 'right'; startX: number; startWidth: number } | null>(
+    null,
+  )
 
   const cellIndex = useMemo(() => buildCellIndex(cells), [cells])
+
+  const handleLinksChange = useCallback(
+    (newLinks: JobCellLink[]) => {
+      if (selectedLaneId == null || selectedStepId == null) return
+      const laneId = selectedLaneId
+      const stepId = selectedStepId
+      setCells((prev) =>
+        prev.map((c) =>
+          c.lane_id === laneId && c.step_id === stepId ? { ...c, links: newLinks } : c,
+        ),
+      )
+    },
+    [selectedLaneId, selectedStepId],
+  )
+
+  const selectedCellLinks = useMemo(() => {
+    if (selectedLaneId == null || selectedStepId == null) return [] as JobCellLink[]
+    return cellIndex.get(cellKey(selectedLaneId, selectedStepId))?.links ?? []
+  }, [cellIndex, selectedLaneId, selectedStepId])
+
+  const onPanelPointerDown = (side: 'left' | 'right', event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    resizeRef.current = {
+      side,
+      startX: event.clientX,
+      startWidth: side === 'left' ? panelWidths.left : panelWidths.right,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const onPanelPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const active = resizeRef.current
+    if (!active) return
+    const delta = event.clientX - active.startX
+    setPanelWidths((prev) => {
+      if (active.side === 'left') {
+        const left = clampJobLifecyclePanelWidth(
+          active.startWidth + delta,
+          JOB_LIFECYCLE_PANEL_BOUNDS.leftMin,
+          JOB_LIFECYCLE_PANEL_BOUNDS.leftMax,
+        )
+        const next = { ...prev, left }
+        writeStoredJobLifecyclePanelWidths(next)
+        return next
+      }
+      const right = clampJobLifecyclePanelWidth(
+        active.startWidth - delta,
+        JOB_LIFECYCLE_PANEL_BOUNDS.rightMin,
+        JOB_LIFECYCLE_PANEL_BOUNDS.rightMax,
+      )
+      const next = { ...prev, right }
+      writeStoredJobLifecyclePanelWidths(next)
+      return next
+    })
+  }
+
+  const onPanelPointerUp = () => {
+    resizeRef.current = null
+  }
   const docsById = useMemo(() => {
     const map = new Map<number, JobLifecycleLibraryDoc>()
     for (const doc of libraryDocs) map.set(doc.id, doc)
@@ -132,6 +210,25 @@ export default function JobLifecycle() {
     })
   }, [libraryDocs, libraryFilter])
 
+  const loadLibraryPage = useCallback(
+    async (page: number, append: boolean) => {
+      const pageSize = 50
+      const res = await api.get<LibraryDocumentPage>(
+        `/api/v1/documents/?page=${page}&page_size=${pageSize}`,
+      )
+      const items = res.data.items ?? []
+      const mapped: JobLifecycleLibraryDoc[] = items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        reference: item.reference_number ?? null,
+      }))
+      setLibraryPages(res.data.pages ?? 1)
+      setLibraryPage(page)
+      setLibraryDocs((prev) => (append ? [...prev, ...mapped] : mapped))
+    },
+    [],
+  )
+
   const loadPack = useCallback(async () => {
     if (!shouldFetch) {
       setJobTypes([])
@@ -139,6 +236,9 @@ export default function JobLifecycle() {
       setSteps([])
       setCells([])
       setLibraryDocs([])
+      setLibraryPage(1)
+      setLibraryPages(1)
+      setPermissionHealth(false)
       setError(null)
       setLoading(false)
       return
@@ -147,42 +247,44 @@ export default function JobLifecycle() {
     setLoading(true)
     setError(null)
     try {
-      const [typesRes, libraryRes] = await Promise.all([
-        jobLifecycleApi.listJobTypes(),
-        (async () => {
-          const pageSize = 100
-          const collected: JobLifecycleLibraryDoc[] = []
-          let page = 1
-          let pages = 1
-          while (page <= pages) {
-            const res = await api.get<LibraryDocumentPage>(
-              `/api/v1/documents/?page=${page}&page_size=${pageSize}`,
-            )
-            const items = res.data.items ?? []
-            for (const item of items) {
-              collected.push({
-                id: item.id,
-                title: item.title,
-                reference: item.reference_number ?? null,
-              })
-            }
-            pages = res.data.pages ?? 1
-            page += 1
-            if (items.length === 0) break
-          }
-          return collected
-        })(),
-      ])
+      const typesRes = await jobLifecycleApi.listJobTypes()
+      setPermissionHealth(false)
       setJobTypes(typesRes.data.items ?? [])
-      setLibraryDocs(libraryRes)
+      try {
+        await loadLibraryPage(1, false)
+      } catch (libraryErr) {
+        setLibraryDocs([])
+        if (isForbiddenApiError(libraryErr)) {
+          // Library tray is helpful but not required to author axes.
+          setDropHint('Library tray could not load — document:read may be missing.')
+        }
+      }
     } catch (err) {
       setJobTypes([])
       setLibraryDocs([])
-      setError(getApiErrorMessage(err))
+      if (isForbiddenApiError(err)) {
+        setPermissionHealth(true)
+        setError(JOB_LIFECYCLE_PERMISSION_HEALTH_COPY)
+      } else {
+        setPermissionHealth(false)
+        setError(getApiErrorMessage(err))
+      }
     } finally {
       setLoading(false)
     }
-  }, [shouldFetch])
+  }, [shouldFetch, loadLibraryPage])
+
+  const loadMoreLibrary = useCallback(async () => {
+    if (libraryLoadingMore || libraryPage >= libraryPages) return
+    setLibraryLoadingMore(true)
+    try {
+      await loadLibraryPage(libraryPage + 1, true)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setLibraryLoadingMore(false)
+    }
+  }, [libraryLoadingMore, libraryPage, libraryPages, loadLibraryPage])
 
   const loadAxesForType = useCallback(
     async (jobTypeId: number) => {
@@ -207,7 +309,12 @@ export default function JobLifecycle() {
         setLanes([])
         setSteps([])
         setCells([])
-        setError(getApiErrorMessage(err))
+        if (isForbiddenApiError(err)) {
+          setPermissionHealth(true)
+          setError(JOB_LIFECYCLE_PERMISSION_HEALTH_COPY)
+        } else {
+          setError(getApiErrorMessage(err))
+        }
       } finally {
         setLoading(false)
       }
@@ -396,7 +503,7 @@ export default function JobLifecycle() {
             </h1>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Compose swimlanes from JL process axes (job type · lane · step). Cells hold library
+            Compose swimlanes from JL process axes (job cycle · lane · step). Cells hold library
             document references only — never a second document store, never an org chart.
           </p>
         </div>
@@ -424,6 +531,15 @@ export default function JobLifecycle() {
 
       <GraphCoach surface="job_lifecycle" />
 
+      {permissionHealth ? (
+        <div
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100"
+          data-testid="job-lifecycle-permission-health"
+          role="status"
+        >
+          {JOB_LIFECYCLE_PERMISSION_HEALTH_COPY}
+        </div>
+      ) : null}
       {error ? (
         <div
           className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -442,15 +558,45 @@ export default function JobLifecycle() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_260px]">
-        <Card className="p-4 space-y-4" data-testid="job-lifecycle-axes">
+      <div
+        className="grid gap-0"
+        style={{
+          gridTemplateColumns: `${panelWidths.left}px 6px minmax(0,1fr) 6px ${panelWidths.right}px`,
+        }}
+        data-testid="job-lifecycle-composer-grid"
+      >
+        <Card className="p-4 space-y-4 min-w-0" data-testid="job-lifecycle-axes">
           <div className="space-y-2">
-            <h2 className="text-sm font-medium">Job types</h2>
+            <h2 className="text-sm font-medium">Job cycles</h2>
+            <p className="text-[11px] text-muted-foreground">
+              A job cycle is a process pack (JobType) — pick or create one to author lanes and steps.
+            </p>
+            <label className="block space-y-1">
+              <span className="text-[11px] text-muted-foreground">Active job cycle</span>
+              <select
+                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                value={effectiveJobTypeId ?? ''}
+                onChange={(e) => {
+                  const next = Number(e.target.value)
+                  setSelectedJobTypeId(Number.isFinite(next) && next > 0 ? next : null)
+                }}
+                data-testid="job-lifecycle-cycle-picker"
+              >
+                {orderedJobTypes.length === 0 ? (
+                  <option value="">No job cycles yet</option>
+                ) : null}
+                {orderedJobTypes.map((jt) => (
+                  <option key={jt.id} value={jt.id}>
+                    {jt.name} ({jt.code})
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="flex gap-2">
               <Input
                 value={newJobTypeName}
                 onChange={(e) => setNewJobTypeName(e.target.value)}
-                placeholder="New job type"
+                placeholder="New job cycle name"
                 data-testid="job-lifecycle-new-type"
               />
               <Button
@@ -559,7 +705,19 @@ export default function JobLifecycle() {
           </div>
         </Card>
 
-        <Card className="p-4 space-y-3 overflow-x-auto" data-testid="job-lifecycle-matrix">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize job cycle panel"
+          data-testid="job-lifecycle-resize-left"
+          className="cursor-col-resize bg-border/60 hover:bg-primary/40"
+          onPointerDown={onPanelPointerDown.bind(null, 'left')}
+          onPointerMove={onPanelPointerMove}
+          onPointerUp={onPanelPointerUp}
+          onPointerCancel={onPanelPointerUp}
+        />
+
+        <Card className="p-4 space-y-3 overflow-x-auto min-w-0" data-testid="job-lifecycle-matrix">
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -678,7 +836,19 @@ export default function JobLifecycle() {
           )}
         </Card>
 
-        <div className="space-y-4">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize library panel"
+          data-testid="job-lifecycle-resize-right"
+          className="cursor-col-resize bg-border/60 hover:bg-primary/40"
+          onPointerDown={onPanelPointerDown.bind(null, 'right')}
+          onPointerMove={onPanelPointerMove}
+          onPointerUp={onPanelPointerUp}
+          onPointerCancel={onPanelPointerUp}
+        />
+
+        <div className="space-y-4 min-w-0">
           <Card className="p-4 space-y-3" data-testid="job-lifecycle-library-tray">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-medium">Library tray</h2>
@@ -722,9 +892,26 @@ export default function JobLifecycle() {
                 <li className="text-xs text-muted-foreground py-2">No library documents.</li>
               ) : null}
             </ul>
+            {libraryPage < libraryPages ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full"
+                disabled={libraryLoadingMore}
+                onClick={() => void loadMoreLibrary()}
+                data-testid="job-lifecycle-library-more"
+              >
+                {libraryLoadingMore ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  'Load more library docs'
+                )}
+              </Button>
+            ) : null}
             <p className="text-[11px] text-muted-foreground">
               Drop attaches <code>library_document_id</code> only — document bodies stay in the
-              library SSOT.
+              library SSOT. Tray loads pages lazily to protect rate limits.
             </p>
           </Card>
 
@@ -745,22 +932,13 @@ export default function JobLifecycle() {
               stepId={selectedStepId}
               jobLifecycleEnabled={jobLifecycleEnabled}
               jobCellLinksEnabled={jobCellLinksEnabled}
-              initialLinks={
-                cellIndex.get(cellKey(selectedLaneId, selectedStepId))?.links ?? []
-              }
-              onLinksChange={(newLinks) => {
-                setCells((prev) => {
-                  return prev.map((c) =>
-                    c.lane_id === selectedLaneId && c.step_id === selectedStepId
-                      ? { ...c, links: newLinks }
-                      : c,
-                  )
-                })
-              }}
+              initialLinks={selectedCellLinks}
+              onLinksChange={handleLinksChange}
             />
           ) : null}
         </div>
       </div>
+
     </div>
   )
 }

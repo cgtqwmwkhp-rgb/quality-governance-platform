@@ -3,8 +3,13 @@
  *
  * Flag-gated by `job_cell_links` (and parent `job_lifecycle`). App / audit
  * hrefs come from the API (X-1 href_registry) — no parallel FE URL builders.
+ *
+ * JL-UX-W1: do NOT refetch on every parent render. Links are seeded from the
+ * cell list payload (`listCells` embeds `links[]`); mutations update local
+ * state + notify parent. A parent-updating callback must never sit in the
+ * fetch effect dependency chain (that caused the 429 storm).
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ExternalLink, Loader2, Plus, Trash2 } from 'lucide-react'
 import { getApiErrorMessage, jobLifecycleApi } from '../../api/client'
@@ -28,9 +33,13 @@ export interface JobCellLinksProps {
   stepId: number
   jobLifecycleEnabled: boolean
   jobCellLinksEnabled: boolean
-  /** Optional seed from cell list payload; refreshed after mutations. */
+  /** Seed from cell list payload; refreshed after mutations via onLinksChange. */
   initialLinks?: JobCellLink[]
   onLinksChange?: (links: JobCellLink[]) => void
+}
+
+function linksSeedKey(jobTypeId: number, laneId: number, stepId: number, links: JobCellLink[]): string {
+  return `${jobTypeId}:${laneId}:${stepId}:${links.map((l) => l.id).join(',')}`
 }
 
 export default function JobCellLinks({
@@ -44,7 +53,6 @@ export default function JobCellLinks({
 }: JobCellLinksProps) {
   const visible = shouldShowJobCellLinks(jobLifecycleEnabled, jobCellLinksEnabled)
   const [links, setLinks] = useState<JobCellLink[]>(initialLinks)
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [kind, setKind] = useState<JobCellLinkKind>('app')
@@ -55,37 +63,22 @@ export default function JobCellLinks({
   const [auditRunId, setAuditRunId] = useState('')
   const [auditFindingId, setAuditFindingId] = useState('')
 
-  const applyLinks = useCallback(
-    (next: JobCellLink[]) => {
-      setLinks(next)
-      onLinksChange?.(next)
-    },
-    [onLinksChange],
-  )
+  const onLinksChangeRef = useRef(onLinksChange)
+  onLinksChangeRef.current = onLinksChange
 
+  const applyLinks = useCallback((next: JobCellLink[]) => {
+    setLinks(next)
+    onLinksChangeRef.current?.(next)
+  }, [])
+
+  const seedKey = linksSeedKey(jobTypeId, laneId, stepId, initialLinks)
+  const seedKeyRef = useRef(seedKey)
   useEffect(() => {
+    if (seedKeyRef.current === seedKey) return
+    seedKeyRef.current = seedKey
     setLinks(initialLinks)
-  }, [initialLinks])
-
-  useEffect(() => {
-    if (!visible) return
-    let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await jobLifecycleApi.listCellLinks(jobTypeId, laneId, stepId)
-        if (!cancelled) applyLinks(res.data.items ?? [])
-      } catch (err) {
-        if (!cancelled) setError(getApiErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [visible, jobTypeId, laneId, stepId, applyLinks])
+    setError(null)
+  }, [seedKey, initialLinks])
 
   if (!visible) return null
 
@@ -173,14 +166,8 @@ export default function JobCellLinks({
       </div>
       <p className="text-[11px] text-muted-foreground">
         App and audit hrefs resolve through the shared registry — no parallel URL builders.
+        Links are seeded from the cell list (no refetch storm).
       </p>
-
-      {loading ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Loading links…
-        </div>
-      ) : null}
 
       {error ? (
         <p className="text-xs text-destructive" data-testid="job-cell-links-error">
@@ -234,7 +221,7 @@ export default function JobCellLinks({
             </li>
           )
         })}
-        {!loading && links.length === 0 ? (
+        {links.length === 0 ? (
           <li className="text-xs text-muted-foreground py-1">No step links yet.</li>
         ) : null}
       </ul>
