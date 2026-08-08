@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { DocumentEdge } from '../../../api/documentGraphClient'
 import { DocumentRelationshipsPanel } from '../../../pages/DocumentRelationshipsPanel'
 
@@ -60,14 +60,25 @@ function edge(overrides: Partial<DocumentEdge> & { id: number }): DocumentEdge {
 function renderPanel(edges: DocumentEdge[]) {
   return render(
     <MemoryRouter>
-      <DocumentRelationshipsPanel
-        documentId={10}
-        documentTitle="Incident Management Policy"
-        edges={edges}
-        loading={false}
-        error={null}
-        onChanged={vi.fn()}
-      />
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <DocumentRelationshipsPanel
+              documentId={10}
+              documentTitle="Incident Management Policy"
+              edges={edges}
+              loading={false}
+              error={null}
+              onChanged={vi.fn()}
+            />
+          }
+        />
+        <Route
+          path="/documents/:documentId"
+          element={<p data-testid="relationship-map-destination">Document detail</p>}
+        />
+      </Routes>
     </MemoryRouter>,
   )
 }
@@ -106,5 +117,28 @@ describe('RelationshipsMapView flag gating via DocumentRelationshipsPanel', () =
         'Incident Reporting SOP',
       ),
     )
+  })
+
+  it('keeps accessible documents with missing titles distinct from hidden documents', async () => {
+    flagState.document_graph_map_view = true
+    apiGet.mockResolvedValue({ data: { id: 20 } })
+    renderPanel([edge({ id: 1 })])
+
+    fireEvent.click(await screen.findByTestId('relationships-view-map'))
+
+    expect(await screen.findByTestId('relationships-map-legend-20')).toHaveTextContent(
+      'Document #20',
+    )
+    expect(screen.queryByText(/not available to you/)).not.toBeInTheDocument()
+  })
+
+  it('navigates map nodes through the client-side router', async () => {
+    flagState.document_graph_map_view = true
+    renderPanel([edge({ id: 1 })])
+
+    fireEvent.click(await screen.findByTestId('relationships-view-map'))
+    fireEvent.click(await screen.findByTestId('relationships-map-node-20'))
+
+    expect(await screen.findByTestId('relationship-map-destination')).toBeInTheDocument()
   })
 })

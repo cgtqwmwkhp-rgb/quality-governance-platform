@@ -4,8 +4,8 @@
  * No force-directed layout. Map|List toggling lives in DocumentRelationshipsPanel.
  * Never calls Doc Graph the Golden Thread.
  */
-import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useMemo, type KeyboardEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import type { DocumentEdge } from '../../api/documentGraphClient'
 import {
   buildRelationshipMapModel,
@@ -28,6 +28,8 @@ export function RelationshipsMapView({
   edges,
   labels = {},
 }: RelationshipsMapViewProps) {
+  const navigate = useNavigate()
+
   const model = useMemo(
     () =>
       buildRelationshipMapModel(documentId, documentTitle, documentReference, edges, labels),
@@ -135,8 +137,21 @@ export function RelationshipsMapView({
                       ? 'relationships-map-hub'
                       : `relationships-map-node-${node.id}`
                   }
+                  {...(!node.isHub && {
+                    onClick: () => navigate(node.href),
+                    onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        navigate(node.href)
+                      }
+                    },
+                    role: 'link',
+                    tabIndex: 0,
+                    style: { cursor: 'pointer' },
+                  })}
                 >
-                  {node.isHub ? body : <a href={node.href}><title>{node.label}</title>{body}</a>}
+                  {!node.isHub ? <title>{node.label}</title> : null}
+                  {body}
                 </g>
               )
             })}
