@@ -75,7 +75,12 @@ class CaseLinkProducer:
             model = model_by_type.get(case_type)
             if not model or not ids:
                 continue
-            result = await db.execute(select(model).where(model.id.in_(ids), model.tenant_id == tenant_id))
+            result = await db.execute(
+                select(model).where(
+                    model.__table__.c.id.in_(ids),
+                    model.__table__.c.tenant_id == tenant_id,
+                )
+            )
             rows = result.scalars().all()
             mapped: dict[int, tuple[Optional[str], Optional[str]]] = {}
             for row in rows:
