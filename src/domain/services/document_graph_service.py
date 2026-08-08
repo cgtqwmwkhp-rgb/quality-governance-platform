@@ -69,8 +69,10 @@ def thread_walk_statuses(*, include_proposed: bool = False) -> tuple[DocumentEdg
 
 
 def document_href(document_id: int) -> str:
-    """SPA deep-link for a library document (RiskUpstreamItem spirit)."""
-    return f"/documents/{document_id}"
+    """SPA deep-link for a library document (href registry — never string-build)."""
+    from src.domain.services.href_registry import document_href as _href
+
+    return _href(document_id)
 
 
 def _as_utc(value: Optional[datetime] = None) -> datetime:

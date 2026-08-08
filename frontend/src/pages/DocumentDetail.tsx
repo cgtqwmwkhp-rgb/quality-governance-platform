@@ -18,6 +18,7 @@ import {
 import api, {
   documentCampaignApi,
   documentGraphApi,
+  entity360Api,
   getApiErrorMessage,
   knowledgeBankApi,
   type DiscussionMessage,
@@ -59,12 +60,13 @@ import {
   buildDocumentRelationshipCoverageHonesty,
   measureRelationshipRoleCoverage,
 } from './documentRelationshipCoverage'
-import { buildPublishImpactPreview, type PublishImpactPreview } from './documentPublishImpactHelpers'
+import { buildPublishImpactPreview, publishImpactPreviewFromBundle, type PublishImpactPreview } from './documentPublishImpactHelpers'
 import { complianceClauseHref } from './complianceEvidenceHelpers'
 import { DocumentPublishImpactPreview } from './DocumentPublishImpactPreview'
 import { DocumentRelationshipChips } from './DocumentRelationshipChips'
 import { DocumentRelationshipsPanel } from './DocumentRelationshipsPanel'
 import { DocumentThreadStrip } from '../components/graph/DocumentThreadStrip'
+import { Entity360Strip } from '../components/graph/Entity360Strip'
 import {
   buildDocumentDownstreamView,
   buildDocumentsExceptionsHref,
@@ -177,6 +179,7 @@ export default function DocumentDetail() {
   const [searchParams] = useSearchParams()
   const documentId = Number(id)
   const documentGraphEnabled = useFeatureFlag('document_graph')
+  const entity360Enabled = useFeatureFlag('entity_360')
   const defaultTab = resolveDocumentDetailTab(searchParams.get('tab'), { documentGraphEnabled })
   const campaignIdParam = Number(searchParams.get('campaignId'))
   const initialCampaignId =
@@ -222,6 +225,8 @@ export default function DocumentDetail() {
   const [publishPreviewLoading, setPublishPreviewLoading] = useState(false)
   const [publishPreviewError, setPublishPreviewError] = useState<string | null>(null)
   const [publishPreview, setPublishPreview] = useState<PublishImpactPreview | null>(null)
+  const [publishCanPublish, setPublishCanPublish] = useState(true)
+  const [publishDegradedReasons, setPublishDegradedReasons] = useState<string[]>([])
   const [titleDraft, setTitleDraft] = useState('')
   const [savingTitle, setSavingTitle] = useState(false)
   const [showInlinePreview, setShowInlinePreview] = useState(false)
@@ -463,10 +468,10 @@ export default function DocumentDetail() {
 
   const handlePublishVersion = async () => {
     if (!documentId) return
-    // Flag-off: publish immediately (prior behaviour). Flag-on: show the
-    // read-only impact checklist first so operators see rematch / dependents /
-    // campaigns before they commit.
-    if (!documentGraphEnabled) {
+    // Flag-off: publish immediately (prior behaviour).
+    // entity_360 on: server ImpactBundle — block when incomplete (no silent path).
+    // document_graph only: legacy client checklist (Promise.allSettled tolerated).
+    if (!documentGraphEnabled && !entity360Enabled) {
       await executePublishVersion()
       return
     }
@@ -475,6 +480,34 @@ export default function DocumentDetail() {
     setPublishPreviewLoading(true)
     setPublishPreviewError(null)
     setPublishPreview(null)
+    setPublishCanPublish(true)
+    setPublishDegradedReasons([])
+
+    if (entity360Enabled) {
+      try {
+        const response = await entity360Api.getDocumentImpact(documentId)
+        const bundle = response.data
+        setPublishPreview(publishImpactPreviewFromBundle(bundle))
+        setPublishCanPublish(Boolean(bundle.can_publish && bundle.complete))
+        setPublishDegradedReasons(bundle.degraded_reasons ?? [])
+        if (!bundle.complete) {
+          setPublishPreviewError(
+            (bundle.degraded_reasons && bundle.degraded_reasons[0]) ||
+              'Impact bundle incomplete',
+          )
+        }
+      } catch (err) {
+        // Entity360 path must not silently enable publish on fetch failure.
+        setPublishPreviewError(getApiErrorMessage(err))
+        setPublishCanPublish(false)
+        setPublishDegradedReasons([getApiErrorMessage(err)])
+        setPublishPreview(null)
+      } finally {
+        setPublishPreviewLoading(false)
+      }
+      return
+    }
+
     try {
       const [threadResult, campaignsResult] = await Promise.allSettled([
         documentGraphApi.getThread(documentId),
@@ -829,6 +862,11 @@ export default function DocumentDetail() {
               documentGraphEnabled={documentGraphEnabled}
             />
           ) : null}
+          <Entity360Strip
+            entityType="document"
+            entityId={document.id}
+            documentGraphEnabled={documentGraphEnabled}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           {['draft', 'indexed', 'rejected'].includes(docStatus) ? (
@@ -1545,13 +1583,20 @@ export default function DocumentDetail() {
             loading={publishPreviewLoading}
             error={publishPreviewError}
             publishing={publishing}
+            canPublish={publishCanPublish}
+            degradedReasons={publishDegradedReasons}
             onCancel={() => {
               if (publishing) return
               setPublishPreviewOpen(false)
               setPublishPreview(null)
               setPublishPreviewError(null)
+              setPublishCanPublish(true)
+              setPublishDegradedReasons([])
             }}
-            onConfirm={() => void executePublishVersion()}
+            onConfirm={() => {
+              if (!publishCanPublish) return
+              void executePublishVersion()
+            }}
           />
         </DialogContent>
       </Dialog>

@@ -1702,6 +1702,26 @@ async def publish_document_version(
 ):
     """Publish working draft; supersede prior published tip (immutable)."""
     document = await _get_document_or_404(db, document_id, current_user)
+
+    # X-1: when Entity360 is on, server ImpactBundle must be complete — never
+    # allow a silent publish-available path over degraded sources.
+    if settings.entity_360_enabled:
+        from fastapi import HTTPException
+
+        from src.domain.services.entity_360 import build_impact_bundle, publish_blocked_detail
+
+        impact = await build_impact_bundle(
+            db=db,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+            document_id=document_id,
+            user=current_user,
+        )
+        if not impact.get("complete") or not impact.get("can_publish"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=publish_blocked_detail(impact),
+            )
+
     version = await document_version_service.publish_library(
         db,
         document,
