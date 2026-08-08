@@ -113,3 +113,6 @@ land confirmed with an `extracted` method; humans confirm the rest.
 - CEL: `ComplianceEvidenceLink` / governed knowledge rematch paths
 - Publish lifecycle (to wire): `src/domain/services/gkb_publish_lifecycle.py`
 - Client feature catalogue: `src/domain/features/catalogue.py`
+- Library PEL / function reference scheme (not Doc Graph): `docs/adr/ADR-0023-governance-library-reference-scheme.md`
+- CEL harden (D15) + clause identity (D14): `docs/governance/library-cel-harden-d15.md`, `docs/governance/library-clause-identity-d14.md`
+- Job axis vocabulary (sibling SSOT discipline): `docs/adr/ADR-0022-job-axis-vocabulary.md`
