@@ -1,7 +1,9 @@
 {
   "a11y.close_menu": "Close menu",
   "a11y.collapse": "Collapse",
+  "a11y.collapse_sidebar": "Collapse sidebar",
   "a11y.expand": "Expand",
+  "a11y.expand_sidebar": "Expand sidebar",
   "a11y.form_submitted": "Form submitted successfully",
   "a11y.item_added": "Item added",
   "a11y.item_removed": "Item removed",
