@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -22,6 +22,21 @@ JobDocumentFreshnessState = Literal["current", "due_soon", "overdue", "obsolete"
 #: Audit-outcome cadence state. ``unknown`` covers ad-hoc audits and runs with
 #: no cadence or due date.
 JobAuditLapseState = Literal["current", "due_soon", "lapsed", "unknown"]
+
+#: Mandatory-evidence cell readiness (JL-UX-W4). ``unknown`` means the evidence
+#: exists but its standing could not be read — not that the cell is fine.
+JobCellReadinessState = Literal[
+    "not_required",
+    "ready",
+    "missing_evidence",
+    "obsolete_evidence",
+    "unknown",
+]
+
+#: Node / edge vocabulary shared by the process interaction map and the audit
+#: trail (JL-UX-W4). One model, two views — never two edge shapes to keep in step.
+JobGraphNodeKind = Literal["job_type", "cell", "document", "audit_finding", "app", "external"]
+JobGraphEdgeKind = Literal["nests", "contains", "evidences", "audits", "references"]
 
 
 class JobTypeCreate(BaseModel):
@@ -281,6 +296,18 @@ class JobLinkEntityTypesResponse(BaseModel):
     total: int
 
 
+class JobCellRequirementUpdate(BaseModel):
+    """Mark a lane × step intersection as owing evidence (JL-UX-W4).
+
+    The *requirement* is authored; the readiness verdict is not writable
+    anywhere — it is derived from the cell's document refs on every read.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    requires_evidence: bool
+
+
 class JobCellResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -289,6 +316,8 @@ class JobCellResponse(BaseModel):
     job_type_id: int
     lane_id: int
     step_id: int
+    #: Default False so a payload built before W4 still validates.
+    requires_evidence: bool = False
     library_document_ids: List[int] = Field(default_factory=list)
     links: List[JobCellLinkResponse] = Field(default_factory=list)
     created_at: datetime
@@ -327,8 +356,153 @@ class JobDocumentFreshnessResponse(BaseModel):
     total: int
 
 
+# ---------------------------------------------------------------------------
+# JL-UX-W4 — clone, readiness, and the shared map / trail graph
+# ---------------------------------------------------------------------------
+
+
+class JobTypeCloneRequest(BaseModel):
+    """Clone a pack's axes into a new job cycle.
+
+    Axes only. There is no ``include_cells`` or ``include_documents`` option
+    because there is no honest version of one: a cell's document refs assert
+    that *this* pack is evidenced by that document, and copying a template
+    cannot make that claim for the new pack.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    #: Inactive axes are copied by default — a retired lane is still part of
+    #: the template's shape, and dropping it silently would change the pack.
+    include_inactive: bool = True
+
+
+class JobTypeCloneResponse(BaseModel):
+    """The new pack plus what was, and was not, copied into it."""
+
+    job_type: JobTypeResponse
+    source_job_type_id: int
+    cloned_lane_count: int
+    cloned_step_count: int
+    #: Always zero. Returned rather than implied so the contract states it.
+    cloned_cell_count: int = 0
+    cloned_document_count: int = 0
+
+
+class JobCellReadiness(BaseModel):
+    """Whether a mandatory cell is actually satisfied. Derived on every read."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    state: JobCellReadinessState
+    reason: str
+    evidence_count: int
+    obsolete_count: int
+    unresolved_count: int
+    is_ready: bool
+
+
+class JobCellReadinessItem(BaseModel):
+    """Readiness of one mandatory-evidence cell. Derived, never stored."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    cell_id: int
+    lane_id: int
+    lane_name: str
+    step_id: int
+    step_name: str
+    requires_evidence: bool
+    library_document_ids: List[int] = Field(default_factory=list)
+    state: JobCellReadinessState
+    reason: str
+    evidence_count: int
+    obsolete_count: int
+    unresolved_count: int
+    is_ready: bool
+
+
+class JobEvidenceReadinessResponse(BaseModel):
+    items: List[JobCellReadinessItem]
+    total: int
+    job_type_id: int
+    #: Echoed back so a caller can tell a presence-only pass from an assured one.
+    assure: bool
+    summary: Dict[str, int] = Field(default_factory=dict)
+
+
+class JobGraphNodeModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    kind: JobGraphNodeKind
+    ref_id: int
+    label: str
+    href: Optional[str] = None
+    detail: Optional[str] = None
+
+
+class JobGraphEdgeModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    kind: JobGraphEdgeKind
+    source: str
+    target: str
+    label: str
+    href: Optional[str] = None
+    cell_id: Optional[int] = None
+    lane_id: Optional[int] = None
+    step_id: Optional[int] = None
+
+
+class JobCycleGraphResponse(BaseModel):
+    """Process interaction map — a view over ``job_cycle`` cell links."""
+
+    root_job_type_id: int
+    depth: int
+    #: True when nesting continues past the requested depth.
+    truncated: bool
+    nodes: List[JobGraphNodeModel] = Field(default_factory=list)
+    edges: List[JobGraphEdgeModel] = Field(default_factory=list)
+
+
+class JobAuditTrailPath(BaseModel):
+    """One sampled walk: pack → cell → the evidence that cell points at."""
+
+    cell_id: int
+    lane_id: int
+    lane_name: str
+    step_id: int
+    step_name: str
+    requires_evidence: bool
+    library_document_ids: List[int] = Field(default_factory=list)
+    node_keys: List[str] = Field(default_factory=list)
+    edge_keys: List[str] = Field(default_factory=list)
+    readiness: JobCellReadiness
+
+
+class JobAuditTrailResponse(BaseModel):
+    root_job_type_id: int
+    assure: bool
+    limit: int
+    #: How many cells *could* have been walked, so a sample never reads as a
+    #: complete export.
+    total_candidates: int
+    truncated: bool
+    paths: List[JobAuditTrailPath] = Field(default_factory=list)
+    nodes: List[JobGraphNodeModel] = Field(default_factory=list)
+    edges: List[JobGraphEdgeModel] = Field(default_factory=list)
+    summary: Dict[str, int] = Field(default_factory=dict)
+
+
 __all__ = [
     "JobAuditLapseState",
+    "JobAuditTrailPath",
+    "JobAuditTrailResponse",
     "JobCellDocumentsPut",
     "JobCellLinkAuditLapse",
     "JobCellLinkCreate",
@@ -336,10 +510,20 @@ __all__ = [
     "JobCellLinkListResponse",
     "JobCellLinkResponse",
     "JobCellListResponse",
+    "JobCellReadiness",
+    "JobCellReadinessItem",
+    "JobCellReadinessState",
+    "JobCellRequirementUpdate",
     "JobCellResponse",
+    "JobCycleGraphResponse",
     "JobDocumentFreshnessItem",
     "JobDocumentFreshnessResponse",
     "JobDocumentFreshnessState",
+    "JobEvidenceReadinessResponse",
+    "JobGraphEdgeKind",
+    "JobGraphEdgeModel",
+    "JobGraphNodeKind",
+    "JobGraphNodeModel",
     "JobLaneCreate",
     "JobLaneListResponse",
     "JobLaneResponse",
@@ -350,6 +534,8 @@ __all__ = [
     "JobStepPdcaPhase",
     "JobStepResponse",
     "JobStepUpdate",
+    "JobTypeCloneRequest",
+    "JobTypeCloneResponse",
     "JobTypeCreate",
     "JobTypeListResponse",
     "JobTypeResponse",

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Copy,
   GitBranch,
   Loader2,
   Plus,
@@ -22,6 +23,7 @@ import api, { getApiErrorMessage, jobLifecycleApi } from '../api/client'
 import type {
   JobCell,
   JobCellLink,
+  JobCellReadinessItem,
   JobDocumentFreshness,
   JobLane,
   JobStep,
@@ -35,6 +37,7 @@ import { Badge } from '../components/ui/Badge'
 import { Input } from '../components/ui/Input'
 import { Entity360Strip, GraphCoach } from '../components/graph'
 import JobCellLinks from '../components/jobLifecycle/JobCellLinks'
+import JobGraphPanel from '../components/jobLifecycle/JobGraphPanel'
 import {
   parseLibraryDocumentDrag,
   setLibraryDocumentDragData,
@@ -48,6 +51,7 @@ import {
   auditLapseClasses,
   auditLapseLabel,
   auditLapseTitle,
+  availableJobLifecycleViewModes,
   buildAxisCode,
   buildCellIndex,
   buildJobCycleBreadcrumb,
@@ -55,13 +59,18 @@ import {
   clampJobLifecyclePanelWidth,
   collectFreshnessDocumentIds,
   computeAxisReorder,
+  conflictBannerCopy,
+  countUnreadyCells,
   deriveLaneNestChips,
   detachDocumentRef,
   emptyComposerCopy,
   freshnessStateClasses,
   freshnessStateLabel,
   freshnessTitle,
+  ifMatchToken,
+  isConflictApiError,
   isForbiddenApiError,
+  isJobLifecycleGraphViewMode,
   jobLifecycleViewModeLabel,
   libraryDocLabel,
   mergeFreshnessIndex,
@@ -74,6 +83,10 @@ import {
   readStoredJobLifecycleFreshness,
   readStoredJobLifecyclePanelWidths,
   readStoredJobLifecycleViewMode,
+  readinessStateClasses,
+  readinessStateLabel,
+  readinessTitle,
+  resolveAvailableViewMode,
   resolveDndCellAttach,
   resolveJobLifecycleFreshness,
   resolveJobLifecyclePanelWidths,
@@ -156,6 +169,13 @@ export default function JobLifecycle() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** JL-UX-W4 — set when a PATCH was refused because the row moved under us. */
+  const [conflict, setConflict] = useState<string | null>(null)
+  const [readiness, setReadiness] = useState<JobCellReadinessItem[]>([])
+  const [readinessError, setReadinessError] = useState<string | null>(null)
+  /** Bumped after a write so derived views re-read rather than going stale. */
+  const [derivedNonce, setDerivedNonce] = useState(0)
+  const [cloneName, setCloneName] = useState('')
   const [dropHint, setDropHint] = useState<string | null>(null)
   const [newJobTypeName, setNewJobTypeName] = useState('')
   const [newLaneName, setNewLaneName] = useState('')
@@ -173,6 +193,14 @@ export default function JobLifecycle() {
   )
 
   const cellIndex = useMemo(() => buildCellIndex(cells), [cells])
+
+  const readinessIndex = useMemo(() => {
+    const map = new Map<string, JobCellReadinessItem>()
+    for (const item of readiness) map.set(cellKey(item.lane_id, item.step_id), item)
+    return map
+  }, [readiness])
+
+  const unreadyCount = useMemo(() => countUnreadyCells(readiness), [readiness])
 
   const handleLinksChange = useCallback(
     (newLinks: JobCellLink[]) => {
@@ -441,6 +469,49 @@ export default function JobLifecycle() {
     }
   }, [freshnessOn, shouldFetch, freshnessIds])
 
+  /** Nothing is mandatory here, so there is no readiness question to ask. */
+  const hasMandatoryCells = useMemo(
+    () => cells.some((cell) => Boolean(cell.requires_evidence)),
+    [cells],
+  )
+
+  /**
+   * Readiness for the pack's mandatory cells (JL-UX-W4).
+   *
+   * Derived on the server on every read — nothing here is cached into the JL
+   * tables. `assure` follows the Freshness toggle, so an operator who has not
+   * asked for document status is shown presence only rather than a verdict the
+   * composer cannot back up.
+   */
+  useEffect(() => {
+    if (!shouldFetch || effectiveJobTypeId == null || !hasMandatoryCells) {
+      setReadiness([])
+      setReadinessError(null)
+      return
+    }
+    let cancelled = false
+    jobLifecycleApi
+      .listEvidenceReadiness(effectiveJobTypeId, freshnessOn)
+      .then((res) => {
+        if (cancelled) return
+        setReadiness(res.data.items ?? [])
+        setReadinessError(null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setReadiness([])
+        setReadinessError(getApiErrorMessage(err))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [shouldFetch, effectiveJobTypeId, freshnessOn, derivedNonce, hasMandatoryCells])
+
+  /** A mode withdrawn by a closed flag must not survive in local storage. */
+  useEffect(() => {
+    setViewMode((prev) => resolveAvailableViewMode(prev, jobCellLinksEnabled))
+  }, [jobCellLinksEnabled])
+
   useEffect(() => {
     if (preferredStepId != null) {
       setSelectedStepId(preferredStepId)
@@ -469,9 +540,12 @@ export default function JobLifecycle() {
   }
 
   const setMode = (next: JobLifecycleViewMode) => {
-    setViewMode(next)
-    writeStoredJobLifecycleViewMode(next)
+    const allowed = resolveAvailableViewMode(next, jobCellLinksEnabled)
+    setViewMode(allowed)
+    writeStoredJobLifecycleViewMode(allowed)
   }
+
+  const graphMode = isJobLifecycleGraphViewMode(viewMode)
 
   const toggleFreshness = () => {
     const next = !freshnessOn
@@ -521,16 +595,44 @@ export default function JobLifecycle() {
     setSelectedStepId(null)
   }
 
+  /**
+   * A refused edit is reported as a conflict, never as a generic failure.
+   *
+   * The distinction matters: a 409 means someone else's version is the one in
+   * the database and this edit was dropped, so the operator has to look before
+   * retrying rather than pressing the button again.
+   */
+  const reportWriteError = (err: unknown, label: string) => {
+    if (isConflictApiError(err)) {
+      setConflict(conflictBannerCopy(label))
+      return
+    }
+    setError(getApiErrorMessage(err))
+  }
+
+  const reloadAfterConflict = () => {
+    setConflict(null)
+    setError(null)
+    if (effectiveJobTypeId != null) void loadAxesForType(effectiveJobTypeId)
+    setDerivedNonce((n) => n + 1)
+  }
+
   const handleRenameLane = async (laneId: number, name: string) => {
     const trimmed = name.trim()
     if (!trimmed || saving) return
+    const current = lanes.find((lane) => lane.id === laneId) ?? null
     setSaving(true)
     setError(null)
+    setConflict(null)
     try {
-      const res = await jobLifecycleApi.updateLane(laneId, { name: trimmed })
+      const res = await jobLifecycleApi.updateLane(
+        laneId,
+        { name: trimmed },
+        { ifMatch: ifMatchToken(current) },
+      )
       setLanes((prev) => prev.map((lane) => (lane.id === laneId ? res.data : lane)))
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      reportWriteError(err, current?.name ?? `Lane #${laneId}`)
     } finally {
       setSaving(false)
     }
@@ -539,13 +641,19 @@ export default function JobLifecycle() {
   const handleRenameStep = async (stepId: number, name: string) => {
     const trimmed = name.trim()
     if (!trimmed || saving) return
+    const current = steps.find((step) => step.id === stepId) ?? null
     setSaving(true)
     setError(null)
+    setConflict(null)
     try {
-      const res = await jobLifecycleApi.updateStep(stepId, { name: trimmed })
+      const res = await jobLifecycleApi.updateStep(
+        stepId,
+        { name: trimmed },
+        { ifMatch: ifMatchToken(current) },
+      )
       setSteps((prev) => prev.map((step) => (step.id === stepId ? res.data : step)))
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      reportWriteError(err, current?.name ?? `Step #${stepId}`)
     } finally {
       setSaving(false)
     }
@@ -554,18 +662,24 @@ export default function JobLifecycle() {
   const handleReorderLane = async (laneId: number, direction: 'up' | 'down') => {
     const updates = computeAxisReorder(lanes, laneId, direction)
     if (updates.length === 0 || saving) return
+    const moving = lanes.find((lane) => lane.id === laneId) ?? null
     setSaving(true)
     setError(null)
+    setConflict(null)
     try {
       const results = await Promise.all(
         updates.map((update) =>
-          jobLifecycleApi.updateLane(update.id, { sort_order: update.sort_order }),
+          jobLifecycleApi.updateLane(
+            update.id,
+            { sort_order: update.sort_order },
+            { ifMatch: ifMatchToken(lanes.find((lane) => lane.id === update.id)) },
+          ),
         ),
       )
       const byId = new Map(results.map((res) => [res.data.id, res.data]))
       setLanes((prev) => prev.map((lane) => byId.get(lane.id) ?? lane))
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      reportWriteError(err, moving?.name ?? `Lane #${laneId}`)
     } finally {
       setSaving(false)
     }
@@ -574,18 +688,24 @@ export default function JobLifecycle() {
   const handleReorderStep = async (stepId: number, direction: 'up' | 'down') => {
     const updates = computeAxisReorder(steps, stepId, direction)
     if (updates.length === 0 || saving) return
+    const moving = steps.find((step) => step.id === stepId) ?? null
     setSaving(true)
     setError(null)
+    setConflict(null)
     try {
       const results = await Promise.all(
         updates.map((update) =>
-          jobLifecycleApi.updateStep(update.id, { sort_order: update.sort_order }),
+          jobLifecycleApi.updateStep(
+            update.id,
+            { sort_order: update.sort_order },
+            { ifMatch: ifMatchToken(steps.find((step) => step.id === update.id)) },
+          ),
         ),
       )
       const byId = new Map(results.map((res) => [res.data.id, res.data]))
       setSteps((prev) => prev.map((step) => byId.get(step.id) ?? step))
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      reportWriteError(err, moving?.name ?? `Step #${stepId}`)
     } finally {
       setSaving(false)
     }
@@ -598,9 +718,64 @@ export default function JobLifecycle() {
     const next: JobStepPdcaPhase | null = nextPdcaPhase(current)
     setSaving(true)
     setError(null)
+    setConflict(null)
     try {
-      const res = await jobLifecycleApi.updateStep(step.id, { pdca_phase: next })
+      const res = await jobLifecycleApi.updateStep(
+        step.id,
+        { pdca_phase: next },
+        { ifMatch: ifMatchToken(step) },
+      )
       setSteps((prev) => prev.map((s) => (s.id === step.id ? res.data : s)))
+    } catch (err) {
+      reportWriteError(err, step.name)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Copy the active pack's axes into a new cycle. Cells are left empty. */
+  const handleCloneJobType = async () => {
+    const name = cloneName.trim()
+    if (!name || !effectiveJobTypeId || saving) return
+    setSaving(true)
+    setError(null)
+    setConflict(null)
+    try {
+      const res = await jobLifecycleApi.cloneJobType(effectiveJobTypeId, {
+        code: buildAxisCode(name, 'job'),
+        name,
+      })
+      setCloneName('')
+      setJobTypes((prev) => [...prev, res.data.job_type])
+      setSelectedJobTypeId(res.data.job_type.id)
+      setSelectedLaneId(null)
+      setSelectedStepId(null)
+      setDropHint(
+        `Cloned ${res.data.cloned_lane_count} lane(s) and ${res.data.cloned_step_count} step(s). Cells are empty — evidence is attached per pack, never copied.`,
+      )
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Author the mandatory-evidence flag on one cell. The verdict stays derived. */
+  const handleToggleCellRequirement = async (laneId: number, stepId: number) => {
+    if (!effectiveJobTypeId || saving) return
+    const current = Boolean(cellIndex.get(cellKey(laneId, stepId))?.requires_evidence)
+    setSaving(true)
+    setError(null)
+    setConflict(null)
+    try {
+      const res = await jobLifecycleApi.patchCellRequirement(effectiveJobTypeId, laneId, stepId, {
+        requires_evidence: !current,
+      })
+      setCells((prev) => {
+        const without = prev.filter((c) => !(c.lane_id === laneId && c.step_id === stepId))
+        return [...without, res.data]
+      })
+      setDerivedNonce((n) => n + 1)
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -692,6 +867,7 @@ export default function JobLifecycle() {
       })
       setSelectedLaneId(laneId)
       setSelectedStepId(stepId)
+      setDerivedNonce((n) => n + 1)
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -793,7 +969,7 @@ export default function JobLifecycle() {
             aria-label="Swimlane view mode"
             data-testid="job-lifecycle-view-mode"
           >
-            {(['matrix', 'transpose', 'phase'] as const).map((mode) => (
+            {availableJobLifecycleViewModes(jobCellLinksEnabled).map((mode) => (
               <Button
                 key={mode}
                 type="button"
@@ -890,6 +1066,44 @@ export default function JobLifecycle() {
           {dropHint}
         </div>
       ) : null}
+      {conflict ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100"
+          data-testid="job-lifecycle-conflict-banner"
+          role="alert"
+        >
+          <span>{conflict}</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="job-lifecycle-conflict-reload"
+            onClick={reloadAfterConflict}
+          >
+            Reload pack
+          </Button>
+        </div>
+      ) : null}
+      {readinessError ? (
+        <div
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100"
+          data-testid="job-lifecycle-readiness-error"
+          role="status"
+        >
+          Evidence readiness could not be loaded, so mandatory cells read as unknown rather than
+          ready: {readinessError}
+        </div>
+      ) : null}
+      {unreadyCount > 0 ? (
+        <div
+          className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          data-testid="job-lifecycle-readiness-summary"
+          role="status"
+        >
+          {unreadyCount} mandatory-evidence cell(s) are not satisfied
+          {freshnessOn ? ' (checked against Library / Document Control)' : ' (presence check only)'}.
+        </div>
+      ) : null}
       {freshnessOn && freshnessError ? (
         <div
           className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100"
@@ -952,6 +1166,30 @@ export default function JobLifecycle() {
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+            <div className="flex gap-2">
+              <Input
+                value={cloneName}
+                onChange={(e) => setCloneName(e.target.value)}
+                placeholder="Clone axes as…"
+                disabled={!effectiveJobTypeId}
+                data-testid="job-lifecycle-clone-name"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void handleCloneJobType()}
+                disabled={saving || !effectiveJobTypeId || !cloneName.trim()}
+                data-testid="job-lifecycle-clone-type"
+                title="Copy this pack's lanes and steps into a new job cycle. Cells stay empty — evidence belongs to the pack that earned it."
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Cloning copies lanes and steps only. Cells, links and document references are not
+              copied — a reference asserts that <em>this</em> pack is evidenced by that document.
+            </p>
             <ul className="space-y-1" data-testid="job-lifecycle-type-list">
               {orderedJobTypes.map((jt) => (
                 <li key={jt.id}>
@@ -1166,6 +1404,15 @@ export default function JobLifecycle() {
           onPointerCancel={onPanelPointerUp}
         />
 
+        {graphMode ? (
+          <JobGraphPanel
+            mode={viewMode === 'map' ? 'map' : 'trail'}
+            jobTypeId={effectiveJobTypeId}
+            assure={freshnessOn}
+            refreshKey={derivedNonce}
+            onDrillIntoCycle={drillIntoCycle}
+          />
+        ) : (
         <Card className="p-4 space-y-3 overflow-x-auto min-w-0" data-testid="job-lifecycle-matrix">
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
@@ -1228,6 +1475,10 @@ export default function JobLifecycle() {
                         cellIndex.get(cellKey(laneId, stepId))?.library_document_ids ?? []
                       const selected =
                         selectedLaneId === laneId && selectedStepId === stepId
+                      const required = Boolean(
+                        cellIndex.get(cellKey(laneId, stepId))?.requires_evidence,
+                      )
+                      const verdict = readinessIndex.get(cellKey(laneId, stepId)) ?? null
                       return (
                         <td
                           key={`${laneId}:${stepId}`}
@@ -1245,6 +1496,42 @@ export default function JobLifecycle() {
                             setSelectedStepId(stepId)
                           }}
                         >
+                          <div className="mb-1 flex items-center justify-between gap-1">
+                            <button
+                              type="button"
+                              className={`rounded-full border px-1.5 py-0 text-[9px] uppercase tracking-wide ${
+                                required
+                                  ? 'border-primary/40 bg-primary/10 text-primary'
+                                  : 'border-border bg-muted/30 text-muted-foreground'
+                              }`}
+                              aria-pressed={required}
+                              aria-label={`${required ? 'Clear' : 'Set'} mandatory evidence for ${row.name} × ${col.name}`}
+                              data-testid={`job-lifecycle-cell-requirement-${laneId}-${stepId}`}
+                              data-requires-evidence={required ? 'true' : 'false'}
+                              disabled={saving}
+                              title={
+                                required
+                                  ? 'This cell must hold evidence. Readiness is derived from its document refs.'
+                                  : 'Mark this cell as owing evidence.'
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleToggleCellRequirement(laneId, stepId)
+                              }}
+                            >
+                              {required ? 'Evidence required' : 'Optional'}
+                            </button>
+                            {required && verdict ? (
+                              <span
+                                className={`shrink-0 rounded-full border px-1.5 py-0 text-[9px] uppercase tracking-wide ${readinessStateClasses(verdict.state)}`}
+                                data-testid={`job-lifecycle-cell-readiness-${laneId}-${stepId}`}
+                                data-readiness-state={verdict.state}
+                                title={readinessTitle(verdict)}
+                              >
+                                {readinessStateLabel(verdict.state)}
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="space-y-1 min-h-[72px]">
                             {docs.length === 0 ? (
                               <p className="text-[11px] text-muted-foreground">
@@ -1338,6 +1625,7 @@ export default function JobLifecycle() {
             </table>
           )}
         </Card>
+        )}
 
         <div
           role="separator"

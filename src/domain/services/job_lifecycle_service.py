@@ -34,12 +34,26 @@ from src.domain.models.job_lifecycle import (
     JobType,
 )
 from src.domain.services.href_registry import audit_finding_href, href_for, job_type_href, registered_entity_types
+from src.domain.services.job_lifecycle_concurrency import if_match_matches, job_lifecycle_etag
 from src.domain.services.job_lifecycle_freshness import (
     AuditLapseVerdict,
     classify_audit_lapse,
     classify_document_freshness,
     is_obsolete_controlled_status,
     normalise_status,
+)
+from src.domain.services.job_lifecycle_graph import (
+    CellReadinessVerdict,
+    JobGraphBuilder,
+    JobGraphEdge,
+    JobGraphNode,
+    clamp_audit_trail_limit,
+    clamp_cycle_graph_depth,
+    classify_cell_readiness,
+    edge_key,
+    node_key,
+    select_trail_cells,
+    summarise_readiness,
 )
 
 #: Ceiling on a single freshness lookup. The composer asks for the ids it can
@@ -191,6 +205,89 @@ def _controlled_is_stricter(candidate: ControlledDocument, current: ControlledDo
     return candidate_due < current_due
 
 
+def _document_label(document: Any, document_id: int) -> str:
+    """Reference · title when the library has both; never a bare id if avoidable."""
+    if document is None:
+        return f"Document #{document_id}"
+    title = (getattr(document, "title", None) or "").strip()
+    reference = (getattr(document, "reference_number", None) or "").strip()
+    if reference and title:
+        return f"{reference} · {title}"
+    return title or reference or f"Document #{document_id}"
+
+
+def _trail_link_edge_kind(link: JobCellLink) -> str:
+    """Edge vocabulary for a cell link, shared with the interaction map."""
+    kind = (link.kind or "").strip().lower()
+    if kind == "job_cycle":
+        return "nests"
+    if kind == "audit_outcome":
+        return "audits"
+    return "references"
+
+
+def _trail_link_node(link: JobCellLink, nested_names: Mapping[int, str]) -> Optional[JobGraphNode]:
+    """Node a cell link points at, or ``None`` when the link cannot resolve.
+
+    A link with no usable target is skipped rather than drawn as a dead end:
+    the trail is meant to be walkable, and an edge to nothing is worse than a
+    missing edge because it reads as evidence that exists.
+    """
+    kind = (link.kind or "").strip().lower()
+    if kind == "job_cycle":
+        target = getattr(link, "target_job_type_id", None)
+        if target is None:
+            return None
+        target_id = int(target)
+        return JobGraphNode(
+            key=node_key("job_type", target_id),
+            kind="job_type",
+            ref_id=target_id,
+            label=nested_names.get(target_id) or link.label or f"Job cycle #{target_id}",
+            href=job_type_href(target_id),
+            detail=None if target_id in nested_names else "unavailable",
+        )
+    if kind == "audit_outcome":
+        if link.audit_run_id is None:
+            return None
+        ref_id = int(link.audit_finding_id) if link.audit_finding_id is not None else int(link.audit_run_id)
+        return JobGraphNode(
+            key=node_key("audit_finding", ref_id),
+            kind="audit_finding",
+            ref_id=ref_id,
+            label=link.label,
+            href=audit_finding_href(
+                run_id=int(link.audit_run_id),
+                finding_id=int(link.audit_finding_id) if link.audit_finding_id is not None else None,
+            ),
+            detail=f"audit run #{int(link.audit_run_id)}",
+        )
+    if kind == "app":
+        if not link.entity_type or link.entity_id is None:
+            return None
+        return JobGraphNode(
+            key=node_key("app", int(link.id)),
+            kind="app",
+            ref_id=int(link.id),
+            label=link.label,
+            href=href_for(link.entity_type, int(link.entity_id)),
+            detail=link.entity_type,
+        )
+    if kind == "external":
+        url = (link.external_url or "").strip()
+        if not url:
+            return None
+        return JobGraphNode(
+            key=node_key("external", int(link.id)),
+            kind="external",
+            ref_id=int(link.id),
+            label=link.label,
+            href=url,
+            detail="external",
+        )
+    return None
+
+
 def _audit_run_ids(links: Iterable[JobCellLink]) -> set[int]:
     """Distinct run ids of the ``audit_outcome`` links in ``links``."""
     return {
@@ -256,8 +353,10 @@ class JobLifecycleService:
         description: Optional[str] = None,
         sort_order: Optional[int] = None,
         is_active: Optional[bool] = None,
+        if_match: Optional[str] = None,
     ) -> JobType:
         row = await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        self._assert_if_match(row, if_match, label="Job cycle")
         if name is not None:
             row.name = name.strip()
         if description is not None:
@@ -274,6 +373,109 @@ class JobLifecycleService:
         row = await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
         row.deleted_at = _utc_now()
         await self.db.commit()
+
+    def _assert_if_match(self, row: Any, if_match: Optional[str], *, label: str) -> None:
+        """Refuse a stale edit (JL-UX-W4).
+
+        Opt-in: no header means the caller did not read a version to compare,
+        so the write proceeds as it always has. A malformed header is a 400
+        rather than a silent pass — a precondition that cannot be evaluated
+        must not be treated as satisfied.
+        """
+        if if_match is None:
+            return
+        try:
+            matched = if_match_matches(if_match=if_match, updated_at=getattr(row, "updated_at", None))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"If-Match must carry the updated_at value that was read ({exc})",
+            ) from exc
+        if not matched:
+            current = job_lifecycle_etag(getattr(row, "updated_at", None))
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"{label} was changed by someone else since you loaded it. "
+                    f"Reload before saving — current updated_at is {current}."
+                ),
+            )
+
+    async def clone_job_type(
+        self,
+        *,
+        tenant_id: int,
+        source_job_type_id: int,
+        code: str,
+        name: str,
+        description: Optional[str] = None,
+        include_inactive: bool = True,
+    ) -> dict[str, Any]:
+        """Copy a pack's **axes** into a new job cycle. Cells stay empty.
+
+        Deliberately not a deep copy. Cloning cells would clone
+        ``library_document_id`` references, and a reference is a governance
+        claim that *this* pack is evidenced by that document — a claim the act
+        of copying a template cannot make on the new pack's behalf. Links are
+        left behind for the same reason, and no document is ever duplicated:
+        the library remains the single copy of any document.
+        """
+        source = await self.get_job_type(tenant_id=tenant_id, job_type_id=source_job_type_id)
+        code_n = _normalise_code(code)
+        await self._assert_unique_type_code(tenant_id=tenant_id, code=code_n)
+
+        lanes = await self.list_lanes(tenant_id=tenant_id, job_type_id=source_job_type_id)
+        steps = await self.list_steps(tenant_id=tenant_id, job_type_id=source_job_type_id)
+        if not include_inactive:
+            lanes = [lane for lane in lanes if lane.is_active]
+            steps = [step for step in steps if step.is_active]
+
+        clone = JobType(
+            tenant_id=tenant_id,
+            code=code_n,
+            name=name.strip(),
+            description=description if description is not None else source.description,
+            sort_order=source.sort_order,
+            is_active=True,
+        )
+        self.db.add(clone)
+        await self.db.flush()
+
+        for lane in lanes:
+            self.db.add(
+                JobLane(
+                    tenant_id=tenant_id,
+                    job_type_id=clone.id,
+                    code=lane.code,
+                    name=lane.name,
+                    description=lane.description,
+                    sort_order=lane.sort_order,
+                    is_active=lane.is_active,
+                )
+            )
+        for step in steps:
+            self.db.add(
+                JobStep(
+                    tenant_id=tenant_id,
+                    job_type_id=clone.id,
+                    code=step.code,
+                    name=step.name,
+                    description=step.description,
+                    sort_order=step.sort_order,
+                    is_active=step.is_active,
+                    pdca_phase=step.pdca_phase,
+                )
+            )
+        await self.db.commit()
+        await self.db.refresh(clone)
+        return {
+            "job_type": clone,
+            "source_job_type_id": int(source_job_type_id),
+            "cloned_lane_count": len(lanes),
+            "cloned_step_count": len(steps),
+            "cloned_cell_count": 0,
+            "cloned_document_count": 0,
+        }
 
     # ------------------------------------------------------------------
     # Lanes
@@ -335,10 +537,12 @@ class JobLifecycleService:
         description: Optional[str] = None,
         sort_order: Optional[int] = None,
         is_active: Optional[bool] = None,
+        if_match: Optional[str] = None,
     ) -> JobLane:
         row = await self._get_live(JobLane, tenant_id=tenant_id, row_id=lane_id)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lane not found")
+        self._assert_if_match(row, if_match, label="Lane")
         if name is not None:
             row.name = name.strip()
         if description is not None:
@@ -422,10 +626,12 @@ class JobLifecycleService:
         is_active: Optional[bool] = None,
         pdca_phase: Optional[str] = None,
         pdca_phase_set: bool = False,
+        if_match: Optional[str] = None,
     ) -> JobStep:
         row = await self._get_live(JobStep, tenant_id=tenant_id, row_id=step_id)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Step not found")
+        self._assert_if_match(row, if_match, label="Step")
         if name is not None:
             row.name = name.strip()
         if description is not None:
@@ -742,6 +948,7 @@ class JobLifecycleService:
             "job_type_id": cell.job_type_id,
             "lane_id": cell.lane_id,
             "step_id": cell.step_id,
+            "requires_evidence": bool(getattr(cell, "requires_evidence", False)),
             "library_document_ids": [d.library_document_id for d in docs],
             "links": links,
             "created_at": cell.created_at,
@@ -792,6 +999,550 @@ class JobLifecycleService:
             )
             for cell in cells
         ]
+
+    async def set_cell_requirement(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        lane_id: int,
+        step_id: int,
+        requires_evidence: bool,
+        include_links: bool = False,
+    ) -> dict[str, Any]:
+        """Mark (or unmark) a lane × step intersection as owing evidence.
+
+        Creates the cell when it does not exist yet, because marking an *empty*
+        cell mandatory is the whole point: that is how a gap becomes visible
+        rather than reading as a deliberate blank.
+        """
+        await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        cell = await self._get_or_create_cell(
+            tenant_id=tenant_id,
+            job_type_id=job_type_id,
+            lane_id=lane_id,
+            step_id=step_id,
+        )
+        cell.requires_evidence = bool(requires_evidence)
+        await self.db.commit()
+        await self.db.refresh(cell)
+        return await self._cell_payload(cell, include_links=include_links)
+
+    # ------------------------------------------------------------------
+    # Evidence readiness (JL-UX-W4) — derived, never stored
+    # ------------------------------------------------------------------
+
+    async def _freshness_by_document_id(
+        self,
+        *,
+        tenant_id: int,
+        document_ids: Sequence[int],
+    ) -> dict[int, dict[str, Any]]:
+        """Freshness verdicts keyed by document id, chunked under the id cap."""
+        ordered = _dedupe_ids(document_ids)
+        index: dict[int, dict[str, Any]] = {}
+        for start in range(0, len(ordered), MAX_FRESHNESS_DOCUMENT_IDS):
+            chunk = ordered[start : start + MAX_FRESHNESS_DOCUMENT_IDS]
+            for item in await self.document_freshness(tenant_id=tenant_id, library_document_ids=chunk):
+                index[int(item["library_document_id"])] = item
+        return index
+
+    @staticmethod
+    def _obsolete_and_unresolved(
+        freshness: Mapping[int, Mapping[str, Any]],
+    ) -> tuple[set[int], set[int]]:
+        """Split a freshness index into withdrawn ids and ids we could not read."""
+        obsolete = {doc_id for doc_id, item in freshness.items() if item.get("is_obsolete")}
+        unresolved = {doc_id for doc_id, item in freshness.items() if not item.get("found")}
+        return obsolete, unresolved
+
+    async def _cells_with_axis_context(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+    ) -> list[dict[str, Any]]:
+        """Live cells of a pack with their lane / step names, in pack order."""
+        result = await self.db.execute(
+            select(
+                JobCell.id,
+                JobCell.lane_id,
+                JobCell.step_id,
+                JobCell.requires_evidence,
+                JobLane.name,
+                JobStep.name,
+            )
+            .join(JobLane, JobLane.id == JobCell.lane_id)
+            .join(JobStep, JobStep.id == JobCell.step_id)
+            .where(
+                JobCell.tenant_id == tenant_id,
+                JobCell.job_type_id == job_type_id,
+                JobCell.deleted_at.is_(None),
+            )
+            .order_by(JobLane.sort_order, JobLane.id, JobStep.sort_order, JobStep.id)
+        )
+        return [
+            {
+                "cell_id": int(cell_id),
+                "lane_id": int(lane_id),
+                "step_id": int(step_id),
+                "requires_evidence": bool(requires_evidence),
+                "lane_name": lane_name,
+                "step_name": step_name,
+            }
+            for cell_id, lane_id, step_id, requires_evidence, lane_name, step_name in result.all()
+        ]
+
+    async def _documents_by_cell(
+        self,
+        *,
+        tenant_id: int,
+        cell_ids: Sequence[int],
+    ) -> dict[int, list[int]]:
+        """Attached ``library_document_id`` per cell, in the operator's order."""
+        if not cell_ids:
+            return {}
+        result = await self.db.execute(
+            select(JobCellDocument.cell_id, JobCellDocument.library_document_id)
+            .where(
+                JobCellDocument.tenant_id == tenant_id,
+                JobCellDocument.cell_id.in_(list(cell_ids)),
+            )
+            .order_by(JobCellDocument.cell_id, JobCellDocument.sort_order, JobCellDocument.id)
+        )
+        by_cell: dict[int, list[int]] = {}
+        for cell_id, document_id in result.all():
+            by_cell.setdefault(int(cell_id), []).append(int(document_id))
+        return by_cell
+
+    async def _links_by_cell(
+        self,
+        *,
+        tenant_id: int,
+        cell_ids: Sequence[int],
+    ) -> dict[int, list[JobCellLink]]:
+        if not cell_ids:
+            return {}
+        result = await self.db.execute(
+            select(JobCellLink)
+            .where(
+                JobCellLink.tenant_id == tenant_id,
+                JobCellLink.cell_id.in_(list(cell_ids)),
+            )
+            .order_by(JobCellLink.cell_id, JobCellLink.sort_order, JobCellLink.id)
+        )
+        by_cell: dict[int, list[JobCellLink]] = {}
+        for row in result.scalars().all():
+            by_cell.setdefault(int(row.cell_id), []).append(row)
+        return by_cell
+
+    async def _documents_by_id(
+        self,
+        *,
+        tenant_id: int,
+        document_ids: Sequence[int],
+    ) -> dict[int, Any]:
+        if not document_ids:
+            return {}
+        result = await self.db.execute(
+            select(Document).where(
+                Document.tenant_id == tenant_id,
+                Document.id.in_(_dedupe_ids(document_ids)),
+            )
+        )
+        return {int(doc.id): doc for doc in result.scalars().all()}
+
+    async def evidence_readiness(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        assure: bool = False,
+    ) -> dict[str, Any]:
+        """Readiness of every cell in the pack that requires evidence.
+
+        Nothing here is stored. With ``assure`` off this reports presence only,
+        which is all the composer can claim without reading the document SSOT;
+        with it on, a withdrawn attachment fails the cell and a document that
+        cannot be read reports ``unknown`` rather than passing.
+        """
+        await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        cells = await self._cells_with_axis_context(tenant_id=tenant_id, job_type_id=job_type_id)
+        mandatory = [c for c in cells if c["requires_evidence"]]
+        docs_by_cell = await self._documents_by_cell(
+            tenant_id=tenant_id,
+            cell_ids=[c["cell_id"] for c in mandatory],
+        )
+        obsolete_ids: set[int] = set()
+        unresolved_ids: set[int] = set()
+        if assure and mandatory:
+            every_id = [doc_id for cell in mandatory for doc_id in docs_by_cell.get(cell["cell_id"], [])]
+            freshness = await self._freshness_by_document_id(tenant_id=tenant_id, document_ids=every_id)
+            obsolete_ids, unresolved_ids = self._obsolete_and_unresolved(freshness)
+
+        items: list[dict[str, Any]] = []
+        verdicts: list[CellReadinessVerdict] = []
+        for cell in mandatory:
+            document_ids = docs_by_cell.get(cell["cell_id"], [])
+            verdict = classify_cell_readiness(
+                requires_evidence=True,
+                document_ids=document_ids,
+                obsolete_ids=obsolete_ids,
+                unresolved_ids=unresolved_ids,
+                assure=assure,
+            )
+            verdicts.append(verdict)
+            items.append({**cell, "library_document_ids": document_ids, **verdict.as_dict()})
+        return {
+            "job_type_id": int(job_type_id),
+            "assure": bool(assure),
+            "items": items,
+            "total": len(items),
+            "summary": summarise_readiness(verdicts),
+        }
+
+    # ------------------------------------------------------------------
+    # Process interaction map + audit trail (JL-UX-W4) — one edge model
+    # ------------------------------------------------------------------
+
+    async def _nest_link_rows(
+        self,
+        *,
+        tenant_id: int,
+        source_job_type_ids: Sequence[int],
+    ) -> list[dict[str, Any]]:
+        """``job_cycle`` links leaving the given packs, with their source cell."""
+        ids = [int(i) for i in source_job_type_ids]
+        if not ids:
+            return []
+        result = await self.db.execute(
+            select(
+                JobCellLink.id,
+                JobCellLink.label,
+                JobCellLink.target_job_type_id,
+                JobCell.id,
+                JobCell.job_type_id,
+                JobCell.lane_id,
+                JobCell.step_id,
+            )
+            .join(JobCell, JobCell.id == JobCellLink.cell_id)
+            .where(
+                JobCellLink.tenant_id == tenant_id,
+                JobCellLink.kind == "job_cycle",
+                JobCellLink.target_job_type_id.is_not(None),
+                JobCell.tenant_id == tenant_id,
+                JobCell.job_type_id.in_(ids),
+                JobCell.deleted_at.is_(None),
+            )
+            .order_by(JobCell.lane_id, JobCell.step_id, JobCellLink.sort_order, JobCellLink.id)
+        )
+        return [
+            {
+                "link_id": int(link_id),
+                "label": label,
+                "target_job_type_id": int(target_job_type_id),
+                "cell_id": int(cell_id),
+                "source_job_type_id": int(source_job_type_id),
+                "lane_id": int(lane_id),
+                "step_id": int(step_id),
+            }
+            for link_id, label, target_job_type_id, cell_id, source_job_type_id, lane_id, step_id in result.all()
+            if target_job_type_id is not None
+        ]
+
+    async def _live_job_type_names(
+        self,
+        *,
+        tenant_id: int,
+        job_type_ids: Iterable[int],
+    ) -> dict[int, str]:
+        ids = _dedupe_ids(job_type_ids)
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(JobType.id, JobType.name).where(
+                JobType.tenant_id == tenant_id,
+                JobType.id.in_(ids),
+                JobType.deleted_at.is_(None),
+            )
+        )
+        return {int(row_id): name for row_id, name in result.all()}
+
+    async def cycle_graph(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        depth: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """Process interaction map: job cycles and the nest links between them.
+
+        A **view**, not a second source of truth. Every edge is one
+        ``job_cycle`` cell link — delete the link in the composer and the line
+        disappears, because there is nowhere else for it to be recorded. Two
+        packs nested through two different cells draw two edges for the same
+        reason.
+        """
+        root = await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        max_depth = clamp_cycle_graph_depth(depth)
+
+        builder = JobGraphBuilder()
+        builder.add_node(
+            JobGraphNode(
+                key=node_key("job_type", int(root.id)),
+                kind="job_type",
+                ref_id=int(root.id),
+                label=root.name,
+                href=job_type_href(int(root.id)),
+                detail="root",
+            )
+        )
+
+        frontier = [int(root.id)]
+        visited: set[int] = {int(root.id)}
+        for _level in range(max_depth):
+            rows = await self._nest_link_rows(tenant_id=tenant_id, source_job_type_ids=frontier)
+            if not rows:
+                frontier = []
+                break
+            names = await self._live_job_type_names(
+                tenant_id=tenant_id,
+                job_type_ids=[row["target_job_type_id"] for row in rows],
+            )
+            next_frontier: list[int] = []
+            for row in rows:
+                target = row["target_job_type_id"]
+                live = target in names
+                target_key = builder.add_node(
+                    JobGraphNode(
+                        key=node_key("job_type", target),
+                        kind="job_type",
+                        ref_id=target,
+                        label=names.get(target) or row["label"] or f"Job cycle #{target}",
+                        href=job_type_href(target),
+                        # A soft-deleted target still has a link in a cell, so
+                        # dropping the edge would hide something the operator
+                        # can see. Say it is gone instead.
+                        detail=None if live else "unavailable",
+                    )
+                )
+                source_key = node_key("job_type", row["source_job_type_id"])
+                builder.add_edge(
+                    JobGraphEdge(
+                        key=edge_key("nests", source_key, target_key, via=row["cell_id"]),
+                        kind="nests",
+                        source=source_key,
+                        target=target_key,
+                        label=row["label"],
+                        href=job_type_href(target),
+                        cell_id=row["cell_id"],
+                        lane_id=row["lane_id"],
+                        step_id=row["step_id"],
+                    )
+                )
+                if live and target not in visited:
+                    visited.add(target)
+                    next_frontier.append(target)
+            frontier = next_frontier
+            if not frontier:
+                break
+
+        # Only ask about the boundary when the walk actually stopped at it.
+        truncated = bool(frontier) and bool(
+            await self._nest_link_rows(tenant_id=tenant_id, source_job_type_ids=frontier)
+        )
+        return {
+            "root_job_type_id": int(root.id),
+            "depth": max_depth,
+            "truncated": truncated,
+            **builder.as_dict(),
+        }
+
+    async def audit_trail(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        limit: Optional[int] = None,
+        assure: bool = False,
+        include_links: bool = False,
+    ) -> dict[str, Any]:
+        """Sample path walk an auditor can follow: pack → cell → evidence.
+
+        Shares the map's node/edge vocabulary, so a ``nests`` edge means the
+        same thing in both and the two views can be drawn by one renderer. The
+        walk is a *sample*: mandatory cells first, then cells that hold
+        something, capped — and the response says how many candidates existed
+        so a truncated walk never reads as a complete one.
+        """
+        root = await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        max_paths = clamp_audit_trail_limit(limit)
+
+        cells = await self._cells_with_axis_context(tenant_id=tenant_id, job_type_id=job_type_id)
+        cell_ids = [c["cell_id"] for c in cells]
+        docs_by_cell = await self._documents_by_cell(tenant_id=tenant_id, cell_ids=cell_ids)
+        # Link edges follow the same gate as the composer's cells: with
+        # ``job_cell_links`` closed the trail must not surface links the
+        # composer itself is hiding.
+        links_by_cell = await self._links_by_cell(tenant_id=tenant_id, cell_ids=cell_ids) if include_links else {}
+
+        candidates = [
+            {
+                **cell,
+                "has_content": bool(docs_by_cell.get(cell["cell_id"])) or bool(links_by_cell.get(cell["cell_id"])),
+            }
+            for cell in cells
+        ]
+        selected, total_candidates = select_trail_cells(candidates, limit=max_paths)
+
+        walked_doc_ids = [doc_id for cell in selected for doc_id in docs_by_cell.get(cell["cell_id"], [])]
+        documents = await self._documents_by_id(tenant_id=tenant_id, document_ids=walked_doc_ids)
+        freshness: dict[int, dict[str, Any]] = {}
+        obsolete_ids: set[int] = set()
+        unresolved_ids: set[int] = set()
+        if assure and walked_doc_ids:
+            freshness = await self._freshness_by_document_id(tenant_id=tenant_id, document_ids=walked_doc_ids)
+            obsolete_ids, unresolved_ids = self._obsolete_and_unresolved(freshness)
+
+        nested_names = await self._live_job_type_names(
+            tenant_id=tenant_id,
+            job_type_ids=[
+                int(link.target_job_type_id)
+                for cell in selected
+                for link in links_by_cell.get(cell["cell_id"], [])
+                if link.kind == "job_cycle" and link.target_job_type_id is not None
+            ],
+        )
+
+        builder = JobGraphBuilder()
+        root_key = builder.add_node(
+            JobGraphNode(
+                key=node_key("job_type", int(root.id)),
+                kind="job_type",
+                ref_id=int(root.id),
+                label=root.name,
+                href=job_type_href(int(root.id)),
+                detail="root",
+            )
+        )
+
+        paths: list[dict[str, Any]] = []
+        verdicts: list[CellReadinessVerdict] = []
+        for cell in selected:
+            cell_id = cell["cell_id"]
+            document_ids = docs_by_cell.get(cell_id, [])
+            cell_key = builder.add_node(
+                JobGraphNode(
+                    key=node_key("cell", cell_id),
+                    kind="cell",
+                    ref_id=cell_id,
+                    label=f"{cell['lane_name']} × {cell['step_name']}",
+                    href=href_for("job_step", int(cell["step_id"])),
+                    detail="requires evidence" if cell["requires_evidence"] else None,
+                )
+            )
+            edge_keys = [
+                builder.add_edge(
+                    JobGraphEdge(
+                        key=edge_key("contains", root_key, cell_key, via=cell_id),
+                        kind="contains",
+                        source=root_key,
+                        target=cell_key,
+                        label=f"{cell['lane_name']} × {cell['step_name']}",
+                        href=href_for("job_step", int(cell["step_id"])),
+                        cell_id=cell_id,
+                        lane_id=cell["lane_id"],
+                        step_id=cell["step_id"],
+                    )
+                )
+            ]
+            node_keys = [root_key, cell_key]
+
+            for document_id in document_ids:
+                doc = documents.get(document_id)
+                verdict = freshness.get(document_id)
+                doc_key = builder.add_node(
+                    JobGraphNode(
+                        key=node_key("document", document_id),
+                        kind="document",
+                        ref_id=document_id,
+                        label=_document_label(doc, document_id),
+                        href=href_for("document", document_id),
+                        detail=str(verdict["state"]) if verdict else None,
+                    )
+                )
+                node_keys.append(doc_key)
+                edge_keys.append(
+                    builder.add_edge(
+                        JobGraphEdge(
+                            key=edge_key("evidences", cell_key, doc_key, via=cell_id),
+                            kind="evidences",
+                            source=cell_key,
+                            target=doc_key,
+                            label=_document_label(doc, document_id),
+                            href=href_for("document", document_id),
+                            cell_id=cell_id,
+                            lane_id=cell["lane_id"],
+                            step_id=cell["step_id"],
+                        )
+                    )
+                )
+
+            for link in links_by_cell.get(cell_id, []):
+                target_node = _trail_link_node(link, nested_names)
+                if target_node is None:
+                    continue
+                target_key = builder.add_node(target_node)
+                node_keys.append(target_key)
+                edge_keys.append(
+                    builder.add_edge(
+                        JobGraphEdge(
+                            key=edge_key(_trail_link_edge_kind(link), cell_key, target_key, via=cell_id),
+                            kind=_trail_link_edge_kind(link),
+                            source=cell_key,
+                            target=target_key,
+                            label=link.label,
+                            href=target_node.href,
+                            cell_id=cell_id,
+                            lane_id=cell["lane_id"],
+                            step_id=cell["step_id"],
+                        )
+                    )
+                )
+
+            readiness = classify_cell_readiness(
+                requires_evidence=bool(cell["requires_evidence"]),
+                document_ids=document_ids,
+                obsolete_ids=obsolete_ids,
+                unresolved_ids=unresolved_ids,
+                assure=assure,
+            )
+            verdicts.append(readiness)
+            paths.append(
+                {
+                    "cell_id": cell_id,
+                    "lane_id": cell["lane_id"],
+                    "lane_name": cell["lane_name"],
+                    "step_id": cell["step_id"],
+                    "step_name": cell["step_name"],
+                    "requires_evidence": bool(cell["requires_evidence"]),
+                    "library_document_ids": document_ids,
+                    "node_keys": node_keys,
+                    "edge_keys": edge_keys,
+                    "readiness": readiness.as_dict(),
+                }
+            )
+
+        return {
+            "root_job_type_id": int(root.id),
+            "assure": bool(assure),
+            "limit": max_paths,
+            "total_candidates": total_candidates,
+            "truncated": total_candidates > len(selected),
+            "paths": paths,
+            "summary": summarise_readiness(verdicts),
+            **builder.as_dict(),
+        }
 
     async def list_cell_links(
         self,
