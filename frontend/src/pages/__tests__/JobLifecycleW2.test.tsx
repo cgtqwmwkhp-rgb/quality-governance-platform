@@ -207,7 +207,8 @@ describe('PDCA colouring', () => {
     fireEvent.click(await screen.findByTestId('job-lifecycle-step-pdca-20'))
 
     await waitFor(() => {
-      expect(updateStep).toHaveBeenCalledWith(20, { pdca_phase: 'do' })
+      // W4 adds the read `updated_at` as an If-Match precondition on every axis PATCH.
+      expect(updateStep).toHaveBeenCalledWith(20, { pdca_phase: 'do' }, { ifMatch: NOW })
     })
     await waitFor(() => {
       expect(screen.getByTestId('job-lifecycle-col-20')).toHaveAttribute('data-pdca-phase', 'do')
@@ -223,7 +224,7 @@ describe('PDCA colouring', () => {
     fireEvent.click(await screen.findByTestId('job-lifecycle-step-pdca-20'))
 
     await waitFor(() => {
-      expect(updateStep).toHaveBeenCalledWith(20, { pdca_phase: null })
+      expect(updateStep).toHaveBeenCalledWith(20, { pdca_phase: null }, { ifMatch: NOW })
     })
   })
 })
@@ -300,7 +301,7 @@ describe('axis rename and reorder use the existing PATCH APIs', () => {
     const input = await screen.findByTestId('job-lifecycle-lane-name-10')
     fireEvent.blur(input, { target: { value: 'Quality' } })
 
-    await waitFor(() => expect(updateLane).toHaveBeenCalledWith(10, { name: 'Quality' }))
+    await waitFor(() => expect(updateLane).toHaveBeenCalledWith(10, { name: 'Quality' }, { ifMatch: NOW }))
   })
 
   it('does not PATCH when a rename leaves the name unchanged', async () => {
@@ -321,8 +322,8 @@ describe('axis rename and reorder use the existing PATCH APIs', () => {
     fireEvent.click(await screen.findByTestId('job-lifecycle-step-down-20'))
 
     await waitFor(() => expect(updateStep).toHaveBeenCalledTimes(2))
-    expect(updateStep).toHaveBeenCalledWith(21, { sort_order: 0 })
-    expect(updateStep).toHaveBeenCalledWith(20, { sort_order: 1 })
+    expect(updateStep).toHaveBeenCalledWith(21, { sort_order: 0 }, { ifMatch: NOW })
+    expect(updateStep).toHaveBeenCalledWith(20, { sort_order: 1 }, { ifMatch: NOW })
   })
 
   it('issues no PATCH when an axis is already at the end', async () => {
@@ -344,7 +345,7 @@ describe('axis rename and reorder use the existing PATCH APIs', () => {
     fireEvent.click(await screen.findByTestId('job-lifecycle-lane-up-11'))
 
     await waitFor(() => expect(updateLane).toHaveBeenCalledTimes(2))
-    expect(updateLane).toHaveBeenCalledWith(11, { sort_order: 0 })
-    expect(updateLane).toHaveBeenCalledWith(10, { sort_order: 1 })
+    expect(updateLane).toHaveBeenCalledWith(11, { sort_order: 0 }, { ifMatch: NOW })
+    expect(updateLane).toHaveBeenCalledWith(10, { sort_order: 1 }, { ifMatch: NOW })
   })
 })

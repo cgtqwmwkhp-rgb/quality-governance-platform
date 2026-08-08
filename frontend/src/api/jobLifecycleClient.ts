@@ -55,6 +55,12 @@ export interface JobCell {
   job_type_id: number
   lane_id: number
   step_id: number
+  /**
+   * JL-UX-W4 — this intersection is expected to hold evidence. Optional on the
+   * type so a cell cached by a pre-W4 build still satisfies it; absent reads
+   * as "not required", which is the same default the column carries.
+   */
+  requires_evidence?: boolean
   library_document_ids: number[]
   links?: JobCellLink[]
   created_at: string
@@ -219,6 +225,148 @@ export interface JobCellDocumentsPutPayload {
   library_document_ids: number[]
 }
 
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W4 — mandatory evidence, clone, map / trail, optimistic concurrency   */
+/* -------------------------------------------------------------------------- */
+
+export interface JobCellRequirementPayload {
+  requires_evidence: boolean
+}
+
+export interface JobTypeClonePayload {
+  code: string
+  name: string
+  description?: string | null
+  include_inactive?: boolean
+}
+
+export interface JobTypeCloneResponse {
+  job_type: JobType
+  source_job_type_id: number
+  cloned_lane_count: number
+  cloned_step_count: number
+  /** Always 0 — a clone copies axes, never evidence claims. */
+  cloned_cell_count: number
+  cloned_document_count: number
+}
+
+/** `unknown` means the evidence exists but its standing could not be read. */
+export type JobCellReadinessState =
+  | 'not_required'
+  | 'ready'
+  | 'missing_evidence'
+  | 'obsolete_evidence'
+  | 'unknown'
+
+export interface JobCellReadiness {
+  state: JobCellReadinessState
+  reason: string
+  evidence_count: number
+  obsolete_count: number
+  unresolved_count: number
+  is_ready: boolean
+}
+
+export interface JobCellReadinessItem extends JobCellReadiness {
+  cell_id: number
+  lane_id: number
+  lane_name: string
+  step_id: number
+  step_name: string
+  requires_evidence: boolean
+  library_document_ids: number[]
+}
+
+export interface JobEvidenceReadinessResponse {
+  items: JobCellReadinessItem[]
+  total: number
+  job_type_id: number
+  assure: boolean
+  summary: Record<string, number>
+}
+
+export type JobGraphNodeKind =
+  | 'job_type'
+  | 'cell'
+  | 'document'
+  | 'audit_finding'
+  | 'app'
+  | 'external'
+
+export type JobGraphEdgeKind = 'nests' | 'contains' | 'evidences' | 'audits' | 'references'
+
+export interface JobGraphNode {
+  key: string
+  kind: JobGraphNodeKind
+  ref_id: number
+  label: string
+  href?: string | null
+  detail?: string | null
+}
+
+export interface JobGraphEdge {
+  key: string
+  kind: JobGraphEdgeKind
+  source: string
+  target: string
+  label: string
+  href?: string | null
+  cell_id?: number | null
+  lane_id?: number | null
+  step_id?: number | null
+}
+
+export interface JobCycleGraphResponse {
+  root_job_type_id: number
+  depth: number
+  truncated: boolean
+  nodes: JobGraphNode[]
+  edges: JobGraphEdge[]
+}
+
+export interface JobAuditTrailPath {
+  cell_id: number
+  lane_id: number
+  lane_name: string
+  step_id: number
+  step_name: string
+  requires_evidence: boolean
+  library_document_ids: number[]
+  node_keys: string[]
+  edge_keys: string[]
+  readiness: JobCellReadiness
+}
+
+export interface JobAuditTrailResponse {
+  root_job_type_id: number
+  assure: boolean
+  limit: number
+  total_candidates: number
+  truncated: boolean
+  paths: JobAuditTrailPath[]
+  nodes: JobGraphNode[]
+  edges: JobGraphEdge[]
+  summary: Record<string, number>
+}
+
+/**
+ * Optimistic-concurrency precondition for an axis PATCH.
+ *
+ * `ifMatch` is the `updated_at` that was read. Omitting it keeps the previous
+ * last-write-wins behaviour, so no existing caller changes meaning.
+ */
+export interface JobLifecycleWriteOptions {
+  ifMatch?: string | null
+}
+
+function ifMatchConfig(
+  options: JobLifecycleWriteOptions | undefined,
+): { headers: Record<string, string> } | null {
+  const token = options?.ifMatch
+  if (typeof token !== 'string' || token.trim() === '') return null
+  return { headers: { 'If-Match': token } }
+}
+
 const PREFIX = '/api/v1/job-lifecycle'
 
 export function createJobLifecycleApi(api: AxiosInstance) {
@@ -238,8 +386,19 @@ export function createJobLifecycleApi(api: AxiosInstance) {
     updateJobType(
       jobTypeId: number,
       payload: JobTypeUpdatePayload,
+      options?: JobLifecycleWriteOptions,
     ): Promise<AxiosResponse<JobType>> {
-      return api.patch(`${PREFIX}/job-types/${jobTypeId}`, payload)
+      const config = ifMatchConfig(options)
+      const url = `${PREFIX}/job-types/${jobTypeId}`
+      return config ? api.patch(url, payload, config) : api.patch(url, payload)
+    },
+
+    /** Copy a pack's lanes and steps into a new cycle. Cells stay empty. */
+    cloneJobType(
+      jobTypeId: number,
+      payload: JobTypeClonePayload,
+    ): Promise<AxiosResponse<JobTypeCloneResponse>> {
+      return api.post(`${PREFIX}/job-types/${jobTypeId}/clone`, payload)
     },
 
     deleteJobType(jobTypeId: number): Promise<AxiosResponse<void>> {
@@ -257,8 +416,14 @@ export function createJobLifecycleApi(api: AxiosInstance) {
       return api.post(`${PREFIX}/job-types/${jobTypeId}/lanes`, payload)
     },
 
-    updateLane(laneId: number, payload: JobLaneUpdatePayload): Promise<AxiosResponse<JobLane>> {
-      return api.patch(`${PREFIX}/lanes/${laneId}`, payload)
+    updateLane(
+      laneId: number,
+      payload: JobLaneUpdatePayload,
+      options?: JobLifecycleWriteOptions,
+    ): Promise<AxiosResponse<JobLane>> {
+      const config = ifMatchConfig(options)
+      const url = `${PREFIX}/lanes/${laneId}`
+      return config ? api.patch(url, payload, config) : api.patch(url, payload)
     },
 
     deleteLane(laneId: number): Promise<AxiosResponse<void>> {
@@ -276,8 +441,14 @@ export function createJobLifecycleApi(api: AxiosInstance) {
       return api.post(`${PREFIX}/job-types/${jobTypeId}/steps`, payload)
     },
 
-    updateStep(stepId: number, payload: JobStepUpdatePayload): Promise<AxiosResponse<JobStep>> {
-      return api.patch(`${PREFIX}/steps/${stepId}`, payload)
+    updateStep(
+      stepId: number,
+      payload: JobStepUpdatePayload,
+      options?: JobLifecycleWriteOptions,
+    ): Promise<AxiosResponse<JobStep>> {
+      const config = ifMatchConfig(options)
+      const url = `${PREFIX}/steps/${stepId}`
+      return config ? api.patch(url, payload, config) : api.patch(url, payload)
     },
 
     deleteStep(stepId: number): Promise<AxiosResponse<void>> {
@@ -298,6 +469,46 @@ export function createJobLifecycleApi(api: AxiosInstance) {
         `${PREFIX}/job-types/${jobTypeId}/cells/${laneId}/${stepId}/documents`,
         payload,
       )
+    },
+
+    /** Author the mandatory-evidence flag. Creates the cell if it is empty. */
+    patchCellRequirement(
+      jobTypeId: number,
+      laneId: number,
+      stepId: number,
+      payload: JobCellRequirementPayload,
+    ): Promise<AxiosResponse<JobCell>> {
+      return api.patch(`${PREFIX}/job-types/${jobTypeId}/cells/${laneId}/${stepId}`, payload)
+    },
+
+    /** Readiness of every mandatory cell. `assure` also reads document status. */
+    listEvidenceReadiness(
+      jobTypeId: number,
+      assure = false,
+    ): Promise<AxiosResponse<JobEvidenceReadinessResponse>> {
+      return api.get(
+        `${PREFIX}/job-types/${jobTypeId}/evidence-readiness?assure=${assure ? 'true' : 'false'}`,
+      )
+    },
+
+    /** Sample path walk for an auditor, in the map's node/edge vocabulary. */
+    getAuditTrail(
+      jobTypeId: number,
+      options: { limit?: number; assure?: boolean } = {},
+    ): Promise<AxiosResponse<JobAuditTrailResponse>> {
+      const params = new URLSearchParams()
+      if (typeof options.limit === 'number') params.set('limit', String(options.limit))
+      params.set('assure', options.assure ? 'true' : 'false')
+      return api.get(`${PREFIX}/job-types/${jobTypeId}/audit-trail?${params.toString()}`)
+    },
+
+    /** Process interaction map over `job_cycle` links (needs job_cell_links). */
+    getCycleGraph(
+      jobTypeId: number,
+      depth?: number,
+    ): Promise<AxiosResponse<JobCycleGraphResponse>> {
+      const suffix = typeof depth === 'number' ? `?depth=${depth}` : ''
+      return api.get(`${PREFIX}/job-types/${jobTypeId}/cycle-graph${suffix}`)
     },
 
     listCellLinks(

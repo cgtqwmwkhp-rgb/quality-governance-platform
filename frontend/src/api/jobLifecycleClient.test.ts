@@ -104,4 +104,69 @@ describe('createJobLifecycleApi', () => {
     client.listDocumentFreshness([])
     expect(api.get).toHaveBeenCalledWith('/api/v1/job-lifecycle/document-freshness?')
   })
+
+  it('sends If-Match on an axis PATCH only when a token was read (JL-UX-W4)', () => {
+    const api = mockApi()
+    const client = createJobLifecycleApi(api as never)
+
+    client.updateLane(10, { name: 'Operate' }, { ifMatch: '2026-08-08T00:00:00Z' })
+    expect(api.patch).toHaveBeenCalledWith(
+      '/api/v1/job-lifecycle/lanes/10',
+      { name: 'Operate' },
+      { headers: { 'If-Match': '2026-08-08T00:00:00Z' } },
+    )
+
+    // No token means no precondition, which is the pre-W4 behaviour exactly —
+    // an empty `If-Match` header would be a malformed request, not a no-op.
+    client.updateStep(20, { name: 'Review' }, { ifMatch: '' })
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/job-lifecycle/steps/20', { name: 'Review' })
+
+    client.updateJobType(3, { name: 'Ops' }, { ifMatch: null })
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/job-lifecycle/job-types/3', { name: 'Ops' })
+  })
+
+  it('clones a pack and patches a cell requirement (JL-UX-W4)', () => {
+    const api = mockApi()
+    const client = createJobLifecycleApi(api as never)
+
+    client.cloneJobType(3, { code: 'ops_v2', name: 'Ops v2' })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/job-lifecycle/job-types/3/clone', {
+      code: 'ops_v2',
+      name: 'Ops v2',
+    })
+
+    client.patchCellRequirement(3, 10, 20, { requires_evidence: true })
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/job-lifecycle/job-types/3/cells/10/20', {
+      requires_evidence: true,
+    })
+  })
+
+  it('reads the derived W4 views with their assurance stated explicitly', () => {
+    const api = mockApi()
+    const client = createJobLifecycleApi(api as never)
+
+    client.listEvidenceReadiness(3)
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/job-lifecycle/job-types/3/evidence-readiness?assure=false',
+    )
+
+    client.listEvidenceReadiness(3, true)
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/job-lifecycle/job-types/3/evidence-readiness?assure=true',
+    )
+
+    client.getAuditTrail(3, { limit: 5, assure: true })
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/job-lifecycle/job-types/3/audit-trail?limit=5&assure=true',
+    )
+
+    client.getAuditTrail(3)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/job-lifecycle/job-types/3/audit-trail?assure=false')
+
+    client.getCycleGraph(3)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/job-lifecycle/job-types/3/cycle-graph')
+
+    client.getCycleGraph(3, 4)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/job-lifecycle/job-types/3/cycle-graph?depth=4')
+  })
 })

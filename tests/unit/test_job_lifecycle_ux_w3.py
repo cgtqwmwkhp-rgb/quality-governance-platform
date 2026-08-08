@@ -55,21 +55,34 @@ ALEMBIC_VERSIONS = REPO_ROOT / "alembic/versions"
 
 
 def test_w3_adds_no_alembic_revision_after_the_w2_head():
-    """Freshness is read-side. A new head here would be a schema change nobody asked for."""
+    """Freshness is read-side, so W3 must contribute no revision of its own.
+
+    Originally this asserted nothing at all sat on top of the W2 head. W4 does
+    legitimately add one (``job_cells.requires_evidence``), so the claim is
+    restated rather than dropped: whatever follows the W2 head must not be a
+    W3 revision. If a freshness-shaped migration ever appears here, this still
+    fails.
+    """
     revisions: set[str] = set()
-    down_revisions: set[str] = set()
+    successors: set[str] = set()
     for path in ALEMBIC_VERSIONS.glob("*.py"):
-        for line in path.read_text(encoding="utf-8").splitlines():
+        text = path.read_text(encoding="utf-8")
+        own_revision: str | None = None
+        follows_w2 = False
+        for line in text.splitlines():
             if '"' not in line:
                 continue
             if line.startswith("revision: str = "):
-                revisions.add(line.split('"')[1])
-            elif line.startswith("down_revision"):
-                down_revisions.add(line.split('"')[1])
+                own_revision = line.split('"')[1]
+                revisions.add(own_revision)
+            elif line.startswith("down_revision") and line.split('"')[1] == "20261021_job_nest_pdca":
+                follows_w2 = True
+        if follows_w2 and own_revision:
+            successors.add(own_revision)
     assert "20261021_job_nest_pdca" in revisions
-    assert (
-        "20261021_job_nest_pdca" not in down_revisions
-    ), "A revision now sits on top of the W2 head; W3 was specified as no-migration."
+    assert successors <= {
+        "20261022_job_cell_req_ev"
+    }, f"Unexpected revision(s) on top of the W2 head: {sorted(successors)}"
 
 
 def test_freshness_is_not_persisted_on_job_lifecycle_tables():

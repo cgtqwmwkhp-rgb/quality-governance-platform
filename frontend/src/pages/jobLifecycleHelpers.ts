@@ -8,20 +8,36 @@ import type { LibraryDocumentDragPayload } from '../components/graph/documentGra
 import type {
   JobAuditLapseState,
   JobCell,
+  JobCellReadinessState,
   JobDocumentFreshness,
   JobDocumentFreshnessState,
+  JobGraphEdge,
+  JobGraphNode,
   JobLane,
   JobStep,
   JobStepPdcaPhase,
   JobType,
 } from '../api/jobLifecycleClient'
 
-export type JobLifecycleViewMode = 'matrix' | 'transpose' | 'phase'
+export type JobLifecycleViewMode = 'matrix' | 'transpose' | 'phase' | 'map' | 'trail'
 
 export const JOB_LIFECYCLE_VIEW_MODES: readonly JobLifecycleViewMode[] = [
   'matrix',
   'transpose',
   'phase',
+  'map',
+  'trail',
+] as const
+
+/**
+ * Modes that read the pack as a graph rather than laying out its cells.
+ *
+ * They are views over the same cells and links — nothing here is a second
+ * source of truth, and neither mode can author anything.
+ */
+export const JOB_LIFECYCLE_GRAPH_VIEW_MODES: readonly JobLifecycleViewMode[] = [
+  'map',
+  'trail',
 ] as const
 
 export const DEFAULT_JOB_LIFECYCLE_VIEW_MODE: JobLifecycleViewMode = 'matrix'
@@ -54,7 +70,17 @@ export function shouldFetchJobLifecycle(jobLifecycleEnabled: boolean): boolean {
 }
 
 export function isJobLifecycleViewMode(value: unknown): value is JobLifecycleViewMode {
-  return value === 'matrix' || value === 'transpose' || value === 'phase'
+  return (
+    value === 'matrix' ||
+    value === 'transpose' ||
+    value === 'phase' ||
+    value === 'map' ||
+    value === 'trail'
+  )
+}
+
+export function isJobLifecycleGraphViewMode(value: unknown): boolean {
+  return value === 'map' || value === 'trail'
 }
 
 export function resolveJobLifecycleViewMode(
@@ -67,6 +93,8 @@ export function resolveJobLifecycleViewMode(
 export function jobLifecycleViewModeLabel(mode: JobLifecycleViewMode): string {
   if (mode === 'matrix') return 'Matrix'
   if (mode === 'transpose') return 'Transpose'
+  if (mode === 'map') return 'Map'
+  if (mode === 'trail') return 'Trail'
   return 'Phase'
 }
 
@@ -830,4 +858,270 @@ export function auditLapseTitle(
   if (lapse.reason === 'cadence_overdue') return `Repeat audit was due ${when}.`
   if (lapse.reason === 'cadence_due_soon') return `Repeat audit due ${when}.`
   return `Next audit due ${when}.`
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W4 — view modes available to this environment                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Modes the toggle may offer.
+ *
+ * Map reads `job_cycle` cell links, and that route is gated by
+ * `job_cell_links`. With the flag closed the mode is withheld rather than
+ * offered and 404'd — an empty map would read as "nothing is nested".
+ */
+export function availableJobLifecycleViewModes(
+  jobCellLinksEnabled: boolean,
+): JobLifecycleViewMode[] {
+  return JOB_LIFECYCLE_VIEW_MODES.filter((mode) => mode !== 'map' || jobCellLinksEnabled)
+}
+
+/** Fall back to Matrix when a stored mode is no longer offered. */
+export function resolveAvailableViewMode(
+  mode: JobLifecycleViewMode,
+  jobCellLinksEnabled: boolean,
+): JobLifecycleViewMode {
+  return availableJobLifecycleViewModes(jobCellLinksEnabled).includes(mode)
+    ? mode
+    : DEFAULT_JOB_LIFECYCLE_VIEW_MODE
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W4 — mandatory evidence readiness                                    */
+/* -------------------------------------------------------------------------- */
+
+export function readinessStateLabel(state: JobCellReadinessState): string {
+  if (state === 'ready') return 'Ready'
+  if (state === 'missing_evidence') return 'No evidence'
+  if (state === 'obsolete_evidence') return 'Evidence obsolete'
+  if (state === 'not_required') return 'Not required'
+  return 'Unknown'
+}
+
+export function readinessStateClasses(state: JobCellReadinessState): string {
+  if (state === 'ready') {
+    return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100'
+  }
+  if (state === 'missing_evidence' || state === 'obsolete_evidence') {
+    return 'border-destructive/40 bg-destructive/10 text-destructive'
+  }
+  if (state === 'unknown') {
+    return 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100'
+  }
+  return 'border-border bg-muted/30 text-muted-foreground'
+}
+
+/**
+ * Plain-language reading of a readiness verdict.
+ *
+ * `unknown` is spelled out as "could not be read" rather than softened: an
+ * unreadable document is not an assured one.
+ */
+export function readinessTitle(
+  verdict:
+    | { state: JobCellReadinessState; reason: string; evidence_count?: number }
+    | null
+    | undefined,
+): string {
+  if (!verdict) return 'Readiness not loaded for this cell.'
+  if (verdict.reason === 'evidence_not_required') {
+    return 'This cell is not marked as requiring evidence.'
+  }
+  if (verdict.reason === 'no_evidence_attached') {
+    return 'Mandatory evidence is missing — no library document is attached.'
+  }
+  if (verdict.reason === 'evidence_obsolete') {
+    return 'Attached evidence is obsolete in the Library or Document Control, so it does not satisfy this cell.'
+  }
+  if (verdict.reason === 'evidence_status_unreadable') {
+    return 'Attached evidence could not be read, so readiness is unknown rather than ready.'
+  }
+  if (verdict.reason === 'evidence_attached') {
+    return `${verdict.evidence_count ?? 0} document reference(s) attached — presence only. Turn Freshness on to check they are still current.`
+  }
+  if (verdict.reason === 'evidence_current') {
+    return `${verdict.evidence_count ?? 0} attached document(s) are non-obsolete in the document SSOT.`
+  }
+  return verdict.reason
+}
+
+/** Mandatory cells that are not ready. The number a governance lead acts on. */
+export function countUnreadyCells(
+  items: readonly { requires_evidence: boolean; is_ready: boolean }[],
+): number {
+  return items.filter((item) => item.requires_evidence && !item.is_ready).length
+}
+
+/** Fast lookup of a cell's requirement flag by lane × step. */
+export function buildRequirementIndex(cells: readonly JobCell[]): Map<string, boolean> {
+  const map = new Map<string, boolean>()
+  for (const cell of cells) map.set(cellKey(cell.lane_id, cell.step_id), Boolean(cell.requires_evidence))
+  return map
+}
+
+export function cellRequiresEvidence(
+  cells: readonly JobCell[],
+  laneId: number,
+  stepId: number,
+): boolean {
+  return Boolean(findCell(cells, laneId, stepId)?.requires_evidence)
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W4 — shared graph layout for Map and Trail                           */
+/* -------------------------------------------------------------------------- */
+
+export interface JobGraphColumn {
+  depth: number
+  nodes: JobGraphNode[]
+}
+
+/**
+ * Group graph nodes into columns by their distance from the root.
+ *
+ * Deterministic and pure so the map cannot reorder itself between renders.
+ * Nodes unreachable from the root still appear, in a trailing column, rather
+ * than being silently dropped — a node the server returned is a node the
+ * operator is entitled to see.
+ */
+export function layoutJobGraph(input: {
+  nodes: readonly JobGraphNode[]
+  edges: readonly JobGraphEdge[]
+  rootKey: string | null
+}): JobGraphColumn[] {
+  const byKey = new Map<string, JobGraphNode>()
+  for (const node of input.nodes) byKey.set(node.key, node)
+
+  const outgoing = new Map<string, string[]>()
+  for (const edge of input.edges) {
+    const list = outgoing.get(edge.source)
+    if (list) list.push(edge.target)
+    else outgoing.set(edge.source, [edge.target])
+  }
+
+  const depthByKey = new Map<string, number>()
+  if (input.rootKey && byKey.has(input.rootKey)) {
+    const queue: Array<{ key: string; depth: number }> = [{ key: input.rootKey, depth: 0 }]
+    depthByKey.set(input.rootKey, 0)
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      for (const target of outgoing.get(current.key) ?? []) {
+        if (depthByKey.has(target) || !byKey.has(target)) continue
+        depthByKey.set(target, current.depth + 1)
+        queue.push({ key: target, depth: current.depth + 1 })
+      }
+    }
+  }
+
+  const maxDepth = depthByKey.size > 0 ? Math.max(...depthByKey.values()) : -1
+  const orphanDepth = maxDepth + 1
+
+  const columns = new Map<number, JobGraphNode[]>()
+  for (const node of input.nodes) {
+    const depth = depthByKey.get(node.key) ?? orphanDepth
+    const bucket = columns.get(depth)
+    if (bucket) bucket.push(node)
+    else columns.set(depth, [node])
+  }
+
+  return Array.from(columns.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([depth, nodes]) => ({ depth, nodes }))
+}
+
+export function graphNodeKindLabel(kind: JobGraphNode['kind']): string {
+  if (kind === 'job_type') return 'Job cycle'
+  if (kind === 'cell') return 'Cell'
+  if (kind === 'document') return 'Document'
+  if (kind === 'audit_finding') return 'Audit'
+  if (kind === 'app') return 'App record'
+  return 'External'
+}
+
+export function graphEdgeKindLabel(kind: JobGraphEdge['kind']): string {
+  if (kind === 'nests') return 'nests'
+  if (kind === 'contains') return 'contains'
+  if (kind === 'evidences') return 'evidenced by'
+  if (kind === 'audits') return 'audited by'
+  return 'references'
+}
+
+/**
+ * How a graph node should be opened.
+ *
+ * An absolute href leaves the SPA, so it must not go through the router — and
+ * a node the server marked `unavailable` is not navigable at all, because the
+ * thing it points at is gone.
+ */
+export function graphNodeLinkTarget(
+  node: Pick<JobGraphNode, 'href' | 'detail'>,
+): 'internal' | 'external' | 'none' {
+  if (node.detail === 'unavailable') return 'none'
+  const href = typeof node.href === 'string' ? node.href.trim() : ''
+  if (href === '') return 'none'
+  if (href.startsWith('/')) return 'internal'
+  if (/^https?:\/\//i.test(href)) return 'external'
+  return 'none'
+}
+
+/** Edges leaving a node, in the order the server returned them. */
+export function edgesFromNode(
+  edges: readonly JobGraphEdge[],
+  nodeKey: string,
+): JobGraphEdge[] {
+  return edges.filter((edge) => edge.source === nodeKey)
+}
+
+export function buildGraphNodeIndex(
+  nodes: readonly JobGraphNode[],
+): Map<string, JobGraphNode> {
+  const map = new Map<string, JobGraphNode>()
+  for (const node of nodes) map.set(node.key, node)
+  return map
+}
+
+/** Nodes a trail path walks, resolved and in walk order; unknown keys drop. */
+export function resolveTrailPathNodes(
+  index: ReadonlyMap<string, JobGraphNode>,
+  nodeKeys: readonly string[],
+): JobGraphNode[] {
+  const resolved: JobGraphNode[] = []
+  for (const key of nodeKeys) {
+    const node = index.get(key)
+    if (node) resolved.push(node)
+  }
+  return resolved
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W4 — optimistic concurrency                                          */
+/* -------------------------------------------------------------------------- */
+
+/** The `updated_at` that was read, sent back as the edit's precondition. */
+export function ifMatchToken(row: { updated_at?: string | null } | null | undefined): string | null {
+  const value = row?.updated_at
+  return typeof value === 'string' && value.trim() !== '' ? value : null
+}
+
+export function isConflictApiError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const maybe = error as { response?: { status?: number }; status_code?: number }
+  if (maybe.response?.status === 409) return true
+  if (maybe.status_code === 409) return true
+  return false
+}
+
+export const JOB_LIFECYCLE_CONFLICT_COPY =
+  'Someone else changed this while you were editing, so your edit was not applied. Reload the pack to see their version, then re-apply your change.'
+
+/**
+ * Banner text for a refused edit.
+ *
+ * Names the axis so an operator knows which of their edits was dropped, and
+ * never claims the edit was saved.
+ */
+export function conflictBannerCopy(label: string | null | undefined): string {
+  const subject = label && label.trim() !== '' ? `“${label.trim()}”` : 'this item'
+  return `Edit to ${subject} was refused: ${JOB_LIFECYCLE_CONFLICT_COPY}`
 }

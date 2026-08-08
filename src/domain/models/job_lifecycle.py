@@ -187,6 +187,7 @@ class JobCell(Base, TimestampMixin):
         ),
         Index("ix_job_cells_tenant_lane", "tenant_id", "lane_id"),
         Index("ix_job_cells_tenant_step", "tenant_id", "step_id"),
+        Index("ix_job_cells_tenant_requires_evidence", "tenant_id", "requires_evidence"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -206,6 +207,17 @@ class JobCell(Base, TimestampMixin):
         Integer,
         ForeignKey("job_steps.id", ondelete="CASCADE"),
         nullable=False,
+    )
+
+    #: JL-UX-W4 — this intersection is expected to hold evidence. The
+    #: *requirement* is authored here; the *readiness* verdict is not stored,
+    #: it is derived on read from the cell's document refs (and their document
+    #: control status when assure is on).
+    requires_evidence: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
     )
 
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
