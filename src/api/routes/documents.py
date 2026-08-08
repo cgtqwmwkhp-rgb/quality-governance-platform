@@ -23,7 +23,7 @@ from src.api.dependencies.partner import partner_readable
 from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
-from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
 from src.domain.models.document import (
     Document,
     DocumentAnnotation,
@@ -64,6 +64,7 @@ from src.domain.services.document_version_service import (
 )
 from src.domain.services.index_job_service import IndexJobService, dispatch_index_job, vector_index_configured
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.file_validation import validate_upload as shared_validate_upload
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
 
@@ -609,6 +610,26 @@ def _safe_filename(filename: Optional[str]) -> str:
     return (filename or "unnamed").replace("/", "_").replace("\\", "_")
 
 
+async def _validate_library_upload(file: UploadFile) -> tuple[str, bytes, FileType, str]:
+    """Shared upload≡revise validation via ``file_validation.validate_upload``.
+
+    Returns ``(display_name, content, file_type, safe_filename)``.
+    """
+    sanitized_name, content, _verdict = await shared_validate_upload(file)
+    _, ext = sanitized_name.rsplit(".", 1) if "." in sanitized_name else ("", "")
+    ext = ext.lower()
+    try:
+        file_type = FileType(ext)
+    except ValueError as exc:
+        raise BadRequestError(f"Unsupported file type: {ext}. Supported: {[f.value for f in FileType]}") from exc
+    safe_filename = _safe_filename(sanitized_name)
+    display_name = file.filename or safe_filename
+    return display_name, content, file_type, safe_filename
+
+
+_CLEAN_SCAN = "clean"
+
+
 def _coerce_extraction(result: ServiceExtractedDocumentContent) -> ExtractedDocumentContent:
     return ExtractedDocumentContent(
         text=result.text,
@@ -824,30 +845,8 @@ async def upload_document(
     if site_location_id is not None and await db.get(Location, site_location_id) is None:
         raise BadRequestError(f"Location {site_location_id} not found")
 
-    # Validate file type
-    file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
-    try:
-        file_type = FileType(file_ext)
-    except ValueError:
-        raise BadRequestError(f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}")
-
-    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-
-    # Read file content
-    content = await file.read()
+    file_name, content, file_type, safe_filename = await _validate_library_upload(file)
     file_size = len(content)
-
-    if file_size == 0:
-        raise BadRequestError("Uploaded file is empty")
-
-    if file_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size ({file_size // (1024*1024)}MB) exceeds maximum allowed size (50MB).",
-        )
-
-    safe_filename = _safe_filename(file.filename)
-    file_name = file.filename or safe_filename
     file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{safe_filename}"
 
     try:
@@ -917,6 +916,7 @@ async def upload_document(
             is_statutory=is_statutory,
             duplicate_warning=duplicate_warning,
             duplicate_warning_detail=duplicate_warning_detail,
+            malware_scan_status=_CLEAN_SCAN,
             created_by_id=current_user.id,
             tenant_id=current_user.tenant_id,
         )
@@ -1384,27 +1384,8 @@ async def patch_document_metadata(
 async def _read_and_validate_revision_file(
     file: UploadFile,
 ) -> tuple[bytes, str, FileType, str]:
-    """Validate an uploaded revision file and return content + metadata."""
-    file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
-    try:
-        file_type = FileType(file_ext)
-    except ValueError:
-        raise BadRequestError(f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}")
-
-    content = await file.read()
-    file_size = len(content)
-    if file_size == 0:
-        raise BadRequestError("Uploaded file is empty")
-
-    max_file_size = 50 * 1024 * 1024
-    if file_size > max_file_size:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size ({file_size // (1024 * 1024)}MB) exceeds maximum allowed size (50MB).",
-        )
-
-    safe_filename = _safe_filename(file.filename)
-    file_name = file.filename or safe_filename
+    """Validate an uploaded revision file — same gate as create upload."""
+    file_name, content, file_type, safe_filename = await _validate_library_upload(file)
     return content, file_name, file_type, safe_filename
 
 
@@ -1422,6 +1403,14 @@ async def get_document_signed_url(
 ):
     """Get a signed document URL for inline viewing or download."""
     document = await _get_document_or_404(db, document_id, current_user)
+    scan_status = getattr(document, "malware_scan_status", None) or _CLEAN_SCAN
+    if scan_status != _CLEAN_SCAN:
+        raise ConflictError(
+            "Document is not available for download until malware scan is clean.",
+            code="MALWARE_SCAN_PENDING",
+            details={"malware_scan_status": scan_status},
+        )
+
     document.download_count += 1
     document.last_accessed_at = datetime.now(timezone.utc)
     await _log_library_access(
@@ -1525,6 +1514,7 @@ async def create_document_version(
             ) from exc
         document.file_type = file_type
         document.mime_type = file.content_type
+        document.malware_scan_status = _CLEAN_SCAN
 
     version = await document_version_service.revise_library(
         db,

@@ -80,6 +80,8 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)  # bytes
     file_path: Mapped[str] = mapped_column(String(1000), nullable=False)  # Azure Blob path
     mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # F-1 / L-41 — signed-URL gate. Legacy rows backfilled to "clean".
+    malware_scan_status: Mapped[str] = mapped_column(String(32), nullable=False, default="clean")
 
     # Classification
     document_type: Mapped[DocumentType] = mapped_column(CaseInsensitiveEnum(DocumentType), default=DocumentType.OTHER)
