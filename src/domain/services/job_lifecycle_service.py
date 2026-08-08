@@ -1,20 +1,25 @@
-"""Job Lifecycle axis service (JL-1 / ADR-0022).
+"""Job Lifecycle axis service (JL-1 / JL-3 / ADR-0022).
 
-Editable Job Type / Lane / Step vocabulary and cell document membership.
-Axis identity is JL ``code`` — never LookupOption or free-text department.
+Editable Job Type / Lane / Step vocabulary, cell document membership, and
+cell hyperlinks (app · external · audit_outcome). Axis identity is JL
+``code`` — never LookupOption or free-text department. Link hrefs resolve
+via ``href_registry`` only.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Optional, Sequence
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.models.audit import AuditFinding
 from src.domain.models.document import Document
-from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobLane, JobStep, JobType
+from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobCellLink, JobLane, JobStep, JobType
+from src.domain.services.href_registry import audit_finding_href, href_for
 
 
 def _utc_now() -> datetime:
@@ -29,6 +34,57 @@ def _normalise_code(code: str) -> str:
             detail="code must be non-empty",
         )
     return cleaned
+
+
+def resolve_cell_link_href(link: JobCellLink) -> str:
+    """Resolve SPA/external href for a cell link via href_registry (or URL)."""
+    kind = (link.kind or "").strip().lower()
+    if kind == "app":
+        if not link.entity_type or link.entity_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="app link missing entity_type/entity_id",
+            )
+        return href_for(link.entity_type, int(link.entity_id))
+    if kind == "external":
+        url = (link.external_url or "").strip()
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="external link missing absolute http(s) URL",
+            )
+        return url
+    if kind == "audit_outcome":
+        if link.audit_run_id is None:
+            return "#"
+        return audit_finding_href(
+            run_id=int(link.audit_run_id),
+            finding_id=int(link.audit_finding_id) if link.audit_finding_id is not None else None,
+        )
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"unknown cell link kind: {link.kind!r}",
+    )
+
+
+def serialize_cell_link(link: JobCellLink) -> dict[str, Any]:
+    return {
+        "id": link.id,
+        "tenant_id": link.tenant_id,
+        "cell_id": link.cell_id,
+        "kind": link.kind,
+        "label": link.label,
+        "entity_type": link.entity_type,
+        "entity_id": link.entity_id,
+        "external_url": link.external_url,
+        "audit_run_id": link.audit_run_id,
+        "audit_finding_id": link.audit_finding_id,
+        "href": resolve_cell_link_href(link),
+        "sort_order": link.sort_order,
+        "created_at": link.created_at,
+        "updated_at": link.updated_at,
+    }
 
 
 class JobLifecycleService:
@@ -276,18 +332,6 @@ class JobLifecycleService:
     # Cells + document membership
     # ------------------------------------------------------------------
 
-    async def list_cells(self, *, tenant_id: int, job_type_id: int) -> list[dict[str, Any]]:
-        await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
-        result = await self.db.execute(
-            select(JobCell).where(
-                JobCell.tenant_id == tenant_id,
-                JobCell.job_type_id == job_type_id,
-                JobCell.deleted_at.is_(None),
-            )
-        )
-        cells = list(result.scalars().all())
-        return [await self._cell_payload(cell) for cell in cells]
-
     async def set_cell_documents(
         self,
         *,
@@ -296,6 +340,7 @@ class JobLifecycleService:
         lane_id: int,
         step_id: int,
         library_document_ids: Sequence[int],
+        include_links: bool = False,
     ) -> dict[str, Any]:
         await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
         lane = await self._get_live(JobLane, tenant_id=tenant_id, row_id=lane_id)
@@ -356,9 +401,14 @@ class JobLifecycleService:
             )
         await self.db.commit()
         await self.db.refresh(cell)
-        return await self._cell_payload(cell)
+        return await self._cell_payload(cell, include_links=include_links)
 
-    async def _cell_payload(self, cell: JobCell) -> dict[str, Any]:
+    async def _cell_payload(
+        self,
+        cell: JobCell,
+        *,
+        include_links: bool = False,
+    ) -> dict[str, Any]:
         result = await self.db.execute(
             select(JobCellDocument)
             .where(
@@ -368,6 +418,17 @@ class JobLifecycleService:
             .order_by(JobCellDocument.sort_order, JobCellDocument.id)
         )
         docs = list(result.scalars().all())
+        links: list[dict[str, Any]] = []
+        if include_links:
+            link_result = await self.db.execute(
+                select(JobCellLink)
+                .where(
+                    JobCellLink.tenant_id == cell.tenant_id,
+                    JobCellLink.cell_id == cell.id,
+                )
+                .order_by(JobCellLink.sort_order, JobCellLink.id)
+            )
+            links = [serialize_cell_link(row) for row in link_result.scalars().all()]
         return {
             "id": cell.id,
             "tenant_id": cell.tenant_id,
@@ -375,9 +436,184 @@ class JobLifecycleService:
             "lane_id": cell.lane_id,
             "step_id": cell.step_id,
             "library_document_ids": [d.library_document_id for d in docs],
+            "links": links,
             "created_at": cell.created_at,
             "updated_at": cell.updated_at,
         }
+
+    async def list_cells(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        include_links: bool = False,
+    ) -> list[dict[str, Any]]:
+        await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        result = await self.db.execute(
+            select(JobCell).where(
+                JobCell.tenant_id == tenant_id,
+                JobCell.job_type_id == job_type_id,
+                JobCell.deleted_at.is_(None),
+            )
+        )
+        cells = list(result.scalars().all())
+        return [await self._cell_payload(cell, include_links=include_links) for cell in cells]
+
+    async def list_cell_links(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        lane_id: int,
+        step_id: int,
+    ) -> list[dict[str, Any]]:
+        cell = await self._require_cell(
+            tenant_id=tenant_id,
+            job_type_id=job_type_id,
+            lane_id=lane_id,
+            step_id=step_id,
+        )
+        result = await self.db.execute(
+            select(JobCellLink)
+            .where(
+                JobCellLink.tenant_id == tenant_id,
+                JobCellLink.cell_id == cell.id,
+            )
+            .order_by(JobCellLink.sort_order, JobCellLink.id)
+        )
+        return [serialize_cell_link(row) for row in result.scalars().all()]
+
+    async def create_cell_link(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        lane_id: int,
+        step_id: int,
+        kind: str,
+        label: str,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[int] = None,
+        external_url: Optional[str] = None,
+        audit_run_id: Optional[int] = None,
+        audit_finding_id: Optional[int] = None,
+        sort_order: int = 0,
+    ) -> dict[str, Any]:
+        cell = await self._get_or_create_cell(
+            tenant_id=tenant_id,
+            job_type_id=job_type_id,
+            lane_id=lane_id,
+            step_id=step_id,
+        )
+        kind_n = kind.strip().lower()
+        if kind_n == "audit_outcome":
+            await self._assert_audit_finding(
+                tenant_id=tenant_id,
+                audit_run_id=int(audit_run_id) if audit_run_id is not None else None,
+                audit_finding_id=int(audit_finding_id) if audit_finding_id is not None else None,
+            )
+            # Unique (cell, finding) — reject duplicates early
+            existing = await self.db.execute(
+                select(JobCellLink.id).where(
+                    JobCellLink.tenant_id == tenant_id,
+                    JobCellLink.cell_id == cell.id,
+                    JobCellLink.audit_finding_id == audit_finding_id,
+                )
+            )
+            if existing.scalars().first() is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="audit_outcome link already exists for this finding on the cell",
+                )
+        elif kind_n == "app":
+            if not entity_type or entity_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="app links require entity_type and entity_id",
+                )
+            # Resolve once so unknown types still get a stable fallback href
+            _ = href_for(entity_type, entity_id)
+        row = JobCellLink(
+            tenant_id=tenant_id,
+            cell_id=cell.id,
+            kind=kind_n,
+            label=label.strip(),
+            entity_type=entity_type,
+            entity_id=entity_id,
+            external_url=external_url,
+            audit_run_id=audit_run_id,
+            audit_finding_id=audit_finding_id,
+            sort_order=sort_order,
+        )
+        self.db.add(row)
+        await self.db.commit()
+        await self.db.refresh(row)
+        return serialize_cell_link(row)
+
+    async def delete_cell_link(self, *, tenant_id: int, link_id: int) -> None:
+        result = await self.db.execute(
+            select(JobCellLink).where(
+                JobCellLink.id == link_id,
+                JobCellLink.tenant_id == tenant_id,
+            )
+        )
+        row = result.scalars().first()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell link not found")
+        await self.db.delete(row)
+        await self.db.commit()
+
+    async def _require_cell(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        lane_id: int,
+        step_id: int,
+    ) -> JobCell:
+        result = await self.db.execute(
+            select(JobCell).where(
+                JobCell.tenant_id == tenant_id,
+                JobCell.job_type_id == job_type_id,
+                JobCell.lane_id == lane_id,
+                JobCell.step_id == step_id,
+                JobCell.deleted_at.is_(None),
+            )
+        )
+        cell = result.scalars().first()
+        if cell is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job cell not found")
+        return cell
+
+    async def _assert_audit_finding(
+        self,
+        *,
+        tenant_id: int,
+        audit_run_id: Optional[int],
+        audit_finding_id: Optional[int],
+    ) -> None:
+        if audit_run_id is None or audit_finding_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="audit_outcome links require audit_run_id and audit_finding_id",
+            )
+        result = await self.db.execute(
+            select(AuditFinding).where(
+                AuditFinding.id == audit_finding_id,
+                AuditFinding.tenant_id == tenant_id,
+            )
+        )
+        finding = result.scalars().first()
+        if finding is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Audit finding not found",
+            )
+        if int(finding.run_id) != int(audit_run_id):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="audit_finding_id does not belong to audit_run_id",
+            )
 
     async def _get_or_create_cell(
         self,
@@ -399,6 +635,16 @@ class JobLifecycleService:
         cell = result.scalars().first()
         if cell is not None:
             return cell
+        # Validate axes belong to the job type before creating the cell.
+        lane = await self._get_live(JobLane, tenant_id=tenant_id, row_id=lane_id)
+        step = await self._get_live(JobStep, tenant_id=tenant_id, row_id=step_id)
+        if lane is None or step is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lane or step not found")
+        if lane.job_type_id != job_type_id or step.job_type_id != job_type_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Lane and step must belong to the job type",
+            )
         cell = JobCell(
             tenant_id=tenant_id,
             job_type_id=job_type_id,
@@ -461,4 +707,8 @@ class JobLifecycleService:
             )
 
 
-__all__ = ["JobLifecycleService"]
+__all__ = [
+    "JobLifecycleService",
+    "resolve_cell_link_href",
+    "serialize_cell_link",
+]

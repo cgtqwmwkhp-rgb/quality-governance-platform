@@ -13,6 +13,9 @@ from fastapi import APIRouter, Depends, status
 from src.api.dependencies import DbSession, require_permission
 from src.api.schemas.job_lifecycle import (
     JobCellDocumentsPut,
+    JobCellLinkCreate,
+    JobCellLinkListResponse,
+    JobCellLinkResponse,
     JobCellListResponse,
     JobCellResponse,
     JobLaneCreate,
@@ -34,6 +37,7 @@ from src.domain.models.user import User
 from src.domain.services.job_lifecycle_service import JobLifecycleService
 
 DISABLED_DETAIL = "Job Lifecycle is not enabled in this environment."
+CELL_LINKS_DISABLED_DETAIL = "Job cell links are not enabled in this environment."
 
 router = APIRouter()
 
@@ -45,7 +49,20 @@ async def require_job_lifecycle_enabled() -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=DISABLED_DETAIL)
 
 
+async def require_job_cell_links_enabled() -> None:
+    from fastapi import HTTPException
+
+    if not settings.job_cell_links_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=CELL_LINKS_DISABLED_DETAIL)
+
+
 _enabled_router = APIRouter(dependencies=[Depends(require_job_lifecycle_enabled)])
+_links_router = APIRouter(
+    dependencies=[
+        Depends(require_job_lifecycle_enabled),
+        Depends(require_job_cell_links_enabled),
+    ]
+)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +301,11 @@ async def list_cells(
     current_user: Annotated[User, Depends(require_permission("job:read"))],
 ):
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-    items = await JobLifecycleService(db).list_cells(tenant_id=tenant_id, job_type_id=job_type_id)
+    items = await JobLifecycleService(db).list_cells(
+        tenant_id=tenant_id,
+        job_type_id=job_type_id,
+        include_links=bool(settings.job_cell_links_enabled),
+    )
     return JobCellListResponse(
         items=[JobCellResponse.model_validate(i) for i in items],
         total=len(items),
@@ -310,10 +331,88 @@ async def put_cell_documents(
         lane_id=lane_id,
         step_id=step_id,
         library_document_ids=body.library_document_ids,
+        include_links=bool(settings.job_cell_links_enabled),
     )
     return JobCellResponse.model_validate(payload)
 
 
-router.include_router(_enabled_router)
+# ---------------------------------------------------------------------------
+# Cell links (JL-3) — gated by job_lifecycle + job_cell_links
+# ---------------------------------------------------------------------------
 
-__all__ = ["DISABLED_DETAIL", "require_job_lifecycle_enabled", "router"]
+
+@_links_router.get(
+    "/job-types/{job_type_id}/cells/{lane_id}/{step_id}/links",
+    response_model=JobCellLinkListResponse,
+)
+async def list_cell_links(
+    job_type_id: int,
+    lane_id: int,
+    step_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("job:read"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    items = await JobLifecycleService(db).list_cell_links(
+        tenant_id=tenant_id,
+        job_type_id=job_type_id,
+        lane_id=lane_id,
+        step_id=step_id,
+    )
+    return JobCellLinkListResponse(
+        items=[JobCellLinkResponse.model_validate(i) for i in items],
+        total=len(items),
+    )
+
+
+@_links_router.post(
+    "/job-types/{job_type_id}/cells/{lane_id}/{step_id}/links",
+    response_model=JobCellLinkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_cell_link(
+    job_type_id: int,
+    lane_id: int,
+    step_id: int,
+    body: JobCellLinkCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("job:author"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    payload = await JobLifecycleService(db).create_cell_link(
+        tenant_id=tenant_id,
+        job_type_id=job_type_id,
+        lane_id=lane_id,
+        step_id=step_id,
+        kind=body.kind,
+        label=body.label,
+        entity_type=body.entity_type,
+        entity_id=body.entity_id,
+        external_url=body.external_url,
+        audit_run_id=body.audit_run_id,
+        audit_finding_id=body.audit_finding_id,
+        sort_order=body.sort_order,
+    )
+    return JobCellLinkResponse.model_validate(payload)
+
+
+@_links_router.delete("/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_cell_link(
+    link_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("job:author"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    await JobLifecycleService(db).delete_cell_link(tenant_id=tenant_id, link_id=link_id)
+
+
+router.include_router(_enabled_router)
+router.include_router(_links_router)
+
+__all__ = [
+    "CELL_LINKS_DISABLED_DETAIL",
+    "DISABLED_DETAIL",
+    "require_job_cell_links_enabled",
+    "require_job_lifecycle_enabled",
+    "router",
+]

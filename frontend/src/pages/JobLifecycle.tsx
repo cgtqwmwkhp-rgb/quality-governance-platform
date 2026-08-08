@@ -17,6 +17,7 @@ import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Input } from '../components/ui/Input'
 import { Entity360Strip, GraphCoach } from '../components/graph'
+import JobCellLinks from '../components/jobLifecycle/JobCellLinks'
 import {
   parseLibraryDocumentDrag,
   setLibraryDocumentDragData,
@@ -59,6 +60,7 @@ interface LibraryDocumentPage {
 
 export default function JobLifecycle() {
   const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
+  const jobCellLinksEnabled = useFeatureFlag('job_cell_links')
   const dndProposeEnabled = useFeatureFlag('document_graph_dnd_propose')
   const visible = shouldShowJobLifecycle(jobLifecycleEnabled)
   const shouldFetch = shouldFetchJobLifecycle(jobLifecycleEnabled)
@@ -651,6 +653,20 @@ export default function JobLifecycle() {
                                 </div>
                               ))
                             )}
+                            {jobCellLinksEnabled
+                              ? (
+                                  cellIndex.get(cellKey(laneId, stepId))?.links ?? []
+                                ).map((link) => (
+                                  <div
+                                    key={`link-${link.id}`}
+                                    className="truncate rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                    data-testid={`job-lifecycle-cell-link-${laneId}-${stepId}-${link.id}`}
+                                    title={link.href}
+                                  >
+                                    {link.kind}: {link.label}
+                                  </div>
+                                ))
+                              : null}
                           </div>
                         </td>
                       )
@@ -721,6 +737,28 @@ export default function JobLifecycle() {
               Select a step to load Connections (Entity360).
             </Card>
           )}
+
+          {selectedJobTypeId != null && selectedLaneId != null && selectedStepId != null ? (
+            <JobCellLinks
+              jobTypeId={selectedJobTypeId}
+              laneId={selectedLaneId}
+              stepId={selectedStepId}
+              jobLifecycleEnabled={jobLifecycleEnabled}
+              jobCellLinksEnabled={jobCellLinksEnabled}
+              initialLinks={
+                cellIndex.get(cellKey(selectedLaneId, selectedStepId))?.links ?? []
+              }
+              onLinksChange={(newLinks) => {
+                setCells((prev) => {
+                  return prev.map((c) =>
+                    c.lane_id === selectedLaneId && c.step_id === selectedStepId
+                      ? { ...c, links: newLinks }
+                      : c,
+                  )
+                })
+              }}
+            />
+          ) : null}
         </div>
       </div>
     </div>

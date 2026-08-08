@@ -45,6 +45,7 @@ def test_jl_tables_registered_for_rls():
         "job_steps",
         "job_cells",
         "job_cell_documents",
+        "job_cell_links",
     ):
         assert table in RLS_TABLES
 
@@ -93,6 +94,7 @@ def test_job_producer_registers_bidirectional_day_one():
     assert isinstance(job, JobLifecycleProducer)
     assert job.supports("document")
     assert job.supports("job_step")
+    assert job.supports("audit_finding")
 
 
 @pytest.mark.asyncio

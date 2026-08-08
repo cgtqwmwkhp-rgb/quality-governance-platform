@@ -62,4 +62,28 @@ describe('createJobLifecycleApi', () => {
     client.deleteStep(20)
     expect(api.delete).toHaveBeenCalledWith('/api/v1/job-lifecycle/steps/20')
   })
+
+  it('lists/creates/deletes cell links via JL-3 endpoints', () => {
+    const api = mockApi()
+    const client = createJobLifecycleApi(api as never)
+
+    client.listCellLinks(3, 10, 20)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/job-lifecycle/job-types/3/cells/10/20/links')
+
+    client.createCellLink(3, 10, 20, {
+      kind: 'app',
+      label: 'RAMS',
+      entity_type: 'document',
+      entity_id: 7,
+    })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/job-lifecycle/job-types/3/cells/10/20/links', {
+      kind: 'app',
+      label: 'RAMS',
+      entity_type: 'document',
+      entity_id: 7,
+    })
+
+    client.deleteCellLink(99)
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/job-lifecycle/links/99')
+  })
 })

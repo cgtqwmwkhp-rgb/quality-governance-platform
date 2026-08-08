@@ -52,8 +52,44 @@ export interface JobCell {
   lane_id: number
   step_id: number
   library_document_ids: number[]
+  links?: JobCellLink[]
   created_at: string
   updated_at: string
+}
+
+export type JobCellLinkKind = 'app' | 'external' | 'audit_outcome'
+
+export interface JobCellLink {
+  id: number
+  tenant_id: number
+  cell_id: number
+  kind: JobCellLinkKind
+  label: string
+  entity_type?: string | null
+  entity_id?: number | null
+  external_url?: string | null
+  audit_run_id?: number | null
+  audit_finding_id?: number | null
+  href: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface JobCellLinkCreatePayload {
+  kind: JobCellLinkKind
+  label: string
+  entity_type?: string
+  entity_id?: number
+  external_url?: string
+  audit_run_id?: number
+  audit_finding_id?: number
+  sort_order?: number
+}
+
+export interface JobCellLinkListResponse {
+  items: JobCellLink[]
+  total: number
 }
 
 export interface JobTypeCreatePayload {
@@ -204,6 +240,30 @@ export function createJobLifecycleApi(api: AxiosInstance) {
         `${PREFIX}/job-types/${jobTypeId}/cells/${laneId}/${stepId}/documents`,
         payload,
       )
+    },
+
+    listCellLinks(
+      jobTypeId: number,
+      laneId: number,
+      stepId: number,
+    ): Promise<AxiosResponse<JobCellLinkListResponse>> {
+      return api.get(`${PREFIX}/job-types/${jobTypeId}/cells/${laneId}/${stepId}/links`)
+    },
+
+    createCellLink(
+      jobTypeId: number,
+      laneId: number,
+      stepId: number,
+      payload: JobCellLinkCreatePayload,
+    ): Promise<AxiosResponse<JobCellLink>> {
+      return api.post(
+        `${PREFIX}/job-types/${jobTypeId}/cells/${laneId}/${stepId}/links`,
+        payload,
+      )
+    },
+
+    deleteCellLink(linkId: number): Promise<AxiosResponse<void>> {
+      return api.delete(`${PREFIX}/links/${linkId}`)
     },
   }
 }

@@ -38,7 +38,7 @@ def test_rls_tables_match_policy_migration():
     # to be hardened by a registered migration, and the PostgreSQL suite, which
     # reads the policies out of pg_policy. This is the cheap guard against a name
     # being dropped.
-    assert len(RLS_TABLES) == 33
+    assert len(RLS_TABLES) == 34
     assert "incidents" in RLS_TABLES
     assert "users" in RLS_TABLES
     assert "audit_log_entries" in RLS_TABLES

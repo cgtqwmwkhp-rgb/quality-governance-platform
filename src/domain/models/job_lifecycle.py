@@ -221,9 +221,72 @@ class JobCellDocument(Base, TimestampMixin):
         return f"<JobCellDocument(id={self.id}, cell={self.cell_id}, doc={self.library_document_id})>"
 
 
+class JobCellLink(Base, TimestampMixin):
+    """Cell hyperlink (JL-3): app · external · audit_outcome.
+
+    App / audit_outcome store structured refs; SPA ``href`` is resolved via
+    ``href_registry`` at read time — never a parallel URL builder. External
+    stores https URLs only.
+    """
+
+    __tablename__ = "job_cell_links"
+    __data_classification__ = DataClassification.C2_INTERNAL
+    __table_args__ = (
+        Index("ix_job_cell_links_tenant_cell_sort", "tenant_id", "cell_id", "sort_order"),
+        Index("ix_job_cell_links_tenant_finding", "tenant_id", "audit_finding_id"),
+        # One audit_outcome link per finding per cell; other kinds leave
+        # audit_finding_id NULL and are unconstrained by it.
+        Index(
+            "ux_job_cell_links_cell_finding",
+            "cell_id",
+            "audit_finding_id",
+            unique=True,
+            postgresql_where=text("audit_finding_id IS NOT NULL"),
+            sqlite_where=text("audit_finding_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    cell_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("job_cells.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    label: Mapped[str] = mapped_column(String(300), nullable=False)
+
+    # kind=app — resolved via href_registry.href_for(entity_type, entity_id)
+    entity_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # kind=external
+    external_url: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+
+    # kind=audit_outcome — bi-link via Entity360; href via audit_finding_href
+    audit_run_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("audit_runs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    audit_finding_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("audit_findings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+
+    def __repr__(self) -> str:
+        return f"<JobCellLink(id={self.id}, cell={self.cell_id}, kind={self.kind!r})>"
+
+
 __all__ = [
     "JobCell",
     "JobCellDocument",
+    "JobCellLink",
     "JobLane",
     "JobStep",
     "JobType",
