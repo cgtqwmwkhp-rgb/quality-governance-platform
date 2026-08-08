@@ -87,7 +87,10 @@ export function RelationshipsMapView({
       </p>
 
       {dndEnabled ? (
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- HTML5 drop target is mouse-only; typed propose / confirm flows remain keyboard-accessible
         <div
+          role="region"
+          aria-label={`${documentTitle} hub — drop a library document to propose a relationship`}
           className={
             dropActive
               ? 'rounded-lg border-2 border-dashed border-primary bg-primary/5 p-3 transition-colors'

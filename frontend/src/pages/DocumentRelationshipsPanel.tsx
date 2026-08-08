@@ -758,11 +758,13 @@ export function DocumentRelationshipsPanel({
                   .filter((item) => item.id !== documentId)
                   .map((item) => (
                     <li key={item.id}>
-                      <div
+                      <button
+                        type="button"
                         draggable
                         onDragStart={(event) => handleTrayDragStart(event, item)}
-                        className="cursor-grab select-none rounded-lg border border-border bg-card/60 px-3 py-2 active:cursor-grabbing"
+                        className="cursor-grab select-none rounded-lg border border-border bg-card/60 px-3 py-2 text-left active:cursor-grabbing"
                         data-testid={`relationships-dnd-tray-item-${item.id}`}
+                        aria-label={`Drag ${item.title} onto the hub to propose a relationship`}
                       >
                         <p className="text-sm font-medium text-foreground">{item.title}</p>
                         {item.reference_number ? (
@@ -770,7 +772,7 @@ export function DocumentRelationshipsPanel({
                             {item.reference_number}
                           </p>
                         ) : null}
-                      </div>
+                      </button>
                     </li>
                   ))}
               </ul>
