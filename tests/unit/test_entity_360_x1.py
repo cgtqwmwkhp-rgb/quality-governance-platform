@@ -24,12 +24,7 @@ from src.domain.services.entity_360 import (
 )
 from src.domain.services.entity_360.producers.document_graph import DocumentGraphProducer
 from src.domain.services.entity_360.registry import all_producers, ensure_default_producers
-from src.domain.services.href_registry import (
-    case_type_href,
-    document_href,
-    href_for,
-    risk_href,
-)
+from src.domain.services.href_registry import case_type_href, document_href, href_for, risk_href
 from src.domain.services.risk_service import RiskService
 
 RISK_UPSTREAM_WIRE_FIELDS = frozenset({"source_type", "source_id", "title", "reference", "href", "audit_run_id"})

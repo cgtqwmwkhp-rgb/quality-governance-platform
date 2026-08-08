@@ -7,13 +7,7 @@ from typing import Any, Optional
 
 from src.domain.services.entity_360.permissions import can_view_hop, filter_hops
 from src.domain.services.entity_360.registry import iter_producers
-from src.domain.services.entity_360.types import (
-    HOP_REQUIRED_FIELDS,
-    ProducerResult,
-    SourceStatus,
-    make_hop,
-    utc_now,
-)
+from src.domain.services.entity_360.types import HOP_REQUIRED_FIELDS, ProducerResult, SourceStatus, make_hop, utc_now
 from src.domain.services.href_registry import href_for
 
 logger = logging.getLogger(__name__)

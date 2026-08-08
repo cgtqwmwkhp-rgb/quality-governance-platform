@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from src.domain.services.entity_360.composer import (
-    Entity360Service,
-    make_hop,
-    narrow_risk_upstream_item,
-    public_hop,
-)
+from src.domain.services.entity_360.composer import Entity360Service, make_hop, narrow_risk_upstream_item, public_hop
 from src.domain.services.entity_360.impact import build_impact_bundle, publish_blocked_detail
 from src.domain.services.entity_360.registry import (
     all_producers,
