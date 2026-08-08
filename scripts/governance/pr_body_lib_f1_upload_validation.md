@@ -12,7 +12,7 @@
 - **Backend (handlers/services):** `src/infrastructure/file_validation.py`; `src/api/routes/documents.py` upload/revise/signed-url; `Document.malware_scan_status`
 - **APIs (endpoints changed/added):** Behavior only — `POST /documents/upload`, `POST /documents/{id}/versions`, `GET /documents/{id}/signed-url` (409 when scan ≠ clean)
 - **Schemas/contracts (OpenAPI/Zod/DTO/types):** No response schema change
-- **Database (migrations/entities/indexes):** Alembic `20260808_lib_f1_malware_scan` — additive column + backfill default `clean`
+- **Database (migrations/entities/indexes):** Alembic `20261024_lib_f1_malware_scan` — additive column + backfill default `clean`
 - **Workflows/jobs/queues (if any):** None
 - **Config/env/flags:** None
 - **Dependencies (added/removed/updated):** None

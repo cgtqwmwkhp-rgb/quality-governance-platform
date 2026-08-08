@@ -621,9 +621,7 @@ async def _validate_library_upload(file: UploadFile) -> tuple[str, bytes, FileTy
     try:
         file_type = FileType(ext)
     except ValueError as exc:
-        raise BadRequestError(
-            f"Unsupported file type: {ext}. Supported: {[f.value for f in FileType]}"
-        ) from exc
+        raise BadRequestError(f"Unsupported file type: {ext}. Supported: {[f.value for f in FileType]}") from exc
     safe_filename = _safe_filename(sanitized_name)
     display_name = file.filename or safe_filename
     return display_name, content, file_type, safe_filename

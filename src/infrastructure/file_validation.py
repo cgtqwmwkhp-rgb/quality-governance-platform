@@ -86,14 +86,11 @@ def refuse_ole2_or_macros(content: bytes, declared_extension: str) -> None:
 
     if content.startswith(OLE2_MAGIC):
         raise FileValidationError(
-            "OLE2 / legacy Office binaries are not allowed (macro risk). "
-            "Export as .docx/.xlsx/.pdf and re-upload."
+            "OLE2 / legacy Office binaries are not allowed (macro risk). " "Export as .docx/.xlsx/.pdf and re-upload."
         )
 
     if declared_ext in {".doc", ".xls", ".ppt", ".docm", ".xlsm", ".pptm"}:
-        raise FileValidationError(
-            f"File type '{declared_ext}' is not allowed (macro-capable / legacy Office)."
-        )
+        raise FileValidationError(f"File type '{declared_ext}' is not allowed (macro-capable / legacy Office).")
 
     if declared_ext in _OOXML_EXTENSIONS and content[:2] == b"PK":
         try:
@@ -102,8 +99,7 @@ def refuse_ole2_or_macros(content: bytes, declared_extension: str) -> None:
                 names_lower = {name.lower() for name in namelist}
                 if any("vbaproject.bin" in name for name in names_lower):
                     raise FileValidationError(
-                        "Macro-enabled Office documents are not allowed "
-                        "(vbaProject.bin detected)."
+                        "Macro-enabled Office documents are not allowed " "(vbaProject.bin detected)."
                     )
                 content_types_name = next(
                     (n for n in namelist if n.lower().endswith("[content_types].xml")),
@@ -116,9 +112,7 @@ def refuse_ole2_or_macros(content: bytes, declared_extension: str) -> None:
                     except Exception:
                         xml = ""
                 if "vnd.ms-office.vbaProject" in xml or "macroEnabled" in xml:
-                    raise FileValidationError(
-                        "Macro-enabled Office documents are not allowed."
-                    )
+                    raise FileValidationError("Macro-enabled Office documents are not allowed.")
         except zipfile.BadZipFile as exc:
             raise FileValidationError("OOXML package is not a valid ZIP archive") from exc
 
