@@ -71,9 +71,9 @@ def test_w3_adds_no_alembic_revision_after_the_w2_head():
             elif line.startswith("down_revision"):
                 down_revisions.add(line.split('"')[1])
     assert "20261021_job_nest_pdca" in revisions
-    assert "20261021_job_nest_pdca" not in down_revisions, (
-        "A revision now sits on top of the W2 head; W3 was specified as no-migration."
-    )
+    assert (
+        "20261021_job_nest_pdca" not in down_revisions
+    ), "A revision now sits on top of the W2 head; W3 was specified as no-migration."
 
 
 def test_freshness_is_not_persisted_on_job_lifecycle_tables():
@@ -186,18 +186,14 @@ def test_normalise_status_handles_enums_blanks_and_case():
 
 
 def test_ad_hoc_audits_never_lapse_they_report_unknown():
-    verdict = classify_audit_lapse(
-        completed_at=NOW - timedelta(days=5000), frequency="ad_hoc", now=NOW
-    )
+    verdict = classify_audit_lapse(completed_at=NOW - timedelta(days=5000), frequency="ad_hoc", now=NOW)
     assert verdict.state == "unknown"
     assert verdict.reason == "no_audit_cadence"
 
 
 def test_unrecognised_frequency_is_unknown_not_a_guessed_cadence():
     assert audit_frequency_days("every other Tuesday") is None
-    verdict = classify_audit_lapse(
-        completed_at=NOW - timedelta(days=5000), frequency="every other Tuesday", now=NOW
-    )
+    verdict = classify_audit_lapse(completed_at=NOW - timedelta(days=5000), frequency="every other Tuesday", now=NOW)
     assert verdict.state == "unknown"
     assert verdict.next_due_at is None
 
@@ -210,9 +206,7 @@ def test_no_run_data_at_all_is_unknown():
 @pytest.mark.parametrize("frequency", sorted(AUDIT_FREQUENCY_DAYS))
 def test_a_completed_audit_lapses_once_its_cadence_elapses(frequency):
     days = AUDIT_FREQUENCY_DAYS[frequency]
-    lapsed = classify_audit_lapse(
-        completed_at=NOW - timedelta(days=days + 1), frequency=frequency, now=NOW
-    )
+    lapsed = classify_audit_lapse(completed_at=NOW - timedelta(days=days + 1), frequency=frequency, now=NOW)
     assert lapsed.state == "lapsed"
     assert lapsed.reason == "cadence_overdue"
     assert lapsed.next_due_at == NOW - timedelta(days=1)
@@ -225,9 +219,7 @@ def test_a_short_cadence_is_not_permanently_due_soon():
     """A fixed 30-day warning would swallow a daily audit's whole cycle."""
     daily = classify_audit_lapse(completed_at=NOW, frequency="daily", now=NOW)
     assert daily.state == "current"
-    annual = classify_audit_lapse(
-        completed_at=NOW - timedelta(days=340), frequency="annually", now=NOW
-    )
+    annual = classify_audit_lapse(completed_at=NOW - timedelta(days=340), frequency="annually", now=NOW)
     assert annual.state == "due_soon"
 
 
@@ -284,9 +276,7 @@ def test_audit_lapse_is_none_when_the_run_is_not_in_the_map():
 
 
 def test_non_audit_links_never_carry_a_lapse():
-    external = _audit_link(
-        kind="external", external_url="https://a.test", audit_run_id=None, audit_finding_id=None
-    )
+    external = _audit_link(kind="external", external_url="https://a.test", audit_run_id=None, audit_finding_id=None)
     payload = serialize_cell_link(external, audit_lapse_by_run={5: classify_audit_lapse(now=NOW)})
     assert payload["audit_lapse"] is None
 
@@ -328,15 +318,11 @@ def _freshness_service(documents, controlled):
 
 
 def _document(doc_id, *, status="approved", review_date=None, title="Doc", reference="PEL-1"):
-    return SimpleNamespace(
-        id=doc_id, status=status, review_date=review_date, title=title, reference_number=reference
-    )
+    return SimpleNamespace(id=doc_id, status=status, review_date=review_date, title=title, reference_number=reference)
 
 
 def _controlled(library_document_id, *, status="published", next_review_date=None):
-    return SimpleNamespace(
-        library_document_id=library_document_id, status=status, next_review_date=next_review_date
-    )
+    return SimpleNamespace(library_document_id=library_document_id, status=status, next_review_date=next_review_date)
 
 
 @pytest.mark.asyncio
@@ -358,9 +344,7 @@ async def test_freshness_reports_an_unseen_id_rather_than_dropping_it():
 
 @pytest.mark.asyncio
 async def test_freshness_echoes_both_raw_statuses_alongside_the_verdict():
-    service = _freshness_service(
-        [_document(1, status="approved")], [_controlled(1, status="obsolete")]
-    )
+    service = _freshness_service([_document(1, status="approved")], [_controlled(1, status="obsolete")])
     item = (await service.document_freshness(tenant_id=1, library_document_ids=[1]))[0]
     assert item["library_status"] == "approved"
     assert item["controlled_status"] == "obsolete"
@@ -496,12 +480,8 @@ async def test_an_already_attached_obsolete_document_stays_removable():
     Document 7 went obsolete after it was attached. A PUT that keeps 7 and
     drops 8 must succeed, or the operator can never clear the cell.
     """
-    service, checked = _guard_service(
-        existing_ids=[7, 8], freshness_items=[_verdict_item(7, obsolete=True)]
-    )
-    await service._assert_no_obsolete_attachments(
-        tenant_id=1, job_type_id=1, lane_id=2, step_id=3, requested_ids=[7]
-    )
+    service, checked = _guard_service(existing_ids=[7, 8], freshness_items=[_verdict_item(7, obsolete=True)])
+    await service._assert_no_obsolete_attachments(tenant_id=1, job_type_id=1, lane_id=2, step_id=3, requested_ids=[7])
     assert checked == [], "no freshness lookup at all when nothing is being added"
 
 
@@ -519,21 +499,15 @@ async def test_only_the_newly_added_ids_are_checked():
 
 @pytest.mark.asyncio
 async def test_a_cell_that_does_not_exist_yet_treats_every_id_as_new():
-    service, checked = _guard_service(
-        existing_ids=None, freshness_items=[_verdict_item(4, obsolete=False)]
-    )
-    await service._assert_no_obsolete_attachments(
-        tenant_id=1, job_type_id=1, lane_id=2, step_id=3, requested_ids=[4]
-    )
+    service, checked = _guard_service(existing_ids=None, freshness_items=[_verdict_item(4, obsolete=False)])
+    await service._assert_no_obsolete_attachments(tenant_id=1, job_type_id=1, lane_id=2, step_id=3, requested_ids=[4])
     assert checked == [[4]]
 
 
 @pytest.mark.asyncio
 async def test_clearing_a_cell_is_never_blocked():
     service, checked = _guard_service(existing_ids=[7], freshness_items=[])
-    await service._assert_no_obsolete_attachments(
-        tenant_id=1, job_type_id=1, lane_id=2, step_id=3, requested_ids=[]
-    )
+    await service._assert_no_obsolete_attachments(tenant_id=1, job_type_id=1, lane_id=2, step_id=3, requested_ids=[])
     assert checked == []
 
 

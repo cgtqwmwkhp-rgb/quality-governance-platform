@@ -584,7 +584,9 @@ class JobLifecycleService:
         for item in await self.document_freshness(tenant_id=tenant_id, library_document_ids=added):
             if not item["is_obsolete"]:
                 continue
-            source = item["controlled_status"] if item["reason"] == "obsolete_controlled_status" else item["library_status"]
+            source = (
+                item["controlled_status"] if item["reason"] == "obsolete_controlled_status" else item["library_status"]
+            )
             blocked.append(f"{item['library_document_id']} ({source})")
         if blocked:
             raise HTTPException(

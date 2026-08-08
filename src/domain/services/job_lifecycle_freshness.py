@@ -28,16 +28,12 @@ DOCUMENT_FRESHNESS_STATES: tuple[str, ...] = (
 
 #: Library ``DocumentStatus`` values that mean "withdrawn from active use".
 #: Attaching one of these to a live job cycle is what W3 blocks.
-OBSOLETE_LIBRARY_STATUSES: frozenset[str] = frozenset(
-    {"obsolete", "superseded", "retired", "archived"}
-)
+OBSOLETE_LIBRARY_STATUSES: frozenset[str] = frozenset({"obsolete", "superseded", "retired", "archived"})
 
 #: ``ControlledDocument.status`` is a free ``String(50)``, not an enum, so the
 #: same withdrawn vocabulary is matched case-insensitively on the doc-control
 #: side. ``document_control`` writes exactly ``"obsolete"``.
-OBSOLETE_CONTROLLED_STATUSES: frozenset[str] = frozenset(
-    {"obsolete", "superseded", "retired", "archived"}
-)
+OBSOLETE_CONTROLLED_STATUSES: frozenset[str] = frozenset({"obsolete", "superseded", "retired", "archived"})
 
 #: How far ahead of a review date a document reads as "due soon".
 DOCUMENT_DUE_SOON_WINDOW_DAYS = 30
