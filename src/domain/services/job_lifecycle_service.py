@@ -27,12 +27,7 @@ from src.domain.models.job_lifecycle import (
     JobStep,
     JobType,
 )
-from src.domain.services.href_registry import (
-    audit_finding_href,
-    href_for,
-    job_type_href,
-    registered_entity_types,
-)
+from src.domain.services.href_registry import audit_finding_href, href_for, job_type_href, registered_entity_types
 
 
 def _utc_now() -> datetime:
@@ -710,9 +705,7 @@ class JobLifecycleService:
         seen: set[int] = {target_job_type_id}
         while frontier:
             current = frontier.pop()
-            for nested_id in await self.nested_job_type_ids(
-                tenant_id=tenant_id, job_type_id=current
-            ):
+            for nested_id in await self.nested_job_type_ids(tenant_id=tenant_id, job_type_id=current):
                 if nested_id == source_job_type_id:
                     return True
                 if nested_id not in seen:

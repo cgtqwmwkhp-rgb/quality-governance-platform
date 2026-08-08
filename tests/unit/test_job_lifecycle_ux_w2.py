@@ -21,15 +21,9 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from src.api.schemas.job_lifecycle import JobCellLinkCreate, JobStepUpdate
+from src.api.schemas.job_lifecycle import JobCellLinkCreate, JobStepResponse, JobStepUpdate
 from src.core.config import settings
-from src.domain.models.job_lifecycle import (
-    JOB_CELL_LINK_KINDS,
-    JOB_STEP_PDCA_PHASES,
-    JobCellLink,
-    JobLane,
-    JobStep,
-)
+from src.domain.models.job_lifecycle import JOB_CELL_LINK_KINDS, JOB_STEP_PDCA_PHASES, JobCellLink, JobLane, JobStep
 from src.domain.services.entity_360.permissions import HOP_READ_PERMISSIONS, can_view_hop
 from src.domain.services.entity_360.producers.job_lifecycle import JobLifecycleProducer
 from src.domain.services.href_registry import href_for, job_type_href, registered_entity_types
@@ -68,9 +62,7 @@ def test_migration_widens_kind_and_adds_nesting_and_pdca():
 def test_link_kinds_include_job_cycle_and_check_constraint_matches():
     assert "job_cycle" in JOB_CELL_LINK_KINDS
     constraints = {
-        c.name: str(c.sqltext)
-        for c in JobCellLink.__table__.constraints
-        if c.name == "ck_job_cell_links_kind"
+        c.name: str(c.sqltext) for c in JobCellLink.__table__.constraints if c.name == "ck_job_cell_links_kind"
     }
     assert "ck_job_cell_links_kind" in constraints
     assert "job_cycle" in constraints["ck_job_cell_links_kind"]
@@ -87,9 +79,7 @@ def test_nesting_has_no_second_ssot_on_lanes():
 def test_job_step_carries_nullable_pdca_phase_with_constraint():
     column = JobStep.__table__.columns["pdca_phase"]
     assert column.nullable is True
-    constraint = next(
-        c for c in JobStep.__table__.constraints if c.name == "ck_job_steps_pdca_phase"
-    )
+    constraint = next(c for c in JobStep.__table__.constraints if c.name == "ck_job_steps_pdca_phase")
     rendered = str(constraint.sqltext)
     assert "IS NULL" in rendered
     for phase in JOB_STEP_PDCA_PHASES:
@@ -190,21 +180,40 @@ def test_other_kinds_may_not_smuggle_a_nest_target():
     with pytest.raises(ValidationError):
         JobCellLinkCreate(kind="external", label="x", external_url="https://a.test", target_job_type_id=2)
     with pytest.raises(ValidationError):
-        JobCellLinkCreate(
-            kind="audit_outcome", label="x", audit_run_id=1, audit_finding_id=2, target_job_type_id=3
-        )
+        JobCellLinkCreate(kind="audit_outcome", label="x", audit_run_id=1, audit_finding_id=2, target_job_type_id=3)
 
 
 def test_step_update_distinguishes_omitted_phase_from_cleared_phase():
-    omitted = JobStepUpdate(name="Deliver")
-    assert omitted.pdca_phase is None
-    assert omitted.pdca_phase_set is False
+    """An omitted key and an explicit null must not mean the same thing.
 
-    cleared = JobStepUpdate(pdca_phase=None, pdca_phase_set=True)
-    assert cleared.pdca_phase_set is True
+    The route decides whether to clear from ``model_fields_set``, so that is
+    what is asserted here — not a companion boolean, which would be a
+    write-only field a client could never read back.
+    """
+    omitted = JobStepUpdate.model_validate({"name": "Deliver"})
+    assert omitted.pdca_phase is None
+    assert "pdca_phase" not in omitted.model_fields_set
+
+    cleared = JobStepUpdate.model_validate({"pdca_phase": None})
+    assert cleared.pdca_phase is None
+    assert "pdca_phase" in cleared.model_fields_set
+
+    setting = JobStepUpdate.model_validate({"pdca_phase": "check"})
+    assert setting.pdca_phase == "check"
+    assert "pdca_phase" in setting.model_fields_set
 
     with pytest.raises(ValidationError):
         JobStepUpdate(pdca_phase="review")
+
+
+def test_step_update_exposes_no_write_only_companion_flag():
+    """Guards the contract fix: no field the response model cannot echo back."""
+    assert "pdca_phase_set" not in JobStepUpdate.model_fields
+    with pytest.raises(ValidationError):
+        JobStepUpdate.model_validate({"pdca_phase": None, "pdca_phase_set": True})
+
+    unreadable = set(JobStepUpdate.model_fields) - set(JobStepResponse.model_fields)
+    assert not unreadable, f"JobStepUpdate accepts fields JobStepResponse never returns: {unreadable}"
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +244,7 @@ def _service_with_graph(edges: dict[int, list[int]]) -> tuple[JobLifecycleServic
 @pytest.mark.asyncio
 async def test_self_nesting_is_a_cycle():
     service, graph = _service_with_graph({})
-    assert await service.would_create_job_cycle_nest_cycle(
-        tenant_id=1, source_job_type_id=5, target_job_type_id=5
-    )
+    assert await service.would_create_job_cycle_nest_cycle(tenant_id=1, source_job_type_id=5, target_job_type_id=5)
     assert graph.calls == 0, "self-nesting is rejected without touching the graph"
 
 
@@ -245,39 +252,29 @@ async def test_self_nesting_is_a_cycle():
 async def test_direct_back_edge_is_a_cycle():
     # 2 already nests 1, so nesting 2 inside 1 closes the loop.
     service, _ = _service_with_graph({2: [1]})
-    assert await service.would_create_job_cycle_nest_cycle(
-        tenant_id=1, source_job_type_id=1, target_job_type_id=2
-    )
+    assert await service.would_create_job_cycle_nest_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=2)
 
 
 @pytest.mark.asyncio
 async def test_transitive_back_edge_is_a_cycle():
     # 2 → 3 → 4 → 1, so nesting 2 inside 1 closes a four-hop loop.
     service, _ = _service_with_graph({2: [3], 3: [4], 4: [1]})
-    assert await service.would_create_job_cycle_nest_cycle(
-        tenant_id=1, source_job_type_id=1, target_job_type_id=2
-    )
+    assert await service.would_create_job_cycle_nest_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=2)
 
 
 @pytest.mark.asyncio
 async def test_diamond_nesting_is_allowed():
     """Shared descendants are not cycles — the guard rejects loops, not reuse."""
     service, _ = _service_with_graph({2: [4], 3: [4]})
-    assert not await service.would_create_job_cycle_nest_cycle(
-        tenant_id=1, source_job_type_id=1, target_job_type_id=2
-    )
-    assert not await service.would_create_job_cycle_nest_cycle(
-        tenant_id=1, source_job_type_id=1, target_job_type_id=3
-    )
+    assert not await service.would_create_job_cycle_nest_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=2)
+    assert not await service.would_create_job_cycle_nest_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=3)
 
 
 @pytest.mark.asyncio
 async def test_guard_terminates_on_a_graph_that_already_contains_a_cycle():
     """A pre-existing loop must not spin the BFS forever."""
     service, _ = _service_with_graph({2: [3], 3: [2]})
-    assert not await service.would_create_job_cycle_nest_cycle(
-        tenant_id=1, source_job_type_id=1, target_job_type_id=2
-    )
+    assert not await service.would_create_job_cycle_nest_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=2)
 
 
 @pytest.mark.asyncio
@@ -296,9 +293,7 @@ async def test_nesting_is_generic_in_both_directions():
 async def test_assert_nestable_rejects_missing_target_id():
     service, _ = _service_with_graph({})
     with pytest.raises(HTTPException) as exc_info:
-        await service._assert_nestable_job_cycle(
-            tenant_id=1, source_job_type_id=1, target_job_type_id=None
-        )
+        await service._assert_nestable_job_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=None)
     assert exc_info.value.status_code == 422
 
 
@@ -307,9 +302,7 @@ async def test_assert_nestable_404s_on_a_target_outside_the_tenant():
     service, _ = _service_with_graph({})
     service._get_live = AsyncMock(return_value=None)  # type: ignore[method-assign]
     with pytest.raises(HTTPException) as exc_info:
-        await service._assert_nestable_job_cycle(
-            tenant_id=1, source_job_type_id=1, target_job_type_id=99
-        )
+        await service._assert_nestable_job_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=99)
     assert exc_info.value.status_code == 404
 
 
@@ -318,9 +311,7 @@ async def test_assert_nestable_conflicts_when_a_cycle_would_form():
     service, _ = _service_with_graph({2: [1]})
     service._get_live = AsyncMock(return_value=SimpleNamespace(id=2))  # type: ignore[method-assign]
     with pytest.raises(HTTPException) as exc_info:
-        await service._assert_nestable_job_cycle(
-            tenant_id=1, source_job_type_id=1, target_job_type_id=2
-        )
+        await service._assert_nestable_job_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=2)
     assert exc_info.value.status_code == 409
 
 
@@ -328,9 +319,7 @@ async def test_assert_nestable_conflicts_when_a_cycle_would_form():
 async def test_assert_nestable_allows_a_clean_nest():
     service, _ = _service_with_graph({})
     service._get_live = AsyncMock(return_value=SimpleNamespace(id=2))  # type: ignore[method-assign]
-    await service._assert_nestable_job_cycle(
-        tenant_id=1, source_job_type_id=1, target_job_type_id=2
-    )
+    await service._assert_nestable_job_cycle(tenant_id=1, source_job_type_id=1, target_job_type_id=2)
 
 
 # ---------------------------------------------------------------------------

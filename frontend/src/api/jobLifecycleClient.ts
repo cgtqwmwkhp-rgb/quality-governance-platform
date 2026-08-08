@@ -148,9 +148,8 @@ export interface JobStepUpdatePayload {
   description?: string | null
   sort_order?: number
   is_active?: boolean
+  /** Send an explicit null to clear the phase; omit the key to leave it alone. */
   pdca_phase?: JobStepPdcaPhase | null
-  /** Required to clear a phase — a bare null means "field omitted" on PATCH. */
-  pdca_phase_set?: boolean
 }
 
 export interface JobTypeListResponse {

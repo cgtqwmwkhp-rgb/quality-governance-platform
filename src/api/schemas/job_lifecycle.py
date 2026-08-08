@@ -110,10 +110,10 @@ class JobStepUpdate(BaseModel):
     description: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
-    #: Sentinel-free clearing: send ``pdca_phase_set=true`` with a null phase to
-    #: unset it, because ``None`` alone means "field omitted" on a PATCH.
+    #: Send an explicit ``null`` to clear the phase. Omitting the key leaves it
+    #: alone — the two are told apart via ``model_fields_set``, not a companion
+    #: flag, so nothing write-only leaks into the wire contract.
     pdca_phase: Optional[JobStepPdcaPhase] = None
-    pdca_phase_set: bool = False
 
 
 class JobStepResponse(BaseModel):

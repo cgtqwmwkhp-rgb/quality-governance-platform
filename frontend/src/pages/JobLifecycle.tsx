@@ -495,10 +495,7 @@ export default function JobLifecycle() {
     setSaving(true)
     setError(null)
     try {
-      const res = await jobLifecycleApi.updateStep(step.id, {
-        pdca_phase: next,
-        pdca_phase_set: true,
-      })
+      const res = await jobLifecycleApi.updateStep(step.id, { pdca_phase: next })
       setSteps((prev) => prev.map((s) => (s.id === step.id ? res.data : s)))
     } catch (err) {
       setError(getApiErrorMessage(err))

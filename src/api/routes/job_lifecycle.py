@@ -278,7 +278,7 @@ async def update_step(
         sort_order=body.sort_order,
         is_active=body.is_active,
         pdca_phase=body.pdca_phase,
-        pdca_phase_set=body.pdca_phase_set,
+        pdca_phase_set="pdca_phase" in body.model_fields_set,
     )
     return JobStepResponse.model_validate(row)
 

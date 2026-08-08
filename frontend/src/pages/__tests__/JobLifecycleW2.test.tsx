@@ -207,14 +207,14 @@ describe('PDCA colouring', () => {
     fireEvent.click(await screen.findByTestId('job-lifecycle-step-pdca-20'))
 
     await waitFor(() => {
-      expect(updateStep).toHaveBeenCalledWith(20, { pdca_phase: 'do', pdca_phase_set: true })
+      expect(updateStep).toHaveBeenCalledWith(20, { pdca_phase: 'do' })
     })
     await waitFor(() => {
       expect(screen.getByTestId('job-lifecycle-col-20')).toHaveAttribute('data-pdca-phase', 'do')
     })
   })
 
-  it('clears the phase from act with an explicit set flag', async () => {
+  it('clears the phase from act by sending an explicit null', async () => {
     listSteps.mockResolvedValue({
       data: { items: [{ ...STEP_PLAN, pdca_phase: 'act' }], total: 1 },
     })
@@ -223,7 +223,7 @@ describe('PDCA colouring', () => {
     fireEvent.click(await screen.findByTestId('job-lifecycle-step-pdca-20'))
 
     await waitFor(() => {
-      expect(updateStep).toHaveBeenCalledWith(20, { pdca_phase: null, pdca_phase_set: true })
+      expect(updateStep).toHaveBeenCalledWith(20, { pdca_phase: null })
     })
   })
 })

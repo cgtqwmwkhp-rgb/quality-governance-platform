@@ -7,9 +7,10 @@ are always present; never a one-way silo. Hrefs come from ``href_registry`` only
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from sqlalchemy import select
+from sqlalchemy.sql.elements import ColumnElement
 
 from src.core.config import settings
 from src.domain.models.document import Document
@@ -273,7 +274,6 @@ class JobLifecycleProducer:
             downstream=downstream,
         )
 
-
     async def _for_job_type(self, *, db: Any, tenant_id: int, job_type_id: int) -> ProducerResult:
         """Nest hops both ways for a job cycle.
 
@@ -310,7 +310,7 @@ class JobLifecycleProducer:
         db: Any,
         tenant_id: int,
         job_type_id: int,
-        direction: str,
+        direction: Literal["upstream", "downstream"],
     ) -> list[dict[str, Any]]:
         """Hops for one nesting direction.
 
@@ -319,6 +319,8 @@ class JobLifecycleProducer:
         cycle that owns the cell. ``JobType`` is joined so the hop carries the
         real name/code rather than the (editable) link label.
         """
+        join_on: ColumnElement[bool]
+        selector: tuple[ColumnElement[bool], ...]
         if direction == "downstream":
             join_on = JobType.id == JobCellLink.target_job_type_id
             selector = (
