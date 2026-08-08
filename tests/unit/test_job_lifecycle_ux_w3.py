@@ -26,11 +26,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from src.api.schemas.job_lifecycle import (
-    JobCellLinkResponse,
-    JobDocumentFreshnessItem,
-    JobDocumentFreshnessResponse,
-)
+from src.api.schemas.job_lifecycle import JobCellLinkResponse, JobDocumentFreshnessItem, JobDocumentFreshnessResponse
 from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobCellLink
 from src.domain.services.job_lifecycle_freshness import (
     AUDIT_FREQUENCY_DAYS,
