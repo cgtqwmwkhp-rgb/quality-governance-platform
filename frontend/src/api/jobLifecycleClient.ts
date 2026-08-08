@@ -349,6 +349,79 @@ export interface JobAuditTrailResponse {
   summary: Record<string, number>
 }
 
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W5 — baselines (snapshots) + portal nested-cycle read                 */
+/* -------------------------------------------------------------------------- */
+
+export interface JobTypeBaselineCreatePayload {
+  label?: string | null
+  note?: string | null
+}
+
+export interface JobTypeBaseline {
+  id: number
+  tenant_id: number
+  job_type_id: number
+  label?: string | null
+  note?: string | null
+  created_by_id?: number | null
+  created_at: string
+  updated_at: string
+  snapshot?: Record<string, unknown> | null
+  is_snapshot: boolean
+  edit_targets_live: boolean
+  viewing_baseline?: boolean
+  banner?: string | null
+}
+
+export interface JobTypeBaselineListResponse {
+  items: JobTypeBaseline[]
+  total: number
+  job_type_id: number
+  edit_targets_live: boolean
+}
+
+export interface JobTypeBaselineDiffResponse {
+  baseline_id: number
+  job_type_id: number
+  viewing_baseline: boolean
+  edit_targets_live: boolean
+  banner: string
+  baseline_created_at: string
+  baseline_label?: string | null
+  has_changes: boolean
+  summary: Record<string, { added: number; removed: number; changed: number }>
+  sections: Record<string, unknown>
+}
+
+export interface PortalJobNestLink {
+  id: number
+  kind: 'job_cycle'
+  label: string
+  target_job_type_id?: number | null
+  href: string
+  sort_order: number
+}
+
+export interface PortalJobCell {
+  id: number
+  lane_id: number
+  step_id: number
+  requires_evidence: boolean
+  library_document_ids: number[]
+  nest_links: PortalJobNestLink[]
+}
+
+export interface PortalNestedCycleResponse {
+  job_type: JobType
+  lanes: JobLane[]
+  steps: JobStep[]
+  cells: PortalJobCell[]
+  cycle_graph?: JobCycleGraphResponse | null
+  read_only: boolean
+  can_author: boolean
+}
+
 /**
  * Optimistic-concurrency precondition for an axis PATCH.
  *
@@ -368,6 +441,7 @@ function ifMatchConfig(
 }
 
 const PREFIX = '/api/v1/job-lifecycle'
+const PORTAL_PREFIX = '/api/v1/portal/job-lifecycle'
 
 export function createJobLifecycleApi(api: AxiosInstance) {
   return {
@@ -546,6 +620,55 @@ export function createJobLifecycleApi(api: AxiosInstance) {
       const params = new URLSearchParams()
       for (const id of libraryDocumentIds) params.append('library_document_ids', String(id))
       return api.get(`${PREFIX}/document-freshness?${params.toString()}`)
+    },
+
+    // --- Baselines (JL-UX-W5) — snapshots; edit always targets live tip ------
+
+    createBaseline(
+      jobTypeId: number,
+      payload: JobTypeBaselineCreatePayload = {},
+    ): Promise<AxiosResponse<JobTypeBaseline>> {
+      return api.post(`${PREFIX}/job-types/${jobTypeId}/baselines`, payload)
+    },
+
+    listBaselines(jobTypeId: number): Promise<AxiosResponse<JobTypeBaselineListResponse>> {
+      return api.get(`${PREFIX}/job-types/${jobTypeId}/baselines`)
+    },
+
+    getBaseline(
+      jobTypeId: number,
+      baselineId: number,
+    ): Promise<AxiosResponse<JobTypeBaseline>> {
+      return api.get(`${PREFIX}/job-types/${jobTypeId}/baselines/${baselineId}`)
+    },
+
+    diffBaseline(
+      jobTypeId: number,
+      baselineId: number,
+    ): Promise<AxiosResponse<JobTypeBaselineDiffResponse>> {
+      return api.get(`${PREFIX}/job-types/${jobTypeId}/baselines/${baselineId}/diff`)
+    },
+
+    // --- Portal nested-cycle read (JL-UX-W5) --------------------------------
+
+    portalListJobTypes(): Promise<AxiosResponse<JobTypeListResponse>> {
+      return api.get(`${PORTAL_PREFIX}/job-types`)
+    },
+
+    portalNestedCycle(
+      jobTypeId: number,
+      depth?: number,
+    ): Promise<AxiosResponse<PortalNestedCycleResponse>> {
+      const suffix = typeof depth === 'number' ? `?depth=${depth}` : ''
+      return api.get(`${PORTAL_PREFIX}/job-types/${jobTypeId}/nested-cycle${suffix}`)
+    },
+
+    portalCycleGraph(
+      jobTypeId: number,
+      depth?: number,
+    ): Promise<AxiosResponse<JobCycleGraphResponse>> {
+      const suffix = typeof depth === 'number' ? `?depth=${depth}` : ''
+      return api.get(`${PORTAL_PREFIX}/job-types/${jobTypeId}/cycle-graph${suffix}`)
     },
   }
 }

@@ -8,9 +8,10 @@ the library ``Document``). No department annotation column in JL-1.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -22,9 +23,13 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base, DataClassification, TimestampMixin
+
+#: JSONB on PostgreSQL; plain JSON for SQLite unit tests.
+_JL_JSON = JSON().with_variant(JSONB(astext_type=Text()), "postgresql")
 
 #: Cell link kinds. ``job_cycle`` nests any JobType inside any other JobType's
 #: cell — generic by design, never a hardcoded pair of packs.
@@ -343,6 +348,42 @@ class JobCellLink(Base, TimestampMixin):
         return f"<JobCellLink(id={self.id}, cell={self.cell_id}, kind={self.kind!r})>"
 
 
+class JobTypeBaseline(Base, TimestampMixin):
+    """Frozen snapshot of a JobType pack's axes + nest edges (JL-UX-W5).
+
+    A baseline is a **snapshot**, not a fork. Live ``job_*`` tables remain the
+    source of truth for edit; viewing a baseline shows a banner and never
+    redirects writes onto the snapshot.
+    """
+
+    __tablename__ = "job_type_baselines"
+    __data_classification__ = DataClassification.C2_INTERNAL
+    __table_args__ = (Index("ix_job_type_baselines_tenant_type_created", "tenant_id", "job_type_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    job_type_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("job_types.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    #: Axes + nest edges at capture time. Shape owned by ``job_lifecycle_baseline``.
+    snapshot: Mapped[dict[str, Any]] = mapped_column(_JL_JSON, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<JobTypeBaseline(id={self.id}, job_type_id={self.job_type_id})>"
+
+
 __all__ = [
     "JOB_CELL_LINK_KINDS",
     "JOB_STEP_PDCA_PHASES",
@@ -352,4 +393,5 @@ __all__ = [
     "JobLane",
     "JobStep",
     "JobType",
+    "JobTypeBaseline",
 ]

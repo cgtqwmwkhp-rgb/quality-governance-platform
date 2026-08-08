@@ -30,6 +30,7 @@ const listEvidenceReadiness = vi.fn()
 const getCycleGraph = vi.fn()
 const getAuditTrail = vi.fn()
 const listDocumentFreshness = vi.fn()
+const listBaselines = vi.fn()
 
 const flagState: Record<string, boolean> = {
   job_lifecycle: true,
@@ -54,6 +55,7 @@ vi.mock('../../api/client', () => ({
     getCycleGraph: (...args: unknown[]) => getCycleGraph(...args),
     getAuditTrail: (...args: unknown[]) => getAuditTrail(...args),
     listDocumentFreshness: (...args: unknown[]) => listDocumentFreshness(...args),
+    listBaselines: (...args: unknown[]) => listBaselines(...args),
   },
   getApiErrorMessage: (err: unknown) =>
     (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
@@ -176,6 +178,7 @@ beforeEach(() => {
     getCycleGraph,
     getAuditTrail,
     listDocumentFreshness,
+    listBaselines,
   ]) {
     fn.mockReset()
   }
@@ -190,6 +193,7 @@ beforeEach(() => {
   listJobTypes.mockResolvedValue({ data: { items: [JOB_TYPE], total: 1 } })
   listLanes.mockResolvedValue({ data: { items: [LANE], total: 1 } })
   listSteps.mockResolvedValue({ data: { items: [STEP], total: 1 } })
+  listBaselines.mockResolvedValue({ data: { items: [], total: 0 } })
   listCells.mockResolvedValue({ data: { items: [CELL], total: 1 } })
   listDocumentFreshness.mockResolvedValue({ data: { items: [], total: 0 } })
   listEvidenceReadiness.mockResolvedValue({

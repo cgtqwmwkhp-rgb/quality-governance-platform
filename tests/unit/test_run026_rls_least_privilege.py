@@ -56,6 +56,7 @@ HARDENING_MIGRATIONS: tuple[tuple[Path, tuple[str, ...]], ...] = (
     (VERSIONS / "20261015_document_edges.py", ("ADOPT_TABLES",)),
     (VERSIONS / "20261019_job_lifecycle_axes.py", ("ADOPT_TABLES",)),
     (VERSIONS / "20261020_job_cell_links.py", ("ADOPT_TABLES",)),
+    (VERSIONS / "20261023_job_type_baselines.py", ("ADOPT_TABLES",)),
 )
 
 

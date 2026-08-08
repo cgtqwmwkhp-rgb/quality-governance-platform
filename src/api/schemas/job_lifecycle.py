@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -499,6 +499,95 @@ class JobAuditTrailResponse(BaseModel):
     summary: Dict[str, int] = Field(default_factory=dict)
 
 
+# ---------------------------------------------------------------------------
+# Baselines (JL-UX-W5) — snapshots, never forks
+# ---------------------------------------------------------------------------
+
+
+class JobTypeBaselineCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: Optional[str] = Field(None, max_length=200)
+    note: Optional[str] = None
+
+
+class JobTypeBaselineResponse(BaseModel):
+    """One frozen snapshot. ``edit_targets_live`` is always true by design."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    tenant_id: int
+    job_type_id: int
+    label: Optional[str] = None
+    note: Optional[str] = None
+    created_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    snapshot: Optional[Dict[str, Any]] = None
+    is_snapshot: bool = True
+    edit_targets_live: bool = True
+    viewing_baseline: bool = False
+    banner: Optional[str] = None
+
+
+class JobTypeBaselineListResponse(BaseModel):
+    items: List[JobTypeBaselineResponse]
+    total: int
+    job_type_id: int
+    edit_targets_live: bool = True
+
+
+class JobTypeBaselineDiffResponse(BaseModel):
+    baseline_id: int
+    job_type_id: int
+    viewing_baseline: bool = True
+    edit_targets_live: bool = True
+    banner: str
+    baseline_created_at: datetime
+    baseline_label: Optional[str] = None
+    has_changes: bool
+    summary: Dict[str, Dict[str, int]] = Field(default_factory=dict)
+    sections: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Portal nested-cycle read (JL-UX-W5)
+# ---------------------------------------------------------------------------
+
+
+class PortalJobNestLink(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: Literal["job_cycle"] = "job_cycle"
+    label: str
+    target_job_type_id: Optional[int] = None
+    href: str
+    sort_order: int = 0
+
+
+class PortalJobCell(BaseModel):
+    id: int
+    lane_id: int
+    step_id: int
+    requires_evidence: bool = False
+    library_document_ids: List[int] = Field(default_factory=list)
+    nest_links: List[PortalJobNestLink] = Field(default_factory=list)
+
+
+class PortalNestedCycleResponse(BaseModel):
+    """Field/portal nest-aware cycle DTO. Read-only by contract."""
+
+    job_type: JobTypeResponse
+    lanes: List[JobLaneResponse] = Field(default_factory=list)
+    steps: List[JobStepResponse] = Field(default_factory=list)
+    cells: List[PortalJobCell] = Field(default_factory=list)
+    cycle_graph: Optional[JobCycleGraphResponse] = None
+    read_only: bool = True
+    can_author: bool = False
+
+
 __all__ = [
     "JobAuditLapseState",
     "JobAuditTrailPath",
@@ -534,10 +623,17 @@ __all__ = [
     "JobStepPdcaPhase",
     "JobStepResponse",
     "JobStepUpdate",
+    "JobTypeBaselineCreate",
+    "JobTypeBaselineDiffResponse",
+    "JobTypeBaselineListResponse",
+    "JobTypeBaselineResponse",
     "JobTypeCloneRequest",
     "JobTypeCloneResponse",
     "JobTypeCreate",
     "JobTypeListResponse",
     "JobTypeResponse",
     "JobTypeUpdate",
+    "PortalJobCell",
+    "PortalJobNestLink",
+    "PortalNestedCycleResponse",
 ]

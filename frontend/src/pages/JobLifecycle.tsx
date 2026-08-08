@@ -29,6 +29,8 @@ import type {
   JobStep,
   JobStepPdcaPhase,
   JobType,
+  JobTypeBaseline,
+  JobTypeBaselineDiffResponse,
 } from '../api/jobLifecycleClient'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { Button } from '../components/ui/Button'
@@ -52,6 +54,7 @@ import {
   auditLapseLabel,
   auditLapseTitle,
   availableJobLifecycleViewModes,
+  baselineViewingBanner,
   buildAxisCode,
   buildCellIndex,
   buildJobCycleBreadcrumb,
@@ -96,9 +99,11 @@ import {
   resolveSelectedStepId,
   resolveSwimlaneAxes,
   shouldFetchJobLifecycle,
+  shouldShowBaselineBanner,
   shouldShowJobCycleBreadcrumb,
   shouldShowJobLifecycle,
   sortAxesByOrder,
+  summariseBaselineDiff,
   truncateDrillTrail,
   writeStoredJobLifecycleFreshness,
   writeStoredJobLifecyclePanelWidths,
@@ -176,6 +181,11 @@ export default function JobLifecycle() {
   /** Bumped after a write so derived views re-read rather than going stale. */
   const [derivedNonce, setDerivedNonce] = useState(0)
   const [cloneName, setCloneName] = useState('')
+  const [baselineLabel, setBaselineLabel] = useState('')
+  const [baselines, setBaselines] = useState<JobTypeBaseline[]>([])
+  const [viewingBaselineId, setViewingBaselineId] = useState<number | null>(null)
+  const [baselineDiff, setBaselineDiff] = useState<JobTypeBaselineDiffResponse | null>(null)
+  const [baselineBanner, setBaselineBanner] = useState<string | null>(null)
   const [dropHint, setDropHint] = useState<string | null>(null)
   const [newJobTypeName, setNewJobTypeName] = useState('')
   const [newLaneName, setNewLaneName] = useState('')
@@ -386,23 +396,36 @@ export default function JobLifecycle() {
         setLanes([])
         setSteps([])
         setCells([])
+        setBaselines([])
+        setViewingBaselineId(null)
+        setBaselineDiff(null)
+        setBaselineBanner(null)
         return
       }
       setLoading(true)
       setError(null)
       try {
-        const [lanesRes, stepsRes, cellsRes] = await Promise.all([
+        const [lanesRes, stepsRes, cellsRes, baselinesRes] = await Promise.all([
           jobLifecycleApi.listLanes(jobTypeId),
           jobLifecycleApi.listSteps(jobTypeId),
           jobLifecycleApi.listCells(jobTypeId),
+          jobLifecycleApi.listBaselines(jobTypeId),
         ])
         setLanes(lanesRes.data.items ?? [])
         setSteps(stepsRes.data.items ?? [])
         setCells(cellsRes.data.items ?? [])
+        setBaselines(baselinesRes.data.items ?? [])
+        setViewingBaselineId(null)
+        setBaselineDiff(null)
+        setBaselineBanner(null)
       } catch (err) {
         setLanes([])
         setSteps([])
         setCells([])
+        setBaselines([])
+        setViewingBaselineId(null)
+        setBaselineDiff(null)
+        setBaselineBanner(null)
         if (isForbiddenApiError(err)) {
           setPermissionHealth(true)
           setError(JOB_LIFECYCLE_PERMISSION_HEALTH_COPY)
@@ -760,6 +783,49 @@ export default function JobLifecycle() {
     }
   }
 
+  /** Freeze the live tip. Edit always stays on live — never on the snapshot. */
+  const handleCreateBaseline = async () => {
+    if (!effectiveJobTypeId || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await jobLifecycleApi.createBaseline(effectiveJobTypeId, {
+        label: baselineLabel.trim() || null,
+      })
+      setBaselineLabel('')
+      setBaselines((prev) => [res.data, ...prev])
+      setDropHint(
+        `Baseline #${res.data.id} captured. Viewing a baseline never redirects edits — live tip remains the source of truth.`,
+      )
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleViewBaseline = async (baselineId: number) => {
+    if (!effectiveJobTypeId) return
+    setError(null)
+    try {
+      const [detail, diff] = await Promise.all([
+        jobLifecycleApi.getBaseline(effectiveJobTypeId, baselineId),
+        jobLifecycleApi.diffBaseline(effectiveJobTypeId, baselineId),
+      ])
+      setViewingBaselineId(baselineId)
+      setBaselineBanner(detail.data.banner || baselineViewingBanner(detail.data))
+      setBaselineDiff(diff.data)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    }
+  }
+
+  const handleClearBaselineView = () => {
+    setViewingBaselineId(null)
+    setBaselineDiff(null)
+    setBaselineBanner(null)
+  }
+
   /** Author the mandatory-evidence flag on one cell. The verdict stays derived. */
   const handleToggleCellRequirement = async (laneId: number, stepId: number) => {
     if (!effectiveJobTypeId || saving) return
@@ -1084,6 +1150,31 @@ export default function JobLifecycle() {
           </Button>
         </div>
       ) : null}
+      {shouldShowBaselineBanner(viewingBaselineId) && baselineBanner ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-950 dark:text-sky-100"
+          data-testid="job-lifecycle-baseline-banner"
+          role="status"
+        >
+          <span>{baselineBanner}</span>
+          <div className="flex items-center gap-2">
+            {baselineDiff ? (
+              <span className="text-xs" data-testid="job-lifecycle-baseline-diff-summary">
+                {summariseBaselineDiff(baselineDiff)}
+              </span>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="job-lifecycle-baseline-clear"
+              onClick={handleClearBaselineView}
+            >
+              Back to live tip
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {readinessError ? (
         <div
           className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100"
@@ -1190,6 +1281,60 @@ export default function JobLifecycle() {
               Cloning copies lanes and steps only. Cells, links and document references are not
               copied — a reference asserts that <em>this</em> pack is evidenced by that document.
             </p>
+            <div className="space-y-2 border-t border-border pt-3">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Baselines
+              </h3>
+              <div className="flex gap-2">
+                <Input
+                  value={baselineLabel}
+                  onChange={(e) => setBaselineLabel(e.target.value)}
+                  placeholder="Baseline label (optional)"
+                  disabled={!effectiveJobTypeId}
+                  data-testid="job-lifecycle-baseline-label"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleCreateBaseline()}
+                  disabled={saving || !effectiveJobTypeId}
+                  data-testid="job-lifecycle-baseline-create"
+                  title="Snapshot axes and nest edges at the live tip. Edit always stays on live."
+                >
+                  Snapshot
+                </Button>
+              </div>
+              <ul className="space-y-1" data-testid="job-lifecycle-baseline-list">
+                {baselines.length === 0 ? (
+                  <li className="text-[11px] text-muted-foreground">No baselines yet.</li>
+                ) : (
+                  baselines.map((baseline) => (
+                    <li key={baseline.id} className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        className={`flex-1 text-left rounded-md px-2 py-1 text-xs ${
+                          viewingBaselineId === baseline.id
+                            ? 'bg-sky-500/10 text-sky-900 dark:text-sky-100'
+                            : 'hover:bg-muted/60'
+                        }`}
+                        data-testid={`job-lifecycle-baseline-${baseline.id}`}
+                        onClick={() => void handleViewBaseline(baseline.id)}
+                      >
+                        {baseline.label?.trim() || `Baseline #${baseline.id}`}
+                        <span className="ml-2 text-[10px] text-muted-foreground">
+                          {new Date(baseline.created_at).toLocaleString()}
+                        </span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+              <p className="text-[11px] text-muted-foreground">
+                Baselines are snapshots, not forks. Viewing one never redirects an edit onto the
+                snapshot.
+              </p>
+            </div>
             <ul className="space-y-1" data-testid="job-lifecycle-type-list">
               {orderedJobTypes.map((jt) => (
                 <li key={jt.id}>

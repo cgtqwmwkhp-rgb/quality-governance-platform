@@ -34,6 +34,10 @@ from src.api.schemas.job_lifecycle import (
     JobStepListResponse,
     JobStepResponse,
     JobStepUpdate,
+    JobTypeBaselineCreate,
+    JobTypeBaselineDiffResponse,
+    JobTypeBaselineListResponse,
+    JobTypeBaselineResponse,
     JobTypeCloneRequest,
     JobTypeCloneResponse,
     JobTypeCreate,
@@ -189,6 +193,97 @@ async def clone_job_type(
         cloned_cell_count=payload["cloned_cell_count"],
         cloned_document_count=payload["cloned_document_count"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Baselines (JL-UX-W5) — snapshots of axes + nest edges; live remains SoT
+# ---------------------------------------------------------------------------
+
+
+@_enabled_router.post(
+    "/job-types/{job_type_id}/baselines",
+    response_model=JobTypeBaselineResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_job_type_baseline(
+    job_type_id: int,
+    body: JobTypeBaselineCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("job:author"))],
+):
+    """Freeze the live tip. Edit always stays on live — never on this snapshot."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    row = await JobLifecycleService(db).create_baseline(
+        tenant_id=tenant_id,
+        job_type_id=job_type_id,
+        label=body.label,
+        note=body.note,
+        created_by_id=getattr(current_user, "id", None),
+    )
+    return JobTypeBaselineResponse.model_validate(
+        JobLifecycleService(db).serialize_baseline(row, include_snapshot=True, viewing=False)
+    )
+
+
+@_enabled_router.get(
+    "/job-types/{job_type_id}/baselines",
+    response_model=JobTypeBaselineListResponse,
+)
+async def list_job_type_baselines(
+    job_type_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("job:read"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = JobLifecycleService(db)
+    items = await service.list_baselines(tenant_id=tenant_id, job_type_id=job_type_id)
+    return JobTypeBaselineListResponse(
+        items=[
+            JobTypeBaselineResponse.model_validate(
+                service.serialize_baseline(row, include_snapshot=False, viewing=False)
+            )
+            for row in items
+        ],
+        total=len(items),
+        job_type_id=job_type_id,
+        edit_targets_live=True,
+    )
+
+
+@_enabled_router.get(
+    "/job-types/{job_type_id}/baselines/{baseline_id}",
+    response_model=JobTypeBaselineResponse,
+)
+async def get_job_type_baseline(
+    job_type_id: int,
+    baseline_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("job:read"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = JobLifecycleService(db)
+    row = await service.get_baseline(tenant_id=tenant_id, job_type_id=job_type_id, baseline_id=baseline_id)
+    return JobTypeBaselineResponse.model_validate(service.serialize_baseline(row, include_snapshot=True, viewing=True))
+
+
+@_enabled_router.get(
+    "/job-types/{job_type_id}/baselines/{baseline_id}/diff",
+    response_model=JobTypeBaselineDiffResponse,
+)
+async def diff_job_type_baseline(
+    job_type_id: int,
+    baseline_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("job:read"))],
+):
+    """Structured added/removed/changed vs the live tip."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    payload = await JobLifecycleService(db).diff_baseline(
+        tenant_id=tenant_id,
+        job_type_id=job_type_id,
+        baseline_id=baseline_id,
+    )
+    return JobTypeBaselineDiffResponse.model_validate(payload)
 
 
 @_enabled_router.delete("/job-types/{job_type_id}", status_code=status.HTTP_204_NO_CONTENT)

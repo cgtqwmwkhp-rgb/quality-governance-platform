@@ -22,6 +22,7 @@ const createLane = vi.fn()
 const createStep = vi.fn()
 const updateLane = vi.fn()
 const updateStep = vi.fn()
+const listBaselines = vi.fn()
 
 const flagState: Record<string, boolean> = {
   job_lifecycle: true,
@@ -44,6 +45,7 @@ vi.mock('../../api/client', () => ({
     createStep: (...args: unknown[]) => createStep(...args),
     updateLane: (...args: unknown[]) => updateLane(...args),
     updateStep: (...args: unknown[]) => updateStep(...args),
+    listBaselines: (...args: unknown[]) => listBaselines(...args),
   },
   getApiErrorMessage: (err: unknown) => (err as Error)?.message ?? 'error',
 }))
@@ -162,6 +164,7 @@ beforeEach(() => {
     createStep,
     updateLane,
     updateStep,
+    listBaselines,
   ]) {
     fn.mockReset()
   }
@@ -177,6 +180,7 @@ beforeEach(() => {
   listJobTypes.mockResolvedValue({ data: { items: [OPERATIONAL, ENGINEER], total: 2 } })
   listLanes.mockResolvedValue({ data: { items: [LANE_QA, LANE_OPS], total: 2 } })
   listSteps.mockResolvedValue({ data: { items: [STEP_PLAN, STEP_UNSET], total: 2 } })
+  listBaselines.mockResolvedValue({ data: { items: [], total: 0 } })
   listCells.mockResolvedValue({ data: { items: [NEST_CELL], total: 1 } })
 })
 

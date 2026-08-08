@@ -17,6 +17,9 @@ import type {
   JobStep,
   JobStepPdcaPhase,
   JobType,
+  JobTypeBaseline,
+  JobTypeBaselineDiffResponse,
+  PortalNestedCycleResponse,
 } from '../api/jobLifecycleClient'
 
 export type JobLifecycleViewMode = 'matrix' | 'transpose' | 'phase' | 'map' | 'trail'
@@ -1124,4 +1127,78 @@ export const JOB_LIFECYCLE_CONFLICT_COPY =
 export function conflictBannerCopy(label: string | null | undefined): string {
   const subject = label && label.trim() !== '' ? `“${label.trim()}”` : 'this item'
   return `Edit to ${subject} was refused: ${JOB_LIFECYCLE_CONFLICT_COPY}`
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W5 — baselines (snapshots) + portal nested read                       */
+/* -------------------------------------------------------------------------- */
+
+/** Operator cue: viewing a snapshot; writes still target the live tip. */
+export function baselineViewingBanner(
+  baseline: Pick<JobTypeBaseline, 'id' | 'label'> | null | undefined,
+): string {
+  if (!baseline) {
+    return 'Viewing a baseline snapshot. Edit always targets the live tip, not this baseline.'
+  }
+  const named = baseline.label && baseline.label.trim() !== '' ? ` “${baseline.label.trim()}”` : ''
+  return (
+    `Viewing baseline${named} #${baseline.id}. ` +
+    'This is a snapshot — edit always targets the live tip, not this baseline.'
+  )
+}
+
+export function shouldShowBaselineBanner(
+  viewingBaselineId: number | null | undefined,
+): boolean {
+  return typeof viewingBaselineId === 'number' && Number.isFinite(viewingBaselineId)
+}
+
+export function summariseBaselineDiff(
+  diff: JobTypeBaselineDiffResponse | null | undefined,
+): string {
+  if (!diff) return 'No diff loaded.'
+  if (!diff.has_changes) return 'Live tip matches this baseline.'
+  const parts: string[] = []
+  for (const [section, counts] of Object.entries(diff.summary ?? {})) {
+    const total = (counts.added ?? 0) + (counts.removed ?? 0) + (counts.changed ?? 0)
+    if (total > 0) {
+      parts.push(
+        `${section}: +${counts.added ?? 0} / −${counts.removed ?? 0} / ~${counts.changed ?? 0}`,
+      )
+    }
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'Live tip differs from this baseline.'
+}
+
+/** Portal surface is read-only by contract — never expose author chrome. */
+export function portalCycleIsReadOnly(
+  payload: Pick<PortalNestedCycleResponse, 'read_only' | 'can_author'> | null | undefined,
+): boolean {
+  if (!payload) return true
+  return payload.read_only !== false && payload.can_author !== true
+}
+
+export function portalNestTargets(
+  cells: PortalNestedCycleResponse['cells'] | null | undefined,
+): Array<{ cellId: number; laneId: number; stepId: number; targetJobTypeId: number; label: string }> {
+  const out: Array<{
+    cellId: number
+    laneId: number
+    stepId: number
+    targetJobTypeId: number
+    label: string
+  }> = []
+  for (const cell of cells ?? []) {
+    for (const link of cell.nest_links ?? []) {
+      if (typeof link.target_job_type_id !== 'number') continue
+      out.push({
+        cellId: cell.id,
+        laneId: cell.lane_id,
+        stepId: cell.step_id,
+        targetJobTypeId: link.target_job_type_id,
+        label: link.label,
+      })
+    }
+  }
+  return out
 }

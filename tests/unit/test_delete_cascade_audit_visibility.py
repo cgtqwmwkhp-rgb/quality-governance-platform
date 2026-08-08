@@ -118,6 +118,10 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("job_types", "job_cells"),
         ("job_types", "job_lanes"),
         ("job_types", "job_steps"),
+        # JL-UX-W5 cycle baselines. Snapshots of the live tip; no ORM relationship
+        # from JobType, so a physical job_types delete removes them via FK CASCADE
+        # with no per-row audit event. Soft-delete is the normal path.
+        ("job_types", "job_type_baselines"),
         ("management_reviews", "management_review_inputs"),
         ("near_misses", "near_miss_running_sheet_entries"),
         ("policies", "policy_acknowledgment_requirements"),

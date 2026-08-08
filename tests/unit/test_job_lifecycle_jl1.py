@@ -46,6 +46,7 @@ def test_jl_tables_registered_for_rls():
         "job_cells",
         "job_cell_documents",
         "job_cell_links",
+        "job_type_baselines",
     ):
         assert table in RLS_TABLES
 
