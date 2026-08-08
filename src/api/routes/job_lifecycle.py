@@ -331,6 +331,7 @@ async def put_cell_documents(
         lane_id=lane_id,
         step_id=step_id,
         library_document_ids=body.library_document_ids,
+        include_links=bool(settings.job_cell_links_enabled),
     )
     return JobCellResponse.model_validate(payload)
 

@@ -153,9 +153,13 @@ class JobLifecycleProducer:
                 )
                 .order_by(JobCellLink.sort_order, JobCellLink.id)
             )
+            seen_findings: set[int] = set()
             for link, _cell in list(link_result.all()):
                 kind = (link.kind or "").strip().lower()
                 if kind == "audit_outcome" and link.audit_finding_id is not None:
+                    if link.audit_finding_id in seen_findings:
+                        continue
+                    seen_findings.add(link.audit_finding_id)
                     upstream.append(
                         make_hop(
                             source_type="audit_finding",

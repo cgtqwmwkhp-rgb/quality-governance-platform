@@ -748,6 +748,15 @@ export default function JobLifecycle() {
               initialLinks={
                 cellIndex.get(cellKey(selectedLaneId, selectedStepId))?.links ?? []
               }
+              onLinksChange={(newLinks) => {
+                setCells((prev) => {
+                  return prev.map((c) =>
+                    c.lane_id === selectedLaneId && c.step_id === selectedStepId
+                      ? { ...c, links: newLinks }
+                      : c,
+                  )
+                })
+              }}
             />
           ) : null}
         </div>

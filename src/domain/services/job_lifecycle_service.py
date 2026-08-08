@@ -57,10 +57,7 @@ def resolve_cell_link_href(link: JobCellLink) -> str:
         return url
     if kind == "audit_outcome":
         if link.audit_run_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="audit_outcome link missing audit_run_id",
-            )
+            return "#"
         return audit_finding_href(
             run_id=int(link.audit_run_id),
             finding_id=int(link.audit_finding_id) if link.audit_finding_id is not None else None,
@@ -343,6 +340,7 @@ class JobLifecycleService:
         lane_id: int,
         step_id: int,
         library_document_ids: Sequence[int],
+        include_links: bool = False,
     ) -> dict[str, Any]:
         await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
         lane = await self._get_live(JobLane, tenant_id=tenant_id, row_id=lane_id)
@@ -403,7 +401,7 @@ class JobLifecycleService:
             )
         await self.db.commit()
         await self.db.refresh(cell)
-        return await self._cell_payload(cell)
+        return await self._cell_payload(cell, include_links=include_links)
 
     async def _cell_payload(
         self,
