@@ -423,8 +423,17 @@ def test_portal_nested_cycle_schema_forbids_author_chrome():
 
 
 def _iter_api_routes(router):
-    """Flatten nested ``include_router`` mounts (CI FastAPI keeps ``_IncludedRouter``)."""
+    """Flatten nested ``include_router`` mounts.
+
+    FastAPI >=0.140 keeps an ``_IncludedRouter`` wrapper whose child routes live
+    on ``original_router`` (not ``.routes``). Older FastAPI flattens APIRoutes
+    onto the parent, so both shapes must resolve to the same GET handlers.
+    """
     for route in getattr(router, "routes", []) or []:
+        nested_router = getattr(route, "original_router", None)
+        if nested_router is not None:
+            yield from _iter_api_routes(nested_router)
+            continue
         nested = getattr(route, "routes", None)
         if nested is not None:
             yield from _iter_api_routes(route)
