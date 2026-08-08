@@ -604,76 +604,21 @@ class RiskService:
         *,
         tenant_id: int,
         risk_id: int,
+        user: Any = None,
     ) -> list[dict[str, Any]]:
-        """Reverse links: case_risk_links + audit finding refs with deep-link hrefs."""
-        from src.domain.models.audit import AuditFinding, audit_finding_risks
-        from src.domain.models.complaint import Complaint
-        from src.domain.models.incident import Incident
-        from src.domain.models.near_miss import NearMiss
-        from src.domain.models.rta import RoadTrafficCollision
-        from src.domain.services.case_risk_links import case_type_href, list_case_links_for_risk
+        """Reverse links via Entity360 case_link producer; wire shape frozen.
 
-        items: list[dict[str, Any]] = []
-        links = await list_case_links_for_risk(self.db, tenant_id=tenant_id, risk_id=risk_id)
-        case_ids_by_type: dict[str, list[int]] = {}
-        for link in links:
-            case_ids_by_type.setdefault(link.case_type, []).append(link.case_id)
-        title_maps: dict[str, dict[int, tuple[Optional[str], Optional[str]]]] = {}
-        model_by_type = {
-            "incident": Incident,
-            "near_miss": NearMiss,
-            "rta": RoadTrafficCollision,
-            "complaint": Complaint,
-        }
-        for case_type, ids in case_ids_by_type.items():
-            model = model_by_type.get(case_type)
-            if not model or not ids:
-                continue
-            result = await self.db.execute(select(model).where(model.id.in_(ids), model.tenant_id == tenant_id))
-            rows = result.scalars().all()
-            mapped: dict[int, tuple[Optional[str], Optional[str]]] = {}
-            for row in rows:
-                title = getattr(row, "title", None)
-                if not title and case_type == "near_miss":
-                    desc = getattr(row, "description", None) or ""
-                    title = (desc[:80] + "…") if len(desc) > 80 else (desc or None)
-                mapped[row.id] = (title, getattr(row, "reference_number", None))
-            title_maps[case_type] = mapped
-        for link in links:
-            title, reference = title_maps.get(link.case_type, {}).get(link.case_id, (None, None))
-            items.append(
-                {
-                    "source_type": link.case_type,
-                    "source_id": link.case_id,
-                    "title": title,
-                    "reference": reference,
-                    "href": case_type_href(link.case_type, link.case_id),
-                }
-            )
-        finding_result = await self.db.execute(
-            select(AuditFinding)
-            .join(
-                audit_finding_risks,
-                audit_finding_risks.c.audit_finding_id == AuditFinding.id,
-            )
-            .where(
-                audit_finding_risks.c.risk_id == risk_id,
-                AuditFinding.tenant_id == tenant_id,
-            )
-            .order_by(AuditFinding.id.desc())
+        Returns ``RiskUpstreamItem``-compatible dicts (narrowing view). Does not
+        require the ``entity_360`` feature flag — shares composer internals only.
+        """
+        from src.domain.services.entity_360 import Entity360Service
+
+        service = Entity360Service(self.db)
+        return await service.list_risk_upstream_items(
+            tenant_id=tenant_id,
+            risk_id=risk_id,
+            user=user,
         )
-        for finding in finding_result.scalars().all():
-            items.append(
-                {
-                    "source_type": "audit_finding",
-                    "source_id": finding.id,
-                    "title": finding.title,
-                    "reference": finding.reference_number,
-                    "href": f"/audits/{finding.run_id}/execute",
-                    "audit_run_id": finding.run_id,
-                }
-            )
-        return items
 
     async def _record_assessment(
         self,

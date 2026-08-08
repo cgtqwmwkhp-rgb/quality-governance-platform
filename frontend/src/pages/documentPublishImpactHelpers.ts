@@ -181,3 +181,115 @@ export function buildPublishImpactPreview(
     empty: dependents.length === 0 && rematch.length === 0 && campaigns.length === 0 && impacts.length === 0,
   }
 }
+
+/**
+ * Map a server ImpactBundle (X-1) onto the existing publish preview checklist
+ * shape so DocumentDetail does not grow a second checklist renderer.
+ */
+export function publishImpactPreviewFromBundle(bundle: {
+  upstream?: Array<{
+    source_type: string
+    source_id: number
+    title?: string | null
+    reference?: string | null
+    relation?: string
+    direction?: string
+  }>
+  downstream?: Array<{
+    source_type: string
+    source_id: number
+    title?: string | null
+    reference?: string | null
+    relation?: string
+    direction?: string
+  }>
+  hops?: Array<{
+    source_type: string
+    source_id: number
+    title?: string | null
+    reference?: string | null
+    relation?: string
+    direction?: string
+    origin?: string
+  }>
+  complete: boolean
+  degraded_reasons?: string[]
+}): PublishImpactPreview {
+  const hops = [
+    ...(bundle.upstream ?? []),
+    ...(bundle.downstream ?? []),
+    ...(bundle.hops ?? []),
+  ]
+  // Dedupe by type+id+relation
+  const seen = new Set<string>()
+  const unique = hops.filter((h) => {
+    const key = `${h.source_type}:${h.source_id}:${h.relation ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  const graphItems = unique
+    .filter((h) => (h as { origin?: string }).origin === 'graph' || !(h as { origin?: string }).origin)
+    .map((h) => ({
+      id: `hop-${h.source_type}-${h.source_id}-${h.relation ?? 'rel'}`,
+      label: h.reference || h.title || `${h.source_type} #${h.source_id}`,
+      detail: `${h.direction ?? 'related'} · ${h.relation ?? 'link'}`,
+    }))
+
+  const lifecycleItems = unique
+    .filter((h) => (h as { origin?: string }).origin === 'lifecycle')
+    .map((h) => ({
+      id: `life-${h.source_id}`,
+      label: h.title || `Campaign #${h.source_id}`,
+      detail: h.relation,
+    }))
+
+  const sections: PublishImpactPreviewSection[] = [
+    {
+      id: 'dependents',
+      title: 'Connections (Entity360)',
+      description: 'Server-composed upstream and downstream hops for this document.',
+      items: graphItems,
+    },
+    {
+      id: 'lifecycle',
+      title: 'Governed knowledge lifecycle',
+      description: 'Campaign and lifecycle signals from the ImpactBundle composer.',
+      items:
+        lifecycleItems.length > 0
+          ? lifecycleItems
+          : [
+              {
+                id: 'life-rematch',
+                label: 'Rematch clause evidence for the new version',
+              },
+            ],
+    },
+    {
+      id: 'evidence',
+      title: 'Clause evidence rematch',
+      description: 'Covered by CEL producers in later slices; empty here is honest.',
+      items: [],
+    },
+    {
+      id: 'campaigns',
+      title: 'Reading campaigns',
+      description: 'Active or draft campaigns appear under lifecycle hops above.',
+      items: [],
+    },
+    {
+      id: 'impacts',
+      title: 'Open regulatory watch impacts',
+      description: 'Satellite adoption lands in X-3.',
+      items: [],
+    },
+  ]
+
+  const totalItems = sections.reduce((sum, section) => sum + section.items.length, 0)
+  return {
+    sections,
+    totalItems,
+    empty: graphItems.length === 0 && lifecycleItems.length === 0,
+  }
+}

@@ -25,6 +25,7 @@ import { createNearMissesApi } from './nearMissesClient'
 import { createComplianceScheduleApi } from './complianceScheduleClient'
 import { createComplianceScheduleFraOcrApi } from './complianceScheduleFraOcrClient'
 import { createDocumentGraphApi } from './documentGraphClient'
+import { createEntity360Api } from './entity360Client'
 import { createCaseClosureApi } from './caseClosureClient'
 import { createRisksApi } from './risksClient'
 import { createStandardsApi } from './standardsClient'
@@ -1113,6 +1114,15 @@ export type {
   DocumentEdgeType,
   HeuristicProposeResponse,
 } from './documentGraphClient'
+
+// ============ Entity360 API (conveyor X-1 — shared hop / ImpactBundle) ============
+export const entity360Api = createEntity360Api(api)
+export type {
+  Entity360Bundle,
+  Entity360Hop,
+  Entity360SourceStatus,
+  ImpactBundle,
+} from './entity360Client'
 
 // ============ Case closure validation (shared by the four registers) ============
 export const caseClosureApi = createCaseClosureApi(api)

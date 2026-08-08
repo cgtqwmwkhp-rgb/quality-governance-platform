@@ -34,6 +34,7 @@ from src.api.routes import (
     drivers,
     employee_portal,
     engineers,
+    entity_360,
     evidence_assets,
     executive_dashboard,
     exports,
@@ -127,6 +128,11 @@ router.include_router(
     document_graph.router,
     prefix="/document-graph",
     tags=["Document Relationship Graph"],
+)
+router.include_router(
+    entity_360.router,
+    prefix="/entity-360",
+    tags=["Entity 360"],
 )
 # Export Center — sync CSV catalog + download (PX-160). No export_jobs this wave.
 router.include_router(exports.router, prefix="/exports", tags=["Export Center"])
