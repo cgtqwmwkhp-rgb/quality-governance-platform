@@ -4,20 +4,26 @@ Editable Job Type / Lane / Step vocabulary, cell document membership, and
 cell hyperlinks (app · external · audit_outcome). Axis identity is JL
 ``code`` — never LookupOption or free-text department. Link hrefs resolve
 via ``href_registry`` only.
+
+JL-UX-W3 adds read-only freshness: document control status is projected onto
+the composer and obsolete documents are refused on attach. The Library and
+Document Control tables stay the sole source of truth — nothing about a
+document's status is stored on, or derived from, the job lifecycle tables.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.audit import AuditFinding
+from src.domain.models.audit import AuditFinding, AuditRun, AuditTemplate
 from src.domain.models.document import Document
+from src.domain.models.document_control import ControlledDocument
 from src.domain.models.job_lifecycle import (
     JOB_STEP_PDCA_PHASES,
     JobCell,
@@ -28,6 +34,18 @@ from src.domain.models.job_lifecycle import (
     JobType,
 )
 from src.domain.services.href_registry import audit_finding_href, href_for, job_type_href, registered_entity_types
+from src.domain.services.job_lifecycle_freshness import (
+    AuditLapseVerdict,
+    classify_audit_lapse,
+    classify_document_freshness,
+    is_obsolete_controlled_status,
+    normalise_status,
+)
+
+#: Ceiling on a single freshness lookup. The composer asks for the ids it can
+#: actually see (a library page plus the attached refs), so this is a guard
+#: against a hand-rolled request, not a paging mechanism.
+MAX_FRESHNESS_DOCUMENT_IDS = 200
 
 
 def _utc_now() -> datetime:
@@ -109,7 +127,22 @@ def resolve_cell_link_href(link: JobCellLink) -> str:
     )
 
 
-def serialize_cell_link(link: JobCellLink) -> dict[str, Any]:
+def serialize_cell_link(
+    link: JobCellLink,
+    *,
+    audit_lapse_by_run: Optional[Mapping[int, AuditLapseVerdict]] = None,
+) -> dict[str, Any]:
+    """Serialize a cell link, attaching an audit-lapse cue where one is known.
+
+    ``audit_lapse`` is populated only for ``audit_outcome`` links and only from
+    a prefetched map, so serialization stays synchronous and callers cannot
+    accidentally issue a query per link.
+    """
+    audit_lapse: Optional[dict[str, Any]] = None
+    if (link.kind or "").strip().lower() == "audit_outcome" and link.audit_run_id is not None:
+        verdict = (audit_lapse_by_run or {}).get(int(link.audit_run_id))
+        if verdict is not None:
+            audit_lapse = verdict.as_dict()
     return {
         "id": link.id,
         "tenant_id": link.tenant_id,
@@ -123,9 +156,47 @@ def serialize_cell_link(link: JobCellLink) -> dict[str, Any]:
         "audit_finding_id": link.audit_finding_id,
         "target_job_type_id": getattr(link, "target_job_type_id", None),
         "href": resolve_cell_link_href(link),
+        "audit_lapse": audit_lapse,
         "sort_order": link.sort_order,
         "created_at": link.created_at,
         "updated_at": link.updated_at,
+    }
+
+
+def _dedupe_ids(values: Iterable[int]) -> list[int]:
+    """Positive int ids, deduped, order preserved."""
+    seen: set[int] = set()
+    ordered: list[int] = []
+    for value in values:
+        as_int = int(value)
+        if as_int in seen:
+            continue
+        seen.add(as_int)
+        ordered.append(as_int)
+    return ordered
+
+
+def _controlled_is_stricter(candidate: ControlledDocument, current: ControlledDocument) -> bool:
+    """Whether ``candidate`` should displace ``current`` as the doc-control view."""
+    candidate_obsolete = is_obsolete_controlled_status(candidate.status)
+    current_obsolete = is_obsolete_controlled_status(current.status)
+    if candidate_obsolete != current_obsolete:
+        return candidate_obsolete
+    candidate_due = candidate.next_review_date
+    current_due = current.next_review_date
+    if candidate_due is None:
+        return False
+    if current_due is None:
+        return True
+    return candidate_due < current_due
+
+
+def _audit_run_ids(links: Iterable[JobCellLink]) -> set[int]:
+    """Distinct run ids of the ``audit_outcome`` links in ``links``."""
+    return {
+        int(link.audit_run_id)
+        for link in links
+        if (link.kind or "").strip().lower() == "audit_outcome" and link.audit_run_id is not None
     }
 
 
@@ -379,6 +450,183 @@ class JobLifecycleService:
         await self.db.commit()
 
     # ------------------------------------------------------------------
+    # Freshness (JL-UX-W3) — read-only projection of the document SSOT
+    # ------------------------------------------------------------------
+
+    async def document_freshness(
+        self,
+        *,
+        tenant_id: int,
+        library_document_ids: Sequence[int],
+    ) -> list[dict[str, Any]]:
+        """Freshness for the given library documents, in the order requested.
+
+        An id the tenant cannot see is returned as ``unknown`` /
+        ``document_not_found`` rather than omitted, so the composer can render
+        an honest "unknown" chip instead of silently showing nothing.
+        """
+        ordered_ids = _dedupe_ids(library_document_ids)
+        if len(ordered_ids) > MAX_FRESHNESS_DOCUMENT_IDS:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"library_document_ids may not exceed {MAX_FRESHNESS_DOCUMENT_IDS} entries",
+            )
+        if not ordered_ids:
+            return []
+
+        docs_result = await self.db.execute(
+            select(Document).where(
+                Document.tenant_id == tenant_id,
+                Document.id.in_(ordered_ids),
+            )
+        )
+        docs_by_id = {int(doc.id): doc for doc in docs_result.scalars().all()}
+        controlled_by_doc = await self._controlled_documents_by_library_id(
+            tenant_id=tenant_id,
+            library_document_ids=ordered_ids,
+        )
+
+        items: list[dict[str, Any]] = []
+        for doc_id in ordered_ids:
+            doc = docs_by_id.get(doc_id)
+            controlled = controlled_by_doc.get(doc_id)
+            verdict = classify_document_freshness(
+                library_status=getattr(doc, "status", None),
+                controlled_status=getattr(controlled, "status", None),
+                library_review_date=getattr(doc, "review_date", None),
+                controlled_next_review_date=getattr(controlled, "next_review_date", None),
+                found=doc is not None,
+            )
+            items.append(
+                {
+                    "library_document_id": doc_id,
+                    "found": doc is not None,
+                    "title": getattr(doc, "title", None),
+                    "reference": getattr(doc, "reference_number", None),
+                    "library_status": normalise_status(getattr(doc, "status", None)),
+                    "controlled_status": normalise_status(getattr(controlled, "status", None)),
+                    **verdict.as_dict(),
+                }
+            )
+        return items
+
+    async def _controlled_documents_by_library_id(
+        self,
+        *,
+        tenant_id: int,
+        library_document_ids: Sequence[int],
+    ) -> dict[int, ControlledDocument]:
+        """One controlled document per library id, picking the strictest.
+
+        ``controlled_documents.library_document_id`` is not unique, so a library
+        document can carry more than one controlled record. An obsolete record
+        wins outright — doc control having withdrawn *any* controlled copy is
+        the answer that matters on attach — and otherwise the earliest
+        ``next_review_date`` wins so the verdict is never softer than the SSOT.
+        """
+        if not library_document_ids:
+            return {}
+        result = await self.db.execute(
+            select(ControlledDocument).where(
+                ControlledDocument.tenant_id == tenant_id,
+                ControlledDocument.library_document_id.in_(list(library_document_ids)),
+            )
+        )
+        chosen: dict[int, ControlledDocument] = {}
+        for row in result.scalars().all():
+            key = int(row.library_document_id) if row.library_document_id is not None else None
+            if key is None:
+                continue
+            current = chosen.get(key)
+            if current is None or _controlled_is_stricter(row, current):
+                chosen[key] = row
+        return chosen
+
+    async def _assert_no_obsolete_attachments(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        lane_id: int,
+        step_id: int,
+        requested_ids: Sequence[int],
+    ) -> None:
+        """Refuse to *add* an obsolete document reference to a cell.
+
+        Only newly added ids are checked. A document that went obsolete after it
+        was attached must stay removable: enforcing on the whole membership list
+        would make every subsequent PUT on that cell fail, trapping the operator
+        with the very reference they are trying to clear.
+        """
+        if not requested_ids:
+            return
+        cell = await self._find_cell(
+            tenant_id=tenant_id,
+            job_type_id=job_type_id,
+            lane_id=lane_id,
+            step_id=step_id,
+        )
+        already_attached: set[int] = set()
+        if cell is not None:
+            existing = await self.db.execute(
+                select(JobCellDocument.library_document_id).where(
+                    JobCellDocument.tenant_id == tenant_id,
+                    JobCellDocument.cell_id == cell.id,
+                )
+            )
+            already_attached = {int(r) for r in existing.scalars().all() if r is not None}
+
+        added = [doc_id for doc_id in requested_ids if doc_id not in already_attached]
+        if not added:
+            return
+
+        blocked: list[str] = []
+        for item in await self.document_freshness(tenant_id=tenant_id, library_document_ids=added):
+            if not item["is_obsolete"]:
+                continue
+            source = (
+                item["controlled_status"] if item["reason"] == "obsolete_controlled_status" else item["library_status"]
+            )
+            blocked.append(f"{item['library_document_id']} ({source})")
+        if blocked:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Obsolete documents cannot be attached — the Library / Document Control "
+                    f"record is the source of truth: {', '.join(blocked)}"
+                ),
+            )
+
+    async def _audit_lapse_map(
+        self,
+        *,
+        tenant_id: int,
+        run_ids: Sequence[int] | set[int],
+    ) -> dict[int, AuditLapseVerdict]:
+        """Lapse verdict per audit run, from the run's dates and template cadence."""
+        ids = sorted({int(r) for r in run_ids})
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                AuditRun.id,
+                AuditRun.completed_at,
+                AuditRun.due_date,
+                AuditTemplate.frequency,
+            )
+            .join(AuditTemplate, AuditTemplate.id == AuditRun.template_id, isouter=True)
+            .where(AuditRun.tenant_id == tenant_id, AuditRun.id.in_(ids))
+        )
+        verdicts: dict[int, AuditLapseVerdict] = {}
+        for run_id, completed_at, due_date, frequency in result.all():
+            verdicts[int(run_id)] = classify_audit_lapse(
+                completed_at=completed_at,
+                due_date=due_date,
+                frequency=frequency,
+            )
+        return verdicts
+
+    # ------------------------------------------------------------------
     # Cells + document membership
     # ------------------------------------------------------------------
 
@@ -400,14 +648,7 @@ class JobLifecycleService:
         if step is None or step.job_type_id != job_type_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Step not found for job type")
 
-        # Dedupe preserving order
-        seen: set[int] = set()
-        ordered_ids: list[int] = []
-        for doc_id in library_document_ids:
-            if doc_id in seen:
-                continue
-            seen.add(doc_id)
-            ordered_ids.append(int(doc_id))
+        ordered_ids = _dedupe_ids(library_document_ids)
 
         if ordered_ids:
             docs = await self.db.execute(
@@ -423,6 +664,14 @@ class JobLifecycleService:
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail=f"library_document_ids not found in tenant: {missing}",
                 )
+
+        await self._assert_no_obsolete_attachments(
+            tenant_id=tenant_id,
+            job_type_id=job_type_id,
+            lane_id=lane_id,
+            step_id=step_id,
+            requested_ids=ordered_ids,
+        )
 
         cell = await self._get_or_create_cell(
             tenant_id=tenant_id,
@@ -458,6 +707,7 @@ class JobLifecycleService:
         cell: JobCell,
         *,
         include_links: bool = False,
+        audit_lapse_by_run: Optional[Mapping[int, AuditLapseVerdict]] = None,
     ) -> dict[str, Any]:
         result = await self.db.execute(
             select(JobCellDocument)
@@ -478,7 +728,14 @@ class JobLifecycleService:
                 )
                 .order_by(JobCellLink.sort_order, JobCellLink.id)
             )
-            links = [serialize_cell_link(row) for row in link_result.scalars().all()]
+            link_rows = list(link_result.scalars().all())
+            lapse_map = audit_lapse_by_run
+            if lapse_map is None:
+                lapse_map = await self._audit_lapse_map(
+                    tenant_id=cell.tenant_id,
+                    run_ids=_audit_run_ids(link_rows),
+                )
+            links = [serialize_cell_link(row, audit_lapse_by_run=lapse_map) for row in link_rows]
         return {
             "id": cell.id,
             "tenant_id": cell.tenant_id,
@@ -507,7 +764,34 @@ class JobLifecycleService:
             )
         )
         cells = list(result.scalars().all())
-        return [await self._cell_payload(cell, include_links=include_links) for cell in cells]
+        # Prefetch every audit-lapse verdict for the pack in one query; the
+        # per-cell payload would otherwise add a third query per cell.
+        lapse_map: Optional[Mapping[int, AuditLapseVerdict]] = None
+        if include_links:
+            run_result = await self.db.execute(
+                select(JobCellLink.audit_run_id)
+                .join(JobCell, JobCell.id == JobCellLink.cell_id)
+                .where(
+                    JobCellLink.tenant_id == tenant_id,
+                    JobCellLink.kind == "audit_outcome",
+                    JobCellLink.audit_run_id.is_not(None),
+                    JobCell.tenant_id == tenant_id,
+                    JobCell.job_type_id == job_type_id,
+                    JobCell.deleted_at.is_(None),
+                )
+            )
+            lapse_map = await self._audit_lapse_map(
+                tenant_id=tenant_id,
+                run_ids={int(r) for r in run_result.scalars().all() if r is not None},
+            )
+        return [
+            await self._cell_payload(
+                cell,
+                include_links=include_links,
+                audit_lapse_by_run=lapse_map,
+            )
+            for cell in cells
+        ]
 
     async def list_cell_links(
         self,
@@ -531,7 +815,9 @@ class JobLifecycleService:
             )
             .order_by(JobCellLink.sort_order, JobCellLink.id)
         )
-        return [serialize_cell_link(row) for row in result.scalars().all()]
+        rows = list(result.scalars().all())
+        lapse_map = await self._audit_lapse_map(tenant_id=tenant_id, run_ids=_audit_run_ids(rows))
+        return [serialize_cell_link(row, audit_lapse_by_run=lapse_map) for row in rows]
 
     async def create_cell_link(
         self,
@@ -618,7 +904,8 @@ class JobLifecycleService:
         self.db.add(row)
         await self.db.commit()
         await self.db.refresh(row)
-        return serialize_cell_link(row)
+        lapse_map = await self._audit_lapse_map(tenant_id=tenant_id, run_ids=_audit_run_ids([row]))
+        return serialize_cell_link(row, audit_lapse_by_run=lapse_map)
 
     async def delete_cell_link(self, *, tenant_id: int, link_id: int) -> None:
         result = await self.db.execute(
@@ -633,14 +920,15 @@ class JobLifecycleService:
         await self.db.delete(row)
         await self.db.commit()
 
-    async def _require_cell(
+    async def _find_cell(
         self,
         *,
         tenant_id: int,
         job_type_id: int,
         lane_id: int,
         step_id: int,
-    ) -> JobCell:
+    ) -> Optional[JobCell]:
+        """Read-only cell lookup — never creates, so a failed guard writes nothing."""
         result = await self.db.execute(
             select(JobCell).where(
                 JobCell.tenant_id == tenant_id,
@@ -650,7 +938,22 @@ class JobLifecycleService:
                 JobCell.deleted_at.is_(None),
             )
         )
-        cell = result.scalars().first()
+        return result.scalars().first()
+
+    async def _require_cell(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        lane_id: int,
+        step_id: int,
+    ) -> JobCell:
+        cell = await self._find_cell(
+            tenant_id=tenant_id,
+            job_type_id=job_type_id,
+            lane_id=lane_id,
+            step_id=step_id,
+        )
         if cell is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job cell not found")
         return cell
@@ -871,6 +1174,7 @@ class JobLifecycleService:
 
 
 __all__ = [
+    "MAX_FRESHNESS_DOCUMENT_IDS",
     "JobLifecycleService",
     "list_link_entity_types",
     "resolve_cell_link_href",

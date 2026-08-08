@@ -105,7 +105,7 @@ describe('coachSteps registry', () => {
     ])
     expect(getCoachSteps('document_relationships')).toHaveLength(5)
     expect(getCoachSteps('document_structure_map')).toHaveLength(5)
-    expect(getCoachSteps('job_lifecycle')).toHaveLength(5)
+    expect(getCoachSteps('job_lifecycle')).toHaveLength(6)
     expect(getCoachSurfaceDefinition('document_relationships').heading).toMatch(/Document/i)
     expect(getCoachSurfaceDefinition('document_structure_map').heading).toMatch(/Structure/i)
   })

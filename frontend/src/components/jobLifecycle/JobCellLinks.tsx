@@ -13,6 +13,9 @@
  * JL-UX-W2: `job_cycle` nests any JobType inside this cell. The entity-type
  * dropdown is fed by the server's href_registry so it cannot offer a type with
  * no builder behind it.
+ *
+ * JL-UX-W3: `audit_outcome` links carry a server-computed lapse cue. It renders
+ * as "Unknown" — never as good standing — when the run has no readable cadence.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -28,6 +31,11 @@ import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Input } from '../ui/Input'
+import {
+  auditLapseClasses,
+  auditLapseLabel,
+  auditLapseTitle,
+} from '../../pages/jobLifecycleHelpers'
 import {
   FALLBACK_APP_ENTITY_TYPES,
   JOB_CELL_LINK_KINDS,
@@ -264,6 +272,18 @@ export default function JobCellLinks({
                   {link.label}
                 </Link>
               )}
+              {link.kind === 'audit_outcome' ? (
+                <span
+                  className={`shrink-0 rounded-full border px-1.5 py-0 text-[9px] uppercase tracking-wide ${auditLapseClasses(
+                    link.audit_lapse?.state ?? 'unknown',
+                  )}`}
+                  data-testid={`job-cell-link-lapse-${link.id}`}
+                  data-lapse-state={link.audit_lapse?.state ?? 'unknown'}
+                  title={auditLapseTitle(link.audit_lapse)}
+                >
+                  {auditLapseLabel(link.audit_lapse?.state ?? 'unknown')}
+                </span>
+              ) : null}
               <button
                 type="button"
                 className="text-muted-foreground hover:text-destructive"

@@ -63,6 +63,18 @@ export interface JobCell {
 
 export type JobCellLinkKind = 'app' | 'external' | 'audit_outcome' | 'job_cycle'
 
+/** Audit cadence state. `unknown` means the run has no cadence we can read. */
+export type JobAuditLapseState = 'current' | 'due_soon' | 'lapsed' | 'unknown'
+
+export interface JobCellLinkAuditLapse {
+  state: JobAuditLapseState
+  reason: string
+  last_completed_at?: string | null
+  next_due_at?: string | null
+  frequency?: string | null
+  frequency_days?: number | null
+}
+
 export interface JobCellLink {
   id: number
   tenant_id: number
@@ -77,9 +89,40 @@ export interface JobCellLink {
   /** Set only for `job_cycle` — the nested JobType. Sole SSOT for nesting. */
   target_job_type_id?: number | null
   href: string
+  /** Set for `audit_outcome` links only — absent everywhere else. */
+  audit_lapse?: JobCellLinkAuditLapse | null
   sort_order: number
   created_at: string
   updated_at: string
+}
+
+/**
+ * Document freshness read from the Library / Document Control SSOT.
+ * `unknown` is a real answer: the SSOT holds no review date for the document.
+ */
+export type JobDocumentFreshnessState =
+  | 'current'
+  | 'due_soon'
+  | 'overdue'
+  | 'obsolete'
+  | 'unknown'
+
+export interface JobDocumentFreshness {
+  library_document_id: number
+  found: boolean
+  title?: string | null
+  reference?: string | null
+  library_status?: string | null
+  controlled_status?: string | null
+  state: JobDocumentFreshnessState
+  reason: string
+  review_date?: string | null
+  is_obsolete: boolean
+}
+
+export interface JobDocumentFreshnessResponse {
+  items: JobDocumentFreshness[]
+  total: number
 }
 
 export interface JobCellLinkCreatePayload {
@@ -283,6 +326,15 @@ export function createJobLifecycleApi(api: AxiosInstance) {
 
     listLinkEntityTypes(): Promise<AxiosResponse<JobLinkEntityTypesResponse>> {
       return api.get(`${PREFIX}/link-entity-types`)
+    },
+
+    /** Freshness for specific library documents. Repeats the id param per id. */
+    listDocumentFreshness(
+      libraryDocumentIds: readonly number[],
+    ): Promise<AxiosResponse<JobDocumentFreshnessResponse>> {
+      const params = new URLSearchParams()
+      for (const id of libraryDocumentIds) params.append('library_document_ids', String(id))
+      return api.get(`${PREFIX}/document-freshness?${params.toString()}`)
     },
   }
 }
