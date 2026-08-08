@@ -8,9 +8,16 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { GitBranch, Loader2, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronUp, GitBranch, Loader2, Plus, Trash2 } from 'lucide-react'
 import api, { getApiErrorMessage, jobLifecycleApi } from '../api/client'
-import type { JobCell, JobCellLink, JobLane, JobStep, JobType } from '../api/jobLifecycleClient'
+import type {
+  JobCell,
+  JobCellLink,
+  JobLane,
+  JobStep,
+  JobStepPdcaPhase,
+  JobType,
+} from '../api/jobLifecycleClient'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -30,24 +37,34 @@ import {
   JOB_LIFECYCLE_PERMISSION_HEALTH_COPY,
   buildAxisCode,
   buildCellIndex,
+  buildJobCycleBreadcrumb,
   cellKey,
   clampJobLifecyclePanelWidth,
+  computeAxisReorder,
+  deriveLaneNestChips,
   detachDocumentRef,
   emptyComposerCopy,
   isForbiddenApiError,
   jobLifecycleViewModeLabel,
   libraryDocLabel,
+  nextPdcaPhase,
+  pdcaPhaseClasses,
+  pdcaPhaseLabel,
+  pushDrillTrail,
   readStoredJobLifecyclePanelWidths,
   readStoredJobLifecycleViewMode,
   resolveDndCellAttach,
   resolveJobLifecyclePanelWidths,
   resolveJobLifecycleViewMode,
+  resolvePdcaPhase,
   resolveSelectedJobTypeId,
   resolveSelectedStepId,
   resolveSwimlaneAxes,
   shouldFetchJobLifecycle,
+  shouldShowJobCycleBreadcrumb,
   shouldShowJobLifecycle,
   sortAxesByOrder,
+  truncateDrillTrail,
   writeStoredJobLifecyclePanelWidths,
   writeStoredJobLifecycleViewMode,
   type JobLifecycleLibraryDoc,
@@ -75,18 +92,27 @@ export default function JobLifecycle() {
   const shouldFetch = shouldFetchJobLifecycle(jobLifecycleEnabled)
   const libraryDragEnabled = shouldEnableLibraryDocumentDrag(dndProposeEnabled)
 
-  const { stepId: stepIdParam } = useParams<{ stepId?: string }>()
+  const { stepId: stepIdParam, jobTypeId: jobTypeIdParam } = useParams<{
+    stepId?: string
+    jobTypeId?: string
+  }>()
   const preferredStepId = useMemo(() => {
     const n = Number(stepIdParam)
     return Number.isFinite(n) && n > 0 ? n : null
   }, [stepIdParam])
+  const preferredJobTypeId = useMemo(() => {
+    const n = Number(jobTypeIdParam)
+    return Number.isFinite(n) && n > 0 ? n : null
+  }, [jobTypeIdParam])
 
   const [jobTypes, setJobTypes] = useState<JobType[]>([])
   const [lanes, setLanes] = useState<JobLane[]>([])
   const [steps, setSteps] = useState<JobStep[]>([])
   const [cells, setCells] = useState<JobCell[]>([])
   const [libraryDocs, setLibraryDocs] = useState<JobLifecycleLibraryDoc[]>([])
-  const [selectedJobTypeId, setSelectedJobTypeId] = useState<number | null>(null)
+  const [selectedJobTypeId, setSelectedJobTypeId] = useState<number | null>(preferredJobTypeId)
+  /** Ancestor cycles visited by drilling in — the breadcrumb's drill-out path. */
+  const [drillTrail, setDrillTrail] = useState<number[]>([])
   const [selectedStepId, setSelectedStepId] = useState<number | null>(preferredStepId)
   const [selectedLaneId, setSelectedLaneId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<JobLifecycleViewMode>(() =>
@@ -182,8 +208,8 @@ export default function JobLifecycle() {
   const orderedSteps = useMemo(() => sortAxesByOrder(steps), [steps])
 
   const effectiveJobTypeId = useMemo(
-    () => resolveSelectedJobTypeId(selectedJobTypeId, jobTypes),
-    [selectedJobTypeId, jobTypes],
+    () => resolveSelectedJobTypeId(selectedJobTypeId ?? preferredJobTypeId, jobTypes),
+    [selectedJobTypeId, preferredJobTypeId, jobTypes],
   )
   const effectiveStepId = useMemo(
     () => resolveSelectedStepId(selectedStepId ?? preferredStepId, steps),
@@ -347,6 +373,22 @@ export default function JobLifecycle() {
     }
   }, [preferredStepId])
 
+  useEffect(() => {
+    if (preferredJobTypeId != null) {
+      setSelectedJobTypeId(preferredJobTypeId)
+    }
+  }, [preferredJobTypeId])
+
+  const breadcrumb = useMemo(
+    () =>
+      buildJobCycleBreadcrumb({
+        trail: drillTrail,
+        currentJobTypeId: effectiveJobTypeId,
+        jobTypes,
+      }),
+    [drillTrail, effectiveJobTypeId, jobTypes],
+  )
+
   if (!visible) {
     return <Navigate to="/documents" replace />
   }
@@ -354,6 +396,112 @@ export default function JobLifecycle() {
   const setMode = (next: JobLifecycleViewMode) => {
     setViewMode(next)
     writeStoredJobLifecycleViewMode(next)
+  }
+
+  /** Drill into a nested cycle, remembering where we came from. */
+  const drillIntoCycle = (targetJobTypeId: number) => {
+    if (targetJobTypeId === effectiveJobTypeId) return
+    setDrillTrail((prev) => pushDrillTrail(prev, effectiveJobTypeId))
+    setSelectedJobTypeId(targetJobTypeId)
+    setSelectedLaneId(null)
+    setSelectedStepId(null)
+  }
+
+  /** Drill back out to a breadcrumb ancestor; deeper entries are discarded. */
+  const drillOutToTrailIndex = (index: number) => {
+    const ancestor = drillTrail[index]
+    if (ancestor == null) return
+    setDrillTrail((prev) => truncateDrillTrail(prev, index))
+    setSelectedJobTypeId(ancestor)
+    setSelectedLaneId(null)
+    setSelectedStepId(null)
+  }
+
+  const handleRenameLane = async (laneId: number, name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await jobLifecycleApi.updateLane(laneId, { name: trimmed })
+      setLanes((prev) => prev.map((lane) => (lane.id === laneId ? res.data : lane)))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRenameStep = async (stepId: number, name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await jobLifecycleApi.updateStep(stepId, { name: trimmed })
+      setSteps((prev) => prev.map((step) => (step.id === stepId ? res.data : step)))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReorderLane = async (laneId: number, direction: 'up' | 'down') => {
+    const updates = computeAxisReorder(lanes, laneId, direction)
+    if (updates.length === 0 || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const results = await Promise.all(
+        updates.map((update) =>
+          jobLifecycleApi.updateLane(update.id, { sort_order: update.sort_order }),
+        ),
+      )
+      const byId = new Map(results.map((res) => [res.data.id, res.data]))
+      setLanes((prev) => prev.map((lane) => byId.get(lane.id) ?? lane))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReorderStep = async (stepId: number, direction: 'up' | 'down') => {
+    const updates = computeAxisReorder(steps, stepId, direction)
+    if (updates.length === 0 || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const results = await Promise.all(
+        updates.map((update) =>
+          jobLifecycleApi.updateStep(update.id, { sort_order: update.sort_order }),
+        ),
+      )
+      const byId = new Map(results.map((res) => [res.data.id, res.data]))
+      setSteps((prev) => prev.map((step) => byId.get(step.id) ?? step))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Advance a step through plan → do → check → act → unset. */
+  const handleCyclePdcaPhase = async (step: JobStep) => {
+    if (saving) return
+    const current = resolvePdcaPhase(step.pdca_phase)
+    const next: JobStepPdcaPhase | null = nextPdcaPhase(current)
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await jobLifecycleApi.updateStep(step.id, { pdca_phase: next })
+      setSteps((prev) => prev.map((s) => (s.id === step.id ? res.data : s)))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleCreateJobType = async () => {
@@ -480,6 +628,20 @@ export default function JobLifecycle() {
     })
   }
 
+  /**
+   * PDCA colours only apply to the step axis — lanes have no Deming phase.
+   * `pdca_phase` is read tolerantly so an unknown value reads as unset.
+   */
+  const axisHeaderPdcaClasses = (item: JobLane | JobStep, axis: 'lane' | 'step') => {
+    if (axis !== 'step') return ''
+    return pdcaPhaseClasses(resolvePdcaPhase((item as { pdca_phase?: unknown }).pdca_phase))
+  }
+
+  const axisPdcaLabel = (item: JobLane | JobStep, axis: 'lane' | 'step') => {
+    if (axis !== 'step') return null
+    return pdcaPhaseLabel(resolvePdcaPhase((item as { pdca_phase?: unknown }).pdca_phase))
+  }
+
   const cellLaneStep = (row: JobLane | JobStep, column: JobLane | JobStep) => {
     if (axes.rowAxis === 'lane') {
       return { laneId: row.id, stepId: column.id }
@@ -528,6 +690,38 @@ export default function JobLifecycle() {
           ))}
         </div>
       </div>
+
+      {shouldShowJobCycleBreadcrumb(drillTrail) ? (
+        <nav
+          className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+          aria-label="Job cycle drill path"
+          data-testid="job-lifecycle-breadcrumb"
+        >
+          {breadcrumb.map((item, index) => (
+            <span key={`${item.jobTypeId}-${index}`} className="flex items-center gap-1">
+              {index > 0 ? <ChevronRight className="h-3 w-3 opacity-60" /> : null}
+              {item.isCurrent ? (
+                <span
+                  className="font-medium text-foreground"
+                  aria-current="page"
+                  data-testid={`job-lifecycle-breadcrumb-current-${item.jobTypeId}`}
+                >
+                  {item.label}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="hover:underline"
+                  data-testid={`job-lifecycle-breadcrumb-${item.jobTypeId}`}
+                  onClick={() => drillOutToTrailIndex(index)}
+                >
+                  {item.label}
+                </button>
+              )}
+            </span>
+          ))}
+        </nav>
+      ) : null}
 
       <GraphCoach surface="job_lifecycle" />
 
@@ -653,11 +847,65 @@ export default function JobLifecycle() {
               </Button>
             </div>
             <ul className="space-y-1 text-sm" data-testid="job-lifecycle-lane-list">
-              {orderedLanes.map((lane) => (
-                <li key={lane.id} className="px-2 py-1 text-muted-foreground">
-                  {lane.name}
-                </li>
-              ))}
+              {orderedLanes.map((lane) => {
+                const nestChips = deriveLaneNestChips(cells, lane.id, jobTypes)
+                return (
+                  <li key={lane.id} className="space-y-1 rounded-md border border-border px-2 py-1.5">
+                    <div className="flex items-center gap-1">
+                      <Input
+                        defaultValue={lane.name}
+                        aria-label={`Rename lane ${lane.name}`}
+                        data-testid={`job-lifecycle-lane-name-${lane.id}`}
+                        onBlur={(e) => {
+                          if (e.target.value.trim() !== lane.name) {
+                            void handleRenameLane(lane.id, e.target.value)
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        aria-label={`Move lane ${lane.name} up`}
+                        data-testid={`job-lifecycle-lane-up-${lane.id}`}
+                        disabled={saving}
+                        onClick={() => void handleReorderLane(lane.id, 'up')}
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        aria-label={`Move lane ${lane.name} down`}
+                        data-testid={`job-lifecycle-lane-down-${lane.id}`}
+                        disabled={saving}
+                        onClick={() => void handleReorderLane(lane.id, 'down')}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {nestChips.length > 0 ? (
+                      <div
+                        className="flex flex-wrap gap-1"
+                        data-testid={`job-lifecycle-lane-nest-${lane.id}`}
+                      >
+                        {nestChips.map((chip) => (
+                          <button
+                            key={chip.targetJobTypeId}
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] text-primary"
+                            title="Nested job cycle — derived from job_cycle cell links"
+                            data-testid={`job-lifecycle-lane-nest-chip-${lane.id}-${chip.targetJobTypeId}`}
+                            onClick={() => drillIntoCycle(chip.targetJobTypeId)}
+                          >
+                            <GitBranch className="h-2.5 w-2.5" />
+                            {chip.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </li>
+                )
+              })}
             </ul>
           </div>
 
@@ -682,25 +930,77 @@ export default function JobLifecycle() {
               </Button>
             </div>
             <ul className="space-y-1" data-testid="job-lifecycle-step-list">
-              {orderedSteps.map((step) => (
-                <li key={step.id}>
-                  <button
-                    type="button"
-                    className={`w-full text-left rounded-md px-2 py-1.5 text-sm ${
-                      step.id === effectiveStepId
-                        ? 'bg-primary/10 text-primary'
-                        : 'hover:bg-muted/60'
+              {orderedSteps.map((step) => {
+                const phase = resolvePdcaPhase(step.pdca_phase)
+                return (
+                  <li
+                    key={step.id}
+                    className={`space-y-1 rounded-md border px-2 py-1.5 ${
+                      step.id === effectiveStepId ? 'border-primary/50' : 'border-border'
                     }`}
-                    data-testid={`job-lifecycle-step-${step.id}`}
-                    onClick={() => {
-                      setSelectedStepId(step.id)
-                      if (viewMode === 'phase') setMode('phase')
-                    }}
                   >
-                    {step.name}
-                  </button>
-                </li>
-              ))}
+                    <div className="flex items-center gap-1">
+                      <Input
+                        defaultValue={step.name}
+                        aria-label={`Rename step ${step.name}`}
+                        data-testid={`job-lifecycle-step-name-${step.id}`}
+                        onBlur={(e) => {
+                          if (e.target.value.trim() !== step.name) {
+                            void handleRenameStep(step.id, e.target.value)
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        aria-label={`Move step ${step.name} up`}
+                        data-testid={`job-lifecycle-step-up-${step.id}`}
+                        disabled={saving}
+                        onClick={() => void handleReorderStep(step.id, 'up')}
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        aria-label={`Move step ${step.name} down`}
+                        data-testid={`job-lifecycle-step-down-${step.id}`}
+                        disabled={saving}
+                        onClick={() => void handleReorderStep(step.id, 'down')}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className={`flex-1 text-left rounded-md px-2 py-1 text-xs ${
+                          step.id === effectiveStepId
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted/60'
+                        }`}
+                        data-testid={`job-lifecycle-step-${step.id}`}
+                        onClick={() => {
+                          setSelectedStepId(step.id)
+                          if (viewMode === 'phase') setMode('phase')
+                        }}
+                      >
+                        Select
+                      </button>
+                      <button
+                        type="button"
+                        className={`rounded-full border px-2 py-0.5 text-[10px] ${pdcaPhaseClasses(phase)}`}
+                        aria-label={`Cycle PDCA phase for ${step.name} (currently ${pdcaPhaseLabel(phase)})`}
+                        data-testid={`job-lifecycle-step-pdca-${step.id}`}
+                        disabled={saving}
+                        onClick={() => void handleCyclePdcaPhase(step)}
+                      >
+                        {pdcaPhaseLabel(phase)}
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         </Card>
@@ -737,10 +1037,22 @@ export default function JobLifecycle() {
                   {axes.columns.map((col) => (
                     <th
                       key={col.id}
-                      className="border border-border p-2 text-left font-medium min-w-[140px]"
+                      className={`border p-2 text-left font-medium min-w-[140px] ${
+                        axisHeaderPdcaClasses(col, axes.columnAxis) || 'border-border'
+                      }`}
                       data-testid={`job-lifecycle-col-${col.id}`}
+                      data-pdca-phase={
+                        axes.columnAxis === 'step'
+                          ? resolvePdcaPhase((col as { pdca_phase?: unknown }).pdca_phase) ?? 'none'
+                          : undefined
+                      }
                     >
-                      {col.name}
+                      <span>{col.name}</span>
+                      {axes.columnAxis === 'step' ? (
+                        <span className="ml-1 text-[10px] uppercase opacity-70">
+                          {axisPdcaLabel(col, axes.columnAxis)}
+                        </span>
+                      ) : null}
                     </th>
                   ))}
                 </tr>
@@ -749,8 +1061,15 @@ export default function JobLifecycle() {
                 {axes.rows.map((row) => (
                   <tr key={row.id}>
                     <th
-                      className="sticky left-0 bg-background border border-border p-2 text-left font-medium"
+                      className={`sticky left-0 border p-2 text-left font-medium ${
+                        axisHeaderPdcaClasses(row, axes.rowAxis) || 'bg-background border-border'
+                      }`}
                       data-testid={`job-lifecycle-row-${row.id}`}
+                      data-pdca-phase={
+                        axes.rowAxis === 'step'
+                          ? resolvePdcaPhase((row as { pdca_phase?: unknown }).pdca_phase) ?? 'none'
+                          : undefined
+                      }
                     >
                       {row.name}
                     </th>
@@ -814,16 +1133,33 @@ export default function JobLifecycle() {
                             {jobCellLinksEnabled
                               ? (
                                   cellIndex.get(cellKey(laneId, stepId))?.links ?? []
-                                ).map((link) => (
-                                  <div
-                                    key={`link-${link.id}`}
-                                    className="truncate rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                    data-testid={`job-lifecycle-cell-link-${laneId}-${stepId}-${link.id}`}
-                                    title={link.href}
-                                  >
-                                    {link.kind}: {link.label}
-                                  </div>
-                                ))
+                                ).map((link) =>
+                                  link.kind === 'job_cycle' && link.target_job_type_id ? (
+                                    <button
+                                      key={`link-${link.id}`}
+                                      type="button"
+                                      className="flex w-full items-center gap-1 truncate rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                                      data-testid={`job-lifecycle-cell-nest-${laneId}-${stepId}-${link.id}`}
+                                      title={`Drill into nested job cycle — ${link.href}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        drillIntoCycle(Number(link.target_job_type_id))
+                                      }}
+                                    >
+                                      <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                                      <span className="truncate">{link.label}</span>
+                                    </button>
+                                  ) : (
+                                    <div
+                                      key={`link-${link.id}`}
+                                      className="truncate rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                      data-testid={`job-lifecycle-cell-link-${laneId}-${stepId}-${link.id}`}
+                                      title={link.href}
+                                    >
+                                      {link.kind}: {link.label}
+                                    </div>
+                                  ),
+                                )
                               : null}
                           </div>
                         </td>
@@ -934,6 +1270,7 @@ export default function JobLifecycle() {
               jobCellLinksEnabled={jobCellLinksEnabled}
               initialLinks={selectedCellLinks}
               onLinksChange={handleLinksChange}
+              jobTypes={orderedJobTypes}
             />
           ) : null}
         </div>

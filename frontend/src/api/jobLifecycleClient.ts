@@ -32,6 +32,9 @@ export interface JobLane {
   updated_at: string
 }
 
+/** Deming phase used to colour a step. `null` is a legitimate "unset". */
+export type JobStepPdcaPhase = 'plan' | 'do' | 'check' | 'act'
+
 export interface JobStep {
   id: number
   tenant_id: number
@@ -41,6 +44,7 @@ export interface JobStep {
   description?: string | null
   sort_order: number
   is_active: boolean
+  pdca_phase?: JobStepPdcaPhase | null
   created_at: string
   updated_at: string
 }
@@ -57,7 +61,7 @@ export interface JobCell {
   updated_at: string
 }
 
-export type JobCellLinkKind = 'app' | 'external' | 'audit_outcome'
+export type JobCellLinkKind = 'app' | 'external' | 'audit_outcome' | 'job_cycle'
 
 export interface JobCellLink {
   id: number
@@ -70,6 +74,8 @@ export interface JobCellLink {
   external_url?: string | null
   audit_run_id?: number | null
   audit_finding_id?: number | null
+  /** Set only for `job_cycle` — the nested JobType. Sole SSOT for nesting. */
+  target_job_type_id?: number | null
   href: string
   sort_order: number
   created_at: string
@@ -84,7 +90,13 @@ export interface JobCellLinkCreatePayload {
   external_url?: string
   audit_run_id?: number
   audit_finding_id?: number
+  target_job_type_id?: number
   sort_order?: number
+}
+
+export interface JobLinkEntityTypesResponse {
+  items: string[]
+  total: number
 }
 
 export interface JobCellLinkListResponse {
@@ -128,6 +140,7 @@ export interface JobStepCreatePayload {
   description?: string | null
   sort_order?: number
   is_active?: boolean
+  pdca_phase?: JobStepPdcaPhase | null
 }
 
 export interface JobStepUpdatePayload {
@@ -135,6 +148,8 @@ export interface JobStepUpdatePayload {
   description?: string | null
   sort_order?: number
   is_active?: boolean
+  /** Send an explicit null to clear the phase; omit the key to leave it alone. */
+  pdca_phase?: JobStepPdcaPhase | null
 }
 
 export interface JobTypeListResponse {
@@ -264,6 +279,10 @@ export function createJobLifecycleApi(api: AxiosInstance) {
 
     deleteCellLink(linkId: number): Promise<AxiosResponse<void>> {
       return api.delete(`${PREFIX}/links/${linkId}`)
+    },
+
+    listLinkEntityTypes(): Promise<AxiosResponse<JobLinkEntityTypesResponse>> {
+      return api.get(`${PREFIX}/link-entity-types`)
     },
   }
 }

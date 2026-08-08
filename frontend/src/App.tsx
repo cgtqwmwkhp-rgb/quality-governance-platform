@@ -417,6 +417,7 @@ function App() {
                 <Route path="documents/structure" element={<DocumentStructureMap />} />
                 <Route path="job-lifecycle" element={<JobLifecycle />} />
                 <Route path="job-lifecycle/steps/:stepId" element={<JobLifecycle />} />
+                <Route path="job-lifecycle/cycles/:jobTypeId" element={<JobLifecycle />} />
                 <Route path="documents/:id" element={<DocumentDetail />} />
                 <Route path="document-control" element={<DocumentControl />} />
                 <Route path="my-reading" element={<MyReading />} />

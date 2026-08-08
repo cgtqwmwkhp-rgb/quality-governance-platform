@@ -10,7 +10,32 @@ export const JOB_CELL_LINK_KINDS: readonly JobCellLinkKind[] = [
   'app',
   'external',
   'audit_outcome',
+  'job_cycle',
 ] as const
+
+/** Default entity types if the registry GET is unavailable (403 / flag closed). */
+export const FALLBACK_APP_ENTITY_TYPES: readonly string[] = [
+  'action',
+  'capa',
+  'complaint',
+  'document',
+  'evidence_link',
+  'incident',
+  'job_step',
+  'near_miss',
+  'risk',
+  'rta',
+] as const
+
+/** Registry types, minus `job_type` — nesting is the `job_cycle` kind. */
+export function normaliseAppEntityTypes(items: readonly string[] | null | undefined): string[] {
+  if (!items || items.length === 0) return FALLBACK_APP_ENTITY_TYPES.slice()
+  const cleaned = items
+    .map((item) => String(item ?? '').trim().toLowerCase())
+    .filter((item) => item.length > 0 && item !== 'job_type')
+  if (cleaned.length === 0) return FALLBACK_APP_ENTITY_TYPES.slice()
+  return Array.from(new Set(cleaned)).sort()
+}
 
 export function shouldShowJobCellLinks(
   jobLifecycleEnabled: boolean,
@@ -22,7 +47,12 @@ export function shouldShowJobCellLinks(
 export function jobCellLinkKindLabel(kind: JobCellLinkKind): string {
   if (kind === 'app') return 'App'
   if (kind === 'external') return 'External'
+  if (kind === 'job_cycle') return 'Nested cycle'
   return 'Audit'
+}
+
+export function isJobCycleNestLink(link: Pick<JobCellLink, 'kind'>): boolean {
+  return link.kind === 'job_cycle'
 }
 
 export function isExternalJobCellLink(link: Pick<JobCellLink, 'kind'>): boolean {
@@ -49,6 +79,7 @@ export function groupJobCellLinksByKind(links: JobCellLink[]): Record<JobCellLin
     app: [],
     external: [],
     audit_outcome: [],
+    job_cycle: [],
   }
   for (const link of links) {
     if (link.kind in grouped) grouped[link.kind].push(link)

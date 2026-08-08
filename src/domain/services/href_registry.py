@@ -24,6 +24,7 @@ _ENTITY_PATHS: dict[str, Callable[[int], str]] = {
     "action": lambda entity_id: f"/actions/{entity_id}",
     # clause ids are catalogue strings (e.g. "9001-7.2") — use clause_evidence_href
     "job_step": lambda entity_id: f"/job-lifecycle/steps/{entity_id}",
+    "job_type": lambda entity_id: f"/job-lifecycle/cycles/{entity_id}",
     "evidence_link": lambda entity_id: f"/compliance/evidence?link={entity_id}",
 }
 
@@ -62,6 +63,11 @@ def risk_href(risk_id: int) -> str:
 def case_type_href(case_type: str, case_id: int) -> str:
     """Deep-link path for a case_risk_links case_type (compat wrapper)."""
     return href_for(case_type, case_id)
+
+
+def job_type_href(job_type_id: int) -> str:
+    """SPA deep-link for a JL job cycle (JobType) — nesting drill-in target."""
+    return href_for("job_type", job_type_id)
 
 
 def audit_finding_href(*, run_id: int, finding_id: int | None = None) -> str:
@@ -104,6 +110,7 @@ __all__ = [
     "clause_evidence_href",
     "document_href",
     "href_for",
+    "job_type_href",
     "register_href",
     "registered_entity_types",
     "registry_snapshot",
