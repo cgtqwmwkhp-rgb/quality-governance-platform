@@ -259,6 +259,28 @@ describe('freshness toggle', () => {
     expect(listDocumentFreshness).toHaveBeenCalledTimes(1)
   })
 
+  it('retries ids from a freshness request cancelled by toggling off', async () => {
+    listDocumentFreshness
+      .mockReturnValueOnce(new Promise<never>(() => undefined))
+      .mockResolvedValueOnce({
+        data: { items: [freshness(7, 'overdue'), freshness(8, 'obsolete')], total: 2 },
+      })
+    renderComposer()
+    const toggle = await screen.findByTestId('job-lifecycle-freshness-toggle')
+
+    fireEvent.click(toggle)
+    await waitFor(() => expect(listDocumentFreshness).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(toggle)
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'false'))
+    fireEvent.click(toggle)
+
+    await waitFor(() => expect(listDocumentFreshness).toHaveBeenCalledTimes(2))
+    expect(await screen.findByTestId('job-lifecycle-library-freshness-8')).toHaveTextContent(
+      'Obsolete',
+    )
+  })
+
   it('shows a document with no verdict as unknown, never as current', async () => {
     listDocumentFreshness.mockResolvedValue({ data: { items: [freshness(7, 'current')], total: 1 } })
     renderComposer()

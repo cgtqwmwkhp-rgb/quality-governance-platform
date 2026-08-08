@@ -465,30 +465,40 @@ export default function JobLifecycle() {
 
   useEffect(() => {
     if (!freshnessOn || !shouldFetch) return
-    const wanted = missingFreshnessIds(freshnessAskedRef.current, freshnessIds)
+    const asked = freshnessAskedRef.current
+    const wanted = missingFreshnessIds(asked, freshnessIds)
     if (wanted.length === 0) return
-    for (const id of wanted) freshnessAskedRef.current.add(id)
+    for (const id of wanted) asked.add(id)
 
     let cancelled = false
+    let settled = false
     setFreshnessLoading(true)
     jobLifecycleApi
       .listDocumentFreshness(wanted)
       .then((res) => {
+        settled = true
         if (cancelled) return
         setFreshness((prev) => mergeFreshnessIndex(prev, res.data.items ?? []))
         setFreshnessError(null)
       })
       .catch((err) => {
+        settled = true
+        if (cancelled) return
         // Drop the claim on these ids so a later render can retry rather than
         // leaving them permanently blank.
-        for (const id of wanted) freshnessAskedRef.current.delete(id)
-        if (!cancelled) setFreshnessError(getApiErrorMessage(err))
+        for (const id of wanted) asked.delete(id)
+        setFreshnessError(getApiErrorMessage(err))
       })
       .finally(() => {
         if (!cancelled) setFreshnessLoading(false)
       })
     return () => {
       cancelled = true
+      // The cancelled response is ignored, so release its ids for the next
+      // active effect to request again.
+      if (!settled) {
+        for (const id of wanted) asked.delete(id)
+      }
     }
   }, [freshnessOn, shouldFetch, freshnessIds])
 
