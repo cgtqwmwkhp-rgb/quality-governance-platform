@@ -212,7 +212,15 @@ from src.domain.models.iso27001 import (
 )
 
 # Job Lifecycle (ADR-0022 / JL-1)
-from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobCellLink, JobLane, JobStep, JobType
+from src.domain.models.job_lifecycle import (
+    JobCell,
+    JobCellDocument,
+    JobCellLink,
+    JobLane,
+    JobStep,
+    JobType,
+    JobTypeBaseline,
+)
 from src.domain.models.legal_hold import LegalHoldStatus, MatterLegalHold
 
 # Governance Library review packs (Wave W3)
@@ -455,6 +463,7 @@ __all__ = [
     "JobCell",
     "JobCellDocument",
     "JobCellLink",
+    "JobTypeBaseline",
     # Governance Library review packs (Wave W3)
     "LibraryReviewPack",
     "LibraryRegulatoryFinding",

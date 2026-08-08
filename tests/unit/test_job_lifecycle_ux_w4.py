@@ -107,6 +107,11 @@ print(json.dumps({
         for rev in script.walk_revisions()
         if "20261021_job_nest_pdca" in (rev._all_down_revisions or ())
     ),
+    "on_top_of_w4": sorted(
+        rev.revision
+        for rev in script.walk_revisions()
+        if "20261022_job_cell_req_ev" in (rev._all_down_revisions or ())
+    ),
 }))
 """
 
@@ -131,14 +136,19 @@ def test_migration_chains_serially_from_the_w3_head():
     assert _module_constant("down_revision") == "20261021_job_nest_pdca"
 
 
-def test_the_w4_revision_is_the_only_head(tmp_path):
-    """A second head would make ``alembic upgrade head`` ambiguous in deploy."""
-    heads = _alembic_revision_map(tmp_path)["heads"]
-    assert heads == ["20261022_job_cell_req_ev"], f"expected a single head, found {heads}"
+def test_the_w4_revision_is_the_only_revision_on_the_w3_head(tmp_path):
+    """Serial wave: W4 alone sits on the W2/W3 head (W5 sits on W4, not W3)."""
+    mapping = _alembic_revision_map(tmp_path)
+    assert mapping["on_top_of_w3"] == ["20261022_job_cell_req_ev"]
+    # W5 is the live head; W4 remains the only successor of W3.
+    assert mapping["heads"] == ["20261023_job_type_baselines"], (
+        f"expected W5 as the single head, found {mapping['heads']}"
+    )
+    assert mapping["on_top_of_w4"] == ["20261023_job_type_baselines"]
 
 
 def test_only_the_w4_revision_sits_on_the_w3_head(tmp_path):
-    """Serial wave: W4 is one revision after the head W2/W3 left behind."""
+    """Kept name: W4 is still the sole direct child of the W2/W3 head."""
     assert _alembic_revision_map(tmp_path)["on_top_of_w3"] == ["20261022_job_cell_req_ev"]
 
 

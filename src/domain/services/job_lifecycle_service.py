@@ -32,8 +32,10 @@ from src.domain.models.job_lifecycle import (
     JobLane,
     JobStep,
     JobType,
+    JobTypeBaseline,
 )
 from src.domain.services.href_registry import audit_finding_href, href_for, job_type_href, registered_entity_types
+from src.domain.services.job_lifecycle_baseline import build_snapshot, diff_snapshots, viewing_baseline_banner
 from src.domain.services.job_lifecycle_concurrency import if_match_matches, job_lifecycle_etag
 from src.domain.services.job_lifecycle_freshness import (
     AuditLapseVerdict,
@@ -1922,6 +1924,273 @@ class JobLifecycleService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Job {label} code already exists: {code}",
             )
+
+    # ------------------------------------------------------------------
+    # Baselines (JL-UX-W5) — snapshots, never forks
+    # ------------------------------------------------------------------
+
+    async def capture_live_snapshot(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+    ) -> dict[str, Any]:
+        """Build the current axes + nest-edge snapshot for a live pack."""
+        job_type = await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        lanes = await self.list_lanes(tenant_id=tenant_id, job_type_id=job_type_id)
+        steps = await self.list_steps(tenant_id=tenant_id, job_type_id=job_type_id)
+        lane_by_id = {int(lane.id): lane for lane in lanes}
+        step_by_id = {int(step.id): step for step in steps}
+
+        cell_result = await self.db.execute(
+            select(JobCell).where(
+                JobCell.tenant_id == tenant_id,
+                JobCell.job_type_id == job_type_id,
+                JobCell.deleted_at.is_(None),
+            )
+        )
+        cells = list(cell_result.scalars().all())
+        cell_rows: list[dict[str, Any]] = []
+        for cell in cells:
+            lane = lane_by_id.get(int(cell.lane_id))
+            step = step_by_id.get(int(cell.step_id))
+            if lane is None or step is None:
+                continue
+            cell_rows.append(
+                {
+                    "lane_code": lane.code,
+                    "step_code": step.code,
+                    "requires_evidence": bool(cell.requires_evidence),
+                }
+            )
+
+        nest_rows = await self._nest_link_rows(tenant_id=tenant_id, source_job_type_ids=[job_type_id])
+        target_ids = [row["target_job_type_id"] for row in nest_rows]
+        target_codes: dict[int, str] = {}
+        if target_ids:
+            code_result = await self.db.execute(
+                select(JobType.id, JobType.code).where(
+                    JobType.tenant_id == tenant_id,
+                    JobType.id.in_(target_ids),
+                    JobType.deleted_at.is_(None),
+                )
+            )
+            target_codes = {int(row_id): code for row_id, code in code_result.all()}
+
+        nest_edges: list[dict[str, Any]] = []
+        for row in nest_rows:
+            lane = lane_by_id.get(int(row["lane_id"]))
+            step = step_by_id.get(int(row["step_id"]))
+            target_code = target_codes.get(int(row["target_job_type_id"]))
+            if lane is None or step is None or target_code is None:
+                continue
+            nest_edges.append(
+                {
+                    "lane_code": lane.code,
+                    "step_code": step.code,
+                    "target_job_type_code": target_code,
+                    "label": row["label"],
+                }
+            )
+
+        return build_snapshot(
+            job_type={
+                "code": job_type.code,
+                "name": job_type.name,
+                "description": job_type.description,
+                "is_active": job_type.is_active,
+                "sort_order": job_type.sort_order,
+            },
+            lanes=[
+                {
+                    "code": lane.code,
+                    "name": lane.name,
+                    "description": lane.description,
+                    "sort_order": lane.sort_order,
+                    "is_active": lane.is_active,
+                }
+                for lane in lanes
+            ],
+            steps=[
+                {
+                    "code": step.code,
+                    "name": step.name,
+                    "description": step.description,
+                    "sort_order": step.sort_order,
+                    "is_active": step.is_active,
+                    "pdca_phase": step.pdca_phase,
+                }
+                for step in steps
+            ],
+            cells=cell_rows,
+            nest_edges=nest_edges,
+        )
+
+    async def create_baseline(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        label: Optional[str] = None,
+        note: Optional[str] = None,
+        created_by_id: Optional[int] = None,
+    ) -> JobTypeBaseline:
+        """Freeze the live tip as an immutable snapshot artefact."""
+        await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        snapshot = await self.capture_live_snapshot(tenant_id=tenant_id, job_type_id=job_type_id)
+        row = JobTypeBaseline(
+            tenant_id=tenant_id,
+            job_type_id=job_type_id,
+            label=(label.strip() if label else None) or None,
+            note=(note.strip() if note else None) or None,
+            created_by_id=created_by_id,
+            snapshot=snapshot,
+        )
+        self.db.add(row)
+        await self.db.commit()
+        await self.db.refresh(row)
+        return row
+
+    async def list_baselines(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+    ) -> list[JobTypeBaseline]:
+        await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        result = await self.db.execute(
+            select(JobTypeBaseline)
+            .where(
+                JobTypeBaseline.tenant_id == tenant_id,
+                JobTypeBaseline.job_type_id == job_type_id,
+            )
+            .order_by(JobTypeBaseline.created_at.desc(), JobTypeBaseline.id.desc())
+        )
+        return list(result.scalars().all())
+
+    async def get_baseline(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        baseline_id: int,
+    ) -> JobTypeBaseline:
+        await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        result = await self.db.execute(
+            select(JobTypeBaseline).where(
+                JobTypeBaseline.tenant_id == tenant_id,
+                JobTypeBaseline.job_type_id == job_type_id,
+                JobTypeBaseline.id == baseline_id,
+            )
+        )
+        row = result.scalars().first()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline not found")
+        return row
+
+    def serialize_baseline(
+        self,
+        row: JobTypeBaseline,
+        *,
+        include_snapshot: bool = True,
+        viewing: bool = False,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "id": int(row.id),
+            "tenant_id": int(row.tenant_id),
+            "job_type_id": int(row.job_type_id),
+            "label": row.label,
+            "note": row.note,
+            "created_by_id": int(row.created_by_id) if row.created_by_id is not None else None,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "is_snapshot": True,
+            "edit_targets_live": True,
+        }
+        if include_snapshot:
+            payload["snapshot"] = dict(row.snapshot or {})
+        if viewing:
+            payload["viewing_baseline"] = True
+            payload["banner"] = viewing_baseline_banner(baseline_id=int(row.id), label=row.label)
+        return payload
+
+    async def diff_baseline(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        baseline_id: int,
+    ) -> dict[str, Any]:
+        """Diff a stored snapshot against the live tip (live remains SoT)."""
+        row = await self.get_baseline(tenant_id=tenant_id, job_type_id=job_type_id, baseline_id=baseline_id)
+        live = await self.capture_live_snapshot(tenant_id=tenant_id, job_type_id=job_type_id)
+        diff = diff_snapshots(row.snapshot or {}, live)
+        return {
+            "baseline_id": int(row.id),
+            "job_type_id": int(job_type_id),
+            "viewing_baseline": True,
+            "edit_targets_live": True,
+            "banner": viewing_baseline_banner(baseline_id=int(row.id), label=row.label),
+            "baseline_created_at": row.created_at,
+            "baseline_label": row.label,
+            **diff,
+        }
+
+    # ------------------------------------------------------------------
+    # Portal nested-cycle read (JL-UX-W5) — job:read only surface
+    # ------------------------------------------------------------------
+
+    async def portal_nested_cycle(
+        self,
+        *,
+        tenant_id: int,
+        job_type_id: int,
+        include_links: bool = True,
+        include_cycle_graph: bool = True,
+        depth: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """Nest-aware read DTO for field/portal. No write affordances."""
+        job_type = await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
+        lanes = await self.list_lanes(tenant_id=tenant_id, job_type_id=job_type_id)
+        steps = await self.list_steps(tenant_id=tenant_id, job_type_id=job_type_id)
+        cells = await self.list_cells(
+            tenant_id=tenant_id,
+            job_type_id=job_type_id,
+            include_links=include_links,
+        )
+        # Portal only needs nest links + document refs — strip author-side kinds
+        # that would tempt a field client into offering write chrome.
+        portal_cells: list[dict[str, Any]] = []
+        for cell in cells:
+            nest_links = [link for link in (cell.get("links") or []) if link.get("kind") == "job_cycle"]
+            portal_cells.append(
+                {
+                    "id": cell["id"],
+                    "lane_id": cell["lane_id"],
+                    "step_id": cell["step_id"],
+                    "requires_evidence": bool(cell.get("requires_evidence", False)),
+                    "library_document_ids": list(cell.get("library_document_ids") or []),
+                    "nest_links": nest_links,
+                }
+            )
+
+        graph: Optional[dict[str, Any]] = None
+        if include_cycle_graph and include_links:
+            graph = await self.cycle_graph(
+                tenant_id=tenant_id,
+                job_type_id=job_type_id,
+                depth=depth,
+            )
+
+        return {
+            "job_type": job_type,
+            "lanes": lanes,
+            "steps": steps,
+            "cells": portal_cells,
+            "cycle_graph": graph,
+            "read_only": True,
+            "can_author": False,
+        }
 
 
 __all__ = [
