@@ -18,7 +18,9 @@ HOP_READ_PERMISSIONS: dict[str, Optional[str]] = {
     "capa": None,  # capa:read is reserved (auth-only today)
     "action": "action:read",
     "clause": "document:read",
-    "job_step": "document:read",  # job:read lands with JL-1
+    "job_step": "job:read",
+    # CEL list endpoints are auth-gated only today — no compliance:read token.
+    "evidence_link": None,
 }
 
 

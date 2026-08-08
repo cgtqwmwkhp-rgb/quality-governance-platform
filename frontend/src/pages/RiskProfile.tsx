@@ -31,6 +31,7 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { Entity360Strip } from '../components/graph/Entity360Strip'
 import { trackError } from '../utils/errorTracker'
 import { formatDisplayDate, formatDisplayDateTime, NOT_PROVIDED } from '../helpers/formatters'
 
@@ -745,6 +746,10 @@ export default function RiskProfile() {
             )}
           </CardContent>
         </Card>
+
+        <div data-testid="risk-profile-connections">
+          <Entity360Strip entityType="risk" entityId={profile.id} requiresSatellites />
+        </div>
 
         <Card data-testid="risk-profile-upstream">
           <CardContent className="space-y-4 p-4">

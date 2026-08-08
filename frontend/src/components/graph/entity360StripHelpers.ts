@@ -1,8 +1,8 @@
 /**
- * Entity360 Connections strip helpers (X-1).
+ * Entity360 Connections strip helpers (X-1 / X-3).
  *
  * Flag-gated visibility only — DocumentDetail mounts the strip; fetch lives
- * inside the component.
+ * inside the component. Satellite pages nest under entity_360_satellites.
  */
 
 export function shouldShowEntity360Strip(entity360Enabled: boolean): boolean {
@@ -18,6 +18,14 @@ export function shouldFetchEntity360(
   // (producer marks error/skip). Strip itself is gated by entity_360 only.
   void masterDocumentGraphEnabled
   return Boolean(entity360Enabled)
+}
+
+/** Nested gate for satellite module mounts (mirrors job_cell_links). */
+export function shouldShowSatelliteConnections(
+  entity360Enabled: boolean,
+  satellitesEnabled: boolean,
+): boolean {
+  return Boolean(entity360Enabled && satellitesEnabled)
 }
 
 export function hopCaption(hop: {

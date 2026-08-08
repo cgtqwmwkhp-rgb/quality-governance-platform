@@ -34,14 +34,19 @@ def test_expand_adds_three_ten2_action_tables():
 
 def test_middleware_rls_tables_include_action_expansion():
     # 23 up to 20260719_rls_gt_exp, plus the two Compliance Schedule tables hardened by
-    # 20260913_cs_wave0, plus sso_provisioning_requests (20261012_rls_sso_prov). This count is here so an expansion cannot
+    # 20260913_cs_wave0, plus sso_provisioning_requests (20261012_rls_sso_prov),
+    # compliance_schedule_ocr_drafts (20261013_compliance_schedule_fra_ocr_drafts),
+    # document_edges (20261015_document_edges), the five JL-1 axes tables
+    # (20261019_job_lifecycle_axes), and job_cell_links (20261020_job_cell_links).
+    # This count is here so an expansion cannot
     # silently drop an earlier table on its way past; the registry-vs-migration
     # coverage check lives in tests/unit/test_run026_rls_least_privilege.py.
-    assert len(RLS_TABLES) == 28
+    assert len(RLS_TABLES) == 34
     for table in ("incident_actions", "complaint_actions", "rta_actions"):
         assert table in RLS_TABLES
     for table in ("policies", "audit_findings", "investigation_actions", "incidents"):
         assert table in RLS_TABLES
+    assert "job_cell_links" in RLS_TABLES
 
 
 def test_migration_sql_includes_with_check_and_force():

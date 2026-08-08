@@ -40,11 +40,23 @@ import {
   measureRelationshipRoleCoverage,
 } from './documentRelationshipCoverage'
 import { RelationshipsMapView } from '../components/graph/RelationshipsMapView'
+import { GraphCoach } from '../components/graph/GraphCoach'
+import { GraphOrientationToggle } from '../components/graph/GraphOrientationToggle'
+import {
+  resolveDndProposeDrop,
+  setLibraryDocumentDragData,
+  shouldEnableRelationshipsMapDnd,
+  type LibraryDocumentDragPayload,
+} from '../components/graph/documentGraphDndHelpers'
 import {
   resolveRelationshipsPanelView,
   shouldShowRelationshipsMapToggle,
   type RelationshipsPanelViewMode,
 } from '../components/graph/relationshipsMapHelpers'
+import {
+  DEFAULT_GRAPH_ORIENTATION,
+  type GraphOrientation,
+} from '../components/graph/graphOrientation'
 
 interface CounterpartDocument {
   id: number
@@ -112,7 +124,12 @@ export function DocumentRelationshipsPanel({
   >({})
   const heuristicProposeEnabled = useFeatureFlag('document_graph_heuristic_propose')
   const mapViewEnabled = useFeatureFlag('document_graph_map_view')
+  const dndProposeEnabled = useFeatureFlag('document_graph_dnd_propose')
+  const mapDndEnabled = shouldEnableRelationshipsMapDnd(dndProposeEnabled)
   const [panelView, setPanelView] = useState<RelationshipsPanelViewMode>('list')
+  const [mapOrientation, setMapOrientation] = useState<GraphOrientation>(DEFAULT_GRAPH_ORIENTATION)
+  const [dropEdgeType, setDropEdgeType] = useState<DocumentEdgeType>('related_to')
+  const [dndProposing, setDndProposing] = useState(false)
   const activeView = resolveRelationshipsPanelView(mapViewEnabled, panelView)
 
   const resolved = useMemo(() => resolveDocumentEdges(documentId, edges), [documentId, edges])
@@ -380,6 +397,45 @@ export function DocumentRelationshipsPanel({
     }
   }
 
+  const handleLibraryDocumentDrop = async (dragged: LibraryDocumentDragPayload) => {
+    if (!mapDndEnabled || dndProposing) return
+    const resolved = resolveDndProposeDrop({
+      hubDocumentId: documentId,
+      dragged,
+      edgeType: dropEdgeType,
+      existingEdges: edges,
+    })
+    if (!resolved.ok) {
+      toast.error(resolved.reason)
+      return
+    }
+    setDndProposing(true)
+    try {
+      await documentGraphApi.proposeTypedEdge(resolved.payload)
+      const label = DOCUMENT_EDGE_TYPE_META[dropEdgeType].label
+      toast.success(
+        `Proposed ${label.toLowerCase()} — confirm required before it drives impact`,
+      )
+      await onChanged()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setDndProposing(false)
+    }
+  }
+
+  const handleTrayDragStart = (
+    event: React.DragEvent,
+    doc: CounterpartDocument,
+  ) => {
+    if (!mapDndEnabled) return
+    setLibraryDocumentDragData(event.dataTransfer, {
+      documentId: doc.id,
+      title: doc.title,
+      reference: doc.reference_number ?? doc.pel_doc_ref ?? null,
+    })
+  }
+
   const toggleSelection = (edgeId: number) => {
     setSelectedEdgeIds((prev) =>
       prev.includes(edgeId) ? prev.filter((id) => id !== edgeId) : [...prev, edgeId],
@@ -527,6 +583,8 @@ export function DocumentRelationshipsPanel({
         </div>
       ) : null}
 
+      <GraphCoach surface="document_relationships" />
+
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -576,6 +634,13 @@ export function DocumentRelationshipsPanel({
                   Map
                 </Button>
               </div>
+            ) : null}
+            {activeView === 'map' ? (
+              <GraphOrientationToggle
+                surface="document_relationships"
+                value={mapOrientation}
+                onChange={setMapOrientation}
+              />
             ) : null}
             {heuristicProposeEnabled ? (
               <Button
@@ -660,6 +725,88 @@ export function DocumentRelationshipsPanel({
         </Card>
       ) : null}
 
+      {activeView === 'map' && mapDndEnabled ? (
+        <Card className="p-4 space-y-3" data-testid="relationships-dnd-tray">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h4 className="font-medium text-foreground">Library tray</h4>
+              <p className="text-xs text-muted-foreground">
+                Drag a library document onto the map hub to propose a relationship. Drops are
+                proposed only — confirm in the list before they drive impact.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground" htmlFor="relationships-dnd-edge-type">
+                Drop as
+              </label>
+              <select
+                id="relationships-dnd-edge-type"
+                className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                value={dropEdgeType}
+                onChange={(e) => setDropEdgeType(e.target.value as DocumentEdgeType)}
+                data-testid="relationships-dnd-edge-type"
+              >
+                {DOCUMENT_EDGE_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {DOCUMENT_EDGE_TYPE_META[type].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground" htmlFor="relationships-dnd-search">
+              Find a document to drag
+            </label>
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                id="relationships-dnd-search"
+                placeholder="Search the library by title or reference"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                data-testid="relationships-dnd-search"
+              />
+              {searching ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : null}
+              {dndProposing ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : null}
+            </div>
+            {searchResults.length > 0 ? (
+              <ul
+                className="flex flex-wrap gap-2"
+                data-testid="relationships-dnd-tray-items"
+              >
+                {searchResults
+                  .filter((item) => item.id !== documentId)
+                  .map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        draggable
+                        onDragStart={(event) => handleTrayDragStart(event, item)}
+                        className="cursor-grab select-none rounded-lg border border-border bg-card/60 px-3 py-2 text-left active:cursor-grabbing"
+                        data-testid={`relationships-dnd-tray-item-${item.id}`}
+                        aria-label={`Drag ${item.title} onto the hub to propose a relationship`}
+                      >
+                        <p className="text-sm font-medium text-foreground">{item.title}</p>
+                        {item.reference_number ? (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {item.reference_number}
+                          </p>
+                        ) : null}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground" data-testid="relationships-dnd-tray-empty">
+                Search the library, then drag a result onto the hub. You can also drag from the
+                Documents library list when this flag is on.
+              </p>
+            )}
+          </div>
+        </Card>
+      ) : null}
+
       {activeView === 'map' ? (
         <Card className="p-4 space-y-2" data-testid="relationships-map-panel">
           <h4 className="font-medium text-foreground">Relationship map</h4>
@@ -668,6 +815,11 @@ export function DocumentRelationshipsPanel({
             documentTitle={documentTitle}
             edges={edges}
             labels={counterpartLabels}
+            dndEnabled={mapDndEnabled}
+            orientation={mapOrientation}
+            onLibraryDocumentDrop={(payload) => {
+              void handleLibraryDocumentDrop(payload)
+            }}
           />
         </Card>
       ) : null}

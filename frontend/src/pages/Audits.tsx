@@ -45,6 +45,7 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
+import { Entity360Strip } from '../components/graph/Entity360Strip'
 import {
   FindingLoopStatusRibbon,
   type CapaLoopLoadState,
@@ -1903,7 +1904,12 @@ export default function Audits() {
                         )}
                       </div>
                       {isHighlighted && (
-                        <div className="mt-4" data-testid={`finding-standards-${finding.id}`}>
+                        <div className="mt-4 space-y-3" data-testid={`finding-standards-${finding.id}`}>
+                          <Entity360Strip
+                            entityType="audit_finding"
+                            entityId={finding.id}
+                            requiresSatellites
+                          />
                           <StandardsAssessmentPanel
                             entityType="audit_finding"
                             entityId={finding.id}

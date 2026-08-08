@@ -735,26 +735,43 @@ jobs:
           python3 <<'PY'
           from __future__ import annotations
 
+          import re
           import sys
           import xml.etree.ElementTree as ET
           from pathlib import Path
 
+          # XML 1.0 illegal controls (pytest failure text can embed them and break ET.parse)
+          _ILLEGAL = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+          def _load_root(path: Path) -> ET.Element | None:
+              raw = path.read_bytes()
+              for attempt, data in enumerate((raw, _ILLEGAL.sub("", raw.decode("utf-8", "replace")).encode("utf-8"))):
+                  try:
+                      return ET.fromstring(data)
+                  except ET.ParseError as exc:
+                      print(f"JUnit parse attempt {attempt + 1} failed for {path.name}: {exc}", file=sys.stderr)
+              print(f"Skipping unparseable JUnit shard {path.name}", file=sys.stderr)
+              return None
+
           shard_dir = Path("junit-shards")
           files = sorted(shard_dir.glob("*.xml")) if shard_dir.is_dir() else []
+          root = ET.Element("testsuites")
+          merged = 0
           if not files:
               print("No shard JUnit files found; writing empty aggregate", file=sys.stderr)
-              root = ET.Element("testsuites")
           else:
-              root = ET.Element("testsuites")
               for path in files:
-                  parsed = ET.parse(path).getroot()
+                  parsed = _load_root(path)
+                  if parsed is None:
+                      continue
                   if parsed.tag == "testsuites":
                       for child in list(parsed):
                           root.append(child)
                   else:
                       root.append(parsed)
+                  merged += 1
           ET.ElementTree(root).write("junit-integration.xml", encoding="UTF-8", xml_declaration=True)
-          print(f"Merged {len(files)} JUnit file(s) -> junit-integration.xml")
+          print(f"Merged {merged}/{len(files)} JUnit file(s) -> junit-integration.xml")
           PY
 
       - name: Upload merged JUnit XML (Stage 2.0)

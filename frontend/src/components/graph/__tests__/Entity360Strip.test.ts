@@ -7,6 +7,7 @@ import {
   hopCaption,
   shouldFetchEntity360,
   shouldShowEntity360Strip,
+  shouldShowSatelliteConnections,
 } from '../entity360StripHelpers'
 import { publishImpactPreviewFromBundle } from '../../../pages/documentPublishImpactHelpers'
 
@@ -19,6 +20,12 @@ describe('entity360StripHelpers', () => {
   it('shows strip when entity_360 is on', () => {
     expect(shouldShowEntity360Strip(true)).toBe(true)
     expect(shouldFetchEntity360(true)).toBe(true)
+  })
+
+  it('nests satellite Connections under entity_360 and entity_360_satellites', () => {
+    expect(shouldShowSatelliteConnections(false, true)).toBe(false)
+    expect(shouldShowSatelliteConnections(true, false)).toBe(false)
+    expect(shouldShowSatelliteConnections(true, true)).toBe(true)
   })
 
   it('formats hop captions with reference preferred', () => {

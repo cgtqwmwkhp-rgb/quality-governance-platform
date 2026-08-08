@@ -35,7 +35,7 @@ DOCUMENT = Path(__file__).resolve().parents[2] / "docs" / "data" / "admin-role-p
 
 #: The value assigned by each ``UPDATE``, i.e. the JSON array between the single
 #: quotes on every ``SET permissions = '...'`` line. Both the wildcard repair
-#: (Step 2) and the 75→82 upgrade (Step 2b) must write the same catalogue value.
+#: (Step 2) and the 75→84 upgrade (Step 2b) must write the same catalogue value.
 _SET_CLAUSE = re.compile(r"^SET permissions = '(\[.*\])'$", re.MULTILINE)
 
 
@@ -63,7 +63,7 @@ def granted_tokens(granted_token_lists: list[list[str]]) -> list[str]:
     for other in granted_token_lists[1:]:
         assert other == first, (
             "every SET permissions value in docs/data/admin-role-permissions-grant.md must be "
-            "identical; the wildcard repair and the 75→82 upgrade write the same catalogue grant"
+            "identical; the wildcard repair and the 75→84 upgrade write the same catalogue grant"
         )
     return first
 
@@ -80,20 +80,22 @@ def test_the_statement_grants_exactly_the_catalogued_admin_list(granted_tokens: 
         "Regenerate the statement. An approved-but-stale statement is the one that gets pasted "
         "into production."
     )
-    assert len(granted_tokens) == 82
+    assert len(granted_tokens) == 84
     assert "action:delete" in granted_tokens
     assert "action:read" in granted_tokens
     assert "risk:read" in granted_tokens
     assert "compliance_schedule:read" in granted_tokens
     assert "document:confirm_edge" in granted_tokens
+    assert "job:read" in granted_tokens
+    assert "job:author" in granted_tokens
     assert "*" not in granted_tokens
 
 
-def test_the_document_includes_the_75_to_82_upgrade(document: str) -> None:
+def test_the_document_includes_the_75_to_84_upgrade(document: str) -> None:
     """Live DBs hold 75 tokens; the upgrade statement must be present and scoped.
 
     The 78-token and 81-token grants this document once proposed were never
-    applied anywhere, so there is deliberately no 78→82 or 81→82 step: the only
+    applied anywhere, so there is deliberately no 78→84 or 81→84 step: the only
     live starting point is 75.
     """
     assert "json_array_length(permissions::json) = 75" in document
@@ -102,6 +104,8 @@ def test_the_document_includes_the_75_to_82_upgrade(document: str) -> None:
     assert "risk:read" in document
     assert "compliance_schedule:read" in document
     assert "document:confirm_edge" in document
+    assert "job:read" in document
+    assert "job:author" in document
 
 
 def test_the_statement_grants_nothing_outside_the_catalogue(granted_tokens: list[str]) -> None:

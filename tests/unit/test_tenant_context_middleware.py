@@ -38,7 +38,7 @@ def test_rls_tables_match_policy_migration():
     # to be hardened by a registered migration, and the PostgreSQL suite, which
     # reads the policies out of pg_policy. This is the cheap guard against a name
     # being dropped.
-    assert len(RLS_TABLES) == 28
+    assert len(RLS_TABLES) == 34
     assert "incidents" in RLS_TABLES
     assert "users" in RLS_TABLES
     assert "audit_log_entries" in RLS_TABLES
@@ -58,6 +58,11 @@ def test_rls_tables_match_policy_migration():
     assert "sso_provisioning_requests" in RLS_TABLES
     assert "compliance_schedule_ocr_drafts" in RLS_TABLES
     assert "document_edges" in RLS_TABLES
+    assert "job_types" in RLS_TABLES
+    assert "job_lanes" in RLS_TABLES
+    assert "job_steps" in RLS_TABLES
+    assert "job_cells" in RLS_TABLES
+    assert "job_cell_documents" in RLS_TABLES
     # Deliberately absent: its tenant_id is always NULL, so tenant_isolation would
     # hide the global catalogue from every tenant instead of isolating anything.
     assert "compliance_requirement_templates" not in RLS_TABLES

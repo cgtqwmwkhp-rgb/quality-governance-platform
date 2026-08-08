@@ -18,6 +18,7 @@ import { displayIncidentText } from './incidentTextDisplay'
 import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
 import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { Entity360Strip } from '../components/graph/Entity360Strip'
 import { IncidentFraSignificantChangePanel } from './IncidentFraSignificantChangePanel'
 import {
   ArrowLeft,
@@ -975,6 +976,12 @@ export default function IncidentDetail() {
           data-testid="incident-detail-refresh-error"
         />
       )}
+
+      {incident.id != null && Number.isFinite(incident.id) ? (
+        <div data-testid="incident-detail-connections">
+          <Entity360Strip entityType="incident" entityId={incident.id} requiresSatellites />
+        </div>
+      ) : null}
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">

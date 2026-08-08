@@ -235,6 +235,22 @@ def readable_resources() -> tuple[Resource, ...]:
 SERVER_OWNED_FIELDS = frozenset(
     {
         "confirmed_by_id",  # Doc Graph edge confirm actor (server-set)
+        # JL-3 job cell links. The parent cell is addressed by the
+        # (job_type_id, lane_id, step_id) triple in the URL and resolved to a
+        # surrogate cell_id by the server, so cell_id is client-supplied in the
+        # same sense a path parameter is — just not under that name.
+        "cell_id",
+        # Navigation targets the server resolves through the X-1 href_registry
+        # (job cell links, Entity 360, Doc Graph, risk register). Accepting an
+        # href from a client would be both meaningless — it is recomputed from
+        # the structured refs on every read — and a way to smuggle a URL past
+        # the registry.
+        "href",
+        # Sub-resource collections projected onto their parent for reading.
+        # JobCellResponse.links is written through
+        # POST/DELETE .../cells/{lane_id}/{step_id}/links, never through the
+        # parent cell body, so no parent writer can or should accept it.
+        "links",
         "id",
         "tenant_id",
         "created_at",

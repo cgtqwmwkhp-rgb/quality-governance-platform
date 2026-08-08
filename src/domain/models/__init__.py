@@ -210,6 +210,9 @@ from src.domain.models.iso27001 import (
     StatementOfApplicability,
     SupplierSecurityAssessment,
 )
+
+# Job Lifecycle (ADR-0022 / JL-1)
+from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobCellLink, JobLane, JobStep, JobType
 from src.domain.models.legal_hold import LegalHoldStatus, MatterLegalHold
 
 # Governance Library review packs (Wave W3)
@@ -445,6 +448,13 @@ __all__ = [
     "DocumentEdgeType",
     "DocumentEdgeStatus",
     "DocumentEdgeMethod",
+    # Job Lifecycle (ADR-0022 / JL-1)
+    "JobType",
+    "JobLane",
+    "JobStep",
+    "JobCell",
+    "JobCellDocument",
+    "JobCellLink",
     # Governance Library review packs (Wave W3)
     "LibraryReviewPack",
     "LibraryRegulatoryFinding",

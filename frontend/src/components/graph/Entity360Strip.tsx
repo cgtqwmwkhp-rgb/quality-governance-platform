@@ -1,9 +1,12 @@
 /**
- * Entity360 Connections strip (X-1).
+ * Entity360 Connections strip (X-1 / X-3).
  *
  * Self-fetches `/entity-360/{type}/{id}` when `entity_360` is open so
  * DocumentDetail only mounts the component. Bidirectional hops; denied sources
  * carry no counts. Never labels Doc Graph the Golden Thread.
+ *
+ * Satellite pages pass ``requiresSatellites`` so both `entity_360` and
+ * `entity_360_satellites` must be on (nested like job_cell_links).
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -17,6 +20,7 @@ import {
   hopCaption,
   shouldFetchEntity360,
   shouldShowEntity360Strip,
+  shouldShowSatelliteConnections,
 } from './entity360StripHelpers'
 
 export interface Entity360StripProps {
@@ -24,6 +28,11 @@ export interface Entity360StripProps {
   entityId: number
   /** Optional master Doc Graph flag — unused for fetch gate today. */
   documentGraphEnabled?: boolean
+  /**
+   * When true, also requires `entity_360_satellites` (satellite module pages).
+   * Document Detail / Job Lifecycle leave this false.
+   */
+  requiresSatellites?: boolean
 }
 
 function HopChip({ hop }: { hop: Entity360Hop }) {
@@ -50,10 +59,16 @@ export function Entity360Strip({
   entityType,
   entityId,
   documentGraphEnabled = true,
+  requiresSatellites = false,
 }: Entity360StripProps) {
   const entity360Enabled = useFeatureFlag('entity_360')
-  const visible = shouldShowEntity360Strip(entity360Enabled)
-  const shouldFetch = shouldFetchEntity360(entity360Enabled, documentGraphEnabled)
+  const satellitesEnabled = useFeatureFlag('entity_360_satellites')
+  const visible = requiresSatellites
+    ? shouldShowSatelliteConnections(entity360Enabled, satellitesEnabled)
+    : shouldShowEntity360Strip(entity360Enabled)
+  const shouldFetch = requiresSatellites
+    ? shouldShowSatelliteConnections(entity360Enabled, satellitesEnabled)
+    : shouldFetchEntity360(entity360Enabled, documentGraphEnabled)
 
   const [bundle, setBundle] = useState<Entity360Bundle | null>(null)
   const [loading, setLoading] = useState(false)

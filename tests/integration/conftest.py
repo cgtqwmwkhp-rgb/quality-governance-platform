@@ -171,6 +171,8 @@ _ADMIN_PERMS = ",".join(
         "compliance_schedule:read",
         "compliance_schedule:create",
         "compliance_schedule:update",
+        "job:read",
+        "job:author",
     ]
 )
 
