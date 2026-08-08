@@ -7,10 +7,14 @@ import {
   cellKey,
   detachDocumentRef,
   emptyComposerCopy,
+  isForbiddenApiError,
   isJobLifecycleViewMode,
   jobLifecycleViewModeLabel,
   libraryDocLabel,
+  JOB_LIFECYCLE_PANEL_BOUNDS,
+  JOB_LIFECYCLE_PERMISSION_HEALTH_COPY,
   resolveDndCellAttach,
+  resolveJobLifecyclePanelWidths,
   resolveJobLifecycleViewMode,
   resolveSelectedJobTypeId,
   resolveSelectedStepId,
@@ -161,7 +165,18 @@ describe('jobLifecycleHelpers', () => {
     ])
     expect(libraryDocLabel(map, 7)).toBe('POL-7 · IM Policy')
     expect(libraryDocLabel(map, 9)).toBe('Document #9')
+    expect(emptyComposerCopy(false)).toMatch(/job cycle/)
     expect(emptyComposerCopy(false)).toMatch(/not departments/)
     expect(emptyComposerCopy(true)).toMatch(/references/)
+  })
+
+  it('clamps and resolves composer panel widths', () => {
+    expect(resolveJobLifecyclePanelWidths({ left: 50, right: 999 })).toEqual({
+      left: JOB_LIFECYCLE_PANEL_BOUNDS.leftMin,
+      right: JOB_LIFECYCLE_PANEL_BOUNDS.rightMax,
+    })
+    expect(isForbiddenApiError({ response: { status: 403 } })).toBe(true)
+    expect(isForbiddenApiError({ response: { status: 500 } })).toBe(false)
+    expect(JOB_LIFECYCLE_PERMISSION_HEALTH_COPY).toMatch(/job:read/)
   })
 })

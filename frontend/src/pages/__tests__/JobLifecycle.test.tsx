@@ -189,6 +189,18 @@ describe('JobLifecycle flag gating', () => {
     expect(screen.getByTestId('job-lifecycle-cell-doc-10-20-7')).toHaveTextContent('POL-7')
     expect(screen.getByTestId('entity360-connections-strip')).toHaveTextContent('job_step:20')
     expect(screen.getByTestId('job-lifecycle-view-matrix')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('job-lifecycle-cycle-picker')).toBeInTheDocument()
+    expect(screen.getByTestId('job-lifecycle-resize-left')).toBeInTheDocument()
+  })
+
+  it('shows permission health banner when job types return 403', async () => {
+    flagState.job_lifecycle = true
+    listJobTypes.mockRejectedValue({ response: { status: 403 } })
+
+    renderAt()
+
+    expect(await screen.findByTestId('job-lifecycle-permission-health')).toBeInTheDocument()
+    expect(screen.getByTestId('job-lifecycle-permission-health')).toHaveTextContent(/job:read/)
   })
 
   it('switches to phase view and deep-links a step', async () => {

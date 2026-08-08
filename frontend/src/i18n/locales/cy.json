@@ -1,7 +1,9 @@
 {
   "a11y.close_menu": "Cau'r ddewislen",
   "a11y.collapse": "Lleihau",
+  "a11y.collapse_sidebar": "Lleihau'r bar ochr",
   "a11y.expand": "Ehangu",
+  "a11y.expand_sidebar": "Ehangu'r bar ochr",
   "a11y.form_submitted": "Ffurflen wedi'i chyflwyno'n llwyddiannus",
   "a11y.item_added": "Eitem wedi'i hychwanegu",
   "a11y.item_removed": "Eitem wedi'i thynnu",

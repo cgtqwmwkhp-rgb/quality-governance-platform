@@ -261,7 +261,99 @@ export function resolveSwimlaneAxes(input: {
 
 export function emptyComposerCopy(hasJobTypes: boolean): string {
   if (!hasJobTypes) {
-    return 'Create a job type to start composing swimlanes. Lanes and steps are process axes — not departments.'
+    return 'Create a job cycle to start composing swimlanes. Lanes and steps are process axes — not departments.'
   }
-  return 'Add lanes and steps for this job type, then drag library documents onto cells to attach references.'
+  return 'Add lanes and steps for this job cycle, then drag library documents onto cells to attach references.'
 }
+
+/** JL-UX-W1 — composer column widths (px) persisted locally. */
+export const JOB_LIFECYCLE_PANEL_STORAGE_KEY = 'job_lifecycle_panel_widths'
+
+export type JobLifecyclePanelWidths = {
+  left: number
+  right: number
+}
+
+export const DEFAULT_JOB_LIFECYCLE_PANEL_WIDTHS: JobLifecyclePanelWidths = {
+  left: 240,
+  right: 260,
+}
+
+export const JOB_LIFECYCLE_PANEL_BOUNDS = {
+  leftMin: 180,
+  leftMax: 420,
+  rightMin: 200,
+  rightMax: 480,
+} as const
+
+export function clampJobLifecyclePanelWidth(
+  value: number,
+  min: number,
+  max: number,
+): number {
+  if (!Number.isFinite(value)) return min
+  return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+export function resolveJobLifecyclePanelWidths(
+  preferred: Partial<JobLifecyclePanelWidths> | null | undefined,
+  fallback: JobLifecyclePanelWidths = DEFAULT_JOB_LIFECYCLE_PANEL_WIDTHS,
+): JobLifecyclePanelWidths {
+  return {
+    left: clampJobLifecyclePanelWidth(
+      preferred?.left ?? fallback.left,
+      JOB_LIFECYCLE_PANEL_BOUNDS.leftMin,
+      JOB_LIFECYCLE_PANEL_BOUNDS.leftMax,
+    ),
+    right: clampJobLifecyclePanelWidth(
+      preferred?.right ?? fallback.right,
+      JOB_LIFECYCLE_PANEL_BOUNDS.rightMin,
+      JOB_LIFECYCLE_PANEL_BOUNDS.rightMax,
+    ),
+  }
+}
+
+export function readStoredJobLifecyclePanelWidths(
+  storage: Pick<Storage, 'getItem'> | null | undefined = typeof localStorage !== 'undefined'
+    ? localStorage
+    : null,
+): JobLifecyclePanelWidths | null {
+  if (!storage) return null
+  try {
+    const raw = storage.getItem(JOB_LIFECYCLE_PANEL_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<JobLifecyclePanelWidths>
+    return resolveJobLifecyclePanelWidths(parsed)
+  } catch {
+    return null
+  }
+}
+
+export function writeStoredJobLifecyclePanelWidths(
+  widths: JobLifecyclePanelWidths,
+  storage: Pick<Storage, 'setItem'> | null | undefined = typeof localStorage !== 'undefined'
+    ? localStorage
+    : null,
+): void {
+  if (!storage) return
+  try {
+    storage.setItem(
+      JOB_LIFECYCLE_PANEL_STORAGE_KEY,
+      JSON.stringify(resolveJobLifecyclePanelWidths(widths)),
+    )
+  } catch {
+    // Storage may be unavailable — ignore.
+  }
+}
+
+/** Permission-health (#10): flags ON does not mean grants exist. */
+export function isForbiddenApiError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const maybe = error as { response?: { status?: number }; status_code?: number }
+  if (maybe.response?.status === 403) return true
+  if (maybe.status_code === 403) return true
+  return false
+}
+
+export const JOB_LIFECYCLE_PERMISSION_HEALTH_COPY =
+  'Job Lifecycle flags are on, but this account is missing job:read / job:author (or is_superuser). Ask an admin to grant those permissions — flags alone do not unlock authoring.'
