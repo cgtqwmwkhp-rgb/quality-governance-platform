@@ -13,7 +13,7 @@ issues the per-row DELETE, which requires a mapped relationship whose cascade
 includes ``delete`` and which does not set ``passive_deletes=True``. Every pair
 below fails that test, so the removal happens with no Python event:
 
-* 83 pairs have no relationship mapped from the parent at all.
+* 84 pairs have no relationship mapped from the parent at all.
 * 5 have a relationship without ``delete`` in its cascade — SQLAlchemy will try
   to de-associate the children instead of deleting them, so still no per-child
   delete event (and on a NOT NULL foreign key that attempt errors).
@@ -104,10 +104,17 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         # cell links join that set for the same reason; their audit_run_id /
         # audit_finding_id parents are ON DELETE SET NULL, so those two do not
         # cascade and are absent here.
+        #
+        # ("job_types", "job_cell_links") is the JL-UX-W2 nesting target. It
+        # cascades rather than nulling because a job_cycle link whose target
+        # job type is gone cannot resolve an href — a nest link must not
+        # outlive the cycle it points at. Job types are soft-deleted in normal
+        # operation, so this fires only on a physical delete.
         ("job_cells", "job_cell_documents"),
         ("job_cells", "job_cell_links"),
         ("job_lanes", "job_cells"),
         ("job_steps", "job_cells"),
+        ("job_types", "job_cell_links"),
         ("job_types", "job_cells"),
         ("job_types", "job_lanes"),
         ("job_types", "job_steps"),

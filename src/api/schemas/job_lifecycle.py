@@ -8,7 +8,11 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-JobCellLinkKind = Literal["app", "external", "audit_outcome"]
+JobCellLinkKind = Literal["app", "external", "audit_outcome", "job_cycle"]
+
+#: Deming phase used to colour a step. Nullable everywhere — an unset phase is
+#: a legitimate state, not a default of "plan".
+JobStepPdcaPhase = Literal["plan", "do", "check", "act"]
 
 
 class JobTypeCreate(BaseModel):
@@ -96,6 +100,7 @@ class JobStepCreate(BaseModel):
     description: Optional[str] = None
     sort_order: int = 0
     is_active: bool = True
+    pdca_phase: Optional[JobStepPdcaPhase] = None
 
 
 class JobStepUpdate(BaseModel):
@@ -105,6 +110,10 @@ class JobStepUpdate(BaseModel):
     description: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
+    #: Sentinel-free clearing: send ``pdca_phase_set=true`` with a null phase to
+    #: unset it, because ``None`` alone means "field omitted" on a PATCH.
+    pdca_phase: Optional[JobStepPdcaPhase] = None
+    pdca_phase_set: bool = False
 
 
 class JobStepResponse(BaseModel):
@@ -118,6 +127,7 @@ class JobStepResponse(BaseModel):
     description: Optional[str] = None
     sort_order: int
     is_active: bool
+    pdca_phase: Optional[JobStepPdcaPhase] = None
     created_at: datetime
     updated_at: datetime
 
@@ -147,6 +157,7 @@ class JobCellLinkCreate(BaseModel):
     external_url: Optional[str] = Field(None, min_length=1, max_length=2000)
     audit_run_id: Optional[int] = Field(None, gt=0)
     audit_finding_id: Optional[int] = Field(None, gt=0)
+    target_job_type_id: Optional[int] = Field(None, gt=0)
     sort_order: int = 0
 
     @field_validator("external_url")
@@ -177,6 +188,8 @@ class JobCellLinkCreate(BaseModel):
                 raise ValueError("app links require entity_type and entity_id")
             if self.external_url or self.audit_run_id or self.audit_finding_id:
                 raise ValueError("app links must not set external_url or audit_*")
+            if self.target_job_type_id is not None:
+                raise ValueError("app links must not set target_job_type_id")
         elif self.kind == "external":
             if not self.external_url:
                 raise ValueError("external links require external_url")
@@ -184,11 +197,22 @@ class JobCellLinkCreate(BaseModel):
                 raise ValueError("external links must not set entity_*")
             if self.audit_run_id or self.audit_finding_id:
                 raise ValueError("external links must not set audit_*")
+            if self.target_job_type_id is not None:
+                raise ValueError("external links must not set target_job_type_id")
         elif self.kind == "audit_outcome":
             if self.audit_run_id is None or self.audit_finding_id is None:
                 raise ValueError("audit_outcome links require audit_run_id and audit_finding_id")
             if self.entity_type or self.entity_id is not None or self.external_url:
                 raise ValueError("audit_outcome links must not set entity_* or external_url")
+            if self.target_job_type_id is not None:
+                raise ValueError("audit_outcome links must not set target_job_type_id")
+        elif self.kind == "job_cycle":
+            if self.target_job_type_id is None:
+                raise ValueError("job_cycle links require target_job_type_id")
+            if self.entity_type or self.entity_id is not None or self.external_url:
+                raise ValueError("job_cycle links must not set entity_* or external_url")
+            if self.audit_run_id or self.audit_finding_id:
+                raise ValueError("job_cycle links must not set audit_*")
         return self
 
 
@@ -205,6 +229,7 @@ class JobCellLinkResponse(BaseModel):
     external_url: Optional[str] = None
     audit_run_id: Optional[int] = None
     audit_finding_id: Optional[int] = None
+    target_job_type_id: Optional[int] = None
     href: str
     sort_order: int
     created_at: datetime
@@ -213,6 +238,17 @@ class JobCellLinkResponse(BaseModel):
 
 class JobCellLinkListResponse(BaseModel):
     items: List[JobCellLinkResponse]
+    total: int
+
+
+class JobLinkEntityTypesResponse(BaseModel):
+    """Entity types the ``app`` link picker may offer.
+
+    Sourced from ``href_registry`` so the composer dropdown cannot drift from
+    the builders that actually resolve the hrefs.
+    """
+
+    items: List[str]
     total: int
 
 
@@ -247,8 +283,10 @@ __all__ = [
     "JobLaneListResponse",
     "JobLaneResponse",
     "JobLaneUpdate",
+    "JobLinkEntityTypesResponse",
     "JobStepCreate",
     "JobStepListResponse",
+    "JobStepPdcaPhase",
     "JobStepResponse",
     "JobStepUpdate",
     "JobTypeCreate",

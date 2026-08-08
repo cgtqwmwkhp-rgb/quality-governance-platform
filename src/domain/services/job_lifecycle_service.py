@@ -18,8 +18,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.audit import AuditFinding
 from src.domain.models.document import Document
-from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobCellLink, JobLane, JobStep, JobType
-from src.domain.services.href_registry import audit_finding_href, href_for
+from src.domain.models.job_lifecycle import (
+    JOB_STEP_PDCA_PHASES,
+    JobCell,
+    JobCellDocument,
+    JobCellLink,
+    JobLane,
+    JobStep,
+    JobType,
+)
+from src.domain.services.href_registry import (
+    audit_finding_href,
+    href_for,
+    job_type_href,
+    registered_entity_types,
+)
 
 
 def _utc_now() -> datetime:
@@ -34,6 +47,31 @@ def _normalise_code(code: str) -> str:
             detail="code must be non-empty",
         )
     return cleaned
+
+
+def _normalise_pdca_phase(value: Optional[str]) -> Optional[str]:
+    """Validate a Deming phase. ``None``/blank clears it — an unset phase is valid."""
+    if value is None:
+        return None
+    cleaned = value.strip().lower()
+    if not cleaned:
+        return None
+    if cleaned not in JOB_STEP_PDCA_PHASES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"pdca_phase must be one of {list(JOB_STEP_PDCA_PHASES)}",
+        )
+    return cleaned
+
+
+def list_link_entity_types() -> list[str]:
+    """App-link entity types, straight from ``href_registry``.
+
+    The composer dropdown reads this so it cannot offer a type that has no
+    builder behind it. ``job_type`` is excluded: nesting is the ``job_cycle``
+    kind with its own acyclic guard, not a free-form app link.
+    """
+    return sorted(t for t in registered_entity_types() if t != "job_type")
 
 
 def resolve_cell_link_href(link: JobCellLink) -> str:
@@ -62,6 +100,14 @@ def resolve_cell_link_href(link: JobCellLink) -> str:
             run_id=int(link.audit_run_id),
             finding_id=int(link.audit_finding_id) if link.audit_finding_id is not None else None,
         )
+    if kind == "job_cycle":
+        target = getattr(link, "target_job_type_id", None)
+        if target is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="job_cycle link missing target_job_type_id",
+            )
+        return job_type_href(int(target))
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"unknown cell link kind: {link.kind!r}",
@@ -80,6 +126,7 @@ def serialize_cell_link(link: JobCellLink) -> dict[str, Any]:
         "external_url": link.external_url,
         "audit_run_id": link.audit_run_id,
         "audit_finding_id": link.audit_finding_id,
+        "target_job_type_id": getattr(link, "target_job_type_id", None),
         "href": resolve_cell_link_href(link),
         "sort_order": link.sort_order,
         "created_at": link.created_at,
@@ -272,6 +319,7 @@ class JobLifecycleService:
         description: Optional[str] = None,
         sort_order: int = 0,
         is_active: bool = True,
+        pdca_phase: Optional[str] = None,
     ) -> JobStep:
         await self.get_job_type(tenant_id=tenant_id, job_type_id=job_type_id)
         code_n = _normalise_code(code)
@@ -290,6 +338,7 @@ class JobLifecycleService:
             description=description,
             sort_order=sort_order,
             is_active=is_active,
+            pdca_phase=_normalise_pdca_phase(pdca_phase),
         )
         self.db.add(row)
         await self.db.commit()
@@ -305,6 +354,8 @@ class JobLifecycleService:
         description: Optional[str] = None,
         sort_order: Optional[int] = None,
         is_active: Optional[bool] = None,
+        pdca_phase: Optional[str] = None,
+        pdca_phase_set: bool = False,
     ) -> JobStep:
         row = await self._get_live(JobStep, tenant_id=tenant_id, row_id=step_id)
         if row is None:
@@ -317,6 +368,10 @@ class JobLifecycleService:
             row.sort_order = sort_order
         if is_active is not None:
             row.is_active = is_active
+        # A bare ``None`` on a PATCH means "not supplied"; clearing the phase
+        # requires the explicit flag so the two intents stay distinguishable.
+        if pdca_phase is not None or pdca_phase_set:
+            row.pdca_phase = _normalise_pdca_phase(pdca_phase)
         await self.db.commit()
         await self.db.refresh(row)
         return row
@@ -497,6 +552,7 @@ class JobLifecycleService:
         external_url: Optional[str] = None,
         audit_run_id: Optional[int] = None,
         audit_finding_id: Optional[int] = None,
+        target_job_type_id: Optional[int] = None,
         sort_order: int = 0,
     ) -> dict[str, Any]:
         cell = await self._get_or_create_cell(
@@ -506,7 +562,25 @@ class JobLifecycleService:
             step_id=step_id,
         )
         kind_n = kind.strip().lower()
-        if kind_n == "audit_outcome":
+        if kind_n == "job_cycle":
+            await self._assert_nestable_job_cycle(
+                tenant_id=tenant_id,
+                source_job_type_id=job_type_id,
+                target_job_type_id=target_job_type_id,
+            )
+            existing_nest = await self.db.execute(
+                select(JobCellLink.id).where(
+                    JobCellLink.tenant_id == tenant_id,
+                    JobCellLink.cell_id == cell.id,
+                    JobCellLink.target_job_type_id == target_job_type_id,
+                )
+            )
+            if existing_nest.scalars().first() is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="job_cycle link already exists for this target on the cell",
+                )
+        elif kind_n == "audit_outcome":
             await self._assert_audit_finding(
                 tenant_id=tenant_id,
                 audit_run_id=int(audit_run_id) if audit_run_id is not None else None,
@@ -543,6 +617,7 @@ class JobLifecycleService:
             external_url=external_url,
             audit_run_id=audit_run_id,
             audit_finding_id=audit_finding_id,
+            target_job_type_id=target_job_type_id,
             sort_order=sort_order,
         )
         self.db.add(row)
@@ -584,6 +659,101 @@ class JobLifecycleService:
         if cell is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job cell not found")
         return cell
+
+    # ------------------------------------------------------------------
+    # Job cycle nesting (JL-UX-W2)
+    # ------------------------------------------------------------------
+
+    async def nested_job_type_ids(self, *, tenant_id: int, job_type_id: int) -> list[int]:
+        """Job types nested directly inside ``job_type_id`` via ``job_cycle`` links."""
+        result = await self.db.execute(
+            select(JobCellLink.target_job_type_id)
+            .join(JobCell, JobCell.id == JobCellLink.cell_id)
+            .where(
+                JobCellLink.tenant_id == tenant_id,
+                JobCellLink.kind == "job_cycle",
+                JobCellLink.target_job_type_id.is_not(None),
+                JobCell.tenant_id == tenant_id,
+                JobCell.job_type_id == job_type_id,
+                JobCell.deleted_at.is_(None),
+            )
+        )
+        seen: set[int] = set()
+        ordered: list[int] = []
+        for target in result.scalars().all():
+            if target is None or int(target) in seen:
+                continue
+            seen.add(int(target))
+            ordered.append(int(target))
+        return ordered
+
+    async def would_create_job_cycle_nest_cycle(
+        self,
+        *,
+        tenant_id: int,
+        source_job_type_id: int,
+        target_job_type_id: int,
+    ) -> bool:
+        """True if nesting ``target`` inside ``source`` would close a cycle.
+
+        Graph direction: a ``job_cycle`` link on a cell of job type ``source``
+        means ``source`` nests ``target``. Adding it closes a cycle when
+        ``target`` can already reach ``source`` by walking nest edges. Same BFS
+        shape as ``DocumentGraphService.would_create_implements_cycle`` — and
+        the same guarantee: read-then-write, so two concurrent inserts that each
+        pass on their own can still form a cycle together.
+        """
+        if source_job_type_id == target_job_type_id:
+            return True
+
+        frontier = [target_job_type_id]
+        seen: set[int] = {target_job_type_id}
+        while frontier:
+            current = frontier.pop()
+            for nested_id in await self.nested_job_type_ids(
+                tenant_id=tenant_id, job_type_id=current
+            ):
+                if nested_id == source_job_type_id:
+                    return True
+                if nested_id not in seen:
+                    seen.add(nested_id)
+                    frontier.append(nested_id)
+        return False
+
+    async def _assert_nestable_job_cycle(
+        self,
+        *,
+        tenant_id: int,
+        source_job_type_id: int,
+        target_job_type_id: Optional[int],
+    ) -> None:
+        if target_job_type_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="job_cycle links require target_job_type_id",
+            )
+        target = int(target_job_type_id)
+        # Any JobType may nest any other JobType — the only rules are tenancy,
+        # liveness and acyclicity. No pair of packs is privileged.
+        if await self._get_live(JobType, tenant_id=tenant_id, row_id=target) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Target job type not found",
+            )
+        if target == int(source_job_type_id):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A job cycle cannot nest itself",
+            )
+        if await self.would_create_job_cycle_nest_cycle(
+            tenant_id=tenant_id,
+            source_job_type_id=int(source_job_type_id),
+            target_job_type_id=target,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="job_cycle link would create a nesting cycle",
+            )
 
     async def _assert_audit_finding(
         self,
@@ -709,6 +879,7 @@ class JobLifecycleService:
 
 __all__ = [
     "JobLifecycleService",
+    "list_link_entity_types",
     "resolve_cell_link_href",
     "serialize_cell_link",
 ]

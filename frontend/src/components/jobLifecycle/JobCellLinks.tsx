@@ -1,28 +1,40 @@
 /**
- * JobCellLinks — JL-3 cell hyperlinks (audit · app · external).
+ * JobCellLinks — JL-3 cell hyperlinks (audit · app · external · job_cycle).
  *
- * Flag-gated by `job_cell_links` (and parent `job_lifecycle`). App / audit
- * hrefs come from the API (X-1 href_registry) — no parallel FE URL builders.
+ * Flag-gated by `job_cell_links` (and parent `job_lifecycle`). App / audit /
+ * nest hrefs come from the API (X-1 href_registry) — no parallel FE URL
+ * builders.
  *
  * JL-UX-W1: do NOT refetch on every parent render. Links are seeded from the
  * cell list payload (`listCells` embeds `links[]`); mutations update local
  * state + notify parent. A parent-updating callback must never sit in the
  * fetch effect dependency chain (that caused the 429 storm).
+ *
+ * JL-UX-W2: `job_cycle` nests any JobType inside this cell. The entity-type
+ * dropdown is fed by the server's href_registry so it cannot offer a type with
+ * no builder behind it.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ExternalLink, Loader2, Plus, Trash2 } from 'lucide-react'
 import { getApiErrorMessage, jobLifecycleApi } from '../../api/client'
-import type { JobCellLink, JobCellLinkCreatePayload, JobCellLinkKind } from '../../api/jobLifecycleClient'
+import type {
+  JobCellLink,
+  JobCellLinkCreatePayload,
+  JobCellLinkKind,
+  JobType,
+} from '../../api/jobLifecycleClient'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Input } from '../ui/Input'
 import {
+  FALLBACK_APP_ENTITY_TYPES,
   JOB_CELL_LINK_KINDS,
   jobCellLinkKindLabel,
   jobCellLinkOpenTarget,
   jobCellLinkRel,
+  normaliseAppEntityTypes,
   resolveJobCellLinkHref,
   shouldShowJobCellLinks,
 } from './jobCellLinksHelpers'
@@ -36,6 +48,8 @@ export interface JobCellLinksProps {
   /** Seed from cell list payload; refreshed after mutations via onLinksChange. */
   initialLinks?: JobCellLink[]
   onLinksChange?: (links: JobCellLink[]) => void
+  /** Nest targets. The active cycle is excluded — self-nesting is rejected. */
+  jobTypes?: JobType[]
 }
 
 function linksSeedKey(jobTypeId: number, laneId: number, stepId: number, links: JobCellLink[]): string {
@@ -50,6 +64,7 @@ export default function JobCellLinks({
   jobCellLinksEnabled,
   initialLinks = [],
   onLinksChange,
+  jobTypes = [],
 }: JobCellLinksProps) {
   const visible = shouldShowJobCellLinks(jobLifecycleEnabled, jobCellLinksEnabled)
   const [links, setLinks] = useState<JobCellLink[]>(initialLinks)
@@ -62,9 +77,33 @@ export default function JobCellLinks({
   const [externalUrl, setExternalUrl] = useState('')
   const [auditRunId, setAuditRunId] = useState('')
   const [auditFindingId, setAuditFindingId] = useState('')
+  const [targetJobTypeId, setTargetJobTypeId] = useState('')
+  const [entityTypes, setEntityTypes] = useState<string[]>(() =>
+    FALLBACK_APP_ENTITY_TYPES.slice(),
+  )
 
   const onLinksChangeRef = useRef(onLinksChange)
   onLinksChangeRef.current = onLinksChange
+
+  const nestCandidates = jobTypes.filter((jt) => jt.id !== jobTypeId)
+
+  // Registry types load once per mount, never per parent render (JL-UX-W1).
+  useEffect(() => {
+    if (!visible) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await jobLifecycleApi.listLinkEntityTypes()
+        if (!cancelled) setEntityTypes(normaliseAppEntityTypes(res.data.items))
+      } catch {
+        // Registry GET is an affordance, not a requirement — keep the fallback.
+        if (!cancelled) setEntityTypes(FALLBACK_APP_ENTITY_TYPES.slice())
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [visible])
 
   const applyLinks = useCallback((next: JobCellLink[]) => {
     setLinks(next)
@@ -111,6 +150,21 @@ export default function JobCellLinks({
         label: trimmedLabel,
         external_url: externalUrl.trim(),
       }
+    } else if (kind === 'job_cycle') {
+      const targetId = Number(targetJobTypeId)
+      if (!Number.isFinite(targetId) || targetId <= 0) {
+        setError('Nested cycle links need a target job cycle')
+        return
+      }
+      if (targetId === jobTypeId) {
+        setError('A job cycle cannot nest itself')
+        return
+      }
+      payload = {
+        kind: 'job_cycle',
+        label: trimmedLabel,
+        target_job_type_id: targetId,
+      }
     } else {
       const runId = Number(auditRunId)
       const findingId = Number(auditFindingId)
@@ -136,6 +190,7 @@ export default function JobCellLinks({
       setExternalUrl('')
       setAuditRunId('')
       setAuditFindingId('')
+      setTargetJobTypeId('')
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -161,12 +216,13 @@ export default function JobCellLinks({
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-medium">Step links</h2>
         <Badge variant="outline" className="text-[10px]">
-          audit · app · external
+          audit · app · external · nest
         </Badge>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        App and audit hrefs resolve through the shared registry — no parallel URL builders.
-        Links are seeded from the cell list (no refetch storm).
+        App, audit and nest hrefs resolve through the shared registry — no parallel URL builders.
+        Links are seeded from the cell list (no refetch storm). Nesting any job cycle inside
+        another is allowed as long as it does not form a loop.
       </p>
 
       {error ? (
@@ -249,12 +305,19 @@ export default function JobCellLinks({
         />
         {kind === 'app' ? (
           <div className="grid grid-cols-2 gap-2">
-            <Input
+            <select
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
               value={entityType}
               onChange={(e) => setEntityType(e.target.value)}
-              placeholder="entity type (document, risk…)"
+              aria-label="App link entity type"
               data-testid="job-cell-links-entity-type"
-            />
+            >
+              {entityTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
             <Input
               value={entityId}
               onChange={(e) => setEntityId(e.target.value)}
@@ -263,6 +326,24 @@ export default function JobCellLinks({
               data-testid="job-cell-links-entity-id"
             />
           </div>
+        ) : null}
+        {kind === 'job_cycle' ? (
+          <select
+            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            value={targetJobTypeId}
+            onChange={(e) => setTargetJobTypeId(e.target.value)}
+            aria-label="Nested job cycle"
+            data-testid="job-cell-links-target-job-type"
+          >
+            <option value="">
+              {nestCandidates.length === 0 ? 'No other job cycles' : 'Select a job cycle…'}
+            </option>
+            {nestCandidates.map((jt) => (
+              <option key={jt.id} value={jt.id}>
+                {jt.name} ({jt.code})
+              </option>
+            ))}
+          </select>
         ) : null}
         {kind === 'external' ? (
           <Input

@@ -22,6 +22,7 @@ from src.api.schemas.job_lifecycle import (
     JobLaneListResponse,
     JobLaneResponse,
     JobLaneUpdate,
+    JobLinkEntityTypesResponse,
     JobStepCreate,
     JobStepListResponse,
     JobStepResponse,
@@ -34,7 +35,7 @@ from src.api.schemas.job_lifecycle import (
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
 from src.domain.models.user import User
-from src.domain.services.job_lifecycle_service import JobLifecycleService
+from src.domain.services.job_lifecycle_service import JobLifecycleService, list_link_entity_types
 
 DISABLED_DETAIL = "Job Lifecycle is not enabled in this environment."
 CELL_LINKS_DISABLED_DETAIL = "Job cell links are not enabled in this environment."
@@ -256,6 +257,7 @@ async def create_step(
         description=body.description,
         sort_order=body.sort_order,
         is_active=body.is_active,
+        pdca_phase=body.pdca_phase,
     )
     return JobStepResponse.model_validate(row)
 
@@ -275,6 +277,8 @@ async def update_step(
         description=body.description,
         sort_order=body.sort_order,
         is_active=body.is_active,
+        pdca_phase=body.pdca_phase,
+        pdca_phase_set=body.pdca_phase_set,
     )
     return JobStepResponse.model_validate(row)
 
@@ -391,9 +395,20 @@ async def create_cell_link(
         external_url=body.external_url,
         audit_run_id=body.audit_run_id,
         audit_finding_id=body.audit_finding_id,
+        target_job_type_id=body.target_job_type_id,
         sort_order=body.sort_order,
     )
     return JobCellLinkResponse.model_validate(payload)
+
+
+@_links_router.get("/link-entity-types", response_model=JobLinkEntityTypesResponse)
+async def list_link_entity_types_route(
+    current_user: Annotated[User, Depends(require_permission("job:read"))],
+):
+    """App-link entity types the composer may offer, sourced from href_registry."""
+    _ = current_user
+    items = list_link_entity_types()
+    return JobLinkEntityTypesResponse(items=items, total=len(items))
 
 
 @_links_router.delete("/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)

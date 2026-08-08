@@ -10,10 +10,34 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base, DataClassification, TimestampMixin
+
+#: Cell link kinds. ``job_cycle`` nests any JobType inside any other JobType's
+#: cell — generic by design, never a hardcoded pair of packs.
+JOB_CELL_LINK_KINDS: tuple[str, ...] = ("app", "external", "audit_outcome", "job_cycle")
+
+#: Deming phases used to colour steps. Nullable on the column: most steps carry
+#: no phase and inventing one would be a claim the data does not support.
+JOB_STEP_PDCA_PHASES: tuple[str, ...] = ("plan", "do", "check", "act")
+
+
+def _sql_in_list(column: str, values: tuple[str, ...]) -> str:
+    rendered = ", ".join(f"'{value}'" for value in values)
+    return f"{column} IN ({rendered})"
 
 
 class JobType(Base, TimestampMixin):
@@ -111,6 +135,10 @@ class JobStep(Base, TimestampMixin):
             sqlite_where=text("deleted_at IS NULL"),
         ),
         Index("ix_job_steps_tenant_type_sort", "tenant_id", "job_type_id", "sort_order"),
+        CheckConstraint(
+            f"pdca_phase IS NULL OR {_sql_in_list('pdca_phase', JOB_STEP_PDCA_PHASES)}",
+            name="ck_job_steps_pdca_phase",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -127,6 +155,9 @@ class JobStep(Base, TimestampMixin):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+
+    #: plan | do | check | act — presentation annotation only (JL-UX-W2).
+    pdca_phase: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
@@ -222,11 +253,15 @@ class JobCellDocument(Base, TimestampMixin):
 
 
 class JobCellLink(Base, TimestampMixin):
-    """Cell hyperlink (JL-3): app · external · audit_outcome.
+    """Cell hyperlink (JL-3): app · external · audit_outcome · job_cycle.
 
-    App / audit_outcome store structured refs; SPA ``href`` is resolved via
-    ``href_registry`` at read time — never a parallel URL builder. External
-    stores https URLs only.
+    App / audit_outcome / job_cycle store structured refs; SPA ``href`` is
+    resolved via ``href_registry`` at read time — never a parallel URL builder.
+    External stores https URLs only.
+
+    ``job_cycle`` (JL-UX-W2) nests a target JobType inside this cell. It is the
+    single source of truth for nesting: no lane carries a parallel FK, and the
+    lane nest chip is derived by reading these rows.
     """
 
     __tablename__ = "job_cell_links"
@@ -234,6 +269,11 @@ class JobCellLink(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_job_cell_links_tenant_cell_sort", "tenant_id", "cell_id", "sort_order"),
         Index("ix_job_cell_links_tenant_finding", "tenant_id", "audit_finding_id"),
+        Index("ix_job_cell_links_tenant_target_type", "tenant_id", "target_job_type_id"),
+        CheckConstraint(
+            _sql_in_list("kind", JOB_CELL_LINK_KINDS),
+            name="ck_job_cell_links_kind",
+        ),
         # One audit_outcome link per finding per cell; other kinds leave
         # audit_finding_id NULL and are unconstrained by it.
         Index(
@@ -277,6 +317,14 @@ class JobCellLink(Base, TimestampMixin):
         nullable=True,
     )
 
+    # kind=job_cycle — nested JobType; CASCADE because a nest link whose target
+    # is gone cannot resolve an href.
+    target_job_type_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("job_types.id", ondelete="CASCADE", name="fk_job_cell_links_target_job_type"),
+        nullable=True,
+    )
+
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
 
     def __repr__(self) -> str:
@@ -284,6 +332,8 @@ class JobCellLink(Base, TimestampMixin):
 
 
 __all__ = [
+    "JOB_CELL_LINK_KINDS",
+    "JOB_STEP_PDCA_PHASES",
     "JobCell",
     "JobCellDocument",
     "JobCellLink",

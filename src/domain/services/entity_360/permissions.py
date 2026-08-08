@@ -19,6 +19,7 @@ HOP_READ_PERMISSIONS: dict[str, Optional[str]] = {
     "action": "action:read",
     "clause": "document:read",
     "job_step": "job:read",
+    "job_type": "job:read",
     # CEL list endpoints are auth-gated only today — no compliance:read token.
     "evidence_link": None,
 }

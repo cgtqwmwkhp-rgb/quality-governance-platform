@@ -5,7 +5,13 @@
  * library_document_id refs. DnD attaches IDs never document bodies.
  */
 import type { LibraryDocumentDragPayload } from '../components/graph/documentGraphDndHelpers'
-import type { JobCell, JobLane, JobStep, JobType } from '../api/jobLifecycleClient'
+import type {
+  JobCell,
+  JobLane,
+  JobStep,
+  JobStepPdcaPhase,
+  JobType,
+} from '../api/jobLifecycleClient'
 
 export type JobLifecycleViewMode = 'matrix' | 'transpose' | 'phase'
 
@@ -357,3 +363,213 @@ export function isForbiddenApiError(error: unknown): boolean {
 
 export const JOB_LIFECYCLE_PERMISSION_HEALTH_COPY =
   'Job Lifecycle flags are on, but this account is missing job:read / job:author (or is_superuser). Ask an admin to grant those permissions — flags alone do not unlock authoring.'
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W2 — PDCA phase colouring                                            */
+/* -------------------------------------------------------------------------- */
+
+export const JOB_STEP_PDCA_PHASES: readonly JobStepPdcaPhase[] = [
+  'plan',
+  'do',
+  'check',
+  'act',
+] as const
+
+export function isJobStepPdcaPhase(value: unknown): value is JobStepPdcaPhase {
+  return value === 'plan' || value === 'do' || value === 'check' || value === 'act'
+}
+
+/** Tolerant reader: an unknown or absent phase is `null`, never a fabricated default. */
+export function resolvePdcaPhase(value: unknown): JobStepPdcaPhase | null {
+  if (typeof value !== 'string') return null
+  const cleaned = value.trim().toLowerCase()
+  return isJobStepPdcaPhase(cleaned) ? cleaned : null
+}
+
+export function pdcaPhaseLabel(phase: JobStepPdcaPhase | null): string {
+  if (phase === 'plan') return 'Plan'
+  if (phase === 'do') return 'Do'
+  if (phase === 'check') return 'Check'
+  if (phase === 'act') return 'Act'
+  return 'No phase'
+}
+
+/**
+ * Deming-cycle colours for step headers. Unset returns neutral classes so an
+ * un-phased step reads as un-phased rather than as an arbitrary colour.
+ */
+export function pdcaPhaseClasses(phase: JobStepPdcaPhase | null): string {
+  if (phase === 'plan') return 'bg-sky-500/10 text-sky-900 dark:text-sky-100 border-sky-500/40'
+  if (phase === 'do') return 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-100 border-emerald-500/40'
+  if (phase === 'check') return 'bg-amber-500/10 text-amber-900 dark:text-amber-100 border-amber-500/40'
+  if (phase === 'act') return 'bg-violet-500/10 text-violet-900 dark:text-violet-100 border-violet-500/40'
+  return 'bg-muted/20 text-muted-foreground border-border'
+}
+
+/** Next phase in the Deming cycle; from unset, start at `plan`. Cycles act → null. */
+export function nextPdcaPhase(phase: JobStepPdcaPhase | null): JobStepPdcaPhase | null {
+  if (phase === null) return 'plan'
+  if (phase === 'plan') return 'do'
+  if (phase === 'do') return 'check'
+  if (phase === 'check') return 'act'
+  return null
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W2 — nesting, derived from job_cycle links only                      */
+/* -------------------------------------------------------------------------- */
+
+export interface JobLaneNestChip {
+  targetJobTypeId: number
+  label: string
+}
+
+/**
+ * Nested job cycles reachable from a lane, derived from the lane's cells.
+ *
+ * There is deliberately no `nested_job_type_id` on `job_lanes`: the
+ * `job_cycle` cell links are the only SSOT, so the chip is computed and can
+ * never disagree with the links a user can see and delete.
+ */
+export function deriveLaneNestChips(
+  cells: readonly JobCell[],
+  laneId: number,
+  jobTypes: readonly JobType[] = [],
+): JobLaneNestChip[] {
+  const namesById = new Map<number, string>()
+  for (const jt of jobTypes) namesById.set(jt.id, jt.name)
+
+  const seen = new Set<number>()
+  const chips: JobLaneNestChip[] = []
+  for (const cell of cells) {
+    if (cell.lane_id !== laneId) continue
+    for (const link of cell.links ?? []) {
+      if (link.kind !== 'job_cycle') continue
+      const target = link.target_job_type_id
+      if (typeof target !== 'number' || !Number.isFinite(target) || target <= 0) continue
+      if (seen.has(target)) continue
+      seen.add(target)
+      chips.push({
+        targetJobTypeId: target,
+        label: namesById.get(target) ?? link.label ?? `Job cycle #${target}`,
+      })
+    }
+  }
+  return chips
+}
+
+/** All job cycles nested anywhere in the loaded pack (any lane, any step). */
+export function deriveNestedJobTypeIds(cells: readonly JobCell[]): number[] {
+  const seen = new Set<number>()
+  const ordered: number[] = []
+  for (const cell of cells) {
+    for (const link of cell.links ?? []) {
+      if (link.kind !== 'job_cycle') continue
+      const target = link.target_job_type_id
+      if (typeof target !== 'number' || !Number.isFinite(target) || target <= 0) continue
+      if (seen.has(target)) continue
+      seen.add(target)
+      ordered.push(target)
+    }
+  }
+  return ordered
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W2 — drill-in / drill-out breadcrumb                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface JobCycleBreadcrumbItem {
+  jobTypeId: number
+  label: string
+  isCurrent: boolean
+}
+
+/** Push the cycle being left onto the trail. Ignores repeats and bad ids. */
+export function pushDrillTrail(trail: readonly number[], fromJobTypeId: number | null): number[] {
+  if (fromJobTypeId == null || !Number.isFinite(fromJobTypeId) || fromJobTypeId <= 0) {
+    return trail.slice()
+  }
+  if (trail[trail.length - 1] === fromJobTypeId) return trail.slice()
+  return [...trail, fromJobTypeId]
+}
+
+/** Drill out to trail position `index`; the entries after it are discarded. */
+export function truncateDrillTrail(trail: readonly number[], index: number): number[] {
+  if (!Number.isFinite(index) || index < 0) return []
+  return trail.slice(0, index)
+}
+
+/**
+ * Breadcrumb for the active drill path. Trail entries are ancestors in visit
+ * order; the current cycle is always last and marked `isCurrent`.
+ */
+export function buildJobCycleBreadcrumb(input: {
+  trail: readonly number[]
+  currentJobTypeId: number | null
+  jobTypes: readonly JobType[]
+}): JobCycleBreadcrumbItem[] {
+  const namesById = new Map<number, string>()
+  for (const jt of input.jobTypes) namesById.set(jt.id, jt.name)
+  const label = (id: number) => namesById.get(id) ?? `Job cycle #${id}`
+
+  const items: JobCycleBreadcrumbItem[] = input.trail.map((id) => ({
+    jobTypeId: id,
+    label: label(id),
+    isCurrent: false,
+  }))
+  if (input.currentJobTypeId != null) {
+    items.push({
+      jobTypeId: input.currentJobTypeId,
+      label: label(input.currentJobTypeId),
+      isCurrent: true,
+    })
+  }
+  return items
+}
+
+/** Only worth rendering once there is somewhere to drill back out to. */
+export function shouldShowJobCycleBreadcrumb(trail: readonly number[]): boolean {
+  return trail.length > 0
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W2 — axis reorder over the existing PATCH APIs                       */
+/* -------------------------------------------------------------------------- */
+
+export interface AxisOrderUpdate {
+  id: number
+  sort_order: number
+}
+
+/**
+ * `sort_order` values that move one axis up or down by one place.
+ *
+ * Returns `[]` at the ends of the list, so the caller issues no PATCH rather
+ * than a no-op write. Positions are renumbered densely from 0 because stored
+ * `sort_order` values can be duplicated or sparse — swapping the two stored
+ * numbers would not move anything when they are equal.
+ */
+export function computeAxisReorder<T extends { id: number; sort_order: number; name: string }>(
+  items: readonly T[],
+  id: number,
+  direction: 'up' | 'down',
+): AxisOrderUpdate[] {
+  const ordered = sortAxesByOrder(items)
+  const index = ordered.findIndex((item) => item.id === id)
+  if (index < 0) return []
+  const target = direction === 'up' ? index - 1 : index + 1
+  if (target < 0 || target >= ordered.length) return []
+
+  const swapped = ordered.slice()
+  const moving = swapped[index]
+  swapped[index] = swapped[target]
+  swapped[target] = moving
+
+  return swapped
+    .map((item, position) => ({ id: item.id, sort_order: position }))
+    .filter((update) => {
+      const before = ordered.find((item) => item.id === update.id)
+      return !before || before.sort_order !== update.sort_order
+    })
+}
