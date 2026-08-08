@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
+import { usePreferencesStore } from '../../stores/usePreferencesStore'
 
 const hasRoleMock = vi.fn(() => true)
 const isSuperuserMock = vi.fn(() => true)
@@ -77,6 +78,7 @@ describe('Layout', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/dashboard')
     onLogout.mockClear()
+    usePreferencesStore.setState({ sidebarCollapsed: false })
     hasRoleMock.mockReset()
     hasRoleMock.mockReturnValue(true)
     isSuperuserMock.mockReset()
@@ -494,5 +496,31 @@ describe('Layout', () => {
     expect(screen.getByText('search.palette_title')).toBeInTheDocument()
     expect(window.location.pathname).toBe('/rtas/99')
     expect(window.location.pathname).not.toBe('/search')
+  })
+
+  it('toggles the desktop sidebar width when the collapse control is clicked', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const sidebar = document.getElementById('app-sidebar')
+    expect(sidebar).toBeTruthy()
+    expect(sidebar).not.toHaveAttribute('data-collapsed')
+    expect(sidebar?.className).not.toMatch(/\blg:w-16\b/)
+
+    await user.click(screen.getByTestId('nav-sidebar-collapse'))
+
+    expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+    expect(sidebar?.className).toMatch(/\blg:w-16\b/)
+
+    await user.click(screen.getByTestId('nav-sidebar-collapse'))
+
+    expect(sidebar).not.toHaveAttribute('data-collapsed')
+    expect(sidebar?.className).not.toMatch(/\blg:w-16\b/)
   })
 })
