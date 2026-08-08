@@ -48,9 +48,7 @@ class CaseLinkProducer:
             if key == "risk":
                 return await self._for_risk(db=db, tenant_id=tenant_id, risk_id=entity_id)
             if key in self._CASE_TYPES:
-                return await self._for_case(
-                    db=db, tenant_id=tenant_id, case_type=key, case_id=entity_id
-                )
+                return await self._for_case(db=db, tenant_id=tenant_id, case_type=key, case_id=entity_id)
             return ProducerResult(origin=self.origin, status="skipped", reason="unsupported")
         except Exception as exc:  # noqa: BLE001
             return ProducerResult(

@@ -50,8 +50,7 @@ class DocumentGraphProducer:
                     DocumentEdge.tenant_id == tenant_id,
                     DocumentEdge.deleted_at.is_(None),
                     DocumentEdge.status != DocumentEdgeStatus.REJECTED,
-                    (DocumentEdge.src_document_id == entity_id)
-                    | (DocumentEdge.dst_document_id == entity_id),
+                    (DocumentEdge.src_document_id == entity_id) | (DocumentEdge.dst_document_id == entity_id),
                 )
             )
             edges: list[DocumentEdge] = list(result.scalars().all())

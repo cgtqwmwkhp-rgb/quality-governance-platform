@@ -32,10 +32,7 @@ from src.domain.services.href_registry import (
 )
 from src.domain.services.risk_service import RiskService
 
-
-RISK_UPSTREAM_WIRE_FIELDS = frozenset(
-    {"source_type", "source_id", "title", "reference", "href", "audit_run_id"}
-)
+RISK_UPSTREAM_WIRE_FIELDS = frozenset({"source_type", "source_id", "title", "reference", "href", "audit_run_id"})
 
 
 # ---------------------------------------------------------------------------
@@ -227,12 +224,15 @@ async def test_publish_route_blocks_when_entity360_degraded(monkeypatch):
 
     monkeypatch.setattr(documents_routes, "_get_document_or_404", _fake_get_doc)
 
-    with patch(
-        "src.domain.services.entity_360.build_impact_bundle",
-        new=_fake_impact,
-    ), patch(
-        "src.domain.services.entity_360.publish_blocked_detail",
-        wraps=publish_blocked_detail,
+    with (
+        patch(
+            "src.domain.services.entity_360.build_impact_bundle",
+            new=_fake_impact,
+        ),
+        patch(
+            "src.domain.services.entity_360.publish_blocked_detail",
+            wraps=publish_blocked_detail,
+        ),
     ):
         with pytest.raises(HTTPException) as exc_info:
             await documents_routes.publish_document_version(

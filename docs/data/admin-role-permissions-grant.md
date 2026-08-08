@@ -1,23 +1,23 @@
 # `roles.permissions` for the admin role (C-1 / C-2 continuation)
 
 > **HELD — do not merge code that gates on `action:read` / `risk:read` / `action:delete` until the
-> 81-token grant below is applied to BOTH staging and production.** Live
+> 82-token grant below is applied to BOTH staging and production.** Live
 > databases currently hold the 75-token grant (C-1 / C-72, 29 July 2026). That
 > grant does **not** include `action:read` or `risk:read`. Shipping the C-2
 > continuation gate first 403s every non-superuser admin out of the actions and
 > operational-risk registers.
 
-**Status of the 81-token grant: NOT APPLIED** to staging or production. Nothing
+**Status of the 82-token grant: NOT APPLIED** to staging or production. Nothing
 in the repository executes any statement below — no Alembic revision, no seed, no
 startup hook — so applying it remains a human decision. The 75-token grant *was*
-applied on 29 July 2026; this document now proposes the 81-token successor.
+applied on 29 July 2026; this document now proposes the 82-token successor.
 
-The 78-token grant this document previously proposed was **never applied
-anywhere**, so it has no successor step of its own: no live database is at 78.
-Step 2b therefore upgrades 75 → 81 directly, and its `WHERE` clause still refuses
-any row that is not still on the 75-token grant.
+The 78-token and 81-token grants this document previously proposed were **never
+applied anywhere**, so they have no successor steps of their own: no live
+database is at 78 or 81. Step 2b therefore upgrades 75 → 82 directly, and its
+`WHERE` clause still refuses any row that is not still on the 75-token grant.
 
-| Environment | 75-token grant | 81-token upgrade | Verified |
+| Environment | 75-token grant | 82-token upgrade | Verified |
 |---|---|---|---|
 | Staging | Applied 29 Jul 2026 (~12:50 UTC) via the `UPDATE` in Step 2 (then 75 tokens) | **NOT APPLIED** — use Step 2b | — |
 | Production | Applied 29 Jul 2026 (18:19 UTC) via `INSERT` (role `id=13`, then 75 tokens, no wildcard) | **NOT APPLIED** — use Step 2b | — |
@@ -46,20 +46,22 @@ granting it to an existing account was explicitly declined, because the only
 active non-superuser was a dormant account with no demonstrated need, and that
 account was deactivated instead.
 
-**What changed for 81.** `action:read` and `risk:read` were promoted from
+**What changed for 82.** `action:read` and `risk:read` were promoted from
 `RESERVED_PERMISSIONS` into `ENFORCED_PERMISSIONS` (75→77). Soft-delete for cases
 (PX-177) then enforced `action:delete`, so the grant grew 77→78. Compliance
 Schedule Wave 0 then enforced `compliance_schedule:create`,
 `compliance_schedule:read` and `compliance_schedule:update`, taking the grant
-78→81. `ADMIN_ROLE_PERMISSIONS` derives from every enforced token except
+78→81. Entity 360 / Doc Graph then enforced `document:confirm_edge`, taking the
+grant 81→82. `ADMIN_ROLE_PERMISSIONS` derives from every enforced token except
 `*:view_all` and `*:set_reference_number`. Apply Step 2b in both environments
 **before** merging gates that depend on these tokens.
 
-The three `compliance_schedule:*` tokens gate a module that ships behind
-`COMPLIANCE_SCHEDULE_ENABLED`, default **false**, whose routes 404 while the flag
-is off. So they are catalogued ahead of use rather than in arrears: an admin
-cannot be 403'd by a route that does not answer. The grant must nonetheless be
-applied before the flag is turned on in any environment.
+The three `compliance_schedule:*` tokens and `document:confirm_edge` gate
+modules that ship behind default-off flags (`COMPLIANCE_SCHEDULE_ENABLED`,
+`ENTITY_360_ENABLED` / Doc Graph), whose routes 404 or stay locked while the
+flag is off. So they are catalogued ahead of use rather than in arrears: an
+admin cannot be 403'd by a route that does not answer. The grant must
+nonetheless be applied before the flag is turned on in any environment.
 
 > **If you are reading this because a PR wants to gate an endpoint on a
 > permission:** check the token is in the catalogue grant *and* that the grant has
@@ -131,7 +133,7 @@ much harder to diagnose than one that plainly does not. For any row the diagnost
 flags, `src.domain.authz.describe_stored_permissions` explains it in the same terms
 without touching a database.
 
-## Step 2 — the statement to apply (wildcard → 81)
+## Step 2 — the statement to apply (wildcard → 82)
 
 Restricted to the row actually being fixed, and to the wildcard value actually
 observed, so a re-run after someone else has corrected the row is a no-op rather
@@ -140,7 +142,7 @@ that already hold the 75-token grant must use **Step 2b** instead.
 
 ```sql
 UPDATE roles
-SET permissions = '["action:create", "action:delete", "action:read", "action:update", "admin:manage", "analytics:create", "analytics:delete", "analytics:manage", "analytics:update", "assessment:create", "assessment:update", "asset:create", "asset:delete", "asset:update", "audit:create", "audit:delete", "audit:read", "audit:update", "capa:create", "capa:update", "complaint:create", "complaint:delete", "complaint:read", "complaint:update", "compliance_schedule:create", "compliance_schedule:read", "compliance_schedule:update", "document:create", "document:read", "document:update", "driver:create", "driver:update", "engineer:create", "engineer:update", "evidence:create", "evidence:update", "form:create", "form:delete", "form:update", "incident:create", "incident:delete", "incident:read", "incident:update", "induction:create", "induction:update", "investigation:approve_customer_omit", "investigation:create", "investigation:delete", "investigation:update", "investigations:comments:read_deleted", "kri:create", "kri:delete", "kri:update", "near_miss:create", "near_miss:delete", "near_miss:read", "near_miss:update", "notifications:delete", "notifications:send", "notifications:update", "policy:create", "policy:delete", "policy:update", "rca:create", "rca:update", "risk:create", "risk:read", "risk:update", "rta:create", "rta:delete", "rta:read", "rta:update", "signature:create", "signature:update", "standard:create", "standard:update", "vehicle:allocate", "vehicle:update", "workflow:create", "workflow:delete", "workflow:update"]'
+SET permissions = '["action:create", "action:delete", "action:read", "action:update", "admin:manage", "analytics:create", "analytics:delete", "analytics:manage", "analytics:update", "assessment:create", "assessment:update", "asset:create", "asset:delete", "asset:update", "audit:create", "audit:delete", "audit:read", "audit:update", "capa:create", "capa:update", "complaint:create", "complaint:delete", "complaint:read", "complaint:update", "compliance_schedule:create", "compliance_schedule:read", "compliance_schedule:update", "document:confirm_edge", "document:create", "document:read", "document:update", "driver:create", "driver:update", "engineer:create", "engineer:update", "evidence:create", "evidence:update", "form:create", "form:delete", "form:update", "incident:create", "incident:delete", "incident:read", "incident:update", "induction:create", "induction:update", "investigation:approve_customer_omit", "investigation:create", "investigation:delete", "investigation:update", "investigations:comments:read_deleted", "kri:create", "kri:delete", "kri:update", "near_miss:create", "near_miss:delete", "near_miss:read", "near_miss:update", "notifications:delete", "notifications:send", "notifications:update", "policy:create", "policy:delete", "policy:update", "rca:create", "rca:update", "risk:create", "risk:read", "risk:update", "rta:create", "rta:delete", "rta:read", "rta:update", "signature:create", "signature:update", "standard:create", "standard:update", "vehicle:allocate", "vehicle:update", "workflow:create", "workflow:delete", "workflow:update"]'
 WHERE name = 'admin'
   AND permissions = '["*"]';
 ```
@@ -159,28 +161,29 @@ BEGIN;
 COMMIT;   -- or ROLLBACK;
 ```
 
-## Step 2b — upgrade an existing 75-token admin row to 81
+## Step 2b — upgrade an existing 75-token admin row to 82
 
 **This is the statement staging and production need today.** Both already hold the
-75-token grant. Replacing that row with the 81-token value adds `action:read`,
-`risk:read`, `action:delete`, and the three `compliance_schedule:*` tokens. The
-`WHERE` clause refuses to overwrite a row that is not still on
-the 75-token grant (so a re-run after a successful upgrade is a no-op).
+75-token grant. Replacing that row with the 82-token value adds `action:read`,
+`risk:read`, `action:delete`, the three `compliance_schedule:*` tokens, and
+`document:confirm_edge`. The `WHERE` clause refuses to overwrite a row that is
+not still on the 75-token grant (so a re-run after a successful upgrade is a
+no-op).
 
 ```sql
 UPDATE roles
-SET permissions = '["action:create", "action:delete", "action:read", "action:update", "admin:manage", "analytics:create", "analytics:delete", "analytics:manage", "analytics:update", "assessment:create", "assessment:update", "asset:create", "asset:delete", "asset:update", "audit:create", "audit:delete", "audit:read", "audit:update", "capa:create", "capa:update", "complaint:create", "complaint:delete", "complaint:read", "complaint:update", "compliance_schedule:create", "compliance_schedule:read", "compliance_schedule:update", "document:create", "document:read", "document:update", "driver:create", "driver:update", "engineer:create", "engineer:update", "evidence:create", "evidence:update", "form:create", "form:delete", "form:update", "incident:create", "incident:delete", "incident:read", "incident:update", "induction:create", "induction:update", "investigation:approve_customer_omit", "investigation:create", "investigation:delete", "investigation:update", "investigations:comments:read_deleted", "kri:create", "kri:delete", "kri:update", "near_miss:create", "near_miss:delete", "near_miss:read", "near_miss:update", "notifications:delete", "notifications:send", "notifications:update", "policy:create", "policy:delete", "policy:update", "rca:create", "rca:update", "risk:create", "risk:read", "risk:update", "rta:create", "rta:delete", "rta:read", "rta:update", "signature:create", "signature:update", "standard:create", "standard:update", "vehicle:allocate", "vehicle:update", "workflow:create", "workflow:delete", "workflow:update"]'
+SET permissions = '["action:create", "action:delete", "action:read", "action:update", "admin:manage", "analytics:create", "analytics:delete", "analytics:manage", "analytics:update", "assessment:create", "assessment:update", "asset:create", "asset:delete", "asset:update", "audit:create", "audit:delete", "audit:read", "audit:update", "capa:create", "capa:update", "complaint:create", "complaint:delete", "complaint:read", "complaint:update", "compliance_schedule:create", "compliance_schedule:read", "compliance_schedule:update", "document:confirm_edge", "document:create", "document:read", "document:update", "driver:create", "driver:update", "engineer:create", "engineer:update", "evidence:create", "evidence:update", "form:create", "form:delete", "form:update", "incident:create", "incident:delete", "incident:read", "incident:update", "induction:create", "induction:update", "investigation:approve_customer_omit", "investigation:create", "investigation:delete", "investigation:update", "investigations:comments:read_deleted", "kri:create", "kri:delete", "kri:update", "near_miss:create", "near_miss:delete", "near_miss:read", "near_miss:update", "notifications:delete", "notifications:send", "notifications:update", "policy:create", "policy:delete", "policy:update", "rca:create", "rca:update", "risk:create", "risk:read", "risk:update", "rta:create", "rta:delete", "rta:read", "rta:update", "signature:create", "signature:update", "standard:create", "standard:update", "vehicle:allocate", "vehicle:update", "workflow:create", "workflow:delete", "workflow:update"]'
 WHERE name = 'admin'
   AND json_array_length(permissions::json) = 75
   AND NOT (permissions::jsonb ? 'action:read')
   AND NOT (permissions::jsonb ? 'risk:read');
 ```
 
-Expect `UPDATE 1`. Then re-run Step 3 and confirm `token_count = 81`.
+Expect `UPDATE 1`. Then re-run Step 3 and confirm `token_count = 82`.
 
 ### What the value is, and what it deliberately omits
 
-81 tokens: every permission the code enforces, minus two families. The list is
+82 tokens: every permission the code enforces, minus two families. The list is
 `ADMIN_ROLE_PERMISSIONS` in `src/domain/authz/catalogue.py`, and
 `tests/unit/test_permission_catalogue.py::test_admin_role_permission_list_is_reviewable`
 prints it. `tests/unit/test_admin_grant_statement.py` fails if the statements above
@@ -206,7 +209,7 @@ FROM roles
 WHERE name = 'admin';
 ```
 
-Expect `token_count = 81`, `contains_wildcard = false`, `has_action_read = true`,
+Expect `token_count = 82`, `contains_wildcard = false`, `has_action_read = true`,
 `has_risk_read = true`.
 
 Then confirm the defect is actually gone from the user's point of view, because the
@@ -225,9 +228,9 @@ This restores the broken wildcard state exactly. It is offered only so the chang
 reversible on paper; the prior value granted nothing, so rolling back reinstates
 the outage.
 
-To roll the 81-token grant back to the previously applied 75-token grant (without
-restoring the wildcard), remove `action:read`, `risk:read`, `action:delete`, and the
-three `compliance_schedule:*` tokens, and re-apply the
+To roll the 82-token grant back to the previously applied 75-token grant (without
+restoring the wildcard), remove `action:read`, `risk:read`, `action:delete`, the
+three `compliance_schedule:*` tokens, and `document:confirm_edge`, and re-apply the
 75-token list from the 29 July 2026 write — only if the C-2 gate PR has not yet
 shipped.
 
