@@ -86,4 +86,22 @@ describe('createJobLifecycleApi', () => {
     client.deleteCellLink(99)
     expect(api.delete).toHaveBeenCalledWith('/api/v1/job-lifecycle/links/99')
   })
+
+  it('requests document freshness with one repeated id param per document', () => {
+    const api = mockApi()
+    const client = createJobLifecycleApi(api as never)
+
+    client.listDocumentFreshness([7, 8])
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/job-lifecycle/document-freshness?library_document_ids=7&library_document_ids=8',
+    )
+  })
+
+  it('sends no id params for an empty request rather than a bare comma list', () => {
+    const api = mockApi()
+    const client = createJobLifecycleApi(api as never)
+
+    client.listDocumentFreshness([])
+    expect(api.get).toHaveBeenCalledWith('/api/v1/job-lifecycle/document-freshness?')
+  })
 })

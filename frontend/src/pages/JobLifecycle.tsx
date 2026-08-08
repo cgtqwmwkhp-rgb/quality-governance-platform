@@ -8,11 +8,21 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ChevronDown, ChevronRight, ChevronUp, GitBranch, Loader2, Plus, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  GitBranch,
+  Loader2,
+  Plus,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react'
 import api, { getApiErrorMessage, jobLifecycleApi } from '../api/client'
 import type {
   JobCell,
   JobCellLink,
+  JobDocumentFreshness,
   JobLane,
   JobStep,
   JobStepPdcaPhase,
@@ -35,25 +45,37 @@ import {
   DEFAULT_JOB_LIFECYCLE_VIEW_MODE,
   JOB_LIFECYCLE_PANEL_BOUNDS,
   JOB_LIFECYCLE_PERMISSION_HEALTH_COPY,
+  auditLapseClasses,
+  auditLapseLabel,
+  auditLapseTitle,
   buildAxisCode,
   buildCellIndex,
   buildJobCycleBreadcrumb,
   cellKey,
   clampJobLifecyclePanelWidth,
+  collectFreshnessDocumentIds,
   computeAxisReorder,
   deriveLaneNestChips,
   detachDocumentRef,
   emptyComposerCopy,
+  freshnessStateClasses,
+  freshnessStateLabel,
+  freshnessTitle,
   isForbiddenApiError,
   jobLifecycleViewModeLabel,
   libraryDocLabel,
+  mergeFreshnessIndex,
+  missingFreshnessIds,
   nextPdcaPhase,
+  obsoleteAttachBlock,
   pdcaPhaseClasses,
   pdcaPhaseLabel,
   pushDrillTrail,
+  readStoredJobLifecycleFreshness,
   readStoredJobLifecyclePanelWidths,
   readStoredJobLifecycleViewMode,
   resolveDndCellAttach,
+  resolveJobLifecycleFreshness,
   resolveJobLifecyclePanelWidths,
   resolveJobLifecycleViewMode,
   resolvePdcaPhase,
@@ -65,6 +87,7 @@ import {
   shouldShowJobLifecycle,
   sortAxesByOrder,
   truncateDrillTrail,
+  writeStoredJobLifecycleFreshness,
   writeStoredJobLifecyclePanelWidths,
   writeStoredJobLifecycleViewMode,
   type JobLifecycleLibraryDoc,
@@ -77,6 +100,8 @@ interface LibraryDocumentPage {
     id: number
     title: string
     reference_number?: string | null
+    status?: string | null
+    review_date?: string | null
   }>
   total?: number
   page?: number
@@ -118,6 +143,16 @@ export default function JobLifecycle() {
   const [viewMode, setViewMode] = useState<JobLifecycleViewMode>(() =>
     resolveJobLifecycleViewMode(readStoredJobLifecycleViewMode(), DEFAULT_JOB_LIFECYCLE_VIEW_MODE),
   )
+  const [freshnessOn, setFreshnessOn] = useState<boolean>(() =>
+    resolveJobLifecycleFreshness(readStoredJobLifecycleFreshness()),
+  )
+  const [freshness, setFreshness] = useState<ReadonlyMap<number, JobDocumentFreshness>>(
+    () => new Map(),
+  )
+  const [freshnessLoading, setFreshnessLoading] = useState(false)
+  const [freshnessError, setFreshnessError] = useState<string | null>(null)
+  /** Ids already asked for — keeps the toggle from re-requesting on every render. */
+  const freshnessAskedRef = useRef<Set<number>>(new Set())
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -243,10 +278,15 @@ export default function JobLifecycle() {
         `/api/v1/documents/?page=${page}&page_size=${pageSize}`,
       )
       const items = res.data.items ?? []
+      // Status and review date come back on every list row; carrying them
+      // through ingest is what lets the tray label an obsolete document even
+      // before the authoritative freshness lookup answers.
       const mapped: JobLifecycleLibraryDoc[] = items.map((item) => ({
         id: item.id,
         title: item.title,
         reference: item.reference_number ?? null,
+        status: item.status ?? null,
+        review_date: item.review_date ?? null,
       }))
       setLibraryPages(res.data.pages ?? 1)
       setLibraryPage(page)
@@ -366,6 +406,41 @@ export default function JobLifecycle() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fetch when type id changes
   }, [effectiveJobTypeId, loadAxesForType])
 
+  /** Everything the composer can currently show a chip for. */
+  const freshnessIds = useMemo(
+    () => collectFreshnessDocumentIds({ libraryDocs, cells }),
+    [libraryDocs, cells],
+  )
+
+  useEffect(() => {
+    if (!freshnessOn || !shouldFetch) return
+    const wanted = missingFreshnessIds(freshnessAskedRef.current, freshnessIds)
+    if (wanted.length === 0) return
+    for (const id of wanted) freshnessAskedRef.current.add(id)
+
+    let cancelled = false
+    setFreshnessLoading(true)
+    jobLifecycleApi
+      .listDocumentFreshness(wanted)
+      .then((res) => {
+        if (cancelled) return
+        setFreshness((prev) => mergeFreshnessIndex(prev, res.data.items ?? []))
+        setFreshnessError(null)
+      })
+      .catch((err) => {
+        // Drop the claim on these ids so a later render can retry rather than
+        // leaving them permanently blank.
+        for (const id of wanted) freshnessAskedRef.current.delete(id)
+        if (!cancelled) setFreshnessError(getApiErrorMessage(err))
+      })
+      .finally(() => {
+        if (!cancelled) setFreshnessLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [freshnessOn, shouldFetch, freshnessIds])
+
   useEffect(() => {
     if (preferredStepId != null) {
       setSelectedStepId(preferredStepId)
@@ -396,6 +471,35 @@ export default function JobLifecycle() {
   const setMode = (next: JobLifecycleViewMode) => {
     setViewMode(next)
     writeStoredJobLifecycleViewMode(next)
+  }
+
+  const toggleFreshness = () => {
+    const next = !freshnessOn
+    setFreshnessOn(next)
+    writeStoredJobLifecycleFreshness(next)
+    if (!next) setFreshnessError(null)
+  }
+
+  /**
+   * Freshness chip for a document, or `null` when the composer is calm.
+   *
+   * With the toggle ON and no verdict yet the chip still renders, as
+   * "Unknown" — a blank space would read as "fine".
+   */
+  const renderFreshnessChip = (documentId: number, testId: string) => {
+    if (!freshnessOn) return null
+    const verdict = freshness.get(documentId)
+    const state = verdict?.state ?? 'unknown'
+    return (
+      <span
+        className={`shrink-0 rounded-full border px-1.5 py-0 text-[9px] uppercase tracking-wide ${freshnessStateClasses(state)}`}
+        data-testid={testId}
+        data-freshness-state={state}
+        title={freshnessTitle(verdict)}
+      >
+        {freshnessStateLabel(state)}
+      </span>
+    )
   }
 
   /** Drill into a nested cycle, remembering where we came from. */
@@ -604,6 +708,19 @@ export default function JobLifecycle() {
       setDropHint(result.reason)
       return
     }
+    // Enforcement, not decoration: this runs whether or not freshness display
+    // is on. The API blocks it too — this only saves a round trip.
+    if (dragged) {
+      const block = obsoleteAttachBlock({
+        documentId: dragged.documentId,
+        freshness,
+        libraryStatus: docsById.get(dragged.documentId)?.status,
+      })
+      if (block.blocked) {
+        setDropHint(block.reason)
+        return
+      }
+    }
     if (result.library_document_ids.length === existing.length) {
       setDropHint('Document already attached to this cell (reference only).')
       return
@@ -669,25 +786,47 @@ export default function JobLifecycle() {
             document references only — never a second document store, never an org chart.
           </p>
         </div>
-        <div
-          className="inline-flex rounded-md border border-border p-0.5"
-          role="group"
-          aria-label="Swimlane view mode"
-          data-testid="job-lifecycle-view-mode"
-        >
-          {(['matrix', 'transpose', 'phase'] as const).map((mode) => (
-            <Button
-              key={mode}
-              type="button"
-              size="sm"
-              variant={viewMode === mode ? 'default' : 'ghost'}
-              aria-pressed={viewMode === mode}
-              data-testid={`job-lifecycle-view-${mode}`}
-              onClick={() => setMode(mode)}
-            >
-              {jobLifecycleViewModeLabel(mode)}
-            </Button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="inline-flex rounded-md border border-border p-0.5"
+            role="group"
+            aria-label="Swimlane view mode"
+            data-testid="job-lifecycle-view-mode"
+          >
+            {(['matrix', 'transpose', 'phase'] as const).map((mode) => (
+              <Button
+                key={mode}
+                type="button"
+                size="sm"
+                variant={viewMode === mode ? 'default' : 'ghost'}
+                aria-pressed={viewMode === mode}
+                data-testid={`job-lifecycle-view-${mode}`}
+                onClick={() => setMode(mode)}
+              >
+                {jobLifecycleViewModeLabel(mode)}
+              </Button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant={freshnessOn ? 'default' : 'outline'}
+            aria-pressed={freshnessOn}
+            data-testid="job-lifecycle-freshness-toggle"
+            title={
+              freshnessOn
+                ? 'Showing document control status from the Library / Document Control record'
+                : 'Show document control status on tray and cell references'
+            }
+            onClick={toggleFreshness}
+          >
+            {freshnessLoading ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+            )}
+            Freshness {freshnessOn ? 'on' : 'off'}
+          </Button>
         </div>
       </div>
 
@@ -749,6 +888,16 @@ export default function JobLifecycle() {
           data-testid="job-lifecycle-drop-hint"
         >
           {dropHint}
+        </div>
+      ) : null}
+      {freshnessOn && freshnessError ? (
+        <div
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100"
+          data-testid="job-lifecycle-freshness-error"
+          role="status"
+        >
+          Document status could not be loaded, so freshness reads as unknown rather than current:{' '}
+          {freshnessError}
         </div>
       ) : null}
 
@@ -1115,6 +1264,10 @@ export default function JobLifecycle() {
                                   >
                                     {libraryDocLabel(docsById, docId)}
                                   </Link>
+                                  {renderFreshnessChip(
+                                    docId,
+                                    `job-lifecycle-cell-doc-freshness-${laneId}-${stepId}-${docId}`,
+                                  )}
                                   <button
                                     type="button"
                                     className="text-muted-foreground hover:text-destructive"
@@ -1152,11 +1305,25 @@ export default function JobLifecycle() {
                                   ) : (
                                     <div
                                       key={`link-${link.id}`}
-                                      className="truncate rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                      className="flex items-center gap-1 rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
                                       data-testid={`job-lifecycle-cell-link-${laneId}-${stepId}-${link.id}`}
                                       title={link.href}
                                     >
-                                      {link.kind}: {link.label}
+                                      <span className="truncate">
+                                        {link.kind}: {link.label}
+                                      </span>
+                                      {link.kind === 'audit_outcome' ? (
+                                        <span
+                                          className={`shrink-0 rounded-full border px-1.5 py-0 text-[9px] uppercase tracking-wide ${auditLapseClasses(
+                                            link.audit_lapse?.state ?? 'unknown',
+                                          )}`}
+                                          data-testid={`job-lifecycle-cell-lapse-${laneId}-${stepId}-${link.id}`}
+                                          data-lapse-state={link.audit_lapse?.state ?? 'unknown'}
+                                          title={auditLapseTitle(link.audit_lapse)}
+                                        >
+                                          {auditLapseLabel(link.audit_lapse?.state ?? 'unknown')}
+                                        </span>
+                                      ) : null}
                                     </div>
                                   ),
                                 )
@@ -1217,7 +1384,10 @@ export default function JobLifecycle() {
                         : 'Enable document_graph_dnd_propose to drag'
                     }
                   >
-                    <div className="font-medium truncate">{doc.title}</div>
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium truncate">{doc.title}</span>
+                      {renderFreshnessChip(doc.id, `job-lifecycle-library-freshness-${doc.id}`)}
+                    </div>
                     {doc.reference ? (
                       <div className="text-muted-foreground truncate">{doc.reference}</div>
                     ) : null}

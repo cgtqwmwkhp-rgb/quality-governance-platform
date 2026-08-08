@@ -14,6 +14,15 @@ JobCellLinkKind = Literal["app", "external", "audit_outcome", "job_cycle"]
 #: a legitimate state, not a default of "plan".
 JobStepPdcaPhase = Literal["plan", "do", "check", "act"]
 
+#: Document freshness read from the Library / Document Control SSOT (JL-UX-W3).
+#: ``unknown`` is a first-class answer — it means the SSOT holds no review date,
+#: not that the document is fine.
+JobDocumentFreshnessState = Literal["current", "due_soon", "overdue", "obsolete", "unknown"]
+
+#: Audit-outcome cadence state. ``unknown`` covers ad-hoc audits and runs with
+#: no cadence or due date.
+JobAuditLapseState = Literal["current", "due_soon", "lapsed", "unknown"]
+
 
 class JobTypeCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -216,6 +225,24 @@ class JobCellLinkCreate(BaseModel):
         return self
 
 
+class JobCellLinkAuditLapse(BaseModel):
+    """Audit-lapse cue for an ``audit_outcome`` link (JL-UX-W3).
+
+    Read-only and derived from the audit run plus its template cadence. When
+    the run has neither a cadence nor a due date the state is ``unknown`` with
+    a ``reason`` — the composer says so rather than implying good standing.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    state: JobAuditLapseState
+    reason: str
+    last_completed_at: Optional[datetime] = None
+    next_due_at: Optional[datetime] = None
+    frequency: Optional[str] = None
+    frequency_days: Optional[int] = None
+
+
 class JobCellLinkResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -231,6 +258,8 @@ class JobCellLinkResponse(BaseModel):
     audit_finding_id: Optional[int] = None
     target_job_type_id: Optional[int] = None
     href: str
+    #: Populated for ``audit_outcome`` links only; ``None`` everywhere else.
+    audit_lapse: Optional[JobCellLinkAuditLapse] = None
     sort_order: int
     created_at: datetime
     updated_at: datetime
@@ -271,14 +300,46 @@ class JobCellListResponse(BaseModel):
     total: int
 
 
+class JobDocumentFreshnessItem(BaseModel):
+    """Freshness for one library document, projected from the document SSOT.
+
+    Both raw statuses are echoed alongside the derived ``state`` so the UI can
+    show what the SSOT actually said, rather than only this module's reading
+    of it. ``found=False`` means the id is not visible to this tenant.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    library_document_id: int
+    found: bool
+    title: Optional[str] = None
+    reference: Optional[str] = None
+    library_status: Optional[str] = None
+    controlled_status: Optional[str] = None
+    state: JobDocumentFreshnessState
+    reason: str
+    review_date: Optional[datetime] = None
+    is_obsolete: bool
+
+
+class JobDocumentFreshnessResponse(BaseModel):
+    items: List[JobDocumentFreshnessItem]
+    total: int
+
+
 __all__ = [
+    "JobAuditLapseState",
     "JobCellDocumentsPut",
+    "JobCellLinkAuditLapse",
     "JobCellLinkCreate",
     "JobCellLinkKind",
     "JobCellLinkListResponse",
     "JobCellLinkResponse",
     "JobCellListResponse",
     "JobCellResponse",
+    "JobDocumentFreshnessItem",
+    "JobDocumentFreshnessResponse",
+    "JobDocumentFreshnessState",
     "JobLaneCreate",
     "JobLaneListResponse",
     "JobLaneResponse",

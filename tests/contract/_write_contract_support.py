@@ -251,6 +251,12 @@ SERVER_OWNED_FIELDS = frozenset(
         # POST/DELETE .../cells/{lane_id}/{step_id}/links, never through the
         # parent cell body, so no parent writer can or should accept it.
         "links",
+        # JL-UX-W3 audit-lapse cue on an audit_outcome cell link. Derived on
+        # every read from the linked AuditRun's dates and its template cadence.
+        # Accepting it from a client would let the composer assert an audit is
+        # in date independently of the audit record — exactly the second source
+        # of truth the freshness work exists to avoid.
+        "audit_lapse",
         "id",
         "tenant_id",
         "created_at",

@@ -6,9 +6,9 @@ Authz: ``job:read`` for reads, ``job:author`` for axis/cell mutations.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import DbSession, require_permission
 from src.api.schemas.job_lifecycle import (
@@ -18,6 +18,8 @@ from src.api.schemas.job_lifecycle import (
     JobCellLinkResponse,
     JobCellListResponse,
     JobCellResponse,
+    JobDocumentFreshnessItem,
+    JobDocumentFreshnessResponse,
     JobLaneCreate,
     JobLaneListResponse,
     JobLaneResponse,
@@ -338,6 +340,34 @@ async def put_cell_documents(
         include_links=bool(settings.job_cell_links_enabled),
     )
     return JobCellResponse.model_validate(payload)
+
+
+# ---------------------------------------------------------------------------
+# Document freshness (JL-UX-W3)
+# ---------------------------------------------------------------------------
+
+
+@_enabled_router.get("/document-freshness", response_model=JobDocumentFreshnessResponse)
+async def list_document_freshness(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("job:read"))],
+    library_document_ids: Annotated[Optional[list[int]], Query()] = None,
+):
+    """Library / Document Control status for the documents the composer can see.
+
+    A read, so it is a GET: the composer asks for the loaded library page plus
+    the ids already attached to cells. Nothing here writes, and the freshness
+    lives entirely in the document tables — the job lifecycle never caches it.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    items = await JobLifecycleService(db).document_freshness(
+        tenant_id=tenant_id,
+        library_document_ids=library_document_ids or [],
+    )
+    return JobDocumentFreshnessResponse(
+        items=[JobDocumentFreshnessItem.model_validate(i) for i in items],
+        total=len(items),
+    )
 
 
 # ---------------------------------------------------------------------------

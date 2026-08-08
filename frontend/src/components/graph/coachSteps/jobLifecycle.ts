@@ -32,9 +32,14 @@ export const JOB_LIFECYCLE_COACH: GraphCoachSurfaceDefinition = {
       body: 'Walk Enquiry → Review on the swimlane. Gaps light up using the same Connections hop contract as Document Detail.',
     },
     {
+      id: 'freshness',
+      title: 'Check freshness',
+      body: 'Turn Freshness on to read document control status onto the tray and cell references. Obsolete documents are refused on attach — the Library / Document Control record decides, not the composer. "Unknown" means no review date is recorded, not that a document is in date.',
+    },
+    {
       id: 'prove',
       title: 'Prove coverage',
-      body: 'Overlay ISO / clause freshness on one phase and export coverage honesty. Orientation (Matrix · Transpose · Phase) is a view — same cells, same refs.',
+      body: 'Walk one phase with freshness on and see where control status is missing. Orientation (Matrix · Transpose · Phase) is a view — same cells, same refs.',
     },
   ],
 }

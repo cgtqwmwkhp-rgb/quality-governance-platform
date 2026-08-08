@@ -6,7 +6,10 @@
  */
 import type { LibraryDocumentDragPayload } from '../components/graph/documentGraphDndHelpers'
 import type {
+  JobAuditLapseState,
   JobCell,
+  JobDocumentFreshness,
+  JobDocumentFreshnessState,
   JobLane,
   JobStep,
   JobStepPdcaPhase,
@@ -29,6 +32,13 @@ export interface JobLifecycleLibraryDoc {
   id: number
   title: string
   reference?: string | null
+  /**
+   * Raw Library status as the list API returned it. Carried through tray
+   * ingest rather than discarded: with freshness ON it is what the chip falls
+   * back to if the authoritative lookup has not answered yet.
+   */
+  status?: string | null
+  review_date?: string | null
 }
 
 export type CellAttachResult =
@@ -572,4 +582,252 @@ export function computeAxisReorder<T extends { id: number; sort_order: number; n
       const before = ordered.find((item) => item.id === update.id)
       return !before || before.sort_order !== update.sort_order
     })
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W3 — freshness toggle                                                */
+/* -------------------------------------------------------------------------- */
+
+export const JOB_LIFECYCLE_FRESHNESS_STORAGE_KEY = 'job_lifecycle_freshness'
+
+/** Default OFF: the composer stays calm until an operator asks for status. */
+export const DEFAULT_JOB_LIFECYCLE_FRESHNESS = false
+
+/** Matches `MAX_FRESHNESS_DOCUMENT_IDS` on the service. */
+export const FRESHNESS_ID_REQUEST_LIMIT = 200
+
+export function parseStoredJobLifecycleFreshness(raw: string | null | undefined): boolean | null {
+  if (raw === 'on') return true
+  if (raw === 'off') return false
+  return null
+}
+
+export function readStoredJobLifecycleFreshness(
+  storage: Pick<Storage, 'getItem'> | null | undefined = typeof localStorage !== 'undefined'
+    ? localStorage
+    : null,
+): boolean | null {
+  if (!storage) return null
+  try {
+    return parseStoredJobLifecycleFreshness(storage.getItem(JOB_LIFECYCLE_FRESHNESS_STORAGE_KEY))
+  } catch {
+    return null
+  }
+}
+
+export function writeStoredJobLifecycleFreshness(
+  enabled: boolean,
+  storage: Pick<Storage, 'setItem'> | null | undefined = typeof localStorage !== 'undefined'
+    ? localStorage
+    : null,
+): void {
+  if (!storage) return
+  try {
+    storage.setItem(JOB_LIFECYCLE_FRESHNESS_STORAGE_KEY, enabled ? 'on' : 'off')
+  } catch {
+    // Storage may be unavailable — ignore.
+  }
+}
+
+export function resolveJobLifecycleFreshness(
+  preferred: boolean | null | undefined,
+  fallback: boolean = DEFAULT_JOB_LIFECYCLE_FRESHNESS,
+): boolean {
+  return typeof preferred === 'boolean' ? preferred : fallback
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W3 — document freshness presentation                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Library statuses that mean "withdrawn from active use".
+ *
+ * Mirrors `OBSOLETE_LIBRARY_STATUSES` on the service so the tray can label a
+ * document the list API already told us is obsolete, without waiting for the
+ * freshness lookup. Everything date-driven is left to the server — duplicating
+ * review-window arithmetic in the client is how the two would drift.
+ */
+export const OBSOLETE_LIBRARY_STATUSES: readonly string[] = [
+  'obsolete',
+  'superseded',
+  'retired',
+  'archived',
+] as const
+
+export function isObsoleteLibraryStatus(status: string | null | undefined): boolean {
+  if (typeof status !== 'string') return false
+  return OBSOLETE_LIBRARY_STATUSES.includes(status.trim().toLowerCase())
+}
+
+export function freshnessStateLabel(state: JobDocumentFreshnessState): string {
+  if (state === 'current') return 'Current'
+  if (state === 'due_soon') return 'Review due'
+  if (state === 'overdue') return 'Overdue'
+  if (state === 'obsolete') return 'Obsolete'
+  return 'Unknown'
+}
+
+export function freshnessStateClasses(state: JobDocumentFreshnessState): string {
+  if (state === 'current') {
+    return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100'
+  }
+  if (state === 'due_soon') {
+    return 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100'
+  }
+  if (state === 'overdue' || state === 'obsolete') {
+    return 'border-destructive/40 bg-destructive/10 text-destructive'
+  }
+  return 'border-border bg-muted/30 text-muted-foreground'
+}
+
+/** Plain-language tooltip naming the field the verdict came from. */
+export function freshnessTitle(item: JobDocumentFreshness | null | undefined): string {
+  if (!item) return 'Freshness unknown — status not loaded for this document.'
+  if (item.reason === 'document_not_found') {
+    return 'Freshness unknown — this document is not visible in your library.'
+  }
+  if (item.reason === 'obsolete_controlled_status') {
+    return `Obsolete in Document Control (status ${item.controlled_status ?? 'obsolete'}).`
+  }
+  if (item.reason === 'obsolete_library_status') {
+    return `Obsolete in the Library (status ${item.library_status ?? 'obsolete'}).`
+  }
+  if (item.reason === 'no_review_date') {
+    return 'Freshness unknown — no review date recorded in Library or Document Control.'
+  }
+  const when = item.review_date ? new Date(item.review_date).toLocaleDateString() : 'unknown date'
+  if (item.reason === 'review_overdue') return `Review was due ${when}.`
+  if (item.reason === 'review_due_soon') return `Review due ${when}.`
+  return `Next review ${when}.`
+}
+
+export function buildFreshnessIndex(
+  items: readonly JobDocumentFreshness[],
+): Map<number, JobDocumentFreshness> {
+  const map = new Map<number, JobDocumentFreshness>()
+  for (const item of items) map.set(item.library_document_id, item)
+  return map
+}
+
+/** Merge a freshness page into the running index without dropping known ids. */
+export function mergeFreshnessIndex(
+  previous: ReadonlyMap<number, JobDocumentFreshness>,
+  items: readonly JobDocumentFreshness[],
+): Map<number, JobDocumentFreshness> {
+  const merged = new Map(previous)
+  for (const item of items) merged.set(item.library_document_id, item)
+  return merged
+}
+
+/**
+ * Ids the composer can currently see: the loaded tray page plus every document
+ * referenced by a cell. Deduped and capped so one request covers the view.
+ */
+export function collectFreshnessDocumentIds(input: {
+  libraryDocs: readonly JobLifecycleLibraryDoc[]
+  cells: readonly JobCell[]
+  limit?: number
+}): number[] {
+  const seen = new Set<number>()
+  const ordered: number[] = []
+  const push = (id: unknown) => {
+    if (typeof id !== 'number' || !Number.isFinite(id) || id <= 0) return
+    if (seen.has(id)) return
+    seen.add(id)
+    ordered.push(id)
+  }
+  // Cell refs first: those chips are the ones that drive attach decisions, so
+  // they must not be the ones dropped when the cap bites.
+  for (const cell of input.cells) {
+    for (const id of cell.library_document_ids ?? []) push(id)
+  }
+  for (const doc of input.libraryDocs) push(doc.id)
+  return ordered.slice(0, input.limit ?? FRESHNESS_ID_REQUEST_LIMIT)
+}
+
+/**
+ * Ids not yet accounted for — the only ones worth another request.
+ *
+ * Takes anything with `has()` so the caller can pass either the verdict index
+ * or the set of ids already asked for, which is what stops a re-render from
+ * re-issuing a request that is still in flight.
+ */
+export function missingFreshnessIds(
+  known: { has(id: number): boolean },
+  ids: readonly number[],
+): number[] {
+  return ids.filter((id) => !known.has(id))
+}
+
+/**
+ * Whether a drop should be refused before it reaches the API.
+ *
+ * The server enforces this too and is the authority; this only spares the
+ * operator a round trip when the tray already shows the document as obsolete.
+ */
+export function obsoleteAttachBlock(input: {
+  documentId: number
+  freshness: ReadonlyMap<number, JobDocumentFreshness>
+  libraryStatus?: string | null
+}): { blocked: boolean; reason: string } {
+  const verdict = input.freshness.get(input.documentId)
+  if (verdict?.is_obsolete) {
+    return {
+      blocked: true,
+      reason: `Obsolete documents cannot be attached — ${freshnessTitle(verdict)} Supersede it in the Library first.`,
+    }
+  }
+  if (!verdict && isObsoleteLibraryStatus(input.libraryStatus)) {
+    return {
+      blocked: true,
+      reason: `Obsolete documents cannot be attached — the Library records this document as ${input.libraryStatus}. Supersede it in the Library first.`,
+    }
+  }
+  return { blocked: false, reason: '' }
+}
+
+/* -------------------------------------------------------------------------- */
+/* JL-UX-W3 — audit lapse cues                                                */
+/* -------------------------------------------------------------------------- */
+
+export function auditLapseLabel(state: JobAuditLapseState): string {
+  if (state === 'current') return 'In date'
+  if (state === 'due_soon') return 'Audit due'
+  if (state === 'lapsed') return 'Lapsed'
+  return 'Unknown'
+}
+
+export function auditLapseClasses(state: JobAuditLapseState): string {
+  if (state === 'current') {
+    return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100'
+  }
+  if (state === 'due_soon') {
+    return 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100'
+  }
+  if (state === 'lapsed') return 'border-destructive/40 bg-destructive/10 text-destructive'
+  return 'border-border bg-muted/30 text-muted-foreground'
+}
+
+/** Names the evidence, so an `unknown` reads as "we cannot tell" not "fine". */
+export function auditLapseTitle(
+  lapse: { state: JobAuditLapseState; reason: string; next_due_at?: string | null } | null | undefined,
+): string {
+  if (!lapse) return 'Audit cadence unknown — no run data loaded for this link.'
+  if (lapse.reason === 'no_audit_run') {
+    return 'Audit cadence unknown — the linked run is not readable.'
+  }
+  if (lapse.reason === 'no_audit_cadence') {
+    return 'Audit cadence unknown — the template records no repeat frequency (ad-hoc audits never lapse).'
+  }
+  if (lapse.reason === 'audit_not_completed') {
+    return 'Audit cadence unknown — the run has not completed and has no due date.'
+  }
+  const when = lapse.next_due_at ? new Date(lapse.next_due_at).toLocaleDateString() : 'unknown date'
+  if (lapse.reason === 'run_past_due') return `Audit run was due ${when} and has not completed.`
+  if (lapse.reason === 'run_due_soon') return `Audit run is due ${when}.`
+  if (lapse.reason === 'run_within_due') return `Audit run is due ${when}.`
+  if (lapse.reason === 'cadence_overdue') return `Repeat audit was due ${when}.`
+  if (lapse.reason === 'cadence_due_soon') return `Repeat audit due ${when}.`
+  return `Next audit due ${when}.`
 }
