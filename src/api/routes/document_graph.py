@@ -150,7 +150,7 @@ async def create_document_edge(
 async def confirm_document_edge(
     edge_id: int,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    current_user: Annotated[User, Depends(require_permission("document:confirm_edge"))],
 ):
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     service = DocumentGraphService(db)
@@ -169,7 +169,7 @@ async def confirm_document_edge(
 async def reject_document_edge(
     edge_id: int,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    current_user: Annotated[User, Depends(require_permission("document:confirm_edge"))],
     body: Optional[DocumentEdgeRejectRequest] = None,
 ):
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))

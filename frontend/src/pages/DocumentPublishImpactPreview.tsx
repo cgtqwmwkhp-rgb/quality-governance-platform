@@ -14,6 +14,9 @@ export interface DocumentPublishImpactPreviewProps {
   loading: boolean
   error: string | null
   publishing: boolean
+  /** When false, confirm is disabled (Entity360 ImpactBundle incomplete). */
+  canPublish?: boolean
+  degradedReasons?: string[]
   onCancel: () => void
   onConfirm: () => void
 }
@@ -24,9 +27,12 @@ export function DocumentPublishImpactPreview({
   loading,
   error,
   publishing,
+  canPublish = true,
+  degradedReasons = [],
   onCancel,
   onConfirm,
 }: DocumentPublishImpactPreviewProps) {
+  const publishBlocked = !canPublish
   return (
     <div className="space-y-4" data-testid="documents-publish-impact-preview">
       <div className="space-y-1">
@@ -45,7 +51,25 @@ export function DocumentPublishImpactPreview({
         </div>
       ) : null}
 
-      {error ? (
+      {publishBlocked ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          data-testid="documents-publish-impact-blocked"
+        >
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            Publish is blocked until the impact bundle is complete.
+            {degradedReasons.length > 0
+              ? ` ${degradedReasons.join('; ')}`
+              : error
+                ? ` ${error}`
+                : null}
+          </span>
+        </div>
+      ) : null}
+
+      {error && !publishBlocked ? (
         <div
           role="alert"
           className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -113,7 +137,7 @@ export function DocumentPublishImpactPreview({
         </Button>
         <Button
           onClick={onConfirm}
-          disabled={publishing || loading}
+          disabled={publishing || loading || publishBlocked}
           data-testid="documents-publish-impact-confirm"
         >
           {publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

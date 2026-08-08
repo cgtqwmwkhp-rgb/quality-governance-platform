@@ -254,8 +254,8 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         enabling_flag_key=None,
         required_permission="document:read",
         reason=(
-            "Gates Entity 360 composer shell. Default off; pre-registered for later 360 "
-            "slices — not implemented in X-0."
+            "Gates Entity 360 composer + Connections strip + ImpactBundle. Default off; "
+            "wired in X-1 — enable via deploy vars when baking."
         ),
     ),
     ClientFeature(

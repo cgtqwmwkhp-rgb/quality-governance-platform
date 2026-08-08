@@ -1227,7 +1227,11 @@ async def list_risk_upstream(
     """Upstream 360: cases + audit findings linked to this risk (reverse joins)."""
     await _get_tenant_risk_or_404(db, current_user.tenant_id, risk_id)
     service = RiskService(db)
-    raw = await service.list_upstream_for_risk(tenant_id=current_user.tenant_id, risk_id=risk_id)
+    raw = await service.list_upstream_for_risk(
+        tenant_id=current_user.tenant_id,
+        risk_id=risk_id,
+        user=current_user,
+    )
     items = [RiskUpstreamItem(**row) for row in raw]
     return RiskUpstreamResponse(items=items, total=len(items))
 

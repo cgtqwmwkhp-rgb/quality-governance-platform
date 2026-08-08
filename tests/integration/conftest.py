@@ -151,6 +151,7 @@ _ADMIN_PERMS = ",".join(
         "document:create",
         "document:read",
         "document:update",
+        "document:confirm_edge",
         "engineer:create",
         "engineer:update",
         "assessment:create",

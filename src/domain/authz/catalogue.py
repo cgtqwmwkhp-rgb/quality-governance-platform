@@ -69,6 +69,7 @@ ENFORCED_PERMISSIONS: frozenset[str] = frozenset(
         "document:create",
         "document:read",
         "document:update",
+        "document:confirm_edge",
         "driver:create",
         "driver:update",
         "engineer:create",

@@ -144,11 +144,7 @@ async def list_case_links_for_risk(
 
 
 def case_type_href(case_type: str, case_id: int) -> str:
-    """Deep-link path for a case_risk_links case_type."""
-    mapping = {
-        "incident": f"/incidents/{case_id}",
-        "near_miss": f"/near-misses/{case_id}",
-        "rta": f"/rtas/{case_id}",
-        "complaint": f"/complaints/{case_id}",
-    }
-    return mapping.get(case_type, f"/{case_type}/{case_id}")
+    """Deep-link path for a case_risk_links case_type (href registry)."""
+    from src.domain.services.href_registry import case_type_href as _href
+
+    return _href(case_type, case_id)
