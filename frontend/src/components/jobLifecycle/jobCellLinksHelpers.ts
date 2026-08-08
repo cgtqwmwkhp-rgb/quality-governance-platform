@@ -4,7 +4,7 @@
  * Hrefs are server-resolved via X-1 href_registry — FE must never invent
  * parallel SPA URL builders for app / audit_outcome kinds.
  */
-import type { JobCellLink, JobCellLinkKind } from '../api/jobLifecycleClient'
+import type { JobCellLink, JobCellLinkKind } from '../../api/jobLifecycleClient'
 
 export const JOB_CELL_LINK_KINDS: readonly JobCellLinkKind[] = [
   'app',

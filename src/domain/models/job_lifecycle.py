@@ -234,6 +234,16 @@ class JobCellLink(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_job_cell_links_tenant_cell_sort", "tenant_id", "cell_id", "sort_order"),
         Index("ix_job_cell_links_tenant_finding", "tenant_id", "audit_finding_id"),
+        # One audit_outcome link per finding per cell; other kinds leave
+        # audit_finding_id NULL and are unconstrained by it.
+        Index(
+            "ux_job_cell_links_cell_finding",
+            "cell_id",
+            "audit_finding_id",
+            unique=True,
+            postgresql_where=text("audit_finding_id IS NOT NULL"),
+            sqlite_where=text("audit_finding_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

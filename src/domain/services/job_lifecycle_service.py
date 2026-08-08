@@ -18,14 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.audit import AuditFinding
 from src.domain.models.document import Document
-from src.domain.models.job_lifecycle import (
-    JobCell,
-    JobCellDocument,
-    JobCellLink,
-    JobLane,
-    JobStep,
-    JobType,
-)
+from src.domain.models.job_lifecycle import JobCell, JobCellDocument, JobCellLink, JobLane, JobStep, JobType
 from src.domain.services.href_registry import audit_finding_href, href_for
 
 
@@ -466,9 +459,7 @@ class JobLifecycleService:
             )
         )
         cells = list(result.scalars().all())
-        return [
-            await self._cell_payload(cell, include_links=include_links) for cell in cells
-        ]
+        return [await self._cell_payload(cell, include_links=include_links) for cell in cells]
 
     async def list_cell_links(
         self,

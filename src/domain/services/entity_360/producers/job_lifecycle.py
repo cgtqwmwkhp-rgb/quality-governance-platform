@@ -54,9 +54,7 @@ class JobLifecycleProducer:
             if key == "job_step":
                 return await self._for_job_step(db=db, tenant_id=tenant_id, step_id=entity_id)
             if key == "audit_finding":
-                return await self._for_audit_finding(
-                    db=db, tenant_id=tenant_id, finding_id=entity_id
-                )
+                return await self._for_audit_finding(db=db, tenant_id=tenant_id, finding_id=entity_id)
             return ProducerResult(origin=self.origin, status="skipped", reason="unsupported")
         except Exception as exc:  # noqa: BLE001 — producer isolation
             return ProducerResult(
@@ -196,9 +194,7 @@ class JobLifecycleProducer:
             downstream=downstream,
         )
 
-    async def _for_audit_finding(
-        self, *, db: Any, tenant_id: int, finding_id: int
-    ) -> ProducerResult:
+    async def _for_audit_finding(self, *, db: Any, tenant_id: int, finding_id: int) -> ProducerResult:
         """Bi-link: finding → job steps that store an audit_outcome CellLink."""
         if not settings.job_cell_links_enabled:
             return ProducerResult(
