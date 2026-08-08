@@ -41,12 +41,13 @@ def test_middleware_rls_tables_include_action_expansion():
     # This count is here so an expansion cannot
     # silently drop an earlier table on its way past; the registry-vs-migration
     # coverage check lives in tests/unit/test_run026_rls_least_privilege.py.
-    assert len(RLS_TABLES) == 34
+    assert len(RLS_TABLES) == 35
     for table in ("incident_actions", "complaint_actions", "rta_actions"):
         assert table in RLS_TABLES
     for table in ("policies", "audit_findings", "investigation_actions", "incidents"):
         assert table in RLS_TABLES
     assert "job_cell_links" in RLS_TABLES
+    assert "job_type_baselines" in RLS_TABLES
 
 
 def test_migration_sql_includes_with_check_and_force():

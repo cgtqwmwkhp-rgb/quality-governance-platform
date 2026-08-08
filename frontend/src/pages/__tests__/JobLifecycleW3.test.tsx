@@ -23,6 +23,7 @@ const listSteps = vi.fn()
 const listCells = vi.fn()
 const putCellDocuments = vi.fn()
 const listDocumentFreshness = vi.fn()
+const listBaselines = vi.fn()
 
 const flagState: Record<string, boolean> = {
   job_lifecycle: true,
@@ -41,6 +42,7 @@ vi.mock('../../api/client', () => ({
     listCells: (...args: unknown[]) => listCells(...args),
     putCellDocuments: (...args: unknown[]) => putCellDocuments(...args),
     listDocumentFreshness: (...args: unknown[]) => listDocumentFreshness(...args),
+    listBaselines: (...args: unknown[]) => listBaselines(...args),
   },
   getApiErrorMessage: (err: unknown) =>
     (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
@@ -170,6 +172,7 @@ beforeEach(() => {
     listCells,
     putCellDocuments,
     listDocumentFreshness,
+    listBaselines,
   ]) {
     fn.mockReset()
   }
@@ -184,6 +187,7 @@ beforeEach(() => {
   listJobTypes.mockResolvedValue({ data: { items: [JOB_TYPE], total: 1 } })
   listLanes.mockResolvedValue({ data: { items: [LANE], total: 1 } })
   listSteps.mockResolvedValue({ data: { items: [STEP], total: 1 } })
+  listBaselines.mockResolvedValue({ data: { items: [], total: 0 } })
   listCells.mockResolvedValue({ data: { items: [CELL], total: 1 } })
   listDocumentFreshness.mockResolvedValue({
     data: { items: [freshness(7, 'overdue'), freshness(8, 'obsolete')], total: 2 },

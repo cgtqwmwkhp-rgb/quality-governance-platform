@@ -422,8 +422,21 @@ def test_portal_nested_cycle_schema_forbids_author_chrome():
 # ---------------------------------------------------------------------------
 
 
+def _iter_api_routes(router):
+    """Flatten nested ``include_router`` mounts (CI FastAPI keeps ``_IncludedRouter``)."""
+    for route in getattr(router, "routes", []) or []:
+        nested = getattr(route, "routes", None)
+        if nested is not None:
+            yield from _iter_api_routes(route)
+            continue
+        yield route
+
+
 def _route_permission(route) -> str | None:
-    for dep in route.dependant.dependencies:
+    dependant = getattr(route, "dependant", None)
+    if dependant is None:
+        return None
+    for dep in dependant.dependencies:
         call = getattr(dep, "call", None)
         if call is None:
             continue
@@ -437,7 +450,7 @@ def test_portal_router_exposes_only_get_routes_under_job_read():
     """Write denied on the portal path: no POST/PATCH/PUT/DELETE is mounted."""
     methods: set[str] = set()
     permissions: set[str | None] = set()
-    for route in portal_routes.router.routes:
+    for route in _iter_api_routes(portal_routes.router):
         path_methods = getattr(route, "methods", None) or set()
         methods |= {m.upper() for m in path_methods}
         permissions.add(_route_permission(route))
@@ -447,7 +460,7 @@ def test_portal_router_exposes_only_get_routes_under_job_read():
 
 
 def test_portal_router_has_no_write_path_templates():
-    paths = [getattr(route, "path", "") for route in portal_routes.router.routes]
+    paths = [getattr(route, "path", "") or "" for route in _iter_api_routes(portal_routes.router)]
     assert any("nested-cycle" in path for path in paths)
     for path in paths:
         assert "baselines" not in path  # baselines are composer/author surface

@@ -16,6 +16,7 @@ const putCellDocuments = vi.fn()
 const createJobType = vi.fn()
 const createLane = vi.fn()
 const createStep = vi.fn()
+const listBaselines = vi.fn()
 
 const flagState: Record<string, boolean> = {
   job_lifecycle: false,
@@ -36,6 +37,7 @@ vi.mock('../../api/client', () => ({
     createJobType: (...args: unknown[]) => createJobType(...args),
     createLane: (...args: unknown[]) => createLane(...args),
     createStep: (...args: unknown[]) => createStep(...args),
+    listBaselines: (...args: unknown[]) => listBaselines(...args),
   },
   getApiErrorMessage: (err: unknown) => (err as Error)?.message ?? 'error',
 }))
@@ -79,6 +81,8 @@ describe('JobLifecycle flag gating', () => {
     createJobType.mockReset()
     createLane.mockReset()
     createStep.mockReset()
+    listBaselines.mockReset()
+    listBaselines.mockResolvedValue({ data: { items: [], total: 0 } })
     flagState.job_lifecycle = false
     flagState.document_graph_dnd_propose = false
     flagState.graph_coach = false
