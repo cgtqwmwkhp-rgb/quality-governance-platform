@@ -4,6 +4,10 @@ export { Entity360Strip } from './Entity360Strip'
 export type { Entity360StripProps } from './Entity360Strip'
 export { RelationshipsMapView } from './RelationshipsMapView'
 export type { RelationshipsMapViewProps } from './RelationshipsMapView'
+export { GraphCoach } from './GraphCoach'
+export type { GraphCoachProps } from './GraphCoach'
+export { GraphOrientationToggle } from './GraphOrientationToggle'
+export type { GraphOrientationToggleProps } from './GraphOrientationToggle'
 export {
   buildThreadStripItems,
   hopDisplayTitle,
@@ -35,3 +39,32 @@ export {
   resolveRelationshipsPanelView,
   shouldShowRelationshipsMapToggle,
 } from './relationshipsMapHelpers'
+export {
+  DEFAULT_GRAPH_ORIENTATION,
+  GRAPH_ORIENTATIONS,
+  graphOrientationLabel,
+  graphOrientationStorageKey,
+  isGraphOrientation,
+  parseStoredGraphOrientation,
+  readStoredGraphOrientation,
+  resolveGraphOrientation,
+  toggleGraphOrientation,
+  writeStoredGraphOrientation,
+} from './graphOrientation'
+export type { GraphOrientation } from './graphOrientation'
+export {
+  clampCoachStepIndex,
+  coachDismissStorageKey,
+  coachStepProgress,
+  dismissCoach,
+  isCoachDismissed,
+  resetCoach,
+  shouldRenderCoachPanel,
+  shouldShowGraphCoach,
+} from './graphCoachHelpers'
+export {
+  GRAPH_COACH_SURFACES,
+  getCoachSteps,
+  getCoachSurfaceDefinition,
+} from './coachSteps'
+export type { GraphCoachStep, GraphCoachSurface } from './coachSteps'
