@@ -18,6 +18,18 @@ export {
   shouldShowEntity360Strip,
 } from './entity360StripHelpers'
 export {
+  LIBRARY_DOCUMENT_DRAG_MIME,
+  buildDndProposeEdgePayload,
+  dndProposeDirection,
+  parseLibraryDocumentDrag,
+  resolveDndProposeDrop,
+  serializeLibraryDocumentDrag,
+  setLibraryDocumentDragData,
+  shouldEnableLibraryDocumentDrag,
+  shouldEnableRelationshipsMapDnd,
+} from './documentGraphDndHelpers'
+export type { LibraryDocumentDragPayload } from './documentGraphDndHelpers'
+export {
   buildRelationshipMapModel,
   relationshipMapEdgeCaption,
   resolveRelationshipsPanelView,

@@ -7,6 +7,7 @@ import { DocumentRelationshipsPanel } from '../DocumentRelationshipsPanel'
 const apiGet = vi.fn()
 const graph = {
   createEdge: vi.fn(),
+  proposeTypedEdge: vi.fn(),
   confirmEdge: vi.fn(),
   rejectEdge: vi.fn(),
   deleteEdge: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('../../api/client', () => ({
   default: { get: (...args: unknown[]) => apiGet(...args) },
   documentGraphApi: {
     createEdge: (...args: unknown[]) => graph.createEdge(...args),
+    proposeTypedEdge: (...args: unknown[]) => graph.proposeTypedEdge(...args),
     confirmEdge: (...args: unknown[]) => graph.confirmEdge(...args),
     rejectEdge: (...args: unknown[]) => graph.rejectEdge(...args),
     deleteEdge: (...args: unknown[]) => graph.deleteEdge(...args),

@@ -107,6 +107,24 @@ describe('createDocumentGraphApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/document-graph/edges/9/citation-staleness')
   })
 
+  it('forces proposed status on proposeTypedEdge even if caller passes confirmed', () => {
+    const api = mockApi()
+    createDocumentGraphApi(api as never).proposeTypedEdge({
+      src_document_id: 20,
+      dst_document_id: 10,
+      edge_type: 'implements',
+      status: 'confirmed',
+      created_method: 'manual',
+    })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/document-graph/edges', {
+      src_document_id: 20,
+      dst_document_id: 10,
+      edge_type: 'implements',
+      status: 'proposed',
+      created_method: 'manual',
+    })
+  })
+
   it('lists clause documents for ISO reverse freshness', () => {
     const api = mockApi()
     createDocumentGraphApi(api as never).listClauseDocuments('9001-7.5')

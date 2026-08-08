@@ -47,6 +47,10 @@ import {
 import { cn } from '../helpers/utils'
 import { LibraryShell } from './LibraryShell'
 import {
+  setLibraryDocumentDragData,
+  shouldEnableLibraryDocumentDrag,
+} from '../components/graph/documentGraphDndHelpers'
+import {
   buildDocumentDownstreamView,
   buildDocumentsExceptionsHref,
   DOCUMENT_CONTROL_GOLDEN_THREAD_PATH,
@@ -210,6 +214,8 @@ export default function Documents() {
   const [searchParams, setSearchParams] = useSearchParams()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const documentGraphEnabled = useFeatureFlag('document_graph')
+  const dndProposeEnabled = useFeatureFlag('document_graph_dnd_propose')
+  const libraryDragEnabled = shouldEnableLibraryDocumentDrag(dndProposeEnabled)
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -468,6 +474,18 @@ export default function Documents() {
   const focusLibrarySearch = useCallback(() => {
     searchInputRef.current?.focus()
   }, [])
+
+  const handleLibraryDocDragStart = useCallback(
+    (event: React.DragEvent, doc: { id: number; title: string; reference_number?: string }) => {
+      if (!libraryDragEnabled) return
+      setLibraryDocumentDragData(event.dataTransfer, {
+        documentId: doc.id,
+        title: doc.title,
+        reference: doc.reference_number ?? null,
+      })
+    },
+    [libraryDragEnabled],
+  )
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -1041,7 +1059,18 @@ export default function Documents() {
                   key={doc.id}
                   hoverable
                   onClick={() => navigate(`/documents/${doc.id}`)}
-                  className="p-5 cursor-pointer"
+                  className={cn('p-5 cursor-pointer', libraryDragEnabled && 'cursor-grab active:cursor-grabbing')}
+                  draggable={libraryDragEnabled}
+                  onDragStart={
+                    libraryDragEnabled
+                      ? (event) => handleLibraryDocDragStart(event, doc)
+                      : undefined
+                  }
+                  data-testid={
+                    libraryDragEnabled
+                      ? `documents-library-drag-${doc.id}`
+                      : undefined
+                  }
                 >
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
                     <FileIcon className="w-6 h-6 text-primary" />
@@ -1177,7 +1206,21 @@ export default function Documents() {
                     <tr
                       key={doc.id}
                       onClick={() => navigate(`/documents/${doc.id}`)}
-                      className="cursor-pointer hover:bg-surface"
+                      className={cn(
+                        'cursor-pointer hover:bg-surface',
+                        libraryDragEnabled && 'cursor-grab active:cursor-grabbing',
+                      )}
+                      draggable={libraryDragEnabled}
+                      onDragStart={
+                        libraryDragEnabled
+                          ? (event) => handleLibraryDocDragStart(event, doc)
+                          : undefined
+                      }
+                      data-testid={
+                        libraryDragEnabled
+                          ? `documents-library-drag-row-${doc.id}`
+                          : undefined
+                      }
                     >
                       <td className="sticky left-0 z-10 bg-card px-6 py-4">
                         <div className="flex items-center gap-3">
