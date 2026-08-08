@@ -191,6 +191,16 @@ export function createDocumentGraphApi(api: AxiosInstance) {
     createEdge: (payload: CreateDocumentEdgePayload) =>
       api.post<DocumentEdge>(`${base}/edges`, payload),
 
+    /**
+     * Library→Map DnD propose path (DG-2). Always posts `status: proposed` so a
+     * drop never auto-confirms — confirm stays on the Relationships list queue.
+     */
+    proposeTypedEdge: (payload: CreateDocumentEdgePayload) =>
+      api.post<DocumentEdge>(`${base}/edges`, {
+        ...payload,
+        status: 'proposed',
+      }),
+
     confirmEdge,
 
     rejectEdge: (edgeId: number, payload?: RejectDocumentEdgePayload) =>
