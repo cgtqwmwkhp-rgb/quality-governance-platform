@@ -82,6 +82,22 @@ vi.mock('../../components/EngineerPeoplePicker', () => ({
   ),
 }))
 
+vi.mock('../../components/graph/Entity360Strip', () => ({
+  Entity360Strip: ({
+    entityType,
+    entityId,
+    requiresSatellites,
+  }: {
+    entityType: string
+    entityId: number
+    requiresSatellites?: boolean
+  }) => (
+    <div data-testid="entity360-connections-strip">
+      {entityType}:{entityId}:{requiresSatellites ? 'sat' : 'core'}
+    </div>
+  ),
+}))
+
 
 const auditFindingAction = {
   id: 9,
@@ -203,6 +219,28 @@ describe('ActionDetail source deep-links', () => {
     expect(screen.getByTestId('action-detail-due')).toBeInTheDocument()
     expect(screen.getByTestId('action-detail-assignee')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Assign/i })).toBeInTheDocument()
+  })
+
+  it('mounts Entity360 Connections for capa keys only', async () => {
+    renderDetail('capa:9')
+    expect(await screen.findByTestId('action-detail-connections')).toBeInTheDocument()
+    expect(screen.getByTestId('entity360-connections-strip')).toHaveTextContent('capa:9:sat')
+  })
+
+  it('does not mount Entity360 Connections for non-capa action keys', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: {
+        ...auditFindingAction,
+        id: 3,
+        title: 'Cordon north gate',
+        action_key: 'incident_action:3',
+        source_type: 'incident',
+        source_id: 11,
+      },
+    })
+    renderDetail('incident_action:3')
+    expect(await screen.findByLabelText('Title')).toHaveValue('Cordon north gate')
+    expect(screen.queryByTestId('action-detail-connections')).not.toBeInTheDocument()
   })
 
   it('shows SMTP honesty beside CAPA assignment when email is unconfigured', async () => {

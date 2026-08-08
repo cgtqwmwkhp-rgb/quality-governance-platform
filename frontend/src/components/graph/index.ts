@@ -33,6 +33,7 @@ export {
   hopCaption,
   shouldFetchEntity360,
   shouldShowEntity360Strip,
+  shouldShowSatelliteConnections,
 } from './entity360StripHelpers'
 export {
   LIBRARY_DOCUMENT_DRAG_MIME,

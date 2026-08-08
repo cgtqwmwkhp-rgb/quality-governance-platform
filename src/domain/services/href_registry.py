@@ -22,8 +22,9 @@ _ENTITY_PATHS: dict[str, Callable[[int], str]] = {
     "complaint": lambda entity_id: f"/complaints/{entity_id}",
     "capa": lambda entity_id: f"/actions/{entity_id}",
     "action": lambda entity_id: f"/actions/{entity_id}",
-    "clause": lambda entity_id: f"/compliance/evidence?clause={entity_id}",
+    # clause ids are catalogue strings (e.g. "9001-7.2") — use clause_evidence_href
     "job_step": lambda entity_id: f"/job-lifecycle/steps/{entity_id}",
+    "evidence_link": lambda entity_id: f"/compliance/evidence?link={entity_id}",
 }
 
 
@@ -73,6 +74,20 @@ def audit_finding_href(*, run_id: int, finding_id: int | None = None) -> str:
     return f"/audits/{run_id}/execute"
 
 
+def clause_evidence_href(clause_id: str) -> str:
+    """Deep-link into Compliance Evidence filtered to a catalogue clause id.
+
+    Clause ids are strings (e.g. ``9001-7.2``); they cannot use the int
+    ``_ENTITY_PATHS`` map — same pattern as ``audit_finding_href``.
+    """
+    from urllib.parse import quote
+
+    key = (clause_id or "").strip()
+    if not key:
+        raise ValueError("clause_id must be non-empty")
+    return f"/compliance/evidence?clause={quote(key, safe='')}"
+
+
 def registered_entity_types() -> frozenset[str]:
     """Known entity types with dedicated builders (excluding fallback)."""
     return frozenset(_ENTITY_PATHS.keys())
@@ -86,6 +101,7 @@ def registry_snapshot() -> Mapping[str, Callable[[int], str]]:
 __all__ = [
     "audit_finding_href",
     "case_type_href",
+    "clause_evidence_href",
     "document_href",
     "href_for",
     "register_href",

@@ -33,11 +33,12 @@ def reset_producers() -> None:
 
 
 def ensure_default_producers() -> None:
-    """Idempotently register built-in producers (document graph + case_link + job)."""
+    """Idempotently register built-in producers (document graph + case_link + job + cel)."""
     global _DEFAULTS_LOADED
     if _DEFAULTS_LOADED:
         return
     from src.domain.services.entity_360.producers.case_link import CaseLinkProducer
+    from src.domain.services.entity_360.producers.compliance_evidence import ComplianceEvidenceProducer
     from src.domain.services.entity_360.producers.document_graph import DocumentGraphProducer
     from src.domain.services.entity_360.producers.job_lifecycle import JobLifecycleProducer
     from src.domain.services.entity_360.producers.lifecycle_impact import LifecycleImpactProducer
@@ -46,6 +47,7 @@ def ensure_default_producers() -> None:
     register_producer(CaseLinkProducer())
     register_producer(LifecycleImpactProducer())
     register_producer(JobLifecycleProducer())
+    register_producer(ComplianceEvidenceProducer())
     _DEFAULTS_LOADED = True
 
 

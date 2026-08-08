@@ -39,6 +39,7 @@ import {
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { EvidenceAssetPreviewDialog } from '../components/EvidenceAssetPreviewDialog'
+import { Entity360Strip } from '../components/graph/Entity360Strip'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath, parseActionDetailId } from './actionLinks'
 import { resolveActionAssignee } from './actionsDisplayHelpers'
@@ -448,6 +449,8 @@ export default function ActionDetail() {
   const titleDirty = titleDraft.trim() !== (action.title || '').trim()
   const dueDirty = dueDraft !== dueDateInputValue(action.due_date)
   const isCapa = action.action_key.startsWith('capa:') || action.source_type === 'capa'
+  const capaIdMatch = /^capa:(\d+)$/.exec(action.action_key)
+  const capaEntityId = capaIdMatch ? Number(capaIdMatch[1]) : null
   const sourceLink = getActionSourceLink(
     action.source_type,
     action.source_id,
@@ -465,6 +468,12 @@ export default function ActionDetail() {
           </Link>
         </Button>
       </div>
+
+      {capaEntityId != null && Number.isFinite(capaEntityId) ? (
+        <div data-testid="action-detail-connections">
+          <Entity360Strip entityType="capa" entityId={capaEntityId} requiresSatellites />
+        </div>
+      ) : null}
 
       <div>
         <div className="flex flex-wrap items-center gap-2">
