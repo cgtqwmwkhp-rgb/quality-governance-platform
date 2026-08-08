@@ -257,6 +257,17 @@ SERVER_OWNED_FIELDS = frozenset(
         # in date independently of the audit record — exactly the second source
         # of truth the freshness work exists to avoid.
         "audit_lapse",
+        # JL-UX-W5 cycle baseline response. The snapshot JSON is captured by the
+        # server at POST time from the live tip; clients may only supply
+        # label/note. The remaining fields are read-side cues that say the row
+        # is a snapshot and that edit always targets the live tip — accepting
+        # them from a client would let the composer claim a fork or suppress
+        # the viewing banner.
+        "snapshot",
+        "is_snapshot",
+        "edit_targets_live",
+        "viewing_baseline",
+        "banner",
         "id",
         "tenant_id",
         "created_at",

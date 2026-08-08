@@ -141,9 +141,9 @@ def test_the_w4_revision_is_the_only_revision_on_the_w3_head(tmp_path):
     mapping = _alembic_revision_map(tmp_path)
     assert mapping["on_top_of_w3"] == ["20261022_job_cell_req_ev"]
     # W5 is the live head; W4 remains the only successor of W3.
-    assert mapping["heads"] == ["20261023_job_type_baselines"], (
-        f"expected W5 as the single head, found {mapping['heads']}"
-    )
+    assert mapping["heads"] == [
+        "20261023_job_type_baselines"
+    ], f"expected W5 as the single head, found {mapping['heads']}"
     assert mapping["on_top_of_w4"] == ["20261023_job_type_baselines"]
 
 
