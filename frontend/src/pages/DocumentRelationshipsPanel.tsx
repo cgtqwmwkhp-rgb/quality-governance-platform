@@ -40,6 +40,8 @@ import {
   measureRelationshipRoleCoverage,
 } from './documentRelationshipCoverage'
 import { RelationshipsMapView } from '../components/graph/RelationshipsMapView'
+import { GraphCoach } from '../components/graph/GraphCoach'
+import { GraphOrientationToggle } from '../components/graph/GraphOrientationToggle'
 import {
   resolveDndProposeDrop,
   setLibraryDocumentDragData,
@@ -51,6 +53,10 @@ import {
   shouldShowRelationshipsMapToggle,
   type RelationshipsPanelViewMode,
 } from '../components/graph/relationshipsMapHelpers'
+import {
+  DEFAULT_GRAPH_ORIENTATION,
+  type GraphOrientation,
+} from '../components/graph/graphOrientation'
 
 interface CounterpartDocument {
   id: number
@@ -121,6 +127,7 @@ export function DocumentRelationshipsPanel({
   const dndProposeEnabled = useFeatureFlag('document_graph_dnd_propose')
   const mapDndEnabled = shouldEnableRelationshipsMapDnd(dndProposeEnabled)
   const [panelView, setPanelView] = useState<RelationshipsPanelViewMode>('list')
+  const [mapOrientation, setMapOrientation] = useState<GraphOrientation>(DEFAULT_GRAPH_ORIENTATION)
   const [dropEdgeType, setDropEdgeType] = useState<DocumentEdgeType>('related_to')
   const [dndProposing, setDndProposing] = useState(false)
   const activeView = resolveRelationshipsPanelView(mapViewEnabled, panelView)
@@ -571,6 +578,8 @@ export function DocumentRelationshipsPanel({
         </div>
       ) : null}
 
+      <GraphCoach surface="document_relationships" />
+
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -620,6 +629,13 @@ export function DocumentRelationshipsPanel({
                   Map
                 </Button>
               </div>
+            ) : null}
+            {activeView === 'map' ? (
+              <GraphOrientationToggle
+                surface="document_relationships"
+                value={mapOrientation}
+                onChange={setMapOrientation}
+              />
             ) : null}
             {heuristicProposeEnabled ? (
               <Button
@@ -795,6 +811,7 @@ export function DocumentRelationshipsPanel({
             edges={edges}
             labels={counterpartLabels}
             dndEnabled={mapDndEnabled}
+            orientation={mapOrientation}
             onLibraryDocumentDrop={(payload) => {
               void handleLibraryDocumentDrop(payload)
             }}

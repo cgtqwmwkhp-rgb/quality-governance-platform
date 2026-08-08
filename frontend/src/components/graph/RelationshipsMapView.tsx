@@ -16,6 +16,11 @@ import {
   buildRelationshipMapModel,
   relationshipMapEdgeCaption,
 } from './relationshipsMapHelpers'
+import {
+  DEFAULT_GRAPH_ORIENTATION,
+  resolveGraphOrientation,
+  type GraphOrientation,
+} from './graphOrientation'
 
 export interface RelationshipsMapViewProps {
   documentId: number
@@ -27,6 +32,8 @@ export interface RelationshipsMapViewProps {
   /** When true, hub accepts library-document drops to propose an edge. */
   dndEnabled?: boolean
   onLibraryDocumentDrop?: (payload: LibraryDocumentDragPayload) => void
+  /** X-2 orientation swap — horizontal hub-fan (default) or vertical spine. */
+  orientation?: GraphOrientation
 }
 
 export function RelationshipsMapView({
@@ -37,13 +44,17 @@ export function RelationshipsMapView({
   labels = {},
   dndEnabled = false,
   onLibraryDocumentDrop,
+  orientation = DEFAULT_GRAPH_ORIENTATION,
 }: RelationshipsMapViewProps) {
   const [dropActive, setDropActive] = useState(false)
+  const resolvedOrientation = resolveGraphOrientation(orientation)
 
   const model = useMemo(
     () =>
-      buildRelationshipMapModel(documentId, documentTitle, documentReference, edges, labels),
-    [documentId, documentTitle, documentReference, edges, labels],
+      buildRelationshipMapModel(documentId, documentTitle, documentReference, edges, labels, {
+        orientation: resolvedOrientation,
+      }),
+    [documentId, documentTitle, documentReference, edges, labels, resolvedOrientation],
   )
 
   const nodeById = useMemo(() => {
@@ -77,10 +88,16 @@ export function RelationshipsMapView({
   }
 
   return (
-    <div className="space-y-3" data-testid="relationships-map-view">
+    <div
+      className="space-y-3"
+      data-testid="relationships-map-view"
+      data-orientation={resolvedOrientation}
+    >
       <p className="text-xs text-muted-foreground">
-        Hub-and-peers layout of confirmed relationships. Proposed links stay in the list confirm
-        queue until a person confirms them.
+        {resolvedOrientation === 'vertical'
+          ? 'Vertical spine layout of confirmed relationships (inbound above, outbound below).'
+          : 'Hub-and-peers layout of confirmed relationships.'}{' '}
+        Proposed links stay in the list confirm queue until a person confirms them.
         {dndEnabled
           ? ' Drag a library document onto the hub to propose a typed edge — never auto-confirmed.'
           : null}
