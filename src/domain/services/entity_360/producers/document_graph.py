@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from src.domain.models.document import Document
 from src.domain.models.document_graph import DocumentEdge, DocumentEdgeStatus, DocumentEdgeType
-from src.domain.services.entity_360.types import ProducerResult, make_hop
+from src.domain.services.entity_360.types import HopDirection, ProducerResult, make_hop
 from src.domain.services.href_registry import document_href
 
 
@@ -97,7 +97,7 @@ class DocumentGraphProducer:
             if edge.src_document_id == entity_id:
                 # src → dst: for implements, dst is parent (upstream); peers go upstream by convention
                 other_id = edge.dst_document_id
-                direction = "upstream"
+                direction: HopDirection = "upstream"
                 if edge_type == DocumentEdgeType.IMPLEMENTS.value or edge_type == "implements":
                     direction = "upstream"
                 bucket = upstream
@@ -114,7 +114,7 @@ class DocumentGraphProducer:
                 title=getattr(doc, "title", None) if doc is not None else None,
                 reference=_document_reference(doc),
                 href=document_href(other_id),
-                direction=direction,  # type: ignore[arg-type]
+                direction=direction,
                 relation=edge_type,
                 depth=1,
                 origin="graph",
