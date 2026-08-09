@@ -62,8 +62,7 @@ CEL_UNIQUE_DDL = (
 CLAUSE_CATALOGUE_UNIQUE = "ux_clauses_catalogue_key"
 CLAUSE_CATALOGUE_PREDICATE = "catalogue_key IS NOT NULL"
 CLAUSE_CATALOGUE_DDL = (
-    f"CREATE UNIQUE INDEX {CLAUSE_CATALOGUE_UNIQUE} ON clauses (catalogue_key) "
-    f"WHERE {CLAUSE_CATALOGUE_PREDICATE}"
+    f"CREATE UNIQUE INDEX {CLAUSE_CATALOGUE_UNIQUE} ON clauses (catalogue_key) " f"WHERE {CLAUSE_CATALOGUE_PREDICATE}"
 )
 
 
@@ -111,7 +110,9 @@ def _add_standards_kind() -> None:
                 server_default="iso",
             ),
         )
-    op.execute(sa.text("UPDATE standards SET kind = 'iso' WHERE kind IS NULL OR kind = ''"))
+        op.execute(sa.text("UPDATE standards SET kind = 'iso' WHERE kind IS NULL OR kind = ''"))
+    if not _index_exists("ix_standards_kind", "standards"):
+        op.create_index("ix_standards_kind", "standards", ["kind"])
     # Drop server default after backfill so new inserts must choose explicitly
     # at the ORM layer (ORM still supplies default=iso).
     try:
@@ -125,10 +126,7 @@ def _add_standards_kind() -> None:
     if bind.dialect.name == "postgresql":
         op.execute(sa.text("ALTER TABLE standards DROP CONSTRAINT IF EXISTS ck_standards_kind"))
         op.execute(
-            sa.text(
-                "ALTER TABLE standards ADD CONSTRAINT ck_standards_kind "
-                "CHECK (kind IN ('iso', 'scheme'))"
-            )
+            sa.text("ALTER TABLE standards ADD CONSTRAINT ck_standards_kind " "CHECK (kind IN ('iso', 'scheme'))")
         )
 
 
@@ -170,9 +168,7 @@ def _seed_standards_and_clauses() -> None:
     from src.domain.services.iso_compliance_service import ISOStandard
 
     bind = op.get_bind()
-    standards_rows = bind.execute(
-        sa.text("SELECT id, code, name, full_name, kind FROM standards")
-    ).mappings().all()
+    standards_rows = bind.execute(sa.text("SELECT id, code, name, full_name, kind FROM standards")).mappings().all()
 
     # Stamp existing ISO editions.
     for row in standards_rows:
@@ -208,9 +204,7 @@ def _seed_standards_and_clauses() -> None:
 
     # Refresh iso_to_id for rows that existed by exact canonical code but
     # were skipped by build_iso_standard_upserts' "code in existing" branch.
-    refreshed = bind.execute(
-        sa.text("SELECT id, code, name, full_name FROM standards")
-    ).mappings().all()
+    refreshed = bind.execute(sa.text("SELECT id, code, name, full_name FROM standards")).mappings().all()
     for row in refreshed:
         matched = match_iso_standard_row(row)
         if matched is not None:
@@ -230,16 +224,12 @@ def _seed_standards_and_clauses() -> None:
 
     missing = [iso.value for iso in ISOStandard if iso not in iso_to_id]
     if missing:
-        raise RuntimeError(
-            f"{revision}: cannot seed clauses.catalogue_key — missing standards for {missing}"
-        )
+        raise RuntimeError(f"{revision}: cannot seed clauses.catalogue_key — missing standards for {missing}")
 
     clause_plans = build_clause_catalogue_rows(iso_to_id)
     existing_keys = {
         row[0]
-        for row in bind.execute(
-            sa.text("SELECT catalogue_key FROM clauses WHERE catalogue_key IS NOT NULL")
-        ).all()
+        for row in bind.execute(sa.text("SELECT catalogue_key FROM clauses WHERE catalogue_key IS NOT NULL")).all()
     }
 
     for plan in clause_plans:
@@ -273,9 +263,7 @@ def _seed_standards_and_clauses() -> None:
     # Second pass: parent FK via catalogue_key.
     key_to_id = {
         row[0]: row[1]
-        for row in bind.execute(
-            sa.text("SELECT catalogue_key, id FROM clauses WHERE catalogue_key IS NOT NULL")
-        ).all()
+        for row in bind.execute(sa.text("SELECT catalogue_key, id FROM clauses WHERE catalogue_key IS NOT NULL")).all()
     }
     for plan in clause_plans:
         parent_key = plan.get("parent_catalogue_key")
@@ -365,12 +353,7 @@ def _harden_cel() -> None:
     )
 
     if _is_postgres():
-        op.execute(
-            sa.text(
-                "ALTER TABLE compliance_evidence_links "
-                "DROP CONSTRAINT IF EXISTS ck_cel_cover_kind"
-            )
-        )
+        op.execute(sa.text("ALTER TABLE compliance_evidence_links " "DROP CONSTRAINT IF EXISTS ck_cel_cover_kind"))
         op.execute(
             sa.text(
                 "ALTER TABLE compliance_evidence_links ADD CONSTRAINT ck_cel_cover_kind "
@@ -417,12 +400,7 @@ def downgrade() -> None:
             )
         cols = _columns("compliance_evidence_links")
         if _is_postgres():
-            op.execute(
-                sa.text(
-                    "ALTER TABLE compliance_evidence_links "
-                    "DROP CONSTRAINT IF EXISTS ck_cel_cover_kind"
-                )
-            )
+            op.execute(sa.text("ALTER TABLE compliance_evidence_links " "DROP CONSTRAINT IF EXISTS ck_cel_cover_kind"))
         if "confirmed_at" in cols:
             op.drop_column("compliance_evidence_links", "confirmed_at")
         if "confirmed_by_id" in cols:
@@ -448,4 +426,6 @@ def downgrade() -> None:
     if _table_exists("standards") and "kind" in _columns("standards"):
         if _is_postgres():
             op.execute(sa.text("ALTER TABLE standards DROP CONSTRAINT IF EXISTS ck_standards_kind"))
+        if _index_exists("ix_standards_kind", "standards"):
+            op.drop_index("ix_standards_kind", table_name="standards")
         op.drop_column("standards", "kind")

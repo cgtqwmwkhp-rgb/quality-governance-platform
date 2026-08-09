@@ -170,9 +170,7 @@ def build_clause_catalogue_rows(
     for index, clause in enumerate(ALL_CLAUSES):
         standard_id = iso_to_standard_id.get(clause.standard)
         if standard_id is None:
-            raise ValueError(
-                f"No standards.id for {clause.standard.value} while seeding catalogue_key={clause.id}"
-            )
+            raise ValueError(f"No standards.id for {clause.standard.value} while seeding catalogue_key={clause.id}")
         rows.append(
             {
                 "standard_id": standard_id,

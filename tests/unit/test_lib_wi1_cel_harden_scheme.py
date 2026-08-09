@@ -172,16 +172,12 @@ def test_sqlite_soft_delete_frees_unique_slot_for_relink() -> None:
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(insert, (2, 1, "document", "42", "9001-7.2", "evidences", None))
 
-    connection.execute(
-        "UPDATE compliance_evidence_links SET deleted_at = '2026-08-09T00:00:00Z' WHERE id = 1"
-    )
+    connection.execute("UPDATE compliance_evidence_links SET deleted_at = '2026-08-09T00:00:00Z' WHERE id = 1")
     connection.execute(insert, (3, 1, "document", "42", "9001-7.2", "evidences", None))
     connection.execute(insert, (4, 1, "document", "42", "9001-7.2", "covers", None))
 
     total = connection.execute("SELECT count(*) FROM compliance_evidence_links").fetchone()[0]
-    live = connection.execute(
-        "SELECT count(*) FROM compliance_evidence_links WHERE deleted_at IS NULL"
-    ).fetchone()[0]
+    live = connection.execute("SELECT count(*) FROM compliance_evidence_links WHERE deleted_at IS NULL").fetchone()[0]
     assert total == 3
     assert live == 2
 

@@ -23,9 +23,7 @@ class Standard(Base, TimestampMixin):
     """Standard model representing an ISO standard (e.g., ISO 9001:2015)."""
 
     __tablename__ = "standards"
-    __table_args__ = (
-        CheckConstraint(f"kind IN ({_KIND_VALUES})", name="ck_standards_kind"),
-    )
+    __table_args__ = (CheckConstraint(f"kind IN ({_KIND_VALUES})", name="ck_standards_kind"),)
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

@@ -268,8 +268,7 @@ def _parse_cover_kind(raw: Optional[str]) -> EvidenceCoverKind:
         return EvidenceCoverKind(value)
     except ValueError as exc:
         raise BadRequestError(
-            f"Invalid cover_kind: {raw}. Expected one of: "
-            f"{', '.join(m.value for m in EvidenceCoverKind)}"
+            f"Invalid cover_kind: {raw}. Expected one of: " f"{', '.join(m.value for m in EvidenceCoverKind)}"
         ) from exc
 
 
