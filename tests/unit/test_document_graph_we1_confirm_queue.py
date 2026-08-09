@@ -270,6 +270,19 @@ def test_pending_queue_route_404s_when_document_graph_is_off(client: TestClient,
     assert detail == document_graph_routes.DISABLED_DETAIL
 
 
-def test_pending_queue_route_is_registered_under_document_graph():
-    paths = {getattr(route, "path", "") for route in document_graph_routes.router.routes}  # type: ignore[attr-defined]
-    assert "/edges/pending" in paths
+def test_pending_queue_route_is_served_under_document_graph(app):
+    """Assert the endpoint the app actually serves, not the shape of a router object.
+
+    A flat loop over ``router.routes`` is version-dependent: up to FastAPI 0.135
+    ``include_router`` copied child routes onto the parent, and from 0.140 it
+    appends one wrapper instead — so the same loop that saw the path locally saw a
+    single empty path in CI. ``walk_mounted_app`` is the traversal the
+    authorisation census already uses for exactly this reason.
+    """
+    from src.domain.authz.extraction import walk_mounted_app
+
+    served = {(method, endpoint.path) for endpoint in walk_mounted_app(app).endpoints for method in endpoint.methods}
+    assert ("GET", f"{GRAPH_PREFIX}/edges/pending") in served
+    # The queue must not have quietly acquired a mutation route of its own —
+    # confirm/reject stay on the existing edge endpoints.
+    assert ("POST", f"{GRAPH_PREFIX}/edges/pending") not in served

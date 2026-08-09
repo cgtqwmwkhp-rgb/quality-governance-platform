@@ -167,6 +167,14 @@ literal `'true'` instead of staying a kill switch.
   additive — those predate this branch and are baseline lag, not a change here.
 - [x] `yaml.safe_load` on both deploy workflows; actionlint clean apart from
   pre-existing `SC2129` style notes that CI already ignores
+- [x] Route registration is asserted through `walk_mounted_app`, not a flat loop
+  over `router.routes`. The first CI run caught the difference honestly: this
+  machine has FastAPI 0.135 (where `include_router` copies child routes onto the
+  parent) while `requirements.lock` pins 0.140.7 (where it appends one wrapper),
+  so a flat loop passed locally and saw a single empty path in CI. The test now
+  asserts the endpoint the app actually serves, which is the claim that matters
+  and is version-agnostic. Local runs remain non-representative for anything
+  route-shape-dependent.
 - [ ] Full CI — on PR
 - [ ] Staging / Prod — tip chase after merge per conveyor
 
