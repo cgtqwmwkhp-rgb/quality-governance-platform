@@ -1005,3 +1005,136 @@ class DocumentGraphService:
             "descendants": descendants,
             "max_depth": depth_cap,
         }
+
+    async def get_cascade_aggregate(
+        self,
+        *,
+        tenant_id: int,
+        viewer: Optional[Any],
+    ) -> dict:
+        """Whole-estate cascade for Structure map L1–L5 bands (NS-EXP / W8).
+
+        One round-trip replaces the Structure map's previous 1+N
+        ``list_edges`` fan-out. Only *confirmed* ``implements`` edges participate
+        — proposed stay in the confirm queue. Documents the operator cannot
+        read are omitted entirely (the documents list ACL already hid them from
+        the old Structure map; this keeps the same surface, not a looser one).
+
+        Parent PEL comes only from a live confirmed primary-parent
+        ``implements`` edge (``document_edges`` SoT). Orphan ids match the
+        workbook definitions among readable rows only.
+        """
+        from src.domain.models.document_library import CASCADE_LEVELS
+
+        docs_result = await self.db.execute(
+            select(Document)
+            .where(Document.tenant_id == tenant_id)
+            .where(Document.is_active.is_(True))
+            .order_by(Document.id.asc())
+        )
+        all_docs = list(docs_result.scalars().all())
+        readable_ids = await self._readable_document_ids(viewer=viewer, documents=all_docs)
+        visible_docs = [doc for doc in all_docs if doc.id in readable_ids]
+        visible_id_set = {doc.id for doc in visible_docs}
+
+        edges: list[DocumentEdge] = []
+        if visible_id_set:
+            edges_result = await self.db.execute(
+                select(DocumentEdge)
+                .where(
+                    DocumentEdge.tenant_id == tenant_id,
+                    DocumentEdge.deleted_at.is_(None),
+                    DocumentEdge.edge_type == DocumentEdgeType.IMPLEMENTS,
+                    DocumentEdge.status == DocumentEdgeStatus.CONFIRMED,
+                    or_(
+                        DocumentEdge.src_document_id.in_(visible_id_set),
+                        DocumentEdge.dst_document_id.in_(visible_id_set),
+                    ),
+                )
+                .order_by(DocumentEdge.id.asc())
+            )
+            edges = list(edges_result.scalars().all())
+
+        # Primary parent: child (src) → parent (dst) on a confirmed primary edge.
+        parent_by_child: dict[int, tuple[int, Optional[str]]] = {}
+        children_by_parent: dict[int, set[int]] = {}
+        for edge in edges:
+            children_by_parent.setdefault(edge.dst_document_id, set()).add(edge.src_document_id)
+            if edge.is_primary_parent:
+                parent_by_child[edge.src_document_id] = (
+                    edge.dst_document_id,
+                    edge.dst_pel_doc_ref or None,
+                )
+
+        # Prefer live parent document pel_doc_ref when the edge stamp is blank.
+        parent_doc_ids = {parent_id for parent_id, _ in parent_by_child.values()}
+        parent_docs = await self._documents_by_ids(tenant_id=tenant_id, document_ids=parent_doc_ids)
+
+        documents_payload: list[dict] = []
+        for doc in visible_docs:
+            parent_id: Optional[int] = None
+            parent_pel: Optional[str] = None
+            parent_info = parent_by_child.get(doc.id)
+            if parent_info is not None:
+                parent_id, edge_pel = parent_info
+                parent_doc = parent_docs.get(parent_id)
+                parent_pel = (
+                    (getattr(parent_doc, "pel_doc_ref", None) if parent_doc is not None else None) or edge_pel or None
+                )
+            doc_type = getattr(doc, "document_type", None)
+            documents_payload.append(
+                {
+                    "document_id": doc.id,
+                    "title": getattr(doc, "title", None),
+                    "reference": _document_reference(doc),
+                    "pel_doc_ref": getattr(doc, "pel_doc_ref", None),
+                    "cascade_level": getattr(doc, "cascade_level", None),
+                    "document_type": (
+                        doc_type.value if hasattr(doc_type, "value") else (str(doc_type) if doc_type else None)
+                    ),
+                    "href": document_href(doc.id),
+                    "readable": True,
+                    "parent_document_id": parent_id,
+                    "parent_pel": parent_pel,
+                }
+            )
+
+        band_counts: dict[Optional[int], int] = {level: 0 for level in CASCADE_LEVELS}
+        band_counts[None] = 0
+        for doc in visible_docs:
+            level = getattr(doc, "cascade_level", None)
+            if level in band_counts:
+                band_counts[level] += 1
+            else:
+                band_counts[None] += 1
+
+        bands = [{"level": level, "label": f"L{level}", "count": band_counts[level]} for level in CASCADE_LEVELS]
+        bands.append({"level": None, "label": "unset", "count": band_counts[None]})
+
+        unimplemented: list[int] = []
+        unparented: list[int] = []
+        uncontrolled: list[int] = []
+        for doc in visible_docs:
+            level = getattr(doc, "cascade_level", None)
+            if level == 2 and not children_by_parent.get(doc.id):
+                unimplemented.append(doc.id)
+            if level in (3, 4) and doc.id not in parent_by_child:
+                unparented.append(doc.id)
+            if level == 5 and doc.id not in parent_by_child:
+                uncontrolled.append(doc.id)
+
+        return {
+            "documents": documents_payload,
+            "edges": edges,
+            "bands": bands,
+            "orphans": {
+                "unimplemented_policy_ids": unimplemented,
+                "unparented_ids": unparented,
+                "uncontrolled_record_ids": uncontrolled,
+                "unimplemented_policy_count": len(unimplemented),
+                "unparented_count": len(unparented),
+                "uncontrolled_record_count": len(uncontrolled),
+            },
+            "returned_documents": len(documents_payload),
+            "returned_edges": len(edges),
+        }

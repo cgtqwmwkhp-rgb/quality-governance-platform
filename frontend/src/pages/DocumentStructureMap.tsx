@@ -1,15 +1,21 @@
 /**
- * Whole-library Structure map (DG-3) — implements explorer.
+ * Whole-library Structure map (DG-3 + NS-EXP / W8) — cascade explorer.
  *
  * Flag-gated by `document_graph_structure_map` (master `document_graph` also
- * required for fetches). Reuses DG-1 `RelationshipsMapView` + X-2 GraphCoach /
- * orientation. Never calls Doc Graph the Golden Thread. Never auto-confirms.
+ * required for fetches). Loads the estate via one `GET /document-graph/cascade`
+ * aggregate (documents + confirmed implements + L1–L5 band counts) — never the
+ * previous 1+N edge fan-out. Reuses DG-1 `RelationshipsMapView` + X-2 GraphCoach.
+ * Never calls Doc Graph the Golden Thread. Never auto-confirms.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { GitBranch, Loader2, ArrowLeft } from 'lucide-react'
-import api, { documentGraphApi, getApiErrorMessage } from '../api/client'
-import type { DocumentEdge } from '../api/documentGraphClient'
+import { documentGraphApi, getApiErrorMessage } from '../api/client'
+import type {
+  CascadeBandSummary,
+  CascadeOrphanSummary,
+  DocumentEdge,
+} from '../api/documentGraphClient'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -19,13 +25,17 @@ import { GraphCoach, GraphOrientationToggle, RelationshipsMapView } from '../com
 import {
   STRUCTURE_MAP_DEFAULT_ORIENTATION,
   buildStructureMapLabels,
-  dedupeDocumentEdgesById,
   filterConfirmedImplementsEdges,
+  filterStructureMapDocumentsByBand,
   findStructureMapRootIds,
+  mapCascadeDocumentsToStructureRefs,
   resolveStructureMapFocusId,
   shouldFetchDocumentStructureMap,
   shouldShowDocumentStructureMap,
+  structureMapBandButtonLabel,
   structureMapEmptyCopy,
+  structureMapLevelBadge,
+  type StructureMapBandFilter,
   type StructureMapDocumentRef,
 } from '../components/graph/documentStructureMapHelpers'
 import {
@@ -35,19 +45,8 @@ import {
   type GraphOrientation,
 } from '../components/graph/graphOrientation'
 
-interface LibraryDocumentRow {
-  id: number
-  title: string
-  reference_number?: string | null
-  document_type?: string | null
-}
-
-interface LibraryDocumentPage {
-  items?: LibraryDocumentRow[]
-  total?: number
-  page?: number
-  page_size?: number
-  pages?: number
+function bandFilterFromSummary(band: CascadeBandSummary): StructureMapBandFilter {
+  return band.level == null ? 'unset' : band.level
 }
 
 export default function DocumentStructureMap() {
@@ -62,10 +61,12 @@ export default function DocumentStructureMap() {
 
   const [documents, setDocuments] = useState<StructureMapDocumentRef[]>([])
   const [edges, setEdges] = useState<DocumentEdge[]>([])
-  const [loadingDocs, setLoadingDocs] = useState(false)
-  const [loadingEdges, setLoadingEdges] = useState(false)
+  const [bands, setBands] = useState<CascadeBandSummary[]>([])
+  const [orphans, setOrphans] = useState<CascadeOrphanSummary | null>(null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
+  const [bandFilter, setBandFilter] = useState<StructureMapBandFilter>('all')
   const [orientation, setOrientation] = useState<GraphOrientation>(() =>
     resolveGraphOrientation(
       readStoredGraphOrientation('document_structure_map'),
@@ -74,9 +75,13 @@ export default function DocumentStructureMap() {
   )
 
   const rootIds = useMemo(() => findStructureMapRootIds(edges), [edges])
+  const bandScopedDocuments = useMemo(
+    () => filterStructureMapDocumentsByBand(documents, bandFilter),
+    [documents, bandFilter],
+  )
   const focusId = useMemo(
-    () => resolveStructureMapFocusId(preferredFocus, documents, rootIds),
-    [preferredFocus, documents, rootIds],
+    () => resolveStructureMapFocusId(preferredFocus, bandScopedDocuments, rootIds),
+    [preferredFocus, bandScopedDocuments, rootIds],
   )
   const focusDoc = useMemo(
     () => documents.find((doc) => doc.id === focusId) ?? null,
@@ -93,11 +98,12 @@ export default function DocumentStructureMap() {
   const filteredDocuments = useMemo(() => {
     const q = filter.trim().toLowerCase()
     const filtered = q
-      ? documents.filter((doc) => {
-          const hay = `${doc.title} ${doc.reference ?? ''} ${doc.documentType ?? ''}`.toLowerCase()
+      ? bandScopedDocuments.filter((doc) => {
+          const hay =
+            `${doc.title} ${doc.reference ?? ''} ${doc.documentType ?? ''} ${doc.parentPel ?? ''}`.toLowerCase()
           return hay.includes(q)
         })
-      : documents
+      : bandScopedDocuments
     const rootIdSet = new Set(rootIds)
     return filtered.slice().sort((a, b) => {
       const aIsRoot = rootIdSet.has(a.id)
@@ -105,108 +111,42 @@ export default function DocumentStructureMap() {
       if (aIsRoot === bIsRoot) return 0
       return aIsRoot ? -1 : 1
     })
-  }, [documents, filter, rootIds])
+  }, [bandScopedDocuments, filter, rootIds])
 
-  const loadLibrary = useCallback(async () => {
+  const loadCascade = useCallback(async () => {
     if (!shouldFetch) {
       setDocuments([])
       setEdges([])
+      setBands([])
+      setOrphans(null)
       setError(null)
-      setLoadingDocs(false)
-      setLoadingEdges(false)
+      setLoading(false)
       return
     }
 
-    setLoadingDocs(true)
+    setLoading(true)
     setError(null)
     try {
-      const allItems: LibraryDocumentRow[] = []
-      const pageSize = 100
-      let page = 1
-      while (true) {
-        const response = await api.get<LibraryDocumentPage | LibraryDocumentRow[]>(
-          `/api/v1/documents/?page=${page}&page_size=${pageSize}`,
-        )
-        const raw = response.data
-        const items = Array.isArray(raw) ? raw : (raw.items ?? [])
-        allItems.push(...items)
-
-        if (Array.isArray(raw)) break
-        const totalPages =
-          raw.pages ??
-          (raw.total != null
-            ? Math.ceil(raw.total / Math.max(1, raw.page_size ?? pageSize))
-            : undefined)
-        if (totalPages != null ? page >= totalPages : items.length < pageSize) break
-        page += 1
-      }
-
-      const mapped: StructureMapDocumentRef[] = allItems.map((row) => ({
-        id: row.id,
-        title: row.title?.trim() || `Document #${row.id}`,
-        reference: row.reference_number ?? null,
-        documentType: row.document_type ?? null,
-      }))
-      setDocuments(mapped)
+      const response = await documentGraphApi.getCascade()
+      const payload = response.data
+      setDocuments(mapCascadeDocumentsToStructureRefs(payload.documents ?? []))
+      setEdges(filterConfirmedImplementsEdges(payload.edges ?? []))
+      setBands(payload.bands ?? [])
+      setOrphans(payload.orphans ?? null)
     } catch (err) {
       setDocuments([])
+      setEdges([])
+      setBands([])
+      setOrphans(null)
       setError(getApiErrorMessage(err))
     } finally {
-      setLoadingDocs(false)
+      setLoading(false)
     }
   }, [shouldFetch])
 
-  const loadImplementsEdges = useCallback(
-    async (docs: StructureMapDocumentRef[]) => {
-      if (!shouldFetch || docs.length === 0) {
-        setEdges([])
-        setLoadingEdges(false)
-        return
-      }
-
-      setLoadingEdges(true)
-      try {
-        const results = await Promise.allSettled(
-          docs.map((doc) =>
-            documentGraphApi.listEdges(doc.id, {
-              edge_type: 'implements',
-              status: 'confirmed',
-            }),
-          ),
-        )
-        const collected: DocumentEdge[] = []
-        const failures: string[] = []
-        for (const result of results) {
-          if (result.status === 'fulfilled') {
-            const items = result.value.data?.items ?? []
-            collected.push(...items)
-          } else {
-            failures.push(getApiErrorMessage(result.reason))
-          }
-        }
-        if (failures.length > 0) {
-          setError(
-            `Failed to load confirmed implements edges for ${failures.length} of ${results.length} documents: ${failures[0]}`,
-          )
-        }
-        setEdges(dedupeDocumentEdgesById(filterConfirmedImplementsEdges(collected)))
-      } catch (err) {
-        setEdges([])
-        setError(getApiErrorMessage(err))
-      } finally {
-        setLoadingEdges(false)
-      }
-    },
-    [shouldFetch],
-  )
-
   useEffect(() => {
-    void loadLibrary()
-  }, [loadLibrary])
-
-  useEffect(() => {
-    void loadImplementsEdges(documents)
-  }, [documents, loadImplementsEdges])
+    void loadCascade()
+  }, [loadCascade])
 
   useEffect(() => {
     if (focusId == null || preferredFocus === focusId) return
@@ -241,7 +181,10 @@ export default function DocumentStructureMap() {
   }
 
   const confirmedCount = filterConfirmedImplementsEdges(edges).length
-  const loading = loadingDocs || loadingEdges
+  const orphanTotal =
+    (orphans?.unimplemented_policy_count ?? 0) +
+    (orphans?.unparented_count ?? 0) +
+    (orphans?.uncontrolled_record_count ?? 0)
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="document-structure-map">
@@ -256,11 +199,12 @@ export default function DocumentStructureMap() {
           <div className="flex flex-wrap items-center gap-2">
             <GitBranch className="h-5 w-5 text-primary" aria-hidden />
             <h1 className="text-3xl font-bold text-foreground">Structure map</h1>
-            <Badge variant="outline">Confirmed implements</Badge>
+            <Badge variant="outline">Cascade L1–L5</Badge>
           </div>
           <p className="text-muted-foreground max-w-2xl">
-            Whole-library implements explorer — pick a focus document to walk Policy → Procedure →
-            SOP on the shared map. Doc Graph spine, not document-control lineage.
+            Whole-library cascade explorer — pick a focus document to walk Manual → Policy →
+            Procedure → SOP → Form on the shared map. One estate aggregate; Doc Graph spine, not
+            document-control lineage.
           </p>
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             <span data-testid="structure-map-doc-count">{documents.length} documents</span>
@@ -270,6 +214,12 @@ export default function DocumentStructureMap() {
             </span>
             <span aria-hidden>·</span>
             <span data-testid="structure-map-root-count">{rootIds.length} roots</span>
+            {orphanTotal > 0 ? (
+              <>
+                <span aria-hidden>·</span>
+                <span data-testid="structure-map-orphan-count">{orphanTotal} orphans</span>
+              </>
+            ) : null}
           </div>
         </div>
         <GraphOrientationToggle
@@ -281,6 +231,41 @@ export default function DocumentStructureMap() {
       </div>
 
       <GraphCoach surface="document_structure_map" />
+
+      {bands.length > 0 ? (
+        <div
+          className="flex flex-wrap gap-2"
+          role="toolbar"
+          aria-label="Cascade level bands"
+          data-testid="structure-map-bands"
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant={bandFilter === 'all' ? 'default' : 'outline'}
+            onClick={() => setBandFilter('all')}
+            data-testid="structure-map-band-all"
+          >
+            All ({documents.length})
+          </Button>
+          {bands.map((band) => {
+            const key = band.level == null ? 'unset' : String(band.level)
+            const filterValue = bandFilterFromSummary(band)
+            return (
+              <Button
+                key={key}
+                type="button"
+                size="sm"
+                variant={bandFilter === filterValue ? 'default' : 'outline'}
+                onClick={() => setBandFilter(filterValue)}
+                data-testid={`structure-map-band-${key}`}
+              >
+                {structureMapBandButtonLabel(band)}
+              </Button>
+            )
+          })}
+        </div>
+      ) : null}
 
       {error ? (
         <div
@@ -295,7 +280,7 @@ export default function DocumentStructureMap() {
       {loading && documents.length === 0 ? (
         <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          Loading library structure…
+          Loading cascade structure…
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(240px,320px)_1fr]">
@@ -303,7 +288,7 @@ export default function DocumentStructureMap() {
             <div className="space-y-1">
               <h2 className="text-sm font-medium text-foreground">Library focus</h2>
               <p className="text-xs text-muted-foreground">
-                Roots listed first when known. Search to jump anywhere in the library.
+                Roots listed first when known. Filter by cascade band or search title / PEL.
               </p>
             </div>
             <Input
@@ -319,7 +304,7 @@ export default function DocumentStructureMap() {
             >
               {filteredDocuments.length === 0 ? (
                 <li className="text-sm text-muted-foreground px-1 py-2">
-                  {filter.trim()
+                  {filter.trim() || bandFilter !== 'all'
                     ? 'No documents match your filter.'
                     : structureMapEmptyCopy(documents.length > 0)}
                 </li>
@@ -327,6 +312,7 @@ export default function DocumentStructureMap() {
                 filteredDocuments.map((doc) => {
                   const isRoot = rootIds.includes(doc.id)
                   const selected = doc.id === focusId
+                  const levelBadge = structureMapLevelBadge(doc.cascadeLevel)
                   return (
                     <li key={doc.id}>
                       <button
@@ -342,6 +328,14 @@ export default function DocumentStructureMap() {
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-medium text-foreground">{doc.title}</span>
+                          {levelBadge ? (
+                            <Badge
+                              variant="outline"
+                              data-testid={`structure-map-level-${doc.id}`}
+                            >
+                              {levelBadge}
+                            </Badge>
+                          ) : null}
                           {isRoot ? (
                             <Badge variant="secondary" data-testid={`structure-map-root-${doc.id}`}>
                               Root
@@ -351,6 +345,11 @@ export default function DocumentStructureMap() {
                         <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-muted-foreground">
                           {doc.reference ? (
                             <span className="font-mono">{doc.reference}</span>
+                          ) : null}
+                          {doc.parentPel ? (
+                            <span data-testid={`structure-map-parent-${doc.id}`}>
+                              Parent {doc.parentPel}
+                            </span>
                           ) : null}
                           {doc.documentType ? <span>{doc.documentType}</span> : null}
                         </div>
@@ -363,10 +362,10 @@ export default function DocumentStructureMap() {
           </Card>
 
           <Card className="p-4 space-y-3" data-testid="structure-map-canvas">
-            {loadingEdges ? (
+            {loading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                Loading confirmed implements edges…
+                Loading cascade aggregate…
               </div>
             ) : null}
             {focusDoc ? (

@@ -1,11 +1,17 @@
 /**
- * Pure helpers for the whole-library Structure map (DG-3).
+ * Pure helpers for the whole-library Structure map (DG-3 + NS-EXP / W8).
  *
  * Explores confirmed `implements` edges across the library using the DG-1 map
- * model. Never calls Doc Graph the Golden Thread. Never invents ISO %.
+ * model, fed by the estate cascade aggregate (one request — not 1+N). Never
+ * calls Doc Graph the Golden Thread. Never invents ISO %.
  */
-import type { DocumentEdge } from '../../api/documentGraphClient'
+import type {
+  CascadeBandSummary,
+  CascadeDocumentItem,
+  DocumentEdge,
+} from '../../api/documentGraphClient'
 import { isActiveDocumentEdge } from '../../pages/documentRelationshipHelpers'
+import { formatCascadeLevelBadge } from '../../pages/documentFilingWizard'
 import {
   buildRelationshipMapModel,
   type RelationshipMapModel,
@@ -19,11 +25,16 @@ import {
 /** Structure map prefers vertical spine (was "spine explorer"). */
 export const STRUCTURE_MAP_DEFAULT_ORIENTATION: GraphOrientation = 'vertical'
 
+export type StructureMapBandFilter = number | 'unset' | 'all'
+
 export interface StructureMapDocumentRef {
   id: number
   title: string
   reference?: string | null
   documentType?: string | null
+  cascadeLevel?: number | null
+  parentPel?: string | null
+  parentDocumentId?: number | null
 }
 
 /**
@@ -139,6 +150,43 @@ export function structureMapEmptyCopy(hasLibraryDocuments: boolean): string {
     return 'No library documents available to explore yet.'
   }
   return 'No confirmed implements relationships for this focus document yet. Propose and confirm edges from Document Relationships — Structure map never invents a spine.'
+}
+
+/** Map cascade aggregate documents onto the Structure map picker model. */
+export function mapCascadeDocumentsToStructureRefs(
+  documents: CascadeDocumentItem[],
+): StructureMapDocumentRef[] {
+  return documents.map((doc) => ({
+    id: doc.document_id,
+    title: (doc.title ?? '').trim() || `Document #${doc.document_id}`,
+    reference: doc.pel_doc_ref ?? doc.reference ?? null,
+    documentType: doc.document_type ?? null,
+    cascadeLevel: doc.cascade_level ?? null,
+    parentPel: doc.parent_pel ?? null,
+    parentDocumentId: doc.parent_document_id ?? null,
+  }))
+}
+
+export function filterStructureMapDocumentsByBand(
+  documents: StructureMapDocumentRef[],
+  band: StructureMapBandFilter,
+): StructureMapDocumentRef[] {
+  if (band === 'all') return documents
+  if (band === 'unset') {
+    return documents.filter((doc) => doc.cascadeLevel == null)
+  }
+  return documents.filter((doc) => doc.cascadeLevel === band)
+}
+
+export function structureMapBandButtonLabel(band: CascadeBandSummary): string {
+  if (band.level == null) {
+    return `Unset (${band.count})`
+  }
+  return `${band.label} (${band.count})`
+}
+
+export function structureMapLevelBadge(level: number | null | undefined): string {
+  return formatCascadeLevelBadge(level)
 }
 
 export { DEFAULT_GRAPH_ORIENTATION, resolveGraphOrientation }

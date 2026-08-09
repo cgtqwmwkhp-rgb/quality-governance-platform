@@ -29,6 +29,7 @@ def test_ims052_columns_contract_is_locked():
         "Status",
         "Function",
         "Level",
+        "Parent PEL",
         "Category",
         "Last Review Date",
         "Next Review Date",
@@ -37,7 +38,7 @@ def test_ims052_columns_contract_is_locked():
         "Retention",
         "Hyperlink",
     )
-    assert len(IMS052_COLUMNS) == 16
+    assert len(IMS052_COLUMNS) == 17
 
 
 def test_build_register_row_maps_fields_and_keeps_legacy_empty():
@@ -59,6 +60,7 @@ def test_build_register_row_maps_fields_and_keeps_legacy_empty():
         function_name="IT & Information Security",
         category_name="Policies",
         location_name="Head Office",
+        parent_pel="PEL-HSEQ-1001",
     )
     assert row[0] == "PEL-IT-2014"
     assert row[1] == ""  # Legacy IMS — no field yet
@@ -69,13 +71,14 @@ def test_build_register_row_maps_fields_and_keeps_legacy_empty():
     assert row[6] == "approved"
     assert row[7] == "IT & Information Security"
     assert row[8] == "L2"  # NS-1 cascade level, matching the 2### band
-    assert row[9] == "Policies"
-    assert row[10] == "2026-01-15"  # reviewed_at = Last Review
-    assert row[11] == "2027-01-15"  # review_date = Next Review
-    assert row[12] == "Head Office"
-    assert row[13] == "managers"
-    assert row[14] == "2031-01-15"
-    assert row[15] == "/documents/42"
+    assert row[9] == "PEL-HSEQ-1001"  # NS-EXP Parent PEL from confirmed primary parent
+    assert row[10] == "Policies"
+    assert row[11] == "2026-01-15"  # reviewed_at = Last Review
+    assert row[12] == "2027-01-15"  # review_date = Next Review
+    assert row[13] == "Head Office"
+    assert row[14] == "managers"
+    assert row[15] == "2031-01-15"
+    assert row[16] == "/documents/42"
 
 
 def test_build_register_row_leaves_level_blank_for_a_legacy_unbanded_document():
@@ -94,6 +97,7 @@ def test_build_register_row_leaves_level_blank_for_a_legacy_unbanded_document():
         retention_until=None,
     )
     assert build_register_row(doc)[8] == ""
+    assert build_register_row(doc)[9] == ""  # no confirmed primary parent → blank Parent PEL
 
 
 def test_build_register_row_does_not_transpose_review_dates():
@@ -110,8 +114,8 @@ def test_build_register_row_does_not_transpose_review_dates():
         retention_until=None,
     )
     row = build_register_row(doc)
-    assert row[10] == "2025-06-01"
-    assert row[11] == "2026-06-01"
+    assert row[11] == "2025-06-01"
+    assert row[12] == "2026-06-01"
 
 
 def test_formula_injection_prefixed_in_title():
@@ -294,12 +298,13 @@ async def test_build_document_register_rows_filters_inactive_and_acl():
         def all(self):
             return list(self._pairs)
 
-    # execute order: documents select, taxonomy for restricted
+    # execute order: documents select, taxonomy for restricted, primary-parent edges
     db = SimpleNamespace(
         execute=AsyncMock(
             side_effect=[
                 _Result(values=[active_ok, active_restricted]),
                 _Result(pairs=[(99, "02.08")]),  # restricted OH taxonomy
+                _Result(pairs=[]),  # no confirmed primary parents
             ]
         )
     )
@@ -307,6 +312,7 @@ async def test_build_document_register_rows_filters_inactive_and_acl():
     rows, total, truncated = await build_document_register_rows(db, 1, user=staff, row_limit=10_000)
     assert len(rows) == 1
     assert rows[0][3] == "Visible"
+    assert rows[0][9] == ""  # Parent PEL blank without a confirmed primary parent
     assert total == 1
     assert truncated is False
 
@@ -314,6 +320,7 @@ async def test_build_document_register_rows_filters_inactive_and_acl():
 @pytest.mark.asyncio
 async def test_build_document_register_rows_applies_acl_before_export_limit():
     from src.domain.models.document import Document
+    from src.domain.models.document_graph import DocumentEdge
     from src.domain.services.document_register_export import build_document_register_rows
 
     def _doc(doc_id: int, title: str, access_level: str, category_id: int | None = None):
@@ -371,6 +378,8 @@ async def test_build_document_register_rows_applies_acl_before_export_limit():
             if limit_clause is not None:
                 selected = selected[: int(limit_clause.value)]
             return _Result(values=selected)
+        if entity is DocumentEdge:
+            return _Result(pairs=[])
         return _Result(pairs=[(99, "02.08")])
 
     db = SimpleNamespace(execute=AsyncMock(side_effect=_execute))
@@ -381,3 +390,88 @@ async def test_build_document_register_rows_applies_acl_before_export_limit():
     assert [row[3] for row in rows] == ["Readable A", "Readable B"]
     assert total == 3
     assert truncated is True
+
+
+@pytest.mark.asyncio
+async def test_build_document_register_rows_fills_parent_pel_from_confirmed_primary_edge():
+    """Parent PEL comes only from a confirmed primary-parent implements edge."""
+    from src.domain.models.document import Document
+    from src.domain.models.document_graph import DocumentEdge
+    from src.domain.services.document_register_export import build_document_register_rows
+
+    child = SimpleNamespace(
+        id=20,
+        tenant_id=1,
+        is_active=True,
+        category_id=None,
+        function_id=None,
+        site_location_id=None,
+        access_level="all_staff",
+        pel_doc_ref="PEL-HSEQ-3001",
+        title="Procedure",
+        reference_number="DOC-20",
+        version="1.0",
+        status="approved",
+        cascade_level=3,
+        reviewed_at=None,
+        review_date=None,
+        retention_until=None,
+    )
+    parent = SimpleNamespace(
+        id=10,
+        tenant_id=1,
+        is_active=True,
+        category_id=None,
+        function_id=None,
+        site_location_id=None,
+        access_level="all_staff",
+        pel_doc_ref="PEL-HSEQ-2001",
+        title="Policy",
+        reference_number="DOC-10",
+        version="1.0",
+        status="approved",
+        cascade_level=2,
+        reviewed_at=None,
+        review_date=None,
+        retention_until=None,
+    )
+
+    class _Scalars:
+        def __init__(self, values):
+            self._values = values
+
+        def all(self):
+            return list(self._values)
+
+    class _Result:
+        def __init__(self, *, values=None, pairs=None):
+            self._values = list(values or [])
+            self._pairs = list(pairs or [])
+
+        def scalars(self):
+            return _Scalars(self._values)
+
+        def all(self):
+            return list(self._pairs)
+
+    async def _execute(statement):
+        entity = statement.column_descriptions[0].get("entity")
+        if entity is Document:
+            # First Document query is the estate; later one resolves parent PELs.
+            cols = [c.get("name") for c in statement.column_descriptions]
+            if cols == ["id", "pel_doc_ref"] or set(cols) == {"id", "pel_doc_ref"}:
+                return _Result(pairs=[(10, "PEL-HSEQ-2001")])
+            return _Result(values=[child, parent])
+        if entity is DocumentEdge:
+            return _Result(pairs=[(20, 10, None)])  # edge stamp blank → use live parent pel
+        return _Result(pairs=[])
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=_execute))
+    staff = SimpleNamespace(is_superuser=True, has_permission=lambda _p: True)
+
+    rows, total, truncated = await build_document_register_rows(db, 1, user=staff, row_limit=10_000)
+    by_title = {row[3]: row for row in rows}
+    assert by_title["Procedure"][9] == "PEL-HSEQ-2001"
+    assert by_title["Policy"][9] == ""
+    assert total == 2
+    assert truncated is False
