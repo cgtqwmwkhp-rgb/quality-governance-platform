@@ -15,7 +15,7 @@ from typing import Any, Sequence
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.document import Document
@@ -177,7 +177,6 @@ async def build_document_register_rows(
         .where(Document.tenant_id == tenant_id)
         .where(Document.is_active.is_(True))
         .order_by(Document.id.desc())
-        .limit(row_limit)
     )
     result = await db.execute(stmt)
     documents = list(result.scalars().all())
@@ -201,19 +200,13 @@ async def build_document_register_rows(
         if user_can_read_library_document(doc, user, taxonomy_id=tax):
             visible.append(doc)
 
-    # Honest totals: count active docs then subtract ACL-hidden among the page.
-    # For exports under the sync row cap we recount visible on the loaded page
-    # and approximate total via a second active count minus hidden-on-page.
-    # Prefer exact post-ACL total when the estate fits under the cap.
-    active_total = await _count_active(db, tenant_id)
-    hidden_on_page = len(documents) - len(visible)
-    if active_total <= row_limit:
-        total_visible = len(visible)
-        truncated = False
-    else:
-        # Cap hit — report active total as upper bound minus known hidden on page.
-        total_visible = max(0, active_total - hidden_on_page)
-        truncated = True
+    # ACL must run across the whole active estate before the export cap is
+    # applied. Limiting the SQL query first can omit older readable documents,
+    # and an active-row count cannot produce an exact post-ACL total.
+    total_visible = len(visible)
+    truncated = total_visible > row_limit
+    if truncated:
+        visible = visible[:row_limit]
 
     function_ids = {d.function_id for d in visible if d.function_id is not None}
     category_ids = {d.category_id for d in visible if d.category_id is not None}
@@ -248,17 +241,6 @@ async def build_document_register_rows(
         for doc in visible
     ]
     return data_rows, total_visible, truncated
-
-
-async def _count_active(db: AsyncSession, tenant_id: int) -> int:
-    stmt = (
-        select(func.count())
-        .select_from(Document)
-        .where(Document.tenant_id == tenant_id)
-        .where(Document.is_active.is_(True))
-    )
-    result = await db.execute(stmt)
-    return int(result.scalar_one() or 0)
 
 
 def serialize_register(
