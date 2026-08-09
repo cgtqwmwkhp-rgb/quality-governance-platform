@@ -4185,5 +4185,7 @@
   "compliance.schedule.form.historical_evidence_label": "Add historical evidence",
   "compliance.schedule.form.historical_evidence_add": "Add evidence files",
   "compliance.schedule.form.historical_complete_error": "The obligation was created, but recording the past completion or attaching evidence failed. Open the obligation to retry from Record completion.",
-  "compliance.schedule.form.historical_open_detail": "Open obligation to retry evidence"
+  "compliance.schedule.form.historical_open_detail": "Open obligation to retry evidence",
+  "documents.table.caption": "Master Document Register",
+  "documents.table.open_aria": "Open {{ref}} — {{title}}"
 }

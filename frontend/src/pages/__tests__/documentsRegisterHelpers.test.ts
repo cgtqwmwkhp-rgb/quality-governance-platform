@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   documentRegisterPrimaryRef,
+  documentRegisterStatusTone,
   resolveDocumentRegisterHref,
 } from '../documentsRegisterHelpers'
 
@@ -43,5 +44,39 @@ describe('documentRegisterPrimaryRef', () => {
         pel_doc_ref: null,
       }),
     ).toEqual({ lead: 'DOC-11', secondary: null, hasPel: false })
+  })
+})
+
+describe('documentRegisterStatusTone (L-08 greyscale)', () => {
+  it('maps known statuses to greyscale closed variant with distinct icons', () => {
+    expect(documentRegisterStatusTone('approved')).toEqual({
+      variant: 'closed',
+      icon: 'check',
+      label: 'approved',
+    })
+    expect(documentRegisterStatusTone('processing')).toEqual({
+      variant: 'closed',
+      icon: 'loader',
+      label: 'processing',
+    })
+    expect(documentRegisterStatusTone('pending')).toEqual({
+      variant: 'closed',
+      icon: 'clock',
+      label: 'pending',
+    })
+    expect(documentRegisterStatusTone('failed')).toEqual({
+      variant: 'closed',
+      icon: 'alert',
+      label: 'failed',
+    })
+  })
+
+  it('falls back for unknown status without inventing colour', () => {
+    expect(documentRegisterStatusTone('weird')).toEqual({
+      variant: 'closed',
+      icon: 'dot',
+      label: 'weird',
+    })
+    expect(documentRegisterStatusTone(null).variant).toBe('closed')
   })
 })

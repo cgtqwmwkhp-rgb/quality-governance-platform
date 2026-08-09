@@ -1,4 +1,4 @@
-"""Export Center API — sync CSV catalog + download (PX-160).
+"""Export Center API — sync catalog + download (PX-160 + WA-3 IMS052).
 
 No async export_jobs table this wave (Lane S owns alembic). Job history and
 scheduled templates remain honestly unavailable.
@@ -25,7 +25,7 @@ from src.domain.services.export_center_service import ExportCenterService
 router = APIRouter()
 
 
-def _csv_response(result) -> StreamingResponse:
+def _export_response(result) -> StreamingResponse:
     headers = {
         "Content-Disposition": f'attachment; filename="{result.filename}"',
         "X-Export-Module": result.module,
@@ -35,8 +35,8 @@ def _csv_response(result) -> StreamingResponse:
         "X-Export-Mode": "sync",
     }
     return StreamingResponse(
-        iter([result.csv_text]),
-        media_type="text/csv; charset=utf-8",
+        iter([result.content]),
+        media_type=result.media_type,
         headers=headers,
     )
 
@@ -63,14 +63,15 @@ async def create_sync_export(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("incident:read"))],
 ) -> StreamingResponse:
-    """Run a synchronous CSV export and stream the file immediately.
+    """Run a synchronous export and stream the file immediately.
 
     Matches WORKFLOW_REGISTRY ``POST /api/v1/exports``. Does not enqueue a job.
+    Documents module emits the fixed IMS052 Register pack (csv/xlsx/pdf).
     """
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     service = ExportCenterService(db)
-    result = await service.build_sync_csv(tenant_id, body.module, body.format)
-    return _csv_response(result)
+    result = await service.build_sync_csv(tenant_id, body.module, body.format, user=current_user)
+    return _export_response(result)
 
 
 @router.get("/{module}/csv")
@@ -80,8 +81,8 @@ async def download_module_csv(
     current_user: Annotated[User, Depends(require_permission("incident:read"))],
     export_format: str = Query("csv", alias="format"),
 ) -> StreamingResponse:
-    """GET convenience for sync CSV download of a single module."""
+    """GET convenience for sync download of a single module (format=csv|xlsx|pdf)."""
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     service = ExportCenterService(db)
-    result = await service.build_sync_csv(tenant_id, module, export_format)
-    return _csv_response(result)
+    result = await service.build_sync_csv(tenant_id, module, export_format, user=current_user)
+    return _export_response(result)

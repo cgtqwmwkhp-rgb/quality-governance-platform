@@ -1,5 +1,6 @@
 /**
- * Master Document Register list projection helpers (WA-1 / L-01 / L-05 / L-05b).
+ * Master Document Register list projection helpers (WA-1 / L-01 / L-05 / L-05b)
+ * + WA-3 / L-08 status tone (greyscale + SR-legible icon key).
  *
  * Open paths prefer the API `href` field projected via server
  * `href_registry.document_href` — callers must not invent parallel SPA builders
@@ -19,6 +20,16 @@ export interface DocumentRegisterPrimaryRef {
   /** Secondary chip when PEL leads (typically DOC-YYYY-####). */
   secondary: string | null
   hasPel: boolean
+}
+
+export type DocumentRegisterStatusIcon = 'check' | 'clock' | 'loader' | 'alert' | 'dot'
+
+export interface DocumentRegisterStatusTone {
+  /** Greyscale badge variant — colour is never the sole status cue (L-08). */
+  variant: 'closed' | 'secondary' | 'outline'
+  icon: DocumentRegisterStatusIcon
+  /** Raw status string for visible + SR text. */
+  label: string
 }
 
 /**
@@ -51,4 +62,27 @@ export function documentRegisterPrimaryRef(doc: {
     return { lead: pel, secondary: reference, hasPel: true }
   }
   return { lead: reference, secondary: null, hasPel: false }
+}
+
+/**
+ * Greyscale status tone for Register cells (L-08).
+ * Hue is never the only cue — callers pair this with an icon keyed by `icon`.
+ */
+export function documentRegisterStatusTone(
+  status?: string | null,
+): DocumentRegisterStatusTone {
+  const label = (typeof status === 'string' ? status : '').trim() || 'unknown'
+  switch (label) {
+    case 'indexed':
+    case 'approved':
+      return { variant: 'closed', icon: 'check', label }
+    case 'processing':
+      return { variant: 'closed', icon: 'loader', label }
+    case 'pending':
+      return { variant: 'closed', icon: 'clock', label }
+    case 'failed':
+      return { variant: 'closed', icon: 'alert', label }
+    default:
+      return { variant: 'closed', icon: 'dot', label }
+  }
 }

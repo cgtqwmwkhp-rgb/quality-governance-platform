@@ -11,7 +11,15 @@ import { expectNoA11yViolations } from '../../test/axe-helper'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) => {
+      if (key === 'documents.table.open_aria' && options) {
+        return `Open ${options.ref} — ${options.title}`
+      }
+      if (key === 'documents.table.caption') {
+        return 'Master Document Register'
+      }
+      return key
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -102,5 +110,61 @@ describe('Documents page accessibility (real page)', () => {
       expect(screen.getByText('Safety Policy')).toBeInTheDocument()
     })
     await expectNoA11yViolations(container)
+  })
+
+  it('keeps greyscale status and unique open link names under pathological titles (L-08)', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({
+          data: {
+            items: [
+              {
+                id: 11,
+                reference_number: 'DOC-11',
+                pel_doc_ref: 'PEL-HSEQ-0001',
+                title: `${'Very long pathological title '.repeat(20)} end`,
+                file_name: 'policy.pdf',
+                file_type: 'pdf',
+                file_size: 2048,
+                document_type: 'policy',
+                sensitivity: 'internal',
+                status: 'approved',
+                version: '1.0',
+                view_count: 0,
+                download_count: 0,
+                is_public: false,
+                created_at: '2026-03-22T10:00:00Z',
+                created_by_name: `${'UploaderName'.repeat(30)}`,
+                href: '/documents/11',
+              },
+            ],
+          },
+        })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    render(<Documents />, { wrapper: Wrapper })
+    await waitFor(() => {
+      expect(screen.getByTestId('documents-register-table')).toBeInTheDocument()
+    })
+    const status = screen.getByTestId('documents-register-status')
+    expect(status).toHaveAttribute('data-status', 'approved')
+    expect(status.className).not.toMatch(/success|destructive|purple|emerald/)
+    expect(
+      screen.getByRole('link', { name: /Open PEL-HSEQ-0001/i }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader').length).toBeGreaterThanOrEqual(8)
   })
 })
