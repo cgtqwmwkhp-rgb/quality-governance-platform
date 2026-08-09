@@ -1,7 +1,7 @@
 # Change Ledger (CL-LIB-WJ0-DROP-COLLABORATIVE)
 
 **Path claim:** `library/wj0-drop-collaborative` (L-35a)  
-**PR status:** **HOLD** — prep branch only; open PR after WI-2 PROD LIVE and alembic head is free of WI-1 `#1687`.
+**PR status:** OPEN — prep inventory after WI-2 `#1691` PROD LIVE `5d1e14ec0c8`. Demolition (DROP + code delete) is a **separate** PR revising `20261031_lib_wi2_homes`.
 
 ## File allowlist (exclusive) — this prep commit
 
@@ -21,7 +21,7 @@
 ## 1) Summary
 
 - **Feature / Change name:** Library WJ-0 / L-35a — DROP `collaborative_*` CRDT trap (prep)
-- **User goal (1–2 lines):** Inventory and freeze the dormant collaborative CRDT stack so WJ-1 native editor cannot land on top of it; demolition executes after WI-2 PROD.
+- **User goal (1–2 lines):** Inventory and freeze the dormant collaborative CRDT stack so WJ-1 native editor cannot land on top of it; demolition DROP is a follow-up after this prep lands LIVE.
 - **In scope (prep):** Inventory + demolition checklist + Change Ledger + deprecation banners on dormant modules
 - **Out of scope:** Alembic DROP; deleting tables/code; DocumentDetail editor; realtime WS gutting
 - **Feature flag / kill switch:** N/A — stack already unwired (no `/realtime/collab` handler; no page consumers). Demolition removes code rather than flagging it.
@@ -32,7 +32,7 @@
 |---------|--------|--------------|
 | Docs | No L-35a inventory | `library-wj0-drop-collaborative-inventory.md` |
 | Models / service / FE hooks | Dormant CRDT | Same behaviour + WJ-0 deprecation banners |
-| Alembic | WI-1 owns next head | **Unchanged** (DROP held) |
+| Alembic | WI-2 LIVE; head free for next serial | **Unchanged in this PR** (DROP deferred to demolition) |
 | APIs | No collab HTTP; realtime in-memory only | Comment clarifying `/collab` will not be added |
 | DocumentDetail / CEL / graph | Untouched | Untouched |
 
@@ -65,7 +65,7 @@
 - [x] Static inventory via `rg` on `origin/main` @ `c8934dc67` (worktree)
 - [x] Confirmed no page consumers for `useCollaboration` / LiveCursors / CollaboratorCursors
 - [x] Confirmed no `/realtime/collab` route; OpenAPI has no collaboration paths
-- [ ] Full CI — when PR opened (HOLD)
+- [ ] Full CI — when PR opened
 - [ ] Staging / Prod — N/A behaviour for prep; tip chase after merge per conveyor
 
 ## 6) Critical Journeys Verified (CUJ)
@@ -80,9 +80,9 @@
 
 ## 8) Release Plan
 
-1. Push prep branch · **HOLD PR**
-2. After WI-2 PROD LIVE: open demolition PR (code delete + alembic DROP + ledger AC-06)
-3. Merge only when alembic head is singular; verify tip LIVE
+1. Open this prep PR (now) · merge when CI green · tip-chase LIVE
+2. Follow-up demolition PR: code delete + alembic DROP + ledger AC-06 (sole alembic)
+3. Merge demolition only with singular alembic head; verify tip LIVE
 
 ## 9) Rollback Plan (Mandatory)
 
@@ -95,7 +95,7 @@
 - Conveyor: `library-spine-conveyor.canvas.tsx` slice WJ-0
 - Anti-dupe: L-35a “DROP collaborative_* before editor”
 - Inventory: `docs/governance/library-wj0-drop-collaborative-inventory.md`
-- WI-1 open PR: `#1687` (`feat/lib-wi1-cel-harden-scheme`) — sole alembic owner until LIVE
+- WI-2 LIVE: `#1691` tip `5d1e14ec0c8` — alembic head `20261031_lib_wi2_homes` free for WJ-0 demolition next
 
 ---
 
@@ -106,4 +106,4 @@
 - [ ] **Gate 2:** CI green (when PR opened)
 - [x] **Gate 3:** N/A behaviour — verify files on tip after merge
 - [x] **Gate 4:** N/A
-- [ ] **Gate 5:** DONE = tip LIVE after merge (docs deploy with app tip) — HOLD until PR opened post WI-2
+- [ ] **Gate 5:** DONE = tip LIVE after merge (docs deploy with app tip)

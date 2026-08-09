@@ -1,9 +1,9 @@
 # WJ-0 / L-35a — DROP `collaborative_*` inventory (prep)
 
-**Status:** PREP ONLY — branch `feat/lib-wj0-drop-collaborative` · **HOLD PR** until WI-2 PROD LIVE.  
-**Base tip inventoried:** `origin/main` @ `c8934dc67`  
+**Status:** PREP — branch `feat/lib-wj0-drop-collaborative` · WI-2 `#1691` PROD LIVE `5d1e14ec0c8` · open inventory PR; demolition PR next (sole alembic).
+**Base tip inventoried:** originally `c8934dc67`; rebased onto `origin/main` @ `5d1e14ec0c8` (WI-2 LIVE).
 **Depends (merge/demolition):** WI-2 PROD (conveyor serial). Prep may land earlier as docs-only.  
-**Alembic:** Do **not** open a DROP migration while WI-1 `#1687` owns the next head (`20261030_lib_wi1_cel_harden_scheme`). Revise `down_revision` after WI-1 merges, then again after any WI-2 migrations.
+**Alembic:** WI-2 head `20261031_lib_wi2_homes` is LIVE. Demolition DROP must set `down_revision = "20261031_lib_wi2_homes"` (sole next alembic). This prep still ships **zero** alembic files.
 
 **Conflict surface (allowed):** collaboration models / service / orphan FE · **not** DocumentDetail, CEL/standards/clauses, upload wizard, `document_graph`, Structure map.  
 **Realtime caution:** `/api/v1/realtime/*` also serves in-memory WS presence/notifications — demolish CRDT callers only; do not gut the WS router until FE consumers are confirmed dead.
@@ -73,8 +73,8 @@ No `yjs` / `y-websocket` dependency in root or frontend `package.json` / `requir
 
 ### Gate 0 — serial + evidence
 
-- [ ] WI-1 `#1687` merged + PROD LIVE (alembic head free of competing WI-1 revision)
-- [ ] WI-2 PROD LIVE (conveyor depends)
+- [x] WI-1 `#1687` merged + PROD LIVE (alembic head free of competing WI-1 revision)
+- [x] WI-2 PROD LIVE (conveyor depends) — tip `5d1e14ec0c8` STG=PROD healthz 200
 - [ ] Capture prod row counts for five tables; backup/export if non-empty
 - [ ] Confirm no runtime callers via OpenAPI + `rg CollaborationService|collaborative_|/realtime/collab`
 
