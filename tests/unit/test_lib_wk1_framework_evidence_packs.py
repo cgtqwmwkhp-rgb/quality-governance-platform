@@ -77,6 +77,55 @@ def test_framework_filter_ignores_cross_scheme_noise() -> None:
     assert row_matches_framework({"standard": "PLANET_MARK"}, "planet_mark")
 
 
+def test_current_issue_count_includes_live_and_published_synonyms() -> None:
+    """Portal badge maps LIVE/PUBLISHED → CURRENT; pack counts must match."""
+    from src.domain.services.framework_evidence_pack_builder import is_current_issue_state
+
+    assert is_current_issue_state("CURRENT")
+    assert is_current_issue_state("live")
+    assert is_current_issue_state("Published")
+    assert not is_current_issue_state("SUPERSEDED")
+    assert not is_current_issue_state(None)
+
+    rows = [
+        {
+            "id": "a",
+            "entity_type": "document",
+            "entity_id": "1",
+            "clause_id": "9001-4.1",
+            "scheme": "iso9001",
+            "signal_type": "evidence",
+            "document_issue_state": "LIVE",
+        },
+        {
+            "id": "b",
+            "entity_type": "document",
+            "entity_id": "2",
+            "clause_id": "9001-4.2",
+            "scheme": "iso9001",
+            "signal_type": "evidence",
+            "document_issue_state": "PUBLISHED",
+        },
+        {
+            "id": "c",
+            "entity_type": "document",
+            "entity_id": "3",
+            "clause_id": "9001-4.3",
+            "scheme": "iso9001",
+            "signal_type": "evidence",
+            "document_issue_state": "SUPERSEDED",
+        },
+    ]
+    pack = build_iso9001_evidence_pack(
+        rows,
+        generated_at="2026-08-09T00:00:00Z",
+        exported_by="test",
+        organization_name="Org",
+    )
+    assert pack["counts"]["current_issue_links"] == 2
+    assert pack["counts"]["exported_evidence_links"] == 3
+
+
 def test_cover_kind_default_and_coexistence_shape() -> None:
     """WI-1 cover_kind is carried through; covers+evidences may coexist on same clause."""
     payload = _load("iso9001.input-rows.json")

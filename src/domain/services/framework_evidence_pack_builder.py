@@ -43,6 +43,9 @@ FRAMEWORK_META: dict[FrameworkId, dict[str, str]] = {
 _CONFORMANCE_SIGNALS = frozenset({"evidence", "", "none"})
 # legacy null/empty signal_type remains conformance-eligible (GKB WL1 honesty)
 
+# Align with portalCoverageBadgeHelpers: LIVE / PUBLISHED count as CURRENT issues.
+_CURRENT_ISSUE_STATES = frozenset({"CURRENT", "LIVE", "PUBLISHED"})
+
 
 class FrameworkEvidenceRow(TypedDict, total=False):
     """Typed CEL-shaped export row (dict-only; no ORM dependency)."""
@@ -97,6 +100,14 @@ def counts_toward_conformance(signal_type: str | None) -> bool:
     if signal in {"nonconformity", "gap", "opportunity"}:
         return False
     return signal in _CONFORMANCE_SIGNALS or signal == "evidence"
+
+
+def is_current_issue_state(document_issue_state: str | None) -> bool:
+    """True when issue state is CURRENT or a portal synonym (LIVE / PUBLISHED)."""
+    if not document_issue_state or not str(document_issue_state).strip():
+        return False
+    value = str(document_issue_state).strip().upper().replace(" ", "_")
+    return value in _CURRENT_ISSUE_STATES
 
 
 def serialize_framework_pack_row(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -167,7 +178,13 @@ def build_framework_evidence_pack(
         evidence_export = list(conformance_rows)
         exclusion_mode = "excluded_from_conformance_evidence"
 
-    current_count = sum(1 for row in evidence_export if str(row.get("document_issue_state") or "").upper() == "CURRENT")
+    current_count = sum(
+        1
+        for row in evidence_export
+        if is_current_issue_state(
+            row.get("document_issue_state") if isinstance(row.get("document_issue_state"), str) else None
+        )
+    )
 
     return {
         "pack_version": PACK_VERSION,
