@@ -48,6 +48,8 @@ import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { cn } from '../helpers/utils'
 import {
   PROPOSED_EVIDENCE_ANCHOR_ID,
+  documentDetailSectionDomId,
+  resolveDocumentDetailSection,
   resolveDocumentDetailTab,
   shouldScrollToProposedEvidence,
 } from './documentEvidenceTab'
@@ -180,7 +182,9 @@ export default function DocumentDetail() {
   const documentId = Number(id)
   const documentGraphEnabled = useFeatureFlag('document_graph')
   const entity360Enabled = useFeatureFlag('entity_360')
-  const defaultTab = resolveDocumentDetailTab(searchParams.get('tab'), { documentGraphEnabled })
+  const tabParam = searchParams.get('tab')
+  const defaultTab = resolveDocumentDetailTab(tabParam)
+  const detailSection = resolveDocumentDetailSection(tabParam)
   const campaignIdParam = Number(searchParams.get('campaignId'))
   const initialCampaignId =
     Number.isFinite(campaignIdParam) && campaignIdParam > 0 ? campaignIdParam : null
@@ -635,7 +639,7 @@ export default function DocumentDetail() {
     }
   }
 
-  // /documents/:id?tab=evidence → Standards & Evidence, scroll to proposed links.
+  // /documents/:id?tab=evidence → Coverage, scroll to proposed links.
   useEffect(() => {
     if (!shouldScrollToProposedEvidence(searchParams.get('tab'), window.location.hash)) return
     if (evidenceLoading) return
@@ -643,6 +647,16 @@ export default function DocumentDetail() {
     if (!node) return
     node.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [defaultTab, evidenceLoading, evidence.length, searchParams])
+
+  // Legacy assurance / used-by section anchors (?tab=qa|watch|quiz|campaign-results).
+  useEffect(() => {
+    if (!detailSection) return
+    const id = documentDetailSectionDomId(detailSection)
+    const frame = window.requestAnimationFrame(() => {
+      window.document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [defaultTab, detailSection])
 
   const handleOpenPreview = async (download = false) => {
     if (!document) return
@@ -862,11 +876,6 @@ export default function DocumentDetail() {
               documentGraphEnabled={documentGraphEnabled}
             />
           ) : null}
-          <Entity360Strip
-            entityType="document"
-            entityId={document.id}
-            documentGraphEnabled={documentGraphEnabled}
-          />
         </div>
         <div className="flex flex-wrap gap-2">
           {['draft', 'indexed', 'rejected'].includes(docStatus) ? (
@@ -923,26 +932,56 @@ export default function DocumentDetail() {
         </Card>
       ) : null}
 
-      <Tabs defaultValue={defaultTab} key={defaultTab}>
-        <TabsList className="flex flex-wrap h-auto gap-1">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="evidence">Standards & Evidence</TabsTrigger>
-          {documentGraphEnabled ? (
-            <TabsTrigger value="relationships" data-testid="document-relationships-tab">
-              Relationships
-              {relationshipSummary.pending > 0 ? ` (${relationshipSummary.pending})` : ''}
-            </TabsTrigger>
-          ) : null}
-          <TabsTrigger value="versions">Versions</TabsTrigger>
-          <TabsTrigger value="quiz">{t('documents.detail.tab_share_quiz_compliance')}</TabsTrigger>
-          <TabsTrigger value="campaign-results">
-            {t('documents.detail.tab_campaign_results', 'Campaign results')}
+      <Tabs defaultValue={defaultTab} key={defaultTab} data-testid="document-detail-layers">
+        <TabsList className="flex flex-wrap h-auto gap-1" data-testid="document-detail-layer-list">
+          <TabsTrigger value="control" data-testid="document-layer-control">
+            {t('documents.detail.layer_control', 'Control')}
           </TabsTrigger>
-          <TabsTrigger value="qa">Q&A</TabsTrigger>
-          <TabsTrigger value="watch">Watch</TabsTrigger>
+          <TabsTrigger value="coverage" data-testid="document-layer-coverage">
+            {t('documents.detail.layer_coverage', 'Coverage')}
+          </TabsTrigger>
+          <TabsTrigger value="related" data-testid="document-layer-related">
+            {t('documents.detail.layer_related', 'Related')}
+            {documentGraphEnabled && relationshipSummary.pending > 0
+              ? ` (${relationshipSummary.pending})`
+              : ''}
+          </TabsTrigger>
+          <TabsTrigger value="used-by" data-testid="document-layer-used-by">
+            {t('documents.detail.layer_used_by', 'Used by')}
+          </TabsTrigger>
+          <TabsTrigger value="history" data-testid="document-layer-history">
+            {t('documents.detail.layer_history', 'History')}
+          </TabsTrigger>
+          <TabsTrigger value="assurance" data-testid="document-layer-assurance">
+            {t('documents.detail.layer_assurance', 'Assurance')}
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-4 space-y-4">
+        <TabsContent value="control" className="mt-4 space-y-4">
+          {canEditTitle && (
+            <Card className="p-4 space-y-3" data-testid="document-title-edit">
+              <h4 className="font-medium text-foreground">Document title</h4>
+              <p className="text-xs text-muted-foreground">
+                Edit the title on draft/working rows without opening a new version.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  data-testid="document-title-input"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => void handleSaveTitle()}
+                  disabled={savingTitle || !titleDraft.trim() || titleDraft.trim() === document.title}
+                  data-testid="document-title-save"
+                >
+                  {savingTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save title'}
+                </Button>
+              </div>
+            </Card>
+          )}
+
           {(() => {
             const downstream = buildDocumentDownstreamView(document)
             return (
@@ -1060,7 +1099,7 @@ export default function DocumentDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="evidence" className="mt-4 space-y-4">
+        <TabsContent value="coverage" className="mt-4 space-y-4">
           <div
             id={PROPOSED_EVIDENCE_ANCHOR_ID}
             ref={proposedSectionRef}
@@ -1205,8 +1244,8 @@ export default function DocumentDetail() {
           )}
         </TabsContent>
 
-        {documentGraphEnabled ? (
-          <TabsContent value="relationships" className="mt-4 space-y-4">
+        <TabsContent value="related" className="mt-4 space-y-4">
+          {documentGraphEnabled ? (
             <DocumentRelationshipsPanel
               documentId={document.id}
               documentTitle={document.title}
@@ -1216,33 +1255,52 @@ export default function DocumentDetail() {
               error={edgesError}
               onChanged={loadEdges}
             />
-          </TabsContent>
-        ) : null}
-
-        <TabsContent value="versions" className="mt-4 space-y-4">
-          {canEditTitle && (
-            <Card className="p-4 space-y-3" data-testid="document-title-edit">
-              <h4 className="font-medium text-foreground">Document title</h4>
-              <p className="text-xs text-muted-foreground">
-                Edit the title on draft/working rows without opening a new version.
+          ) : (
+            <Card className="p-4" data-testid="document-related-graph-off">
+              <h3 className="font-medium text-foreground">
+                {t('documents.detail.related_graph_off_title', 'Related links not recorded here')}
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {t(
+                  'documents.detail.related_graph_off_body',
+                  'Document Graph is not switched on in this environment, so parent/child and reference links are not shown. That does not mean none exist — ask a platform admin to enable Doc Graph when relationship recording is required.',
+                )}
               </p>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  data-testid="document-title-input"
-                />
-                <Button
-                  size="sm"
-                  onClick={() => void handleSaveTitle()}
-                  disabled={savingTitle || !titleDraft.trim() || titleDraft.trim() === document.title}
-                  data-testid="document-title-save"
-                >
-                  {savingTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save title'}
-                </Button>
-              </div>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="used-by" className="mt-4 space-y-4">
+          <div
+            id={documentDetailSectionDomId('connections')}
+            className="scroll-mt-24 space-y-2"
+            data-testid="document-used-by-connections"
+          >
+            <h3 className="text-sm font-medium text-foreground">
+              {t('documents.detail.used_by_connections', 'Connections')}
+            </h3>
+            <Entity360Strip
+              entityType="document"
+              entityId={document.id}
+              documentGraphEnabled={documentGraphEnabled}
+            />
+          </div>
+          <div
+            id={documentDetailSectionDomId('campaign-results')}
+            className="scroll-mt-24 space-y-2"
+            data-testid="document-used-by-campaigns"
+          >
+            <h3 className="text-sm font-medium text-foreground">
+              {t('documents.detail.used_by_campaigns', 'Campaigns')}
+            </h3>
+            <DocumentCampaignResults
+              documentId={documentId}
+              initialCampaignId={initialCampaignId}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4 space-y-4">
           <DocumentVersionControlBar
             documentLabel={document.title}
             currentVersion={versionHistory?.current_version ?? document.version}
@@ -1282,280 +1340,293 @@ export default function DocumentDetail() {
           </div>
         </TabsContent>
 
-        <TabsContent value="quiz" className="mt-4 space-y-4">
-          {quizAiFallback ? (
-            <div
-              className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"
-              role="alert"
-              data-testid="quiz-ai-fallback-banner"
-            >
-              {t('documents.detail.quiz_ai_fallback')}
-            </div>
-          ) : null}
-          <Card className="p-4 space-y-4">
-            <h3 className="font-medium text-foreground">Generate comprehension quiz</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="gkb-question-count" className="text-sm text-muted-foreground">
-                  Question count
-                </label>
-                <Input
-                  id="gkb-question-count"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  min={1}
-                  max={30}
-                  value={questionCountInput}
-                  onChange={(e) =>
-                    setQuestionCountInput(normalizeQuestionCountInput(e.target.value))
-                  }
-                  onBlur={() =>
-                    setQuestionCountInput(String(sanitizeQuestionCount(questionCountInput)))
-                  }
-                />
+        <TabsContent value="assurance" className="mt-4 space-y-4">
+          <div
+            id={documentDetailSectionDomId('quiz')}
+            className="scroll-mt-24 space-y-4"
+            data-testid="document-assurance-quiz"
+          >
+            {quizAiFallback ? (
+              <div
+                className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"
+                role="alert"
+                data-testid="quiz-ai-fallback-banner"
+              >
+                {t('documents.detail.quiz_ai_fallback')}
               </div>
-              <div>
-                <label htmlFor="gkb-pass-mark" className="text-sm text-muted-foreground">
-                  Pass mark (%)
-                </label>
-                <Input
-                  id="gkb-pass-mark"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={passMark}
-                  onChange={(e) => setPassMark(Number(e.target.value))}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={includeMcq}
-                  onChange={(e) => setIncludeMcq(e.target.checked)}
-                />
-                Include MCQ
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={includeOpen}
-                  onChange={(e) => setIncludeOpen(e.target.checked)}
-                />
-                Include open questions
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={autoApproveQuiz}
-                  onChange={(e) => setAutoApproveQuiz(e.target.checked)}
-                />
-                Auto-approve if quality
-              </label>
-            </div>
-            <Button onClick={() => void handleGenerateQuiz()} disabled={quizGenerating}>
-              {quizGenerating ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4 mr-2" />
-              )}
-              Generate quiz
-            </Button>
-          </Card>
-
-          {quizDraft && (
+            ) : null}
             <Card className="p-4 space-y-4">
-              <div className="flex items-center justify-between gap-2">
+              <h3 className="font-medium text-foreground">Generate comprehension quiz</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <h3 className="font-medium text-foreground">Quiz draft</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {quizDraft.questions.length} questions · pass {quizDraft.pass_mark}% ·{' '}
-                    {quizDraft.status}
-                  </p>
+                  <label htmlFor="gkb-question-count" className="text-sm text-muted-foreground">
+                    Question count
+                  </label>
+                  <Input
+                    id="gkb-question-count"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    min={1}
+                    max={30}
+                    value={questionCountInput}
+                    onChange={(e) =>
+                      setQuestionCountInput(normalizeQuestionCountInput(e.target.value))
+                    }
+                    onBlur={() =>
+                      setQuestionCountInput(String(sanitizeQuestionCount(questionCountInput)))
+                    }
+                  />
                 </div>
-                {quizDraft.status !== 'approved' && (
-                  <Button onClick={() => void handleApproveQuiz()} disabled={quizApproving}>
-                    {quizApproving ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                    )}
-                    Approve
-                  </Button>
-                )}
-              </div>
-              <div className="space-y-3">
-                {(quizDraft.questions as Array<{ question?: string; type?: string }>).map(
-                  (q, idx) => (
-                    <div key={idx} className="rounded-lg border border-border p-3">
-                      <p className="text-sm font-medium text-foreground">
-                        {idx + 1}. {q.question ?? JSON.stringify(q)}
-                      </p>
-                      {q.type && (
-                        <Badge variant="outline" className="mt-2 text-xs">
-                          {q.type}
-                        </Badge>
-                      )}
-                    </div>
-                  ),
-                )}
-              </div>
-            </Card>
-          )}
-
-          <DocumentCampaignPanel
-            documentId={documentId}
-            hasApprovedQuiz={quizDraft?.status === 'approved'}
-          />
-        </TabsContent>
-
-        <TabsContent value="campaign-results" className="mt-4 space-y-4">
-          <DocumentCampaignResults
-            documentId={documentId}
-            initialCampaignId={initialCampaignId}
-          />
-        </TabsContent>
-
-        <TabsContent value="qa" className="mt-4 space-y-4">
-          <Card className="p-4 space-y-3">
-            <h3 className="font-medium text-foreground">Start a discussion</h3>
-            <Input
-              placeholder="Thread title (optional)"
-              value={newThreadTitle}
-              onChange={(e) => setNewThreadTitle(e.target.value)}
-            />
-            <Button onClick={() => void handleCreateThread()}>
-              <MessageSquare className="w-4 h-4 mr-2" />
-              Ask a question
-            </Button>
-          </Card>
-
-          {threads.length === 0 ? (
-            <EmptyState
-              icon={<MessageSquare className="w-8 h-8 text-muted-foreground" />}
-              title="No discussions yet"
-              description="Create a thread to ask questions about this document."
-            />
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <Card className="p-2 lg:col-span-1">
-                <div className="space-y-1">
-                  {threads.map((thread) => (
-                    <button
-                      key={thread.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveThreadId(thread.id)
-                        void loadThreadMessages(thread.id)
-                      }}
-                      className={cn(
-                        'w-full text-left rounded-lg px-3 py-2 text-sm transition-colors',
-                        activeThreadId === thread.id
-                          ? 'bg-primary/10 text-primary'
-                          : 'hover:bg-muted/50 text-foreground',
-                      )}
-                    >
-                      {thread.title ?? `Thread #${thread.id}`}
-                    </button>
-                  ))}
+                <div>
+                  <label htmlFor="gkb-pass-mark" className="text-sm text-muted-foreground">
+                    Pass mark (%)
+                  </label>
+                  <Input
+                    id="gkb-pass-mark"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={passMark}
+                    onChange={(e) => setPassMark(Number(e.target.value))}
+                  />
                 </div>
-              </Card>
-              <Card className="p-4 lg:col-span-2 space-y-4">
-                {activeThreadId ? (
-                  <>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {messagesLoading ? (
-                        <div className="flex justify-center py-4">
-                          <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                        </div>
-                      ) : (threadMessages[activeThreadId] ?? []).length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No messages yet.</p>
-                      ) : (
-                        (threadMessages[activeThreadId] ?? []).map((msg) => (
-                          <div
-                            key={msg.id}
-                            className="rounded-lg border border-border p-3 text-sm"
-                          >
-                            <p className="text-foreground">{msg.body}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              {msg.is_ai_draft && (
-                                <Badge variant="outline" className="text-xs">
-                                  AI draft
-                                </Badge>
-                              )}
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(msg.created_at).toLocaleString()}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    <Textarea
-                      placeholder="Write your message…"
-                      value={messageBody}
-                      onChange={(e) => setMessageBody(e.target.value)}
-                      rows={3}
-                    />
-                    <div className="flex flex-wrap items-center gap-3">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={useAiDraft}
-                          onChange={(e) => setUseAiDraft(e.target.checked)}
-                        />
-                        Use AI draft
-                      </label>
-                      <Button
-                        onClick={() => void handlePostMessage()}
-                        disabled={postingMessage || !messageBody.trim()}
-                      >
-                        {postingMessage ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : null}
-                        Post
-                      </Button>
-                    </div>
-                  </>
+              </div>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={includeMcq}
+                    onChange={(e) => setIncludeMcq(e.target.checked)}
+                  />
+                  Include MCQ
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={includeOpen}
+                    onChange={(e) => setIncludeOpen(e.target.checked)}
+                  />
+                  Include open questions
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={autoApproveQuiz}
+                    onChange={(e) => setAutoApproveQuiz(e.target.checked)}
+                  />
+                  Auto-approve if quality
+                </label>
+              </div>
+              <Button onClick={() => void handleGenerateQuiz()} disabled={quizGenerating}>
+                {quizGenerating ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
-                  <p className="text-sm text-muted-foreground">Select a thread to view messages.</p>
+                  <Sparkles className="w-4 h-4 mr-2" />
                 )}
-              </Card>
-            </div>
-          )}
-        </TabsContent>
+                Generate quiz
+              </Button>
+            </Card>
 
-        <TabsContent value="watch" className="mt-4 space-y-4">
-          {impacts.length === 0 ? (
-            <EmptyState
-              icon={<Eye className="w-8 h-8 text-muted-foreground" />}
-              title="No regulatory impacts"
-              description="No watch impacts are linked to this document yet."
-            />
-          ) : (
-            <div className="space-y-3">
-              {impacts.map((impact) => (
-                <Card key={impact.id} className="p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-foreground">Update {impact.update_id}</p>
-                      {impact.rationale && (
-                        <p className="text-sm text-muted-foreground mt-1">{impact.rationale}</p>
-                      )}
-                    </div>
-                    <Badge variant="outline">{impact.status}</Badge>
-                  </div>
-                  {impact.confidence != null && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Confidence: {(impact.confidence * 100).toFixed(0)}%
+            {quizDraft && (
+              <Card className="p-4 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-medium text-foreground">Quiz draft</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {quizDraft.questions.length} questions · pass {quizDraft.pass_mark}% ·{' '}
+                      {quizDraft.status}
                     </p>
+                  </div>
+                  {quizDraft.status !== 'approved' && (
+                    <Button onClick={() => void handleApproveQuiz()} disabled={quizApproving}>
+                      {quizApproving ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                      )}
+                      Approve
+                    </Button>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  {(quizDraft.questions as Array<{ question?: string; type?: string }>).map(
+                    (q, idx) => (
+                      <div key={idx} className="rounded-lg border border-border p-3">
+                        <p className="text-sm font-medium text-foreground">
+                          {idx + 1}. {q.question ?? JSON.stringify(q)}
+                        </p>
+                        {q.type && (
+                          <Badge variant="outline" className="mt-2 text-xs">
+                            {q.type}
+                          </Badge>
+                        )}
+                      </div>
+                    ),
+                  )}
+                </div>
+              </Card>
+            )}
+          </div>
+
+          <div
+            id={documentDetailSectionDomId('share')}
+            className="scroll-mt-24"
+            data-testid="document-assurance-share"
+          >
+            <DocumentCampaignPanel
+              documentId={documentId}
+              hasApprovedQuiz={quizDraft?.status === 'approved'}
+            />
+          </div>
+
+          <div
+            id={documentDetailSectionDomId('qa')}
+            className="scroll-mt-24 space-y-4"
+            data-testid="document-assurance-qa"
+          >
+            <Card className="p-4 space-y-3">
+              <h3 className="font-medium text-foreground">Start a discussion</h3>
+              <Input
+                placeholder="Thread title (optional)"
+                value={newThreadTitle}
+                onChange={(e) => setNewThreadTitle(e.target.value)}
+              />
+              <Button onClick={() => void handleCreateThread()}>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Ask a question
+              </Button>
+            </Card>
+
+            {threads.length === 0 ? (
+              <EmptyState
+                icon={<MessageSquare className="w-8 h-8 text-muted-foreground" />}
+                title="No discussions yet"
+                description="Create a thread to ask questions about this document."
+              />
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <Card className="p-2 lg:col-span-1">
+                  <div className="space-y-1">
+                    {threads.map((thread) => (
+                      <button
+                        key={thread.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveThreadId(thread.id)
+                          void loadThreadMessages(thread.id)
+                        }}
+                        className={cn(
+                          'w-full text-left rounded-lg px-3 py-2 text-sm transition-colors',
+                          activeThreadId === thread.id
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted/50 text-foreground',
+                        )}
+                      >
+                        {thread.title ?? `Thread #${thread.id}`}
+                      </button>
+                    ))}
+                  </div>
+                </Card>
+                <Card className="p-4 lg:col-span-2 space-y-4">
+                  {activeThreadId ? (
+                    <>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {messagesLoading ? (
+                          <div className="flex justify-center py-4">
+                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                          </div>
+                        ) : (threadMessages[activeThreadId] ?? []).length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No messages yet.</p>
+                        ) : (
+                          (threadMessages[activeThreadId] ?? []).map((msg) => (
+                            <div
+                              key={msg.id}
+                              className="rounded-lg border border-border p-3 text-sm"
+                            >
+                              <p className="text-foreground">{msg.body}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                {msg.is_ai_draft && (
+                                  <Badge variant="outline" className="text-xs">
+                                    AI draft
+                                  </Badge>
+                                )}
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(msg.created_at).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <Textarea
+                        placeholder="Write your message…"
+                        value={messageBody}
+                        onChange={(e) => setMessageBody(e.target.value)}
+                        rows={3}
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={useAiDraft}
+                            onChange={(e) => setUseAiDraft(e.target.checked)}
+                          />
+                          Use AI draft
+                        </label>
+                        <Button
+                          onClick={() => void handlePostMessage()}
+                          disabled={postingMessage || !messageBody.trim()}
+                        >
+                          {postingMessage ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : null}
+                          Post
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Select a thread to view messages.</p>
                   )}
                 </Card>
-              ))}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
+
+          <div
+            id={documentDetailSectionDomId('watch')}
+            className="scroll-mt-24 space-y-4"
+            data-testid="document-assurance-watch"
+          >
+            {impacts.length === 0 ? (
+              <EmptyState
+                icon={<Eye className="w-8 h-8 text-muted-foreground" />}
+                title="No regulatory impacts"
+                description="No watch impacts are linked to this document yet."
+              />
+            ) : (
+              <div className="space-y-3">
+                {impacts.map((impact) => (
+                  <Card key={impact.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium text-foreground">Update {impact.update_id}</p>
+                        {impact.rationale && (
+                          <p className="text-sm text-muted-foreground mt-1">{impact.rationale}</p>
+                        )}
+                      </div>
+                      <Badge variant="outline">{impact.status}</Badge>
+                    </div>
+                    {impact.confidence != null && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Confidence: {(impact.confidence * 100).toFixed(0)}%
+                      </p>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 
