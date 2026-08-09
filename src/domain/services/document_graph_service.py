@@ -29,6 +29,15 @@ from src.domain.services.audit_service import record_audit_event
 THREAD_MAX_DEPTH = 4
 THREAD_HOP_ORIGIN = "graph"
 
+# WE-1: statuses that belong in the operator confirm queue (Knowledge Exceptions).
+PENDING_EDGE_STATUSES = (
+    DocumentEdgeStatus.PROPOSED,
+    DocumentEdgeStatus.NEEDS_REVIEW,
+)
+# One page of queue, matching the CEL exceptions inbox cap so neither surface
+# implies it is showing a global total.
+PENDING_QUEUE_LIMIT = 200
+
 # ADR-0021: AI/heuristic must never auto-confirm edges that drive publish impact.
 IMPACT_DRIVING_EDGE_TYPES = frozenset(
     {
@@ -591,6 +600,169 @@ class DocumentGraphService:
         query = query.order_by(DocumentEdge.created_at.desc(), DocumentEdge.id.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    async def _readable_document_ids(
+        self,
+        *,
+        viewer: Optional[Any],
+        documents: Sequence[Document],
+    ) -> set[int]:
+        """Ids the viewer may read, honouring the library ACL the by-id route enforces.
+
+        A tenant-wide queue would otherwise leak restricted titles that
+        ``GET /api/v1/documents/{id}`` refuses to that same operator. Taxonomy
+        ids for restricted rows are resolved in one batch rather than per row.
+        """
+        from src.domain.services.document_library_rbac import user_can_read_library_document
+
+        restricted_category_ids = {
+            cat_id
+            for doc in documents
+            if (getattr(doc, "access_level", None) or "") == "restricted"
+            and (cat_id := getattr(doc, "category_id", None)) is not None
+        }
+        taxonomy_by_category: dict[int, Optional[str]] = {}
+        if restricted_category_ids:
+            from src.domain.models.document_library import DocumentCategory
+
+            result = await self.db.execute(
+                select(DocumentCategory.id, DocumentCategory.taxonomy_id).where(
+                    DocumentCategory.id.in_(restricted_category_ids)
+                )
+            )
+            taxonomy_by_category = {row[0]: row[1] for row in result.all()}
+
+        readable: set[int] = set()
+        for doc in documents:
+            category_id = getattr(doc, "category_id", None)
+            taxonomy_id = taxonomy_by_category.get(category_id) if category_id is not None else None
+            if user_can_read_library_document(doc, viewer, taxonomy_id=taxonomy_id):
+                readable.add(doc.id)
+        return readable
+
+    @staticmethod
+    def _endpoint_payload(
+        *,
+        document_id: int,
+        doc: Optional[Any],
+        pel_doc_ref: Optional[str],
+        readable: bool,
+    ) -> dict:
+        """One end of a queued edge. Title/reference are withheld when ACL denies read.
+
+        The id and deep-link stay: the operator can still ask for access to a
+        document they can see a proposal about but not read.
+        """
+        if doc is None or not readable:
+            return {
+                "document_id": document_id,
+                "title": None,
+                "reference": None,
+                "href": document_href(document_id),
+                "readable": False,
+            }
+        return {
+            "document_id": document_id,
+            "title": getattr(doc, "title", None),
+            "reference": _document_reference(doc) or pel_doc_ref,
+            "href": document_href(document_id),
+            "readable": True,
+        }
+
+    async def list_pending_edges(
+        self,
+        *,
+        tenant_id: int,
+        viewer: Optional[Any],
+        edge_type: Optional[DocumentEdgeType | str] = None,
+        status: Optional[DocumentEdgeStatus | str] = None,
+        limit: int = PENDING_QUEUE_LIMIT,
+    ) -> dict:
+        """Tenant-wide proposed / needs_review edges for the operator confirm queue.
+
+        WE-1: the Knowledge Exceptions inbox reads this so Doc Graph proposals are
+        reviewable without a second Confirm Queue route (ADR-0023). ``document_edges``
+        stays the only source of truth — nothing is copied into CEL.
+
+        Confirmed and rejected edges are excluded: this is a queue, not a register.
+        ``truncated`` says plainly when a page was cut, so the UI never presents one
+        page as a global total.
+        """
+        page_size = max(1, min(int(limit), PENDING_QUEUE_LIMIT))
+
+        statuses: tuple[DocumentEdgeStatus, ...] = PENDING_EDGE_STATUSES
+        if status is not None:
+            status_enum = _coerce_edge_status(status)
+            if status_enum not in PENDING_EDGE_STATUSES:
+                raise ValidationError(
+                    "Confirm queue holds proposed / needs_review edges only",
+                    code="DOCUMENT_GRAPH_NOT_PENDING_STATUS",
+                    details={"status": status_enum.value},
+                )
+            statuses = (status_enum,)
+
+        query = select(DocumentEdge).where(
+            DocumentEdge.tenant_id == tenant_id,
+            DocumentEdge.deleted_at.is_(None),
+            DocumentEdge.status.in_(statuses),
+        )
+        if edge_type is not None:
+            query = query.where(DocumentEdge.edge_type == _coerce_edge_type(edge_type))
+        # One extra row is fetched purely to tell a full page from a cut one.
+        query = query.order_by(DocumentEdge.created_at.desc(), DocumentEdge.id.desc()).limit(page_size + 1)
+
+        result = await self.db.execute(query)
+        rows = list(result.scalars().all())
+        truncated = len(rows) > page_size
+        edges = rows[:page_size]
+
+        document_ids = {edge.src_document_id for edge in edges} | {edge.dst_document_id for edge in edges}
+        docs = await self._documents_by_ids(tenant_id=tenant_id, document_ids=document_ids)
+        readable_ids = await self._readable_document_ids(viewer=viewer, documents=list(docs.values()))
+
+        items = []
+        for edge in edges:
+            edge_type_enum = (
+                edge.edge_type
+                if isinstance(edge.edge_type, DocumentEdgeType)
+                else DocumentEdgeType(str(edge.edge_type))
+            )
+            items.append(
+                {
+                    "edge_id": edge.id,
+                    "edge_type": edge_type_enum.value,
+                    "status": (edge.status.value if isinstance(edge.status, DocumentEdgeStatus) else str(edge.status)),
+                    "created_method": (
+                        edge.created_method.value
+                        if isinstance(edge.created_method, DocumentEdgeMethod)
+                        else str(edge.created_method)
+                    ),
+                    "is_primary_parent": bool(edge.is_primary_parent),
+                    "impact_driving": edge_type_enum in IMPACT_DRIVING_EDGE_TYPES,
+                    "confidence": edge.confidence,
+                    "rationale": edge.rationale,
+                    "created_at": edge.created_at,
+                    "src": self._endpoint_payload(
+                        document_id=edge.src_document_id,
+                        doc=docs.get(edge.src_document_id),
+                        pel_doc_ref=edge.src_pel_doc_ref,
+                        readable=edge.src_document_id in readable_ids,
+                    ),
+                    "dst": self._endpoint_payload(
+                        document_id=edge.dst_document_id,
+                        doc=docs.get(edge.dst_document_id),
+                        pel_doc_ref=edge.dst_pel_doc_ref,
+                        readable=edge.dst_document_id in readable_ids,
+                    ),
+                }
+            )
+
+        return {
+            "items": items,
+            "returned": len(items),
+            "limit": page_size,
+            "truncated": truncated,
+        }
 
     async def confirm(
         self,

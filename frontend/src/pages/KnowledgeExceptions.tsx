@@ -7,14 +7,18 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Link2,
   Loader2,
   XCircle,
 } from 'lucide-react'
 import {
+  documentGraphApi,
   getApiErrorMessage,
   knowledgeBankApi,
   type KnowledgeEvidenceLink,
 } from '../api/client'
+import type { PendingDocumentEdgeItem } from '../api/documentGraphClient'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -40,6 +44,14 @@ import {
   resolveClauseIdentity,
   type DedupedExceptionRow,
 } from './knowledgeExceptionsHonesty'
+import {
+  buildGraphQueueHonesty,
+  isBlindPendingEdge,
+  isGraphQueueClosedError,
+  pendingEdgeHelper,
+  pendingEdgeRelationLabel,
+  pendingEndpointLabel,
+} from './knowledgeExceptionsGraphQueue'
 import {
   EXCEPTIONS_ENTITY_TYPE_OPTIONS,
   EXCEPTIONS_SIGNAL_TYPE_OPTIONS,
@@ -305,6 +317,242 @@ function ExceptionRow({
           )}
         </div>
       </div>
+    </Card>
+  )
+}
+
+/**
+ * Doc Graph proposals slice of this inbox (WE-1).
+ *
+ * Reads the tenant-wide confirm queue and acts through the existing Doc Graph
+ * edge routes — `document_edges` stays the source of truth and nothing is
+ * mirrored into CEL. Deliberately part of this page rather than a twin Confirm
+ * Queue route (ADR-0023); the per-document queue on Document Detail → Related
+ * remains the other way in.
+ */
+function GraphProposalsQueue() {
+  const graphEnabled = useFeatureFlag('document_graph')
+  const [items, setItems] = useState<PendingDocumentEdgeItem[]>([])
+  const [page, setPage] = useState({ returned: 0, limit: 200, truncated: false })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [closed, setClosed] = useState(false)
+  const [actingEdgeId, setActingEdgeId] = useState<number | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    setClosed(false)
+    try {
+      const response = await documentGraphApi.listPendingEdges()
+      setItems(response.data.items)
+      setPage({
+        returned: response.data.returned,
+        limit: response.data.limit,
+        truncated: response.data.truncated,
+      })
+    } catch (err) {
+      // A closed flag is not an empty queue, and neither is a failed read.
+      setItems([])
+      setPage({ returned: 0, limit: 200, truncated: false })
+      if (isGraphQueueClosedError(err)) {
+        setClosed(true)
+      } else {
+        setError(getApiErrorMessage(err))
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!graphEnabled) return
+    void load()
+  }, [graphEnabled, load])
+
+  const honesty = useMemo(() => buildGraphQueueHonesty(page), [page])
+
+  const runAction = async (
+    edgeId: number,
+    action: () => Promise<unknown>,
+    successMessage: string,
+  ) => {
+    setActingEdgeId(edgeId)
+    try {
+      await action()
+      toast.success(successMessage)
+      await load()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setActingEdgeId(null)
+    }
+  }
+
+  if (!graphEnabled) return null
+
+  return (
+    <Card className="p-4 space-y-3" data-testid="exceptions-graph-queue">
+      <div className="space-y-1">
+        <h2 className="flex items-center gap-2 font-medium text-foreground">
+          <Link2 className="w-4 h-4 text-primary" />
+          Document relationship proposals
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Proposed links between two library documents. They do not drive impact until a
+          person confirms them. Confirming here is the same decision as confirming on a
+          document&apos;s Related tab.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading relationship proposals…
+        </div>
+      ) : null}
+
+      {!loading && closed ? (
+        <p className="text-sm text-muted-foreground" data-testid="exceptions-graph-queue-closed">
+          Document Graph is not switched on for this API, so relationship proposals cannot be
+          listed. This is not a statement that none are pending.
+        </p>
+      ) : null}
+
+      {!loading && error ? (
+        <div
+          className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          data-testid="exceptions-graph-queue-error"
+        >
+          {error} — relationship proposals could not be listed, so this is not a zero.
+        </div>
+      ) : null}
+
+      {!loading && !closed && !error ? (
+        <>
+          <p
+            className={cn('text-xs', honesty.truncated ? 'text-warning' : 'text-muted-foreground')}
+            data-testid="exceptions-graph-queue-honesty"
+          >
+            {honesty.summary}
+          </p>
+          {items.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="exceptions-graph-queue-empty">
+              No relationship proposals awaiting confirmation. Propose links from a
+              document&apos;s Related tab.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {items.map((item) => {
+                const blind = isBlindPendingEdge(item)
+                // Page-wide, matching the CEL rows above: one decision in flight at a
+                // time, so a second click cannot land against a list this reload will
+                // replace.
+                const busy = actingEdgeId !== null
+                return (
+                  <div
+                    key={item.edge_id}
+                    className="rounded-lg border border-border bg-card/40 p-3 space-y-2"
+                    data-testid={`graph-proposal-row-${item.edge_id}`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      {statusBadge(item.status)}
+                      <Badge variant="outline">{pendingEdgeRelationLabel(item.edge_type)}</Badge>
+                      {item.is_primary_parent ? (
+                        <Badge variant="secondary">Primary parent</Badge>
+                      ) : null}
+                      {item.created_method !== 'manual' ? (
+                        <Badge variant="outline">{item.created_method}</Badge>
+                      ) : null}
+                      {item.impact_driving ? (
+                        <Badge
+                          variant="warning"
+                          data-testid={`graph-proposal-impact-${item.edge_id}`}
+                        >
+                          Drives publish impact once confirmed
+                        </Badge>
+                      ) : null}
+                    </div>
+
+                    <p className="text-sm text-foreground">
+                      {item.src.readable ? (
+                        <Link to={item.src.href} className="text-primary hover:underline">
+                          {pendingEndpointLabel(item.src)}
+                        </Link>
+                      ) : (
+                        <span>{pendingEndpointLabel(item.src)}</span>
+                      )}
+                      <span className="text-muted-foreground">
+                        {' '}
+                        {pendingEdgeRelationLabel(item.edge_type).toLowerCase()}{' '}
+                      </span>
+                      {item.dst.readable ? (
+                        <Link to={item.dst.href} className="text-primary hover:underline">
+                          {pendingEndpointLabel(item.dst)}
+                        </Link>
+                      ) : (
+                        <span>{pendingEndpointLabel(item.dst)}</span>
+                      )}
+                    </p>
+
+                    <p className="text-xs text-muted-foreground">
+                      {item.rationale?.trim() || pendingEdgeHelper(item.edge_type)}
+                      {item.confidence != null
+                        ? ` · ${(item.confidence * 100).toFixed(0)}% confidence`
+                        : ''}
+                    </p>
+
+                    {blind ? (
+                      <p
+                        className="text-xs text-warning"
+                        data-testid={`graph-proposal-blind-${item.edge_id}`}
+                      >
+                        Neither document is available to you, so this proposal is not yours to
+                        decide. Ask a platform admin for access.
+                      </p>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          data-testid={`graph-proposal-confirm-${item.edge_id}`}
+                          onClick={() =>
+                            void runAction(
+                              item.edge_id,
+                              () => documentGraphApi.confirmEdge(item.edge_id),
+                              'Relationship confirmed',
+                            )
+                          }
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Confirm
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          data-testid={`graph-proposal-reject-${item.edge_id}`}
+                          onClick={() =>
+                            void runAction(
+                              item.edge_id,
+                              () => documentGraphApi.rejectEdge(item.edge_id),
+                              'Relationship rejected',
+                            )
+                          }
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> Reject
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      ) : null}
     </Card>
   )
 }
@@ -586,6 +834,8 @@ export default function KnowledgeExceptions() {
           for confirm/reject (reject requires a rationale).
         </p>
       </Card>
+
+      <GraphProposalsQueue />
 
       {returnTo ? (
         <Card
