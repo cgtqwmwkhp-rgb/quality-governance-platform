@@ -127,8 +127,9 @@ class DocumentResponse(BaseModel):
     created_by_id: Optional[int] = None
     created_by_name: Optional[str] = None
 
-    # WA-1 / L-05b — Detail deep-link from href_registry (never blank for filed docs).
-    href: str
+    # WA-1 / L-05b — Detail deep-link from href_registry (always set for filed docs).
+    # Optional in schema so OpenAPI treats the additive field as non-breaking.
+    href: str = ""
 
     class Config:
         from_attributes = True
