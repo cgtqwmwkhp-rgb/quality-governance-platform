@@ -27,10 +27,12 @@ FUNCTIONS_JSON_PATH = _REPO_ROOT / "specs" / "governance-library" / "functions.j
 
 EXPECTED_CATEGORY_COUNT = 86
 
-# The 11 ADR-0023 function codes. Asserted on every seed run so a bad edit to
-# functions.json fails the seed rather than quietly changing which prefixes the
-# business can ever issue — a PEL reference is immutable once allocated.
-EXPECTED_FUNCTION_COUNT = 11
+# Northern Star v6 / ADR-0023 amendment: 12 active codes (CTR+SVC, no OPS) plus
+# withdrawn OPS kept inactive so issued PEL-OPS-#### rows stay resolvable (R29).
+# Asserted on every seed run so a bad edit to functions.json fails the seed
+# rather than quietly changing which prefixes the business can ever issue —
+# a PEL reference is immutable once allocated.
+EXPECTED_FUNCTION_COUNT = 13
 
 
 class TagSeedRow(TypedDict):

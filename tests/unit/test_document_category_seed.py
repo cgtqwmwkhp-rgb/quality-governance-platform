@@ -95,7 +95,7 @@ class TestTaxonomySeedData:
 class TestLibraryFunctionSeedData:
     """Sanity checks on functions.json — the source of every PEL prefix (ADR-0023)."""
 
-    def test_functions_json_has_the_eleven_adr_0023_codes(self):
+    def test_functions_json_has_northern_star_codes_plus_withdrawn_ops(self):
         rows = load_library_functions()
         assert len(rows) == EXPECTED_FUNCTION_COUNT
         assert [r["code"] for r in rows] == [
@@ -105,12 +105,18 @@ class TestLibraryFunctionSeedData:
             "PPL",
             "PROC",
             "FLT",
-            "OPS",
+            "CTR",
+            "SVC",
             "TECH",
             "DP",
             "FIN",
             "COM",
+            "OPS",
         ]
+        by_code = {r["code"]: r for r in rows}
+        assert by_code["CTR"]["active"] is True
+        assert by_code["SVC"]["active"] is True
+        assert by_code["OPS"]["active"] is False
 
     def test_function_codes_are_unique_and_upper_case(self):
         rows = load_library_functions()
@@ -241,7 +247,7 @@ class TestSeedDocumentCategoriesIdempotency:
         assert counter_keys == {(fid, band) for fid in function_ids for band in CASCADE_LEVELS}
 
     @pytest.mark.asyncio
-    async def test_seed_creates_the_eleven_adr_0023_functions(self, isolated_db_session: AsyncSession):
+    async def test_seed_creates_northern_star_functions_with_ops_withdrawn(self, isolated_db_session: AsyncSession):
         result = await seed_document_categories(isolated_db_session)
         await isolated_db_session.commit()
 
@@ -257,13 +263,19 @@ class TestSeedDocumentCategoriesIdempotency:
             "PPL",
             "PROC",
             "FLT",
-            "OPS",
+            "CTR",
+            "SVC",
             "TECH",
             "DP",
             "FIN",
             "COM",
+            "OPS",
         }
-        assert all(f.active for f in functions)
+        by_code = {f.code: f for f in functions}
+        assert by_code["OPS"].active is False
+        assert by_code["CTR"].active is True
+        assert by_code["SVC"].active is True
+        assert all(f.active for f in functions if f.code != "OPS")
 
     @pytest.mark.asyncio
     async def test_reseed_never_resets_an_advanced_function_counter(self, isolated_db_session: AsyncSession):

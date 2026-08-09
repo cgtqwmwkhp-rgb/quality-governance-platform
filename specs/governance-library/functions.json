@@ -1,14 +1,14 @@
 {
-  "$schema_note": "Controlled list of business functions, seeded into `document_functions`. Every filed document carries at most one function, chosen at filing, and its reference is PEL-<CODE>-<SEQ> (e.g. PEL-IT-0014). Per ADR-0023 the function is FIXED AT FILING and is NOT a pointer to the current owner: reassigning ownership never rewrites a reference. The sequence counter is per function, allocated atomically, immutable, and never reused. Derived from the management team named in IMS 001 s5.3, the roles named in IMS 059 Communications Register, and the Control Room Manager role profile, then reduced from 13 to 11, then to 10 on review of 8 Aug 2026 when HS and CMP merged into HSEQ, then to 11 with the addition of TECH.",
-  "version": "1.0",
+  "$schema_note": "Controlled list of business functions, seeded into `document_functions`. Every filed document carries at most one function, chosen at filing, and its reference is PEL-<CODE>-<BAND><SEQ> (e.g. PEL-IT-3014) per Northern Star / ADR-0023 amendment. The function is FIXED AT FILING and is NOT a pointer to the current owner. Northern Star v6.0 FINAL uses twelve active codes: CTR + SVC replace OPS for forward filing. OPS remains in this seed as active=false so any already-issued PEL-OPS-#### rows keep a resolvable function row (R29 \u2014 never silently renumber). Derived from IMS 001 s5.3, IMS 059, Control Room / Workshop role profiles, and PEL-HSEQ-5014 v6.0 FINAL.",
+  "version": "1.1",
   "generated": "2026-08-09",
   "adr": "docs/adr/ADR-0023-governance-library-reference-scheme.md",
   "reference_scheme": {
-    "pattern": "PEL-<FUNCTION>-<SEQ>",
-    "example": "PEL-IT-0014 = the 14th document ever filed under the IT & Information Security function",
-    "sequence": "Four digits, zero-padded, allocated atomically per function. Four rather than two because HSEQ holds 226 documents on day one; a two-digit sequence would overflow immediately.",
-    "company_prefix": "PEL- is retained deliberately. Plantexpand documents are submitted into client audit packs (Thames Water, UKPN, Cadent, SGN); a bare IT0014 could not be asserted as Plantexpand's within a client bundle.",
-    "supersedes": "PEL-<SECTION>-<SUB>-<SEQ> (taxonomy v1.1/v1.2). Any reference already issued under the retired form is kept verbatim on the document and is never rewritten; the two forms cannot collide because the retired form always carries a numeric subcategory group (PEL-HSE-01-001) that the function form does not."
+    "pattern": "PEL-<FUNCTION>-<BAND><SEQ>",
+    "example": "PEL-IT-3014 = the 14th Procedure/Standard (L3) ever filed under IT",
+    "sequence": "Four digits: first digit is cascade level 1\u20135; remaining three are the per-(function,band) sequence, zero-padded, allocated atomically, immutable, never reused.",
+    "company_prefix": "PEL- is retained deliberately. Plantexpand documents are submitted into client audit packs (Thames Water, UKPN, Cadent, SGN); a bare IT3014 could not be asserted as Plantexpand's within a client bundle.",
+    "supersedes": "PEL-<FUNCTION>-0### (WA-2 unbanded) and PEL-<SECTION>-<SUB>-<SEQ> (taxonomy v1). Issued references stay verbatim; they cannot collide with banded form because banded sequences always start 1\u20135 and unbanded WA-2 always start with 0."
   },
   "test_for_a_function": "A function earns a code only if it has a distinct accountable owner AND a filer could reliably pick it without judgement. Where two candidates share an owner or produce documents that straddle the boundary, they are merged - an ambiguous code is worse than a coarse one, because the reference is immutable and a mis-filed one cannot be corrected in place.",
   "functions": [
@@ -50,21 +50,28 @@
     {
       "code": "FLT",
       "name": "Fleet & Transport",
-      "description": "Plantexpand as a vehicle operator and employer of drivers: vehicle records, MOT and tax status, walkaround and defect reports, DVLA licence checks, drivers' hours, grey fleet. Deliberately NOT the workshop - see OPS.",
+      "description": "Plantexpand as a vehicle operator and employer of drivers: vehicle records, MOT and tax status, walkaround and defect reports, DVLA licence checks, drivers' hours, grey fleet. Deliberately NOT the workshop \u2014 see SVC.",
       "sort_order": 60,
       "active": true
     },
     {
-      "code": "OPS",
-      "name": "Operations",
-      "description": "Delivery of the service the business sells: the workshop and mobile engineering, plant maintenance records, asset register, calibration, pre-use checks, business continuity, and the Control Room - planning, processing, scheduling, call-ahead and resource optimisation. Absorbed the former CTR code; their own file naming (PAMS-SOP-OPS-Resource-Optimisation) already treated it as Operations.",
+      "code": "CTR",
+      "name": "Control Room",
+      "description": "Control Room planning, processing, scheduling, call-ahead and resource optimisation. Split from the former OPS fold by Northern Star v6.0 FINAL so Control Room has a distinct accountable owner (Control Room Manager) and a filer can pick it without judgement. BOUNDARY: workshop / mobile engineering delivery is SVC; vehicle operator compliance is FLT.",
       "sort_order": 70,
+      "active": true
+    },
+    {
+      "code": "SVC",
+      "name": "Service Delivery (workshop and mobile engineering)",
+      "description": "Delivery of the service the business sells in the workshop and via mobile engineering: plant maintenance records, asset register, calibration, pre-use checks, business continuity for service delivery. Split from the former OPS fold by Northern Star v6.0 FINAL under the Workshop Manager. BOUNDARY: Control Room scheduling is CTR; technical specifications are TECH; fleet/driver compliance is FLT.",
+      "sort_order": 72,
       "active": true
     },
     {
       "code": "TECH",
       "name": "Technical",
-      "description": "Technical authority for the service the business delivers: torque and tightening standards, service and repair schedules, manufacturer technical data and service bulletins, diagnostic procedures, equipment manuals and specifications, and the technical standards engineers must work to. BOUNDARY: distinct from IT, which is systems and information security - 'technical' in this scheme never means computing. Distinct from OPS, which is how work is scheduled and delivered rather than the standard it must meet: a PPM schedule record is OPS, the specification that schedule implements is TECH. Distinct from HSEQ, which owns hazard control: how to weld safely is HSEQ, the weld specification is TECH.",
+      "description": "Technical authority for the service the business delivers: torque and tightening standards, service and repair schedules, manufacturer technical data and service bulletins, diagnostic procedures, equipment manuals and specifications, and the technical standards engineers must work to. BOUNDARY: distinct from IT (systems / information security). Distinct from SVC (workshop / mobile delivery records) and CTR (control-room scheduling): a PPM schedule record is SVC, the specification that schedule implements is TECH. Distinct from HSEQ (hazard control): how to weld safely is HSEQ, the weld specification is TECH.",
       "sort_order": 80,
       "active": true
     },
@@ -88,6 +95,14 @@
       "description": "Client-facing commercial activity: account management and client-specific operating arrangements. Customer contracts themselves are out of scope for the library (decision of 8 Aug 2026); the code exists so client-facing operational documents are not forced into Operations.",
       "sort_order": 110,
       "active": true
+    },
+    {
+      "code": "OPS",
+      "name": "Operations (withdrawn \u2014 use CTR or SVC)",
+      "description": "WITHDRAWN from the Northern Star vocabulary (ADR-0023 \u00a7 Amendment / Wave W2). Retained inactive so any already-issued PEL-OPS-#### references remain resolvable (R29). Forward filing must use CTR (Control Room) or SVC (Service Delivery / workshop).",
+      "sort_order": 71,
+      "active": false
     }
-  ]
+  ],
+  "northern_star": "specs/governance-library/northern-star-v6.json"
 }
