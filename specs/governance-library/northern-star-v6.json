@@ -28770,54 +28770,6 @@
    "score": null
   },
   {
-   "from": "PEL-IT-3004",
-   "to": "PEL-IT-3004",
-   "type": "Supersedes",
-   "target_kind": "document",
-   "confidence": "orphan review reissue",
-   "score": null
-  },
-  {
-   "from": "PEL-HSEQ-2029",
-   "to": "PEL-HSEQ-2029",
-   "type": "Supersedes",
-   "target_kind": "document",
-   "confidence": "orphan review reissue",
-   "score": null
-  },
-  {
-   "from": "PEL-PPL-2023",
-   "to": "PEL-PPL-2023",
-   "type": "Supersedes",
-   "target_kind": "document",
-   "confidence": "orphan review reissue",
-   "score": null
-  },
-  {
-   "from": "PEL-PROC-4008",
-   "to": "PEL-PROC-4008",
-   "type": "Supersedes",
-   "target_kind": "document",
-   "confidence": "orphan review reissue",
-   "score": null
-  },
-  {
-   "from": "PEL-PROC-3006",
-   "to": "PEL-PROC-3006",
-   "type": "Supersedes",
-   "target_kind": "document",
-   "confidence": "orphan review reissue",
-   "score": null
-  },
-  {
-   "from": "PEL-IT-3005",
-   "to": "PEL-IT-3005",
-   "type": "Supersedes",
-   "target_kind": "document",
-   "confidence": "orphan review reissue",
-   "score": null
-  },
-  {
    "from": "PEL-HSEQ-4087",
    "to": "PEL-HSEQ-2014",
    "type": "Child of",
@@ -38430,6 +38382,14 @@
    "finding": "Retention is now computable where the taxonomy states years, and honestly flagged where it does not",
    "evidence": "37 of 388 documents have no computable retention. This is exactly Gate 5, now measured per document instead of asserted.",
    "action": "Fixed: retention_years and retention_computable fields added. The Gate 5 deliverable is the list of documents where retention_computable is false, which the register now produces on demand."
+  },
+  {
+   "lens": 2,
+   "id": "L2-W5b-01",
+   "sev": "Major",
+   "finding": "Supersedes self-loops removed at W5b dry-run prep",
+   "evidence": "Removed 6 edges where from==to: ['PEL-IT-3004', 'PEL-HSEQ-2029', 'PEL-PPL-2023', 'PEL-PROC-4008', 'PEL-PROC-3006', 'PEL-IT-3005']",
+   "action": "Fixed in pack: self-loops deleted; a document cannot supersede itself."
   }
  ],
  "required_documents": [
