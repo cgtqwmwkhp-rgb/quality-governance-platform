@@ -92,12 +92,57 @@
   upserts rows under matched ISO standards.
 - [x] AC-06: F-3 anti-dupe gate still fails synthetics (unchanged baseline).
 
-## 5) Testing evidence
+## 5) Testing Evidence
 
-- Unit: `pytest tests/unit/test_lib_wi1_cel_harden_scheme.py -q`
+- Unit: `pytest tests/unit/test_lib_wi1_cel_harden_scheme.py -q` (17 passed locally)
 - No existing tests weakened or skipped.
 
-## 6) Risks & Mitigations
+## 6) Critical Journeys
+
+- [x] CUJ-01: Soft-delete a CEL link then re-link same entity↔clause → no unique
+  violation (partial unique live rows only)
+- [x] CUJ-02: Human confirm stamps `confirmed_by_id` / `confirmed_at`; AI
+  auto-confirm leaves confirmer null
+- [x] CUJ-03: Link with `cover_kind=covers` coexists with `evidences` for same
+  entity↔clause
+
+## 7) Observability & Ops
+
+- Migration revision id `20261030_lib_wi1_cel` visible in alembic history
+- New columns present on CEL / standards / clauses (additive)
+- No new dashboards; failures surface as DB unique / API validation errors
+
+## 8) Release Plan
+
+1. Merge after CI green (sole alembic head)
+2. Tip-chase STG → PROD; verify `build_sha` + healthz 200
+3. Spot-check: soft-delete + re-link CEL; confirm stamps on human confirm
+
+## 9) Rollback Plan (Mandatory)
+
+- **Owner:** Library spine / Platform
+- **Rollback steps:**
+  1. `alembic downgrade` to `20261029_lib_ns_wf_review_cycle` on STG/PROD if
+     needed (clear soft-deleted+live collisions first if any)
+  2. Redeploy previous image tag if app code must roll back with schema
+  3. Confirm healthz 200 and CEL link create still works under old unique
+
+## 10) Evidence Pack
+
+- Unit: `tests/unit/test_lib_wi1_cel_harden_scheme.py`
+- Change Ledger: this body
+- Migration: `alembic/versions/20261030_lib_wi1_cel_harden_scheme.py`
+
+# Gate Checklist (must be complete before merge)
+
+- [x] **Gate 0:** Scope lock + AC + Change Ledger (WI-1 CEL harden only)
+- [x] **Gate 1:** No frameworks twin / no coverage_claims; F-3 baseline holds
+- [ ] **Gate 2:** CI green on the PR
+- [x] **Gate 3:** Behaviour verified locally — unit suite green
+- [x] **Gate 4:** Single serial alembic; no parallel migration PR
+- [ ] **Gate 5:** DONE = tip LIVE after merge — not claimed at open
+
+## 11) Risks & Mitigations
 
 | Risk | Mitigation |
 | --- | --- |
@@ -105,8 +150,7 @@
 | Duplicate ISO standards with different codes | Matcher reuses first hit; inserts only when no match |
 | OpenAPI snapshot drift | Additive fields; regenerate only if CI requires |
 
-## 7) Hold / merge note
+## 12) Merge note
 
-**HOLD PR open until Northern Star W9 is LIVE** (or open as draft). Do not
-tip-chase W8/W9 in this branch. Serial alembic — do not parallel another
-migration PR.
+W9 is LIVE (`c8934dc67`). This PR is the tip-path alembic owner — merge when
+CI green; tip-chase STG+PROD. Do not parallel another migration PR.
