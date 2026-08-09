@@ -1707,7 +1707,7 @@ async def patch_evidence(
             raise HTTPException(
                 status_code=422,
                 detail=api_error(
-                    link_outcome.status.value,
+                    link_outcome.status.name,
                     link_outcome.detail or "Register document link could not be established",
                     details={"year_id": year_id, "evidence_id": evidence_id, "document_id": patch.document_id},
                 ),

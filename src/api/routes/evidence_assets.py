@@ -542,7 +542,7 @@ async def update_evidence_asset(
             raise HTTPException(
                 status_code=422,
                 detail=api_error(
-                    outcome.status.value,
+                    outcome.status.name,
                     outcome.detail or "Register document link could not be established",
                     details={"asset_id": asset_id, "document_id": document_id},
                 ),
