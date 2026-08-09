@@ -62,6 +62,7 @@ from src.domain.services.document_version_service import (
     document_version_service,
     parse_filename_version_hint,
 )
+from src.domain.services.href_registry import document_href
 from src.domain.services.index_job_service import IndexJobService, dispatch_index_job, vector_index_configured
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.file_validation import validate_upload as shared_validate_upload
@@ -125,6 +126,9 @@ class DocumentResponse(BaseModel):
     # Batched User join on list — no N+1 (see list_documents).
     created_by_id: Optional[int] = None
     created_by_name: Optional[str] = None
+
+    # WA-1 / L-05b — Detail deep-link from href_registry (never blank for filed docs).
+    href: str
 
     class Config:
         from_attributes = True
@@ -215,6 +219,7 @@ def _document_to_response(
         live_at=live_at,
         created_by_id=getattr(document, "created_by_id", None),
         created_by_name=created_by_name,
+        href=document_href(document.id),
     )
 
 
@@ -1233,6 +1238,7 @@ async def list_documents(
                 Document.title.ilike(search_filter),
                 Document.description.ilike(search_filter),
                 Document.reference_number.ilike(search_filter),
+                Document.pel_doc_ref.ilike(search_filter),
                 Document.file_name.ilike(search_filter),
             )
         )

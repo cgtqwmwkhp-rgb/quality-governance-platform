@@ -74,6 +74,8 @@ const sampleDoc = {
   download_count: 0,
   is_public: false,
   created_at: '2026-03-22T10:00:00Z',
+  href: '/documents/11',
+  pel_doc_ref: 'PEL-01-01-0003',
 }
 
 function mockHappyPath() {
@@ -504,11 +506,13 @@ describe('Documents', () => {
       </MemoryRouter>,
     )
 
+    await screen.findByText('Safety Policy')
+    fireEvent.click(screen.getByRole('button', { name: /grid view/i }))
     expect(await screen.findByTestId('document-campaign-ring-11')).toBeInTheDocument()
     expect(screen.queryByTestId('document-campaign-badge-11')).not.toBeInTheDocument()
   })
 
-  it('shows governance dates, campaign ring, uploaded-by, and views in the list view; drops size/type', async () => {
+  it('shows PEL lead, Hyperlink, governance dates, campaign ring, uploaded-by, and views in the Register list', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url.startsWith('/api/v1/documents/?')) {
         return Promise.resolve({
@@ -547,13 +551,19 @@ describe('Documents', () => {
     )
 
     await screen.findByText('Safety Policy')
-    fireEvent.click(screen.getByRole('button', { name: /list view/i }))
 
+    expect(screen.getByText('documents.table.pel')).toBeInTheDocument()
+    expect(screen.getByText('documents.table.hyperlink')).toBeInTheDocument()
     expect(screen.getByText('documents.table.review_expiry')).toBeInTheDocument()
     expect(screen.getByText('documents.table.campaign')).toBeInTheDocument()
     expect(screen.getByText('documents.table.uploaded_by')).toBeInTheDocument()
     expect(screen.queryByText('documents.table.size')).not.toBeInTheDocument()
     expect(screen.queryByText('common.type')).not.toBeInTheDocument()
+
+    expect(screen.getByTestId('documents-register-pel-11')).toHaveTextContent('PEL-01-01-0003')
+    const hyperlink = screen.getByTestId('documents-register-hyperlink-11')
+    expect(hyperlink).toHaveAttribute('href', '/documents/11')
+    expect(hyperlink).toHaveTextContent('documents.table.open')
 
     expect(screen.getByText('Jane Doe')).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
