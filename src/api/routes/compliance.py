@@ -23,7 +23,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceCoverKind,
+    EvidenceLinkMethod,
+    EvidenceLinkStatus,
+)
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
 from src.domain.models.tenant import Tenant
@@ -129,6 +134,8 @@ class EvidenceLinkRequest(BaseModel):
     confidence: Optional[float] = None
     title: Optional[str] = None
     notes: Optional[str] = None
+    # D15: relationship shape. Default evidences keeps legacy create semantics.
+    cover_kind: str = EvidenceCoverKind.EVIDENCES.value
 
 
 class EvidenceLinkResponse(BaseModel):
@@ -142,8 +149,11 @@ class EvidenceLinkResponse(BaseModel):
     notes: Optional[str]
     document_version_id: Optional[int] = None
     standard_edition: Optional[str] = None
+    cover_kind: str = EvidenceCoverKind.EVIDENCES.value
     created_at: str
     created_by_email: Optional[str]
+    confirmed_by_id: Optional[int] = None
+    confirmed_at: Optional[str] = None
 
 
 class ComplianceStandardResponse(BaseModel):
@@ -218,26 +228,55 @@ def _match_ims_standard(value: Optional[str]) -> Optional[ISOStandard]:
 def _confirmed_provenance(
     link: ComplianceEvidenceLink,
 ) -> tuple[Optional[datetime], Optional[str]]:
-    """Best-effort confirmed_at/by without a dedicated confirm-actor column.
+    """Resolve confirmed_at / confirmed_by for serializers.
 
-    Returns (None, None) when the link is not confirmed. When confirmed,
-    uses updated_at (or created_at) as confirmed_at and created_by_email as
-    confirmed_by only when the link was auto-applied or manually created —
-    human Exceptions confirm currently leaves no actor stamp.
+    Prefer durable ``confirmed_by_id`` / ``confirmed_at`` (WI-1 / D15). Fall back
+    to the pre-column heuristic only when those are still null so historical
+    packs keep a best-effort actor without inventing one for AI auto-confirm.
     """
     link_status = link.effective_status if hasattr(link, "effective_status") else getattr(link, "status", None)
     status_value = None if link_status is None else getattr(link_status, "value", str(link_status))
     if status_value != EvidenceLinkStatus.CONFIRMED.value:
         return None, None
 
+    durable_at = getattr(link, "confirmed_at", None)
+    durable_by_id = getattr(link, "confirmed_by_id", None)
+    if durable_at is not None or durable_by_id is not None:
+        # Email is not stored on the confirmer FK; serializers that need an
+        # address keep using created_by_email only when it matches the confirmer.
+        confirmed_by = None
+        if durable_by_id is not None and durable_by_id == getattr(link, "created_by_id", None):
+            confirmed_by = link.created_by_email
+        elif durable_by_id is not None:
+            confirmed_by = f"user:{durable_by_id}"
+        return durable_at, confirmed_by
+
+    # Legacy heuristic (pre-WI-1 rows with no confirmer stamp).
     confirmed_at = link.updated_at or link.created_at
     if getattr(link, "auto_applied", False):
-        return confirmed_at, link.created_by_email
+        # AI auto-confirm must not invent a human confirmer.
+        return confirmed_at, None
     linked_by = link.linked_by.value if hasattr(link.linked_by, "value") else str(link.linked_by)
     if linked_by == EvidenceLinkMethod.MANUAL.value:
         return confirmed_at, link.created_by_email
-    # AI/auto proposed then human-confirmed: timestamp present, actor not stamped.
     return confirmed_at, None
+
+
+def _parse_cover_kind(raw: Optional[str]) -> EvidenceCoverKind:
+    value = (raw or EvidenceCoverKind.EVIDENCES.value).strip().lower()
+    try:
+        return EvidenceCoverKind(value)
+    except ValueError as exc:
+        raise BadRequestError(
+            f"Invalid cover_kind: {raw}. Expected one of: "
+            f"{', '.join(m.value for m in EvidenceCoverKind)}"
+        ) from exc
+
+
+def _stamp_manual_confirmed(link: ComplianceEvidenceLink, user: User) -> None:
+    """Human create/confirm that lands confirmed must set durable confirmer."""
+    link.confirmed_by_id = getattr(user, "id", None)
+    link.confirmed_at = datetime.now(timezone.utc)
 
 
 def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
@@ -266,6 +305,9 @@ def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
 
 
 def _serialize_link(link: ComplianceEvidenceLink) -> EvidenceLinkResponse:
+    cover = getattr(link, "cover_kind", None)
+    cover_value = cover.value if hasattr(cover, "value") else (cover or EvidenceCoverKind.EVIDENCES.value)
+    confirmed_at = getattr(link, "confirmed_at", None)
     return EvidenceLinkResponse(
         id=link.id,
         entity_type=link.entity_type,
@@ -277,8 +319,11 @@ def _serialize_link(link: ComplianceEvidenceLink) -> EvidenceLinkResponse:
         notes=link.notes,
         document_version_id=getattr(link, "document_version_id", None),
         standard_edition=getattr(link, "standard_edition", None),
+        cover_kind=str(cover_value),
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
+        confirmed_by_id=getattr(link, "confirmed_by_id", None),
+        confirmed_at=confirmed_at.isoformat() if confirmed_at is not None else None,
     )
 
 
@@ -475,6 +520,8 @@ async def link_evidence(
     except ValueError as exc:
         raise BadRequestError(f"Invalid linked_by value: {request.linked_by}") from exc
 
+    cover_kind = _parse_cover_kind(request.cover_kind)
+
     existing_result = await db.execute(
         select(ComplianceEvidenceLink).where(
             ComplianceEvidenceLink.deleted_at.is_(None),
@@ -482,6 +529,7 @@ async def link_evidence(
             ComplianceEvidenceLink.entity_type == request.entity_type,
             ComplianceEvidenceLink.entity_id == request.entity_id,
             ComplianceEvidenceLink.clause_id.in_(request.clause_ids),
+            ComplianceEvidenceLink.cover_kind == cover_kind,
         )
     )
     existing_by_clause = {link.clause_id: link for link in existing_result.scalars().all()}
@@ -495,6 +543,7 @@ async def link_evidence(
                 entity_type=request.entity_type,
                 entity_id=request.entity_id,
                 clause_id=clause_id,
+                cover_kind=cover_kind,
                 created_by_id=current_user.id,
                 created_by_email=current_user.email,
             )
@@ -504,6 +553,12 @@ async def link_evidence(
         link.confidence = request.confidence
         link.title = request.title
         link.notes = request.notes
+        link.cover_kind = cover_kind
+        # Manual create lands as confirmed (effective_status) — stamp confirmer.
+        if link_method == EvidenceLinkMethod.MANUAL:
+            link.status = EvidenceLinkStatus.CONFIRMED
+            link.auto_applied = False
+            _stamp_manual_confirmed(link, current_user)
         if request.entity_type == "document":
             from src.domain.services.cel_version_pin import pin_evidence_link_document_version
 
