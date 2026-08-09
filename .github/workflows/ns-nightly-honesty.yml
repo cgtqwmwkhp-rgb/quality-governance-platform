@@ -30,6 +30,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install pytest (unit pins only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pytest>=7.4.0,<10.0.0"
+
       - name: Run honesty report (artifact)
         run: |
           python -m scripts.governance.library.northern_star_nightly_honesty --json \

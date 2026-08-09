@@ -78,16 +78,47 @@ Live pack pins (honesty, not greenwash):
 - [x] CUJ-02: `--guard` exits 0 on current pack; exits 1 if counters zeroed
 - [x] CUJ-03: Workflow uploads honesty artifact
 
-## 7–10) Ops / Release / Rollback / Evidence
+## 7) Observability & Ops
 
-- Release: merge after W8 LIVE preferred (parallel prep OK); tip-chase; do not claim W9 DONE at merge
-- Rollback: revert merge
-- Evidence: master plan W9; baseline JSON; unit pins
+- Report-only job: stdout + uploaded artifact `ns-nightly-honesty-report` (JSON + text).
+- No new runtime metrics, AuditLog events, or owner email alerts (deferred).
+- Delivery guard (`--guard`) fails the workflow when honesty floors are breached (fabricated zeros).
+- Schedule: cron `15 3 * * *` UTC + `workflow_dispatch` + PR path on honesty files.
+
+## 8) Release Plan
+
+1. Hold merge until W8 (#1684) is LIVE unless explicitly told otherwise — this PR is parallel prep only.
+2. Merge this PR to `main` after W8 LIVE; `CI - Default` green on the tip SHA.
+3. Tip-chase is owned by the governed tip path after merge — **do not tip-chase from this babysit**.
+4. First scheduled / manual `ns-nightly-honesty` dispatch after merge uploads the honesty artifact.
+5. Do **not** claim W9 DONE at merge — DONE = tip LIVE + honesty job verified.
+
+## 9) Rollback Plan (Mandatory)
+
+- **Trigger:** Nightly honesty job red on real pack drift, guard false-positive blocking unrelated PRs, or workflow flake after install.
+- **Rollback steps:**
+  1. Disable/skip the scheduled workflow (or revert the merge commit) — no DB or app image dependency for pack-only honesty.
+  2. If a baseline floor is wrong after an intentional pack improvement, update `docs/governance/library_ns_nightly_honesty_baseline.json` via a follow-up PR (never weaken by inventing zeros).
+  3. No schema to unwind; no feature flag.
+- **Owner:** Platform Engineering — David Harris
+
+## 10) Evidence Pack
+
+- Authority: Northern Star master plan wave W9 / NS-NIGHTLY (R08 / R25 / R30).
+- ADR: ADR-0023 § Amendment — staged hardness (nightly warn/alert).
+- Baseline: `docs/governance/library_ns_nightly_honesty_baseline.json`.
+- Script: `scripts/governance/library/northern_star_nightly_honesty.py`.
+- Workflow: `.github/workflows/ns-nightly-honesty.yml`.
+- Ledger file: `scripts/governance/pr_body_lib_ns_nightly_honesty.md`.
+- Live pack pins: R08=30, R25 issued missing review_date=8 (overdue uncomputed), R30 coverage gaps=220.
 
 ---
 
-# Gate Checklist
+# Gate Checklist (must be complete before merge)
 
-- [x] Gate 0–1 scope + ledger
-- [ ] Gate 2 CI
-- [ ] Gate 3–5 tip LIVE (after merge — not now)
+- [x] **Gate 0:** Scope lock + AC + Change Ledger; pack-only honesty; no W8 path overlap
+- [x] **Gate 1:** No DB writes / no silent greenwash — delivery guard floors held
+- [ ] **Gate 2:** CI green on the PR
+- [x] **Gate 3:** Behaviour verified locally — report + `--guard` OK on live pack; unit pins
+- [x] **Gate 4:** No migration, no data change, no tip-chase from this PR
+- [ ] **Gate 5:** DONE = tip LIVE after merge + first honesty artifact — not claimed here (hold merge until W8 LIVE)
