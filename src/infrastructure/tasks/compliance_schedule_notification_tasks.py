@@ -243,15 +243,28 @@ async def _user_email_pref_enabled(session: "AsyncSession", user_id: int) -> boo
     return bool(prefs.email_enabled)
 
 
-async def _maybe_enqueue_due_reminder_email(
+class PendingDueReminderEmail(TypedDict):
+    recipient: str
+    title: str
+    body: str
+
+
+async def _maybe_queue_due_reminder_email(
     session: "AsyncSession",
     *,
     tenant_id: int,
     user_id: int,
     kwargs: dict[str, Any],
     results: ComplianceSweepResults,
+    pending_emails: list[PendingDueReminderEmail],
 ) -> None:
-    """Best-effort email after a successful COMPLIANCE_ALERT insert. Never raises."""
+    """Queue due-reminder mail for flush after the tenant transaction commits.
+
+    Preference / flag reads happen here (still inside the open session). Celery
+    ``send_email.delay`` must not run until after commit: otherwise a rollback
+    (timeout, tenant failure, dry-run) can mail without a matching in-app row.
+    Never raises.
+    """
     from src.domain.services.compliance_schedule_notify_flags import email_channel_enabled
 
     try:
@@ -265,7 +278,6 @@ async def _maybe_enqueue_due_reminder_email(
         from sqlalchemy import select
 
         from src.domain.models.user import User
-        from src.infrastructure.tasks.email_tasks import send_email
 
         row = await session.execute(select(User.email).where(User.id == user_id))
         recipient = row.scalar_one_or_none()
@@ -273,16 +285,51 @@ async def _maybe_enqueue_due_reminder_email(
             results["emails_skipped"] += 1
             return
 
-        body = f"{kwargs['message']}\n\nOpen: {kwargs['action_url']}"
-        send_email.delay(recipient, kwargs["title"], body, False)
-        results["emails_enqueued"] += 1
+        pending_emails.append(
+            {
+                "recipient": recipient,
+                "title": kwargs["title"],
+                "body": f"{kwargs['message']}\n\nOpen: {kwargs['action_url']}",
+            }
+        )
     except Exception:
         results["emails_skipped"] += 1
         logger.warning(
-            "Compliance schedule due-reminder email enqueue failed for user %s",
+            "Compliance schedule due-reminder email queue failed for user %s",
             user_id,
             exc_info=True,
         )
+
+
+def _flush_pending_due_reminder_emails(
+    pending_emails: Sequence[PendingDueReminderEmail],
+    results: ComplianceSweepResults,
+) -> None:
+    """Enqueue Celery mail only after a successful tenant commit. Never raises."""
+    if not pending_emails:
+        return
+    try:
+        from src.infrastructure.tasks.email_tasks import send_email
+    except Exception:
+        results["emails_skipped"] += len(pending_emails)
+        logger.warning(
+            "Compliance schedule due-reminder email flush import failed; %d mail(s) dropped",
+            len(pending_emails),
+            exc_info=True,
+        )
+        return
+
+    for item in pending_emails:
+        try:
+            send_email.delay(item["recipient"], item["title"], item["body"], False)
+            results["emails_enqueued"] += 1
+        except Exception:
+            results["emails_skipped"] += 1
+            logger.warning(
+                "Compliance schedule due-reminder email enqueue failed for %s",
+                item["recipient"],
+                exc_info=True,
+            )
 
 
 async def _sweep_tenant(
@@ -293,6 +340,7 @@ async def _sweep_tenant(
     evaluated_at: datetime,
     dry_run: bool,
     results: ComplianceSweepResults,
+    pending_emails: list[PendingDueReminderEmail],
 ) -> None:
     from sqlalchemy.exc import IntegrityError
 
@@ -380,12 +428,13 @@ async def _sweep_tenant(
                 results["notifications_skipped_conflict"] += 1
             else:
                 results["notifications_created"] += 1
-                await _maybe_enqueue_due_reminder_email(
+                await _maybe_queue_due_reminder_email(
                     session,
                     tenant_id=tenant_id,
                     user_id=user_id,
                     kwargs=kwargs,
                     results=results,
+                    pending_emails=pending_emails,
                 )
 
 
@@ -480,6 +529,7 @@ async def _sweep_all_tenants(
                     continue
 
                 await apply_tenant_guc(session, tenant_id)
+                pending_emails: list[PendingDueReminderEmail] = []
                 await _sweep_tenant(
                     session,
                     tenant_id=tenant_id,
@@ -487,12 +537,16 @@ async def _sweep_all_tenants(
                     evaluated_at=evaluated_at,
                     dry_run=dry_run,
                     results=results,
+                    pending_emails=pending_emails,
                 )
 
                 if dry_run:
                     await session.rollback()
                 else:
                     await session.commit()
+                    # Only after commit: queued mail must not outlive a rolled-back
+                    # COMPLIANCE_ALERT insert for this tenant.
+                    _flush_pending_due_reminder_emails(pending_emails, results)
                 results["tenants_swept"] += 1
             except SoftTimeLimitExceeded:
                 # Must not be swallowed by the handler below. The soft limit exists so

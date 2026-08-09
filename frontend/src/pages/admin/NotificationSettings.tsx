@@ -100,25 +100,29 @@ export default function NotificationSettings() {
     setCsFlagsLoading(true)
     setCsFlagsError(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/feature-flags/?limit=100`, {
-        credentials: 'include',
-        headers: await authHeaders(),
-      })
-      if (!res.ok) {
-        setCsFlagsError(`Could not load feature flags (${res.status}).`)
-        return
-      }
-      const data = (await res.json()) as { items?: FeatureFlagRow[] }
+      const headers = await authHeaders()
       const next: Record<string, boolean> = {}
-      for (const flag of data.items || []) {
-        if (CS_NOTIFY_FLAGS.some((f) => f.key === flag.key)) {
-          next[flag.key] = Boolean(flag.enabled)
-        }
-      }
-      // Defaults match server seed (enabled=True) when a row is not yet visible in this page size.
-      for (const def of CS_NOTIFY_FLAGS) {
-        if (!(def.key in next)) next[def.key] = true
-      }
+      // Fetch each CS key directly. A paginated list + "missing => enabled"
+      // misreads flags that exist but sit past the first page.
+      await Promise.all(
+        CS_NOTIFY_FLAGS.map(async (def) => {
+          const res = await fetch(`${API_BASE_URL}/api/v1/feature-flags/${encodeURIComponent(def.key)}`, {
+            credentials: 'include',
+            headers,
+          })
+          if (res.ok) {
+            const flag = (await res.json()) as FeatureFlagRow
+            next[def.key] = Boolean(flag.enabled)
+            return
+          }
+          if (res.status === 404) {
+            // Seed default is enabled when the row is not yet materialised.
+            next[def.key] = true
+            return
+          }
+          throw new Error(`flag ${def.key} HTTP ${res.status}`)
+        }),
+      )
       setCsFlags(next)
     } catch {
       setCsFlagsError('Could not load Compliance Schedule notification flags.')
