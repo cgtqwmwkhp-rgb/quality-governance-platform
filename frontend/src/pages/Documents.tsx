@@ -564,6 +564,7 @@ export default function Documents() {
     setUploadError(null)
     setPendingUploadFile(file)
     setSelectedFunctionCode(null)
+    setSelectedCascadeLevel(null)
     setFilingWizardStep('function')
   }
 
@@ -617,6 +618,7 @@ export default function Documents() {
       // Bring-under-control stub. Do not invent a second Register.
       setPendingUploadFile(null)
       setSelectedFunctionCode(null)
+      setSelectedCascadeLevel(null)
       setUploadRelationshipDoc({ id: uploadedId, title: uploadedTitle })
       setFilingWizardStep('related')
     } catch (err) {
@@ -639,6 +641,7 @@ export default function Documents() {
     setFilingWizardStep('file')
     setPendingUploadFile(null)
     setSelectedFunctionCode(null)
+    setSelectedCascadeLevel(null)
     setUploadRelationshipDoc(null)
     setRelationshipBusy(false)
     setUploadError(null)

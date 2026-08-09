@@ -1096,7 +1096,9 @@ async def upload_document(
         )
     except HTTPException:
         raise
-    except BadRequestError:
+    except (BadRequestError, DomainValidationError, NotFoundError):
+        # Band exhaustion / inactive function / missing counter must surface as
+        # domain responses (422/404), not the broad upload 500 catch-all.
         raise
     except Exception as exc:
         logger.exception("Document upload failed unexpectedly")
