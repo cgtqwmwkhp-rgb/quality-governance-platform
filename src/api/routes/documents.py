@@ -48,6 +48,10 @@ from src.domain.services.document_category_service import (
     coerce_cascade_level,
     resolve_function_code,
 )
+from src.domain.services.library_rules import (
+    assert_access_level_required,
+    assert_filename_grammar_if_pel_prefixed,
+)
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_library_campaign_offer_service import (
@@ -919,6 +923,10 @@ async def upload_document(
         raise BadRequestError(f"Location {site_location_id} not found")
 
     file_name, content, file_type, safe_filename = await _validate_library_upload(file)
+    try:
+        assert_filename_grammar_if_pel_prefixed(file_name)
+    except DomainValidationError as exc:
+        raise BadRequestError(str(exc)) from exc
     file_size = len(content)
     file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{safe_filename}"
 
@@ -953,7 +961,10 @@ async def upload_document(
                     "5 Form/Register/Record) and cannot be re-banded once issued."
                 )
             function_id = filing_function.id
-            pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id, cascade_level)
+            try:
+                pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id, cascade_level)
+            except DomainValidationError as exc:
+                raise BadRequestError(str(exc)) from exc
 
         if category_id is not None:
             filing_category = await load_filing_category(db, category_id)
@@ -980,6 +991,16 @@ async def upload_document(
                     }
                     for d in dupes
                 ]
+
+        # R26 (W4): every created document carries an access level. Taxonomy
+        # defaults supply it when a category is chosen; otherwise all_staff is
+        # the Northern Star default rather than leaving NULL (silent gap).
+        if access_level is None:
+            access_level = "all_staff"
+        try:
+            access_level = assert_access_level_required(access_level)
+        except DomainValidationError as exc:
+            raise BadRequestError(str(exc)) from exc
 
         # Create document record
         doc = Document(
