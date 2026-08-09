@@ -1,0 +1,426 @@
+{
+  "source": "northern-star-v6.json",
+  "schema_version": "3.2",
+  "generated": "2026-08-09",
+  "reference_pattern": "^PEL-(HSEQ|IT|FAC|PPL|PROC|FLT|CTR|SVC|TECH|DP|FIN|COM)-[1-5][0-9]{3}$",
+  "levels": [
+    {
+      "level": 1,
+      "code": "L1",
+      "name": "Manual",
+      "band": "1000-1999"
+    },
+    {
+      "level": 2,
+      "code": "L2",
+      "name": "Policy",
+      "band": "2000-2999"
+    },
+    {
+      "level": 3,
+      "code": "L3",
+      "name": "Procedure or Standard",
+      "band": "3000-3999"
+    },
+    {
+      "level": 4,
+      "code": "L4",
+      "name": "SOP, RAMS or Assessment",
+      "band": "4000-4999"
+    },
+    {
+      "level": 5,
+      "code": "L5",
+      "name": "Form, Register or Record",
+      "band": "5000-5999"
+    }
+  ],
+  "functions": [
+    {
+      "code": "HSEQ",
+      "name": "Health, Safety, Environment & Quality",
+      "role": "HSEQ Manager",
+      "approver": "Executive Directors"
+    },
+    {
+      "code": "IT",
+      "name": "IT & Information Security",
+      "role": "IT Manager",
+      "approver": "Function owner"
+    },
+    {
+      "code": "FAC",
+      "name": "Facilities & Premises",
+      "role": "Facilities Manager",
+      "approver": "Function owner"
+    },
+    {
+      "code": "PPL",
+      "name": "People",
+      "role": "HR Manager",
+      "approver": "Executive Directors"
+    },
+    {
+      "code": "PROC",
+      "name": "Procurement & Supply Chain",
+      "role": "Procurement Manager",
+      "approver": "Function owner"
+    },
+    {
+      "code": "FLT",
+      "name": "Fleet & Transport",
+      "role": "Fleet Manager",
+      "approver": "Function owner"
+    },
+    {
+      "code": "CTR",
+      "name": "Control Room",
+      "role": "Control Room Manager",
+      "approver": "Function owner"
+    },
+    {
+      "code": "SVC",
+      "name": "Service Delivery (workshop and mobile engineering)",
+      "role": "Workshop Manager",
+      "approver": "Function owner"
+    },
+    {
+      "code": "TECH",
+      "name": "Technical",
+      "role": "Technical Manager",
+      "approver": "Function owner"
+    },
+    {
+      "code": "DP",
+      "name": "Data Protection",
+      "role": "Data Protection Officer",
+      "approver": "Executive Directors"
+    },
+    {
+      "code": "FIN",
+      "name": "Finance",
+      "role": "Finance Manager",
+      "approver": "Function owner"
+    },
+    {
+      "code": "COM",
+      "name": "Commercial",
+      "role": "Commercial lead",
+      "approver": "Function owner"
+    }
+  ],
+  "validation_rules": [
+    {
+      "id": "R01",
+      "name": "Reference format",
+      "rule": "Every reference matches ^PEL-(HSEQ|IT|FAC|PPL|PROC|FLT|CTR|SVC|TECH|DP|FIN|COM)-[1-5][0-9]{3}$",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R02",
+      "name": "Band equals level",
+      "rule": "The first digit of the sequence equals the cascade level",
+      "severity": "Block",
+      "enforced": "On create and on level change"
+    },
+    {
+      "id": "R03",
+      "name": "Function matches",
+      "rule": "The function code in the reference equals the function field",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R04",
+      "name": "Reference immutable",
+      "rule": "A reference is never edited once issued",
+      "severity": "Block",
+      "enforced": "Always"
+    },
+    {
+      "id": "R05",
+      "name": "Level change is a reissue",
+      "rule": "Changing level withdraws the old reference and issues a new one with a Supersedes link",
+      "severity": "Block",
+      "enforced": "On level change"
+    },
+    {
+      "id": "R06",
+      "name": "No reuse",
+      "rule": "A withdrawn or superseded reference is never reissued",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R07",
+      "name": "Parent required",
+      "rule": "Every document below L1 names a parent",
+      "severity": "Block on issue",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R08",
+      "name": "Policies must be implemented",
+      "rule": "Every document of type Policy at L2 has at least one child at L3 or below. Statements and strategies are exempt: a statement declares, a strategy is implemented through the objectives register, and neither states a requirement that needs a method",
+      "severity": "Warn, report monthly",
+      "enforced": "Nightly"
+    },
+    {
+      "id": "R09",
+      "name": "Records must be required",
+      "rule": "Every L5 names the document that requires it",
+      "severity": "Warn",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R10",
+      "name": "Amendment record required",
+      "rule": "No document is issued without a completed amendment record",
+      "severity": "Block",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R11",
+      "name": "Amendment reconciles",
+      "rule": "The top amendment row matches version, date and author in the control block",
+      "severity": "Block",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R12",
+      "name": "Amendment rows immutable",
+      "rule": "A previously issued amendment row is never edited or deleted",
+      "severity": "Block",
+      "enforced": "Always"
+    },
+    {
+      "id": "R13",
+      "name": "Published rendition is current",
+      "rule": "A published rendition must render the current approved version",
+      "severity": "Alert",
+      "enforced": "Nightly"
+    },
+    {
+      "id": "R14",
+      "name": "Only approved versions publish",
+      "rule": "A published rendition is only produced from an approved version",
+      "severity": "Block",
+      "enforced": "On publish"
+    },
+    {
+      "id": "R15",
+      "name": "Level in the footer",
+      "rule": "The rendering pipeline stamps the cascade level into the footer of every page; it does not trust the author to",
+      "severity": "Block",
+      "enforced": "On publish, by the pipeline"
+    },
+    {
+      "id": "R16",
+      "name": "Ownership is role plus person",
+      "rule": "Every document carries an owner role and the named person currently filling it. The role gives continuity, the person gives accountability",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R17",
+      "name": "Distributions are not documents",
+      "rule": "A copy sent anywhere is recorded as a distribution, never given a reference",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R18",
+      "name": "Supersede same day",
+      "rule": "On reissue the previous issue is superseded, archived and removed from the live library the same day",
+      "severity": "Block",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R19",
+      "name": "Retention is computable",
+      "rule": "Retention is a number of years with a basis; a disposal date must be calculable",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R20",
+      "name": "Review date required",
+      "rule": "Every document states its review cycle and the basis for it. There is no default cycle; a cycle is justified by risk, statute or certification expectation",
+      "severity": "Block",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R21",
+      "name": "Spread the review load",
+      "rule": "No more than 10 documents share a review date",
+      "severity": "Warn",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R22",
+      "name": "Whole number versions",
+      "rule": "Approved issues are whole numbers; decimals are drafts",
+      "severity": "Block",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R23",
+      "name": "Approver is not the author",
+      "rule": "The approver of a version must not be the author of that version",
+      "severity": "Block",
+      "enforced": "On issue"
+    },
+    {
+      "id": "R24",
+      "name": "External documents identified",
+      "rule": "A document of external origin (HSE, a client, a supplier, a consultant) carries external_origin=true, its publisher, and is excluded from internal authorship rules. ISO 9001 7.5.3.2 requires documents of external origin to be identified and controlled",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R25",
+      "name": "Review overdue alerting",
+      "rule": "Any Issued document past its review date is alerted to the owner at 30 days before, on the day, and weekly after; the register reports the overdue count monthly",
+      "severity": "Alert",
+      "enforced": "Nightly"
+    },
+    {
+      "id": "R26",
+      "name": "Access level required",
+      "rule": "Every document carries an access level, defaulted from its taxonomy category, overridable per document with a reason",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R27",
+      "name": "Cascade re-validated on withdrawal",
+      "rule": "Withdrawing a document re-runs the orphan check on every document that named it as parent; new orphans are alerted the same day",
+      "severity": "Alert",
+      "enforced": "On withdrawal"
+    },
+    {
+      "id": "R28",
+      "name": "Disposal is a logged event",
+      "rule": "When retention expires, disposal (or the decision to retain longer, with a reason) is recorded in the events table. ISO 9001 7.5.3.2 d covers disposition, not just retention",
+      "severity": "Block",
+      "enforced": "On disposal"
+    },
+    {
+      "id": "R29",
+      "name": "Allocation is frozen and append-only",
+      "rule": "The reference allocation is frozen at v4.0. A new document takes the next free number in its band; nothing is ever renumbered",
+      "severity": "Block",
+      "enforced": "On create"
+    },
+    {
+      "id": "R30",
+      "name": "Legacy references resolve",
+      "rule": "Every legacy reference (IMS, PLA, PXL, MSF, MAN, PP, 000x) resolves through the register to exactly one live PEL reference",
+      "severity": "Warn",
+      "enforced": "Nightly"
+    },
+    {
+      "id": "R31",
+      "name": "Event triggered review",
+      "rule": "A legislative change detected by the application, an incident, an audit finding, a process change or a client requirement change opens a review on every linked document immediately, regardless of its cycle",
+      "severity": "Block (the review task cannot be dismissed, only completed)",
+      "enforced": "On event"
+    },
+    {
+      "id": "R32",
+      "name": "Filename grammar",
+      "rule": "Every filename matches: PEL reference, space, Title Case title (acronyms protected, \"and\" not \"&\", no version markers inside the title), space, v<whole number>, extension",
+      "severity": "Block",
+      "enforced": "On create and on rename"
+    }
+  ],
+  "workflow_transitions": [
+    {
+      "from": "Draft",
+      "to": "In review",
+      "actor": "Author",
+      "guard": "A complete draft exists with an amendment entry drafted"
+    },
+    {
+      "from": "In review",
+      "to": "Draft",
+      "actor": "Reviewer",
+      "guard": "Changes requested; comments recorded"
+    },
+    {
+      "from": "In review",
+      "to": "Approved",
+      "actor": "Approver (not the author, R23)",
+      "guard": "R10 and R11 pass; approver named and dated"
+    },
+    {
+      "from": "Approved",
+      "to": "Issued",
+      "actor": "Document owner",
+      "guard": "Published rendition generated by the pipeline (R14, R15); register row updated; previous version superseded the same day (R18)"
+    },
+    {
+      "from": "Issued",
+      "to": "Superseded",
+      "actor": "System, on issue of the next version",
+      "guard": "Automatic; archived and removed from the live library"
+    },
+    {
+      "from": "Issued",
+      "to": "Withdrawn",
+      "actor": "Owner plus approver",
+      "guard": "Reason recorded; cascade re-validated (R27); reference retired (R06)"
+    },
+    {
+      "from": "Issued",
+      "to": "Issued (typo correction)",
+      "actor": "Owner",
+      "guard": "No version increment; correction logged in the amendment record against the current version"
+    },
+    {
+      "from": "Draft",
+      "to": "Withdrawn",
+      "actor": "Author or owner",
+      "guard": "Abandoned before issue; no reference consumed if never allocated"
+    },
+    {
+      "from": "Any",
+      "to": "Level change",
+      "actor": "Owner plus approver",
+      "guard": "WITHDRAWAL AND REISSUE: old reference Withdrawn, new reference issued with a Supersedes link (R05)"
+    },
+    {
+      "from": "Issued",
+      "to": "Emergency reissue",
+      "actor": "Owner plus any Executive Director",
+      "guard": "For a safety-critical defect: expedited approval, full amendment entry, board notified at the next meeting; the emergency route is logged as an event and reported at management review"
+    }
+  ],
+  "review_triggers": [
+    {
+      "trigger": "Legislative or regulatory change",
+      "mechanism": "The application monitors the legislation links held against each document (767 of them) and the HSE and ICO feeds; a detected change opens a review on every linked document the same day"
+    },
+    {
+      "trigger": "Incident, near miss or ill health case",
+      "mechanism": "Any incident reopens the assessments and procedures for the activity involved"
+    },
+    {
+      "trigger": "Audit finding or nonconformity",
+      "mechanism": "Internal, certification or client audit"
+    },
+    {
+      "trigger": "Process or organisational change",
+      "mechanism": "New equipment, new site, new service line, restructure"
+    },
+    {
+      "trigger": "Client or contract requirement change",
+      "mechanism": "A framework or utility client changes its standards"
+    },
+    {
+      "trigger": "External best practice change",
+      "mechanism": "A revised HSE guidance note, British Standard or industry code"
+    }
+  ]
+}
