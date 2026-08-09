@@ -1567,6 +1567,7 @@ async def create_document_version(
 ):
     """Open a revision draft with optional new file upload + re-index."""
     document = await _get_document_or_404(db, document_id, current_user)
+    await assert_document_not_held(db, document, action="revised")
 
     file_name: str | None = None
     file_path: str | None = None
