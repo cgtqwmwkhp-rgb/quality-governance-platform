@@ -155,9 +155,7 @@ def build_framework_evidence_pack(
     operational_rows: list[dict[str, Any]] = []
     for row in matched:
         serialized = serialize_framework_pack_row(row)
-        if counts_toward_conformance(
-            row.get("signal_type") if isinstance(row.get("signal_type"), str) else None
-        ):
+        if counts_toward_conformance(row.get("signal_type") if isinstance(row.get("signal_type"), str) else None):
             conformance_rows.append(serialized)
         else:
             operational_rows.append(serialized)
@@ -169,11 +167,7 @@ def build_framework_evidence_pack(
         evidence_export = list(conformance_rows)
         exclusion_mode = "excluded_from_conformance_evidence"
 
-    current_count = sum(
-        1
-        for row in evidence_export
-        if str(row.get("document_issue_state") or "").upper() == "CURRENT"
-    )
+    current_count = sum(1 for row in evidence_export if str(row.get("document_issue_state") or "").upper() == "CURRENT")
 
     return {
         "pack_version": PACK_VERSION,

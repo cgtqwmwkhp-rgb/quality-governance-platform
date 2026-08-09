@@ -15,13 +15,7 @@ from src.domain.services.framework_evidence_pack_builder import (
     row_matches_framework,
 )
 
-FIXTURE_DIR = (
-    Path(__file__).resolve().parents[2]
-    / "specs"
-    / "governance-library"
-    / "fixtures"
-    / "evidence-packs"
-)
+FIXTURE_DIR = Path(__file__).resolve().parents[2] / "specs" / "governance-library" / "fixtures" / "evidence-packs"
 
 # WI-1 conflict paths — this slice must never touch them.
 _FORBIDDEN_PATH_MARKERS = (
@@ -100,11 +94,7 @@ def test_cover_kind_default_and_coexistence_shape() -> None:
 def test_wk1_prep_does_not_edit_wi1_conflict_files() -> None:
     """Sanity: builder stays NEW-file only and does not import WI-1 conflict modules."""
     builder_path = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "domain"
-        / "services"
-        / "framework_evidence_pack_builder.py"
+        Path(__file__).resolve().parents[2] / "src" / "domain" / "services" / "framework_evidence_pack_builder.py"
     )
     text = builder_path.read_text(encoding="utf-8")
     for marker in _FORBIDDEN_PATH_MARKERS:
