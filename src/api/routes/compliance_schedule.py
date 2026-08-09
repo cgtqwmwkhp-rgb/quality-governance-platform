@@ -558,6 +558,7 @@ async def file_record_to_library(
         user=current_user,
         evidence_asset_id=data.evidence_asset_id,
         category_id=data.category_id,
+        function_code=data.function_code,
         library_document_id=data.library_document_id,
         title=data.title,
     )
@@ -748,6 +749,7 @@ async def file_fra_ocr_draft(
         tenant_id=tenant_id,
         user=current_user,
         category_id=data.category_id,
+        function_code=data.function_code,
         title=data.title,
     )
     if result.index_job is not None:

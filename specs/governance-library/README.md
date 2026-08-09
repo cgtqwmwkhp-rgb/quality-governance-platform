@@ -56,7 +56,8 @@ reinterpreted onto QGP's SQLAlchemy/Alembic/FastAPI stack.
 
 | File | Purpose |
 |---|---|
-| `taxonomy.json` | Unmodified seed source — 13 sections + 73 subcategories = 86 categories, with `ref_prefix`, `default_access`, `review_cycle`, `retention_rule`. Loaded by `scripts/governance/library/seed_document_categories.py`. |
+| `taxonomy.json` | Unmodified seed source — 13 sections + 73 subcategories = 86 categories, with `ref_prefix`, `default_access`, `review_cycle`, `retention_rule`. Loaded by `scripts/governance/library/seed_document_categories.py`. Since WA-2, `ref_prefix` is a filing default only — it no longer determines the reference (see `functions.json`). |
+| `functions.json` | WA-2 / ADR-0023 — the 11 owning-function codes seeded into `document_functions`. The PEL reference is `PEL-<FUNCTION>-<SEQ>`, so this file is the source of every prefix the business can ever issue; the counter is per function and a code is never renamed once it has issued a reference. Loaded by the same seeder. |
 | `seed/validate.mjs` | Unmodified sanity-check script — run `node specs/governance-library/seed/validate.mjs` before re-seeding after any taxonomy edit. |
 
 See `docs/governance/decision-log-template.md` conventions and

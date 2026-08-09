@@ -1,10 +1,17 @@
-"""Governance Library taxonomy: categories, tag vocabulary, PEL reference counters.
+"""Governance Library taxonomy: categories, functions, tag vocabulary, PEL counters.
 
 Wave W0 (feat/gov-lib-w0-taxonomy-pel) — see specs/governance-library/README.md
 for the locked decisions this schema implements. `documents` (src.domain.
 models.document.Document) remains the library file system-of-record;
 `ControlledDocument` remains the control layer. This module only adds the
 taxonomy/classification/reference layer that sits alongside them.
+
+Wave WA-2 (ADR-0023) adds `document_functions` and moves the PEL sequence
+counter from the category to the function: the reference is
+`PEL-<FUNCTION>-<SEQ>`, so the *category classifies* and the *reference
+identifies*. Category and Function are deliberately different axes — a
+policy about information security files to `01.01 Policies` and carries
+`PEL-IT-0014`.
 """
 
 from typing import List, Optional
@@ -17,6 +24,40 @@ from src.domain.models.base import Base, TimestampMixin
 # Level-2 (subcategory) taxonomy_id that must always seed inactive — HGV/O-licence
 # is out of scope for Plantexpand's current fleet (Wave W0 decision log).
 DEACTIVATED_TAXONOMY_IDS = frozenset({"06.04"})
+
+
+class DocumentFunction(Base, TimestampMixin):
+    """Owning business function for a filed document — the PEL reference axis (ADR-0023).
+
+    Seeded idempotently from specs/governance-library/functions.json (11
+    rows). Global reference data (tenant_id nullable), matching the
+    `document_categories` / `document_tags` pattern: readable by any active
+    user, writable by admins only.
+
+    A function is *not* a pointer to whoever currently owns the document. It
+    is fixed when the document is filed, so moving ownership of information
+    security from the IT Manager to the DPO leaves every existing
+    `PEL-IT-####` reference standing. Deactivate rather than delete — an
+    inactive function cannot be chosen for a new document but keeps backing
+    every reference already issued under it.
+    """
+
+    __tablename__ = "document_functions"
+    __table_args__ = (UniqueConstraint("code", name="uq_document_functions_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
+    # Natural key from functions.json (e.g. "HSEQ") — the idempotent seed anchor
+    # and the literal prefix segment of every reference the function issues.
+    code: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+    def __repr__(self) -> str:
+        return f"<DocumentFunction(code='{self.code}', name='{self.name}')>"
 
 
 class DocumentCategory(Base, TimestampMixin):
@@ -95,21 +136,28 @@ class DocumentTag(Base, TimestampMixin):
 
 
 class PelDocRefCounter(Base):
-    """Atomic per-category sequence counter for PEL-<SECTION>-<SUB>-<SEQ> allocation.
+    """Atomic per-function sequence counter for PEL-<FUNCTION>-<SEQ> allocation.
 
-    One row per level-2 `DocumentCategory`. Allocation is a single atomic
-    ``UPDATE ... SET next_seq = next_seq + 1 RETURNING next_seq`` so
-    concurrent allocations for the same category can never collide —
-    see src.domain.services.document_category_service.allocate_pel_doc_ref.
+    One row per `DocumentFunction` (WA-2 / ADR-0023 — it was one row per
+    level-2 category under the retired `PEL-<SECTION>-<SUB>-<SEQ>` scheme).
+    Allocation is a single atomic ``UPDATE ... SET next_seq = next_seq + 1
+    RETURNING next_seq`` so concurrent allocations for the same function can
+    never collide — see
+    src.domain.services.document_category_service.allocate_pel_doc_ref.
+
+    ``ondelete="RESTRICT"`` rather than CASCADE: deleting the counter would
+    restart the sequence and re-issue references that are already printed on
+    documents and cited in audit packs. Functions are deactivated, not
+    deleted.
     """
 
     __tablename__ = "pel_doc_ref_counters"
 
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("document_categories.id", ondelete="CASCADE"),
+    function_id: Mapped[int] = mapped_column(
+        ForeignKey("document_functions.id", ondelete="RESTRICT"),
         primary_key=True,
     )
     next_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     def __repr__(self) -> str:
-        return f"<PelDocRefCounter(category_id={self.category_id}, next_seq={self.next_seq})>"
+        return f"<PelDocRefCounter(function_id={self.function_id}, next_seq={self.next_seq})>"

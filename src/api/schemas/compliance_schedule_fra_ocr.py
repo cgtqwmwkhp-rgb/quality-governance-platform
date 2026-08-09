@@ -181,6 +181,11 @@ class FraOcrFileRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category_id: int = Field(..., ge=1)
+    # Owning function for the PEL reference (ADR-0023) — a different axis from
+    # category_id. Omitted means "not yet confirmed": the document is filed
+    # with no PEL reference rather than one derived from the category. An FRA
+    # sits on the HSEQ/FAC boundary, so it is not safe to infer.
+    function_code: Optional[str] = Field(default=None, min_length=1, max_length=20)
     title: Optional[str] = Field(default=None, min_length=1, max_length=500)
 
     @field_validator("title", mode="before")

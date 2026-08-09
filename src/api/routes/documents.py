@@ -42,7 +42,7 @@ from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_campaign_service import DocumentCampaignService
-from src.domain.services.document_category_service import allocate_pel_doc_ref
+from src.domain.services.document_category_service import allocate_pel_doc_ref, resolve_function_code
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_library_campaign_offer_service import (
@@ -826,14 +826,23 @@ async def upload_document(
     department: str = Form(None),
     sensitivity: str = Form("internal"),
     category_id: Optional[int] = Form(None),
+    function_code: Optional[str] = Form(None),
     site_location_id: Optional[int] = Form(None),
 ):
     """Upload and process a new document.
 
     `category_id` (Governance Library taxonomy, Wave W0) is optional and
-    separate from the legacy free-text `category` string: when provided, a
-    `pel_doc_ref` (PEL-<SECTION>-<SUB>-<SEQ>) is atomically allocated
-    alongside the existing `reference_number` (DOC-YYYY-####).
+    separate from the legacy free-text `category` string.
+
+    `function_code` (WA-2 / ADR-0023) is the *owning function* — a different
+    axis from the category, and the one the PEL reference is drawn from. When
+    a valid code is supplied a `pel_doc_ref` (`PEL-<FUNCTION>-<SEQ>`) is
+    atomically allocated alongside the existing `reference_number`
+    (DOC-YYYY-####), and both it and the function are then immutable. When no
+    code is supplied the document is still created, with no PEL reference: the
+    function is confirmed by a filer, never inferred, because a mis-filed
+    reference cannot be corrected in place.
+
     `site_location_id` binds the document to an existing `Location`
     (site/workshop) — no separate Site table.
     """
@@ -846,6 +855,7 @@ async def upload_document(
     # via FastAPI's request pipeline (e.g. in unit tests) — normalize with an
     # `isinstance` check rather than `is not None` so both call styles behave.
     category_id = category_id if isinstance(category_id, int) else None
+    function_code = function_code if isinstance(function_code, str) else None
     site_location_id = site_location_id if isinstance(site_location_id, int) else None
 
     if site_location_id is not None and await db.get(Location, site_location_id) is None:
@@ -860,15 +870,24 @@ async def upload_document(
 
         filing_category = None
         pel_doc_ref: Optional[str] = None
+        function_id: Optional[int] = None
         access_level: Optional[str] = None
         is_statutory = False
         duplicate_warning = False
         duplicate_warning_detail: Optional[list] = None
         initial_status = DocumentStatus.PROCESSING
 
+        # Resolved before the category branch so an unknown code fails the
+        # upload rather than creating a document whose reference silently went
+        # missing. Category and Function are independent axes (ADR-0023) — a
+        # function may be confirmed with or without a taxonomy category.
+        filing_function = await resolve_function_code(db, function_code)
+        if filing_function is not None:
+            function_id = filing_function.id
+            pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id)
+
         if category_id is not None:
             filing_category = await load_filing_category(db, category_id)
-            pel_doc_ref = await allocate_pel_doc_ref(db, category_id)
             defaults = filing_defaults_for_category(filing_category)
             access_level = defaults.access_level
             is_statutory = defaults.is_statutory
@@ -917,6 +936,7 @@ async def upload_document(
             reference_number=reference_number,
             category_id=category_id,
             pel_doc_ref=pel_doc_ref,
+            function_id=function_id,
             site_location_id=site_location_id,
             access_level=access_level,
             is_statutory=is_statutory,

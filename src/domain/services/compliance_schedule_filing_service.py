@@ -38,7 +38,7 @@ from src.domain.models.enums import DocumentStatus, DocumentType
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.document_category_service import allocate_pel_doc_ref
+from src.domain.services.document_category_service import allocate_pel_doc_ref, resolve_function_code
 from src.domain.services.document_library_filing_service import (
     assert_library_read_access,
     filing_defaults_for_category,
@@ -249,6 +249,7 @@ async def file_record_to_library(
     user: User,
     evidence_asset_id: Optional[int] = None,
     category_id: Optional[int] = None,
+    function_code: Optional[str] = None,
     library_document_id: Optional[int] = None,
     title: Optional[str] = None,
 ) -> FilingResult:
@@ -258,6 +259,11 @@ async def file_record_to_library(
     ``library_document_id`` must be given; the request schema enforces that, and
     this function repeats the check because it is also reachable from tests and
     scripts.
+
+    ``function_code`` is the owning function the PEL reference is drawn from
+    (ADR-0023). It is optional: without it the filed document gets no
+    ``pel_doc_ref``, because deriving a function from the evidence would print
+    an immutable reference nobody confirmed.
     """
     if (evidence_asset_id is None) == (library_document_id is None):
         raise ValidationError(
@@ -298,6 +304,7 @@ async def file_record_to_library(
             user=user,
             evidence_asset_id=evidence_asset_id,
             category_id=category_id,
+            function_code=function_code,
             title=title,
         )
         linked_existing = False
@@ -329,6 +336,7 @@ async def file_record_to_library(
             "pel_doc_ref": getattr(document, "pel_doc_ref", None),
             "evidence_asset_id": evidence_asset_id,
             "category_id": category_id,
+            "function_code": function_code,
             "linked_existing": linked_existing,
             "index_job_id": index_job.id if index_job is not None else None,
         },
@@ -358,6 +366,7 @@ async def _create_library_document(
     user: User,
     evidence_asset_id: int,
     category_id: int,
+    function_code: Optional[str],
     title: Optional[str],
 ) -> tuple[Document, bool, Optional[list[dict]]]:
     """Copy a bound evidence asset into the Library as a new draft document."""
@@ -368,6 +377,9 @@ async def _create_library_document(
         tenant_id=tenant_id,
     )
     category = await load_filing_category(db, category_id)
+    # Resolved before the storage download so an unknown function code fails the
+    # request cheaply rather than after a file has been copied.
+    filing_function = await resolve_function_code(db, function_code)
     file_type = _file_type_for(asset.original_filename)
 
     requirement = await _load_requirement(db, requirement_id=record.requirement_id, tenant_id=tenant_id)
@@ -390,7 +402,7 @@ async def _create_library_document(
         ) from exc
 
     reference_number = await ReferenceNumberService.generate(db, "document", Document)
-    pel_doc_ref = await allocate_pel_doc_ref(db, category_id)
+    pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id) if filing_function is not None else None
     defaults = filing_defaults_for_category(category)
 
     site_location_id = getattr(requirement, "location_id", None)
@@ -443,6 +455,7 @@ async def _create_library_document(
         reference_number=reference_number,
         category_id=category_id,
         pel_doc_ref=pel_doc_ref,
+        function_id=filing_function.id if filing_function is not None else None,
         site_location_id=site_location_id,
         access_level=defaults.access_level,
         is_statutory=defaults.is_statutory,

@@ -44,14 +44,41 @@ def _cs_headers(permissions: str) -> dict[str, str]:
 
 
 @pytest.fixture
-async def filing_category(test_session):
-    """A level-2 taxonomy category with its PEL sequence counter.
+async def filing_function(test_session):
+    """A `DocumentFunction` with its PEL sequence counter (WA-2 / ADR-0023).
 
-    The integration harness creates tables from metadata but seeds no taxonomy,
-    and ``allocate_pel_doc_ref`` refuses a category with no counter row — so the
-    counter is part of the fixture, not an afterthought.
+    The integration harness creates tables from metadata but seeds no library
+    reference data, and ``allocate_pel_doc_ref`` refuses a function with no
+    counter row — so the counter is part of the fixture, not an afterthought.
     """
-    from src.domain.models.document_library import DocumentCategory, PelDocRefCounter
+    from src.domain.models.document_library import DocumentFunction, PelDocRefCounter
+
+    suffix = uuid4().hex[:6]
+    function = DocumentFunction(
+        tenant_id=None,
+        code=f"HSEQ{suffix}".upper(),
+        name="Health, Safety, Environment & Quality",
+        sort_order=10,
+        active=True,
+    )
+    test_session.add(function)
+    await test_session.flush()
+
+    test_session.add(PelDocRefCounter(function_id=function.id, next_seq=1))
+    await test_session.commit()
+    await test_session.refresh(function)
+    return function
+
+
+@pytest.fixture
+async def filing_category(test_session):
+    """A level-2 taxonomy category to file under.
+
+    Since WA-2 the category no longer carries the PEL counter — the reference is
+    drawn from the function (see ``filing_function``). The category still
+    supplies the filing defaults (access level, statutory flag).
+    """
+    from src.domain.models.document_library import DocumentCategory
 
     suffix = uuid4().hex[:6]
     section = DocumentCategory(
@@ -85,9 +112,6 @@ async def filing_category(test_session):
         active=True,
     )
     test_session.add(subcategory)
-    await test_session.flush()
-
-    test_session.add(PelDocRefCounter(category_id=subcategory.id, next_seq=1))
     await test_session.commit()
     await test_session.refresh(subcategory)
     return subcategory
@@ -396,6 +420,7 @@ async def test_filing_evidence_creates_a_library_document(
     enable_compliance_schedule,
     unique_template,
     filing_category,
+    filing_function,
     superuser_auth_headers: dict,
     test_session,
     monkeypatch,
@@ -410,6 +435,7 @@ async def test_filing_evidence_creates_a_library_document(
         json={
             "evidence_asset_id": asset.id,
             "category_id": filing_category.id,
+            "function_code": filing_function.code,
             "title": "Wickford FRA 2026",
         },
     )
@@ -417,7 +443,8 @@ async def test_filing_evidence_creates_a_library_document(
     body = response.json()
     assert body["linked_existing"] is False
     assert body["record"]["filing_status"] == "filed"
-    assert body["pel_doc_ref"] == f"{filing_category.ref_prefix}-001"
+    # WA-2 / ADR-0023: the reference comes from the function, not the category path.
+    assert body["pel_doc_ref"] == f"PEL-{filing_function.code}-0001"
 
     storage.download.assert_awaited_once_with(asset.storage_key)
     # The Library copy is a new key, not a second pointer at the evidence blob:
@@ -433,11 +460,80 @@ async def test_filing_evidence_creates_a_library_document(
     assert document.tenant_id == 1
     assert document.title == "Wickford FRA 2026"
     assert document.category_id == filing_category.id
+    # Category and Function are different axes and both are recorded (ADR-0023).
+    assert document.function_id == filing_function.id
     # ``filing_defaults_for_category`` supplies both of these.
     assert document.access_level == "managers"
     assert document.is_statutory is True
     # Filing puts evidence in the Library; it does not approve or publish it.
     assert document.status.value == "draft"
+
+
+@pytest.mark.asyncio
+async def test_filing_without_a_function_files_the_document_with_no_pel_reference(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    filing_category,
+    superuser_auth_headers: dict,
+    test_session,
+    monkeypatch,
+):
+    """ADR-0023 fails closed: no confirmed function means no reference, not a guessed one.
+
+    A reference is immutable once issued, so deriving one from the category
+    would print a wrong prefix that can never be corrected in place. The
+    document is still filed and still openable — it simply leads with its
+    DOC-YYYY-#### reference until a function is confirmed.
+    """
+    record = await _completed_record(client, superuser_auth_headers, unique_template.template_key)
+    asset = await _bound_evidence_asset(test_session, record_id=record["id"])
+    _fake_storage(monkeypatch)
+
+    response = await client.post(
+        f"/api/v1/compliance-schedule/records/{record['id']}/file",
+        headers=superuser_auth_headers,
+        json={"evidence_asset_id": asset.id, "category_id": filing_category.id},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["record"]["filing_status"] == "filed"
+    assert body["pel_doc_ref"] is None
+
+    from src.domain.models.document import Document
+
+    document = await test_session.get(Document, body["library_document_id"])
+    await test_session.refresh(document)
+    assert document.pel_doc_ref is None
+    assert document.function_id is None
+    assert document.reference_number.startswith("DOC-")
+
+
+@pytest.mark.asyncio
+async def test_filing_with_an_unknown_function_code_is_refused(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    filing_category,
+    superuser_auth_headers: dict,
+    test_session,
+    monkeypatch,
+):
+    """An unrecognised code must fail loudly, never fall through to "no function"."""
+    record = await _completed_record(client, superuser_auth_headers, unique_template.template_key)
+    asset = await _bound_evidence_asset(test_session, record_id=record["id"])
+    _fake_storage(monkeypatch)
+
+    response = await client.post(
+        f"/api/v1/compliance-schedule/records/{record['id']}/file",
+        headers=superuser_auth_headers,
+        json={
+            "evidence_asset_id": asset.id,
+            "category_id": filing_category.id,
+            "function_code": "NOT-A-FUNCTION",
+        },
+    )
+    assert response.status_code in (400, 422), response.text
 
 
 @pytest.mark.asyncio
