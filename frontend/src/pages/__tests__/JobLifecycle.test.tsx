@@ -282,7 +282,9 @@ describe('JobLifecycle flag gating', () => {
     await waitFor(() => {
       expect(screen.getByTestId('job-lifecycle-view-phase')).toHaveAttribute('aria-pressed', 'true')
     })
-    expect(screen.getByTestId('job-lifecycle-col-21')).toBeInTheDocument()
+    // Phase mode flips from the deep-link before steps finish loading; wait for
+    // the filtered column rather than racing the pack fetch.
+    expect(await screen.findByTestId('job-lifecycle-col-21')).toBeInTheDocument()
     expect(screen.queryByTestId('job-lifecycle-col-20')).not.toBeInTheDocument()
   })
 
