@@ -229,3 +229,51 @@ def test_notify_flag_keys_are_stable() -> None:
     assert ASSIGNMENT_NOTIFY_FLAG in NOTIFY_FLAG_KEYS
     assert DUE_REMINDER_NOTIFY_FLAG in NOTIFY_FLAG_KEYS
     assert EMAIL_ENABLED_FLAG in NOTIFY_FLAG_KEYS
+
+
+@pytest.mark.asyncio
+async def test_get_cs_notify_flag_seeds_missing_row() -> None:
+    """GET /feature-flags/{cs-key} must seed so Admin Notification Settings can PATCH."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from src.api.routes.feature_flags import get_feature_flag
+    from src.domain.services.compliance_schedule_notify_flags import ASSIGNMENT_NOTIFY_FLAG
+
+    seeded = SimpleNamespace(
+        id=uuid4(),
+        key=ASSIGNMENT_NOTIFY_FLAG,
+        name="seeded",
+        description="",
+        enabled=True,
+        rollout_percentage=100,
+        tenant_overrides=None,
+        metadata_=None,
+        created_by="system",
+        updated_by=None,
+        created_at=None,
+        updated_at=None,
+    )
+    service = MagicMock()
+    service._get_flag = AsyncMock(return_value=seeded)
+
+    with (
+        patch(
+            "src.domain.services.compliance_schedule_notify_flags.ensure_compliance_schedule_notify_flags",
+            new_callable=AsyncMock,
+            return_value=[seeded],
+        ) as ensure,
+        patch(
+            "src.api.routes.feature_flags.FeatureFlagService",
+            return_value=service,
+        ),
+    ):
+        response = await get_feature_flag(
+            key=ASSIGNMENT_NOTIFY_FLAG,
+            db=MagicMock(),
+            current_user=SimpleNamespace(id=1, tenant_id=1),
+        )
+
+    ensure.assert_awaited_once()
+    assert response.key == ASSIGNMENT_NOTIFY_FLAG
+    assert response.enabled is True
