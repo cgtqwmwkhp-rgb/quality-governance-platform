@@ -22,7 +22,7 @@
 - **Compatibility strategy:** `legal_matter_reference` is nullable and not backfilled. NULL means "filed under no legal matter", which is a positive fact, not an unknown — so no existing document becomes frozen by deploying this. `library_document_id` on control create stays **optional** so the existing Document Control page keeps working; supplying it is what folds the record onto the Register.
 - **Tolerant reader / strict writer applied?** Yes. New response fields are optional and default to null/false; the hold-scope writer is `extra="forbid"` so a misspelled field cannot leave a document outside every hold while returning 200.
 - **Breaking changes (behavioural, intended):** an author can no longer publish their own library document (`400 SEPARATION_OF_DUTIES`); a second control record on a Register row already under control is refused (`409 CONTROL_RECORD_EXISTS`); every lifecycle transition on a document under an active hold is refused (`409 LEGAL_HOLD_ACTIVE`).
-- **Migration plan:** Additive, nullable column + one composite index. Verified by running the full chain and the downgrade on PostgreSQL: `upgrade head` reaches `20261026_lib_wc1_control_holds` as the single head, the column and index exist, `downgrade -1` removes both. Both operations are existence-guarded, so a re-run is a no-op. Index creation is not `CONCURRENTLY` — see residual risks.
+- **Migration plan:** Additive, nullable column + one composite index. Locally verified: `alembic heads` reports exactly one head (`20261026_lib_wc1_control_holds` on top of `20261025_lib_wa2_functions_pel`); upgrade/downgrade are existence-guarded so a re-run is a no-op. Full empty-DB Postgres `upgrade head` / `downgrade -1` is deferred to CI integration shards (not claimed as a local Postgres observation). Index creation is not `CONCURRENTLY` — see residual risks.
 - **Rollback strategy (DB):** `downgrade -1` drops the index then the column; nothing else reads it. A revert without the downgrade is also safe (the column is simply unused).
 - **Why no DB unique index on `controlled_documents.library_document_id`:** migration `20260724_ds_library_control_fk` runs a soft-match backfill that can, in principle, assign the same `library_document_id` to two same-title control rows. Creating a unique index would then fail the deploy on live data. The 1:1 rule is therefore enforced at the write path now, and the index is deferred behind a steward de-dupe rather than shipped as a migration that can block production. Stated plainly rather than claimed as a guarantee we do not have.
 
@@ -53,13 +53,14 @@
 - [x] AC-10 (refusal without side effects): a revision attempt on a held document that carries a file is refused **before** the upload — storage is never called, so no orphaned blob is left behind by the refusal
 
 ## 5) Testing Evidence (link to runs)
-- [x] `tests/integration/test_lib_wc1_control_holds.py` + `tests/unit/test_legal_hold_enforcement.py` — **26 passed** on SQLite (default harness) **and** on PostgreSQL (the dialect CI uses)
-- [x] Full integration suite on PostgreSQL — **1101 passed, 0 failed** (12 errors are a local-only environment artefact in the schema-parity harness: it shells out to `alembic`, which resolves to a Homebrew binary shadowed by the repo's own `alembic/` package directory. Unrelated to this change; CI uses the venv entrypoint.)
-- [x] Full unit suite — **6037 tests, 0 failed** after regenerating the OpenAPI artefacts and advancing the two migration head pins (see below)
-- [x] `black` / `flake8` (0) / `mypy` (`Success: no issues found in 594 source files`)
-- [x] Governance gates run locally: `validate_migration_naming` (0 violations), `validate_schema_constraints` (0 critical), `validate_tenant_id_not_null` (0 critical), `validate_library_anti_dupe` (0 critical), `validate_error_code_coverage` (pass), `validate_openapi_contract` (819 paths), `check_openapi_compatibility` (additive only), `validate_write_schema_extra_forbid_ratchet` (within baseline), `validate_audit_trail_coverage_ratchet` (within baseline)
-- [x] Migration proven on PostgreSQL: full `upgrade head` from empty, column + index present, `downgrade -1` clean, single head
-- [x] Contract suite (`tests/contract`) — 476 passed
+Honest local evidence only (what was run and watched on this branch before CI):
+- [x] `tests/unit/test_legal_hold_enforcement.py` — **7 passed** (SQLite harness)
+- [x] `tests/integration/test_lib_wc1_control_holds.py` — **20 passed** (SQLite harness; count may advance as Bugbot/follow-up tests land)
+- [x] Related library/version suites + `black` / `isort` / `flake8` / `mypy` clean after the isort fix
+- [x] Contract suite (`tests/contract`) — **466+ passed** locally; OpenAPI baseline resynced; `check_openapi_compatibility.py` additive-only
+- [x] Governance gates run locally: `validate_migration_naming`, `validate_library_anti_dupe`, `validate_openapi_contract`, `check_openapi_compatibility` (additive only)
+- [x] Alembic: single head `20261026_lib_wc1_control_holds` (`alembic heads`); head-pin tests in `test_job_lifecycle_ux_w4/w5.py` advanced (invariant unchanged)
+- [ ] Full unit / full integration / empty-DB Postgres migration up+down — **not claimed locally**; rely on PR CI (Unit Tests + Integration shards + Alembic Migration Drift)
 - [ ] Full CI — on PR
 - [ ] Staging / Prod tip verify — after merge per conveyor (DONE ≠ merge)
 
@@ -90,13 +91,14 @@
 - **Owner:** Platform Engineering (Library spine) — David Harris
 
 ## 10) Evidence Pack (links)
-- CI run(s): linked once PR checks complete
-- Migration evidence: full `alembic upgrade head` + `downgrade -1` on a scratch PostgreSQL database; `\d documents` showing `legal_matter_reference` and `ix_documents_tenant_legal_matter_reference`; `alembic_version` = `20261026_lib_wc1_control_holds`
-- Test evidence: 25 WC-1 tests green on both SQLite and PostgreSQL; 1101 integration and 6037 unit tests green
+- CI run(s): linked once PR checks complete (this is the source of truth for full-suite + Postgres dialect)
+- Migration evidence (local): single Alembic head `20261026_lib_wc1_control_holds`; CI Alembic Migration Drift / integration shards cover apply path
+- Test evidence (local): WC-1 unit 7 + integration ≥20 on SQLite; contract suite green; full-suite numbers deferred to CI — do not treat prior inflated counts as verified
 - Contract evidence: `check_openapi_compatibility.py` — 1 new endpoint, 2 new schemas, no breaking change
 - Staging deploy evidence: after merge tip chase
 - Canary evidence (if applicable): N/A
 - Acceptance notes: L-01d / L-40 from `library-world-class-ux-plan`; conveyor WC-1 (depends WB-1 PROD). Adjacent held deliberately: WD-1 wizard, editor, `approved → published` transition, `controlled_documents.library_document_id` unique index, multi-matter hold scope.
+- **Decision pending:** author≠publisher on library publish closes the self-publish escape hatch (approve already refuses self-approval on main). Confirm keep-in-WC-1 vs strip to a follow-up PR before merge if single-admin tenants must keep author-publish.
 
 ## Residual risks (disclosed, not hidden)
 1. **Empty hold.** A hold on a matter with no documents filed against it freezes nothing. This is the state every hold starts in — the instruction arrives before anyone files records — so it is asserted as correct behaviour (AC-04) rather than patched. Mitigation is procedural and is now in the runbook: issuing a hold is two steps, not one.
@@ -111,7 +113,7 @@
 
 # Gate Checklist (must be complete before merge)
 - [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
-- [x] **Gate 1:** API/Data/UX — one Alembic revision (single head, up+down proven on PostgreSQL); one hold register; control folded onto the one Register; no twin register and no second Confirm Queue; OpenAPI additive only
+- [x] **Gate 1:** API/Data/UX — one Alembic revision (single head locally; Postgres apply via CI); one hold register; control folded onto the one Register; no twin register and no second Confirm Queue; OpenAPI additive only
 - [ ] **Gate 2:** CI green (lint/type/build/tests as applicable)
 - [x] **Gate 3:** Staging verification plan — tip SHA after merge; create a hold, file a document under it, confirm revise is refused and release restores it
 - [x] **Gate 4:** Canary healthy (if used) — N/A (inert until a matter is filed)
