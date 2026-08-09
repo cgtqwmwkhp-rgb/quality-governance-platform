@@ -19,9 +19,7 @@ from src.infrastructure.tasks.compliance_schedule_notification_tasks import (
 async def test_enqueue_email_calls_send_email_delay() -> None:
     results = _empty_results(dry_run=False, evaluated_at=datetime.now(timezone.utc))
     session = MagicMock()
-    session.execute = AsyncMock(
-        return_value=SimpleNamespace(scalar_one_or_none=lambda: "owner@example.com")
-    )
+    session.execute = AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: "owner@example.com"))
 
     with (
         patch(

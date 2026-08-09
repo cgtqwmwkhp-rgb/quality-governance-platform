@@ -236,9 +236,7 @@ async def _user_email_pref_enabled(session: "AsyncSession", user_id: int) -> boo
 
     from src.domain.models.notification import NotificationPreference
 
-    result = await session.execute(
-        select(NotificationPreference).where(NotificationPreference.user_id == user_id)
-    )
+    result = await session.execute(select(NotificationPreference).where(NotificationPreference.user_id == user_id))
     prefs = result.scalar_one_or_none()
     if prefs is None:
         return True

@@ -22,9 +22,7 @@ from src.domain.services.compliance_schedule_notify_flags import (
 @pytest.mark.asyncio
 async def test_notify_skips_when_owner_unchanged() -> None:
     db = MagicMock()
-    with patch(
-        "src.domain.services.compliance_schedule_assignment_notify.NotificationService"
-    ) as svc_cls:
+    with patch("src.domain.services.compliance_schedule_assignment_notify.NotificationService") as svc_cls:
         result = await notify_compliance_schedule_owner_assignment(
             db,
             tenant_id=1,
@@ -58,9 +56,7 @@ async def test_notify_skips_when_assignment_flag_off(monkeypatch) -> None:
             new_callable=AsyncMock,
             return_value=False,
         ),
-        patch(
-            "src.domain.services.compliance_schedule_assignment_notify.NotificationService"
-        ) as svc_cls,
+        patch("src.domain.services.compliance_schedule_assignment_notify.NotificationService") as svc_cls,
     ):
         result = await notify_compliance_schedule_owner_assignment(
             db,
