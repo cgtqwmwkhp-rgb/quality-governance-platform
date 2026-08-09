@@ -11,7 +11,12 @@ from sqlalchemy import or_, select
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkStatus, EvidenceSignalType
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceCoverKind,
+    EvidenceLinkStatus,
+    EvidenceSignalType,
+)
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import (
     AiDecisionLog,
@@ -218,7 +223,7 @@ def _tenant_id_for(user: CurrentUser) -> int:
 
 def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetailResponse:
     cover = getattr(link, "cover_kind", None)
-    cover_value = cover.value if hasattr(cover, "value") else (cover or "evidences")
+    cover_value = cover.value if isinstance(cover, EvidenceCoverKind) else (cover or EvidenceCoverKind.EVIDENCES.value)
     confirmed_at = getattr(link, "confirmed_at", None)
     return EvidenceLinkDetailResponse(
         id=link.id,

@@ -305,7 +305,7 @@ def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
 
 def _serialize_link(link: ComplianceEvidenceLink) -> EvidenceLinkResponse:
     cover = getattr(link, "cover_kind", None)
-    cover_value = cover.value if hasattr(cover, "value") else (cover or EvidenceCoverKind.EVIDENCES.value)
+    cover_value = cover.value if isinstance(cover, EvidenceCoverKind) else (cover or EvidenceCoverKind.EVIDENCES.value)
     confirmed_at = getattr(link, "confirmed_at", None)
     return EvidenceLinkResponse(
         id=link.id,

@@ -27,8 +27,7 @@ from src.domain.models.compliance_evidence import (
     EvidenceLinkMethod,
     EvidenceLinkStatus,
 )
-from src.domain.models.standard import StandardKind
-from src.domain.models.standard import Clause
+from src.domain.models.standard import Clause, StandardKind
 from src.domain.services.clause_catalogue_seed import (
     SCHEME_STANDARD_SPECS,
     build_clause_catalogue_rows,
