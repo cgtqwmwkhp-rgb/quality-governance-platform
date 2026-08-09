@@ -167,6 +167,41 @@ rules replace Citation's flat 7-year / all-staff position on migration.
 Function codes classify **who owns the document for filing**. They are not Doc
 Graph edge types, not JL lanes, and not ISO clause identities.
 
+## Amendment — Northern Star (PEL-HSEQ-5014 v6.0 FINAL)
+
+**Status**: Accepted as programme authority  
+**Date**: 2026-08-09  
+**Decision**: v6.0 FINAL supersedes earlier estate counts and the 11-code OPS
+fold for **forward** Library work. Execution SSOT: Cursor canvas
+`library-v6-northern-star-master-plan` (waves W0–W9).
+
+### What changes
+
+1. **Authority pack.** `specs/governance-library/northern-star-v6.json` is the
+   checked-in Northern Star payload (`schema_version` 3.2,
+   `final_for_app_build: true`, `allocation_frozen: true`). Slim companion:
+   `northern-star-rules-v6.json` (levels, functions, R01–R32, workflow).
+2. **Banded PEL.** Forward allocations match
+   `^PEL-(HSEQ|IT|FAC|PPL|PROC|FLT|CTR|SVC|TECH|DP|FIN|COM)-[1-5][0-9]{3}$`
+   where the first digit of the sequence is the cascade level (R01–R03). This
+   tightens `PEL-<FUNCTION>-<SEQ>` without abandoning the function axis.
+3. **Twelve functions.** v6 splits Operations into **CTR** (Control Room) and
+   **SVC** (Service Delivery / workshop). **OPS is not in the Northern Star
+   vocabulary.** Reseed is Wave **W2** (one alembic). Existing issued
+   `PEL-OPS-####` rows are never silently renumbered (R29) — steward map only.
+4. **Cascade level + owner role + staged rules.** Stored L1–L5, `owner_role`
+   with person resolved from role assignment (R16), and R01–R32 severity
+   staging are Waves **W3–W9** on the master-plan conveyor — not this docs PR.
+5. **Ingest model.** Finished files are produced outside the app; QGP indexes on
+   upload and provides **in-app** L1–L5 navigation (Related / PEL chips).
+   Implements→standard stays CEL — never `document_edges`.
+
+### What does not change
+
+- Category ≠ Function; one Master Document Register; ADR-0021 edges as hierarchy
+  SoT; no twin Confirm Queue / Documents-360 page; ADR-0020 remains Compliance
+  Schedule only.
+
 ## Consequences
 
 **Positive:** the reference is meaningful where the estate is most concentrated;
