@@ -1567,6 +1567,11 @@ async def create_document_version(
 ):
     """Open a revision draft with optional new file upload + re-index."""
     document = await _get_document_or_404(db, document_id, current_user)
+    # Ahead of the upload below, not only inside `create_library_version`: the blob
+    # is written before the service is reached, so relying on the service guard
+    # alone leaves an orphaned object behind every refused revision of a held
+    # document. Both checks stay — the service one is the chokepoint every caller
+    # goes through, this one keeps the refusal free of side effects.
     await assert_document_not_held(db, document, action="revised")
 
     file_name: str | None = None

@@ -10,7 +10,7 @@
 ## 2) Impact Map (what changed)
 - **Backend — new:** `src/domain/services/legal_hold_enforcement.py` (the single chokepoint: scope resolution, active-hold read, refusal, SQL predicate for set-based paths)
 - **Backend — wired:** `document_version_service.py` (revise/publish, library and controlled; `assert_publisher_is_not_author`); `document_library_lifecycle_service.py` (submit / reject / approve); `document_library_disposal_service.py` (hold predicate inside the eligibility statement); `gkb_control_library_link.py` (batch control-state read + approve/publish write-through)
-- **APIs:** `PUT /api/v1/legal-holds/documents/{document_id}` (new, `admin:manage`); `DocumentResponse` gains read-only `controlled_document_id`, `control_status`, `legal_matter_reference`, `legal_hold_active`; `POST /api/v1/document-control/` accepts optional `library_document_id` and refuses an unknown or already-taken anchor
+- **APIs:** `PUT /api/v1/legal-holds/documents/{document_id}` (new, `admin:manage`); `DocumentResponse` gains read-only `controlled_document_id`, `control_status`, `legal_matter_reference`, `legal_hold_active`; `POST /api/v1/document-control/` accepts optional `library_document_id` and refuses an unknown or already-taken anchor; `POST /api/v1/documents/{id}/versions` checks the hold **before** the blob upload so a refused revision leaves no orphaned object (the service-level chokepoint is unchanged and still runs)
 - **Database:** ONE Alembic revision `20261026_lib_wc1_control_holds` — adds `documents.legal_matter_reference` (nullable `VARCHAR(128)`) and `ix_documents_tenant_legal_matter_reference (tenant_id, legal_matter_reference)`. No new table; `matter_legal_holds` remains the only hold register.
 - **Config/env/flags:** None
 - **Dependencies:** None
@@ -50,9 +50,10 @@
 - [x] AC-07 (L-40 SoD): the author of a document cannot publish it (`400 SEPARATION_OF_DUTIES`) and the document is not left published; an unattributed publish is not treated as self-publication
 - [x] AC-08 (hold scope is not self-releasing): the hold-scope writer requires `admin:manage`, so `document:update` cannot file a record out of the scope of the hold that is blocking it; cross-tenant document ids 404
 - [x] AC-09 (no twin): no new table, no second control register, no second Confirm Queue; `validate_library_anti_dupe` reports 0 coverage twins and 0 freetext violations
+- [x] AC-10 (refusal without side effects): a revision attempt on a held document that carries a file is refused **before** the upload — storage is never called, so no orphaned blob is left behind by the refusal
 
 ## 5) Testing Evidence (link to runs)
-- [x] `tests/integration/test_lib_wc1_control_holds.py` + `tests/unit/test_legal_hold_enforcement.py` — **25 passed** on SQLite (default harness) **and** on PostgreSQL (the dialect CI uses)
+- [x] `tests/integration/test_lib_wc1_control_holds.py` + `tests/unit/test_legal_hold_enforcement.py` — **26 passed** on SQLite (default harness) **and** on PostgreSQL (the dialect CI uses)
 - [x] Full integration suite on PostgreSQL — **1101 passed, 0 failed** (12 errors are a local-only environment artefact in the schema-parity harness: it shells out to `alembic`, which resolves to a Homebrew binary shadowed by the repo's own `alembic/` package directory. Unrelated to this change; CI uses the venv entrypoint.)
 - [x] Full unit suite — **6037 tests, 0 failed** after regenerating the OpenAPI artefacts and advancing the two migration head pins (see below)
 - [x] `black` / `flake8` (0) / `mypy` (`Success: no issues found in 594 source files`)
@@ -61,6 +62,8 @@
 - [x] Contract suite (`tests/contract`) — 476 passed
 - [ ] Full CI — on PR
 - [ ] Staging / Prod tip verify — after merge per conveyor (DONE ≠ merge)
+
+**Review findings folded in.** Bugbot found one real gap after the first push: the library revise route uploads the new file to blob storage before reaching the service-level guard, so a refused revision of a held document still left an orphaned object. Fixed at the route (pre-upload check retained alongside the service chokepoint) and covered by AC-10. The controlled revise route takes no file, so it does not have the same shape.
 
 **Two existing tests were edited; neither assertion was weakened.** `test_job_lifecycle_ux_w4.py` / `_w5.py` pin the *literal* current Alembic head to prove the chain has not branched. Adding any migration makes that literal stale — the test's own comment says "Tip head advances with later migrations" and WA-2 updated it the same way. The invariant (exactly one head) is unchanged; only the expected head advances to `20261026_lib_wc1_control_holds`.
 
