@@ -1,6 +1,12 @@
 """
 Real-Time WebSocket API Routes
 
+WJ-0 / L-35a (PREP): In-memory presence/notifications only.
+There is intentionally no `/realtime/collab/{document_id}` handler —
+FE useCollaboration targets a never-built CRDT endpoint. Do not add one;
+DROP collaborative_* after WI-2 PROD (inventory doc). Keep this router
+until NotificationCenter / useWebSocket keep-or-cut is decided separately.
+
 Features:
 - WebSocket connection handling
 - Real-time notifications

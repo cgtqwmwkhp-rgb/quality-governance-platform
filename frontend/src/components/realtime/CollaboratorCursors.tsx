@@ -1,6 +1,9 @@
 /**
  * CollaboratorCursors - Shows remote collaborator cursors
  *
+ * WJ-0 / L-35a (PREP): Dormant CRDT UI — export-only; no page consumers.
+ * Scheduled removal with collaborative_* DROP.
+ *
  * Features:
  * - Colored cursor indicators per collaborator
  * - Name labels on hover

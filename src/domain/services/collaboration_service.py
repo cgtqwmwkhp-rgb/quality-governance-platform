@@ -1,6 +1,10 @@
 """
 Real-time Collaboration Service
 
+WJ-0 / L-35a (PREP): Orphan service — no API route imports this module.
+Do not add routes. Demolition after WI-2 PROD; see
+docs/governance/library-wj0-drop-collaborative-inventory.md.
+
 Provides live co-editing with:
 - Yjs CRDT synchronization
 - Cursor/selection tracking

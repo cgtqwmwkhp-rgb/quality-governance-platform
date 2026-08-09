@@ -1,6 +1,11 @@
 """
 Real-time Collaboration Models
 
+WJ-0 / L-35a (PREP): Dormant CRDT stack. Do not wire new callers.
+Scheduled DROP of collaborative_* (and likely document_comments /
+user_presence) after WI-2 PROD — see
+docs/governance/library-wj0-drop-collaborative-inventory.md.
+
 Provides live co-editing with:
 - Yjs CRDT document state
 - Cursor positions

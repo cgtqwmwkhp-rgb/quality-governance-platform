@@ -1,6 +1,10 @@
 /**
  * useCollaboration - React hook for real-time collaborative editing
  *
+ * WJ-0 / L-35a (PREP): Dormant — no page consumers; targets missing
+ * `/api/v1/realtime/collab/{id}` (never implemented). Do not wire.
+ * See docs/governance/library-wj0-drop-collaborative-inventory.md.
+ *
  * Features:
  * - Yjs-based conflict-free collaborative editing
  * - Awareness (cursor positions, user presence)
