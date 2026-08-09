@@ -283,18 +283,72 @@ def test_module_never_mentions_expired():
     assert "expired" not in source.lower()
 
 
-def test_nothing_imports_this_module_yet():
-    """This PR is inert by construction. When the sweep lands, delete this test.
+def test_sweep_and_assignment_paths_import_the_builders():
+    """Builders stay the single source of due/assignment copy and keys."""
+    from src.domain.services import compliance_schedule_assignment_notify as assign
+    from src.infrastructure.tasks import compliance_schedule_notification_tasks as sweep
 
-    It exists so a reviewer does not have to take "no runtime effect" on trust.
-    """
-    repo_root = Path(builders.__file__).resolve().parents[4]
-    module_name = "compliance_schedule_notifications"
+    assert "compliance_schedule_notifications" in Path(sweep.__file__).read_text(encoding="utf-8")
+    assert "compliance_schedule_notifications" in Path(assign.__file__).read_text(encoding="utf-8")
 
-    importers = [
-        path
-        for path in repo_root.joinpath("src").rglob("*.py")
-        if module_name in path.read_text(encoding="utf-8") and path.name != f"{module_name}.py"
-    ]
 
-    assert importers == [], f"expected no importers, found {[str(p) for p in importers]}"
+# --- owner assignment ------------------------------------------------------------
+
+
+def test_should_notify_owner_change_only_when_new_person_gains_ownership():
+    from src.domain.services.compliance_schedule_notifications import should_notify_owner_change
+
+    assert should_notify_owner_change(previous_owner_id=None, new_owner_id=7) is True
+    assert should_notify_owner_change(previous_owner_id=3, new_owner_id=7) is True
+    assert should_notify_owner_change(previous_owner_id=7, new_owner_id=7) is False
+    assert should_notify_owner_change(previous_owner_id=7, new_owner_id=None) is False
+    assert should_notify_owner_change(previous_owner_id=None, new_owner_id=None) is False
+
+
+def test_build_assignment_notification_kwargs_for_new_owner():
+    from src.domain.services.compliance_schedule_notifications import (
+        ASSIGNMENT_NOTIFICATION_CATEGORY,
+        build_assignment_notification_kwargs,
+    )
+
+    kwargs = build_assignment_notification_kwargs(
+        user_id=7,
+        tenant_id=3,
+        requirement_id=11,
+        reference_number="CSR-0011",
+        title="Fire risk assessment",
+        assigned_by_user_id=2,
+        previous_owner_id=None,
+        next_due_date=date(2026, 9, 1),
+    )
+
+    assert kwargs["type"] is NotificationType.ASSIGNMENT
+    assert kwargs["user_id"] == 7
+    assert kwargs["tenant_id"] == 3
+    assert kwargs["entity_type"] == ENTITY_TYPE
+    assert kwargs["entity_id"] == "11"
+    assert kwargs["action_url"] == "/compliance-schedule/11"
+    assert kwargs["sender_id"] == 2
+    assert "CSR-0011" in kwargs["message"]
+    assert "2026-09-01" in kwargs["message"]
+    assert kwargs["extra_data"]["notification_category"] == ASSIGNMENT_NOTIFICATION_CATEGORY
+    assert kwargs["extra_data"]["previous_owner_id"] is None
+
+
+def test_build_assignment_notification_kwargs_reassignment_type():
+    from src.domain.services.compliance_schedule_notifications import build_assignment_notification_kwargs
+
+    kwargs = build_assignment_notification_kwargs(
+        user_id=7,
+        tenant_id=3,
+        requirement_id=11,
+        reference_number="CSR-0011",
+        title="Fire risk assessment",
+        assigned_by_user_id=2,
+        previous_owner_id=4,
+        next_due_date=None,
+    )
+
+    assert kwargs["type"] is NotificationType.REASSIGNMENT
+    assert kwargs["extra_data"]["previous_owner_id"] == 4
+    assert "reassigned" in kwargs["title"].lower() or "reassigned" in kwargs["message"].lower()

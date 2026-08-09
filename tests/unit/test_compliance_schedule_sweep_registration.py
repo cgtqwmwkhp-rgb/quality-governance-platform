@@ -129,6 +129,8 @@ def test_every_counter_a_runbook_will_quote_is_present():
         "notifications_created",
         "notifications_skipped_existing",
         "notifications_skipped_conflict",
+        "emails_enqueued",
+        "emails_skipped",
         "recipients_unresolved",
         "dry_run",
         "timed_out",

@@ -1,4 +1,4 @@
-"""Pure in-app notification helpers for Compliance Schedule (Wave 2).
+"""Pure notification helpers for Compliance Schedule (due sweep + owner assignment).
 
 Every function here is pure: no session, no clock of its own, no I/O. ``now`` is
 injected exactly as :mod:`src.domain.services.compliance_schedule_policy` requires, so
@@ -12,11 +12,18 @@ ceased to apply, which is the opposite of what a missed inspection date means --
 obligation is still owed, and more urgently. The same rule is enforced on the policy
 module, and a test here greps this file for it.
 
-Notification type is :attr:`NotificationType.COMPLIANCE_ALERT` for every band. The
-alternative -- mapping overdue to ``ACTION_OVERDUE`` as document campaigns do -- would
-label these as Actions, and the Actions module means something specific in this product
-(a CAPA someone owns). Urgency is carried by ``priority`` and by ``extra_data['band']``
-instead, and no PostgreSQL enum migration is needed either way.
+Due-reminder notification type is :attr:`NotificationType.COMPLIANCE_ALERT` for every
+band. The alternative -- mapping overdue to ``ACTION_OVERDUE`` as document campaigns
+do -- would label these as Actions, and the Actions module means something specific in
+this product (a CAPA someone owns). Urgency is carried by ``priority`` and by
+``extra_data['band']`` instead, and no PostgreSQL enum migration is needed either way.
+
+Owner allocation uses :attr:`NotificationType.ASSIGNMENT` /
+:attr:`NotificationType.REASSIGNMENT` (existing enum values; no migration).
+
+Once an occurrence is completed, ``next_due_date`` rolls forward and the dedupe key
+(requirement + occurrence date + band) no longer matches prior reminder rows, so the
+sweep naturally stops nagging that cycle — there is no separate cancel job.
 """
 
 from __future__ import annotations
@@ -33,6 +40,7 @@ from src.domain.services.compliance_schedule_policy import DueBand
 ENTITY_TYPE = "compliance_requirement"
 
 NOTIFICATION_CATEGORY = "compliance_schedule_due"
+ASSIGNMENT_NOTIFICATION_CATEGORY = "compliance_schedule_assignment"
 
 DEFAULT_ADMIN_ROLE = "admin"
 
@@ -236,3 +244,97 @@ def build_notification_kwargs(
         },
         "delivered_channels": ["in_app"],
     }
+
+
+def should_notify_owner_change(
+    *,
+    previous_owner_id: Optional[int],
+    new_owner_id: Optional[int],
+) -> bool:
+    """True when ownership lands on a person who did not already own it.
+
+    Unassign (``new_owner_id is None``) and no-op same-owner writes do not notify.
+    """
+    if new_owner_id is None:
+        return False
+    return previous_owner_id != new_owner_id
+
+
+def build_assignment_notification_kwargs(
+    *,
+    user_id: int,
+    tenant_id: int,
+    requirement_id: int,
+    reference_number: str,
+    title: str,
+    assigned_by_user_id: int,
+    previous_owner_id: Optional[int] = None,
+    next_due_date: Optional[date] = None,
+) -> Dict[str, Any]:
+    """Kwargs for an owner-allocation ``Notification`` row. Pure — no I/O.
+
+    Uses ASSIGNMENT when there was no prior owner, REASSIGNMENT when ownership moved
+    from one person to another. The new owner is the only recipient (caller passes
+    ``user_id``); the actor is still notified when they assign themselves — matching
+    incident / action assignment, which do not skip self.
+    """
+    is_reassignment = previous_owner_id is not None and previous_owner_id != user_id
+    notification_type = NotificationType.REASSIGNMENT if is_reassignment else NotificationType.ASSIGNMENT
+    due_clause = f" Next due {next_due_date.isoformat()}." if next_due_date is not None else ""
+    if is_reassignment:
+        message = (
+            f"You are now the owner of {reference_number} ({title})."
+            f"{due_clause} Open the requirement to plan or record completion."
+        )
+        notif_title = f"Compliance requirement reassigned to you: {title}"
+    else:
+        message = (
+            f"You have been allocated as owner of {reference_number} ({title})."
+            f"{due_clause} Open the requirement to plan or record completion."
+        )
+        notif_title = f"Compliance requirement assigned to you: {title}"
+
+    return {
+        "user_id": user_id,
+        "tenant_id": tenant_id,
+        "type": notification_type,
+        "priority": NotificationPriority.HIGH,
+        "title": notif_title,
+        "message": message,
+        "entity_type": ENTITY_TYPE,
+        "entity_id": str(requirement_id),
+        "action_url": action_url_for_requirement(requirement_id),
+        "sender_id": assigned_by_user_id,
+        "extra_data": {
+            "notification_category": ASSIGNMENT_NOTIFICATION_CATEGORY,
+            "previous_owner_id": previous_owner_id,
+            "reference_number": reference_number,
+            "next_due_date": next_due_date.isoformat() if next_due_date is not None else None,
+        },
+        "delivered_channels": ["in_app"],
+    }
+
+
+def due_reminder_email_subject(*, title: str, band: DueBand) -> str:
+    """Subject line for a due-reminder email (matches in-app title prefix)."""
+    return title_for_band(band, title=title)
+
+
+def due_reminder_email_body(
+    *,
+    reference_number: str,
+    title: str,
+    band: DueBand,
+    due_date: date,
+    statutory: bool,
+    action_url: str,
+) -> str:
+    """Plain-text email body for a due reminder; deep link appended."""
+    body = message_for_band(
+        band,
+        reference_number=reference_number,
+        title=title,
+        due_date=due_date,
+        statutory=statutory,
+    )
+    return f"{body}\n\nOpen: {action_url}"
