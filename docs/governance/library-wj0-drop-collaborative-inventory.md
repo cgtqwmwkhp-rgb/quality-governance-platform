@@ -127,5 +127,5 @@ downgrade: recreate from 20260120 definitions (+ tenant columns)
 ## 7) Prep delivered on this branch
 
 - This inventory + demolition checklist
-- Change Ledger draft: `scripts/governance/pr_body_lib_wj0_drop_collaborative.md` (**HOLD PR**)
+- Change Ledger: `scripts/governance/pr_body_lib_wj0_drop_collaborative.md` (OPEN prep PR)
 - Deprecation banners on dormant CRDT modules (no behaviour change)
