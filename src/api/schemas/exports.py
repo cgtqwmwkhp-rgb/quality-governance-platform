@@ -1,4 +1,4 @@
-"""Pydantic schemas for Export Center sync APIs (PX-160)."""
+"""Pydantic schemas for Export Center sync APIs (PX-160 + WA-3 IMS052)."""
 
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ ExportModuleId = Literal[
     "compliance_schedule",
 ]
 
-ExportFormat = Literal["csv"]
+ExportFormat = Literal["csv", "xlsx", "pdf"]
 
 
 class ExportCapabilities(BaseModel):
-    """Honest capability disclosure — sync CSV now; job store deferred to Lane S."""
+    """Honest capability disclosure — sync formats now; job store deferred to Lane S."""
 
     sync_csv: bool = True
     job_history: bool = False
@@ -56,6 +56,9 @@ class CreateExportRequest(BaseModel):
 
     ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
     of the export proceeding while the unknown key is silently dropped (B-10).
+
+    Column pickers are forbidden: documents always emit the fixed IMS052 header
+    (WA-3 / L-07). Passing ``columns`` / ``fields`` / ``visible_columns`` is a 422.
     """
 
     model_config = ConfigDict(extra="forbid")

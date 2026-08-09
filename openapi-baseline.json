@@ -17018,11 +17018,15 @@
       },
       "CreateExportRequest": {
         "additionalProperties": false,
-        "description": "POST /exports body \u2014 sync stream only this wave (no async job create).\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the export proceeding while the unknown key is silently dropped (B-10).",
+        "description": "POST /exports body \u2014 sync stream only this wave (no async job create).\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the export proceeding while the unknown key is silently dropped (B-10).\n\nColumn pickers are forbidden: documents always emit the fixed IMS052 header\n(WA-3 / L-07). Passing ``columns`` / ``fields`` / ``visible_columns`` is a 422.",
         "properties": {
           "format": {
-            "const": "csv",
             "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx",
+              "pdf"
+            ],
             "title": "Format",
             "type": "string"
           },
@@ -23356,7 +23360,7 @@
         "type": "object"
       },
       "ExportCapabilities": {
-        "description": "Honest capability disclosure \u2014 sync CSV now; job store deferred to Lane S.",
+        "description": "Honest capability disclosure \u2014 sync formats now; job store deferred to Lane S.",
         "properties": {
           "job_history": {
             "default": false,
@@ -23414,7 +23418,11 @@
           },
           "formats": {
             "items": {
-              "const": "csv",
+              "enum": [
+                "csv",
+                "xlsx",
+                "pdf"
+              ],
               "type": "string"
             },
             "title": "Formats",
@@ -84558,7 +84566,7 @@
     },
     "/api/v1/exports": {
       "post": {
-        "description": "Run a synchronous CSV export and stream the file immediately.\n\nMatches WORKFLOW_REGISTRY ``POST /api/v1/exports``. Does not enqueue a job.",
+        "description": "Run a synchronous export and stream the file immediately.\n\nMatches WORKFLOW_REGISTRY ``POST /api/v1/exports``. Does not enqueue a job.\nDocuments module emits the fixed IMS052 Register pack (csv/xlsx/pdf).",
         "operationId": "create_sync_export_api_v1_exports_post",
         "requestBody": {
           "content": {
@@ -84603,7 +84611,7 @@
     },
     "/api/v1/exports/": {
       "post": {
-        "description": "Run a synchronous CSV export and stream the file immediately.\n\nMatches WORKFLOW_REGISTRY ``POST /api/v1/exports``. Does not enqueue a job.",
+        "description": "Run a synchronous export and stream the file immediately.\n\nMatches WORKFLOW_REGISTRY ``POST /api/v1/exports``. Does not enqueue a job.\nDocuments module emits the fixed IMS052 Register pack (csv/xlsx/pdf).",
         "operationId": "create_sync_export_api_v1_exports__post",
         "requestBody": {
           "content": {
@@ -84675,7 +84683,7 @@
     },
     "/api/v1/exports/{module}/csv": {
       "get": {
-        "description": "GET convenience for sync CSV download of a single module.",
+        "description": "GET convenience for sync download of a single module (format=csv|xlsx|pdf).",
         "operationId": "download_module_csv_api_v1_exports__module__csv_get",
         "parameters": [
           {

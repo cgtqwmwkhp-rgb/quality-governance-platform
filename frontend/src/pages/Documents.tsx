@@ -25,6 +25,10 @@ import {
   Zap,
   Megaphone,
   GitBranch,
+  Check,
+  Clock,
+  AlertCircle,
+  Circle,
 } from 'lucide-react'
 import api, { documentCampaignApi, getApiErrorMessage, type CampaignComplianceRow } from '../api/client'
 import { toast } from '../contexts/ToastContext'
@@ -58,7 +62,9 @@ import {
 } from './documentsDownstreamHelpers'
 import {
   documentRegisterPrimaryRef,
+  documentRegisterStatusTone,
   resolveDocumentRegisterHref,
+  type DocumentRegisterStatusIcon,
 } from './documentsRegisterHelpers'
 import { CampaignRing } from './CampaignRing'
 import { complianceRowByDocumentId } from './documentCampaignHelpers'
@@ -200,21 +206,38 @@ const FILE_ICONS: Record<string, typeof FileText> = {
   txt: FileText,
 }
 
-const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'indexed':
-      return 'resolved'
-    case 'approved':
-      return 'success'
-    case 'processing':
-      return 'in-progress'
-    case 'pending':
-      return 'submitted'
-    case 'failed':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
+const STATUS_ICONS: Record<DocumentRegisterStatusIcon, typeof Check> = {
+  check: Check,
+  clock: Clock,
+  loader: Loader2,
+  alert: AlertCircle,
+  dot: Circle,
+}
+
+function RegisterStatusBadge({
+  status,
+  className,
+}: {
+  status: string
+  className?: string
+}) {
+  const tone = documentRegisterStatusTone(status)
+  const Icon = STATUS_ICONS[tone.icon]
+  return (
+    <Badge
+      variant={tone.variant}
+      className={cn('gap-1', className)}
+      data-testid="documents-register-status"
+      data-status={tone.label}
+      aria-label={`Status: ${tone.label}`}
+    >
+      <Icon
+        className={cn('h-3 w-3 shrink-0', tone.icon === 'loader' && 'animate-spin')}
+        aria-hidden="true"
+      />
+      <span>{tone.label}</span>
+    </Badge>
+  )
 }
 
 export default function Documents() {
@@ -1115,9 +1138,7 @@ export default function Documents() {
                         {registerRef.secondary}
                       </span>
                     ) : null}
-                    <Badge variant={getStatusVariant(doc.status) as any} className="text-[10px]">
-                      {doc.status}
-                    </Badge>
+                    <RegisterStatusBadge status={doc.status} className="text-[10px]" />
                     {campaignRow ? <CampaignRing documentId={doc.id} row={campaignRow} size={22} /> : null}
                   </div>
                   <h2 className="font-semibold text-foreground truncate mb-1 text-base">{doc.title}</h2>
@@ -1185,31 +1206,56 @@ export default function Documents() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px]">
+            <table className="w-full min-w-[960px]" data-testid="documents-register-table">
+              <caption className="sr-only">{t('documents.table.caption')}</caption>
               <thead>
                 <tr className="border-b border-border">
-                  <th className="sticky left-0 z-10 bg-card px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="sticky left-0 z-10 w-[22rem] max-w-[22rem] bg-card px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.document')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.pel')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.hyperlink')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('common.status')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.review_expiry')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.campaign')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.uploaded_by')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.views')}
                   </th>
                 </tr>
@@ -1276,14 +1322,19 @@ export default function Documents() {
                           : undefined
                       }
                     >
-                      <td className="sticky left-0 z-10 bg-card px-6 py-4">
-                        <div className="flex items-center gap-3">
+                      <td className="sticky left-0 z-10 w-[22rem] max-w-[22rem] overflow-hidden bg-card px-6 py-4">
+                        <div className="flex min-w-0 items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                             <FileIcon className="w-5 h-5 text-primary" />
                           </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-medium text-foreground truncate">{doc.title}</p>
+                          <div className="min-w-0 overflow-hidden">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <p
+                                className="min-w-0 truncate font-medium text-foreground"
+                                title={doc.title}
+                              >
+                                {doc.title}
+                              </p>
                               <span className="text-xs text-muted-foreground font-mono shrink-0">
                                 v{doc.version}
                               </span>
@@ -1293,16 +1344,24 @@ export default function Documents() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground font-mono">
+                            <p
+                              className="truncate text-xs font-mono text-muted-foreground"
+                              title={
+                                registerRef.hasPel
+                                  ? registerRef.secondary ?? undefined
+                                  : registerRef.lead
+                              }
+                            >
                               {registerRef.hasPel ? registerRef.secondary : registerRef.lead}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="max-w-[12rem] overflow-hidden px-6 py-4">
                         <span
-                          className="font-mono text-xs text-primary"
+                          className="block max-w-[12rem] truncate font-mono text-xs text-primary"
                           data-testid={`documents-register-pel-${doc.id}`}
+                          title={registerRef.hasPel ? registerRef.lead : undefined}
                         >
                           {registerRef.hasPel ? registerRef.lead : '—'}
                         </span>
@@ -1314,28 +1373,40 @@ export default function Documents() {
                         <Link
                           to={registerHref}
                           data-testid={`documents-register-hyperlink-${doc.id}`}
-                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                          aria-label={t('documents.table.open_aria', {
+                            ref: registerRef.lead,
+                            title: doc.title,
+                          })}
+                          className="inline-flex items-center gap-1 rounded-sm text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
                           {t('documents.table.open')}
                         </Link>
                       </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(doc.status) as any}>{doc.status}</Badge>
+                      <td className="overflow-hidden px-6 py-4">
+                        <RegisterStatusBadge status={doc.status} />
                       </td>
-                      <td className="px-6 py-4 text-xs text-muted-foreground">
+                      <td className="max-w-[12rem] overflow-hidden px-6 py-4 text-xs text-muted-foreground">
                         {reviewLabel || expiryLabel ? (
-                          <div className="space-y-0.5">
+                          <div className="min-w-0 space-y-0.5">
                             {reviewLabel && (
                               <div
-                                className={cn(isPastDue(doc.review_date) && 'font-medium text-warning')}
+                                className={cn(
+                                  'truncate',
+                                  isPastDue(doc.review_date) && 'font-medium text-warning',
+                                )}
+                                title={`${t('documents.table.review_short')}: ${reviewLabel}`}
                               >
                                 {t('documents.table.review_short')}: {reviewLabel}
                               </div>
                             )}
                             {expiryLabel && (
                               <div
-                                className={cn(isPastDue(doc.expiry_date) && 'font-medium text-destructive')}
+                                className={cn(
+                                  'truncate',
+                                  isPastDue(doc.expiry_date) && 'font-medium text-destructive',
+                                )}
+                                title={`${t('documents.table.expiry_short')}: ${expiryLabel}`}
                               >
                                 {t('documents.table.expiry_short')}: {expiryLabel}
                               </div>
@@ -1345,14 +1416,17 @@ export default function Documents() {
                           <span>—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="overflow-hidden px-6 py-4">
                         {campaignRow ? (
                           <CampaignRing documentId={doc.id} row={campaignRow} size={28} />
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                      <td
+                        className="max-w-[14rem] truncate px-6 py-4 text-sm text-muted-foreground"
+                        title={doc.created_by_name || undefined}
+                      >
                         {doc.created_by_name || '—'}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{doc.view_count}</td>
@@ -1576,9 +1650,7 @@ export default function Documents() {
                   </Card>
                   <Card className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">Status</p>
-                    <Badge variant={getStatusVariant(selectedDocument.status) as any}>
-                      {selectedDocument.status}
-                    </Badge>
+                    <RegisterStatusBadge status={selectedDocument.status} />
                   </Card>
                   <Card className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">Sensitivity</p>

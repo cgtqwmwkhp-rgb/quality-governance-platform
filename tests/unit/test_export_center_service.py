@@ -1,14 +1,15 @@
-"""Unit tests for Export Center sync CSV service (PX-160)."""
+"""Unit tests for Export Center sync CSV service (PX-160 + WA-3 IMS052)."""
 
 from __future__ import annotations
 
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from src.domain.exceptions import BadRequestError
+from src.domain.services.document_register_export import IMS052_COLUMNS
 from src.domain.services.export_center_service import (
     SYNC_ROW_LIMIT,
     ExportCenterService,
@@ -51,11 +52,12 @@ async def test_catalog_returns_live_counts_and_honest_capabilities():
     assert len(catalog["modules"]) == 8
     assert catalog["modules"][0]["id"] == "incidents"
     assert catalog["modules"][0]["record_count"] == 0
+    assert catalog["modules"][0]["formats"] == ["csv"]
     assert catalog["modules"][6]["id"] == "documents"
     assert catalog["modules"][6]["record_count"] == 6
+    assert catalog["modules"][6]["formats"] == ["csv", "xlsx", "pdf"]
     assert catalog["modules"][7]["id"] == "compliance_schedule"
     assert catalog["modules"][7]["record_count"] == 7
-    assert all(m["formats"] == ["csv"] for m in catalog["modules"])
 
 
 @pytest.mark.asyncio
@@ -86,6 +88,7 @@ async def test_build_sync_csv_writes_header_and_rows():
     assert result.row_count == 1
     assert result.truncated is False
     assert result.filename.startswith("incidents_export_")
+    assert result.media_type.startswith("text/csv")
     assert "reference_number" in result.csv_text.splitlines()[0]
     assert "INC-2026-0009" in result.csv_text
     assert "Spill" in result.csv_text
@@ -100,6 +103,22 @@ async def test_build_sync_csv_rejects_unknown_module_and_format():
 
     with pytest.raises(BadRequestError, match="Unsupported export format"):
         await service.build_sync_csv(1, "incidents", "pdf")
+
+
+@pytest.mark.asyncio
+async def test_documents_export_rejects_xlsx_for_incidents_but_allows_for_documents():
+    service = ExportCenterService(SimpleNamespace(execute=AsyncMock()))
+    with pytest.raises(BadRequestError, match="Supported: csv"):
+        await service.build_sync_csv(1, "incidents", "xlsx")
+
+    user = SimpleNamespace(is_superuser=True)
+    with patch(
+        "src.domain.services.export_center_service.build_document_register_rows",
+        new=AsyncMock(return_value=([], 0, False)),
+    ):
+        result = await service.build_sync_csv(1, "documents", "xlsx", user=user)
+    assert result.filename.endswith(".xlsx")
+    assert "spreadsheetml" in result.media_type
 
 
 def test_incident_row_mapper_handles_enums():
@@ -164,3 +183,46 @@ def test_compliance_schedule_row_mapper_key_fields():
     )
     mapped = _compliance_schedule_row(row)
     assert mapped == ["1", "CSR-1", "PAT testing", "2026-12-31", "7", "False", "True"]
+
+
+@pytest.mark.asyncio
+async def test_documents_export_uses_fixed_ims052_header_ignoring_picker():
+    """L-07: documents export always emits IMS052 columns — never a picker subset."""
+    user = SimpleNamespace(is_superuser=True)
+    ims_row = [
+        "PEL-IT-0001",
+        "",
+        "",
+        "Policy",
+        "DOC-1",
+        "1.0",
+        "approved",
+        "IT",
+        "Policies",
+        "",
+        "",
+        "",
+        "all_staff",
+        "",
+        "/documents/1",
+    ]
+    with patch(
+        "src.domain.services.export_center_service.build_document_register_rows",
+        new=AsyncMock(return_value=([ims_row], 1, False)),
+    ):
+        service = ExportCenterService(SimpleNamespace())
+        result = await service.build_sync_csv(7, "documents", "csv", user=user)
+
+    assert result.filename.startswith("ims052_document_register_")
+    header = result.csv_text.splitlines()[0]
+    assert header == ",".join(IMS052_COLUMNS)
+    assert "Policy" in result.csv_text
+    assert "file_name" not in header
+    assert "created_at" not in header
+
+
+@pytest.mark.asyncio
+async def test_documents_export_requires_user_for_acl():
+    service = ExportCenterService(SimpleNamespace())
+    with pytest.raises(BadRequestError, match="authenticated user"):
+        await service.build_sync_csv(1, "documents", "csv", user=None)

@@ -1,7 +1,11 @@
-"""Export Center sync CSV builders (PX-160).
+"""Export Center sync builders (PX-160) + IMS052 document register (WA-3 / L-07).
 
 Prefer synchronous streaming exports. Async ``export_jobs`` persistence is
 owned by Lane S (alembic) and is intentionally not claimed here.
+
+The ``documents`` module is the Master Document Register evidence pack —
+fixed IMS052 columns, never driven by a UI column picker. Other modules keep
+their generic CSV row mappers.
 """
 
 from __future__ import annotations
@@ -10,7 +14,7 @@ import csv
 import io
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Sequence
+from typing import Any, Awaitable, Callable, Optional, Sequence
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +28,11 @@ from src.domain.models.document import Document
 from src.domain.models.incident import Incident
 from src.domain.models.risk import Risk
 from src.domain.models.rta import RoadTrafficCollision
+from src.domain.services.document_register_export import (
+    IMS052_FILENAME_STEM,
+    build_document_register_rows,
+    serialize_register,
+)
 
 # Hard cap for sync responses — keep request-scoped memory bounded.
 SYNC_ROW_LIMIT = 10_000
@@ -39,7 +48,7 @@ SUPPORTED_MODULES = (
     "compliance_schedule",
 )
 
-SUPPORTED_FORMATS = ("csv",)
+SUPPORTED_FORMATS = ("csv", "xlsx", "pdf")
 
 
 @dataclass(frozen=True)
@@ -51,6 +60,11 @@ class _ModuleSpec:
     columns: Sequence[str]
     row_mapper: Callable[[Any], list[str]]
     order_by: Any
+    formats: tuple[str, ...] = ("csv",)
+    filename_stem: Optional[str] = None
+    # When set, replaces the generic select+row_mapper path (documents / IMS052).
+    rows_builder: Optional[Callable[..., Awaitable[tuple[list[list[str]], int, bool]]]] = None
+    active_only: bool = False
 
 
 def _enum_str(value: Any) -> str:
@@ -148,6 +162,7 @@ def _action_row(row: CAPAAction) -> list[str]:
 
 
 def _document_row(row: Document) -> list[str]:
+    # Retained for type completeness; documents use rows_builder (IMS052).
     return [
         str(row.id),
         _s(row.reference_number),
@@ -168,6 +183,15 @@ def _compliance_schedule_row(row: ComplianceRequirement) -> list[str]:
         _s(row.is_active),
         _s(row.statutory),
     ]
+
+
+async def _build_document_register(
+    db: AsyncSession,
+    tenant_id: int,
+    *,
+    user: Any,
+) -> tuple[list[list[str]], int, bool]:
+    return await build_document_register_rows(db, tenant_id, user=user, row_limit=SYNC_ROW_LIMIT)
 
 
 _MODULE_SPECS: dict[str, _ModuleSpec] = {
@@ -276,19 +300,19 @@ _MODULE_SPECS: dict[str, _ModuleSpec] = {
     ),
     "documents": _ModuleSpec(
         id="documents",
-        name="Documents",
-        description="Document library metadata (CSV sync)",
+        name="Documents (IMS052 Register)",
+        description=(
+            "Master Document Register evidence pack (IMS052). "
+            "Fixed columns — UI column picker is ignored. CSV / XLSX / PDF."
+        ),
         model=Document,
-        columns=[
-            "id",
-            "reference_number",
-            "title",
-            "status",
-            "file_name",
-            "created_at",
-        ],
+        columns=[],  # fixed IMS052 header owned by document_register_export
         row_mapper=_document_row,
         order_by=Document.id.desc(),
+        formats=("csv", "xlsx", "pdf"),
+        filename_stem=IMS052_FILENAME_STEM,
+        rows_builder=_build_document_register,
+        active_only=True,
     ),
     "compliance_schedule": _ModuleSpec(
         id="compliance_schedule",
@@ -312,18 +336,26 @@ _MODULE_SPECS: dict[str, _ModuleSpec] = {
 
 @dataclass(frozen=True)
 class SyncExportResult:
-    """In-memory sync CSV payload (streamed by the route layer)."""
+    """In-memory sync export payload (streamed by the route layer)."""
 
     module: str
     filename: str
-    csv_text: str
+    content: bytes
+    media_type: str
     row_count: int
     truncated: bool
     total_available: int
 
+    @property
+    def csv_text(self) -> str:
+        """Backward-compatible view for CSV payloads (tests / callers)."""
+        if not self.media_type.startswith("text/csv"):
+            raise TypeError("csv_text is only available for CSV exports")
+        return self.content.decode("utf-8")
+
 
 class ExportCenterService:
-    """Tenant-scoped catalog + sync CSV generation for Export Center."""
+    """Tenant-scoped catalog + sync export generation for Export Center."""
 
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
@@ -332,14 +364,14 @@ class ExportCenterService:
         modules: list[dict[str, Any]] = []
         for module_id in SUPPORTED_MODULES:
             spec = _MODULE_SPECS[module_id]
-            count = await self._count(spec.model, tenant_id)
+            count = await self._count(spec, tenant_id)
             modules.append(
                 {
                     "id": spec.id,
                     "name": spec.name,
                     "description": spec.description,
                     "record_count": count,
-                    "formats": ["csv"],
+                    "formats": list(spec.formats),
                     "sync_available": True,
                 }
             )
@@ -353,23 +385,61 @@ class ExportCenterService:
             },
         }
 
-    async def build_sync_csv(self, tenant_id: int, module: str, export_format: str = "csv") -> SyncExportResult:
+    async def build_sync_csv(
+        self,
+        tenant_id: int,
+        module: str,
+        export_format: str = "csv",
+        *,
+        user: Any = None,
+    ) -> SyncExportResult:
+        """Build a sync export. Name retained for route compatibility; formats vary."""
         module_key = (module or "").strip().lower()
         fmt = (export_format or "").strip().lower()
         if module_key not in _MODULE_SPECS:
             raise BadRequestError(
                 f"Unsupported export module '{module}'. " f"Supported: {', '.join(SUPPORTED_MODULES)}."
             )
-        if fmt not in SUPPORTED_FORMATS:
+        spec = _MODULE_SPECS[module_key]
+        if fmt not in spec.formats:
             raise BadRequestError(
-                f"Unsupported export format '{export_format}'. Sync exports support csv only this wave."
+                f"Unsupported export format '{export_format}' for module '{module_key}'. "
+                f"Supported: {', '.join(spec.formats)}."
             )
 
-        spec = _MODULE_SPECS[module_key]
-        total = await self._count(spec.model, tenant_id)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+        stem = spec.filename_stem or f"{module_key}_export"
+
+        if spec.rows_builder is not None:
+            if user is None:
+                raise BadRequestError("Document register export requires an authenticated user for ACL narrowing.")
+            data_rows, total_visible, truncated = await spec.rows_builder(self._db, tenant_id, user=user)
+            try:
+                content, media_type, extension = serialize_register(data_rows, fmt)
+            except ValueError as exc:
+                raise BadRequestError(str(exc)) from exc
+            return SyncExportResult(
+                module=module_key,
+                filename=f"{stem}_{stamp}.{extension}",
+                content=content,
+                media_type=media_type,
+                row_count=len(data_rows),
+                truncated=truncated,
+                total_available=total_visible,
+            )
+
+        if fmt != "csv":
+            raise BadRequestError(
+                f"Unsupported export format '{export_format}' for module '{module_key}'. "
+                f"Supported: {', '.join(spec.formats)}."
+            )
+
+        total = await self._count(spec, tenant_id)
         stmt: Select[Any] = (
             select(spec.model).where(spec.model.tenant_id == tenant_id).order_by(spec.order_by).limit(SYNC_ROW_LIMIT)
         )
+        if spec.active_only and hasattr(spec.model, "is_active"):
+            stmt = stmt.where(spec.model.is_active.is_(True))
         result = await self._db.execute(stmt)
         rows = list(result.scalars().all())
 
@@ -380,18 +450,20 @@ class ExportCenterService:
             writer.writerow(spec.row_mapper(row))
 
         truncated = total > len(rows)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
-        filename = f"{module_key}_export_{stamp}.csv"
         return SyncExportResult(
             module=module_key,
-            filename=filename,
-            csv_text=buffer.getvalue(),
+            filename=f"{stem}_{stamp}.csv",
+            content=buffer.getvalue().encode("utf-8"),
+            media_type="text/csv; charset=utf-8",
             row_count=len(rows),
             truncated=truncated,
             total_available=total,
         )
 
-    async def _count(self, model: Any, tenant_id: int) -> int:
+    async def _count(self, spec: _ModuleSpec, tenant_id: int) -> int:
+        model = spec.model
         stmt = select(func.count()).select_from(model).where(model.tenant_id == tenant_id)
+        if spec.active_only and hasattr(model, "is_active"):
+            stmt = stmt.where(model.is_active.is_(True))
         result = await self._db.execute(stmt)
         return int(result.scalar_one() or 0)

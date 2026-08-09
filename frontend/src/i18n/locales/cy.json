@@ -3854,5 +3854,7 @@
   "compliance.schedule.form.historical_evidence_label": "Ychwanegu tystiolaeth hanesyddol",
   "compliance.schedule.form.historical_evidence_add": "Ychwanegu ffeiliau tystiolaeth",
   "compliance.schedule.form.historical_complete_error": "Crëwyd y rhwymedigaeth, ond methodd cofnodi'r cwblhau yn y gorffennol neu atodi tystiolaeth. Agorwch y rhwymedigaeth i geisio eto o Gofnodi cwblhau.",
-  "compliance.schedule.form.historical_open_detail": "Agor rhwymedigaeth i ailgeisio tystiolaeth"
+  "compliance.schedule.form.historical_open_detail": "Agor rhwymedigaeth i ailgeisio tystiolaeth",
+  "documents.table.caption": "Cofrestr Dogfennau Meistr",
+  "documents.table.open_aria": "Agor {{ref}} — {{title}}"
 }
