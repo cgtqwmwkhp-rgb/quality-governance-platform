@@ -594,3 +594,64 @@ async def test_author_cannot_publish_their_own_document(admin_client: AsyncClien
         row = await session.scalar(select(Document).where(Document.id == document_id))
         assert row is not None
         assert row.status != DocumentStatus.PUBLISHED, "the refused publish was applied anyway"
+
+
+@pytest.mark.asyncio
+async def test_controlled_metadata_and_approval_are_refused_while_held(
+    admin_client: AsyncClient,
+    superuser_client: AsyncClient,
+) -> None:
+    """Bugbot: Document Control PUT / submit / approval-action skipped the hold guard.
+
+    Library approve/submit are covered elsewhere; these are the parallel Document
+    Control routes that still mutated an anchored control record under hold.
+    """
+    matter = f"MATTER-{uuid.uuid4().hex[:8]}"
+    document_id = await _seed_document()
+    controlled_id = await _seed_controlled(library_document_id=document_id, status="draft")
+    await _file_under_matter(superuser_client, document_id, matter)
+
+    workflow = await admin_client.post(
+        "/api/v1/document-control/workflows",
+        json={
+            "name": "WC-1 hold approval path",
+            "applicable_document_types": ["policy"],
+            "workflow_steps": [{"step": 1, "approver_role": "quality_manager"}],
+        },
+    )
+    assert workflow.status_code == 201, workflow.text
+    workflow_id = int(workflow.json()["id"])
+
+    # Open the approval instance before the hold so the decision path is reachable.
+    submitted = await admin_client.post(
+        f"/api/v1/document-control/{controlled_id}/submit-for-approval",
+        params={"workflow_id": workflow_id},
+    )
+    assert submitted.status_code == 200, submitted.text
+    instance_id = int(submitted.json()["instance_id"])
+
+    await _issue_hold(superuser_client, matter)
+
+    refused_update = await admin_client.put(
+        f"/api/v1/document-control/{controlled_id}",
+        json={"title": "Retitled under hold"},
+    )
+    _assert_hold_refusal(refused_update, matter=matter)
+
+    refused_submit = await admin_client.post(
+        f"/api/v1/document-control/{controlled_id}/submit-for-approval",
+        params={"workflow_id": workflow_id},
+    )
+    _assert_hold_refusal(refused_submit, matter=matter)
+
+    refused_action = await admin_client.post(
+        f"/api/v1/document-control/approvals/{instance_id}/action",
+        json={"action": "approved", "comments": "should be frozen by the hold"},
+    )
+    _assert_hold_refusal(refused_action, matter=matter)
+
+    controlled = await _controlled_row(controlled_id)
+    assert controlled.status == "pending_approval", (
+        f"held control record moved from pending_approval to {controlled.status!r}"
+    )
+    assert controlled.title != "Retitled under hold", "the refused metadata edit was applied"

@@ -557,6 +557,10 @@ async def update_document(
     if not document:
         raise NotFoundError("Document not found")
 
+    # WC-1 / L-40 — freeze anchored Register rows before any metadata write.
+    await assert_controlled_document_not_held(
+        db, document, tenant_id=_tenant_id(current_user), action="edited"
+    )
     assert_document_metadata_editable(document.status)
 
     update_data = document_data.model_dump(exclude_unset=True)
@@ -817,6 +821,11 @@ async def submit_for_approval(
     if not document:
         raise NotFoundError("Document not found")
 
+    # WC-1 / L-40 — refuse before status flips to pending_approval.
+    await assert_controlled_document_not_held(
+        db, document, tenant_id=tenant_id, action="submitted for approval"
+    )
+
     # After the 404, and still before both the first query against an absent
     # table and the status change staged alongside its INSERT.
     await _refuse_write_if_unprovisioned(
@@ -889,20 +898,6 @@ async def take_approval_action(
     if not instance:
         raise NotFoundError("Approval instance not found")
 
-    # Record the action
-    action = DocumentApprovalAction(
-        tenant_id=tenant_id,
-        instance_id=instance_id,
-        workflow_step=instance.current_step,
-        approver_id=current_user.id,
-        approver_name=current_user.full_name,
-        action=action_request.action,
-        comments=action_request.comments,
-        conditions=action_request.conditions,
-        delegated_to=action_request.delegated_to,
-    )
-    db.add(action)
-
     # Get workflow to determine next steps
     result = await db.execute(
         apply_tenant_filter(
@@ -923,6 +918,29 @@ async def take_approval_action(
         )
     )
     document = result.scalar_one_or_none()
+
+    # WC-1 / L-40 — refuse before recording the decision or flipping status.
+    if document is not None:
+        await assert_controlled_document_not_held(
+            db,
+            document,
+            tenant_id=tenant_id,
+            action=f"approval-action:{action_request.action}",
+        )
+
+    # Record the action
+    action = DocumentApprovalAction(
+        tenant_id=tenant_id,
+        instance_id=instance_id,
+        workflow_step=instance.current_step,
+        approver_id=current_user.id,
+        approver_name=current_user.full_name,
+        action=action_request.action,
+        comments=action_request.comments,
+        conditions=action_request.conditions,
+        delegated_to=action_request.delegated_to,
+    )
+    db.add(action)
 
     if action_request.action == "approved":
         # Check if this was the last step
