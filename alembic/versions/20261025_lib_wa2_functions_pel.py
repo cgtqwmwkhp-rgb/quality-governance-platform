@@ -85,6 +85,9 @@ def upgrade() -> None:
         op.create_index("ix_document_functions_tenant_id", "document_functions", ["tenant_id"])
         op.create_index("ix_document_functions_code", "document_functions", ["code"])
         op.create_index("ix_document_functions_active", "document_functions", ["active"])
+        # TimestampMixin declares created_at as indexed; omitting it here is drift
+        # the Alembic ratchet fails on rather than silently defers.
+        op.create_index("ix_document_functions_created_at", "document_functions", ["created_at"])
 
     _seed_functions()
 
@@ -250,6 +253,7 @@ def downgrade() -> None:
     )
 
     if _table_exists("document_functions"):
+        op.drop_index("ix_document_functions_created_at", table_name="document_functions")
         op.drop_index("ix_document_functions_active", table_name="document_functions")
         op.drop_index("ix_document_functions_code", table_name="document_functions")
         op.drop_index("ix_document_functions_tenant_id", table_name="document_functions")

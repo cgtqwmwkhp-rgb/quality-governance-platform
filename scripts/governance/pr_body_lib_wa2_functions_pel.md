@@ -16,6 +16,7 @@
 - **Dependencies:** None
 - **Tests:** `test_pel_doc_ref_allocation.py` (ported to the function axis, plus four-digit/overflow/resolver cases); `test_pel_doc_ref_immutability.py` (new); `test_document_category_seed.py` (function seed + counter-never-reset); `test_compliance_schedule_filing_api.py` (function-derived ref, no-function path, unknown-code refusal); head pins in `test_job_lifecycle_ux_w4/w5.py`; cascade register in `test_delete_cascade_audit_visibility.py`
 - **Docs:** `specs/governance-library/functions.json`, spec-pack README, `docs/governance/tenant_id_catalog_exceptions.json`, this Change Ledger
+- **Contract baseline:** `openapi-baseline.json` refreshed. The diff is only the surface listed under APIs above — one new path, one new schema, `function_code` added as an optional property to three request bodies, and three counts on `SeedResultResponse`. Those counts are what `check_openapi_compatibility.py` reports as breaking: it applies its "new required field" rule to every schema, and cannot tell that `SeedResultResponse` is only ever a response body, where a new required field is additive for the client. The checker's request/response blindness is a real gap but a shared gate touching every PR, so it is noted rather than changed here.
 
 ## 3) Compatibility & Data Safety
 - **Compatibility strategy:** `function_code` is optional on every create path. A caller that omits it still files the document — it simply carries no `pel_doc_ref` until a function is confirmed, which is a state WA-1's Register already renders (DOC lead, Hyperlink never blank). An unrecognised code is refused rather than treated as "no function".
@@ -52,6 +53,8 @@
 - [x] `alembic upgrade head` → `downgrade -1` → `upgrade head` on a scratch PostgreSQL 
 - [x] Trigger proven by raw SQL: rewrite refused, null refused, function rewrite refused, unrelated update allowed, NULL → value allowed, delete-in-use refused
 - [x] `python3 scripts/governance/library/anti_dupe_gate.py` — 0 critical, 0 advisory
+- [x] `alembic check` + `validate_alembic_drift_ratchet.py` on a scratch PostgreSQL — no new suppressed drift. First run caught a real omission: `TimestampMixin` declares `created_at` indexed and the migration did not create it, so `ix_document_functions_created_at` was added rather than the baseline widened
+- [x] `check_openapi_compatibility.py` against the refreshed baseline — pass
 - [x] `black --check` / `isort --check-only` / `flake8` clean
 - [ ] Full CI — on PR
 - [ ] Staging / Prod tip verify — after merge per conveyor (DONE ≠ merge)
