@@ -48,10 +48,6 @@ from src.domain.services.document_category_service import (
     coerce_cascade_level,
     resolve_function_code,
 )
-from src.domain.services.library_rules import (
-    assert_access_level_required,
-    assert_filename_grammar_if_pel_prefixed,
-)
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_library_campaign_offer_service import (
@@ -78,6 +74,7 @@ from src.domain.services.gkb_control_library_link import (
 from src.domain.services.href_registry import document_href
 from src.domain.services.index_job_service import IndexJobService, dispatch_index_job, vector_index_configured
 from src.domain.services.legal_hold_enforcement import assert_document_not_held, held_document_ids
+from src.domain.services.library_rules import assert_access_level_required, assert_filename_grammar_if_pel_prefixed
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.file_validation import validate_upload as shared_validate_upload
 from src.infrastructure.monitoring.azure_monitor import track_metric

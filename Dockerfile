@@ -66,6 +66,8 @@ COPY --chown=appuser:appgroup alembic.ini .
 # which runs against a full repo checkout — still passes.
 COPY --chown=appuser:appgroup specs/governance-library/taxonomy.json ./specs/governance-library/taxonomy.json
 COPY --chown=appuser:appgroup specs/governance-library/functions.json ./specs/governance-library/functions.json
+COPY --chown=appuser:appgroup specs/governance-library/northern-star-rules-v6.json ./specs/governance-library/northern-star-rules-v6.json
+COPY --chown=appuser:appgroup specs/governance-library/northern-star-v6.json ./specs/governance-library/northern-star-v6.json
 COPY --chown=appuser:appgroup specs/compliance-schedule/catalogue.json ./specs/compliance-schedule/catalogue.json
 COPY --chown=appuser:appgroup certs/ ./certs/
 COPY --chown=appuser:appgroup scripts/celery/ ./scripts/celery/

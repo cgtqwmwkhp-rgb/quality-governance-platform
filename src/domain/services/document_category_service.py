@@ -43,7 +43,6 @@ from src.domain.models.document_library import (
     DocumentTag,
     PelDocRefCounter,
 )
-from src.domain.services.library_rules import assert_pel_identity
 from src.domain.services.document_category_seed_data import (
     EXPECTED_CATEGORY_COUNT,
     EXPECTED_FUNCTION_COUNT,
@@ -51,6 +50,7 @@ from src.domain.services.document_category_seed_data import (
     load_library_functions,
     load_taxonomy_categories,
 )
+from src.domain.services.library_rules import assert_pel_identity
 
 
 @dataclass
