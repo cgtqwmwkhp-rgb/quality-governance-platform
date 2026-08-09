@@ -74,6 +74,7 @@ from src.domain.services.gkb_control_library_link import (
 from src.domain.services.href_registry import document_href
 from src.domain.services.index_job_service import IndexJobService, dispatch_index_job, vector_index_configured
 from src.domain.services.legal_hold_enforcement import assert_document_not_held, held_document_ids
+from src.domain.services.library_rules import assert_access_level_required, assert_filename_grammar_if_pel_prefixed
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.file_validation import validate_upload as shared_validate_upload
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -841,6 +842,34 @@ def _index_job_response(job: IndexJob) -> IndexJobResponse:
     )
 
 
+def _validated_document_access_level(access_level: Optional[str]) -> str:
+    """Apply the Northern Star default and translate R26 failures for the API."""
+    if access_level is None:
+        access_level = "all_staff"
+    try:
+        return assert_access_level_required(access_level)
+    except DomainValidationError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+
+def _optional_coerce_cascade_level(cascade_level: Optional[int]) -> Optional[int]:
+    """Validate cascade_level when provided; leave unset levels unset."""
+    if cascade_level is None:
+        return None
+    try:
+        return coerce_cascade_level(cascade_level)
+    except DomainValidationError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+
+def _assert_upload_filename_grammar(file_name: str) -> None:
+    """R32: PEL-prefixed filenames must match Northern Star grammar."""
+    try:
+        assert_filename_grammar_if_pel_prefixed(file_name)
+    except DomainValidationError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+
 # =============================================================================
 # UPLOAD & CREATE
 # =============================================================================
@@ -909,16 +938,13 @@ async def upload_document(
     # Validated before the file is read so a bad level costs nothing, and
     # before the function is resolved so the caller gets the level complaint
     # rather than an unrelated one.
-    if cascade_level is not None:
-        try:
-            cascade_level = coerce_cascade_level(cascade_level)
-        except DomainValidationError as exc:
-            raise BadRequestError(str(exc)) from exc
+    cascade_level = _optional_coerce_cascade_level(cascade_level)
 
     if site_location_id is not None and await db.get(Location, site_location_id) is None:
         raise BadRequestError(f"Location {site_location_id} not found")
 
     file_name, content, file_type, safe_filename = await _validate_library_upload(file)
+    _assert_upload_filename_grammar(file_name)
     file_size = len(content)
     file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{safe_filename}"
 
@@ -953,7 +979,10 @@ async def upload_document(
                     "5 Form/Register/Record) and cannot be re-banded once issued."
                 )
             function_id = filing_function.id
-            pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id, cascade_level)
+            try:
+                pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id, cascade_level)
+            except DomainValidationError as exc:
+                raise BadRequestError(str(exc)) from exc
 
         if category_id is not None:
             filing_category = await load_filing_category(db, category_id)
@@ -980,6 +1009,11 @@ async def upload_document(
                     }
                     for d in dupes
                 ]
+
+        # R26 (W4): every created document carries an access level. Taxonomy
+        # defaults supply it when a category is chosen; otherwise all_staff is
+        # the Northern Star default rather than leaving NULL (silent gap).
+        access_level = _validated_document_access_level(access_level)
 
         # Create document record
         doc = Document(

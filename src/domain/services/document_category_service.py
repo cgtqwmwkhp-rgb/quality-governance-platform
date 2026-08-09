@@ -50,6 +50,7 @@ from src.domain.services.document_category_seed_data import (
     load_library_functions,
     load_taxonomy_categories,
 )
+from src.domain.services.library_rules import assert_pel_identity
 
 
 @dataclass
@@ -352,4 +353,8 @@ async def allocate_pel_doc_ref(db: AsyncSession, function_id: int, cascade_level
             "scheme has to be amended before this document can be filed; "
             "numbers are never re-used or renumbered (R06/R29)."
         )
-    return f"PEL-{function.code}-{band}{allocated_seq:0{PEL_BAND_SEQ_WIDTH}d}"
+    pel_doc_ref = f"PEL-{function.code}-{band}{allocated_seq:0{PEL_BAND_SEQ_WIDTH}d}"
+    # W4 / NS-RULE-A: identity hard-block — the allocator constructs the ref, so
+    # this is a belt-and-braces assert that R01–R03 hold by construction.
+    assert_pel_identity(pel_doc_ref, function_code=function.code, cascade_level=band)
+    return pel_doc_ref

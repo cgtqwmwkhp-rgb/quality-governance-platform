@@ -132,23 +132,19 @@ class TestConformsToTheCheckedInAuthorityPack:
             assert low <= int(ref.rsplit("-", 1)[1]) <= high
 
     @pytest.mark.asyncio
-    async def test_banding_is_correct_even_for_a_function_v6_has_not_reseeded_yet(self, session_factory):
-        """OPS is a WA-2 code that v6 replaces with CTR+SVC; the reseed is Wave W2.
+    async def test_allocator_refuses_ops_because_r01_excludes_it(self, session_factory):
+        """W2 withdrew OPS from the Northern Star vocabulary; W4 makes R01 a hard block.
 
-        Until then a document can still be filed under OPS, and this pins what
-        that produces: the band digit is right (R02 holds — that is this PR's
-        job), but the function segment is not yet in the v6 vocabulary, so R01
-        does not pass. Recording it here means the W2 reseed has something
-        concrete to flip rather than a silent surprise.
+        A test harness can still seed an active OPS row, but the allocator must
+        not emit `PEL-OPS-####` — that reference fails R01 and must never be
+        printed on a document.
         """
         assert "OPS" not in _V6_FUNCTION_CODES
         function_id = await _seed_function(session_factory, code="OPS", name="Operations")
         async with session_factory() as session:
-            ref = await allocate_pel_doc_ref(session, function_id, 3)
-            await session.commit()
-        assert ref == "PEL-OPS-3001"
-        assert ref.rsplit("-", 1)[1][0] == "3", "R02 (band == level) must hold regardless"
-        assert not R01_REFERENCE_PATTERN.match(ref), "expected the known pre-W2 R01 gap"
+            with pytest.raises(ValidationError, match="R01"):
+                await allocate_pel_doc_ref(session, function_id, 3)
+            await session.rollback()
 
     def test_the_r29_rule_is_still_append_only(self):
         """If the pack ever relaxes R29 to gap-fill, this allocator's design must be revisited."""
