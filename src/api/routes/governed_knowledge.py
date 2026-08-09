@@ -11,7 +11,12 @@ from sqlalchemy import or_, select
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkStatus, EvidenceSignalType
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceCoverKind,
+    EvidenceLinkStatus,
+    EvidenceSignalType,
+)
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import (
     AiDecisionLog,
@@ -51,6 +56,9 @@ class EvidenceLinkDetailResponse(BaseModel):
     signal_type: Optional[str] = None
     document_version_id: Optional[int] = None
     standard_edition: Optional[str] = None
+    cover_kind: str = "evidences"
+    confirmed_by_id: Optional[int] = None
+    confirmed_at: Optional[str] = None
     created_at: str
     created_by_email: Optional[str]
 
@@ -214,6 +222,9 @@ def _tenant_id_for(user: CurrentUser) -> int:
 
 
 def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetailResponse:
+    cover = getattr(link, "cover_kind", None)
+    cover_value = cover.value if isinstance(cover, EvidenceCoverKind) else (cover or EvidenceCoverKind.EVIDENCES.value)
+    confirmed_at = getattr(link, "confirmed_at", None)
     return EvidenceLinkDetailResponse(
         id=link.id,
         entity_type=link.entity_type,
@@ -230,9 +241,18 @@ def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetail
         signal_type=link.signal_type,
         document_version_id=getattr(link, "document_version_id", None),
         standard_edition=getattr(link, "standard_edition", None),
+        cover_kind=str(cover_value),
+        confirmed_by_id=getattr(link, "confirmed_by_id", None),
+        confirmed_at=confirmed_at.isoformat() if confirmed_at is not None else None,
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
     )
+
+
+def _stamp_human_cel_confirm(link: ComplianceEvidenceLink, user: User) -> None:
+    """D15: only human confirm/create may set durable confirmer columns."""
+    link.confirmed_by_id = getattr(user, "id", None)
+    link.confirmed_at = datetime.now(timezone.utc)
 
 
 async def _get_document_or_404(db: DbSession, document_id: int, tenant_id: int) -> Document:
@@ -426,6 +446,7 @@ async def confirm_evidence_link(
     prior = link.effective_status.value
     link.status = EvidenceLinkStatus.CONFIRMED
     link.auto_applied = False
+    _stamp_human_cel_confirm(link, current_user)
     if link.entity_type == "document":
         from src.domain.services.cel_version_pin import pin_evidence_link_document_version
 
@@ -541,6 +562,7 @@ async def bulk_confirm_evidence(
         for link in links:
             link.status = EvidenceLinkStatus.CONFIRMED
             link.auto_applied = False
+            _stamp_human_cel_confirm(link, current_user)
             if link.entity_type == "document":
                 from src.domain.services.cel_version_pin import pin_evidence_link_document_version
 
@@ -559,6 +581,7 @@ async def bulk_confirm_evidence(
         for link in links:
             link.status = EvidenceLinkStatus.CONFIRMED
             link.auto_applied = False
+            _stamp_human_cel_confirm(link, current_user)
             if link.entity_type == "document":
                 from src.domain.services.cel_version_pin import pin_evidence_link_document_version
 

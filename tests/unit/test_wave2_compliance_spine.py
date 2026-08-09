@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.routes.compliance import get_compliance_coverage, link_evidence, list_standards
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceCoverKind, EvidenceLinkMethod
 from src.domain.models.standard import Standard
 from src.domain.services.ims_dashboard_service import IMSDashboardService
 
@@ -55,6 +55,7 @@ async def test_link_evidence_persists_tenant_scoped_links():
             confidence=88.0,
             title="Controlled document",
             notes="Quarterly evidence set",
+            cover_kind=EvidenceCoverKind.EVIDENCES.value,
         ),
         db,
         current_user,
@@ -65,6 +66,7 @@ async def test_link_evidence_persists_tenant_scoped_links():
     assert all(link.created_by_id == 17 for link in added)
     assert all(link.created_by_email == "qa@example.com" for link in added)
     assert all(link.linked_by == EvidenceLinkMethod.MANUAL for link in added)
+    assert all(link.cover_kind == EvidenceCoverKind.EVIDENCES for link in added)
     assert response["message"] == "Upserted 2 evidence link(s)"
 
 

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.compliance_evidence import (
     ComplianceEvidenceLink,
+    EvidenceCoverKind,
     EvidenceLinkMethod,
     EvidenceLinkStatus,
     EvidenceSignalType,
@@ -236,6 +237,7 @@ class GovernedKnowledgeService:
                 ComplianceEvidenceLink.entity_type == entity_type,
                 ComplianceEvidenceLink.entity_id == entity_id,
                 ComplianceEvidenceLink.clause_id == mapping.clause_id,
+                ComplianceEvidenceLink.cover_kind == EvidenceCoverKind.EVIDENCES,
             )
         )
         link = existing_result.scalar_one_or_none()
@@ -245,6 +247,7 @@ class GovernedKnowledgeService:
                 entity_type=entity_type,
                 entity_id=entity_id,
                 clause_id=mapping.clause_id,
+                cover_kind=EvidenceCoverKind.EVIDENCES,
                 created_by_id=getattr(user, "id", None),
                 created_by_email=getattr(user, "email", None),
             )
@@ -257,6 +260,12 @@ class GovernedKnowledgeService:
         link.status = status
         link.auto_applied = auto_applied
         link.linked_by = EvidenceLinkMethod.AI
+        # D15: AI / auto-confirm must never stamp a human confirmer. Clear when
+        # this write is machine-confirmed, and also when it demotes the link out
+        # of confirmed, so a rematch cannot leave a false actor behind.
+        if auto_applied or status != EvidenceLinkStatus.CONFIRMED:
+            link.confirmed_by_id = None
+            link.confirmed_at = None
         if signal_type is not None:
             link.signal_type = signal_type.value
         elif entity_type == "document" and not link.signal_type:
