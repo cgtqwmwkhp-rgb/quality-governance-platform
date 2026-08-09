@@ -38,7 +38,11 @@ from src.domain.models.enums import DocumentStatus, DocumentType
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.document_category_service import allocate_pel_doc_ref, resolve_function_code
+from src.domain.services.document_category_service import (
+    allocate_pel_doc_ref,
+    coerce_cascade_level,
+    resolve_function_code,
+)
 from src.domain.services.document_library_filing_service import (
     assert_library_read_access,
     filing_defaults_for_category,
@@ -420,8 +424,14 @@ async def _create_library_document(
         ) from exc
 
     reference_number = await ReferenceNumberService.generate(db, "document", Document)
+    # ``coerce_cascade_level`` rather than the caller-supplied value directly:
+    # the guard above already refuses a function with no level, but that guard
+    # tests ``filing_function``, so nothing here would otherwise stop a None
+    # reaching the allocator if that guard were ever moved or weakened.
     pel_doc_ref = (
-        await allocate_pel_doc_ref(db, filing_function.id, cascade_level) if filing_function is not None else None
+        await allocate_pel_doc_ref(db, filing_function.id, coerce_cascade_level(cascade_level))
+        if filing_function is not None
+        else None
     )
     defaults = filing_defaults_for_category(category)
 

@@ -40,7 +40,11 @@ from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.compliance_schedule_filing_service import FILING_ERROR_MAX_CHARS, _load_bound_evidence_asset
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
-from src.domain.services.document_category_service import allocate_pel_doc_ref, resolve_function_code
+from src.domain.services.document_category_service import (
+    allocate_pel_doc_ref,
+    coerce_cascade_level,
+    resolve_function_code,
+)
 from src.domain.services.document_library_filing_service import (
     filing_defaults_for_category,
     find_duplicate_approved_candidates,
@@ -784,8 +788,11 @@ class ComplianceScheduleFraOcrService:
         doc_title = title or draft.source_filename or f"FRA draft {draft.id}"
         site_location_id = requirement.location_id
         reference_number = await ReferenceNumberService.generate(self.db, "document", Document)
+        # Coerced here, not passed straight through: the earlier guard refuses a
+        # function with no level, but it tests ``filing_function``, so this is
+        # what actually stops a None reaching the allocator.
         pel_doc_ref = (
-            await allocate_pel_doc_ref(self.db, filing_function.id, cascade_level)
+            await allocate_pel_doc_ref(self.db, filing_function.id, coerce_cascade_level(cascade_level))
             if filing_function is not None
             else None
         )
