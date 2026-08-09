@@ -66,6 +66,8 @@ reinterpreted onto QGP's SQLAlchemy/Alembic/FastAPI stack.
 
 Dry-run ingest (Wave **W5b**): `python -m scripts.governance.library.northern_star_dry_run_ingest` — report only, never silent write.
 
+Nightly honesty (Wave **W9** / NS-NIGHTLY): `python -m scripts.governance.library.northern_star_nightly_honesty` — R08 / R25 / R30 pack reports only; `--guard` refuses fabricated zeros against `docs/governance/library_ns_nightly_honesty_baseline.json`. Scheduled via `.github/workflows/ns-nightly-honesty.yml`.
+
 Programme master plan: Cursor canvas `library-v6-northern-star-master-plan`.
 ADR amendment: `docs/adr/ADR-0023-governance-library-reference-scheme.md`
 § Amendment — Northern Star.

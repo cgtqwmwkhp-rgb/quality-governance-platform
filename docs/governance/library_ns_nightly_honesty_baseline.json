@@ -1,0 +1,11 @@
+{
+  "_comment": "Northern Star W9 / NS-NIGHTLY honesty delivery-guard floors. Floors refuse fabricated zeros while the estate still has known debt. Raise floors only when steward work closes gaps; never lower to greenwash.",
+  "r08_gaps_floor": 1,
+  "r25_issued_missing_review_date_floor": 1,
+  "r30_gap_total_floor": 100,
+  "r30_gap_total_planning_estimate": 135,
+  "notes": [
+    "Master plan expects ~135 R30 legacy coverage gaps; live pack measures controlled non-external docs missing legacy_ref (currently higher).",
+    "R25 overdue is uncomputed (0) while pack review_date is absent — not 'none overdue'."
+  ]
+}
