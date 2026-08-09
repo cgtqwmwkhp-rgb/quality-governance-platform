@@ -93,6 +93,52 @@ class DocumentEdgeListResponse(BaseModel):
     total: int
 
 
+class PendingEdgeEndpoint(BaseModel):
+    """One end of a queued edge, enriched so the queue avoids N+1 document reads.
+
+    ``readable`` is false when the library ACL would refuse this operator the
+    document by id; ``title`` is then withheld rather than guessed at.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: int
+    title: Optional[str] = None
+    reference: Optional[str] = None
+    href: str
+    readable: bool
+
+
+class PendingDocumentEdgeItem(BaseModel):
+    """A proposed / needs_review Doc Graph edge awaiting operator confirmation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    edge_id: int
+    edge_type: DocumentEdgeType
+    status: DocumentEdgeStatus
+    created_method: DocumentEdgeMethod
+    is_primary_parent: bool
+    # True when confirming this edge can drive publish impact (ADR-0021).
+    impact_driving: bool
+    confidence: Optional[float] = None
+    rationale: Optional[str] = None
+    created_at: datetime
+    src: PendingEdgeEndpoint
+    dst: PendingEdgeEndpoint
+
+
+class PendingDocumentEdgeListResponse(BaseModel):
+    """One page of the Doc Graph confirm queue — never a global facet total."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[PendingDocumentEdgeItem]
+    returned: int
+    limit: int
+    truncated: bool
+
+
 class DocumentThreadHop(BaseModel):
     """One hop on a Doc Graph primary-implements thread (ambient-renderable).
 

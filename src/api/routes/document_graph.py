@@ -23,6 +23,7 @@ from src.api.schemas.document_graph import (
     ImSeedDocumentItem,
     ImSeedEdgeItem,
     ImSeedResponse,
+    PendingDocumentEdgeListResponse,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
@@ -31,7 +32,7 @@ from src.domain.models.user import User
 from src.domain.services.document_graph_heuristic_propose import DocumentGraphHeuristicProposeService
 from src.domain.services.document_graph_im_seed import DocumentGraphImSeedService
 from src.domain.services.document_graph_iso_reverse import DocumentGraphIsoReverseService
-from src.domain.services.document_graph_service import DocumentGraphService
+from src.domain.services.document_graph_service import PENDING_QUEUE_LIMIT, DocumentGraphService
 
 DISABLED_DETAIL = "Doc Graph is not enabled in this environment."
 HEURISTIC_DISABLED_DETAIL = "Doc Graph heuristic propose is not enabled in this environment."
@@ -82,6 +83,38 @@ async def list_document_edges(
         items=[DocumentEdgeResponse.model_validate(i) for i in items],
         total=len(items),
     )
+
+
+@_enabled_router.get(
+    "/edges/pending",
+    response_model=PendingDocumentEdgeListResponse,
+)
+async def list_pending_document_edges(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+    edge_type: Optional[DocumentEdgeType] = Query(None),
+    status_filter: Optional[DocumentEdgeStatus] = Query(
+        None,
+        alias="status",
+        description="proposed | needs_review only — the queue refuses settled statuses.",
+    ),
+    limit: int = Query(PENDING_QUEUE_LIMIT, ge=1, le=PENDING_QUEUE_LIMIT),
+):
+    """Tenant-wide Doc Graph confirm queue for the Knowledge Exceptions inbox (WE-1).
+
+    ``document_edges`` remains the source of truth — nothing is mirrored into CEL,
+    and confirm/reject stay on the existing edge routes.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = DocumentGraphService(db)
+    payload = await service.list_pending_edges(
+        tenant_id=tenant_id,
+        viewer=current_user,
+        edge_type=edge_type,
+        status=status_filter,
+        limit=limit,
+    )
+    return PendingDocumentEdgeListResponse.model_validate(payload)
 
 
 @_enabled_router.get(

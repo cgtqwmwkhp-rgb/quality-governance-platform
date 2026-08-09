@@ -109,5 +109,29 @@
     "description": "Enable non-LLM Doc Graph heuristic propose (ANDed with DOCUMENT_GRAPH_ENABLED). Default false. Keep IMPACT/LLM propose off for Wave 1 bake.",
     "default": "false",
     "example": "true"
+  },
+  "DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED": {
+    "required": false,
+    "description": "Show the ambient Doc Graph thread strip (ADR-0021 X-0). ANDed with DOCUMENT_GRAPH_ENABLED. Default false; persist via deploy vars so it is not a hand-set app setting (WE-1).",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_MAP_VIEW_ENABLED": {
+    "required": false,
+    "description": "Offer the Relationships Map|List toggle (DG-1). ANDed with DOCUMENT_GRAPH_ENABLED. Confirm stays a list queue whatever this is set to. Default false; persist via deploy vars (WE-1).",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_DND_PROPOSE_ENABLED": {
+    "required": false,
+    "description": "Allow drag-and-drop propose onto the relationships map (DG-2). Drops are always proposed, never confirmed. ANDed with DOCUMENT_GRAPH_ENABLED. Default false; persist via deploy vars (WE-1).",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED": {
+    "required": false,
+    "description": "Expose the read-only library Structure Map page (DG-3). Never the default confirm surface. ANDed with DOCUMENT_GRAPH_ENABLED. Default false; persist via deploy vars (WE-1).",
+    "default": "false",
+    "example": "true"
   }
 }

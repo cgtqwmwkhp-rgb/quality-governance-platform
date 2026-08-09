@@ -12,6 +12,7 @@ const mockList = vi.fn()
 const mockConfirm = vi.fn()
 const mockReject = vi.fn()
 const mockBulkConfirm = vi.fn()
+const mockListPendingEdges = vi.fn()
 const mockToastSuccess = vi.fn()
 const mockToastError = vi.fn()
 
@@ -31,6 +32,13 @@ vi.mock('../../api/client', () => ({
     confirmLink: (...a: unknown[]) => mockConfirm(...a),
     rejectLink: (...a: unknown[]) => mockReject(...a),
     bulkConfirm: (...a: unknown[]) => mockBulkConfirm(...a),
+  },
+  // Doc Graph slice (WE-1) stays closed in these cases — the flag hook is not
+  // mocked here, so it resolves to its default-off value and never calls out.
+  documentGraphApi: {
+    listPendingEdges: (...a: unknown[]) => mockListPendingEdges(...a),
+    confirmEdge: vi.fn(),
+    rejectEdge: vi.fn(),
   },
 }))
 

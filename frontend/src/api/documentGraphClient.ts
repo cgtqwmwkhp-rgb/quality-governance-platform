@@ -80,6 +80,50 @@ export interface DocumentEdgeQuery {
   status?: DocumentEdgeStatus
 }
 
+/** Statuses the confirm queue serves — settled edges are refused by the API. */
+export type PendingDocumentEdgeStatus = Extract<
+  DocumentEdgeStatus,
+  'proposed' | 'needs_review'
+>
+
+/** One end of a queued edge. `title` is withheld when the library ACL denies read. */
+export interface PendingDocumentEdgeEndpoint {
+  document_id: number
+  title?: string | null
+  reference?: string | null
+  href: string
+  readable: boolean
+}
+
+export interface PendingDocumentEdgeItem {
+  edge_id: number
+  edge_type: DocumentEdgeType
+  status: PendingDocumentEdgeStatus
+  created_method: DocumentEdgeMethod
+  is_primary_parent: boolean
+  /** Confirming this edge can drive publish impact (ADR-0021). */
+  impact_driving: boolean
+  confidence?: number | null
+  rationale?: string | null
+  created_at: string
+  src: PendingDocumentEdgeEndpoint
+  dst: PendingDocumentEdgeEndpoint
+}
+
+/** One page of the confirm queue. `truncated` says so — never a global total. */
+export interface PendingDocumentEdgeListResponse {
+  items: PendingDocumentEdgeItem[]
+  returned: number
+  limit: number
+  truncated: boolean
+}
+
+export interface PendingDocumentEdgeQuery {
+  edge_type?: DocumentEdgeType
+  status?: PendingDocumentEdgeStatus
+  limit?: number
+}
+
 export interface CreateDocumentEdgePayload {
   src_document_id: number
   dst_document_id: number
@@ -177,6 +221,14 @@ export function createDocumentGraphApi(api: AxiosInstance) {
   return {
     listEdges: (documentId: number, params?: DocumentEdgeQuery) =>
       api.get<DocumentEdgeListResponse>(`${base}/documents/${documentId}/edges`, { params }),
+
+    /**
+     * Tenant-wide Doc Graph confirm queue (WE-1) — proposed / needs_review only.
+     * Read by the Knowledge Exceptions inbox; confirm/reject stay on the edge
+     * routes below, so `document_edges` remains the single source of truth.
+     */
+    listPendingEdges: (params?: PendingDocumentEdgeQuery) =>
+      api.get<PendingDocumentEdgeListResponse>(`${base}/edges/pending`, { params }),
 
     getThread: (documentId: number, params?: { include_proposed?: boolean }) =>
       params
