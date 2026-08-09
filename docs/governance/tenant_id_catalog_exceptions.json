@@ -25,6 +25,7 @@
     "failed_tasks": "Platform Celery DLQ — failures may be global/system tasks without a resolvable tenant at persist time (writer does not require tenant_id)",
     "document_categories": "Governance Library taxonomy (Wave W0) — shared/global category catalog seeded from specs/governance-library/taxonomy.json; owner: Governance/Quality platform team",
     "document_tags": "Governance Library tag vocabulary (Wave W0) — shared/global tag catalog; owner: Governance/Quality platform team",
+    "document_functions": "Governance Library owning-function catalog (WA-2 / ADR-0023) — shared/global list of the 11 function codes seeded from specs/governance-library/functions.json, matching its document_categories / document_tags siblings. tenant_id is nullable by design because a function code is the immutable prefix of every PEL reference issued under it (PEL-IT-0014) and must mean the same thing in every tenant's audit pack; a tenant-scoped duplicate of a code would let two documents claim one reference. Owner: Governance/Quality platform team (David Harris)",
     "compliance_requirement_templates": "Compliance Schedule obligation catalogue (Wave 0) — shared/global template library seeded from specs/compliance-schedule/catalogue.json; tenant_id is always NULL by design because a template defines the statutory obligation, not a tenant's instance of it (tenant-owned rows live in compliance_requirements). Owner: Governance/Quality platform team (David Harris)"
   }
 }

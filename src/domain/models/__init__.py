@@ -119,7 +119,7 @@ from src.domain.models.document_control import (
 from src.domain.models.document_graph import DocumentEdge, DocumentEdgeMethod, DocumentEdgeStatus, DocumentEdgeType
 
 # Governance Library taxonomy (Wave W0)
-from src.domain.models.document_library import DocumentCategory, DocumentTag, PelDocRefCounter
+from src.domain.models.document_library import DocumentCategory, DocumentFunction, DocumentTag, PelDocRefCounter
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 from src.domain.models.engineer import (
     CompetencyLifecycleState,
@@ -447,8 +447,9 @@ __all__ = [
     "DocumentTrainingLink",
     "DocumentAccessLog",
     "ObsoleteDocumentRecord",
-    # Governance Library taxonomy (Wave W0)
+    # Governance Library taxonomy (Wave W0) + function axis (WA-2 / ADR-0023)
     "DocumentCategory",
+    "DocumentFunction",
     "DocumentTag",
     "PelDocRefCounter",
     # Doc Graph (ADR-0021 Wave 0)

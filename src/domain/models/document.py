@@ -5,10 +5,11 @@ semantic search, and full governance integration.
 """
 
 import enum
+import functools
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, event
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -152,12 +153,22 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Governance Library taxonomy (Wave W0) — sits alongside `reference_number`
     # (DOC-YYYY-####). `pel_doc_ref` is a separate, atomically-allocated
-    # reference (PEL-<SECTION>-<SUB>-<SEQ>); see
+    # reference (PEL-<FUNCTION>-<SEQ> since WA-2 / ADR-0023); see
     # src.domain.services.document_category_service.allocate_pel_doc_ref.
     category_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("document_categories.id", ondelete="SET NULL"), nullable=True, index=True
     )
     pel_doc_ref: Mapped[Optional[str]] = mapped_column(String(30), unique=True, nullable=True, index=True)
+
+    # Owning function (WA-2 / ADR-0023) — the axis the PEL reference is drawn
+    # from, deliberately distinct from `category_id`. Fixed at filing: it is a
+    # property of the document, not a live pointer to the current owner, so
+    # RESTRICT rather than SET NULL — orphaning it would leave a reference
+    # nothing accounts for. Nullable because a document may be filed before a
+    # function is confirmed, in which case no PEL reference is allocated.
+    function_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("document_functions.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
 
     # Site/workshop binding — reuses the existing Location model (no new Site table).
     site_location_id: Mapped[Optional[int]] = mapped_column(
@@ -187,6 +198,54 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     def __repr__(self) -> str:
         return f"<Document(id={self.id}, ref='{self.reference_number}', title='{self.title[:50]}')>"
+
+
+# =============================================================================
+# IMMUTABLE PEL REFERENCE (WA-2 / ADR-0023)
+# =============================================================================
+
+# A PEL reference is printed on the document face and cited in client audit
+# packs, so it is allocated once and never rewritten: a mis-filed reference is
+# corrected by re-filing (new reference, old one retired), never by editing in
+# place. The same holds for the function it was drawn from — rewriting that
+# would leave the reference describing a function the document no longer claims.
+#
+# NULL -> value is allowed (the reference may be allocated after the row is
+# created, when the function is confirmed). value -> different value and
+# value -> NULL are refused.
+#
+# This listener is the in-process guard and is what the unit tests exercise on
+# SQLite. It cannot see a raw `UPDATE documents SET ...` that bypasses the ORM,
+# and it deliberately does not force a load of the previous value (that would
+# emit lazy IO outside the async greenlet), so an expired attribute is passed
+# over here. The `trg_documents_pel_doc_ref_immutable` trigger installed by the
+# WA-2 migration is the authoritative enforcement on PostgreSQL.
+_IMMUTABLE_ONCE_SET = ("pel_doc_ref", "function_id")
+
+
+def _refuse_rewrite(attribute: str, target: "Document", value: object, oldvalue: object, initiator: object) -> object:
+    from sqlalchemy.orm.base import NO_VALUE
+
+    from src.domain.exceptions import ConflictError
+
+    if oldvalue is NO_VALUE or oldvalue is None or oldvalue == value:
+        return value
+    raise ConflictError(
+        f"Document.{attribute} is immutable once allocated "
+        f"({oldvalue!r} -> {value!r}). Re-file the document to issue a new "
+        "PEL reference; never edit an issued one in place (ADR-0023).",
+        code="PEL_REF_IMMUTABLE",
+    )
+
+
+for _attribute in _IMMUTABLE_ONCE_SET:
+    event.listen(
+        getattr(Document, _attribute),
+        "set",
+        functools.partial(_refuse_rewrite, _attribute),
+        retval=True,
+    )
+del _attribute
 
 
 # =============================================================================

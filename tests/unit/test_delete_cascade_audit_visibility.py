@@ -73,7 +73,10 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("dashboards", "dashboard_widgets"),
         ("document_approval_instances", "document_approval_actions"),
         ("document_approval_workflows", "document_approval_instances"),
-        ("document_categories", "pel_doc_ref_counters"),
+        # ("document_categories", "pel_doc_ref_counters") was here until WA-2.
+        # The counter now hangs off document_functions with ondelete=RESTRICT,
+        # so deleting its parent is refused outright rather than silently
+        # cascading — there is no longer an invisible delete to record.
         ("document_discussion_threads", "document_discussion_messages"),
         ("documents", "document_edges"),
         ("documents", "job_cell_documents"),

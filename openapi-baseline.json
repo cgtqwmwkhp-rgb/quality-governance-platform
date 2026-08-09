@@ -10101,6 +10101,17 @@
             "title": "File",
             "type": "string"
           },
+          "function_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Function Code"
+          },
           "sensitivity": {
             "default": "internal",
             "title": "Sensitivity",
@@ -19597,6 +19608,52 @@
         "title": "DocumentEdgeType",
         "type": "string"
       },
+      "DocumentFunctionResponse": {
+        "description": "An owning business function \u2014 the axis a PEL reference is drawn from (ADR-0023).",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "description",
+          "sort_order",
+          "active"
+        ],
+        "title": "DocumentFunctionResponse",
+        "type": "object"
+      },
       "DocumentListResponse": {
         "description": "Paginated document list.",
         "properties": {
@@ -26730,6 +26787,19 @@
             "minimum": 1.0,
             "title": "Category Id",
             "type": "integer"
+          },
+          "function_code": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Function Code"
           },
           "title": {
             "anyOf": [
@@ -43636,6 +43706,19 @@
             ],
             "title": "Evidence Asset Id"
           },
+          "function_code": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Function Code"
+          },
           "library_document_id": {
             "anyOf": [
               {
@@ -50166,6 +50249,14 @@
             "title": "Counters Created",
             "type": "integer"
           },
+          "functions_created": {
+            "title": "Functions Created",
+            "type": "integer"
+          },
+          "functions_updated": {
+            "title": "Functions Updated",
+            "type": "integer"
+          },
           "tags_created": {
             "title": "Tags Created",
             "type": "integer"
@@ -50178,6 +50269,10 @@
             "title": "Total Categories",
             "type": "integer"
           },
+          "total_functions": {
+            "title": "Total Functions",
+            "type": "integer"
+          },
           "total_tags": {
             "title": "Total Tags",
             "type": "integer"
@@ -50186,10 +50281,13 @@
         "required": [
           "categories_created",
           "categories_updated",
+          "functions_created",
+          "functions_updated",
           "tags_created",
           "tags_updated",
           "counters_created",
           "total_categories",
+          "total_functions",
           "total_tags"
         ],
         "title": "SeedResultResponse",
@@ -79280,6 +79378,59 @@
         ]
       }
     },
+    "/api/v1/document-categories/functions": {
+      "get": {
+        "description": "List the controlled function vocabulary.\n\nThis is the picker behind \"which function owns this document?\" at filing\ntime. Inactive functions are hidden by default \u2014 they still back every\nreference already issued under them, but must not be offered for a new\ndocument.\n\nGated on `document:read` rather than the \"any active user\" posture the\nsibling category/tag readers carry: the function vocabulary is only\nmeaningful to someone who can already see the Register, and a new endpoint\njoining the authenticated-only list is what\n`test_route_authorisation_census` exists to prevent.",
+        "operationId": "list_document_functions_api_v1_document_categories_functions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentFunctionResponse"
+                  },
+                  "title": "Response List Document Functions Api V1 Document Categories Functions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Document Functions",
+        "tags": [
+          "Governance Library Taxonomy"
+        ]
+      }
+    },
     "/api/v1/document-categories/rbac-catalog": {
       "get": {
         "description": "Return staff/manager/admin facet bundles and restricted category gates.",
@@ -79309,7 +79460,7 @@
     },
     "/api/v1/document-categories/reseed": {
       "post": {
-        "description": "Admin-only: idempotently re-apply specs/governance-library/taxonomy.json.\n\nSafe to call at any time \u2014 upserts by natural key, never duplicates,\nand always re-forces the Wave W0 deactivation list (06.04).",
+        "description": "Admin-only: idempotently re-apply taxonomy.json and functions.json.\n\nSafe to call at any time \u2014 upserts by natural key, never duplicates,\nand always re-forces the Wave W0 deactivation list (06.04). Existing PEL\ncounters are never reset, so a reseed cannot re-issue a reference.",
         "operationId": "reseed_document_categories_api_v1_document_categories_reseed_post",
         "responses": {
           "200": {
@@ -81468,7 +81619,7 @@
     },
     "/api/v1/documents/upload": {
       "post": {
-        "description": "Upload and process a new document.\n\n`category_id` (Governance Library taxonomy, Wave W0) is optional and\nseparate from the legacy free-text `category` string: when provided, a\n`pel_doc_ref` (PEL-<SECTION>-<SUB>-<SEQ>) is atomically allocated\nalongside the existing `reference_number` (DOC-YYYY-####).\n`site_location_id` binds the document to an existing `Location`\n(site/workshop) \u2014 no separate Site table.",
+        "description": "Upload and process a new document.\n\n`category_id` (Governance Library taxonomy, Wave W0) is optional and\nseparate from the legacy free-text `category` string.\n\n`function_code` (WA-2 / ADR-0023) is the *owning function* \u2014 a different\naxis from the category, and the one the PEL reference is drawn from. When\na valid code is supplied a `pel_doc_ref` (`PEL-<FUNCTION>-<SEQ>`) is\natomically allocated alongside the existing `reference_number`\n(DOC-YYYY-####), and both it and the function are then immutable. When no\ncode is supplied the document is still created, with no PEL reference: the\nfunction is confirmed by a filer, never inferred, because a mis-filed\nreference cannot be corrected in place.\n\n`site_location_id` binds the document to an existing `Location`\n(site/workshop) \u2014 no separate Site table.",
         "operationId": "upload_document_api_v1_documents_upload_post",
         "requestBody": {
           "content": {

@@ -23,8 +23,14 @@ DEACTIVATED_TAXONOMY_IDS = frozenset({"06.04"})
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 TAXONOMY_JSON_PATH = _REPO_ROOT / "specs" / "governance-library" / "taxonomy.json"
+FUNCTIONS_JSON_PATH = _REPO_ROOT / "specs" / "governance-library" / "functions.json"
 
 EXPECTED_CATEGORY_COUNT = 86
+
+# The 11 ADR-0023 function codes. Asserted on every seed run so a bad edit to
+# functions.json fails the seed rather than quietly changing which prefixes the
+# business can ever issue — a PEL reference is immutable once allocated.
+EXPECTED_FUNCTION_COUNT = 11
 
 
 class TagSeedRow(TypedDict):
@@ -96,6 +102,38 @@ def load_taxonomy_categories(taxonomy_path: Path | None = None) -> list[dict[str
                 "retention_rule": cat.get("retention_rule"),
                 "typical_contents": cat.get("typical_contents"),
                 "active": taxonomy_id not in DEACTIVATED_TAXONOMY_IDS,
+            }
+        )
+    return rows
+
+
+def load_library_functions(functions_path: Path | None = None) -> list[dict[str, Any]]:
+    """Parse functions.json into row dicts keyed to `DocumentFunction` columns.
+
+    ADR-0023: the reference prefix encodes the owning *function*, not the
+    category, so this list is what every `PEL-<CODE>-<SEQ>` reference the
+    business will ever issue is drawn from. Codes are upper-cased and
+    duplicate codes raise — a duplicate would give two functions one counter
+    and let the same reference be issued twice.
+    """
+    path = functions_path or FUNCTIONS_JSON_PATH
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for fn in raw["functions"]:
+        code = str(fn["code"]).strip().upper()
+        if not code:
+            raise ValueError("functions.json contains a function with an empty code")
+        if code in seen:
+            raise ValueError(f"functions.json contains duplicate function code {code!r}")
+        seen.add(code)
+        rows.append(
+            {
+                "code": code,
+                "name": fn["name"],
+                "description": fn.get("description"),
+                "sort_order": fn["sort_order"],
+                "active": bool(fn.get("active", True)),
             }
         )
     return rows

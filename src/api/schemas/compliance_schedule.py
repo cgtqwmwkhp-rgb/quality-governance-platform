@@ -246,6 +246,11 @@ class RecordFileRequest(BaseModel):
 
     evidence_asset_id: Optional[int] = Field(None, ge=1)
     category_id: Optional[int] = Field(None, ge=1)
+    # Owning function for the PEL reference (ADR-0023) — a different axis from
+    # category_id. Omitted means "not yet confirmed": the document is filed
+    # with no PEL reference rather than one derived from the category, because
+    # an issued reference can never be corrected in place.
+    function_code: Optional[str] = Field(None, min_length=1, max_length=20)
     library_document_id: Optional[int] = Field(None, ge=1)
     title: Optional[str] = Field(None, min_length=1, max_length=500)
 
@@ -262,6 +267,8 @@ class RecordFileRequest(BaseModel):
             raise ValueError("category_id is required when filing an evidence asset")
         if self.library_document_id is not None and self.category_id is not None:
             raise ValueError("category_id does not apply when linking an existing library document")
+        if self.library_document_id is not None and self.function_code is not None:
+            raise ValueError("function_code does not apply when linking an existing library document")
         if self.library_document_id is not None and self.title is not None:
             raise ValueError("title does not apply when linking an existing library document")
         return self
