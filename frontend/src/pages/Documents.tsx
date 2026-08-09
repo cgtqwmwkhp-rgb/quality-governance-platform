@@ -40,6 +40,16 @@ import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/Dialog'
 import { DocumentCreateRelationshipsStep } from './DocumentCreateRelationshipsStep'
+import { DocumentFilingControlStub } from './DocumentFilingControlStub'
+import { DocumentFilingFunctionStep } from './DocumentFilingFunctionStep'
+import { DocumentFilingRelatedPlaceholder } from './DocumentFilingRelatedPlaceholder'
+import { DocumentFilingWizardChrome } from './DocumentFilingWizardChrome'
+import {
+  appendOptionalFunctionCode,
+  DOCUMENT_FILING_STEP_DESC_KEYS,
+  DOCUMENT_FILING_STEP_TITLE_KEYS,
+  type DocumentFilingWizardStep,
+} from './documentFilingWizard'
 import {
   Select,
   SelectContent,
@@ -260,6 +270,9 @@ export default function Documents() {
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  /** WD-1 filing wizard phase inside the existing upload modal (not a twin app). */
+  const [filingWizardStep, setFilingWizardStep] = useState<DocumentFilingWizardStep>('file')
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
   const [uploadRelationshipDoc, setUploadRelationshipDoc] = useState<{
     id: number
     title: string
@@ -532,17 +545,24 @@ export default function Documents() {
     }
   }
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      await handleFileUpload(e.dataTransfer.files[0])
+      beginFilingWithFile(e.dataTransfer.files[0])
     }
   }
 
-  const handleFileUpload = async (file: File) => {
+  /** Stage the file and open Function confirm (L-18) before calling upload. */
+  const beginFilingWithFile = (file: File) => {
+    setUploadError(null)
+    setPendingUploadFile(file)
+    setFilingWizardStep('function')
+  }
+
+  const handleFileUpload = async (file: File, functionCode: string | null = null) => {
     setUploading(true)
     setUploadProgress(0)
     setUploadError(null)
@@ -552,6 +572,7 @@ export default function Documents() {
     formData.append('title', file.name.replace(/\.[^/.]+$/, ''))
     formData.append('document_type', 'other')
     formData.append('sensitivity', 'internal')
+    appendOptionalFunctionCode(formData, functionCode)
 
     let progressInterval: ReturnType<typeof setInterval> | undefined
     try {
@@ -582,17 +603,16 @@ export default function Documents() {
         page,
         filterCategory === ALL_CATEGORIES_VALUE ? undefined : filterCategory,
       )
-      // Flag-off: close as before. Flag-on: stay in the modal for the authorship
-      // relationship step so coverage starts at create, not only on Detail.
-      if (documentGraphEnabled) {
-        setUploadRelationshipDoc({ id: uploadedId, title: uploadedTitle })
-      } else {
-        setUploadRelationshipDoc(null)
-        setShowUploadModal(false)
-      }
+      // Always continue the filing spine: Related (real or honest placeholder) then
+      // Bring-under-control stub. Do not invent a second Register.
+      setPendingUploadFile(null)
+      setUploadRelationshipDoc({ id: uploadedId, title: uploadedTitle })
+      setFilingWizardStep('related')
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'upload' })
       reportFailure(err, setUploadError)
+      // Stay on Function so the filer can retry or go back without losing the file.
+      setFilingWizardStep('function')
     } finally {
       if (progressInterval) clearInterval(progressInterval)
       setUploading(false)
@@ -605,9 +625,15 @@ export default function Documents() {
     // so Skip/Done/X cannot unmount the step mid-request (Bugbot).
     if (uploading || relationshipBusy) return
     setShowUploadModal(false)
+    setFilingWizardStep('file')
+    setPendingUploadFile(null)
     setUploadRelationshipDoc(null)
     setRelationshipBusy(false)
     setUploadError(null)
+  }
+
+  const advanceFromRelatedStep = () => {
+    setFilingWizardStep('control')
   }
 
   const resolveSignedUrl = useCallback(async (documentId: number, download = true) => {
@@ -705,6 +731,8 @@ export default function Documents() {
             <Button
               onClick={() => {
                 setUploadRelationshipDoc(null)
+                setPendingUploadFile(null)
+                setFilingWizardStep('file')
                 setUploadError(null)
                 setShowUploadModal(true)
               }}
@@ -1440,23 +1468,28 @@ export default function Documents() {
         </Card>
       )}
 
-      {/* Upload Modal (+ optional Doc Graph relationship step when flag on) */}
+      {/* Upload / filing wizard modal (WD-1 spine on existing upload surface) */}
       <Dialog
         open={showUploadModal}
         onOpenChange={(open) => {
           if (open) {
             setShowUploadModal(true)
+            setFilingWizardStep('file')
+            setPendingUploadFile(null)
+            setUploadRelationshipDoc(null)
             return
           }
           closeUploadModal()
         }}
       >
         <DialogContent
-          className={cn(dragActive && !uploadRelationshipDoc && 'border-primary bg-primary/5')}
-          onDragEnter={uploadRelationshipDoc ? undefined : handleDrag}
-          onDragLeave={uploadRelationshipDoc ? undefined : handleDrag}
-          onDragOver={uploadRelationshipDoc ? undefined : handleDrag}
-          onDrop={uploadRelationshipDoc ? undefined : handleDrop}
+          className={cn(
+            dragActive && filingWizardStep === 'file' && 'border-primary bg-primary/5',
+          )}
+          onDragEnter={filingWizardStep === 'file' ? handleDrag : undefined}
+          onDragLeave={filingWizardStep === 'file' ? handleDrag : undefined}
+          onDragOver={filingWizardStep === 'file' ? handleDrag : undefined}
+          onDrop={filingWizardStep === 'file' ? handleDrop : undefined}
           onInteractOutside={(event) => {
             if (uploading || relationshipBusy) event.preventDefault()
           }}
@@ -1465,25 +1498,31 @@ export default function Documents() {
           }}
         >
           <DialogHeader>
-            <DialogTitle>
-              {uploadRelationshipDoc ? 'Document relationships' : t('documents.upload')}
-            </DialogTitle>
+            <DocumentFilingWizardChrome step={filingWizardStep} />
+            <DialogTitle>{t(DOCUMENT_FILING_STEP_TITLE_KEYS[filingWizardStep])}</DialogTitle>
             <DialogDescription>
-              {uploadRelationshipDoc
-                ? 'Optionally record what this library document implements, requires, relates to, or conflicts with.'
-                : 'Upload governance evidence for durable storage and semantic indexing.'}
+              {t(DOCUMENT_FILING_STEP_DESC_KEYS[filingWizardStep])}
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-4">
-            {uploadRelationshipDoc ? (
-              <DocumentCreateRelationshipsStep
-                documentId={uploadRelationshipDoc.id}
-                documentTitle={uploadRelationshipDoc.title}
-                onDone={closeUploadModal}
-                onBusyChange={setRelationshipBusy}
-              />
-            ) : (
+            {filingWizardStep === 'related' && uploadRelationshipDoc ? (
+              documentGraphEnabled ? (
+                <DocumentCreateRelationshipsStep
+                  documentId={uploadRelationshipDoc.id}
+                  documentTitle={uploadRelationshipDoc.title}
+                  onDone={advanceFromRelatedStep}
+                  onBusyChange={setRelationshipBusy}
+                />
+              ) : (
+                <DocumentFilingRelatedPlaceholder
+                  documentTitle={uploadRelationshipDoc.title}
+                  onContinue={advanceFromRelatedStep}
+                />
+              )
+            ) : filingWizardStep === 'control' ? (
+              <DocumentFilingControlStub onDone={closeUploadModal} />
+            ) : filingWizardStep === 'function' && pendingUploadFile ? (
               <>
                 {uploadError && !uploading ? (
                   <div
@@ -1495,7 +1534,7 @@ export default function Documents() {
                   </div>
                 ) : null}
                 {uploading ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-8" data-testid="documents-filing-uploading">
                     <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
                     <p className="text-foreground mb-2">{t('documents.processing')}</p>
                     <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
@@ -1505,39 +1544,64 @@ export default function Documents() {
                       />
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">
-                      Storing file, then extracting metadata and indexing…
+                      {t('documents.filing.uploading_hint')}
                     </p>
                   </div>
                 ) : (
-                  <div
-                    className={cn(
-                      'border-2 border-dashed rounded-2xl p-12 text-center transition-colors',
-                      dragActive
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-muted-foreground',
-                    )}
-                  >
-                    <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      PDF, Word, Excel, CSV, Markdown, Text, or images (max 50 MB)
-                    </p>
-                    <label>
-                      <Button asChild>
-                        <span className="cursor-pointer">
-                          <Plus size={16} />
-                          {t('documents.browse_files')}
-                        </span>
-                      </Button>
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.md,.txt,.png,.jpg,.jpeg"
-                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-                      />
-                    </label>
-                  </div>
+                  <DocumentFilingFunctionStep
+                    fileName={pendingUploadFile.name}
+                    busy={uploading}
+                    onBack={() => {
+                      setPendingUploadFile(null)
+                      setUploadError(null)
+                      setFilingWizardStep('file')
+                    }}
+                    onConfirm={(functionCode) => {
+                      void handleFileUpload(pendingUploadFile, functionCode)
+                    }}
+                  />
                 )}
+              </>
+            ) : (
+              <>
+                {uploadError && !uploading ? (
+                  <div
+                    role="alert"
+                    className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                    data-testid="documents-upload-error"
+                  >
+                    {uploadError}
+                  </div>
+                ) : null}
+                <div
+                  className={cn(
+                    'border-2 border-dashed rounded-2xl p-12 text-center transition-colors',
+                    dragActive
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-muted-foreground',
+                  )}
+                  data-testid="documents-filing-file-step"
+                >
+                  <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    PDF, Word, Excel, CSV, Markdown, Text, or images (max 50 MB)
+                  </p>
+                  <label>
+                    <Button asChild>
+                      <span className="cursor-pointer">
+                        <Plus size={16} />
+                        {t('documents.browse_files')}
+                      </span>
+                    </Button>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.md,.txt,.png,.jpg,.jpeg"
+                      onChange={(e) => e.target.files?.[0] && beginFilingWithFile(e.target.files[0])}
+                    />
+                  </label>
+                </div>
               </>
             )}
           </div>

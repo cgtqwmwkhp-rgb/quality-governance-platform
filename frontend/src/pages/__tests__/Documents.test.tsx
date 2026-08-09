@@ -405,6 +405,90 @@ describe('Documents', () => {
     mockPost.mockResolvedValue({
       data: { id: 99, reference_number: 'DOC-99', title: 'upload', status: 'processing' },
     })
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/api/v1/document-categories/functions') {
+        return Promise.resolve({
+          data: [{ id: 1, code: 'HSEQ', name: 'HSEQ', sort_order: 1, active: true }],
+        })
+      }
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('documents-live-badge')
+    fireEvent.click(screen.getByRole('button', { name: /documents\.upload/i }))
+    expect(await screen.findByTestId('documents-filing-file-step')).toBeInTheDocument()
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(fileInput).toBeTruthy()
+    const file = new File(['hello'], 'policy.pdf', { type: 'application/pdf' })
+    fireEvent.change(fileInput, { target: { files: [file] } })
+
+    // WD-1: Function confirm before upload (does not invent a second Register).
+    expect(await screen.findByTestId('documents-filing-function-step')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('documents-filing-function-continue'))
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalled()
+    })
+    const [, formData, config] = mockPost.mock.calls.find((call) =>
+      String(call[0]).includes('/documents/upload'),
+    ) as [string, FormData, { headers?: Record<string, string> }]
+    expect(config?.headers?.['Content-Type']).toBeUndefined()
+    expect(formData.get('function_code')).toBeNull()
+
+    expect(await screen.findByTestId('documents-upload-downstream-notice')).toBeInTheDocument()
+    expect(screen.getByTestId('documents-upload-indexing-note')).toBeInTheDocument()
+    expect(screen.queryByTestId('documents-upload-exceptions-link')).not.toBeInTheDocument()
+    // Flag-off: honest Related placeholder, not the live Doc Graph step.
+    expect(await screen.findByTestId('documents-filing-related-placeholder')).toBeInTheDocument()
+    expect(screen.queryByTestId('documents-create-relationships-step')).not.toBeInTheDocument()
+  })
+
+  it('sends optional function_code on upload when the filer confirms a function', async () => {
+    mockPost.mockResolvedValue({
+      data: { id: 99, reference_number: 'DOC-99', title: 'upload', status: 'processing' },
+    })
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/api/v1/document-categories/functions') {
+        return Promise.resolve({
+          data: [{ id: 1, code: 'IT', name: 'Information Technology', sort_order: 1, active: true }],
+        })
+      }
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
     const Documents = (await import('../Documents')).default
     render(
       <MemoryRouter initialEntries={['/documents']}>
@@ -415,22 +499,22 @@ describe('Documents', () => {
     await screen.findByTestId('documents-live-badge')
     fireEvent.click(screen.getByRole('button', { name: /documents\.upload/i }))
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-    expect(fileInput).toBeTruthy()
-    const file = new File(['hello'], 'policy.pdf', { type: 'application/pdf' })
-    fireEvent.change(fileInput, { target: { files: [file] } })
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['hello'], 'policy.pdf', { type: 'application/pdf' })] },
+    })
+
+    expect(await screen.findByTestId('documents-filing-function-step')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('documents-filing-function-select'))
+    fireEvent.click(await screen.findByTestId('documents-filing-function-option-IT'))
+    fireEvent.click(screen.getByTestId('documents-filing-function-continue'))
 
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalled()
     })
-    const [, , config] = mockPost.mock.calls.find((call) =>
+    const [, formData] = mockPost.mock.calls.find((call) =>
       String(call[0]).includes('/documents/upload'),
-    ) as [string, FormData, { headers?: Record<string, string> }]
-    expect(config?.headers?.['Content-Type']).toBeUndefined()
-
-    expect(await screen.findByTestId('documents-upload-downstream-notice')).toBeInTheDocument()
-    expect(screen.getByTestId('documents-upload-indexing-note')).toBeInTheDocument()
-    expect(screen.queryByTestId('documents-upload-exceptions-link')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('documents-create-relationships-step')).not.toBeInTheDocument()
+    ) as [string, FormData]
+    expect(formData.get('function_code')).toBe('IT')
   })
 
   it('opens the Doc Graph relationship step after upload when document_graph is on', async () => {
@@ -438,6 +522,26 @@ describe('Documents', () => {
     mockPost.mockResolvedValue({
       data: { id: 99, reference_number: 'DOC-99', title: 'upload', status: 'processing' },
     })
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/api/v1/document-categories/functions') {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
     const Documents = (await import('../Documents')).default
     render(
       <MemoryRouter initialEntries={['/documents']}>
@@ -451,13 +555,62 @@ describe('Documents', () => {
     const file = new File(['hello'], 'policy.pdf', { type: 'application/pdf' })
     fireEvent.change(fileInput, { target: { files: [file] } })
 
+    expect(await screen.findByTestId('documents-filing-function-step')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('documents-filing-function-continue'))
+
     expect(await screen.findByTestId('documents-create-relationships-step')).toBeInTheDocument()
     expect(screen.getByTestId('documents-upload-downstream-notice')).toBeInTheDocument()
-    // Flag-on path keeps the modal open — closing via Skip finishes authorship.
+    // Flag-on Related → Control stub (L-18c scaffold), not immediate dismiss.
     fireEvent.click(screen.getByTestId('documents-create-rel-done'))
+    expect(await screen.findByTestId('documents-filing-control-stub')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('documents-filing-control-done'))
     await waitFor(() => {
-      expect(screen.queryByTestId('documents-create-relationships-step')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('documents-filing-control-stub')).not.toBeInTheDocument()
     })
+  })
+
+  it('shows Related honesty then Control stub when document_graph is off', async () => {
+    mockPost.mockResolvedValue({
+      data: { id: 99, reference_number: 'DOC-99', title: 'upload', status: 'processing' },
+    })
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/api/v1/document-categories/functions') {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('documents-live-badge')
+    fireEvent.click(screen.getByRole('button', { name: /documents\.upload/i }))
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['hello'], 'policy.pdf', { type: 'application/pdf' })] },
+    })
+    fireEvent.click(await screen.findByTestId('documents-filing-function-continue'))
+
+    expect(await screen.findByTestId('documents-filing-related-placeholder')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('documents-filing-related-continue'))
+    expect(await screen.findByTestId('documents-filing-control-stub')).toBeInTheDocument()
   })
 
   it('hydrates q/status/type filters from shareable URL', async () => {
