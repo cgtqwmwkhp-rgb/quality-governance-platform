@@ -147,24 +147,31 @@ def inventory_homes() -> list[HomeInventory]:
             ):
                 doc_fks.append(column.name)
 
-        if table == "carbon_evidence":
-            action = (
-                "ADD nullable document_id FK → documents.id; keep metadata; "
-                "promote blob via Register (dual-write then stop SoT on storage_key)"
-            )
-            disposition = "migrate"
-        elif table == "uvdb_audit_response":
+        # The action is derived from the ORM, not asserted, so this report stops
+        # telling a reader to add a column that WI-2 has already added.
+        linked = bool(doc_fks)
+        if table == "uvdb_audit_response":
             action = (
                 "Normalise documents_presented elements to "
                 "{document_id, label}; JSON stays projection not blob SoT"
             )
             disposition = "migrate"
+        elif table == "carbon_evidence":
+            action = (
+                "LINKED: document_id FK present; promote remaining NULL rows via "
+                "steward or proven match (F-3 allowlist shrink later)"
+                if linked
+                else "ADD nullable document_id FK → documents.id; keep PM metadata"
+            )
+            disposition = "linked" if linked else "migrate"
         else:
             action = (
-                "ADD optional nullable document_id FK → documents.id when filed; "
-                "retain case storage_key short-term (F-3 allowlist shrink later)"
+                "LINKED: optional document_id FK present; case storage_key retained "
+                "short-term (F-3 allowlist shrink later)"
+                if linked
+                else "ADD optional nullable document_id FK → documents.id when filed"
             )
-            disposition = "migrate"
+            disposition = "linked" if linked else "migrate"
 
         results.append(
             HomeInventory(
@@ -188,6 +195,7 @@ def inventory_report() -> dict[str, Any]:
         "programme": "WI-2 / L-32",
         "title": "File homes → documents.id",
         "depends_on": "WI-1 PROD (alembic 20261030_lib_wi1_cel)",
+        "alembic_head": "20261031_lib_wi2_homes",
         "register_sot": "documents.id",
         "homes": [asdict(h) for h in homes],
         "summary": {

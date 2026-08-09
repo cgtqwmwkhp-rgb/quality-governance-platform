@@ -103,11 +103,13 @@ class PrepReport:
             key = "ea_matched" if plan.status == "matched" else "ea_unmatched"
             buckets[key] += 1
         self.counters = buckets
+        # Shipped by WI-2: alembic 20261031_lib_wi2_homes (revising
+        # 20261030_lib_wi1_cel), the ORM columns, and the steward / promote
+        # routes. What stays here is what WI-2 deliberately did not do.
         self.deferred = [
-            "Live alembic revising 20261030_lib_wi1_cel (held until WI-1 LIVE)",
-            "ORM document_id columns on carbon_evidence / evidence_assets",
-            "Production dual-write + promote routes",
+            "Backfill of legacy NULL document_id rows — steward or proven match only",
             "F-3 allowlist shrink for carbon_evidence / evidence_assets",
+            "Dropping carbon_evidence / evidence_assets storage_key as blob SoT",
             "CEL evidences wiring for UVDB/PM occurrence rows (uses WI-1 cover_kind)",
         ]
 

@@ -1,8 +1,10 @@
-"""WI-2 / L-32 prep: file-homes inventory + migrate dry-run (no alembic head).
+"""WI-2 / L-32: file-homes inventory + migrate dry-run.
 
-Pins the read-only prep lane that may land while WI-1 (#1687) still owns
-alembic. These tests must **not** import a live
-``alembic/versions/*wi2*`` revision.
+Pins the read-only prep lane. WI-1 is now LIVE and WI-2's schema has been
+promoted, so the assertions that held the prep phase open — "no live WI-2
+alembic", "carbon_evidence still needs a document_id FK" — are inverted here to
+pin the *post*-promotion state instead. They are not relaxed: each one now
+asserts the stronger fact that the link landed.
 """
 
 from __future__ import annotations
@@ -17,12 +19,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = REPO_ROOT / "scripts/governance/library/file_homes_inventory.py"
 PREP = REPO_ROOT / "scripts/governance/library/file_homes_migrate_prep.py"
 DESIGN = REPO_ROOT / "docs/governance/library-file-homes-l32.md"
-DRAFT = (
-    REPO_ROOT
-    / "docs/governance/drafts"
-    / "alembic_DRAFT_after_wi1_20261031_lib_wi2_file_homes_documents_id.py.draft"
-)
+DRAFTS_DIR = REPO_ROOT / "docs/governance/drafts"
 WI1_HEAD = "20261030_lib_wi1_cel"
+WI2_HEAD = "20261031_lib_wi2_homes"
+MIGRATION = REPO_ROOT / "alembic/versions/20261031_lib_wi2_file_homes_documents_id.py"
 VERSIONS = REPO_ROOT / "alembic" / "versions"
 
 
@@ -43,33 +43,36 @@ inventory = _load(INVENTORY, "qgp_lib_wi2_file_homes_inventory")
 prep = _load(PREP, "qgp_lib_wi2_file_homes_migrate_prep")
 
 
-def test_design_note_and_draft_exist() -> None:
+def test_design_note_and_live_migration_exist() -> None:
     assert DESIGN.is_file()
-    assert DRAFT.is_file()
-    text = DRAFT.read_text(encoding="utf-8")
-    assert WI1_HEAD in text
-    assert 'down_revision' in text
-    assert "20261030_lib_wi1_cel" in text
+    assert MIGRATION.is_file(), "WI-2 schema must be a live revision now WI-1 is LIVE"
+    text = MIGRATION.read_text(encoding="utf-8")
+    assert f'revision: str = "{WI2_HEAD}"' in text
+    assert f'down_revision: Union[str, Sequence[str], None] = "{WI1_HEAD}"' in text
     assert "carbon_evidence" in text
     assert "evidence_assets" in text
-    assert "NOT AN ACTIVE ALEMBIC" in text or "DRAFT" in text
 
 
-def test_no_live_wi2_alembic_under_versions() -> None:
-    """Conflict avoidance: WI-1 owns alembic until LIVE — no competing head."""
+def test_exactly_one_wi2_revision_under_versions() -> None:
+    """The draft was promoted, not copied: one file may declare this revision."""
     offenders = [
-        p
-        for p in VERSIONS.rglob("*")
-        if p.is_file()
-        and "wi2" in p.name.lower()
-        and (p.suffix == ".py" or "file_home" in p.name.lower())
+        p for p in VERSIONS.rglob("*.py") if p.is_file() and "wi2" in p.name.lower() and "__pycache__" not in p.parts
     ]
-    assert offenders == [], f"live WI-2 alembic must stay draft-only: {offenders}"
+    assert offenders == [MIGRATION], f"expected exactly the promoted WI-2 revision, found {offenders}"
 
 
-def test_draft_is_not_python_module_under_versions() -> None:
-    assert DRAFT.suffixes[-2:] == [".py", ".draft"] or DRAFT.name.endswith(".py.draft")
-    assert "alembic/versions" not in str(DRAFT.relative_to(REPO_ROOT))
+def test_prep_draft_retired_after_promotion() -> None:
+    """A ``.py.draft`` twin of a live revision is a second source of truth.
+
+    While WI-1 owned alembic the draft was the whole point. Now that the real
+    revision exists, keeping a file that also declares ``revision =
+    "20261031_lib_wi2_homes"`` invites the two to drift, and drift in a migration
+    id is not a cosmetic problem.
+    """
+    if not DRAFTS_DIR.is_dir():
+        return
+    strays = [p for p in DRAFTS_DIR.rglob("*") if p.is_file() and WI2_HEAD in p.read_text(encoding="utf-8")]
+    assert strays == [], f"retire the promoted WI-2 draft: {strays}"
 
 
 def test_inventory_reports_three_homes() -> None:
@@ -77,9 +80,11 @@ def test_inventory_reports_three_homes() -> None:
     tables = {h["table"] for h in report["homes"]}
     assert tables == {"carbon_evidence", "uvdb_audit_response", "evidence_assets"}
     assert report["summary"]["missing"] == []
-    assert "carbon_evidence" in report["summary"]["needs_document_fk"]
-    assert "evidence_assets" in report["summary"]["needs_document_fk"]
+    # Post-promotion: both blob homes carry the link, so nothing still needs it.
+    assert report["summary"]["needs_document_fk"] == []
+    assert set(report["summary"]["already_linked"]) == {"carbon_evidence", "evidence_assets"}
     assert "uvdb_audit_response" in report["summary"]["needs_presented_normalise"]
+    assert report["alembic_head"] == WI2_HEAD
 
 
 def test_inventory_cli_json_exit_zero() -> None:
@@ -88,12 +93,14 @@ def test_inventory_cli_json_exit_zero() -> None:
 
 def test_inventory_sees_file_columns_on_carbon_and_ea() -> None:
     homes = {h.table: h for h in inventory.inventory_homes()}
+    # The occurrence blobs stay put — WI-2 links, it does not move or drop files.
     assert "storage_key" in homes["carbon_evidence"].file_home_columns
     assert "file_path" in homes["carbon_evidence"].file_home_columns
     assert "storage_key" in homes["evidence_assets"].file_home_columns
     assert "documents_presented" in homes["uvdb_audit_response"].presented_columns
-    assert homes["carbon_evidence"].existing_document_fks == []
-    assert homes["evidence_assets"].existing_document_fks == []
+    assert homes["carbon_evidence"].existing_document_fks == ["document_id"]
+    assert homes["evidence_assets"].existing_document_fks == ["document_id"]
+    assert homes["uvdb_audit_response"].existing_document_fks == []
 
 
 def test_migrate_prep_rejects_apply() -> None:
@@ -114,7 +121,11 @@ def test_migrate_prep_demo_matches_expected() -> None:
     assert report.counters["uvdb_unmatched"] >= 1
     assert report.counters["ea_matched"] == 1
     assert report.counters["ea_unmatched"] == 1
-    assert any("20261030_lib_wi1_cel" in item for item in report.deferred)
+    # The schema and the ORM columns are no longer deferred; the honest remainder
+    # is the backfill and the F-3 shrink, which WI-2 deliberately did not do.
+    assert not any(WI1_HEAD in item for item in report.deferred)
+    assert any("F-3 allowlist shrink" in item for item in report.deferred)
+    assert any("Backfill" in item for item in report.deferred)
 
 
 def test_uvdb_projection_shape() -> None:
@@ -178,10 +189,10 @@ def test_prep_cli_demo_json() -> None:
     assert prep.main(["--demo", "--json"]) == 0
 
 
-def test_design_mentions_conflict_hold() -> None:
+def test_design_records_the_live_head_and_all_three_homes() -> None:
     text = DESIGN.read_text(encoding="utf-8")
-    assert "20261030_lib_wi1_cel" in text
-    assert "dual-head" in text.lower() or "Do not dual-head" in text
+    assert WI1_HEAD in text
+    assert WI2_HEAD in text
     assert "carbon_evidence" in text
     assert "documents_presented" in text
     assert "evidence_assets" in text

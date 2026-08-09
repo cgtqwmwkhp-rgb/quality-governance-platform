@@ -33,6 +33,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
+from src.domain.services.library_file_home_link import normalise_documents_presented
 from src.domain.services.uvdb_protocol_export_service import build_protocol_export, build_protocol_structure_payload
 from src.domain.services.uvdb_service import (
     build_section_title_index,
@@ -147,6 +148,9 @@ class ResponseCreate(BaseModel):
     site_response: Optional[int] = Field(None, ge=0, le=3)
     sub_question_responses: Optional[dict] = None
     evidence_provided: Optional[str] = None
+    # WI-2 / L-32 — stored as a {document_id, label} projection over Register
+    # documents.id. Legacy element shapes (a title, a bare id, a dict) are still
+    # accepted on the way in and converted; see normalise_documents_presented.
     documents_presented: Optional[list] = None
     finding_type: Optional[str] = None
     finding_description: Optional[str] = None
@@ -575,15 +579,36 @@ async def create_response(
     if not audit:
         raise NotFoundError("Audit not found")
 
+    payload = response_data.model_dump()
+
+    # WI-2 / L-32 — project documents_presented onto {document_id, label} here
+    # rather than in a data migration, because resolving an id needs a tenant and
+    # only the request knows one. Links resolve against the caller's tenant only
+    # when the audit belongs to it; on a mismatch every element keeps its label
+    # and carries no id, so one tenant's Register reference can never be written
+    # onto another tenant's audit.
+    link_tenant_id = getattr(current_user, "tenant_id", None)
+    if audit.tenant_id is not None and audit.tenant_id != link_tenant_id:
+        link_tenant_id = None
+    payload["documents_presented"] = await normalise_documents_presented(
+        db,
+        tenant_id=link_tenant_id,
+        elements=payload.get("documents_presented"),
+    )
+
     response = UVDBAuditResponse(
         audit_id=audit_id,
-        **response_data.model_dump(),
+        **payload,
     )
     db.add(response)
     await db.commit()
     await db.refresh(response)
 
-    return {"id": response.id, "message": "Response recorded"}
+    return {
+        "id": response.id,
+        "message": "Response recorded",
+        "documents_presented": response.documents_presented,
+    }
 
 
 @router.get("/audits/{audit_id}/responses", response_model=dict)
@@ -612,6 +637,10 @@ async def get_audit_responses(
                 "site_response": r.site_response,
                 "finding_type": r.finding_type,
                 "finding_description": r.finding_description,
+                # WI-2 — the {document_id, label} projection is only useful if a
+                # reader can see which elements actually reached the Register.
+                # An element with a label and a null id is unfiled, not missing.
+                "documents_presented": r.documents_presented,
             }
             for r in responses
         ],
