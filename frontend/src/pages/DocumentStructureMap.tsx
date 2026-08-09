@@ -379,7 +379,9 @@ export default function DocumentStructureMap() {
               />
             ) : (
               <p className="text-sm text-muted-foreground" data-testid="structure-map-empty">
-                {structureMapEmptyCopy(documents.length > 0)}
+                {documents.length > 0 && bandScopedDocuments.length === 0
+                  ? 'No documents in this cascade band. Choose All or another level to explore the estate.'
+                  : structureMapEmptyCopy(documents.length > 0)}
               </p>
             )}
             {focusDoc ? (

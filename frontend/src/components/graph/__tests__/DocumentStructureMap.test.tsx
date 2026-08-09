@@ -164,6 +164,23 @@ describe('DocumentStructureMap flag gating', () => {
     expect(getCascade).toHaveBeenCalledTimes(1)
   })
 
+  it('does not claim missing implements when a cascade band has no documents', async () => {
+    flagState.document_graph = true
+    flagState.document_graph_structure_map = true
+    getCascade.mockResolvedValue({ data: cascadePayload() })
+
+    renderAt()
+
+    await screen.findByTestId('structure-map-doc-10')
+    fireEvent.click(screen.getByTestId('structure-map-band-1'))
+    expect(await screen.findByTestId('structure-map-empty')).toHaveTextContent(
+      /No documents in this cascade band/i,
+    )
+    expect(screen.getByTestId('structure-map-empty').textContent?.toLowerCase()).not.toContain(
+      'confirmed implements',
+    )
+  })
+
   it('lists roots first and gives filtered-empty copy', async () => {
     flagState.document_graph = true
     flagState.document_graph_structure_map = true
