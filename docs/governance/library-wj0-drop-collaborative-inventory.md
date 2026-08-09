@@ -1,9 +1,9 @@
-# WJ-0 / L-35a — DROP `collaborative_*` inventory (prep)
+# WJ-0 / L-35a — DROP `collaborative_*` inventory + demolition record
 
-**Status:** PREP — branch `feat/lib-wj0-drop-collaborative` · WI-2 `#1691` PROD LIVE `5d1e14ec0c8` · open inventory PR; demolition PR next (sole alembic).
-**Base tip inventoried:** originally `c8934dc67`; rebased onto `origin/main` @ `5d1e14ec0c8` (WI-2 LIVE).
-**Depends (merge/demolition):** WI-2 PROD (conveyor serial). Prep may land earlier as docs-only.  
-**Alembic:** WI-2 head `20261031_lib_wi2_homes` is LIVE. Demolition DROP must set `down_revision = "20261031_lib_wi2_homes"` (sole next alembic). This prep still ships **zero** alembic files.
+**Status:** DEMOLITION — branch `feat/lib-wj0-drop-collaborative-demolition` · prep `#1692` PROD LIVE `e22b1dcee` · this PR drops the tables and deletes the orphan code.
+**Base tip inventoried:** originally `c8934dc67`; rebased onto `origin/main` @ `5d1e14ec0c8` (WI-2 LIVE); demolition branched from `e22b1dcee` (prep LIVE).
+**Depends (merge/demolition):** WI-2 PROD (conveyor serial) — met. Prep landed earlier as docs-only.  
+**Alembic:** demolition ships the sole revision `20261101_lib_wj0_drop`, `down_revision = "20261031_lib_wi2_homes"` (the WI-2 head that was LIVE when it was written).
 
 **Conflict surface (allowed):** collaboration models / service / orphan FE · **not** DocumentDetail, CEL/standards/clauses, upload wizard, `document_graph`, Structure map.  
 **Realtime caution:** `/api/v1/realtime/*` also serves in-memory WS presence/notifications — demolish CRDT callers only; do not gut the WS router until FE consumers are confirmed dead.
@@ -22,13 +22,17 @@
 
 Tenant columns added via `alembic/versions/20260308_add_tenant_id_to_all_models.py` (listed for all five).
 
-Drift baseline entries: `docs/governance/alembic_drift_baseline.json` → `tables.collaborative_*`, `document_comments`, `user_presence`.
+Drift baseline entries: `docs/governance/alembic_drift_baseline.json` → `tables.collaborative_*`, `document_comments`, `user_presence`. **Removed** by the demolition PR (22 suppressed operations across 5 tables; `total_operations` 1059 → 1037).
 
-**Prod row counts:** not queried in this prep. Demolition PR must capture counts + empty/non-empty decision before DROP.
+**Sibling decision (demolition):** DROP all five. `document_comments` has no route, service caller or FE consumer, and the live commenting need is already served by `document_discussion_threads` / `document_discussion_messages` (`governed_knowledge.py`, wired to `/api/v1/governed-knowledge`) — keeping an unread second comment table beside a read one is the duplicate SoT the anti-dupe plan forbids. `user_presence` is not what `/api/v1/realtime/presence/{user_id}` reads; that route answers from the in-memory `connection_manager`.
+
+**Prod row counts:** still not queried — the authoring environment has no operator access to the production database. Counts are therefore logged at `INFO` immediately before each `DROP` (`_log_row_count`), so the deploy log records what was destroyed. The DROP is unconditional: any row present is abandoned CRDT state for a feature that was never reachable, and there is no migration path from a Yjs blob to the native editor.
 
 ---
 
 ## 2) Backend code
+
+*Read as the state found at inventory time. The demolition PR deletes `collaboration.py`, `collaboration_service.py` and `test_collaboration_service.py`; `realtime.py`, `connection_manager.py` and `route_declarations.py` are unchanged.*
 
 | Path | Role | Wired to HTTP? |
 |------|------|----------------|
@@ -44,6 +48,8 @@ Drift baseline entries: `docs/governance/alembic_drift_baseline.json` → `table
 ---
 
 ## 3) Frontend
+
+*State found at inventory time. The demolition PR deletes `useCollaboration` (+ test), `LiveCursors` and `CollaboratorCursors`; `useWebSocket` and `NotificationCenter` are unchanged.*
 
 | Path | Role | Page consumers (main) |
 |------|------|------------------------|
@@ -69,63 +75,73 @@ No `yjs` / `y-websocket` dependency in root or frontend `package.json` / `requir
 
 ---
 
-## 5) Demolition checklist (future PR — after WI-2 PROD)
+## 5) Demolition checklist (executed by the demolition PR)
 
 ### Gate 0 — serial + evidence
 
 - [x] WI-1 `#1687` merged + PROD LIVE (alembic head free of competing WI-1 revision)
 - [x] WI-2 PROD LIVE (conveyor depends) — tip `5d1e14ec0c8` STG=PROD healthz 200
-- [ ] Capture prod row counts for five tables; backup/export if non-empty
-- [ ] Confirm no runtime callers via OpenAPI + `rg CollaborationService|collaborative_|/realtime/collab`
+- [x] Prep `#1692` PROD LIVE — tip `e22b1dcee` STG=PROD healthz 200
+- [x] Prod row counts: **not obtainable** from the authoring environment — logged at DROP time instead (see §1)
+- [x] Confirm no runtime callers via OpenAPI + `rg CollaborationService|collaborative_|/realtime/collab`
 
 ### Code removal (conflict-safe order)
 
-- [ ] Delete or stub-fail `CollaborationService` + unit tests
-- [ ] Delete FE `useCollaboration` (+ test), `LiveCursors`, `CollaboratorCursors`; trim barrel exports
-- [ ] Remove `src.domain.models.collaboration` from `alembic/env.py` **in same PR as DROP**
-- [ ] Decide fate of `document_comments` + `user_presence` (recommend DROP with stack unless a kept product need is documented)
-- [ ] Leave `/api/v1/realtime/ws|stats|online-users|presence|broadcast` unless separately proven unused — **do not** add `/collab`
+- [x] Delete `CollaborationService` + unit tests
+- [x] Delete FE `useCollaboration` (+ test), `LiveCursors`, `CollaboratorCursors`; trim barrel exports
+- [x] Delete `src/domain/models/collaboration.py` and remove `src.domain.models.collaboration` from `alembic/env.py` **in same PR as DROP** — leaving the module imported would put five tables in `Base.metadata` that the database no longer has, and `alembic check` fails on `CreateTableOp`
+- [x] Decide fate of `document_comments` + `user_presence` — DROP with the stack (rationale in §1)
+- [x] Leave `/api/v1/realtime/ws|stats|online-users|presence|broadcast` untouched — **no** `/collab` added
 
-### Alembic (HOLD draft until heads settle)
+### Alembic (landed)
+
+`alembic/versions/20261101_lib_wj0_drop_collaborative.py`
 
 ```text
-# Pseudocode only — do NOT land while WI-1/WI-2 migrations in flight
-revision = "YYYYMMDD_lib_wj0_drop_collaborative"
-down_revision = "<post-WI-2 head>"
+revision = "20261101_lib_wj0_drop"
+down_revision = "20261031_lib_wi2_homes"
 
-upgrade:
-  drop_index / drop_table collaborative_changes
-  drop_index / drop_table collaborative_sessions
-  drop_index / drop_table collaborative_documents
-  # optional same PR:
-  drop_table document_comments
-  drop_table user_presence
+upgrade:   log row count, drop indexes, drop table — children first
+           collaborative_changes → collaborative_sessions → collaborative_documents
+           → document_comments → user_presence
 
-downgrade: recreate from 20260120 definitions (+ tenant columns)
+downgrade: recreate all five from the 20260120 DDL plus the 20260308 tenant_id
+           column and ix_<table>_tenant_id index. Schema only; no data.
 ```
 
-- [ ] Update `docs/governance/alembic_drift_baseline.json` exclusions/ops for dropped tables
-- [ ] OpenAPI / authz declarations unchanged unless realtime endpoints removed
+- [x] Update `docs/governance/alembic_drift_baseline.json` for dropped tables
+- [x] OpenAPI / authz declarations unchanged — no realtime endpoint removed
 
 ### Verify
 
-- [ ] `pytest` green without collaboration unit module (or with intentional absence)
-- [ ] Frontend unit/barrel imports clean
+- [x] `alembic upgrade head` then `downgrade` then `upgrade` again, locally
+- [x] `pytest` green with the collaboration unit module absent
+- [x] Frontend typecheck / unit / barrel imports clean
 - [ ] Staging + PROD tip verify after deploy (conveyor DONE gate)
 
 ---
 
 ## 6) Gaps / open questions
 
-1. **Sibling tables:** L-35a text says `collaborative_*` only — confirm product intent for `document_comments` + `user_presence` before DROP.
-2. **Realtime keep-set:** WS presence/broadcast may still be desired for non-CRDT features; inventory found no page wiring for `useWebSocket`, but NotificationCenter exists — confirm before shrinking authz allowlist.
-3. **Prod data:** row counts unknown in prep; non-empty CRDT blobs would be abandoned product state (no Office/CRDT keep path per anti-dupe plan).
-4. **Alembic timing:** demolition migration must chain after WI-1 and WI-2 heads; this prep intentionally ships **zero** alembic files.
+1. ~~**Sibling tables**~~ — closed by the demolition PR: both dropped, rationale in §1.
+2. **Realtime keep-set:** still open, and deliberately untouched here. `useWebSocket` has no page wiring, but NotificationCenter exists; the WS router, `connection_manager` and the authz allowlist are unchanged by WJ-0. A separate slice owns that decision.
+3. ~~**Prod data**~~ — resolved as far as it can be: counts were never obtainable from the authoring environment, so they are logged at DROP time instead of asserted in advance. Any row destroyed was abandoned CRDT state for a feature no route ever reached.
+4. ~~**Alembic timing**~~ — closed: WI-1 and WI-2 are both PROD LIVE, and `20261101_lib_wj0_drop` is the sole revision in the demolition PR.
 
 ---
 
-## 7) Prep delivered on this branch
+## 7) Delivered
+
+**Prep (`#1692`, PROD LIVE `e22b1dcee`)**
 
 - This inventory + demolition checklist
-- Change Ledger: `scripts/governance/pr_body_lib_wj0_drop_collaborative.md` (OPEN prep PR)
+- Change Ledger: `scripts/governance/pr_body_lib_wj0_drop_collaborative.md`
 - Deprecation banners on dormant CRDT modules (no behaviour change)
+
+**Demolition (this PR)**
+
+- `alembic/versions/20261101_lib_wj0_drop_collaborative.py` — sole revision
+- Deleted: `src/domain/models/collaboration.py`, `src/domain/services/collaboration_service.py`, `tests/unit/test_collaboration_service.py`
+- Deleted: `frontend/src/hooks/useCollaboration.ts` (+ test), `components/collaboration/LiveCursors.tsx`, `components/realtime/CollaboratorCursors.tsx`; barrels trimmed
+- `alembic/env.py` no longer imports the collaboration models; drift baseline rewritten
+- Change Ledger: `scripts/governance/pr_body_lib_wj0_drop_collaborative_demolition.md`

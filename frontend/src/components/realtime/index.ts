@@ -5,4 +5,3 @@
 export { default as NotificationCenter } from './NotificationCenter'
 export { default as MentionInput } from './MentionInput'
 export { default as PresenceIndicator } from './PresenceIndicator'
-export { default as CollaboratorCursors } from './CollaboratorCursors'
