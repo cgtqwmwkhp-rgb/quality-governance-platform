@@ -4,6 +4,7 @@ import cy from '../../i18n/locales/cy.json'
 import {
   anchorHint,
   anchorLabel,
+  formatOwnershipLabel,
   frequencyLabel,
   ownershipOf,
   statusLabel,
@@ -57,6 +58,24 @@ describe('ownershipOf', () => {
 
   it('does not treat owner 0 as unowned', () => {
     expect(ownershipOf(0, 0)).toBe('you')
+  })
+})
+
+describe('formatOwnershipLabel', () => {
+  it('keeps Wave-1 id-only fallbacks when owner_name is absent', () => {
+    expect(formatOwnershipLabel('you')).toBe('Owned by you')
+    expect(formatOwnershipLabel('other')).toBe('Owned by someone else')
+    expect(formatOwnershipLabel('unassigned')).toBe('Unassigned')
+  })
+
+  it('prefers the resolved name for you and other', () => {
+    expect(formatOwnershipLabel('you', 'Jamie Uncle')).toBe('Jamie Uncle (you)')
+    expect(formatOwnershipLabel('other', 'Jamie Uncle')).toBe('Jamie Uncle')
+  })
+
+  it('ignores blank owner_name rather than inventing a blank label', () => {
+    expect(formatOwnershipLabel('other', '   ')).toBe('Owned by someone else')
+    expect(formatOwnershipLabel('you', null)).toBe('Owned by you')
   })
 })
 

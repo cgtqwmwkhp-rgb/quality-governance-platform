@@ -124,4 +124,17 @@ describe('ComplianceSchedule: an activated obligation always has someone to noti
     // unowned, not silently blank.
     expect(screen.getByTestId('compliance-schedule-owner-3')).toHaveTextContent('Unassigned')
   })
+
+  it('shows the resolved owner name when the API provides owner_name', async () => {
+    resolveWith([
+      requirement({ id: 1, owner_id: 42, owner_name: 'Jamie Uncle' }),
+      requirement({ id: 2, owner_id: 99, owner_name: 'Jamie Uncle' }),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByTestId('compliance-schedule-list')).toBeInTheDocument())
+
+    expect(screen.getByTestId('compliance-schedule-owner-1')).toHaveTextContent('Jamie Uncle (you)')
+    expect(screen.getByTestId('compliance-schedule-owner-2')).toHaveTextContent('Jamie Uncle')
+  })
 })
