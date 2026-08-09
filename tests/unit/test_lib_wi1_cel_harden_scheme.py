@@ -147,8 +147,7 @@ def test_cel_partial_predicate_on_both_dialects(dialect_name: str) -> None:
 def test_sqlite_soft_delete_frees_unique_slot_for_relink() -> None:
     ddl = str(CreateIndex(_cel_index()).compile(dialect=sqlite.dialect()))
     connection = sqlite3.connect(":memory:")
-    connection.executescript(
-        """
+    connection.executescript("""
         CREATE TABLE compliance_evidence_links (
             id INTEGER PRIMARY KEY,
             tenant_id INT NOT NULL,
@@ -158,8 +157,7 @@ def test_sqlite_soft_delete_frees_unique_slot_for_relink() -> None:
             cover_kind TEXT NOT NULL,
             deleted_at TEXT
         );
-        """
-    )
+        """)
     connection.execute(ddl)
 
     insert = (

@@ -261,8 +261,9 @@ class GovernedKnowledgeService:
         link.auto_applied = auto_applied
         link.linked_by = EvidenceLinkMethod.AI
         # D15: AI / auto-confirm must never stamp a human confirmer. Clear when
-        # this write is machine-confirmed so a rematch cannot leave a false actor.
-        if auto_applied:
+        # this write is machine-confirmed, and also when it demotes the link out
+        # of confirmed, so a rematch cannot leave a false actor behind.
+        if auto_applied or status != EvidenceLinkStatus.CONFIRMED:
             link.confirmed_by_id = None
             link.confirmed_at = None
         if signal_type is not None:

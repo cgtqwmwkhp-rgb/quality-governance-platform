@@ -558,6 +558,11 @@ async def link_evidence(
             link.status = EvidenceLinkStatus.CONFIRMED
             link.auto_applied = False
             _stamp_manual_confirmed(link, current_user)
+        else:
+            # D15: a non-manual rewrite of an existing link must not keep the
+            # earlier human confirmer — that stamp attested to different content.
+            link.confirmed_by_id = None
+            link.confirmed_at = None
         if request.entity_type == "document":
             from src.domain.services.cel_version_pin import pin_evidence_link_document_version
 
