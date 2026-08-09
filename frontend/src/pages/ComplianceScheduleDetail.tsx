@@ -203,7 +203,10 @@ export default function ComplianceScheduleDetail() {
         <div>
           <dt className="text-muted-foreground">{t('compliance.schedule.owner', 'Owner')}</dt>
           <dd className="font-medium mt-0.5" data-testid="compliance-schedule-detail-owner">
-            {ownershipLabel(ownershipOf(requirement.owner_id, currentUserId))}
+            {ownershipLabel(
+              ownershipOf(requirement.owner_id, currentUserId),
+              requirement.owner_name,
+            )}
           </dd>
         </div>
         <div>

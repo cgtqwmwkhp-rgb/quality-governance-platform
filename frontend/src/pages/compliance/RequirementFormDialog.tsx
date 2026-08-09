@@ -441,7 +441,7 @@ export function RequirementFormDialog({
     ? t(
         'compliance.schedule.form.owner_hint_edit',
         'Currently {{owner}}. Leave blank to keep it unchanged.',
-        { owner: ownershipLabel(ownershipOf(requirement?.owner_id, currentUserId)).toLowerCase() },
+        { owner: ownershipLabel(ownershipOf(requirement?.owner_id, currentUserId), requirement?.owner_name).toLowerCase() },
       )
     : t(
         'compliance.schedule.form.owner_hint_create',

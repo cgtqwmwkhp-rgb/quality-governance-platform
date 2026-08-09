@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime, timezone
-from typing import Annotated, Optional
+from typing import Annotated, Iterable, Optional
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from sqlalchemy import select
 
 from src.api.dependencies import DbSession, require_permission
 from src.api.schemas.compliance_schedule import (
@@ -116,7 +117,43 @@ _enabled_router = APIRouter(dependencies=[Depends(require_compliance_schedule_en
 _fra_ocr_router = APIRouter(dependencies=[Depends(require_fra_ocr_enabled)])
 
 
-def _requirement_response(row, *, now: Optional[datetime] = None) -> RequirementResponse:
+async def _resolve_owner_names(
+    db: DbSession,
+    owner_ids: Iterable[Optional[int]],
+    *,
+    tenant_id: int,
+) -> dict[int, str]:
+    """Batch-resolve active in-tenant owner display names (no N+1).
+
+    Mirrors ``ComplianceScheduleService._assert_owner_in_tenant`` (tenant + active)
+    and the reminder sweep's soft-delete exclusion so a deleted user does not
+    surface as a live owner label.
+    """
+    ids = {int(oid) for oid in owner_ids if oid is not None}
+    if not ids:
+        return {}
+    result = await db.execute(
+        select(User).where(
+            User.id.in_(ids),
+            User.tenant_id == tenant_id,
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+    )
+    names: dict[int, str] = {}
+    for user in result.scalars().all():
+        name = (user.full_name or "").strip()
+        if name:
+            names[int(user.id)] = name
+    return names
+
+
+def _requirement_response(
+    row,
+    *,
+    now: Optional[datetime] = None,
+    owner_name: Optional[str] = None,
+) -> RequirementResponse:
     clock = now or datetime.now(timezone.utc)
     status_value = derive_status(clock, row.next_due_date)
     return RequirementResponse(
@@ -139,12 +176,25 @@ def _requirement_response(row, *, now: Optional[datetime] = None) -> Requirement
         next_due_date=row.next_due_date,
         last_completed_at=row.last_completed_at,
         owner_id=row.owner_id,
+        owner_name=owner_name,
         is_active=row.is_active,
         status=status_value,
         created_at=row.created_at,
         updated_at=row.updated_at,
         fra_ocr_eligible=ComplianceScheduleFraOcrService.is_fra_ocr_eligible(row),
     )
+
+
+async def _requirement_response_with_owner(
+    db: DbSession,
+    row,
+    *,
+    tenant_id: int,
+    now: Optional[datetime] = None,
+) -> RequirementResponse:
+    owner_names = await _resolve_owner_names(db, (row.owner_id,), tenant_id=tenant_id)
+    owner_name = owner_names.get(row.owner_id) if row.owner_id is not None else None
+    return _requirement_response(row, now=now, owner_name=owner_name)
 
 
 def _regulatory_suggestion_response(result) -> RegulatoryBasisSuggestResponse:
@@ -224,7 +274,7 @@ async def activate_catalogue_template(
         last_completed_at=payload.last_completed_at,
         owner_id=payload.owner_id,
     )
-    return _requirement_response(row)
+    return await _requirement_response_with_owner(db, row, tenant_id=tenant_id)
 
 
 # ---------------------------------------------------------------------------
@@ -340,8 +390,19 @@ async def list_requirements(
         page=page,
         page_size=page_size,
     )
+    owner_names = await _resolve_owner_names(
+        db,
+        (r.owner_id for r in rows),
+        tenant_id=tenant_id,
+    )
     return RequirementListResponse(
-        items=[_requirement_response(r) for r in rows],
+        items=[
+            _requirement_response(
+                r,
+                owner_name=owner_names.get(r.owner_id) if r.owner_id is not None else None,
+            )
+            for r in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -381,7 +442,7 @@ async def create_requirement(
         last_completed_at=data.last_completed_at,
         is_active=data.is_active,
     )
-    return _requirement_response(row)
+    return await _requirement_response_with_owner(db, row, tenant_id=tenant_id)
 
 
 @_enabled_router.get("/requirements/{requirement_id}", response_model=RequirementResponse)
@@ -393,7 +454,7 @@ async def get_requirement(
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     service = ComplianceScheduleService(db)
     row = await service.get_requirement(requirement_id, tenant_id=tenant_id)
-    return _requirement_response(row)
+    return await _requirement_response_with_owner(db, row, tenant_id=tenant_id)
 
 
 @_enabled_router.patch("/requirements/{requirement_id}", response_model=RequirementResponse)
@@ -415,7 +476,7 @@ async def update_requirement(
         user_id=current_user.id,
         updates=updates,
     )
-    return _requirement_response(row)
+    return await _requirement_response_with_owner(db, row, tenant_id=tenant_id)
 
 
 @_enabled_router.post(
@@ -434,7 +495,7 @@ async def deactivate_requirement(
         tenant_id=tenant_id,
         user_id=current_user.id,
     )
-    return _requirement_response(row)
+    return await _requirement_response_with_owner(db, row, tenant_id=tenant_id)
 
 
 @_enabled_router.get(
@@ -726,7 +787,11 @@ async def confirm_fra_ocr_draft(
             applied_summary[key] = date.fromisoformat(value)
     return FraOcrConfirmResponse(
         draft=_fra_draft_response(draft),
-        requirement=_requirement_response(requirement),
+        requirement=await _requirement_response_with_owner(
+            db,
+            requirement,
+            tenant_id=tenant_id,
+        ),
         applied=FraOcrAppliedSummary.model_validate(applied_summary),
     )
 

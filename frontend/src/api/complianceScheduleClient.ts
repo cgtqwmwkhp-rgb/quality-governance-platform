@@ -25,6 +25,8 @@ export interface ComplianceRequirement {
   next_due_date: string
   last_completed_at?: string | null
   owner_id?: number | null
+  /** Resolved display name for owner_id when the API can resolve an active in-tenant user. */
+  owner_name?: string | null
   is_active: boolean
   status?: ComplianceStatus | null
   created_at: string

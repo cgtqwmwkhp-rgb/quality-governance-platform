@@ -122,6 +122,7 @@ class RequirementResponse(BaseModel):
     next_due_date: date
     last_completed_at: Optional[datetime] = None
     owner_id: Optional[int] = None
+    owner_name: Optional[str] = None
     is_active: bool
     status: Optional[ComplianceStatusLiteral] = None
     created_at: datetime

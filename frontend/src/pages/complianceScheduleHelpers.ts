@@ -48,6 +48,36 @@ export function ownershipOf(
 }
 
 /**
+ * Human-readable owner line for the register / detail / edit hint.
+ *
+ * When the API has not yet populated ``owner_name`` (Wave-1 id-only responses,
+ * or a soft-deleted / inactive / cross-tenant id), fall back honestly rather
+ * than inventing a blank.
+ */
+export function formatOwnershipLabel(
+  ownership: Ownership,
+  ownerName?: string | null,
+  labels: {
+    you: string
+    other: string
+    unassigned: string
+    youNamed?: (name: string) => string
+  } = {
+    you: 'Owned by you',
+    other: 'Owned by someone else',
+    unassigned: 'Unassigned',
+  },
+): string {
+  const name = typeof ownerName === 'string' ? ownerName.trim() : ''
+  if (ownership === 'unassigned') return labels.unassigned
+  if (ownership === 'you') {
+    if (name) return (labels.youNamed ?? ((n) => `${n} (you)`))(name)
+    return labels.you
+  }
+  return name || labels.other
+}
+
+/**
  * How often the obligation recurs.
  *
  * When both intervals are set the scheduler adds them — months first, then days

@@ -294,7 +294,10 @@ export default function ComplianceSchedule() {
                         {item.reference_number} · {t('compliance.schedule.due', 'Due')}{' '}
                         {item.next_due_date} ·{' '}
                         <span data-testid={`compliance-schedule-owner-${item.id}`}>
-                          {ownershipLabel(ownershipOf(item.owner_id, currentUserId))}
+                          {ownershipLabel(
+                            ownershipOf(item.owner_id, currentUserId),
+                            item.owner_name,
+                          )}
                         </span>
                       </div>
                     </div>
