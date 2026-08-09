@@ -8,9 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.domain.models.notification import NotificationChannel, NotificationType
-from src.domain.services.compliance_schedule_assignment_notify import (
-    notify_compliance_schedule_owner_assignment,
-)
+from src.domain.services.compliance_schedule_assignment_notify import notify_compliance_schedule_owner_assignment
 from src.domain.services.compliance_schedule_notify_flags import (
     ASSIGNMENT_NOTIFY_FLAG,
     DUE_REMINDER_NOTIFY_FLAG,

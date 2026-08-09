@@ -19,10 +19,7 @@ from src.domain.services.compliance_schedule_notifications import (
     build_assignment_notification_kwargs,
     should_notify_owner_change,
 )
-from src.domain.services.compliance_schedule_notify_flags import (
-    assignment_notify_enabled,
-    email_channel_enabled,
-)
+from src.domain.services.compliance_schedule_notify_flags import assignment_notify_enabled, email_channel_enabled
 from src.domain.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)

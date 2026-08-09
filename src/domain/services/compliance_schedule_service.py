@@ -30,9 +30,7 @@ from src.domain.models.standard import Clause, Standard
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_auto_service import CAPAAutoService
-from src.domain.services.compliance_schedule_assignment_notify import (
-    notify_compliance_schedule_owner_assignment,
-)
+from src.domain.services.compliance_schedule_assignment_notify import notify_compliance_schedule_owner_assignment
 from src.domain.services.compliance_schedule_policy import Anchor, compute_next_due, derive_status
 from src.domain.services.reference_number import ReferenceNumberService
 
