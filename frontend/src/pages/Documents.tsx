@@ -273,6 +273,7 @@ export default function Documents() {
   /** WD-1 filing wizard phase inside the existing upload modal (not a twin app). */
   const [filingWizardStep, setFilingWizardStep] = useState<DocumentFilingWizardStep>('file')
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
+  const [selectedFunctionCode, setSelectedFunctionCode] = useState<string | null>(null)
   const [uploadRelationshipDoc, setUploadRelationshipDoc] = useState<{
     id: number
     title: string
@@ -559,6 +560,7 @@ export default function Documents() {
   const beginFilingWithFile = (file: File) => {
     setUploadError(null)
     setPendingUploadFile(file)
+    setSelectedFunctionCode(null)
     setFilingWizardStep('function')
   }
 
@@ -606,6 +608,7 @@ export default function Documents() {
       // Always continue the filing spine: Related (real or honest placeholder) then
       // Bring-under-control stub. Do not invent a second Register.
       setPendingUploadFile(null)
+      setSelectedFunctionCode(null)
       setUploadRelationshipDoc({ id: uploadedId, title: uploadedTitle })
       setFilingWizardStep('related')
     } catch (err) {
@@ -627,6 +630,7 @@ export default function Documents() {
     setShowUploadModal(false)
     setFilingWizardStep('file')
     setPendingUploadFile(null)
+    setSelectedFunctionCode(null)
     setUploadRelationshipDoc(null)
     setRelationshipBusy(false)
     setUploadError(null)
@@ -732,6 +736,7 @@ export default function Documents() {
               onClick={() => {
                 setUploadRelationshipDoc(null)
                 setPendingUploadFile(null)
+                setSelectedFunctionCode(null)
                 setFilingWizardStep('file')
                 setUploadError(null)
                 setShowUploadModal(true)
@@ -1476,6 +1481,7 @@ export default function Documents() {
             setShowUploadModal(true)
             setFilingWizardStep('file')
             setPendingUploadFile(null)
+            setSelectedFunctionCode(null)
             setUploadRelationshipDoc(null)
             return
           }
@@ -1551,8 +1557,11 @@ export default function Documents() {
                   <DocumentFilingFunctionStep
                     fileName={pendingUploadFile.name}
                     busy={uploading}
+                    selectedCode={selectedFunctionCode}
+                    onSelectedCodeChange={setSelectedFunctionCode}
                     onBack={() => {
                       setPendingUploadFile(null)
+                      setSelectedFunctionCode(null)
                       setUploadError(null)
                       setFilingWizardStep('file')
                     }}

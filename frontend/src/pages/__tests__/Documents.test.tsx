@@ -517,6 +517,66 @@ describe('Documents', () => {
     expect(formData.get('function_code')).toBe('IT')
   })
 
+  it('preserves the selected function when a failed upload is retried', async () => {
+    mockPost
+      .mockRejectedValueOnce(new Error('Upload offline'))
+      .mockResolvedValueOnce({
+        data: { id: 99, reference_number: 'DOC-99', title: 'upload', status: 'processing' },
+      })
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/api/v1/document-categories/functions') {
+        return Promise.resolve({
+          data: [{ id: 1, code: 'IT', name: 'Information Technology', sort_order: 1, active: true }],
+        })
+      }
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('documents-live-badge')
+    fireEvent.click(screen.getByRole('button', { name: /documents\.upload/i }))
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['hello'], 'policy.pdf', { type: 'application/pdf' })] },
+    })
+
+    expect(await screen.findByTestId('documents-filing-function-step')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('documents-filing-function-select'))
+    fireEvent.click(await screen.findByTestId('documents-filing-function-option-IT'))
+    fireEvent.click(screen.getByTestId('documents-filing-function-continue'))
+
+    expect(await screen.findByTestId('documents-upload-error')).toHaveTextContent('Upload offline')
+    fireEvent.click(screen.getByTestId('documents-filing-function-continue'))
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledTimes(2)
+    })
+    const uploadCalls = mockPost.mock.calls.filter((call) =>
+      String(call[0]).includes('/documents/upload'),
+    ) as [string, FormData][]
+    expect(uploadCalls[0][1].get('function_code')).toBe('IT')
+    expect(uploadCalls[1][1].get('function_code')).toBe('IT')
+  })
+
   it('opens the Doc Graph relationship step after upload when document_graph is on', async () => {
     mockUseFeatureFlag.mockImplementation((flag: unknown) => flag === 'document_graph')
     mockPost.mockResolvedValue({

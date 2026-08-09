@@ -31,6 +31,8 @@ const NONE_VALUE = '__none__'
 export interface DocumentFilingFunctionStepProps {
   fileName: string
   busy?: boolean
+  selectedCode: string | null
+  onSelectedCodeChange: (functionCode: string | null) => void
   onConfirm: (functionCode: string | null) => void
   onBack: () => void
 }
@@ -38,6 +40,8 @@ export interface DocumentFilingFunctionStepProps {
 export function DocumentFilingFunctionStep({
   fileName,
   busy = false,
+  selectedCode,
+  onSelectedCodeChange,
   onConfirm,
   onBack,
 }: DocumentFilingFunctionStepProps) {
@@ -45,7 +49,6 @@ export function DocumentFilingFunctionStep({
   const [functions, setFunctions] = useState<DocumentFunctionOption[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [selectedCode, setSelectedCode] = useState<string>(NONE_VALUE)
 
   useEffect(() => {
     let cancelled = false
@@ -74,7 +77,8 @@ export function DocumentFilingFunctionStep({
     }
   }, [])
 
-  const confirmedCode = selectedCode === NONE_VALUE ? null : selectedCode
+  const selectValue = selectedCode ?? NONE_VALUE
+  const confirmedCode = selectedCode
 
   return (
     <div className="space-y-4" data-testid="documents-filing-function-step">
@@ -109,8 +113,10 @@ export function DocumentFilingFunctionStep({
             {t('documents.filing.function.select_label')}
           </Label>
           <Select
-            value={selectedCode}
-            onValueChange={setSelectedCode}
+            value={selectValue}
+            onValueChange={(value) => {
+              onSelectedCodeChange(value === NONE_VALUE ? null : value)
+            }}
             disabled={busy || functions.length === 0}
           >
             <SelectTrigger

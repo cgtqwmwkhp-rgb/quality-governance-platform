@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { DocumentFilingFunctionStep } from '../DocumentFilingFunctionStep'
 import { DocumentFilingRelatedPlaceholder } from '../DocumentFilingRelatedPlaceholder'
 import { DocumentFilingControlStub } from '../DocumentFilingControlStub'
@@ -31,6 +32,25 @@ vi.mock('../../api/client', () => ({
   getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'Request failed'),
 }))
 
+function FunctionStepHarness({
+  onConfirm,
+  onBack,
+}: {
+  onConfirm: (functionCode: string | null) => void
+  onBack: () => void
+}) {
+  const [selectedCode, setSelectedCode] = useState<string | null>(null)
+  return (
+    <DocumentFilingFunctionStep
+      fileName="policy.pdf"
+      selectedCode={selectedCode}
+      onSelectedCodeChange={setSelectedCode}
+      onConfirm={onConfirm}
+      onBack={onBack}
+    />
+  )
+}
+
 describe('DocumentFilingFunctionStep', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -45,9 +65,7 @@ describe('DocumentFilingFunctionStep', () => {
   it('loads functions from the WA-2 vocabulary endpoint and confirms a code', async () => {
     const onConfirm = vi.fn()
     const onBack = vi.fn()
-    render(
-      <DocumentFilingFunctionStep fileName="policy.pdf" onConfirm={onConfirm} onBack={onBack} />,
-    )
+    render(<FunctionStepHarness onConfirm={onConfirm} onBack={onBack} />)
 
     expect(await screen.findByTestId('documents-filing-function-step')).toBeInTheDocument()
     await waitFor(() => {
@@ -65,13 +83,7 @@ describe('DocumentFilingFunctionStep', () => {
 
   it('allows upload without a function (API optional; required later in full WD-1)', async () => {
     const onConfirm = vi.fn()
-    render(
-      <DocumentFilingFunctionStep
-        fileName="policy.pdf"
-        onConfirm={onConfirm}
-        onBack={vi.fn()}
-      />,
-    )
+    render(<FunctionStepHarness onConfirm={onConfirm} onBack={vi.fn()} />)
     await screen.findByTestId('documents-filing-function-file')
     fireEvent.click(await screen.findByTestId('documents-filing-function-continue'))
     expect(onConfirm).toHaveBeenCalledWith(null)
