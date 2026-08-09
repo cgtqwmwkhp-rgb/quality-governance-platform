@@ -24,6 +24,7 @@ from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
+from src.domain.exceptions import ValidationError as DomainValidationError
 from src.domain.models.document import (
     Document,
     DocumentAnnotation,
@@ -42,7 +43,11 @@ from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_campaign_service import DocumentCampaignService
-from src.domain.services.document_category_service import allocate_pel_doc_ref, resolve_function_code
+from src.domain.services.document_category_service import (
+    allocate_pel_doc_ref,
+    coerce_cascade_level,
+    resolve_function_code,
+)
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_library_campaign_offer_service import (
@@ -97,6 +102,10 @@ class DocumentResponse(BaseModel):
     category: Optional[str]
     category_id: Optional[int] = None
     pel_doc_ref: Optional[str] = None
+    # NS-1 cascade level 1-5. Projected as its own field rather than left for
+    # the client to slice out of `pel_doc_ref`: legacy references are unbanded,
+    # and a document can carry a level before it carries a reference.
+    cascade_level: Optional[int] = None
     site_location_id: Optional[int] = None
     access_level: Optional[str] = None
     is_statutory: bool = False
@@ -211,6 +220,7 @@ def _document_to_response(
         category=document.category,
         category_id=getattr(document, "category_id", None),
         pel_doc_ref=getattr(document, "pel_doc_ref", None),
+        cascade_level=getattr(document, "cascade_level", None),
         site_location_id=getattr(document, "site_location_id", None),
         access_level=getattr(document, "access_level", None),
         is_statutory=bool(getattr(document, "is_statutory", False)),
@@ -258,6 +268,9 @@ class DocumentUploadResponse(BaseModel):
     index_job_id: Optional[int] = None
     filename_version_hint: Optional[str] = None
     pel_doc_ref: Optional[str] = None
+    # NS-1 — echoed back so the caller can see the band its reference landed
+    # in without re-parsing the reference string.
+    cascade_level: Optional[int] = None
     duplicate_warning: bool = False
     duplicate_warning_detail: Optional[list] = None
 
@@ -850,6 +863,7 @@ async def upload_document(
     sensitivity: str = Form("internal"),
     category_id: Optional[int] = Form(None),
     function_code: Optional[str] = Form(None),
+    cascade_level: Optional[int] = Form(None),
     site_location_id: Optional[int] = Form(None),
 ):
     """Upload and process a new document.
@@ -858,13 +872,23 @@ async def upload_document(
     separate from the legacy free-text `category` string.
 
     `function_code` (WA-2 / ADR-0023) is the *owning function* — a different
-    axis from the category, and the one the PEL reference is drawn from. When
-    a valid code is supplied a `pel_doc_ref` (`PEL-<FUNCTION>-<SEQ>`) is
-    atomically allocated alongside the existing `reference_number`
-    (DOC-YYYY-####), and both it and the function are then immutable. When no
-    code is supplied the document is still created, with no PEL reference: the
-    function is confirmed by a filer, never inferred, because a mis-filed
-    reference cannot be corrected in place.
+    axis from the category, and the one the PEL reference is drawn from.
+
+    `cascade_level` (NS-1 / Northern Star v6) is the document's level in the
+    cascade, 1 Manual through 5 Form/Register/Record. It is the band the
+    reference is drawn from, so supplying `function_code` **requires** it: a
+    reference cannot be issued into a band nobody chose, and it cannot be
+    re-banded afterwards because it is immutable. Supplying `cascade_level`
+    on its own is allowed — a document may record its level before its
+    function is confirmed.
+
+    When both are supplied a `pel_doc_ref` (`PEL-<FUNCTION>-<BAND><SEQ>`, e.g.
+    `PEL-HSEQ-3001`) is atomically allocated alongside the existing
+    `reference_number` (DOC-YYYY-####), and the reference, the function and
+    the level are then fixed. When no function code is supplied the document
+    is still created, with no PEL reference: the function is confirmed by a
+    filer, never inferred, because a mis-filed reference cannot be corrected
+    in place.
 
     `site_location_id` binds the document to an existing `Location`
     (site/workshop) — no separate Site table.
@@ -879,7 +903,17 @@ async def upload_document(
     # `isinstance` check rather than `is not None` so both call styles behave.
     category_id = category_id if isinstance(category_id, int) else None
     function_code = function_code if isinstance(function_code, str) else None
+    cascade_level = cascade_level if isinstance(cascade_level, int) and not isinstance(cascade_level, bool) else None
     site_location_id = site_location_id if isinstance(site_location_id, int) else None
+
+    # Validated before the file is read so a bad level costs nothing, and
+    # before the function is resolved so the caller gets the level complaint
+    # rather than an unrelated one.
+    if cascade_level is not None:
+        try:
+            cascade_level = coerce_cascade_level(cascade_level)
+        except DomainValidationError as exc:
+            raise BadRequestError(str(exc)) from exc
 
     if site_location_id is not None and await db.get(Location, site_location_id) is None:
         raise BadRequestError(f"Location {site_location_id} not found")
@@ -906,8 +940,20 @@ async def upload_document(
         # function may be confirmed with or without a taxonomy category.
         filing_function = await resolve_function_code(db, function_code)
         if filing_function is not None:
+            if cascade_level is None:
+                # NS-1: the band digit *is* the level, so there is no reference
+                # to issue until the filer says which level this document sits
+                # at. Refusing beats defaulting — a defaulted band prints an
+                # immutable reference that misplaces the document in the
+                # cascade, and R05 makes correcting it a full reissue.
+                raise BadRequestError(
+                    "cascade_level is required when function_code is supplied: "
+                    "the PEL reference is banded by cascade level (1 Manual, "
+                    "2 Policy, 3 Procedure/Standard, 4 SOP/RAMS/Assessment, "
+                    "5 Form/Register/Record) and cannot be re-banded once issued."
+                )
             function_id = filing_function.id
-            pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id)
+            pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id, cascade_level)
 
         if category_id is not None:
             filing_category = await load_filing_category(db, category_id)
@@ -960,6 +1006,7 @@ async def upload_document(
             category_id=category_id,
             pel_doc_ref=pel_doc_ref,
             function_id=function_id,
+            cascade_level=cascade_level,
             site_location_id=site_location_id,
             access_level=access_level,
             is_statutory=is_statutory,
@@ -1040,6 +1087,7 @@ async def upload_document(
             index_job_id=index_job.id if index_job else None,
             filename_version_hint=hint.label if hint else None,
             pel_doc_ref=getattr(doc, "pel_doc_ref", None),
+            cascade_level=getattr(doc, "cascade_level", None),
             duplicate_warning=bool(getattr(doc, "duplicate_warning", False)),
             duplicate_warning_detail=_coerce_json_list(getattr(doc, "duplicate_warning_detail", None)),
             message=(

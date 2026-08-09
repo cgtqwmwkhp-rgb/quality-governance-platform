@@ -12,11 +12,19 @@ counter from the category to the function: the reference is
 identifies*. Category and Function are deliberately different axes — a
 policy about information security files to `01.01 Policies` and carries
 `PEL-IT-0014`.
+
+NS-1 (Northern Star v6) bands that sequence by cascade level: the reference
+is `PEL-<FUNCTION>-<BAND><SEQ>` where the band digit *is* the level, so
+`PEL-IT-2014` reads "IT, a Policy, the 14th one". The counter is re-keyed
+from `function_id` to `(function_id, level_band)` accordingly. References
+already issued under the unbanded form keep their leading `0` and are never
+rewritten; a `0` band digit is outside the 1–5 the new scheme allocates, so
+the two forms cannot collide.
 """
 
 from typing import List, Optional
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, SmallInteger, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import Base, TimestampMixin
@@ -24,6 +32,23 @@ from src.domain.models.base import Base, TimestampMixin
 # Level-2 (subcategory) taxonomy_id that must always seed inactive — HGV/O-licence
 # is out of scope for Plantexpand's current fleet (Wave W0 decision log).
 DEACTIVATED_TAXONOMY_IDS = frozenset({"06.04"})
+
+# Northern Star v6 cascade levels. The level is not decoration: it is the first
+# digit of every sequence the library issues (`PEL-HSEQ-3001` is a level-3
+# Procedure), so the band and the level are the same number by construction —
+# that is rule R02 ("the first digit of the sequence equals the cascade level").
+#
+#   1 Manual   2 Policy   3 Procedure/Standard   4 SOP/RAMS/Assessment
+#   5 Form/Register/Record
+CASCADE_LEVEL_MIN = 1
+CASCADE_LEVEL_MAX = 5
+CASCADE_LEVELS: tuple[int, ...] = tuple(range(CASCADE_LEVEL_MIN, CASCADE_LEVEL_MAX + 1))
+
+# Digits after the band digit. Four digits total (`[1-5][0-9]{3}`) is the whole
+# reference grammar under R01, so a band holds 999 documents and the 1000th is
+# refused rather than silently widened — see `allocate_pel_doc_ref`.
+PEL_BAND_SEQ_WIDTH = 3
+PEL_BAND_CAPACITY = 10**PEL_BAND_SEQ_WIDTH - 1
 
 
 class DocumentFunction(Base, TimestampMixin):
@@ -136,13 +161,19 @@ class DocumentTag(Base, TimestampMixin):
 
 
 class PelDocRefCounter(Base):
-    """Atomic per-function sequence counter for PEL-<FUNCTION>-<SEQ> allocation.
+    """Atomic per-(function, band) sequence counter for `PEL-<FUNCTION>-<BAND><SEQ>`.
 
-    One row per `DocumentFunction` (WA-2 / ADR-0023 — it was one row per
-    level-2 category under the retired `PEL-<SECTION>-<SUB>-<SEQ>` scheme).
+    One row per `DocumentFunction` *per cascade level* (NS-1 / Northern Star
+    v6 — WA-2 had one row per function, and Wave W0 before it had one row per
+    level-2 category). A function therefore owns five independent sequences,
+    because HSEQ's procedures and HSEQ's forms number separately: the first
+    procedure is `PEL-HSEQ-3001` while the first form is `PEL-HSEQ-5001`.
+
     Allocation is a single atomic ``UPDATE ... SET next_seq = next_seq + 1
-    RETURNING next_seq`` so concurrent allocations for the same function can
-    never collide — see
+    RETURNING next_seq`` scoped to one (function, band) row, so concurrent
+    allocations in the same band are guaranteed distinct numbers and
+    allocations in *different* bands of the same function no longer contend at
+    all — see
     src.domain.services.document_category_service.allocate_pel_doc_ref.
 
     ``ondelete="RESTRICT"`` rather than CASCADE: deleting the counter would
@@ -152,12 +183,25 @@ class PelDocRefCounter(Base):
     """
 
     __tablename__ = "pel_doc_ref_counters"
+    __table_args__ = (
+        CheckConstraint(
+            f"level_band >= {CASCADE_LEVEL_MIN} AND level_band <= {CASCADE_LEVEL_MAX}",
+            name="ck_pel_doc_ref_counters_level_band",
+        ),
+    )
 
     function_id: Mapped[int] = mapped_column(
         ForeignKey("document_functions.id", ondelete="RESTRICT"),
         primary_key=True,
     )
+    # The cascade level this sequence numbers, and literally the leading digit
+    # of every reference it issues (R02). Part of the primary key, so a band
+    # can never acquire a second counter row and fork its own sequence.
+    level_band: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     next_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     def __repr__(self) -> str:
-        return f"<PelDocRefCounter(function_id={self.function_id}, next_seq={self.next_seq})>"
+        return (
+            f"<PelDocRefCounter(function_id={self.function_id}, "
+            f"level_band={self.level_band}, next_seq={self.next_seq})>"
+        )

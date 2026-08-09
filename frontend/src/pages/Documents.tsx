@@ -45,6 +45,7 @@ import { DocumentFilingFunctionStep } from './DocumentFilingFunctionStep'
 import { DocumentFilingRelatedPlaceholder } from './DocumentFilingRelatedPlaceholder'
 import { DocumentFilingWizardChrome } from './DocumentFilingWizardChrome'
 import {
+  appendOptionalCascadeLevel,
   appendOptionalFunctionCode,
   DOCUMENT_FILING_STEP_DESC_KEYS,
   DOCUMENT_FILING_STEP_TITLE_KEYS,
@@ -274,6 +275,8 @@ export default function Documents() {
   const [filingWizardStep, setFilingWizardStep] = useState<DocumentFilingWizardStep>('file')
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
   const [selectedFunctionCode, setSelectedFunctionCode] = useState<string | null>(null)
+  // NS-1 — the band the PEL reference is drawn from. Required with a function.
+  const [selectedCascadeLevel, setSelectedCascadeLevel] = useState<number | null>(null)
   const [uploadRelationshipDoc, setUploadRelationshipDoc] = useState<{
     id: number
     title: string
@@ -564,7 +567,11 @@ export default function Documents() {
     setFilingWizardStep('function')
   }
 
-  const handleFileUpload = async (file: File, functionCode: string | null = null) => {
+  const handleFileUpload = async (
+    file: File,
+    functionCode: string | null = null,
+    cascadeLevel: number | null = null,
+  ) => {
     setUploading(true)
     setUploadProgress(0)
     setUploadError(null)
@@ -575,6 +582,7 @@ export default function Documents() {
     formData.append('document_type', 'other')
     formData.append('sensitivity', 'internal')
     appendOptionalFunctionCode(formData, functionCode)
+    appendOptionalCascadeLevel(formData, cascadeLevel)
 
     let progressInterval: ReturnType<typeof setInterval> | undefined
     try {
@@ -1559,14 +1567,17 @@ export default function Documents() {
                     busy={uploading}
                     selectedCode={selectedFunctionCode}
                     onSelectedCodeChange={setSelectedFunctionCode}
+                    selectedCascadeLevel={selectedCascadeLevel}
+                    onSelectedCascadeLevelChange={setSelectedCascadeLevel}
                     onBack={() => {
                       setPendingUploadFile(null)
                       setSelectedFunctionCode(null)
+                      setSelectedCascadeLevel(null)
                       setUploadError(null)
                       setFilingWizardStep('file')
                     }}
-                    onConfirm={(functionCode) => {
-                      void handleFileUpload(pendingUploadFile, functionCode)
+                    onConfirm={(functionCode, cascadeLevel) => {
+                      void handleFileUpload(pendingUploadFile, functionCode, cascadeLevel)
                     }}
                   />
                 )}

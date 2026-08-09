@@ -117,7 +117,7 @@ def test_migration_chains_serially_from_the_w4_head():
 
 def test_the_w5_revision_is_the_only_head(tmp_path):
     heads = _alembic_revision_map(tmp_path)["heads"]
-    assert heads == ["20261026_lib_wc1_control_holds"], f"expected WC-1 as the single head, found {heads}"
+    assert heads == ["20261027_lib_ns1_banded_pel"], f"expected NS-1 as the single head, found {heads}"
 
 
 def test_only_the_w5_revision_sits_on_the_w4_head(tmp_path):

@@ -10068,6 +10068,17 @@
       },
       "Body_upload_document_api_v1_documents_upload_post": {
         "properties": {
+          "cascade_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cascade Level"
+          },
           "category": {
             "title": "Category",
             "type": "string"
@@ -19948,6 +19959,17 @@
             ],
             "title": "Ai Tags"
           },
+          "cascade_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cascade Level"
+          },
           "category": {
             "anyOf": [
               {
@@ -20676,6 +20698,17 @@
       "DocumentUploadResponse": {
         "description": "Response after document upload.",
         "properties": {
+          "cascade_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cascade Level"
+          },
           "duplicate_warning": {
             "default": false,
             "title": "Duplicate Warning",
@@ -26903,6 +26936,19 @@
       "FraOcrFileRequest": {
         "additionalProperties": false,
         "properties": {
+          "cascade_level": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cascade Level"
+          },
           "category_id": {
             "minimum": 1.0,
             "title": "Category Id",
@@ -43802,6 +43848,19 @@
         "additionalProperties": false,
         "description": "Body for the explicit Library filing step (ADR-0020).\n\nExactly one mode per request:\n\n* ``evidence_asset_id`` + ``category_id`` \u2014 copy an evidence asset already\n  attached to this occurrence into the Governance Library as a new draft\n  document under that taxonomy category.\n* ``library_document_id`` \u2014 point the occurrence at a document that is\n  already in the Library.\n\nThe two are mutually exclusive rather than merged into one optional-field\nsoup because they authorise differently: one creates a document, the other\nexposes an existing one. A request that supplies both is a caller who has\nnot decided which they meant, and guessing for them would file something.",
         "properties": {
+          "cascade_level": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cascade Level"
+          },
           "category_id": {
             "anyOf": [
               {
@@ -81739,7 +81798,7 @@
     },
     "/api/v1/documents/upload": {
       "post": {
-        "description": "Upload and process a new document.\n\n`category_id` (Governance Library taxonomy, Wave W0) is optional and\nseparate from the legacy free-text `category` string.\n\n`function_code` (WA-2 / ADR-0023) is the *owning function* \u2014 a different\naxis from the category, and the one the PEL reference is drawn from. When\na valid code is supplied a `pel_doc_ref` (`PEL-<FUNCTION>-<SEQ>`) is\natomically allocated alongside the existing `reference_number`\n(DOC-YYYY-####), and both it and the function are then immutable. When no\ncode is supplied the document is still created, with no PEL reference: the\nfunction is confirmed by a filer, never inferred, because a mis-filed\nreference cannot be corrected in place.\n\n`site_location_id` binds the document to an existing `Location`\n(site/workshop) \u2014 no separate Site table.",
+        "description": "Upload and process a new document.\n\n`category_id` (Governance Library taxonomy, Wave W0) is optional and\nseparate from the legacy free-text `category` string.\n\n`function_code` (WA-2 / ADR-0023) is the *owning function* \u2014 a different\naxis from the category, and the one the PEL reference is drawn from.\n\n`cascade_level` (NS-1 / Northern Star v6) is the document's level in the\ncascade, 1 Manual through 5 Form/Register/Record. It is the band the\nreference is drawn from, so supplying `function_code` **requires** it: a\nreference cannot be issued into a band nobody chose, and it cannot be\nre-banded afterwards because it is immutable. Supplying `cascade_level`\non its own is allowed \u2014 a document may record its level before its\nfunction is confirmed.\n\nWhen both are supplied a `pel_doc_ref` (`PEL-<FUNCTION>-<BAND><SEQ>`, e.g.\n`PEL-HSEQ-3001`) is atomically allocated alongside the existing\n`reference_number` (DOC-YYYY-####), and the reference, the function and\nthe level are then fixed. When no function code is supplied the document\nis still created, with no PEL reference: the function is confirmed by a\nfiler, never inferred, because a mis-filed reference cannot be corrected\nin place.\n\n`site_location_id` binds the document to an existing `Location`\n(site/workshop) \u2014 no separate Site table.",
         "operationId": "upload_document_api_v1_documents_upload_post",
         "requestBody": {
           "content": {

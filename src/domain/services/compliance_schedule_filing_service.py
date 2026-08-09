@@ -250,6 +250,7 @@ async def file_record_to_library(
     evidence_asset_id: Optional[int] = None,
     category_id: Optional[int] = None,
     function_code: Optional[str] = None,
+    cascade_level: Optional[int] = None,
     library_document_id: Optional[int] = None,
     title: Optional[str] = None,
 ) -> FilingResult:
@@ -264,6 +265,13 @@ async def file_record_to_library(
     (ADR-0023). It is optional: without it the filed document gets no
     ``pel_doc_ref``, because deriving a function from the evidence would print
     an immutable reference nobody confirmed.
+
+    ``cascade_level`` (NS-1) is the band the reference is drawn from and is
+    required whenever ``function_code`` is given. Filed evidence is very often
+    a level-5 record, but "very often" is not "always" — a filed contractor
+    method statement is a level-4 document — so the level is confirmed by the
+    filer rather than defaulted here. A defaulted band would print an
+    immutable reference that misplaces the document in the cascade.
     """
     if (evidence_asset_id is None) == (library_document_id is None):
         raise ValidationError(
@@ -305,6 +313,7 @@ async def file_record_to_library(
             evidence_asset_id=evidence_asset_id,
             category_id=category_id,
             function_code=function_code,
+            cascade_level=cascade_level,
             title=title,
         )
         linked_existing = False
@@ -337,6 +346,7 @@ async def file_record_to_library(
             "evidence_asset_id": evidence_asset_id,
             "category_id": category_id,
             "function_code": function_code,
+            "cascade_level": cascade_level,
             "linked_existing": linked_existing,
             "index_job_id": index_job.id if index_job is not None else None,
         },
@@ -367,6 +377,7 @@ async def _create_library_document(
     evidence_asset_id: int,
     category_id: int,
     function_code: Optional[str],
+    cascade_level: Optional[int],
     title: Optional[str],
 ) -> tuple[Document, bool, Optional[list[dict]]]:
     """Copy a bound evidence asset into the Library as a new draft document."""
@@ -380,6 +391,13 @@ async def _create_library_document(
     # Resolved before the storage download so an unknown function code fails the
     # request cheaply rather than after a file has been copied.
     filing_function = await resolve_function_code(db, function_code)
+    if filing_function is not None and cascade_level is None:
+        raise ValidationError(
+            "cascade_level is required when function_code is supplied: the PEL "
+            "reference is banded by cascade level and cannot be re-banded once "
+            "issued (NS-1 / R02).",
+            code="VALIDATION_ERROR",
+        )
     file_type = _file_type_for(asset.original_filename)
 
     requirement = await _load_requirement(db, requirement_id=record.requirement_id, tenant_id=tenant_id)
@@ -402,7 +420,9 @@ async def _create_library_document(
         ) from exc
 
     reference_number = await ReferenceNumberService.generate(db, "document", Document)
-    pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id) if filing_function is not None else None
+    pel_doc_ref = (
+        await allocate_pel_doc_ref(db, filing_function.id, cascade_level) if filing_function is not None else None
+    )
     defaults = filing_defaults_for_category(category)
 
     site_location_id = getattr(requirement, "location_id", None)
@@ -456,6 +476,7 @@ async def _create_library_document(
         category_id=category_id,
         pel_doc_ref=pel_doc_ref,
         function_id=filing_function.id if filing_function is not None else None,
+        cascade_level=cascade_level,
         site_location_id=site_location_id,
         access_level=defaults.access_level,
         is_statutory=defaults.is_statutory,

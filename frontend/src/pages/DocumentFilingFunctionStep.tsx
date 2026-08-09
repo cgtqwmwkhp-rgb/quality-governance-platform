@@ -22,7 +22,11 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import {
+  CASCADE_LEVEL_OPTIONS,
+  canConfirmFilingStep,
+  formatCascadeLevelLabel,
   formatFunctionOptionLabel,
+  isCascadeLevel,
   type DocumentFunctionOption,
 } from './documentFilingWizard'
 
@@ -33,7 +37,9 @@ export interface DocumentFilingFunctionStepProps {
   busy?: boolean
   selectedCode: string | null
   onSelectedCodeChange: (functionCode: string | null) => void
-  onConfirm: (functionCode: string | null) => void
+  selectedCascadeLevel: number | null
+  onSelectedCascadeLevelChange: (cascadeLevel: number | null) => void
+  onConfirm: (functionCode: string | null, cascadeLevel: number | null) => void
   onBack: () => void
 }
 
@@ -42,6 +48,8 @@ export function DocumentFilingFunctionStep({
   busy = false,
   selectedCode,
   onSelectedCodeChange,
+  selectedCascadeLevel,
+  onSelectedCascadeLevelChange,
   onConfirm,
   onBack,
 }: DocumentFilingFunctionStepProps) {
@@ -79,6 +87,11 @@ export function DocumentFilingFunctionStep({
 
   const selectValue = selectedCode ?? NONE_VALUE
   const confirmedCode = selectedCode
+  const confirmedLevel = isCascadeLevel(selectedCascadeLevel) ? selectedCascadeLevel : null
+  // A confirmed function allocates an immutable banded reference, so the level
+  // that band is drawn from has to be chosen with it (NS-1 / R02).
+  const levelRequired = Boolean(confirmedCode)
+  const canConfirm = canConfirmFilingStep(confirmedCode, confirmedLevel)
 
   return (
     <div className="space-y-4" data-testid="documents-filing-function-step">
@@ -142,6 +155,55 @@ export function DocumentFilingFunctionStep({
               {t('documents.filing.function.empty')}
             </p>
           ) : null}
+
+          <div className="space-y-2 pt-2">
+            <Label htmlFor="documents-filing-level-select">
+              {levelRequired
+                ? t('documents.filing.level.select_label_required')
+                : t('documents.filing.level.select_label')}
+            </Label>
+            <Select
+              value={confirmedLevel === null ? NONE_VALUE : String(confirmedLevel)}
+              onValueChange={(value) => {
+                onSelectedCascadeLevelChange(value === NONE_VALUE ? null : Number(value))
+              }}
+              disabled={busy}
+            >
+              <SelectTrigger
+                id="documents-filing-level-select"
+                data-testid="documents-filing-level-select"
+                aria-label={t('documents.filing.level.select_label')}
+                aria-required={levelRequired}
+              >
+                <SelectValue placeholder={t('documents.filing.level.select_placeholder')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE_VALUE}>{t('documents.filing.level.skip_option')}</SelectItem>
+                {CASCADE_LEVEL_OPTIONS.map((option) => (
+                  <SelectItem
+                    key={option.level}
+                    value={String(option.level)}
+                    data-testid={`documents-filing-level-option-${option.level}`}
+                  >
+                    {formatCascadeLevelLabel(option)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {levelRequired && confirmedLevel === null ? (
+              <p
+                role="alert"
+                className="text-xs text-destructive"
+                data-testid="documents-filing-level-required"
+              >
+                {t('documents.filing.level.required_with_function')}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground" data-testid="documents-filing-level-helper">
+                {t('documents.filing.level.helper')}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -155,8 +217,8 @@ export function DocumentFilingFunctionStep({
           {t('documents.filing.function.back')}
         </Button>
         <Button
-          onClick={() => onConfirm(confirmedCode)}
-          disabled={busy || loading}
+          onClick={() => onConfirm(confirmedCode, confirmedLevel)}
+          disabled={busy || loading || !canConfirm}
           data-testid="documents-filing-function-continue"
         >
           {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

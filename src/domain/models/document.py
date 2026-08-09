@@ -9,11 +9,25 @@ import functools
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, event
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    event,
+)
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.document_library import CASCADE_LEVEL_MAX, CASCADE_LEVEL_MIN
 from src.domain.models.enums import DocumentStatus, DocumentType
 
 # =============================================================================
@@ -68,6 +82,13 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __table_args__ = (
         # WC-1 — legal-hold enforcement always reads (tenant_id, matter).
         Index("ix_documents_tenant_legal_matter_reference", "tenant_id", "legal_matter_reference"),
+        # NS-1 — a level outside 1..5 has no band to allocate from and no
+        # meaning in the cascade. NULL stays legal: legacy rows predate the
+        # cascade, and a document may be filed before its level is confirmed.
+        CheckConstraint(
+            f"cascade_level IS NULL OR (cascade_level >= {CASCADE_LEVEL_MIN} AND cascade_level <= {CASCADE_LEVEL_MAX})",
+            name="ck_documents_cascade_level_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -174,6 +195,16 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         ForeignKey("document_functions.id", ondelete="RESTRICT"), nullable=True, index=True
     )
 
+    # Cascade level 1..5 (NS-1 / Northern Star v6). This is the *same* number as
+    # the band digit of `pel_doc_ref` whenever one is allocated — the allocator
+    # takes the level and returns the reference, so R02 ("the first digit of the
+    # sequence equals the cascade level") holds by construction rather than by
+    # a reconciliation job. Nullable because legacy rows predate the cascade and
+    # a document may be filed before its level is confirmed; but a PEL reference
+    # is never issued without one, because the band it would be drawn from is
+    # exactly what the level names.
+    cascade_level: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True, index=True)
+
     # Site/workshop binding — reuses the existing Location model (no new Site table).
     site_location_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
@@ -256,6 +287,48 @@ for _attribute in _IMMUTABLE_ONCE_SET:
         retval=True,
     )
 del _attribute
+
+
+def _refuse_level_change_after_issue(target: "Document", value: object, oldvalue: object, initiator: object) -> object:
+    """Refuse a cascade-level edit once a PEL reference has been issued (R02/R05).
+
+    The band digit of an issued reference *is* the cascade level, so moving the
+    level on an issued document would leave `PEL-HSEQ-3001` claiming level 3
+    while the record claims level 4 — and the reference cannot follow, because
+    it is immutable. Northern Star R05 says a level change is a reissue:
+    withdraw the old reference and issue a new one in the new band with a
+    Supersedes link.
+
+    Before issue the level is freely editable — a draft's level is exactly the
+    thing a filer is still deciding. Unlike `_refuse_rewrite` this therefore
+    keys off `pel_doc_ref`, not off the old level being set.
+
+    `pel_doc_ref` is read out of the instance dict rather than by attribute, for
+    the same reason the listener above does not force a load: touching an
+    expired attribute here would emit lazy IO outside the async greenlet. An
+    unloaded reference reads as "not issued" and the edit is allowed through —
+    the `trg_documents_pel_doc_ref_immutable` trigger is the authoritative
+    guard on PostgreSQL and catches exactly that case.
+    """
+    from sqlalchemy.orm.base import NO_VALUE
+
+    from src.domain.exceptions import ConflictError
+
+    if oldvalue is NO_VALUE or oldvalue is None or oldvalue == value:
+        return value
+    issued_ref = target.__dict__.get("pel_doc_ref")
+    if issued_ref is None:
+        return value
+    raise ConflictError(
+        f"Document.cascade_level is fixed once a PEL reference is issued "
+        f"({oldvalue!r} -> {value!r}); {issued_ref} is banded to level "
+        f"{oldvalue!r}. Re-file the document to issue a reference in the new "
+        "band and supersede this one (Northern Star R02/R05).",
+        code="PEL_REF_IMMUTABLE",
+    )
+
+
+event.listen(Document.cascade_level, "set", _refuse_level_change_after_issue, retval=True)
 
 
 # =============================================================================

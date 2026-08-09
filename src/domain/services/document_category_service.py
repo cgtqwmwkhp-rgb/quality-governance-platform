@@ -8,14 +8,19 @@ Two responsibilities:
    repeatedly — upserts by natural key (`taxonomy_id` / `code` / `slug`),
    never duplicates, and always re-applies the Wave W0 deactivation list on
    reseed.
-2. Atomic PEL doc-ref allocation (`PEL-<FUNCTION>-<SEQ>`, ADR-0023) via a
-   single `UPDATE ... RETURNING` on `pel_doc_ref_counters`, so concurrent
-   document creates under the same function can never collide.
+2. Atomic PEL doc-ref allocation (`PEL-<FUNCTION>-<BAND><SEQ>`, ADR-0023 as
+   amended by Northern Star v6) via a single `UPDATE ... RETURNING` on
+   `pel_doc_ref_counters`, so concurrent document creates in the same
+   (function, band) can never collide.
 
 WA-2 moved the counter from the category to the function: the category
-classifies, the reference identifies. There is exactly one allocator — the
-retired `PEL-<SECTION>-<SUB>-<SEQ>` form is not issued anywhere, and
-references already issued under it are kept verbatim and never rewritten.
+classifies, the reference identifies. NS-1 then bands the sequence by cascade
+level, so the reference also *positions* the document in the cascade:
+`PEL-IT-2014` is IT's 14th Policy. There is exactly one allocator — the
+retired `PEL-<SECTION>-<SUB>-<SEQ>` and unbanded `PEL-<FUNCTION>-0###` forms
+are not issued anywhere, and references already issued under them are kept
+verbatim and never rewritten (R29: allocation is append-only, nothing is ever
+renumbered).
 """
 
 from __future__ import annotations
@@ -27,7 +32,17 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import NotFoundError, ValidationError
-from src.domain.models.document_library import DocumentCategory, DocumentFunction, DocumentTag, PelDocRefCounter
+from src.domain.models.document_library import (
+    CASCADE_LEVEL_MAX,
+    CASCADE_LEVEL_MIN,
+    CASCADE_LEVELS,
+    PEL_BAND_CAPACITY,
+    PEL_BAND_SEQ_WIDTH,
+    DocumentCategory,
+    DocumentFunction,
+    DocumentTag,
+    PelDocRefCounter,
+)
 from src.domain.services.document_category_seed_data import (
     EXPECTED_CATEGORY_COUNT,
     EXPECTED_FUNCTION_COUNT,
@@ -35,12 +50,6 @@ from src.domain.services.document_category_seed_data import (
     load_library_functions,
     load_taxonomy_categories,
 )
-
-# Four digits because HSEQ holds 226 documents on day one (ADR-0023). The width
-# is a floor, not a ceiling: allocation 10_000 formats as `PEL-HSEQ-10000`
-# rather than truncating or wrapping, so the sequence never re-issues a
-# reference just because it outgrew its padding.
-PEL_SEQ_WIDTH = 4
 
 
 @dataclass
@@ -165,20 +174,25 @@ async def seed_document_categories(db: AsyncSession) -> CategorySeedResult:
             f"expected {EXPECTED_FUNCTION_COUNT}. Check specs/governance-library/functions.json."
         )
 
-    # PEL counters — one per function, seeded once and never reset (resetting
-    # an existing counter would re-issue a PEL ref that is already printed on a
-    # document and cited in a client audit pack).
+    # PEL counters — one per function *per cascade band* (NS-1), seeded once and
+    # never reset (resetting an existing counter would re-issue a PEL ref that
+    # is already printed on a document and cited in a client audit pack). All
+    # five bands are seeded up front rather than lazily on first use, so
+    # allocation is a plain UPDATE that never has to race to create its own row.
     counters_created = 0
     function_ids = [f.id for f in existing_functions_by_code.values()]
     if function_ids:
         existing_counters = await db.execute(
-            select(PelDocRefCounter.function_id).where(PelDocRefCounter.function_id.in_(function_ids))
+            select(PelDocRefCounter.function_id, PelDocRefCounter.level_band).where(
+                PelDocRefCounter.function_id.in_(function_ids)
+            )
         )
-        existing_counter_ids = {row[0] for row in existing_counters.all()}
+        existing_counter_keys = {(row[0], row[1]) for row in existing_counters.all()}
         for function_id in function_ids:
-            if function_id not in existing_counter_ids:
-                db.add(PelDocRefCounter(function_id=function_id, next_seq=1))
-                counters_created += 1
+            for band in CASCADE_LEVELS:
+                if (function_id, band) not in existing_counter_keys:
+                    db.add(PelDocRefCounter(function_id=function_id, level_band=band, next_seq=1))
+                    counters_created += 1
 
     # Tag vocabulary — upsert by slug.
     existing_tags_result = await db.execute(select(DocumentTag))
@@ -243,28 +257,69 @@ async def resolve_function_code(db: AsyncSession, function_code: Optional[str]) 
     return function
 
 
-async def allocate_pel_doc_ref(db: AsyncSession, function_id: int) -> str:
-    """Atomically allocate the next `PEL-<FUNCTION>-<SEQ>` for a function (ADR-0023).
+def coerce_cascade_level(cascade_level: object, *, field: str = "cascade_level") -> int:
+    """Coerce and range-check a caller-supplied cascade level, or raise.
+
+    Accepts an `int`, or the digit strings that arrive from multipart form
+    fields. Everything else is refused, including `None` and floats: `int(2.5)`
+    is 2, and silently rounding a level would band an immutable reference one
+    tier away from where the caller pointed. There is deliberately no default
+    level either — guessing one prints a reference in a band nobody chose, and
+    the band is the part of the reference that says where the document sits in
+    the cascade.
+    """
+    bad = ValidationError(
+        f"{field} must be a cascade level {CASCADE_LEVEL_MIN}-{CASCADE_LEVEL_MAX} "
+        f"(1 Manual, 2 Policy, 3 Procedure/Standard, 4 SOP/RAMS/Assessment, "
+        f"5 Form/Register/Record), got {cascade_level!r}"
+    )
+    if isinstance(cascade_level, bool) or cascade_level is None:
+        raise bad
+    if isinstance(cascade_level, int):
+        level = cascade_level
+    elif isinstance(cascade_level, str):
+        text = cascade_level.strip()
+        if not text.isdigit():
+            raise bad
+        level = int(text)
+    else:
+        raise bad
+    if level not in CASCADE_LEVELS:
+        raise bad
+    return level
+
+
+async def allocate_pel_doc_ref(db: AsyncSession, function_id: int, cascade_level: int) -> str:
+    """Atomically allocate the next `PEL-<FUNCTION>-<BAND><SEQ>` in one band (NS-1).
+
+    `cascade_level` is required, has no default, and *is* the band digit: level
+    3 allocates `PEL-HSEQ-3001`, `PEL-HSEQ-3002`, ... So rule R02 ("the first
+    digit of the sequence equals the cascade level") holds because there is no
+    way to express a reference that breaks it — the caller cannot pass a band
+    and a level separately and get them out of step.
 
     Single `UPDATE ... RETURNING` statement — the increment and the read of
     the pre-increment value happen in one round trip, so two concurrent
-    callers allocating for the same function are guaranteed distinct sequence
-    numbers even though neither takes an explicit row lock first. Raises
-    `NotFoundError` if the function doesn't exist or has no counter row (i.e.
-    is not a seeded function); `ValidationError` if it is inactive.
+    callers allocating in the same (function, band) are guaranteed distinct
+    sequence numbers even though neither takes an explicit row lock first, and
+    the number always moves forward (R29: append-only, never gap-filled, never
+    renumbered — a rolled-back create leaves a hole rather than handing the
+    number to the next caller). Raises `NotFoundError` if the function doesn't
+    exist or that band has no counter row (i.e. is not a seeded function);
+    `ValidationError` if the function is inactive or the level is out of range.
 
-    The increment is transactional, so a rolled-back create releases the
-    number rather than burning it. The flip side is that the counter row stays
-    locked for the rest of the caller's transaction, which in the upload paths
-    spans the blob-storage write: concurrent allocations for the *same*
-    function serialise behind it. That was equally true of the Wave W0
-    per-category counter, but WA-2 concentrates it, because HSEQ is expected to
-    carry ~73% of the estate where the old scheme spread the same traffic over
-    73 category counters. If that contention ever bites, the fix is to allocate
-    after the storage write rather than before it (the reference may be set on
-    an already-created row — NULL to value is permitted), not to weaken the
-    atomicity here.
+    Banding also relieves the contention WA-2 concentrated. The increment is
+    transactional, so the counter row stays locked for the rest of the caller's
+    transaction, which in the upload paths spans the blob-storage write. Under
+    WA-2 every HSEQ upload serialised behind one row — and HSEQ is expected to
+    carry ~73% of the estate. That queue is now split five ways, because an
+    HSEQ form and an HSEQ procedure touch different rows. If it still bites,
+    the fix is to allocate after the storage write rather than before it (the
+    reference may be set on an already-created row — NULL to value is
+    permitted), not to weaken the atomicity here.
     """
+    band = coerce_cascade_level(cascade_level)
+
     function = await db.get(DocumentFunction, function_id)
     if function is None:
         raise NotFoundError(f"Document function {function_id} not found")
@@ -273,14 +328,28 @@ async def allocate_pel_doc_ref(db: AsyncSession, function_id: int) -> str:
 
     stmt = (
         update(PelDocRefCounter)
-        .where(PelDocRefCounter.function_id == function_id)
+        .where(PelDocRefCounter.function_id == function_id, PelDocRefCounter.level_band == band)
         .values(next_seq=PelDocRefCounter.next_seq + 1)
         .returning(PelDocRefCounter.next_seq)
     )
     result = await db.execute(stmt)
     row = result.first()
     if row is None:
-        raise NotFoundError(f"No PEL doc-ref counter seeded for function {function_id}")
+        raise NotFoundError(f"No PEL doc-ref counter seeded for function {function_id} band {band}")
 
     allocated_seq = row[0] - 1
-    return f"PEL-{function.code}-{allocated_seq:0{PEL_SEQ_WIDTH}d}"
+    if allocated_seq > PEL_BAND_CAPACITY:
+        # A band holds 999. Widening the sequence (the pre-NS-1 behaviour) would
+        # emit `PEL-HSEQ-31000`, which fails R01, and narrowing/wrapping would
+        # re-issue a live reference, which fails R06. Neither is available, so
+        # the only honest move is to refuse and let a human amend the scheme.
+        # The counter is left advanced on purpose: every subsequent attempt in
+        # this band must fail the same way rather than quietly finding a hole.
+        raise ValidationError(
+            f"Band {band} of function '{function.code}' is exhausted at "
+            f"{PEL_BAND_CAPACITY} references (R01 fixes the sequence at "
+            f"{PEL_BAND_SEQ_WIDTH} digits after the band digit). The reference "
+            "scheme has to be amended before this document can be filed; "
+            "numbers are never re-used or renumbered (R06/R29)."
+        )
+    return f"PEL-{function.code}-{band}{allocated_seq:0{PEL_BAND_SEQ_WIDTH}d}"
