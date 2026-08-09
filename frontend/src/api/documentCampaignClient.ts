@@ -133,6 +133,8 @@ export interface DocumentCampaignAssignment {
   linked_policy_id?: number | null
   document_title?: string | null
   document_version?: string | null
+  /** Controlled issue currency for portal CURRENT badge (L-48). Optional until API projects it. */
+  document_issue_state?: string | null
   status: string
   assigned_at?: string | null
   due_date?: string | null

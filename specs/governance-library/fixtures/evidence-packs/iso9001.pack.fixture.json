@@ -1,0 +1,106 @@
+{
+  "pack_version": "lib-wk1-framework-1.0",
+  "framework": {
+    "id": "iso9001",
+    "code": "ISO_9001",
+    "label": "ISO 9001:2015",
+    "kind": "iso"
+  },
+  "generated_at": "2026-08-09T12:00:00+00:00",
+  "exported_by": "wk1-fixture@plantexpand.test",
+  "organization_name": "Plantexpand Fixture Co",
+  "provenance_policy": {
+    "source": "typed_cel_rows",
+    "wi1_fields": [
+      "cover_kind",
+      "confirmed_by_id",
+      "confirmed_at",
+      "catalogue_key"
+    ],
+    "wire_status": "builder_ready_awaiting_wi1_adapter",
+    "signal_honesty": "Only signal_type=evidence (and legacy null/empty) is conformance-eligible. nonconformity/gap/opportunity are operational assessor signals.",
+    "nonconformity_mode": "excluded_from_conformance_evidence",
+    "include_nonconformity": false,
+    "no_coverage_twin_tables": true
+  },
+  "counts": {
+    "matched_rows": 3,
+    "conformance_evidence_links": 2,
+    "operational_signal_links": 1,
+    "exported_evidence_links": 2,
+    "current_issue_links": 2
+  },
+  "evidence_links": [
+    {
+      "id": "cel-9001-1",
+      "entity_type": "document",
+      "entity_id": "101",
+      "clause_id": "9001-7.5.3",
+      "catalogue_key": "9001-7.5.3",
+      "cover_kind": "covers",
+      "signal_type": "evidence",
+      "conformance_eligible": true,
+      "scheme": "iso9001",
+      "standard": "ISO_9001",
+      "status": "confirmed",
+      "confirmed_at": "2026-08-01T09:00:00+00:00",
+      "confirmed_by_id": 42,
+      "confirmed_by": "hseq.lead@plantexpand.test",
+      "created_at": "2026-07-20T10:00:00+00:00",
+      "created_by": "mapper@plantexpand.test",
+      "rationale": "Controlled Quality Manual issue covers documented information control.",
+      "confidence": 0.94,
+      "title": "Quality Manual",
+      "notes": null,
+      "document_issue_state": "CURRENT"
+    },
+    {
+      "id": "cel-9001-2",
+      "entity_type": "document",
+      "entity_id": "101",
+      "clause_id": "9001-7.5.3",
+      "catalogue_key": "9001-7.5.3",
+      "cover_kind": "evidences",
+      "signal_type": "evidence",
+      "conformance_eligible": true,
+      "scheme": "iso9001",
+      "standard": "ISO_9001",
+      "status": "confirmed",
+      "confirmed_at": "2026-08-01T09:05:00+00:00",
+      "confirmed_by_id": 42,
+      "confirmed_by": "hseq.lead@plantexpand.test",
+      "created_at": "2026-07-21T10:00:00+00:00",
+      "created_by": "mapper@plantexpand.test",
+      "rationale": "Revision log evidences control of changes.",
+      "confidence": 0.9,
+      "title": "Quality Manual \u2014 revision log",
+      "notes": null,
+      "document_issue_state": "CURRENT"
+    }
+  ],
+  "operational_signals": [
+    {
+      "id": "cel-9001-nc",
+      "entity_type": "document",
+      "entity_id": "202",
+      "clause_id": "9001-8.5.1",
+      "catalogue_key": "9001-8.5.1",
+      "cover_kind": "evidences",
+      "signal_type": "nonconformity",
+      "conformance_eligible": false,
+      "scheme": "iso9001",
+      "standard": "ISO_9001",
+      "status": "open",
+      "confirmed_at": null,
+      "confirmed_by_id": null,
+      "confirmed_by": null,
+      "created_at": "2026-07-22T11:00:00+00:00",
+      "created_by": "auditor@plantexpand.test",
+      "rationale": "Operational NC \u2014 not conformance evidence.",
+      "confidence": 0.7,
+      "title": "Production work instruction gap",
+      "notes": "Open finding",
+      "document_issue_state": "CURRENT"
+    }
+  ]
+}
