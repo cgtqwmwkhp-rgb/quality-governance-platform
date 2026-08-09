@@ -19071,6 +19071,18 @@
             "title": "Is Confidential",
             "type": "boolean"
           },
+          "library_document_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Document Id"
+          },
           "owner_name": {
             "anyOf": [
               {
@@ -19658,6 +19670,68 @@
         "title": "DocumentFunctionResponse",
         "type": "object"
       },
+      "DocumentHoldScopeRequest": {
+        "additionalProperties": false,
+        "description": "Which matter a Register document is filed under.\n\n``extra=\"forbid\"`` so a misspelled field cannot leave a document outside every\nhold while the call reports 200 (B-10).",
+        "properties": {
+          "matter_reference": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matter Reference"
+          }
+        },
+        "title": "DocumentHoldScopeRequest",
+        "type": "object"
+      },
+      "DocumentHoldScopeResponse": {
+        "properties": {
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "legal_hold_active": {
+            "title": "Legal Hold Active",
+            "type": "boolean"
+          },
+          "legal_hold_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Hold Id"
+          },
+          "matter_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matter Reference"
+          }
+        },
+        "required": [
+          "document_id",
+          "matter_reference",
+          "legal_hold_active",
+          "legal_hold_id"
+        ],
+        "title": "DocumentHoldScopeResponse",
+        "type": "object"
+      },
       "DocumentListResponse": {
         "description": "Paginated document list.",
         "properties": {
@@ -19907,6 +19981,28 @@
             ],
             "title": "Chunk Count"
           },
+          "control_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Status"
+          },
+          "controlled_document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Controlled Document Id"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -20057,6 +20153,22 @@
             "default": false,
             "title": "Is Statutory",
             "type": "boolean"
+          },
+          "legal_hold_active": {
+            "default": false,
+            "title": "Legal Hold Active",
+            "type": "boolean"
+          },
+          "legal_matter_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Matter Reference"
           },
           "live_at": {
             "anyOf": [
@@ -79690,7 +79802,7 @@
         ]
       },
       "post": {
-        "description": "Create a new controlled document",
+        "description": "Create a new controlled document, optionally anchored to a Register row.",
         "operationId": "create_document_api_v1_document_control__post",
         "requestBody": {
           "content": {
@@ -94854,6 +94966,64 @@
           }
         ],
         "summary": "Create Matter Legal Hold",
+        "tags": [
+          "Legal Holds"
+        ]
+      }
+    },
+    "/api/v1/legal-holds/documents/{document_id}": {
+      "put": {
+        "description": "File a Register document under a legal matter, or clear it.\n\nGuarded by ``admin:manage`` rather than ``document:update`` on purpose: the\nmatter a record is filed under decides whether the record can be changed at\nall, so it must not be writable by the same permission the write it blocks\nuses. It is also why this lives on the hold register rather than on the\ndocument PATCH \u2014 that writer is refused outright while a hold is active, and\na field that can release its own brake is not a control.\n\nClearing (``matter_reference: null``) is allowed while a hold is active: a\ndocument can be genuinely out of scope of a matter, and the alternative is\nthat a mis-filing can never be corrected. Because that is the one call that\ncan take a record out from under a hold, both directions are written to the\naudit trail with the before and after matter \u2014 otherwise the only trace of\nwho unfroze a record would be its absence.",
+        "operationId": "set_document_hold_scope_api_v1_legal_holds_documents__document_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentHoldScopeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentHoldScopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Document Hold Scope",
         "tags": [
           "Legal Holds"
         ]

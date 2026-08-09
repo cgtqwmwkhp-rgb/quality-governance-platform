@@ -16,6 +16,7 @@ from src.domain.services.document_library_filing_service import (
     supersede_prior_approved_by_pel_doc_ref,
 )
 from src.domain.services.document_version_service import assert_version_mutable, version_is_immutable
+from src.domain.services.legal_hold_enforcement import assert_document_not_held
 
 
 async def submit_for_review(db: AsyncSession, document: Document) -> Document:
@@ -27,6 +28,7 @@ async def submit_for_review(db: AsyncSession, document: Document) -> Document:
         )
     if document.category_id is None:
         raise BadRequestError("Governance submit requires category_id (filed document)")
+    await assert_document_not_held(db, document, action="submitted for review")
 
     document.status = DocumentStatus.UNDER_REVIEW
     document.reviewed_at = None
@@ -45,6 +47,7 @@ async def reject_review(
     """under_review → draft."""
     if document.status != DocumentStatus.UNDER_REVIEW:
         raise StateTransitionError("Only documents under review can be rejected")
+    await assert_document_not_held(db, document, action="returned to draft")
 
     document.status = DocumentStatus.DRAFT
     document.reviewed_by_id = reviewer_id
@@ -66,6 +69,7 @@ async def approve_document(
         raise StateTransitionError("Only documents under review can be approved")
     if document.created_by_id is not None and document.created_by_id == approved_by_id:
         raise BadRequestError("Self-approval is not permitted")
+    await assert_document_not_held(db, document, action="approved")
 
     if version_id is not None:
         version = await db.scalar(
