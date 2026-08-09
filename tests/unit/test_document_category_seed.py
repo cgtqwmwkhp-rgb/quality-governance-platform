@@ -247,9 +247,7 @@ class TestSeedDocumentCategoriesIdempotency:
         assert counter_keys == {(fid, band) for fid in function_ids for band in CASCADE_LEVELS}
 
     @pytest.mark.asyncio
-    async def test_seed_creates_northern_star_functions_with_ops_withdrawn(
-        self, isolated_db_session: AsyncSession
-    ):
+    async def test_seed_creates_northern_star_functions_with_ops_withdrawn(self, isolated_db_session: AsyncSession):
         result = await seed_document_categories(isolated_db_session)
         await isolated_db_session.commit()
 
