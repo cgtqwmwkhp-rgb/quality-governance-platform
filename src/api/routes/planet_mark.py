@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
+from src.api.utils.errors import api_error
 from src.domain.models.planet_mark import (
     CarbonEvidence,
     CarbonReportingYear,
@@ -1705,7 +1706,11 @@ async def patch_evidence(
         if link_outcome.is_error:
             raise HTTPException(
                 status_code=422,
-                detail=link_outcome.detail or "Register document link could not be established",
+                detail=api_error(
+                    link_outcome.status.value,
+                    link_outcome.detail or "Register document link could not be established",
+                    details={"year_id": year_id, "evidence_id": evidence_id, "document_id": patch.document_id},
+                ),
             )
 
     doc.updated_at = datetime.now(timezone.utc)

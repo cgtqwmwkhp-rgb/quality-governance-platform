@@ -26,6 +26,7 @@ from src.api.schemas.evidence_asset import (
     EvidenceAssetUpdate,
     EvidenceAssetUploadResponse,
 )
+from src.api.utils.errors import api_error
 from src.api.utils.evidence_disposition import resolve_evidence_signed_url_disposition
 from src.core.config import settings
 from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
@@ -540,7 +541,11 @@ async def update_evidence_asset(
         if outcome.is_error:
             raise HTTPException(
                 status_code=422,
-                detail=outcome.detail or "Register document link could not be established",
+                detail=api_error(
+                    outcome.status.value,
+                    outcome.detail or "Register document link could not be established",
+                    details={"asset_id": asset_id, "document_id": document_id},
+                ),
             )
 
     asset.updated_by_id = current_user.id

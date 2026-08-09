@@ -25,13 +25,17 @@ import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, Optional
+from unittest.mock import AsyncMock
 
 import pytest
 import sqlalchemy as sa
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from src.api.routes import evidence_assets as evidence_assets_routes
+from src.api.routes import planet_mark as planet_mark_routes
 from src.domain.models.document import Document, DocumentType
 from src.domain.models.document_control import ControlledDocument
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
@@ -401,6 +405,72 @@ async def test_steward_links_and_cannot_cross_tenants_on_evidence_assets(db_sess
     accepted = await link_evidence_asset(db_session, asset, tenant_id=1, document_id=mine.id)
     assert accepted.status is LinkStatus.LINKED
     assert asset.document_id == mine.id
+
+
+@pytest.mark.parametrize(
+    ("route_module", "route", "route_kwargs", "expected_details"),
+    [
+        (
+            evidence_assets_routes,
+            evidence_assets_routes.update_evidence_asset,
+            {
+                "asset_id": 17,
+                "asset_data": SimpleNamespace(model_dump=lambda **_: {"document_id": 29}),
+            },
+            {"asset_id": 17, "document_id": 29},
+        ),
+        (
+            planet_mark_routes,
+            planet_mark_routes.patch_evidence,
+            {
+                "year_id": 11,
+                "evidence_id": 17,
+                "patch": SimpleNamespace(
+                    is_verified=None,
+                    verified_by=None,
+                    notes=None,
+                    model_fields_set={"document_id"},
+                    document_id=29,
+                ),
+            },
+            {"year_id": 11, "evidence_id": 17, "document_id": 29},
+        ),
+    ],
+)
+async def test_steward_link_rejections_share_the_422_document_not_found_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    route_module: ModuleType,
+    route: Any,
+    route_kwargs: dict[str, Any],
+    expected_details: dict[str, int],
+) -> None:
+    """Both occurrence PATCH surfaces expose the same tenant-safe error."""
+    occurrence = SimpleNamespace(id=17, tenant_id=1, document_id=None)
+    result = SimpleNamespace(scalar_one_or_none=lambda: occurrence)
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=result),
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+    current_user = SimpleNamespace(id=7, tenant_id=1)
+    rejected = SimpleNamespace(
+        is_error=True,
+        status=LinkStatus.DOCUMENT_NOT_FOUND,
+        detail="Register document was not found",
+    )
+    link_name = "link_evidence_asset" if route_module is evidence_assets_routes else "link_carbon_evidence"
+    monkeypatch.setattr(route_module, link_name, AsyncMock(return_value=rejected))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await route(db=db, current_user=current_user, **route_kwargs)
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == {
+        "code": "DOCUMENT_NOT_FOUND",
+        "message": "Register document was not found",
+        "details": expected_details,
+    }
+    db.commit.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
