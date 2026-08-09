@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import DbSession, require_permission
 from src.api.schemas.document_graph import (
+    CascadeAggregateResponse,
     CitationStalenessResponse,
     ClauseDocumentsResponse,
     DocumentEdgeCreate,
@@ -58,6 +59,27 @@ async def require_document_graph_heuristic_propose_enabled() -> None:
 
 _enabled_router = APIRouter(dependencies=[Depends(require_document_graph_enabled)])
 _heuristic_router = APIRouter(dependencies=[Depends(require_document_graph_heuristic_propose_enabled)])
+
+
+@_enabled_router.get(
+    "/cascade",
+    response_model=CascadeAggregateResponse,
+)
+async def get_cascade_aggregate(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+):
+    """Whole-estate cascade aggregate for Structure map L1–L5 bands (NS-EXP / W8).
+
+    One request returns readable documents (with cascade level + primary Parent
+    PEL), confirmed ``implements`` edges, band counts, and workbook orphan ids.
+    Replaces the Structure map's previous 1+N edge fetches. Gated by master
+    ``document_graph`` — 404 when closed.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = DocumentGraphService(db)
+    payload = await service.get_cascade_aggregate(tenant_id=tenant_id, viewer=current_user)
+    return CascadeAggregateResponse.model_validate(payload)
 
 
 @_enabled_router.get(

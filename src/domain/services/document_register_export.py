@@ -19,6 +19,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.document import Document
+from src.domain.models.document_graph import DocumentEdge, DocumentEdgeStatus, DocumentEdgeType
 from src.domain.models.document_library import DocumentCategory, DocumentFunction
 from src.domain.models.location import Location
 from src.domain.services.document_library_rbac import user_can_read_library_document
@@ -39,6 +40,10 @@ IMS052_COLUMNS: tuple[str, ...] = (
     # the cascade existed; the column is never derived from the reference
     # string, because an unbanded legacy reference has no level to derive.
     "Level",
+    # NS-EXP / W8 — Parent PEL from a confirmed primary-parent implements edge
+    # only (document_edges SoT). Blank when no confirmed primary parent exists;
+    # never invents a parent from free-text Implements / Supported-by columns.
+    "Parent PEL",
     "Category",
     "Last Review Date",
     "Next Review Date",
@@ -90,6 +95,7 @@ def build_register_row(
     function_name: str = "",
     category_name: str = "",
     location_name: str = "",
+    parent_pel: str = "",
 ) -> list[str]:
     """Map one Document (+ joined labels) onto the fixed IMS052 column order."""
     cells = [
@@ -102,6 +108,7 @@ def build_register_row(
         _enum_str(getattr(doc, "status", None)),
         function_name,
         _cascade_level_str(getattr(doc, "cascade_level", None)),
+        str(parent_pel or ""),
         category_name,
         _date_only(getattr(doc, "reviewed_at", None)),
         _date_only(getattr(doc, "review_date", None)),
@@ -248,12 +255,45 @@ async def build_document_register_rows(
         rows = await db.execute(select(Location.id, Location.name).where(Location.id.in_(location_ids)))
         location_names = {row[0]: row[1] for row in rows.all()}
 
+    # NS-EXP / W8 — Parent PEL from confirmed primary-parent implements edges.
+    parent_pel_by_child: dict[int, str] = {}
+    if visible:
+        child_ids = [doc.id for doc in visible]
+        edge_rows = await db.execute(
+            select(
+                DocumentEdge.src_document_id,
+                DocumentEdge.dst_document_id,
+                DocumentEdge.dst_pel_doc_ref,
+            ).where(
+                DocumentEdge.tenant_id == tenant_id,
+                DocumentEdge.deleted_at.is_(None),
+                DocumentEdge.edge_type == DocumentEdgeType.IMPLEMENTS,
+                DocumentEdge.status == DocumentEdgeStatus.CONFIRMED,
+                DocumentEdge.is_primary_parent.is_(True),
+                DocumentEdge.src_document_id.in_(child_ids),
+            )
+        )
+        parent_pairs = list(edge_rows.all())
+        parent_ids = {row[1] for row in parent_pairs}
+        parent_pel_by_id: dict[int, str] = {}
+        if parent_ids:
+            parent_rows = await db.execute(
+                select(Document.id, Document.pel_doc_ref).where(
+                    Document.tenant_id == tenant_id,
+                    Document.id.in_(parent_ids),
+                )
+            )
+            parent_pel_by_id = {row[0]: str(row[1]) for row in parent_rows.all() if row[1]}
+        for src_id, dst_id, dst_pel in parent_pairs:
+            parent_pel_by_child[src_id] = parent_pel_by_id.get(dst_id) or str(dst_pel or "")
+
     data_rows = [
         build_register_row(
             doc,
             function_name=function_names.get(doc.function_id, "") if doc.function_id else "",
             category_name=category_names.get(doc.category_id, "") if doc.category_id else "",
             location_name=location_names.get(doc.site_location_id, "") if doc.site_location_id else "",
+            parent_pel=parent_pel_by_child.get(doc.id, ""),
         )
         for doc in visible
     ]

@@ -1,5 +1,5 @@
 /**
- * DocumentStructureMap page — flag-off + coach/map mount smoke (DG-3).
+ * DocumentStructureMap page — flag-off + cascade aggregate mount smoke (NS-EXP / W8).
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -7,8 +7,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import DocumentStructureMap from '../../../pages/DocumentStructureMap'
 import { resetCoach } from '../graphCoachHelpers'
 
-const apiGet = vi.fn()
-const listEdges = vi.fn()
+const getCascade = vi.fn()
 
 const flagState: Record<string, boolean> = {
   document_graph: false,
@@ -17,9 +16,9 @@ const flagState: Record<string, boolean> = {
 }
 
 vi.mock('../../../api/client', () => ({
-  default: { get: (...args: unknown[]) => apiGet(...args) },
+  default: { get: vi.fn() },
   documentGraphApi: {
-    listEdges: (...args: unknown[]) => listEdges(...args),
+    getCascade: (...args: unknown[]) => getCascade(...args),
   },
   getApiErrorMessage: (err: unknown) => (err as Error)?.message ?? 'error',
 }))
@@ -27,6 +26,70 @@ vi.mock('../../../api/client', () => ({
 vi.mock('../../../hooks/useFeatureFlag', () => ({
   useFeatureFlag: (key: string) => Boolean(flagState[key]),
 }))
+
+function cascadePayload(overrides: Record<string, unknown> = {}) {
+  return {
+    documents: [
+      {
+        document_id: 10,
+        title: 'IM Policy',
+        reference: 'DOC-10',
+        pel_doc_ref: 'PEL-HSEQ-2001',
+        cascade_level: 2,
+        document_type: 'policy',
+        href: '/documents/10',
+        readable: true,
+        parent_document_id: null,
+        parent_pel: null,
+      },
+      {
+        document_id: 20,
+        title: 'Reporting SOP',
+        reference: 'DOC-20',
+        pel_doc_ref: 'PEL-HSEQ-3001',
+        cascade_level: 3,
+        document_type: 'sop',
+        href: '/documents/20',
+        readable: true,
+        parent_document_id: 10,
+        parent_pel: 'PEL-HSEQ-2001',
+      },
+    ],
+    edges: [
+      {
+        id: 1,
+        tenant_id: 1,
+        src_document_id: 20,
+        dst_document_id: 10,
+        edge_type: 'implements',
+        is_primary_parent: true,
+        status: 'confirmed',
+        created_method: 'manual',
+        created_at: '2026-08-01T10:00:00Z',
+        updated_at: '2026-08-01T10:00:00Z',
+      },
+    ],
+    bands: [
+      { level: 1, label: 'L1', count: 0 },
+      { level: 2, label: 'L2', count: 1 },
+      { level: 3, label: 'L3', count: 1 },
+      { level: 4, label: 'L4', count: 0 },
+      { level: 5, label: 'L5', count: 0 },
+      { level: null, label: 'unset', count: 0 },
+    ],
+    orphans: {
+      unimplemented_policy_ids: [],
+      unparented_ids: [],
+      uncontrolled_record_ids: [],
+      unimplemented_policy_count: 0,
+      unparented_count: 0,
+      uncontrolled_record_count: 0,
+    },
+    returned_documents: 2,
+    returned_edges: 1,
+    ...overrides,
+  }
+}
 
 function renderAt(path = '/documents/structure') {
   return render(
@@ -41,8 +104,7 @@ function renderAt(path = '/documents/structure') {
 
 describe('DocumentStructureMap flag gating', () => {
   beforeEach(() => {
-    apiGet.mockReset()
-    listEdges.mockReset()
+    getCascade.mockReset()
     flagState.document_graph = false
     flagState.document_graph_structure_map = false
     flagState.graph_coach = false
@@ -53,8 +115,7 @@ describe('DocumentStructureMap flag gating', () => {
     renderAt()
     expect(screen.getByTestId('documents-fallback')).toBeInTheDocument()
     expect(screen.queryByTestId('document-structure-map')).not.toBeInTheDocument()
-    expect(apiGet).not.toHaveBeenCalled()
-    expect(listEdges).not.toHaveBeenCalled()
+    expect(getCascade).not.toHaveBeenCalled()
   })
 
   it('does not fetch when structure map is on but master document_graph is off', async () => {
@@ -63,130 +124,50 @@ describe('DocumentStructureMap flag gating', () => {
     renderAt()
     expect(screen.getByTestId('document-structure-map')).toBeInTheDocument()
     await waitFor(() => {
-      expect(apiGet).not.toHaveBeenCalled()
-      expect(listEdges).not.toHaveBeenCalled()
+      expect(getCascade).not.toHaveBeenCalled()
     })
   })
 
-  it('loads library implements edges and mounts coach when flags are on', async () => {
+  it('loads the cascade aggregate once and mounts coach when flags are on', async () => {
     flagState.document_graph = true
     flagState.document_graph_structure_map = true
     flagState.graph_coach = true
-    apiGet.mockResolvedValue({
-      data: {
-        items: [
-          { id: 10, title: 'IM Policy', reference_number: 'POL-10', document_type: 'policy' },
-          { id: 20, title: 'Reporting SOP', reference_number: 'SOP-20', document_type: 'sop' },
-        ],
-      },
-    })
-    listEdges.mockImplementation((documentId: number) => {
-      if (documentId === 10) {
-        return Promise.resolve({
-          data: {
-            items: [
-              {
-                id: 1,
-                tenant_id: 1,
-                src_document_id: 20,
-                dst_document_id: 10,
-                edge_type: 'implements',
-                is_primary_parent: true,
-                status: 'confirmed',
-                created_method: 'manual',
-                created_at: '2026-08-01T10:00:00Z',
-                updated_at: '2026-08-01T10:00:00Z',
-              },
-            ],
-            total: 1,
-          },
-        })
-      }
-      return Promise.resolve({ data: { items: [], total: 0 } })
-    })
+    getCascade.mockResolvedValue({ data: cascadePayload() })
 
     renderAt()
 
     expect(await screen.findByTestId('document-structure-map')).toBeInTheDocument()
     expect(await screen.findByTestId('graph-coach-document_structure_map')).toBeInTheDocument()
     expect(await screen.findByTestId('structure-map-doc-10')).toBeInTheDocument()
+    expect(await screen.findByTestId('structure-map-level-10')).toHaveTextContent('L2')
+    expect(await screen.findByTestId('structure-map-parent-20')).toHaveTextContent(
+      'Parent PEL-HSEQ-2001',
+    )
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalled()
-      expect(listEdges).toHaveBeenCalled()
+      expect(getCascade).toHaveBeenCalledTimes(1)
     })
     expect(await screen.findByTestId('relationships-map-view')).toBeInTheDocument()
+    expect(screen.getByTestId('structure-map-bands')).toBeInTheDocument()
   })
 
-  it('loads every page with the API-supported page size', async () => {
+  it('filters the picker by cascade band without a second fetch', async () => {
     flagState.document_graph = true
     flagState.document_graph_structure_map = true
-    const firstPage = Array.from({ length: 100 }, (_, index) => ({
-      id: index + 1,
-      title: `Document ${index + 1}`,
-    }))
-    apiGet.mockImplementation((url: string) => {
-      if (url.includes('page=1&')) {
-        return Promise.resolve({
-          data: { items: firstPage, total: 101, page: 1, page_size: 100, pages: 2 },
-        })
-      }
-      return Promise.resolve({
-        data: {
-          items: [{ id: 101, title: 'Document 101' }],
-          total: 101,
-          page: 2,
-          page_size: 100,
-          pages: 2,
-        },
-      })
-    })
-    listEdges.mockResolvedValue({ data: { items: [], total: 0 } })
+    getCascade.mockResolvedValue({ data: cascadePayload() })
 
     renderAt()
 
-    await waitFor(() => {
-      expect(screen.getByTestId('structure-map-doc-count')).toHaveTextContent('101 documents')
-    })
-    expect(apiGet).toHaveBeenNthCalledWith(1, '/api/v1/documents/?page=1&page_size=100')
-    expect(apiGet).toHaveBeenNthCalledWith(2, '/api/v1/documents/?page=2&page_size=100')
-    expect(screen.getByTestId('structure-map-doc-101')).toBeInTheDocument()
+    await screen.findByTestId('structure-map-doc-10')
+    fireEvent.click(screen.getByTestId('structure-map-band-3'))
+    expect(screen.queryByTestId('structure-map-doc-10')).not.toBeInTheDocument()
+    expect(screen.getByTestId('structure-map-doc-20')).toBeInTheDocument()
+    expect(getCascade).toHaveBeenCalledTimes(1)
   })
 
   it('lists roots first and gives filtered-empty copy', async () => {
     flagState.document_graph = true
     flagState.document_graph_structure_map = true
-    apiGet.mockResolvedValue({
-      data: {
-        items: [
-          { id: 20, title: 'Reporting SOP' },
-          { id: 10, title: 'IM Policy' },
-        ],
-      },
-    })
-    listEdges.mockImplementation((documentId: number) =>
-      Promise.resolve({
-        data: {
-          items:
-            documentId === 20
-              ? [
-                  {
-                    id: 1,
-                    tenant_id: 1,
-                    src_document_id: 20,
-                    dst_document_id: 10,
-                    edge_type: 'implements',
-                    is_primary_parent: true,
-                    status: 'confirmed',
-                    created_method: 'manual',
-                    created_at: '2026-08-01T10:00:00Z',
-                    updated_at: '2026-08-01T10:00:00Z',
-                  },
-                ]
-              : [],
-          total: documentId === 20 ? 1 : 0,
-        },
-      }),
-    )
+    getCascade.mockResolvedValue({ data: cascadePayload() })
 
     renderAt()
 
@@ -200,27 +181,15 @@ describe('DocumentStructureMap flag gating', () => {
     expect(await screen.findByText('No documents match your filter.')).toBeInTheDocument()
   })
 
-  it('surfaces partial edge fetch failures without discarding successful results', async () => {
+  it('surfaces cascade aggregate failures honestly', async () => {
     flagState.document_graph = true
     flagState.document_graph_structure_map = true
-    apiGet.mockResolvedValue({
-      data: {
-        items: [
-          { id: 10, title: 'IM Policy' },
-          { id: 20, title: 'Reporting SOP' },
-        ],
-      },
-    })
-    listEdges.mockImplementation((documentId: number) => {
-      if (documentId === 20) return Promise.reject(new Error('edge service unavailable'))
-      return Promise.resolve({ data: { items: [], total: 0 } })
-    })
+    getCascade.mockRejectedValue(new Error('cascade service unavailable'))
 
     renderAt()
 
     expect(await screen.findByTestId('structure-map-error')).toHaveTextContent(
-      'Failed to load confirmed implements edges for 1 of 2 documents: edge service unavailable',
+      'cascade service unavailable',
     )
-    expect(screen.getByTestId('structure-map-doc-10')).toBeInTheDocument()
   })
 })

@@ -212,6 +212,45 @@ export interface ImSeedResponse {
   edges_reused: number
 }
 
+/** One readable library document in the estate cascade aggregate (NS-EXP / W8). */
+export interface CascadeDocumentItem {
+  document_id: number
+  title?: string | null
+  reference?: string | null
+  pel_doc_ref?: string | null
+  cascade_level?: number | null
+  document_type?: string | null
+  href: string
+  readable: boolean
+  parent_document_id?: number | null
+  parent_pel?: string | null
+}
+
+export interface CascadeBandSummary {
+  level: number | null
+  label: string
+  count: number
+}
+
+export interface CascadeOrphanSummary {
+  unimplemented_policy_ids: number[]
+  unparented_ids: number[]
+  uncontrolled_record_ids: number[]
+  unimplemented_policy_count: number
+  unparented_count: number
+  uncontrolled_record_count: number
+}
+
+/** Whole-estate cascade payload — one request for Structure map L1–L5 bands. */
+export interface CascadeAggregateResponse {
+  documents: CascadeDocumentItem[]
+  edges: DocumentEdge[]
+  bands: CascadeBandSummary[]
+  orphans: CascadeOrphanSummary
+  returned_documents: number
+  returned_edges: number
+}
+
 export function createDocumentGraphApi(api: AxiosInstance) {
   const base = '/api/v1/document-graph'
 
@@ -221,6 +260,13 @@ export function createDocumentGraphApi(api: AxiosInstance) {
   return {
     listEdges: (documentId: number, params?: DocumentEdgeQuery) =>
       api.get<DocumentEdgeListResponse>(`${base}/documents/${documentId}/edges`, { params }),
+
+    /**
+     * Tenant-wide cascade aggregate (NS-EXP / W8) — documents + confirmed
+     * implements edges + L1–L5 band counts in one request. Structure map uses
+     * this instead of paging `/documents` and fan-outing `listEdges`.
+     */
+    getCascade: () => api.get<CascadeAggregateResponse>(`${base}/cascade`),
 
     /**
      * Tenant-wide Doc Graph confirm queue (WE-1) — proposed / needs_review only.

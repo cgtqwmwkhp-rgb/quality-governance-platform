@@ -243,3 +243,69 @@ class ImSeedResponse(BaseModel):
     documents_reused: int
     edges_created: int
     edges_reused: int
+
+
+class CascadeDocumentItem(BaseModel):
+    """One active library document in the estate cascade aggregate (NS-EXP / W8).
+
+    Titles are omitted when the library ACL would refuse the by-id route for the
+    same operator — the Structure map never invents a second ACL.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: int
+    title: Optional[str] = None
+    reference: Optional[str] = None
+    pel_doc_ref: Optional[str] = None
+    cascade_level: Optional[int] = Field(None, ge=1, le=5)
+    document_type: Optional[str] = None
+    href: str
+    readable: bool
+    parent_document_id: Optional[int] = None
+    parent_pel: Optional[str] = None
+
+
+class CascadeBandSummary(BaseModel):
+    """Count of readable documents at one cascade level (or unset)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    level: Optional[int] = Field(None, ge=1, le=5)
+    label: str
+    count: int = Field(..., ge=0)
+
+
+class CascadeOrphanSummary(BaseModel):
+    """Workbook orphan types among readable documents (CAS-3 honesty counts).
+
+    Ids are listable so the Structure map can surface them without a twin
+    orphan board page. Counts match the id lists — never a facet total over
+    documents the operator cannot read.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    unimplemented_policy_ids: List[int]
+    unparented_ids: List[int]
+    uncontrolled_record_ids: List[int]
+    unimplemented_policy_count: int = Field(..., ge=0)
+    unparented_count: int = Field(..., ge=0)
+    uncontrolled_record_count: int = Field(..., ge=0)
+
+
+class CascadeAggregateResponse(BaseModel):
+    """Whole-estate cascade payload for Structure map L1–L5 bands (one request).
+
+    Confirmed ``implements`` edges only — proposed stay out of the explorer.
+    Replaces the Structure map's previous 1+N per-document edge fetches.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    documents: List[CascadeDocumentItem]
+    edges: List[DocumentEdgeResponse]
+    bands: List[CascadeBandSummary]
+    orphans: CascadeOrphanSummary
+    returned_documents: int = Field(..., ge=0)
+    returned_edges: int = Field(..., ge=0)
