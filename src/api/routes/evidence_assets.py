@@ -538,10 +538,9 @@ async def update_evidence_asset(
             document_id=document_id,
         )
         if outcome.is_error:
-            raise BadRequestError(
-                outcome.detail or "Register document link could not be established",
-                code="DOCUMENT_LINK_REJECTED",
-                details={"asset_id": asset_id, "document_id": document_id},
+            raise HTTPException(
+                status_code=422,
+                detail=outcome.detail or "Register document link could not be established",
             )
 
     asset.updated_by_id = current_user.id
