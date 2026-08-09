@@ -153,6 +153,13 @@ class EvidenceAssetUpdate(BaseModel):
     retention_policy: Optional[str] = Field(None)
     linked_investigation_id: Optional[int] = Field(None)
     metadata_json: Optional[Dict[str, Any]] = Field(None)
+    document_id: Optional[int] = Field(
+        None,
+        description=(
+            "Register documents.id this asset has been filed under (WI-2 / L-32). "
+            "Null clears the link; the Register document must already exist in this tenant."
+        ),
+    )
 
     @field_validator("visibility")
     @classmethod
@@ -188,6 +195,7 @@ class EvidenceAssetResponse(BaseModel):
     source_module: str
     source_id: str = Field(..., description="Source record id (numeric string or action_key)")
     linked_investigation_id: Optional[int] = None
+    document_id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
     captured_at: Optional[datetime] = None

@@ -148,6 +148,9 @@ class AuditResponseItem(BaseModel):
     site_response: Optional[int] = None
     finding_type: Optional[str] = None
     finding_description: Optional[str] = None
+    # WI-2 / L-32 — {document_id, label} projection over Register documents.id.
+    # A null document_id means the element is not filed to the Register yet.
+    documents_presented: Optional[List[Dict[str, Any]]] = None
 
 
 class GetAuditResponsesResponse(BaseModel):

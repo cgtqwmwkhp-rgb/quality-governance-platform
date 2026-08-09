@@ -423,6 +423,20 @@ class CarbonEvidence(Base):
     file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     storage_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    # Library link (WI-2 / L-32) — Register `documents.id` is the only library
+    # file home, so this is the Register identity of the same file, not a second
+    # copy of it. Nullable and never inferred: a link is set only when a steward
+    # names the document or a content match is proven
+    # (src/domain/services/library_file_home_link.py). SET NULL because removing
+    # the Register document must not delete the Planet Mark evidence record or
+    # its category / year / verification metadata, which live here.
+    document_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("documents.id", ondelete="SET NULL", name="fk_carbon_evidence_document_id"),
+        nullable=True,
+        index=True,
+    )
     file_size_kb: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 

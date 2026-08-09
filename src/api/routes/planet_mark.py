@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
+from src.api.utils.errors import api_error
 from src.domain.models.planet_mark import (
     CarbonEvidence,
     CarbonReportingYear,
@@ -38,6 +39,7 @@ from src.domain.models.planet_mark import (
     UtilityMeterReading,
 )
 from src.domain.models.user import User
+from src.domain.services.library_file_home_link import link_carbon_evidence, promote_carbon_evidence
 from src.domain.services.planet_mark_export_service import PlanetMarkExportService, export_pack_filename
 
 logger = logging.getLogger(__name__)
@@ -1468,6 +1470,10 @@ class EvidencePatch(BaseModel):
     is_verified: Optional[bool] = None
     verified_by: Optional[str] = None
     notes: Optional[str] = None
+    # WI-2 / L-32 — file this evidence under a Register document. Sending null
+    # clears the link; omitting the key leaves it alone. Never inferred: the
+    # Register row must already exist in this tenant.
+    document_id: Optional[int] = None
 
 
 @router.get("/years/{year_id}/evidence", response_model=dict)
@@ -1509,6 +1515,8 @@ async def list_evidence(
                 "uploaded_by": d.uploaded_by,
                 "uploaded_at": d.uploaded_at.isoformat(),
                 "storage_key": d.storage_key,
+                # WI-2 — null means "not filed to the Register", not "missing".
+                "document_id": d.document_id,
             }
             for d in docs
         ],
@@ -1687,9 +1695,73 @@ async def patch_evidence(
     if patch.notes is not None:
         doc.notes = patch.notes
 
+    link_outcome = None
+    if "document_id" in patch.model_fields_set:
+        link_outcome = await link_carbon_evidence(
+            db,
+            doc,
+            tenant_id=current_user.tenant_id,
+            document_id=patch.document_id,
+        )
+        if link_outcome.is_error:
+            raise HTTPException(
+                status_code=422,
+                detail=api_error(
+                    link_outcome.status.name,
+                    link_outcome.detail or "Register document link could not be established",
+                    details={"year_id": year_id, "evidence_id": evidence_id, "document_id": patch.document_id},
+                ),
+            )
+
     doc.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    return {"message": "Evidence updated", "id": doc.id}
+    return {
+        "message": "Evidence updated",
+        "id": doc.id,
+        "document_id": doc.document_id,
+        "document_link_status": link_outcome.status.value if link_outcome else None,
+    }
+
+
+@router.post("/years/{year_id}/evidence/{evidence_id}/promote-to-library", response_model=dict)
+async def promote_evidence_to_library(
+    year_id: int,
+    evidence_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+) -> dict[str, Any]:
+    """File this Planet Mark evidence under the Register document it already is.
+
+    WI-2 / L-32 match path. A link is written only where the Register already
+    holds this exact file in this tenant — same content hash, or the identical
+    blob path. This endpoint never creates a ``documents`` row, so evidence the
+    Register has not seen returns ``unmatched`` and keeps its Planet Mark blob and
+    metadata untouched; a steward files it and links it explicitly.
+    """
+    doc = (
+        await db.execute(
+            select(CarbonEvidence).where(
+                CarbonEvidence.id == evidence_id,
+                CarbonEvidence.reporting_year_id == year_id,
+                CarbonEvidence.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Evidence document not found")
+
+    outcome = await promote_carbon_evidence(db, doc, tenant_id=current_user.tenant_id)
+    if outcome.written:
+        doc.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    return {
+        "id": doc.id,
+        "document_id": outcome.document_id,
+        "status": outcome.status.value,
+        "method": outcome.method.value if outcome.method else None,
+        "detail": outcome.detail,
+    }
 
 
 @router.delete("/years/{year_id}/evidence/{evidence_id}", response_model=dict)
