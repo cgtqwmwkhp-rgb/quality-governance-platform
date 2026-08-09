@@ -33,6 +33,12 @@ async def list_feature_flags(
     """List all feature flags."""
     service = FeatureFlagService(db)
     try:
+        # Seed CS notify toggles so admin UI can turn them off without a migration.
+        from src.domain.services.compliance_schedule_notify_flags import (
+            ensure_compliance_schedule_notify_flags,
+        )
+
+        await ensure_compliance_schedule_notify_flags(db)
         flags = await service.list_flags()
     except ProgrammingError:
         logger.exception("GET /feature-flags failed — feature_flags table unavailable")

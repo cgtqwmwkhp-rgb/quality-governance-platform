@@ -30,6 +30,9 @@ from src.domain.models.standard import Clause, Standard
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_auto_service import CAPAAutoService
+from src.domain.services.compliance_schedule_assignment_notify import (
+    notify_compliance_schedule_owner_assignment,
+)
 from src.domain.services.compliance_schedule_policy import Anchor, compute_next_due, derive_status
 from src.domain.services.reference_number import ReferenceNumberService
 
@@ -554,6 +557,20 @@ class ComplianceScheduleService:
         await self.db.refresh(requirement)
         # Eager template for ``fra_ocr_eligible`` (avoids async lazy IO).
         await self.db.refresh(requirement, attribute_names=["template"])
+        # Owner allocation notify after commit so a delivery failure cannot roll back
+        # the requirement write (incident / action assignment posture).
+        if requirement.owner_id is not None:
+            await notify_compliance_schedule_owner_assignment(
+                self.db,
+                tenant_id=tenant_id,
+                requirement_id=requirement.id,
+                reference_number=requirement.reference_number,
+                title=requirement.title,
+                new_owner_id=requirement.owner_id,
+                previous_owner_id=None,
+                assigned_by_user_id=user_id,
+                next_due_date=requirement.next_due_date,
+            )
         return requirement
 
     async def update_requirement(
@@ -565,6 +582,7 @@ class ComplianceScheduleService:
         updates: dict[str, Any],
     ) -> ComplianceRequirement:
         requirement = await self.get_requirement(requirement_id, tenant_id=tenant_id)
+        previous_owner_id = requirement.owner_id
         if "location_id" in updates:
             await self._assert_location_in_tenant(updates["location_id"], tenant_id=tenant_id)
         if "owner_id" in updates:
@@ -643,6 +661,18 @@ class ComplianceScheduleService:
         await self.db.commit()
         await self.db.refresh(requirement)
         await self.db.refresh(requirement, attribute_names=["template"])
+        if "owner_id" in changed:
+            await notify_compliance_schedule_owner_assignment(
+                self.db,
+                tenant_id=tenant_id,
+                requirement_id=requirement.id,
+                reference_number=requirement.reference_number,
+                title=requirement.title,
+                new_owner_id=requirement.owner_id,
+                previous_owner_id=previous_owner_id,
+                assigned_by_user_id=user_id,
+                next_due_date=requirement.next_due_date,
+            )
         return requirement
 
     async def deactivate_requirement(

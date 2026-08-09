@@ -9,14 +9,19 @@ in an environment that has never run it.
 | Task name | `src.infrastructure.tasks.compliance_schedule_notification_tasks.sweep_compliance_schedule_due` |
 | Module | `src/infrastructure/tasks/compliance_schedule_notification_tasks.py` |
 | Queue | `notifications` |
-| Scheduled | **No.** Registered in `CELERY_TASK_MODULES`, deliberately absent from `beat_schedule` |
+| Scheduled | **Yes — daily 08:15 UTC** (`sweep-compliance-schedule-due` in `celery_app.conf.beat_schedule`) |
 | Writes | `notifications` rows with `entity_type = 'compliance_requirement'` |
+| Email | Best-effort `send_email.delay` after a new COMPLIANCE_ALERT insert when due-reminder + email flags and recipient prefs allow |
+| Assignment notify | Owner allocation uses `compliance_schedule_assignment_notify` (+ `compliance_schedule_email_enabled`) |
 | Gates | `COMPLIANCE_SCHEDULE_ENABLED` (opener) and the `compliance_schedule_kill_switch` feature flag |
 
-Scheduling it is a separate change from registering it, so that switching the sweep off
-is a one-line revert rather than a code edit under pressure. Until that change lands the
-sweep runs only when someone triggers it by hand, which is also how the first run in any
-environment should happen.
+Removing the beat entry stops the schedule without touching the task (deploy-time lever).
+The faster lever, needing no deploy, is the kill switch. Manual `dry_run` remains how the
+first run in any environment should happen.
+
+**Occurrence completion stops reminders for that cycle:** completing a requirement rolls
+`next_due_date` forward; the reminder dedupe key includes the occurrence date, so prior
+band reminders no longer match. There is no separate cancel job.
 
 ---
 
@@ -136,6 +141,20 @@ not `az webapp log download`, for the reasons in
 | `timed_out` | The run hit its soft time limit and returned early | `true` means the remaining tenants are unswept. Safe — the next run finishes them. See below |
 | `evaluated_at` | UTC ISO timestamp taken at the start of the run | Also stamped into every row's `extra_data.evaluated_at`; use it to scope a cleanup |
 | `admin_role` | Role name used to resolve admin recipients | Should be the real admin role name for these tenants. Section 5 |
+
+### Admin notify toggles (no migration)
+
+Seeded on `GET /api/v1/feature-flags/` (and Admin → Notification Settings):
+
+| Flag key | Default | Effect when `enabled=false` |
+|---|---|---|
+| `compliance_schedule_assignment_notify` | on | No owner-allocation in-app/email |
+| `compliance_schedule_due_reminder_notify` | on | Sweep skips the tenant (no in-app, no email) |
+| `compliance_schedule_email_enabled` | on | In-app still sent; no CS email enqueue |
+
+Missing rows default to **on** until seeded. `tenant_overrides` are honoured by
+`FeatureFlagService.is_enabled`. Result counters also include `emails_enqueued` /
+`emails_skipped`.
 
 ### A healthy steady-state run
 
@@ -373,7 +392,23 @@ seconds, provided `COMPLIANCE_SCHEDULE_ENABLED` is still true for that environme
 Section 6. This is the first lever in almost every situation: it is reversible, leaves an
 audit trail, and needs no release.
 
-### 2. Remove the module from `CELERY_TASK_MODULES` and deploy
+### 2. Turn off notify flags — seconds, no deploy
+
+```bash
+curl -sS -X PATCH "$BASE/api/v1/feature-flags/compliance_schedule_due_reminder_notify" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+curl -sS -X PATCH "$BASE/api/v1/feature-flags/compliance_schedule_assignment_notify" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+curl -sS -X PATCH "$BASE/api/v1/feature-flags/compliance_schedule_email_enabled" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+Or use Admin → Notification Settings (persists via the Feature Flags API).
+
+### 3. Remove the module from `CELERY_TASK_MODULES` and deploy
 
 Delete `"src.infrastructure.tasks.compliance_schedule_notification_tasks"` from
 `CELERY_TASK_MODULES` in `src/infrastructure/tasks/celery_app.py` and redeploy the
@@ -384,12 +419,12 @@ that tuple, so this is a deliberate change with a test to update, not a hotfix. 
 it when the kill switch is not enough — for example if the sweep is failing before it
 reaches the switch.
 
-### 3. Revert the PR
+### 4. Revert the PR
 
 The full revert. The sweep, its builders, and the dedupe index are separate changes;
 reverting the sweep alone leaves the index and the builders in place, which is harmless.
 
-### 4. Delete notifications already written
+### 5. Delete notifications already written
 
 Independent of all of the above, and the only way to undo delivery. `notifications` has
 no soft delete, so this is a hard `DELETE`. Count before you delete, and scope it.
@@ -452,3 +487,5 @@ its own leak fix. Treat the rules below as the pattern a new sweep copies.
 - `src/infrastructure/tasks/compliance_schedule_notification_tasks.py` — the sweep, and why it is built this way
 - `src/domain/services/compliance_schedule_kill_switch.py` — the switch and its cache
 - `src/domain/services/compliance_schedule_notifications.py` — bands, recipients, and the reminder key
+- `src/domain/services/compliance_schedule_notify_flags.py` — assignment / due / email feature flags
+- `src/domain/services/compliance_schedule_assignment_notify.py` — best-effort owner allocation notify
