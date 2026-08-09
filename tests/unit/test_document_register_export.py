@@ -273,13 +273,12 @@ async def test_build_document_register_rows_filters_inactive_and_acl():
         def all(self):
             return list(self._pairs)
 
-    # execute order: documents select, taxonomy for restricted, active count
+    # execute order: documents select, taxonomy for restricted
     db = SimpleNamespace(
         execute=AsyncMock(
             side_effect=[
                 _Result(values=[active_ok, active_restricted]),
                 _Result(pairs=[(99, "02.08")]),  # restricted OH taxonomy
-                _Result(scalar=2),
             ]
         )
     )
@@ -289,3 +288,75 @@ async def test_build_document_register_rows_filters_inactive_and_acl():
     assert rows[0][3] == "Visible"
     assert total == 1
     assert truncated is False
+
+
+@pytest.mark.asyncio
+async def test_build_document_register_rows_applies_acl_before_export_limit():
+    from src.domain.models.document import Document
+    from src.domain.services.document_register_export import build_document_register_rows
+
+    def _doc(doc_id: int, title: str, access_level: str, category_id: int | None = None):
+        return SimpleNamespace(
+            id=doc_id,
+            tenant_id=1,
+            is_active=True,
+            category_id=category_id,
+            function_id=None,
+            site_location_id=None,
+            access_level=access_level,
+            pel_doc_ref=None,
+            title=title,
+            reference_number=f"DOC-{doc_id}",
+            version="1.0",
+            status="approved",
+            reviewed_at=None,
+            review_date=None,
+            retention_until=None,
+        )
+
+    documents = [
+        _doc(5, "Newest hidden", "restricted", 99),
+        _doc(4, "Second hidden", "restricted", 99),
+        _doc(3, "Readable A", "all_staff"),
+        _doc(2, "Readable B", "all_staff"),
+        _doc(1, "Readable C", "all_staff"),
+    ]
+
+    class _Scalars:
+        def __init__(self, values):
+            self._values = values
+
+        def all(self):
+            return list(self._values)
+
+    class _Result:
+        def __init__(self, *, values=None, pairs=None):
+            self._values = list(values or [])
+            self._pairs = list(pairs or [])
+
+        def scalars(self):
+            return _Scalars(self._values)
+
+        def all(self):
+            return list(self._pairs)
+
+    async def _execute(statement):
+        entity = statement.column_descriptions[0].get("entity")
+        if entity is Document:
+            # Model database LIMIT behavior so this test regresses if the cap
+            # is ever moved back ahead of the ACL filter.
+            limit_clause = getattr(statement, "_limit_clause", None)
+            selected = documents
+            if limit_clause is not None:
+                selected = selected[: int(limit_clause.value)]
+            return _Result(values=selected)
+        return _Result(pairs=[(99, "02.08")])
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=_execute))
+    staff = SimpleNamespace(is_superuser=False, has_permission=lambda _p: False)
+
+    rows, total, truncated = await build_document_register_rows(db, 1, user=staff, row_limit=2)
+
+    assert [row[3] for row in rows] == ["Readable A", "Readable B"]
+    assert total == 3
+    assert truncated is True
