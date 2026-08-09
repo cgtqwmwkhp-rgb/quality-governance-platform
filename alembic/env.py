@@ -23,7 +23,6 @@ from src.domain.models import *  # noqa: F401,F403
 for _metadata_mod in (
     "src.domain.models.audit_log",
     "src.domain.models.auditor_competence",
-    "src.domain.models.collaboration",
     "src.domain.models.compliance_automation",
     "src.domain.models.kri",
     "src.domain.models.near_miss",
