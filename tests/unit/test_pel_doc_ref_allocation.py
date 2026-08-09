@@ -30,6 +30,7 @@ loop a chance to interleave tasks).
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import tempfile
 import uuid
@@ -42,8 +43,20 @@ from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.models.document_library import CASCADE_LEVELS, DocumentFunction, PelDocRefCounter
 from src.domain.services.document_category_service import allocate_pel_doc_ref, resolve_function_code
 
-# The v6 grammar, verbatim from specs/governance-library/northern-star-rules-v6.json.
-R01_REFERENCE_PATTERN = re.compile(r"^PEL-(HSEQ|IT|FAC|PPL|PROC|FLT|CTR|SVC|TECH|DP|FIN|COM)-[1-5][0-9]{3}$")
+_RULES_PATH = Path(__file__).resolve().parents[2] / "specs" / "governance-library" / "northern-star-rules-v6.json"
+_RULES = json.loads(_RULES_PATH.read_text())
+
+# Read from the NS-0 authority pack rather than copied into this file: the
+# checked-in rules JSON is the SoT for the grammar, and a second copy here would
+# silently stop tracking it the first time the pack is amended.
+R01_REFERENCE_PATTERN = re.compile(_RULES["reference_pattern"])
+
+# Functions used below are drawn from the v6 vocabulary so these tests keep
+# meaning after the W2 reseed. NOTE: the seeded `document_functions` table still
+# carries the WA-2 code OPS, which v6 replaces with CTR+SVC; that reseed is
+# explicitly Wave W2 (ADR-0023 § Amendment), not this PR, so a `PEL-OPS-####`
+# issued today would satisfy R02 but not R01's function list.
+_V6_FUNCTION_CODES = frozenset(fn["code"] for fn in _RULES["functions"])
 
 
 @pytest.fixture
@@ -95,6 +108,55 @@ async def _seed_function(
                 session.add(PelDocRefCounter(function_id=function.id, level_band=band, next_seq=next_seq))
         await session.commit()
         return function.id
+
+
+class TestConformsToTheCheckedInAuthorityPack:
+    """Pin the implementation to specs/governance-library/northern-star-rules-v6.json."""
+
+    def test_cascade_levels_match_the_authority_pack(self):
+        assert list(CASCADE_LEVELS) == [level["level"] for level in _RULES["levels"]]
+
+    def test_each_band_range_starts_at_the_level_digit(self):
+        """v6 declares bands as `1000-1999`, `2000-2999`, ... — the level is the leading digit."""
+        for level in _RULES["levels"]:
+            low, high = level["band"].split("-")
+            assert low == f"{level['level']}000"
+            assert high == f"{level['level']}999"
+
+    @pytest.mark.asyncio
+    async def test_an_allocated_reference_falls_inside_its_declared_band(self, session_factory):
+        function_id = await _seed_function(session_factory)
+        for level in _RULES["levels"]:
+            async with session_factory() as session:
+                ref = await allocate_pel_doc_ref(session, function_id, level["level"])
+                await session.commit()
+            low, high = (int(part) for part in level["band"].split("-"))
+            assert low <= int(ref.rsplit("-", 1)[1]) <= high
+
+    @pytest.mark.asyncio
+    async def test_banding_is_correct_even_for_a_function_v6_has_not_reseeded_yet(self, session_factory):
+        """OPS is a WA-2 code that v6 replaces with CTR+SVC; the reseed is Wave W2.
+
+        Until then a document can still be filed under OPS, and this pins what
+        that produces: the band digit is right (R02 holds — that is this PR's
+        job), but the function segment is not yet in the v6 vocabulary, so R01
+        does not pass. Recording it here means the W2 reseed has something
+        concrete to flip rather than a silent surprise.
+        """
+        assert "OPS" not in _V6_FUNCTION_CODES
+        function_id = await _seed_function(session_factory, code="OPS", name="Operations")
+        async with session_factory() as session:
+            ref = await allocate_pel_doc_ref(session, function_id, 3)
+            await session.commit()
+        assert ref == "PEL-OPS-3001"
+        assert ref.rsplit("-", 1)[1][0] == "3", "R02 (band == level) must hold regardless"
+        assert not R01_REFERENCE_PATTERN.match(ref), "expected the known pre-W2 R01 gap"
+
+    def test_the_r29_rule_is_still_append_only(self):
+        """If the pack ever relaxes R29 to gap-fill, this allocator's design must be revisited."""
+        r29 = next(rule for rule in _RULES["validation_rules"] if rule["id"] == "R29")
+        assert "next free number in its band" in r29["rule"]
+        assert "nothing is ever renumbered" in r29["rule"]
 
 
 class TestBandedFormat:
