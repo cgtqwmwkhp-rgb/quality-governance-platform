@@ -1090,13 +1090,7 @@ class DocumentGraphService:
                     "pel_doc_ref": getattr(doc, "pel_doc_ref", None),
                     "cascade_level": getattr(doc, "cascade_level", None),
                     "document_type": (
-                        None
-                        if doc_type is None
-                        else (
-                            doc_type.value
-                            if hasattr(doc_type, "value")
-                            else str(doc_type)
-                        )
+                        None if doc_type is None else (doc_type.value if hasattr(doc_type, "value") else str(doc_type))
                     ),
                     "href": document_href(doc.id),
                     "readable": True,
