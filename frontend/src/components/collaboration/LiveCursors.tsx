@@ -1,6 +1,9 @@
 /**
  * Live Cursors Component
  *
+ * WJ-0 / L-35a (PREP): Dormant CRDT UI — no page consumers. Scheduled removal
+ * with collaborative_* DROP. See library-wj0-drop-collaborative-inventory.md.
+ *
  * Shows real-time cursor positions of other users editing the same document.
  */
 
