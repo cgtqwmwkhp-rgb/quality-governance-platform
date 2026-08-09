@@ -558,9 +558,7 @@ async def update_document(
         raise NotFoundError("Document not found")
 
     # WC-1 / L-40 — freeze anchored Register rows before any metadata write.
-    await assert_controlled_document_not_held(
-        db, document, tenant_id=_tenant_id(current_user), action="edited"
-    )
+    await assert_controlled_document_not_held(db, document, tenant_id=_tenant_id(current_user), action="edited")
     assert_document_metadata_editable(document.status)
 
     update_data = document_data.model_dump(exclude_unset=True)
@@ -822,9 +820,7 @@ async def submit_for_approval(
         raise NotFoundError("Document not found")
 
     # WC-1 / L-40 — refuse before status flips to pending_approval.
-    await assert_controlled_document_not_held(
-        db, document, tenant_id=tenant_id, action="submitted for approval"
-    )
+    await assert_controlled_document_not_held(db, document, tenant_id=tenant_id, action="submitted for approval")
 
     # After the 404, and still before both the first query against an absent
     # table and the status change staged alongside its INSERT.

@@ -651,7 +651,7 @@ async def test_controlled_metadata_and_approval_are_refused_while_held(
     _assert_hold_refusal(refused_action, matter=matter)
 
     controlled = await _controlled_row(controlled_id)
-    assert controlled.status == "pending_approval", (
-        f"held control record moved from pending_approval to {controlled.status!r}"
-    )
+    assert (
+        controlled.status == "pending_approval"
+    ), f"held control record moved from pending_approval to {controlled.status!r}"
     assert controlled.title != "Retitled under hold", "the refused metadata edit was applied"
