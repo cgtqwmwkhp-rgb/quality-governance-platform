@@ -114,4 +114,5 @@ proposed (which remains out of programme scope).
 - Programme flags (pre-registered default off): `job_lifecycle`,
   `job_cell_links`
 - Prior SSOT discipline: `docs/adr/ADR-0021-document-relationship-graph.md`
+- Library PEL / function codes (filing identity — not JL lanes): `docs/adr/ADR-0023-governance-library-reference-scheme.md`
 - JL-1 depends on: this ADR merged + X-2 PROD LIVE

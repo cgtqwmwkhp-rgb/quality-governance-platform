@@ -19,6 +19,11 @@ reinterpreted onto QGP's SQLAlchemy/Alembic/FastAPI stack.
   `documents.reference_number` (DOC-YYYY-####, via `ReferenceNumberService`)
   is untouched. `documents.pel_doc_ref` is a new, separate, nullable+unique
   column allocated atomically per level-2 category.
+  **Forward scheme (Accepted, ADR-0023):** new allocations become
+  `PEL-<FUNCTION>-<SEQ>` (function axis, not category path). Category
+  `ref_prefix` remains a filing default until the Function-axis wave
+  revises counters. Do **not** cite ADR-0020 for this — ADR-0020 is the
+  Compliance Schedule occurrence model.
 - **Taxonomy category `06.04` (O-Licence & Tachograph — HGV) is seeded
   `active=false`.** Plantexpand does not currently run HGVs under an
   operator's licence; the category stays in the taxonomy (for provenance /
@@ -57,3 +62,10 @@ reinterpreted onto QGP's SQLAlchemy/Alembic/FastAPI stack.
 See `docs/governance/decision-log-template.md` conventions and
 `scripts/governance/pr_body_gov_lib_w0_taxonomy_pel.md` for the full Change
 Ledger for this wave.
+
+Related FIRST-pack design notes (enhance, do not twin):
+
+- `docs/adr/ADR-0023-governance-library-reference-scheme.md` — function PEL scheme
+- `docs/governance/library-clause-identity-d14.md` — `ALL_CLAUSES` ↔ `clauses`
+- `docs/governance/library-cel-harden-d15.md` — CEL harden; never coverage_claims
+- `docs/governance/library-home-inventory-f7.md` — file / retention / access homes
