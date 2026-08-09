@@ -65,6 +65,10 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Enterprise document with AI-powered metadata extraction."""
 
     __tablename__ = "documents"
+    __table_args__ = (
+        # WC-1 — legal-hold enforcement always reads (tenant_id, matter).
+        Index("ix_documents_tenant_legal_matter_reference", "tenant_id", "legal_matter_reference"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -174,6 +178,12 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     site_location_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
     )
+
+    # WC-1 / L-40 — which legal matter this document is filed under. Hold state
+    # is NOT stored here: `matter_legal_holds` remains the only hold register,
+    # and a document is frozen while an ACTIVE hold exists for this matter in
+    # the same tenant. NULL means "filed under no matter", not "unknown".
+    legal_matter_reference: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 
     # Governance Library filing (Wave W1) — defaults from category on create.
     access_level: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # all_staff|managers|restricted

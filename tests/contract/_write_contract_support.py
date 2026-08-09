@@ -268,6 +268,23 @@ SERVER_OWNED_FIELDS = frozenset(
         "edit_targets_live",
         "viewing_baseline",
         "banner",
+        # WC-1 control/hold projection on DocumentResponse. All four are read
+        # sides of state owned elsewhere, and none is settable through the
+        # document writer by design:
+        #   * controlled_document_id / control_status are read from the anchored
+        #     `controlled_documents` row. They move when Document Control moves,
+        #     or when a library approve/publish writes through to it — never
+        #     because a client asserted a status on a document body.
+        #   * legal_matter_reference is written only by
+        #     PUT /legal-holds/documents/{id} under `admin:manage`. Accepting it
+        #     on the document writer would let `document:update` file a record out
+        #     of the scope of the hold that is blocking that same writer.
+        #   * legal_hold_active is the live verdict from `matter_legal_holds`,
+        #     recomputed per read so it cannot contradict a released hold.
+        "controlled_document_id",
+        "control_status",
+        "legal_matter_reference",
+        "legal_hold_active",
         "id",
         "tenant_id",
         "created_at",

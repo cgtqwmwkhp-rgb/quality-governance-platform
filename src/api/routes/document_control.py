@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
-from src.domain.exceptions import FeatureNotProvisionedError, MeasurementUnavailableError, NotFoundError
+from src.domain.exceptions import ConflictError, FeatureNotProvisionedError, MeasurementUnavailableError, NotFoundError
 from src.domain.models.document_control import (
     ControlledDocument,
     ControlledDocumentVersion,
@@ -35,6 +35,7 @@ from src.domain.models.document_control import (
 from src.domain.models.user import User
 from src.domain.services.document_version_service import assert_document_metadata_editable, document_version_service
 from src.domain.services.gkb_golden_thread import GoldenThreadContext, decide_golden_thread_publish
+from src.domain.services.legal_hold_enforcement import assert_controlled_document_not_held
 from src.domain.services.schema_presence import absent_tables
 
 router = APIRouter()
@@ -147,6 +148,11 @@ def _tenant_stmt(stmt: Any, model: Any, current_user: CurrentUser) -> Any:
 
 
 class DocumentCreate(BaseModel):
+    #: WC-1 / L-01d — the Register row this control record governs. Optional so
+    #: the existing Document Control page keeps working while the in-app "bring
+    #: under control" journey (L-18c) is built; supplying it is what folds the
+    #: control record onto the one Register instead of starting a second home.
+    library_document_id: Optional[int] = Field(default=None, ge=1)
     title: str = Field(..., min_length=5, max_length=500)
     description: Optional[str] = None
     document_type: str = Field(..., description="policy, procedure, work_instruction, etc.")
@@ -233,6 +239,51 @@ class ObsoleteRequest(BaseModel):
 
     obsolete_reason: str = Field(..., min_length=10)
     superseded_by_id: Optional[int] = None
+
+
+async def _assert_anchor_is_available(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    library_document_id: int,
+) -> None:
+    """Refuse an anchor that is not this tenant's Register row, or already taken.
+
+    Two refusals, both L-01d (one Register, enhance never replicate):
+
+    * A document id from another tenant, or none at all, would create a control
+      record whose golden thread points at nothing readable — which is worse than
+      an unanchored one, because ``relationship_state`` would report ``linked``.
+    * A second control record on the same Register row is a twin control register
+      for that document. There is no product question a second one answers, and
+      the Register projection would have to pick between them.
+    """
+    from src.domain.models.document import Document as LibraryDocument
+
+    library_document = await db.scalar(
+        select(LibraryDocument.id).where(
+            LibraryDocument.id == library_document_id,
+            LibraryDocument.tenant_id == tenant_id,
+        )
+    )
+    if library_document is None:
+        raise NotFoundError(
+            f"Register document {library_document_id} was not found in this tenant.",
+            details={"library_document_id": library_document_id},
+        )
+
+    existing = await db.scalar(
+        select(ControlledDocument.id).where(
+            ControlledDocument.tenant_id == tenant_id,
+            ControlledDocument.library_document_id == library_document_id,
+        )
+    )
+    if existing is not None:
+        raise ConflictError(
+            f"Register document {library_document_id} is already under control as controlled document {existing}.",
+            code="CONTROL_RECORD_EXISTS",
+            details={"library_document_id": library_document_id, "controlled_document_id": existing},
+        )
 
 
 # ============ Document CRUD Endpoints ============
@@ -324,8 +375,12 @@ async def create_document(
     current_user: Annotated[User, Depends(require_permission("document:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Create a new controlled document"""
+    """Create a new controlled document, optionally anchored to a Register row."""
     tenant_id = _tenant_id(current_user)
+    if document_data.library_document_id is not None:
+        await _assert_anchor_is_available(
+            db, tenant_id=tenant_id, library_document_id=document_data.library_document_id
+        )
     type_prefix = document_data.document_type[:3].upper()
     unique_suffix = uuid.uuid4().hex[:8].upper()
     document_number = f"{type_prefix}-{unique_suffix}"
@@ -1016,6 +1071,7 @@ async def mark_document_obsolete(
 
     # After the 404, before the status change below.
     await _refuse_write_if_unprovisioned(db, OBSOLETE_RECORD_TABLES, "An obsolete-document record")
+    await assert_controlled_document_not_held(db, document, tenant_id=tenant_id, action="marked obsolete")
 
     # Update document
     document.status = "obsolete"

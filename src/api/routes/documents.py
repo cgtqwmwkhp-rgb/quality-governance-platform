@@ -62,8 +62,13 @@ from src.domain.services.document_version_service import (
     document_version_service,
     parse_filename_version_hint,
 )
+from src.domain.services.gkb_control_library_link import (
+    control_state_for_documents,
+    write_library_decision_through_to_control,
+)
 from src.domain.services.href_registry import document_href
 from src.domain.services.index_job_service import IndexJobService, dispatch_index_job, vector_index_configured
+from src.domain.services.legal_hold_enforcement import assert_document_not_held, held_document_ids
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.file_validation import validate_upload as shared_validate_upload
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -131,6 +136,18 @@ class DocumentResponse(BaseModel):
     # Optional in schema so OpenAPI treats the additive field as non-breaking.
     href: str = ""
 
+    # WC-1 / L-01d — control state folded onto the one Register (D1). Derived from
+    # the anchored `controlled_documents` row; `null` means the document is not
+    # under control, which is why it is not flattened to a string like "draft".
+    controlled_document_id: Optional[int] = None
+    control_status: Optional[str] = None
+
+    # WC-1 / L-40 — legal-hold scope and the live verdict from
+    # `matter_legal_holds`. `legal_hold_active` is read per request rather than
+    # stored, so it cannot go stale against a hold that was released.
+    legal_matter_reference: Optional[str] = None
+    legal_hold_active: bool = False
+
     class Config:
         from_attributes = True
 
@@ -178,6 +195,8 @@ def _document_to_response(
     *,
     created_by_name: Optional[str] = None,
     live_at: Optional[datetime] = None,
+    control_state: Optional[tuple[int, str]] = None,
+    legal_hold_active: bool = False,
 ) -> DocumentResponse:
     """Serialize a document row without failing the whole list on legacy JSON shapes."""
     return DocumentResponse(
@@ -221,6 +240,10 @@ def _document_to_response(
         created_by_id=getattr(document, "created_by_id", None),
         created_by_name=created_by_name,
         href=document_href(document.id),
+        controlled_document_id=control_state[0] if control_state else None,
+        control_status=control_state[1] if control_state else None,
+        legal_matter_reference=getattr(document, "legal_matter_reference", None),
+        legal_hold_active=legal_hold_active,
     )
 
 
@@ -1339,12 +1362,26 @@ async def list_documents(
         )
         live_at_by_doc = {row[0]: row[1] for row in version_rows.all() if row[1] is not None}
 
+    # WC-1 — control state and hold verdict, one query each for the whole page.
+    control_state_by_doc: dict[int, tuple[int, str]] = {}
+    held_ids: set[int] = set()
+    if visible:
+        list_tenant_id = require_tenant_id(current_user.tenant_id)
+        control_state_by_doc = await control_state_for_documents(
+            db,
+            tenant_id=list_tenant_id,
+            document_ids=doc_ids,
+        )
+        held_ids = await held_document_ids(db, tenant_id=list_tenant_id, documents=visible)
+
     return DocumentListResponse(
         items=[
             _document_to_response(
                 d,
                 created_by_name=created_by_names.get(d.created_by_id) if d.created_by_id is not None else None,
                 live_at=live_at_by_doc.get(d.id),
+                control_state=control_state_by_doc.get(d.id),
+                legal_hold_active=d.id in held_ids,
             )
             for d in visible
         ],
@@ -1375,7 +1412,21 @@ async def get_document(
     await _log_library_access(db, document, current_user, "view")
     await db.commit()
 
-    return _document_to_response(document)
+    # Scoped by the document's own tenant, not the caller's: a superuser may open
+    # one named row across tenants (B-13), and its control record and hold live in
+    # that row's tenant rather than in theirs.
+    control_state = await control_state_for_documents(
+        db,
+        tenant_id=document.tenant_id,
+        document_ids=[document.id],
+    )
+    held = await held_document_ids(db, tenant_id=document.tenant_id, documents=[document])
+
+    return _document_to_response(
+        document,
+        control_state=control_state.get(document.id),
+        legal_hold_active=document.id in held,
+    )
 
 
 @router.patch("/{document_id}", response_model=DocumentResponse)
@@ -1388,6 +1439,7 @@ async def patch_document_metadata(
     """Update title/description on draft/working rows without opening a new version."""
     document = await _get_document_or_404(db, document_id, current_user)
     assert_library_metadata_editable(document.status)
+    await assert_document_not_held(db, document, action="edited")
 
     if payload.title is not None:
         title = payload.title.strip()
@@ -1405,7 +1457,12 @@ async def patch_document_metadata(
 
     await db.commit()
     await db.refresh(document)
-    return _document_to_response(document)
+    control_state = await control_state_for_documents(
+        db,
+        tenant_id=document.tenant_id,
+        document_ids=[document.id],
+    )
+    return _document_to_response(document, control_state=control_state.get(document.id))
 
 
 async def _read_and_validate_revision_file(
@@ -1618,6 +1675,19 @@ async def approve_document_version(
         approved_by_id=current_user.id,
         version_id=version_id,
     )
+    # WC-1 / L-01d — the anchored control record moves in the same transaction, so
+    # Document Control can no longer report `draft` for a document the Register
+    # has approved. Deliberately outside the try/except below: a KB indexing hop
+    # may fail without unsaying the approval, but two registers disagreeing about
+    # whether a document is approved is not something to log and carry on from.
+    await write_library_decision_through_to_control(
+        db,
+        document,
+        library_status="approved",
+        version_number=version.version_number,
+        actor_id=current_user.id,
+        actor_name=getattr(current_user, "full_name", None) or getattr(current_user, "email", None),
+    )
     try:
         from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle
 
@@ -1744,6 +1814,14 @@ async def publish_document_version(
         document,
         published_by_id=current_user.id,
         version_id=version_id,
+    )
+    await write_library_decision_through_to_control(
+        db,
+        document,
+        library_status="published",
+        version_number=version.version_number,
+        actor_id=current_user.id,
+        actor_name=getattr(current_user, "full_name", None) or getattr(current_user, "email", None),
     )
     try:
         from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle

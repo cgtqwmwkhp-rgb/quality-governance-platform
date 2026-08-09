@@ -23,6 +23,7 @@ from src.domain.models.document_library import DocumentCategory
 from src.domain.models.enums import DocumentStatus
 from src.domain.models.governed_knowledge import DocumentDiscussionThread, DocumentQuizDraft
 from src.domain.services.document_ai_service import VectorSearchService, document_chunk_vector_id
+from src.domain.services.legal_hold_enforcement import not_under_active_legal_hold
 from src.infrastructure.storage import storage_service
 
 logger = logging.getLogger(__name__)
@@ -80,12 +81,19 @@ def _candidate_from_row(document: Document, retention_rule: str | None) -> Dispo
 
 
 def _has_no_governance_dependants():
-    """SQL predicates that prevent disposal from severing governance provenance."""
+    """SQL predicates that prevent disposal from severing governance provenance.
+
+    The legal-hold predicate sits inside the same statement rather than beside it
+    as a separate check (WC-1 / L-40): a held document is then never a member of
+    the eligible set, so neither the preview nor the execute path can dispose one
+    by forgetting to ask.
+    """
     return (
         ~exists(select(DocumentCampaign.id).where(DocumentCampaign.document_id == Document.id)),
         ~exists(select(ControlledDocument.id).where(ControlledDocument.library_document_id == Document.id)),
         ~exists(select(DocumentDiscussionThread.id).where(DocumentDiscussionThread.document_id == Document.id)),
         ~exists(select(DocumentQuizDraft.id).where(DocumentQuizDraft.document_id == Document.id)),
+        not_under_active_legal_hold(),
     )
 
 
