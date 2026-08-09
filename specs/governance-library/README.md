@@ -64,6 +64,8 @@ reinterpreted onto QGP's SQLAlchemy/Alembic/FastAPI stack.
 
 ## Northern Star (locked 2026-08-09)
 
+Dry-run ingest (Wave **W5b**): `python -m scripts.governance.library.northern_star_dry_run_ingest` — report only, never silent write.
+
 Programme master plan: Cursor canvas `library-v6-northern-star-master-plan`.
 ADR amendment: `docs/adr/ADR-0023-governance-library-reference-scheme.md`
 § Amendment — Northern Star.
