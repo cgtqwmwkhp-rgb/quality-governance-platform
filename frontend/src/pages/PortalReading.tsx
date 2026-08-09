@@ -42,6 +42,8 @@ import {
   type QuestionGateChoice,
   type SignChoice,
 } from './campaignReadingHelpers'
+import { PortalCoverageBadge } from '../components/portal/PortalCoverageBadge'
+import { resolvePortalCoverageBadge } from '../components/portal/portalCoverageBadgeHelpers'
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
@@ -388,6 +390,15 @@ export default function PortalReading() {
                 questionSent,
               )
               const signatureRequired = isSignatureRequiredForCompletion(gateChoice, signChoice)
+              const coverageSource = {
+                document_issue_state: item.document_issue_state,
+                document_version: item.document_version,
+              }
+              const coverage = resolvePortalCoverageBadge(coverageSource)
+              const coverageLabel =
+                coverage.state === 'UNKNOWN' && item.document_version
+                  ? t(coverage.labelKey, { version: item.document_version })
+                  : t(coverage.labelKey)
 
               return (
                 <Card key={item.id} className="p-4" data-testid={`portal-reading-assignment-${item.id}`}>
@@ -395,6 +406,9 @@ export default function PortalReading() {
                     <div>
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         <Badge variant="submitted">{item.status}</Badge>
+                        {coverage.visible ? (
+                          <PortalCoverageBadge source={coverageSource} label={coverageLabel} />
+                        ) : null}
                         {isQuizRequired(item) && (
                           <Badge variant="outline">{t('my_reading.quiz')}</Badge>
                         )}

@@ -70,6 +70,8 @@ describe('PortalReading O-08', () => {
             id: 7,
             document_id: 42,
             document_title: 'H&S Policy',
+            document_version: '2.0',
+            document_issue_state: 'CURRENT',
             campaign_title: 'Q3 rollout',
             status: 'pending',
             due_date: '2026-08-01',
@@ -103,6 +105,9 @@ describe('PortalReading O-08', () => {
     expect(await screen.findByTestId('portal-reading-assignment-7')).toBeInTheDocument()
     expect(screen.getByText('H&S Policy')).toBeInTheDocument()
     expect(mockListMyAssignments).toHaveBeenCalled()
+    const badge = screen.getByTestId('portal-coverage-badge')
+    expect(badge).toHaveAttribute('data-issue-state', 'CURRENT')
+    expect(screen.getByTestId('portal-coverage-badge-version')).toHaveTextContent('v2.0')
   })
 
   it('records open and launches signed document URL in a new tab', async () => {
