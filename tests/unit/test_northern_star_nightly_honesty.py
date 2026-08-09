@@ -113,13 +113,17 @@ def test_live_pack_honesty_pins_and_guard_passes():
 
 
 def test_delivery_guard_rejects_fabricated_zeros():
-    clean = HonestyReport(pack_path="x", document_count=0, counters={
-        "r08_gaps": 0,
-        "r25_issued_missing_review_date": 0,
-        "r25_pack_missing_review_date": 10,
-        "r25_overdue_computed": 0,
-        "r30_gap_total": 0,
-    })
+    clean = HonestyReport(
+        pack_path="x",
+        document_count=0,
+        counters={
+            "r08_gaps": 0,
+            "r25_issued_missing_review_date": 0,
+            "r25_pack_missing_review_date": 10,
+            "r25_overdue_computed": 0,
+            "r30_gap_total": 0,
+        },
+    )
     failures = assert_delivery_guard(clean, load_baseline())
     assert any("r08_gaps" in f for f in failures)
     assert any("r30_gap_total" in f for f in failures)

@@ -133,10 +133,7 @@ def _legacy_catalogue(docs: list[dict[str, Any]]) -> set[str]:
                 part = part.strip()
                 if part and part.lower() not in {"none", "n/a", "-", "null"}:
                     tokens.add(normalize_legacy_token(part))
-        blob = " ".join(
-            str(doc.get(k) or "")
-            for k in ("filename", "proposed_filename", "title", "source_location")
-        )
+        blob = " ".join(str(doc.get(k) or "") for k in ("filename", "proposed_filename", "title", "source_location"))
         for match in _LEGACY_TOKEN_RE.findall(blob):
             tokens.add(normalize_legacy_token(match))
     return tokens
@@ -160,16 +157,10 @@ def run_honesty_report(pack: dict[str, Any], *, pack_path: Path = _PACK_PATH) ->
         if doc.get("type") != _POLICY or _level(doc) != 2:
             continue
         ref = str(doc.get("pel_ref") or "")
-        deep = [
-            child
-            for child in children.get(ref, ())
-            if child in by_ref and (_level(by_ref[child]) or 0) >= 3
-        ]
+        deep = [child for child in children.get(ref, ()) if child in by_ref and (_level(by_ref[child]) or 0) >= 3]
         if not deep:
             r08_gaps.append(ref)
-    report.counters["r08_policy_l2"] = sum(
-        1 for d in docs if d.get("type") == _POLICY and _level(d) == 2
-    )
+    report.counters["r08_policy_l2"] = sum(1 for d in docs if d.get("type") == _POLICY and _level(d) == 2)
     report.counters["r08_exempt_l2_statement_strategy"] = r08_exempt
     report.counters["r08_gaps"] = len(r08_gaps)
     if r08_gaps:
@@ -178,8 +169,7 @@ def run_honesty_report(pack: dict[str, Any], *, pack_path: Path = _PACK_PATH) ->
                 code="R08",
                 severity="Warn",
                 message=(
-                    f"{len(r08_gaps)} L2 Policy document(s) have no child at L3+ "
-                    "(Statements / Strategy·Plan exempt)"
+                    f"{len(r08_gaps)} L2 Policy document(s) have no child at L3+ " "(Statements / Strategy·Plan exempt)"
                 ),
                 refs=sorted(r08_gaps)[:40],
             )
@@ -198,9 +188,7 @@ def run_honesty_report(pack: dict[str, Any], *, pack_path: Path = _PACK_PATH) ->
     issued_missing_review_date = [d for d in issued if not d.get("review_date")]
     all_missing_review_date = sum(1 for d in docs if not d.get("review_date"))
     report.counters["r25_issued"] = len(issued)
-    report.counters["r25_issued_with_review_cycle"] = sum(
-        1 for d in issued if d.get("review_cycle_months")
-    )
+    report.counters["r25_issued_with_review_cycle"] = sum(1 for d in issued if d.get("review_cycle_months"))
     report.counters["r25_issued_missing_review_date"] = len(issued_missing_review_date)
     report.counters["r25_pack_missing_review_date"] = all_missing_review_date
     report.counters["r25_overdue_computed"] = 0  # cannot invent overdue without dates
@@ -259,8 +247,7 @@ def run_honesty_report(pack: dict[str, Any], *, pack_path: Path = _PACK_PATH) ->
                 code="R30",
                 severity="Warn",
                 message=(
-                    f"{len(unresolved)} unresolved + {len(ambiguous)} ambiguous "
-                    "legacy token(s) in pack catalogue"
+                    f"{len(unresolved)} unresolved + {len(ambiguous)} ambiguous " "legacy token(s) in pack catalogue"
                 ),
                 refs=(unresolved + ambiguous)[:40],
             )
@@ -299,9 +286,7 @@ def render_text(report: HonestyReport) -> str:
         ref_bit = f" refs={finding.refs[:12]}" if finding.refs else ""
         lines.append(f"  [{finding.severity}] {finding.code}: {finding.message}{ref_bit}")
     lines.append("")
-    lines.append(
-        "Delivery: use --guard to refuse fabricated zeros against the honesty baseline."
-    )
+    lines.append("Delivery: use --guard to refuse fabricated zeros against the honesty baseline.")
     return "\n".join(lines) + "\n"
 
 
@@ -327,19 +312,14 @@ def assert_delivery_guard(
     for key, floor in floors.items():
         value = int(report.counters.get(key, 0))
         if value < floor:
-            failures.append(
-                f"CRITICAL: {key}={value} below honesty floor {floor} "
-                "(fabricated clean / silent green)"
-            )
+            failures.append(f"CRITICAL: {key}={value} below honesty floor {floor} " "(fabricated clean / silent green)")
 
     # Overdue must not be marketed as measured when review dates are absent.
     if (
         int(report.counters.get("r25_pack_missing_review_date", 0)) > 0
         and int(report.counters.get("r25_overdue_computed", -1)) != 0
     ):
-        failures.append(
-            "CRITICAL: r25_overdue_computed must stay 0 while pack review_date is absent"
-        )
+        failures.append("CRITICAL: r25_overdue_computed must stay 0 while pack review_date is absent")
 
     return failures
 
