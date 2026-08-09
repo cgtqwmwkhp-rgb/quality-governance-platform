@@ -52,22 +52,44 @@ async def filing_function(test_session):
     has no counter row — so the counters are part of the fixture, not an
     afterthought. All five cascade bands are seeded, matching what
     ``seed_document_categories`` does in a real environment.
+
+    The function code must be an R01-allowlisted vocabulary token (here
+    ``HSEQ``). Suffixed synthetic codes made unique refs under WA-2, but W4
+    ``assert_pel_identity`` hard-blocks any ``PEL-<CODE>-…`` whose CODE is not
+    in the Northern Star pack — so isolation is via resetting band counters,
+    not inventing a new code.
     """
+    from sqlalchemy import select
+
     from src.domain.models.document_library import CASCADE_LEVELS, DocumentFunction, PelDocRefCounter
 
-    suffix = uuid4().hex[:6]
-    function = DocumentFunction(
-        tenant_id=None,
-        code=f"HSEQ{suffix}".upper(),
-        name="Health, Safety, Environment & Quality",
-        sort_order=10,
-        active=True,
-    )
-    test_session.add(function)
-    await test_session.flush()
+    existing = await test_session.scalar(select(DocumentFunction).where(DocumentFunction.code == "HSEQ"))
+    if existing is None:
+        function = DocumentFunction(
+            tenant_id=None,
+            code="HSEQ",
+            name="Health, Safety, Environment & Quality",
+            sort_order=10,
+            active=True,
+        )
+        test_session.add(function)
+        await test_session.flush()
+    else:
+        function = existing
+        function.active = True
 
     for band in CASCADE_LEVELS:
-        test_session.add(PelDocRefCounter(function_id=function.id, level_band=band, next_seq=1))
+        counter = await test_session.scalar(
+            select(PelDocRefCounter).where(
+                PelDocRefCounter.function_id == function.id,
+                PelDocRefCounter.level_band == band,
+            )
+        )
+        if counter is None:
+            test_session.add(PelDocRefCounter(function_id=function.id, level_band=band, next_seq=1))
+        else:
+            counter.next_seq = 1
+
     await test_session.commit()
     await test_session.refresh(function)
     return function
