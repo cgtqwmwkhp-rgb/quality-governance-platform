@@ -61,7 +61,12 @@ from src.domain.services.document_library_filing_service import (
     find_duplicate_approved_candidates,
     load_filing_category,
 )
-from src.domain.services.document_library_lifecycle_service import approve_document, reject_review, submit_for_review
+from src.domain.services.document_library_lifecycle_service import (
+    approve_document,
+    issue_document,
+    reject_review,
+    submit_for_review,
+)
 from src.domain.services.document_version_service import (
     assert_library_metadata_editable,
     document_version_service,
@@ -461,6 +466,19 @@ class LibraryLifecycleResponse(BaseModel):
     document_id: int
     status: str
     message: str
+
+
+class LibraryIssueRequest(BaseModel):
+    """Northern Star W6 / NS-WF issue (approved → issued).
+
+    ``review_cycle_months`` / ``review_cycle_basis`` are optional here only
+    because a document may already state them; R20 refuses the issue when
+    neither the document nor the request supplies both. Nothing defaults them.
+    """
+
+    version_id: Optional[int] = None
+    review_cycle_months: Optional[int] = None
+    review_cycle_basis: Optional[str] = None
 
 
 class LibraryVersionResponse(BaseModel):
@@ -1941,6 +1959,107 @@ async def publish_document_version(
             exc_info=True,
         )
     await db.commit()
+    versions = await document_version_service.list_library_versions(
+        db,
+        document_id,
+        tenant_id=getattr(current_user, "tenant_id", None),
+        is_superuser=bool(getattr(current_user, "is_superuser", False)),
+    )
+    serialized = [document_version_service.serialize_library_version(v) for v in versions]
+    return LibraryVersionHistoryResponse(
+        document_id=document.id,
+        current_version=document.version,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
+        published_version=next((v["version_number"] for v in serialized if v["status"] == "published"), None),
+        working_version=next((v["version_number"] for v in serialized if v["status"] == "draft"), None),
+        versions=[LibraryVersionResponse(**v) for v in serialized],
+    )
+
+
+@router.post("/{document_id}/issue", response_model=LibraryVersionHistoryResponse)
+async def issue_document_version(
+    document_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    payload: LibraryIssueRequest | None = None,
+):
+    """Northern Star W6 / NS-WF: issue an approved document (approved → issued).
+
+    The governed route to live. Unlike ``/publish`` it refuses anything that is
+    not already approved and applies the pack's issue-time blocks (R07, R10, R11,
+    R14 approval leg, R18, R20, R22, R23). It produces no rendition and claims
+    none: R15's footer stamping needs a rendering pipeline that does not exist.
+    """
+    document = await _get_document_or_404(db, document_id, current_user)
+    request = payload or LibraryIssueRequest()
+
+    # X-1: the same gate the publish path carries — never put a document live
+    # over a degraded impact view when Entity360 is on.
+    if settings.entity_360_enabled:
+        from fastapi import HTTPException
+
+        from src.domain.services.entity_360 import build_impact_bundle, publish_blocked_detail
+
+        impact = await build_impact_bundle(
+            db=db,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+            document_id=document_id,
+            user=current_user,
+        )
+        if not impact.get("complete") or not impact.get("can_publish"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=publish_blocked_detail(impact),
+            )
+
+    version = await issue_document(
+        db,
+        document,
+        issued_by_id=current_user.id,
+        version_id=request.version_id,
+        review_cycle_months=request.review_cycle_months,
+        review_cycle_basis=request.review_cycle_basis,
+    )
+    # Outside the try/except below for the same reason as approve: an indexing
+    # hop may fail without unsaying the issue, but two registers disagreeing
+    # about whether a document is live is not something to log and carry on from.
+    await write_library_decision_through_to_control(
+        db,
+        document,
+        library_status="published",
+        version_number=version.version_number,
+        actor_id=current_user.id,
+        actor_name=getattr(current_user, "full_name", None) or getattr(current_user, "email", None),
+    )
+    try:
+        from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle
+
+        await run_library_publish_lifecycle(
+            db=db,
+            library_document=document,
+            new_version=version.version_number,
+            user=current_user,
+        )
+    except Exception:
+        logger.exception(
+            "Governed KB publish lifecycle failed after library issue for document %s",
+            document_id,
+        )
+    try:
+        campaign_service = DocumentCampaignService(db)
+        await campaign_service.spawn_reack_campaign(
+            document_id=document_id,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+            actor_id=current_user.id,
+        )
+    except Exception:  # noqa: BLE001 — issue must not fail on the re-ack hook
+        logger.warning(
+            "spawn_reack_campaign failed after library issue for document %s",
+            document_id,
+            exc_info=True,
+        )
+    await db.commit()
+    await db.refresh(document)
     versions = await document_version_service.list_library_versions(
         db,
         document_id,
