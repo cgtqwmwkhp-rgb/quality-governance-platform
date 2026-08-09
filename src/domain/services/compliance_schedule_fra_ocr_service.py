@@ -40,7 +40,11 @@ from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.compliance_schedule_filing_service import FILING_ERROR_MAX_CHARS, _load_bound_evidence_asset
 from src.domain.services.compliance_schedule_service import ComplianceScheduleService
-from src.domain.services.document_category_service import allocate_pel_doc_ref, resolve_function_code
+from src.domain.services.document_category_service import (
+    allocate_pel_doc_ref,
+    coerce_cascade_level,
+    resolve_function_code,
+)
 from src.domain.services.document_library_filing_service import (
     filing_defaults_for_category,
     find_duplicate_approved_candidates,
@@ -703,6 +707,7 @@ class ComplianceScheduleFraOcrService:
         user: User,
         category_id: int,
         function_code: Optional[str] = None,
+        cascade_level: Optional[int] = None,
         title: Optional[str] = None,
     ) -> FraOcrFilingOutcome:
         """File a confirmed FRA draft into the Library.
@@ -711,6 +716,12 @@ class ComplianceScheduleFraOcrService:
         from (ADR-0023). Optional: without it the filed document gets no
         ``pel_doc_ref``. An FRA sits on the HSEQ/FAC boundary, so the function
         is confirmed by the filer rather than inferred from the category.
+
+        ``cascade_level`` (NS-1) is the band the reference is drawn from and is
+        required whenever ``function_code`` is given. An FRA is a level-4
+        assessment under the Northern Star cascade, but it is not this
+        service's job to assert that on the filer's behalf: the band is baked
+        into an immutable reference, so it is confirmed, not inferred.
         """
         draft = await self._load_draft(draft_id=draft_id, tenant_id=tenant_id, for_update=True)
         if draft.status != ComplianceOcrDraftStatus.CONFIRMED:
@@ -735,6 +746,13 @@ class ComplianceScheduleFraOcrService:
         # Resolved before the storage download so an unknown function code
         # fails the request cheaply rather than after the PDF is copied.
         filing_function = await resolve_function_code(self.db, function_code)
+        if filing_function is not None and cascade_level is None:
+            raise ValidationError(
+                "cascade_level is required when function_code is supplied: the "
+                "PEL reference is banded by cascade level and cannot be "
+                "re-banded once issued (NS-1 / R02).",
+                code="VALIDATION_ERROR",
+            )
         if getattr(category, "taxonomy_id", None) != FRA_TAXONOMY_ID:
             raise ValidationError(
                 f"FRA OCR filing requires a Library category with taxonomy_id {FRA_TAXONOMY_ID}",
@@ -770,7 +788,14 @@ class ComplianceScheduleFraOcrService:
         doc_title = title or draft.source_filename or f"FRA draft {draft.id}"
         site_location_id = requirement.location_id
         reference_number = await ReferenceNumberService.generate(self.db, "document", Document)
-        pel_doc_ref = await allocate_pel_doc_ref(self.db, filing_function.id) if filing_function is not None else None
+        # Coerced here, not passed straight through: the earlier guard refuses a
+        # function with no level, but it tests ``filing_function``, so this is
+        # what actually stops a None reaching the allocator.
+        pel_doc_ref = (
+            await allocate_pel_doc_ref(self.db, filing_function.id, coerce_cascade_level(cascade_level))
+            if filing_function is not None
+            else None
+        )
         defaults = filing_defaults_for_category(category)
 
         duplicates = await find_duplicate_approved_candidates(
@@ -819,6 +844,7 @@ class ComplianceScheduleFraOcrService:
             category_id=category_id,
             pel_doc_ref=pel_doc_ref,
             function_id=filing_function.id if filing_function is not None else None,
+            cascade_level=cascade_level,
             site_location_id=site_location_id,
             access_level=defaults.access_level,
             is_statutory=defaults.is_statutory,

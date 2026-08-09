@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.api.schemas.compliance_schedule import RequirementResponse
 from src.api.schemas.validators import sanitize_field
@@ -186,12 +186,23 @@ class FraOcrFileRequest(BaseModel):
     # with no PEL reference rather than one derived from the category. An FRA
     # sits on the HSEQ/FAC boundary, so it is not safe to infer.
     function_code: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    # Cascade level 1-5 (NS-1) — the band the PEL reference is drawn from.
+    # Required alongside function_code: an FRA is a level-4 assessment, but the
+    # band is baked into an immutable reference, so it is confirmed by the
+    # filer rather than assumed here.
+    cascade_level: Optional[int] = Field(default=None, ge=1, le=5)
     title: Optional[str] = Field(default=None, min_length=1, max_length=500)
 
     @field_validator("title", mode="before")
     @classmethod
     def _sanitize(cls, v):
         return sanitize_field(v)
+
+    @model_validator(mode="after")
+    def _level_required_with_function(self) -> "FraOcrFileRequest":
+        if self.function_code is not None and self.cascade_level is None:
+            raise ValueError("cascade_level is required when function_code is supplied (NS-1 banded PEL reference)")
+        return self
 
 
 class FraOcrFilingResponse(BaseModel):

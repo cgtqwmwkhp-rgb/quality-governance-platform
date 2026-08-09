@@ -34,6 +34,11 @@ IMS052_COLUMNS: tuple[str, ...] = (
     "Issue",
     "Status",
     "Function",
+    # NS-1 — the cascade level, alongside Function and Category so the
+    # classification triple reads together. Blank for legacy rows filed before
+    # the cascade existed; the column is never derived from the reference
+    # string, because an unbanded legacy reference has no level to derive.
+    "Level",
     "Category",
     "Last Review Date",
     "Next Review Date",
@@ -61,6 +66,17 @@ def _date_only(value: datetime | date | None) -> str:
     return value.isoformat()
 
 
+def _cascade_level_str(value: Any) -> str:
+    """Render the cascade level as `L3`, or blank when the document has none.
+
+    `L`-prefixed rather than bare, so a spreadsheet reads it as a label and not
+    as a number to sum, sort numerically against blanks, or reformat.
+    """
+    if value is None:
+        return ""
+    return f"L{int(value)}"
+
+
 def _excel_safe(value: str) -> str:
     """Prefix formula-like cells so free-text titles cannot inject Excel formulas."""
     if value and value[0] in ("=", "+", "-", "@"):
@@ -85,6 +101,7 @@ def build_register_row(
         str(getattr(doc, "version", None) or ""),
         _enum_str(getattr(doc, "status", None)),
         function_name,
+        _cascade_level_str(getattr(doc, "cascade_level", None)),
         category_name,
         _date_only(getattr(doc, "reviewed_at", None)),
         _date_only(getattr(doc, "review_date", None)),

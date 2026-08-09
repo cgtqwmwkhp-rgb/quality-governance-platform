@@ -506,6 +506,11 @@ describe('Documents', () => {
     expect(await screen.findByTestId('documents-filing-function-step')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('documents-filing-function-select'))
     fireEvent.click(await screen.findByTestId('documents-filing-function-option-IT'))
+    // NS-1: confirming a function allocates a banded PEL reference, so a
+    // cascade level must be chosen with it before Continue is enabled.
+    expect(screen.getByTestId('documents-filing-function-continue')).toBeDisabled()
+    fireEvent.click(screen.getByTestId('documents-filing-level-select'))
+    fireEvent.click(await screen.findByTestId('documents-filing-level-option-2'))
     fireEvent.click(screen.getByTestId('documents-filing-function-continue'))
 
     await waitFor(() => {
@@ -515,6 +520,7 @@ describe('Documents', () => {
       String(call[0]).includes('/documents/upload'),
     ) as [string, FormData]
     expect(formData.get('function_code')).toBe('IT')
+    expect(formData.get('cascade_level')).toBe('2')
   })
 
   it('preserves the selected function when a failed upload is retried', async () => {
@@ -562,6 +568,8 @@ describe('Documents', () => {
     expect(await screen.findByTestId('documents-filing-function-step')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('documents-filing-function-select'))
     fireEvent.click(await screen.findByTestId('documents-filing-function-option-IT'))
+    fireEvent.click(screen.getByTestId('documents-filing-level-select'))
+    fireEvent.click(await screen.findByTestId('documents-filing-level-option-4'))
     fireEvent.click(screen.getByTestId('documents-filing-function-continue'))
 
     expect(await screen.findByTestId('documents-upload-error')).toHaveTextContent('Upload offline')
@@ -575,6 +583,10 @@ describe('Documents', () => {
     ) as [string, FormData][]
     expect(uploadCalls[0][1].get('function_code')).toBe('IT')
     expect(uploadCalls[1][1].get('function_code')).toBe('IT')
+    // The level survives the retry too — a re-upload must not silently drop the
+    // band and issue an unbanded reference.
+    expect(uploadCalls[0][1].get('cascade_level')).toBe('4')
+    expect(uploadCalls[1][1].get('cascade_level')).toBe('4')
   })
 
   it('opens the Doc Graph relationship step after upload when document_graph is on', async () => {

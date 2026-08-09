@@ -251,6 +251,12 @@ class RecordFileRequest(BaseModel):
     # with no PEL reference rather than one derived from the category, because
     # an issued reference can never be corrected in place.
     function_code: Optional[str] = Field(None, min_length=1, max_length=20)
+    # Cascade level 1-5 (NS-1) — the band the PEL reference is drawn from, and
+    # the first digit of its sequence. Required alongside function_code because
+    # the band is baked into an immutable reference: filed evidence is usually
+    # a level-5 record but not always, and a defaulted band would misplace the
+    # document in the cascade permanently.
+    cascade_level: Optional[int] = Field(None, ge=1, le=5)
     library_document_id: Optional[int] = Field(None, ge=1)
     title: Optional[str] = Field(None, min_length=1, max_length=500)
 
@@ -269,6 +275,10 @@ class RecordFileRequest(BaseModel):
             raise ValueError("category_id does not apply when linking an existing library document")
         if self.library_document_id is not None and self.function_code is not None:
             raise ValueError("function_code does not apply when linking an existing library document")
+        if self.library_document_id is not None and self.cascade_level is not None:
+            raise ValueError("cascade_level does not apply when linking an existing library document")
+        if self.function_code is not None and self.cascade_level is None:
+            raise ValueError("cascade_level is required when function_code is supplied (NS-1 banded PEL reference)")
         if self.library_document_id is not None and self.title is not None:
             raise ValueError("title does not apply when linking an existing library document")
         return self

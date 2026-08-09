@@ -45,13 +45,15 @@ def _cs_headers(permissions: str) -> dict[str, str]:
 
 @pytest.fixture
 async def filing_function(test_session):
-    """A `DocumentFunction` with its PEL sequence counter (WA-2 / ADR-0023).
+    """A `DocumentFunction` with its per-band PEL sequence counters (NS-1).
 
     The integration harness creates tables from metadata but seeds no library
-    reference data, and ``allocate_pel_doc_ref`` refuses a function with no
-    counter row — so the counter is part of the fixture, not an afterthought.
+    reference data, and ``allocate_pel_doc_ref`` refuses a function whose band
+    has no counter row — so the counters are part of the fixture, not an
+    afterthought. All five cascade bands are seeded, matching what
+    ``seed_document_categories`` does in a real environment.
     """
-    from src.domain.models.document_library import DocumentFunction, PelDocRefCounter
+    from src.domain.models.document_library import CASCADE_LEVELS, DocumentFunction, PelDocRefCounter
 
     suffix = uuid4().hex[:6]
     function = DocumentFunction(
@@ -64,7 +66,8 @@ async def filing_function(test_session):
     test_session.add(function)
     await test_session.flush()
 
-    test_session.add(PelDocRefCounter(function_id=function.id, next_seq=1))
+    for band in CASCADE_LEVELS:
+        test_session.add(PelDocRefCounter(function_id=function.id, level_band=band, next_seq=1))
     await test_session.commit()
     await test_session.refresh(function)
     return function
@@ -436,6 +439,7 @@ async def test_filing_evidence_creates_a_library_document(
             "evidence_asset_id": asset.id,
             "category_id": filing_category.id,
             "function_code": filing_function.code,
+            "cascade_level": 5,
             "title": "Wickford FRA 2026",
         },
     )
@@ -443,8 +447,10 @@ async def test_filing_evidence_creates_a_library_document(
     body = response.json()
     assert body["linked_existing"] is False
     assert body["record"]["filing_status"] == "filed"
-    # WA-2 / ADR-0023: the reference comes from the function, not the category path.
-    assert body["pel_doc_ref"] == f"PEL-{filing_function.code}-0001"
+    # WA-2 / ADR-0023: the reference comes from the function, not the category
+    # path. NS-1: and it is banded by cascade level, so a filed record reads
+    # `-5001` (band 5 = Form/Register/Record), never the withdrawn `-0001`.
+    assert body["pel_doc_ref"] == f"PEL-{filing_function.code}-5001"
 
     storage.download.assert_awaited_once_with(asset.storage_key)
     # The Library copy is a new key, not a second pointer at the evidence blob:
@@ -531,9 +537,49 @@ async def test_filing_with_an_unknown_function_code_is_refused(
             "evidence_asset_id": asset.id,
             "category_id": filing_category.id,
             "function_code": "NOT-A-FUNCTION",
+            # Supplied so this exercises the unknown-code path; without it the
+            # NS-1 schema rule would reject the request first and this test
+            # would pass for the wrong reason.
+            "cascade_level": 5,
         },
     )
     assert response.status_code in (400, 422), response.text
+
+
+@pytest.mark.asyncio
+async def test_filing_with_a_function_but_no_cascade_level_is_refused(
+    client: AsyncClient,
+    enable_compliance_schedule,
+    unique_template,
+    filing_category,
+    filing_function,
+    superuser_auth_headers: dict,
+    test_session,
+    monkeypatch,
+):
+    """NS-1: a PEL reference is banded by level, so it cannot be issued without one."""
+    record = await _completed_record(client, superuser_auth_headers, unique_template.template_key)
+    asset = await _bound_evidence_asset(test_session, record_id=record["id"])
+    _fake_storage(monkeypatch)
+
+    response = await client.post(
+        f"/api/v1/compliance-schedule/records/{record['id']}/file",
+        headers=superuser_auth_headers,
+        json={
+            "evidence_asset_id": asset.id,
+            "category_id": filing_category.id,
+            "function_code": filing_function.code,
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert "cascade_level" in response.text
+
+    # The refusal must not have half-filed the record.
+    from src.domain.models.compliance_schedule import ComplianceRecord
+
+    stored = await test_session.get(ComplianceRecord, record["id"])
+    await test_session.refresh(stored)
+    assert stored.library_document_id is None
 
 
 @pytest.mark.asyncio

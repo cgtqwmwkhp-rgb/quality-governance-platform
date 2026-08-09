@@ -16,7 +16,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from src.domain.models.document_library import DocumentCategory, DocumentFunction, DocumentTag, PelDocRefCounter
+from src.domain.models.document_library import (
+    CASCADE_LEVELS,
+    DocumentCategory,
+    DocumentFunction,
+    DocumentTag,
+    PelDocRefCounter,
+)
 from src.domain.services.document_category_seed_data import (
     DEACTIVATED_TAXONOMY_IDS,
     EXPECTED_CATEGORY_COUNT,
@@ -189,7 +195,8 @@ class TestSeedDocumentCategoriesIdempotency:
         assert len(functions) == EXPECTED_FUNCTION_COUNT
 
         counters = (await isolated_db_session.execute(select(PelDocRefCounter))).scalars().all()
-        assert len(counters) == EXPECTED_FUNCTION_COUNT  # one per function, never duplicated
+        # NS-1: one per function *per band*, never duplicated
+        assert len(counters) == EXPECTED_FUNCTION_COUNT * len(CASCADE_LEVELS)
         assert all(c.next_seq == 1 for c in counters)  # reseeding never resets/bumps an existing counter
 
         tags = (await isolated_db_session.execute(select(DocumentTag))).scalars().all()
@@ -217,15 +224,21 @@ class TestSeedDocumentCategoriesIdempotency:
         assert result.scalar_one().active is False
 
     @pytest.mark.asyncio
-    async def test_seed_creates_one_counter_per_function(self, isolated_db_session: AsyncSession):
-        """WA-2 / ADR-0023: the counter hangs off the function, not the category."""
+    async def test_seed_creates_one_counter_per_function_per_band(self, isolated_db_session: AsyncSession):
+        """NS-1: the counter hangs off (function, cascade band), not the function alone.
+
+        All five bands are seeded up front so allocation is a plain UPDATE that
+        never races to create its own row.
+        """
         result = await seed_document_categories(isolated_db_session)
         await isolated_db_session.commit()
 
-        assert result.counters_created == EXPECTED_FUNCTION_COUNT
+        assert result.counters_created == EXPECTED_FUNCTION_COUNT * len(CASCADE_LEVELS)
         function_ids = (await isolated_db_session.execute(select(DocumentFunction.id))).scalars().all()
-        counter_ids = (await isolated_db_session.execute(select(PelDocRefCounter.function_id))).scalars().all()
-        assert set(function_ids) == set(counter_ids)
+        counter_keys = set(
+            (await isolated_db_session.execute(select(PelDocRefCounter.function_id, PelDocRefCounter.level_band))).all()
+        )
+        assert counter_keys == {(fid, band) for fid in function_ids for band in CASCADE_LEVELS}
 
     @pytest.mark.asyncio
     async def test_seed_creates_the_eleven_adr_0023_functions(self, isolated_db_session: AsyncSession):
@@ -261,7 +274,7 @@ class TestSeedDocumentCategoriesIdempotency:
         hseq = (
             await isolated_db_session.execute(select(DocumentFunction).where(DocumentFunction.code == "HSEQ"))
         ).scalar_one()
-        counter = await isolated_db_session.get(PelDocRefCounter, hseq.id)
+        counter = await isolated_db_session.get(PelDocRefCounter, (hseq.id, 3))
         counter.next_seq = 227
         await isolated_db_session.commit()
 
@@ -269,7 +282,9 @@ class TestSeedDocumentCategoriesIdempotency:
         await isolated_db_session.commit()
 
         assert second.counters_created == 0
-        assert (await isolated_db_session.get(PelDocRefCounter, hseq.id)).next_seq == 227
+        assert (await isolated_db_session.get(PelDocRefCounter, (hseq.id, 3))).next_seq == 227
+        # The other bands of the same function are independent and untouched.
+        assert (await isolated_db_session.get(PelDocRefCounter, (hseq.id, 5))).next_seq == 1
 
     @pytest.mark.asyncio
     async def test_seed_creates_tag_vocabulary_without_iso_tags(self, isolated_db_session: AsyncSession):

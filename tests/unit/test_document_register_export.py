@@ -28,6 +28,7 @@ def test_ims052_columns_contract_is_locked():
         "Issue",
         "Status",
         "Function",
+        "Level",
         "Category",
         "Last Review Date",
         "Next Review Date",
@@ -36,17 +37,18 @@ def test_ims052_columns_contract_is_locked():
         "Retention",
         "Hyperlink",
     )
-    assert len(IMS052_COLUMNS) == 15
+    assert len(IMS052_COLUMNS) == 16
 
 
 def test_build_register_row_maps_fields_and_keeps_legacy_empty():
     doc = SimpleNamespace(
         id=42,
-        pel_doc_ref="PEL-IT-0014",
+        pel_doc_ref="PEL-IT-2014",
         title="InfoSec Policy",
         reference_number="DOC-2026-0042",
         version="2.1",
         status=SimpleNamespace(value="approved"),
+        cascade_level=2,
         reviewed_at=datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc),
         review_date=datetime(2027, 1, 15, 0, 0, tzinfo=timezone.utc),
         access_level="managers",
@@ -58,7 +60,7 @@ def test_build_register_row_maps_fields_and_keeps_legacy_empty():
         category_name="Policies",
         location_name="Head Office",
     )
-    assert row[0] == "PEL-IT-0014"
+    assert row[0] == "PEL-IT-2014"
     assert row[1] == ""  # Legacy IMS — no field yet
     assert row[2] == ""  # Legacy PLA — no field yet
     assert row[3] == "InfoSec Policy"
@@ -66,13 +68,32 @@ def test_build_register_row_maps_fields_and_keeps_legacy_empty():
     assert row[5] == "2.1"
     assert row[6] == "approved"
     assert row[7] == "IT & Information Security"
-    assert row[8] == "Policies"
-    assert row[9] == "2026-01-15"  # reviewed_at = Last Review
-    assert row[10] == "2027-01-15"  # review_date = Next Review
-    assert row[11] == "Head Office"
-    assert row[12] == "managers"
-    assert row[13] == "2031-01-15"
-    assert row[14] == "/documents/42"
+    assert row[8] == "L2"  # NS-1 cascade level, matching the 2### band
+    assert row[9] == "Policies"
+    assert row[10] == "2026-01-15"  # reviewed_at = Last Review
+    assert row[11] == "2027-01-15"  # review_date = Next Review
+    assert row[12] == "Head Office"
+    assert row[13] == "managers"
+    assert row[14] == "2031-01-15"
+    assert row[15] == "/documents/42"
+
+
+def test_build_register_row_leaves_level_blank_for_a_legacy_unbanded_document():
+    """A document filed before NS-1 has no level, and the register must not invent one."""
+    doc = SimpleNamespace(
+        id=7,
+        pel_doc_ref="PEL-HSEQ-0001",
+        title="Legacy Procedure",
+        reference_number="DOC-2025-0007",
+        version="1.0",
+        status="approved",
+        cascade_level=None,
+        reviewed_at=None,
+        review_date=None,
+        access_level=None,
+        retention_until=None,
+    )
+    assert build_register_row(doc)[8] == ""
 
 
 def test_build_register_row_does_not_transpose_review_dates():
@@ -89,8 +110,8 @@ def test_build_register_row_does_not_transpose_review_dates():
         retention_until=None,
     )
     row = build_register_row(doc)
-    assert row[9] == "2025-06-01"
-    assert row[10] == "2026-06-01"
+    assert row[10] == "2025-06-01"
+    assert row[11] == "2026-06-01"
 
 
 def test_formula_injection_prefixed_in_title():
