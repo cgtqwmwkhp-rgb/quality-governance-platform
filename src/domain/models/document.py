@@ -216,6 +216,15 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # the same tenant. NULL means "filed under no matter", not "unknown".
     legal_matter_reference: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 
+    # Northern Star R20 (Wave W6 / NS-WF) — a document states its review cycle and
+    # the *basis* for it before it can be issued. Deliberately two columns and
+    # deliberately nullable: the pack says there is no default cycle, so an
+    # unstated cycle must read as unstated rather than as a house standard nobody
+    # agreed to, and legacy rows predate the rule. `DocumentCategory.review_cycle`
+    # is free text guidance for the whole category and is not the same fact.
+    review_cycle_months: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    review_cycle_basis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Governance Library filing (Wave W1) — defaults from category on create.
     access_level: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # all_staff|managers|restricted
     is_statutory: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -452,6 +461,12 @@ class DocumentVersion(Base, TimestampMixin):
     is_immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     published_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # Northern Star W6 / NS-WF — who issued this version and when. Kept apart
+    # from `published_at` / `published_by_id`, which the approve transition uses
+    # to record the approval: issue must not overwrite the approval record.
+    issued_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    issued_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # File info
     file_name: Mapped[str] = mapped_column(String(500), nullable=False)
