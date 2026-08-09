@@ -51,11 +51,9 @@ _RULES = json.loads(_RULES_PATH.read_text())
 # silently stop tracking it the first time the pack is amended.
 R01_REFERENCE_PATTERN = re.compile(_RULES["reference_pattern"])
 
-# Functions used below are drawn from the v6 vocabulary so these tests keep
-# meaning after the W2 reseed. NOTE: the seeded `document_functions` table still
-# carries the WA-2 code OPS, which v6 replaces with CTR+SVC; that reseed is
-# explicitly Wave W2 (ADR-0023 § Amendment), not this PR, so a `PEL-OPS-####`
-# issued today would satisfy R02 but not R01's function list.
+# Functions used below are drawn from the v6 vocabulary (CTR+SVC, no OPS).
+# W2 keeps an inactive OPS row for R29 resolvability; R01's allow-list still
+# excludes OPS, which the banded allocator grammar already refuses.
 _V6_FUNCTION_CODES = frozenset(fn["code"] for fn in _RULES["functions"])
 
 

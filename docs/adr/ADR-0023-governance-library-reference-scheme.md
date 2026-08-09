@@ -187,8 +187,10 @@ fold for **forward** Library work. Execution SSOT: Cursor canvas
    tightens `PEL-<FUNCTION>-<SEQ>` without abandoning the function axis.
 3. **Twelve functions.** v6 splits Operations into **CTR** (Control Room) and
    **SVC** (Service Delivery / workshop). **OPS is not in the Northern Star
-   vocabulary.** Reseed is Wave **W2** (one alembic). Existing issued
-   `PEL-OPS-####` rows are never silently renumbered (R29) — steward map only.
+   vocabulary.** Wave **W2** (`20261028_lib_ns_func_ctr_svc`) reseeds
+   `document_functions`: CTR/SVC active, OPS retained **inactive** so issued
+   `PEL-OPS-####` rows stay resolvable and are never silently renumbered (R29)
+   — steward map only for any remapping.
 4. **Cascade level + owner role + staged rules.** Stored L1–L5, `owner_role`
    with person resolved from role assignment (R16), and R01–R32 severity
    staging are Waves **W3–W9** on the master-plan conveyor — not this docs PR.
