@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
@@ -199,6 +201,31 @@ async def test_revise_is_refused_while_the_matter_is_held(
 
     refused = await _revise(admin_client, document_id)
     _assert_hold_refusal(refused, matter=matter)
+
+
+@pytest.mark.asyncio
+async def test_held_revision_with_file_never_reaches_storage(
+    admin_client: AsyncClient,
+    superuser_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The hold check must run before upload, or a refused revision leaves an orphaned blob."""
+    matter = f"MATTER-{uuid.uuid4().hex[:8]}"
+    document_id = await _seed_document()
+    await _file_under_matter(superuser_client, document_id, matter)
+    await _issue_hold(superuser_client, matter)
+
+    upload = AsyncMock()
+    monkeypatch.setattr("src.api.routes.documents.storage_service", lambda: SimpleNamespace(upload=upload))
+
+    refused = await admin_client.post(
+        f"/api/v1/documents/{document_id}/versions",
+        data={"change_notes": "WC-1 held file revision", "change_type": "revision"},
+        files={"file": ("held-revision.pdf", b"%PDF-1.4 held revision", "application/pdf")},
+    )
+
+    _assert_hold_refusal(refused, matter=matter)
+    upload.assert_not_awaited()
 
 
 @pytest.mark.asyncio
