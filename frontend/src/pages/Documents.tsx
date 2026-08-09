@@ -56,6 +56,10 @@ import {
   buildDocumentsExceptionsHref,
   DOCUMENT_CONTROL_GOLDEN_THREAD_PATH,
 } from './documentsDownstreamHelpers'
+import {
+  documentRegisterPrimaryRef,
+  resolveDocumentRegisterHref,
+} from './documentsRegisterHelpers'
 import { CampaignRing } from './CampaignRing'
 import { complianceRowByDocumentId } from './documentCampaignHelpers'
 
@@ -80,6 +84,10 @@ interface Document {
   file_size: number
   document_type: string
   category?: string
+  /** Governance Library PEL when allocated (Register lead identifier). */
+  pel_doc_ref?: string | null
+  /** Detail deep-link from server href_registry (WA-1 / L-05b). */
+  href?: string | null
   department?: string
   sensitivity: string
   status: string
@@ -222,7 +230,8 @@ export default function Documents() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  // Master Document Register defaults to list (L-05); grid remains available.
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
   const deferredSearch = useDeferredValue(searchTerm)
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
@@ -1073,11 +1082,13 @@ export default function Documents() {
             filteredDocuments.map((doc) => {
               const FileIcon = getFileIcon(doc.file_type)
               const campaignRow = campaignComplianceByDoc.get(doc.id)
+              const registerRef = documentRegisterPrimaryRef(doc)
+              const registerHref = resolveDocumentRegisterHref(doc)
               return (
                 <Card
                   key={doc.id}
                   hoverable
-                  onClick={() => navigate(`/documents/${doc.id}`)}
+                  onClick={() => navigate(registerHref)}
                   className={cn('p-5 cursor-pointer', libraryDragEnabled && 'cursor-grab active:cursor-grabbing')}
                   draggable={libraryDragEnabled}
                   onDragStart={
@@ -1096,7 +1107,14 @@ export default function Documents() {
                   </div>
 
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="font-mono text-xs text-primary">{doc.reference_number}</span>
+                    <span className="font-mono text-xs text-primary" data-testid={`documents-register-pel-${doc.id}`}>
+                      {registerRef.lead}
+                    </span>
+                    {registerRef.secondary ? (
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {registerRef.secondary}
+                      </span>
+                    ) : null}
                     <Badge variant={getStatusVariant(doc.status) as any} className="text-[10px]">
                       {doc.status}
                     </Badge>
@@ -1131,6 +1149,15 @@ export default function Documents() {
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border">
                     <span>{formatFileSize(doc.file_size)}</span>
                     <div className="flex items-center gap-3">
+                      <Link
+                        to={registerHref}
+                        data-testid={`documents-register-hyperlink-${doc.id}`}
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        {t('documents.table.open')}
+                      </Link>
                       <span className="flex items-center gap-1">
                         <Eye className="w-3 h-3" />
                         {doc.view_count}
@@ -1158,11 +1185,17 @@ export default function Documents() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px]">
+            <table className="w-full min-w-[960px]">
               <thead>
                 <tr className="border-b border-border">
                   <th className="sticky left-0 z-10 bg-card px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
                     {t('documents.table.document')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    {t('documents.table.pel')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    {t('documents.table.hyperlink')}
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
                     {t('common.status')}
@@ -1184,7 +1217,7 @@ export default function Documents() {
               <tbody className="divide-y divide-border">
                 {filteredDocuments.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8" data-testid="documents-empty">
+                    <td colSpan={8} className="px-6 py-8" data-testid="documents-empty">
                       <EmptyState
                         icon={<Search className="w-8 h-8 text-muted-foreground" />}
                         title={
@@ -1221,10 +1254,12 @@ export default function Documents() {
                   const campaignRow = campaignComplianceByDoc.get(doc.id)
                   const reviewLabel = formatGovernanceDate(doc.review_date)
                   const expiryLabel = formatGovernanceDate(doc.expiry_date)
+                  const registerRef = documentRegisterPrimaryRef(doc)
+                  const registerHref = resolveDocumentRegisterHref(doc)
                   return (
                     <tr
                       key={doc.id}
-                      onClick={() => navigate(`/documents/${doc.id}`)}
+                      onClick={() => navigate(registerHref)}
                       className={cn(
                         'cursor-pointer hover:bg-surface',
                         libraryDragEnabled && 'cursor-grab active:cursor-grabbing',
@@ -1259,10 +1294,31 @@ export default function Documents() {
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground font-mono">
-                              {doc.reference_number}
+                              {registerRef.hasPel ? registerRef.secondary : registerRef.lead}
                             </p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className="font-mono text-xs text-primary"
+                          data-testid={`documents-register-pel-${doc.id}`}
+                        >
+                          {registerRef.hasPel ? registerRef.lead : '—'}
+                        </span>
+                      </td>
+                      <td
+                        className="px-6 py-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Link
+                          to={registerHref}
+                          data-testid={`documents-register-hyperlink-${doc.id}`}
+                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          {t('documents.table.open')}
+                        </Link>
                       </td>
                       <td className="px-6 py-4">
                         <Badge variant={getStatusVariant(doc.status) as any}>{doc.status}</Badge>
