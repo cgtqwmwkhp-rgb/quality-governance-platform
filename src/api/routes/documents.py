@@ -842,6 +842,16 @@ def _index_job_response(job: IndexJob) -> IndexJobResponse:
     )
 
 
+def _validated_document_access_level(access_level: Optional[str]) -> str:
+    """Apply the Northern Star default and translate R26 failures for the API."""
+    if access_level is None:
+        access_level = "all_staff"
+    try:
+        return assert_access_level_required(access_level)
+    except DomainValidationError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+
 # =============================================================================
 # UPLOAD & CREATE
 # =============================================================================
@@ -992,12 +1002,7 @@ async def upload_document(
         # R26 (W4): every created document carries an access level. Taxonomy
         # defaults supply it when a category is chosen; otherwise all_staff is
         # the Northern Star default rather than leaving NULL (silent gap).
-        if access_level is None:
-            access_level = "all_staff"
-        try:
-            access_level = assert_access_level_required(access_level)
-        except DomainValidationError as exc:
-            raise BadRequestError(str(exc)) from exc
+        access_level = _validated_document_access_level(access_level)
 
         # Create document record
         doc = Document(
