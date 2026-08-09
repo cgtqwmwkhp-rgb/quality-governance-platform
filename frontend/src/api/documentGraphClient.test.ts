@@ -25,6 +25,12 @@ describe('createDocumentGraphApi', () => {
     })
   })
 
+  it('loads the estate cascade aggregate in one request', () => {
+    const api = mockApi()
+    createDocumentGraphApi(api as never).getCascade()
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-graph/cascade')
+  })
+
   it('reads the primary-implements walk', () => {
     const api = mockApi()
     createDocumentGraphApi(api as never).getThread(42)
