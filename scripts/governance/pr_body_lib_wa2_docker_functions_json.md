@@ -57,5 +57,21 @@
 - **Rollback steps:** Revert this PR; tip remains on prior image (WA-2 code still on main but STG/PROD stay on pre-WA-2 until fixed)
 - **Data repair:** None
 
-## 10) Post-Release Monitoring
+## 10) Evidence Pack (links)
+- CI run(s): Linked after PR checks complete
+- Staging deploy evidence: After merge tip chase (re-run WA-2 migration)
+- Canary evidence (if applicable): N/A
+- Acceptance notes: Root cause was Dockerfile omitting `functions.json` while migration seeds from it in ACI
+
+## 11) Post-Release Monitoring
 - Staging/Prod deploy green; `/api/v1/meta/version` build_sha = tip; healthz 200
+
+---
+
+# Gate Checklist (must be complete before merge)
+- [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
+- [x] **Gate 1:** API/Data/UX — image COPY only; no twin seed source
+- [ ] **Gate 2:** CI green (lint/type/build/tests as applicable)
+- [x] **Gate 3:** Staging verification plan — tip SHA after merge; migration must pass
+- [x] **Gate 4:** Canary healthy (if used) — N/A
+- [x] **Gate 5:** Production verification plan + monitoring ready — tip SHA LIVE before DONE
