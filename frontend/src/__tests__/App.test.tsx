@@ -114,7 +114,6 @@ vi.mock('../pages/ComplianceEvidence', () => ({ default: () => <div>ComplianceEv
 vi.mock('../pages/AdvancedAnalytics', () => ({ default: () => <div>AdvancedAnalytics</div> }))
 vi.mock('../pages/DashboardBuilder', () => ({ default: () => <div>DashboardBuilder</div> }))
 vi.mock('../pages/ReportGenerator', () => ({ default: () => <div>ReportGenerator</div> }))
-vi.mock('../pages/WorkflowCenter', () => ({ default: () => <div>WorkflowCenter</div> }))
 vi.mock('../pages/ComplianceAutomation', () => ({ default: () => <div>ComplianceAutomation</div> }))
 vi.mock('../pages/RiskRegister', () => ({ default: () => <div>RiskRegister</div> }))
 vi.mock('../pages/IMSDashboard', () => ({ default: () => <div>IMSDashboard</div> }))
@@ -280,6 +279,21 @@ describe('App', () => {
 
     expect(screen.queryByText('AIIntelligence')).not.toBeInTheDocument()
     expect(window.location.pathname).toBe('/ai-intelligence/insights')
+  })
+
+  it('sends a bookmarked /workflows to the live action queue', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/workflows')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(window.location.pathname).toBe('/actions')
+    expect(window.location.search).toBe('?view=mine')
+    expect(screen.getByText('Actions')).toBeInTheDocument()
   })
 
   it('serves /ai-intelligence on direct navigation when the flag is on', async () => {

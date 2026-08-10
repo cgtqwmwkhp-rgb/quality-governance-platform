@@ -84,7 +84,6 @@ const ComplianceEvidence = lazy(() => import('./pages/ComplianceEvidence'))
 const AdvancedAnalytics = lazy(() => import('./pages/AdvancedAnalytics'))
 const DashboardBuilder = lazy(() => import('./pages/DashboardBuilder'))
 const ReportGenerator = lazy(() => import('./pages/ReportGenerator'))
-const WorkflowCenter = lazy(() => import('./pages/WorkflowCenter'))
 const ComplianceAutomation = lazy(() => import('./pages/ComplianceAutomation'))
 const ComplianceSchedule = lazy(() => import('./pages/ComplianceSchedule'))
 const ComplianceScheduleDetail = lazy(() => import('./pages/ComplianceScheduleDetail'))
@@ -526,7 +525,10 @@ function App() {
               <Route element={<RouteErrorBoundary />}>
                 <Route path="users" element={<Navigate to="/admin/users" replace />} />
                 <Route path="audit-trail" element={<AuditTrail />} />
-                <Route path="workflows" element={<WorkflowCenter />} />
+                {/* Workflow Center is frozen: the engine persisted nothing, so the page
+                    could only ever render an empty queue. Bookmarks land on the live
+                    action queue until FR-APPROVALS-01 ships a real approvals surface. */}
+                <Route path="workflows" element={<Navigate to="/actions?view=mine" replace />} />
                 <Route path="compliance-automation" element={<ComplianceAutomation />} />
                 <Route path="compliance-schedule" element={<ComplianceSchedule />} />
                 <Route path="compliance-schedule/:id" element={<ComplianceScheduleDetail />} />

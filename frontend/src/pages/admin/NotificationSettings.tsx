@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Bell, Mail, Smartphone, Globe, CalendarClock, UserPlus } from 'lucide-react'
+import { Mail, CalendarClock, UserPlus } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { API_BASE_URL } from '../../config/apiBase'
 import { getValidPlatformToken } from '../../utils/auth'
-
-interface NotificationChannel {
-  key: string
-  label: string
-  icon: React.ReactNode
-  enabled: boolean
-  description: string
-}
 
 type PushReadiness = {
   status: string
@@ -65,36 +57,6 @@ export default function NotificationSettings() {
   const [csFlagsError, setCsFlagsError] = useState<string | null>(null)
   const [csFlagsLoading, setCsFlagsLoading] = useState(true)
   const [csSavingKey, setCsSavingKey] = useState<string | null>(null)
-  const [channels, setChannels] = useState<NotificationChannel[]>([
-    {
-      key: 'email',
-      label: 'Email Notifications',
-      icon: <Mail className="w-5 h-5" />,
-      enabled: true,
-      description: 'Send notifications via email for critical events',
-    },
-    {
-      key: 'push',
-      label: 'Push Notifications',
-      icon: <Smartphone className="w-5 h-5" />,
-      enabled: false,
-      description: 'Browser push notifications for real-time alerts',
-    },
-    {
-      key: 'in_app',
-      label: 'In-App Notifications',
-      icon: <Bell className="w-5 h-5" />,
-      enabled: true,
-      description: 'Show notifications within the application',
-    },
-    {
-      key: 'webhook',
-      label: 'Webhook Integration',
-      icon: <Globe className="w-5 h-5" />,
-      enabled: false,
-      description: 'Send events to external webhook endpoints',
-    },
-  ])
 
   const loadCsFlags = useCallback(async () => {
     setCsFlagsLoading(true)
@@ -151,11 +113,6 @@ export default function NotificationSettings() {
       cancelled = true
     }
   }, [loadCsFlags])
-
-  const toggleChannel = (key: string) => {
-    // Cosmetic channel cards below are not persisted — CS toggles above are the real controls.
-    setChannels((prev) => prev.map((ch) => (ch.key === key ? { ...ch, enabled: !ch.enabled } : ch)))
-  }
 
   const toggleCsFlag = async (key: string) => {
     const current = csFlags[key] ?? true
@@ -279,42 +236,6 @@ export default function NotificationSettings() {
           </p>
         </div>
       )}
-
-      <div className="grid gap-4">
-        <p className="text-sm text-muted-foreground">
-          Channel cards below are illustrative only and do not persist. Use Compliance Schedule
-          toggles above, or user Notification Preferences for personal email/push prefs.
-        </p>
-        {channels.map((ch) => (
-          <Card key={ch.key}>
-            <CardContent className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-4">
-                <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    ch.enabled ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-400'
-                  }`}
-                >
-                  {ch.icon}
-                </div>
-                <div>
-                  <p className="font-medium">{ch.label}</p>
-                  <p className="text-sm text-muted-foreground">{ch.description}</p>
-                  {ch.key === 'push' && pushStatusLabel && (
-                    <p className="text-xs mt-1 text-muted-foreground">{pushStatusLabel}</p>
-                  )}
-                </div>
-              </div>
-              <Button
-                variant={ch.enabled ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => toggleChannel(ch.key)}
-              >
-                {ch.enabled ? 'Enabled' : 'Disabled'}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
     </div>
   )
 }
