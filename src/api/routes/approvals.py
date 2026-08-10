@@ -74,8 +74,9 @@ class DecisionSourceResponse(BaseModel):
     unattributed: int = Field(
         default=0,
         description=(
-            "Rows this source holds whose current step names no approver, so they are "
-            "outstanding for nobody and appear in no user's queue."
+            "Rows this source holds that name nobody — an approval step with no approvers, "
+            "a review with no reviewer — so they are outstanding for no one and appear in "
+            "no user's queue."
         ),
     )
     truncated: bool = Field(

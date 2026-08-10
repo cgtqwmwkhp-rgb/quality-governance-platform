@@ -149,9 +149,9 @@ class SourceReading:
     count: Optional[int]
     #: Why the source is unavailable, in terms an operator can act on.
     reason: Optional[str] = None
-    #: Rows this source holds that name no approver on their current step, so they
-    #: are outstanding for nobody. Reported because the alternative is a decision
-    #: that no queue anywhere shows.
+    #: Rows this source holds that name nobody — an approval step with no
+    #: approvers, a review with no reviewer — so they are outstanding for no one.
+    #: Reported because the alternative is a decision that no queue anywhere shows.
     unattributed: int = 0
     #: True when :data:`MAX_ITEMS_PER_SOURCE` cut the list short, so ``count`` is a
     #: floor for this source rather than its total.
@@ -254,6 +254,22 @@ async def _read_investigation_reviews(
     if absent:
         return [], _unavailable(SOURCE_INVESTIGATION_REVIEW, label, absent, "investigations under review")
 
+    # Under review with no reviewer named. Counted for the same reason a document
+    # approval step naming nobody is counted: it is waiting on a person this row
+    # does not identify, so it belongs in no user's queue and would otherwise be
+    # visible only to someone who thought to open the register.
+    unattributed = (
+        await db.execute(
+            select(func.count())
+            .select_from(InvestigationRun)
+            .where(
+                InvestigationRun.tenant_id == tenant_id,
+                InvestigationRun.status == InvestigationStatus.UNDER_REVIEW,
+                InvestigationRun.reviewer_user_id.is_(None),
+            )
+        )
+    ).scalar_one()
+
     stmt = (
         select(
             InvestigationRun.id,
@@ -297,6 +313,7 @@ async def _read_investigation_reviews(
         label=label,
         status="live",
         count=len(items),
+        unattributed=int(unattributed),
         truncated=truncated,
     )
 

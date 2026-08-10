@@ -364,19 +364,26 @@ class TestInvestigationReviewsThatAreMine:
         assert f"investigation_review:{investigation_id}" not in [item["key"] for item in body["items"]]
         assert _source(body, "investigation_review")["count"] == 0
 
-    async def test_an_investigation_with_no_reviewer_is_in_nobodys_queue(
+    async def test_an_investigation_with_no_reviewer_is_counted_not_dropped(
         self, doc_control_scratch: ScratchDatabase, doc_control_scratch_client: AsyncClient
     ):
         """``reviewer_user_id`` is nullable, and a null reviewer names nobody.
 
-        This read model will not guess who: there is no role expansion here, so an
-        unassigned review stays visible only on the investigations register.
+        This read model will not guess who — there is no role expansion here — but
+        it does not stay quiet either: an unassigned review is waiting on somebody
+        the row does not identify, so it is reported on the source exactly as an
+        approval step with no approvers is.
         """
         investigation_id = await _seed_investigation(doc_control_scratch, reviewer_user_id=None)
 
         response = await doc_control_scratch_client.get(ENDPOINT)
 
-        assert f"investigation_review:{investigation_id}" not in [item["key"] for item in response.json()["items"]]
+        body = response.json()
+        assert f"investigation_review:{investigation_id}" not in [item["key"] for item in body["items"]]
+        source = _source(body, "investigation_review")
+        assert source["status"] == "live"
+        assert source["count"] == 0
+        assert source["unattributed"] == 1
 
     async def test_an_investigation_not_under_review_is_not_a_decision_yet(
         self, doc_control_scratch: ScratchDatabase, doc_control_scratch_client: AsyncClient
@@ -473,6 +480,28 @@ class TestSignaturesThatAreMine:
             doc_control_scratch,
             signer_user_id=OTHER_USER_ID,
             signer_email="somebody-else@example.com",
+        )
+
+        response = await doc_control_scratch_client.get(ENDPOINT)
+
+        body = response.json()
+        assert f"signature_request:{request_id}" not in [item["key"] for item in body["items"]]
+        assert _source(body, "signature_request")["count"] == 0
+
+    async def test_another_tenants_request_naming_my_user_id_is_not_mine(
+        self, doc_control_scratch: ScratchDatabase, doc_control_scratch_client: AsyncClient
+    ):
+        """The signer row carries a nullable tenant, so the request must be scoped.
+
+        Same reason as the document and investigation cases: user ids are not
+        unique across tenants, so an unscoped signer match would put another
+        tenant's document in front of this user.
+        """
+        request_id = await _seed_signature_request(
+            doc_control_scratch,
+            signer_user_id=USER_ID,
+            signer_email="anyone@example.com",
+            tenant_id=OTHER_TENANT_ID,
         )
 
         response = await doc_control_scratch_client.get(ENDPOINT)

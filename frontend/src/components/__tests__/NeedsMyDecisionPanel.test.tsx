@@ -274,6 +274,29 @@ describe('NeedsMyDecisionPanel', () => {
     )
   })
 
+  it('still names stuck decisions when the caller personally owes nothing', async () => {
+    /*
+     * "You are clear" is true of the caller and says nothing about decisions that
+     * name nobody. Suppressing the note here would make this screen agree that
+     * three stuck approvals do not exist, which is the failure the panel exists to
+     * prevent — just displaced from one user to everyone.
+     */
+    respondWith({
+      items: [],
+      total: 0,
+      sources: [
+        { ...LIVE_SOURCES[0], unattributed: 2 },
+        { ...LIVE_SOURCES[1], unattributed: 1 },
+        LIVE_SOURCES[2],
+      ],
+    })
+
+    renderPanel()
+
+    await waitFor(() => expect(screen.getByTestId('needs-my-decision-clear')).toBeInTheDocument())
+    expect(screen.getByTestId('needs-my-decision-unattributed')).toHaveTextContent('3')
+  })
+
   it('shows a failure with a retry instead of an empty panel', async () => {
     mockMyDecisions.mockRejectedValueOnce(new Error('network'))
 

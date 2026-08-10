@@ -202,6 +202,23 @@ export function NeedsMyDecisionPanel() {
   const unattributed = unattributedDecisionCount(data)
   const truncated = (data.sources ?? []).some((source) => source.truncated)
 
+  /*
+   * Decisions the domains hold that name nobody. Rendered in every state that has
+   * room for it, including "you are clear": the caller personally owes nothing,
+   * which is not the same as nothing being stuck, and this is the only screen that
+   * knows the difference.
+   */
+  const unattributedNote =
+    unattributed > 0 ? (
+      <p className="text-xs text-muted-foreground" data-testid="needs-my-decision-unattributed">
+        {t(
+          'approvals.my_decisions.unattributed',
+          '{{count}} pending decision(s) name nobody, so they are in no one\u2019s queue and need a workflow fix.',
+          { count: unattributed },
+        )}
+      </p>
+    ) : null
+
   if (data.items.length === 0) {
     // Two different answers, and only one of them is "you are clear".
     if (!complete) {
@@ -232,6 +249,7 @@ export function NeedsMyDecisionPanel() {
                   {reason}
                 </p>
               ))}
+              {unattributedNote ? <div className="mt-2">{unattributedNote}</div> : null}
             </div>
           </div>
         </div>
@@ -240,15 +258,21 @@ export function NeedsMyDecisionPanel() {
 
     return (
       <div
-        className="flex items-center gap-2 rounded-xl border border-border p-4 text-sm text-muted-foreground"
+        className="rounded-xl border border-border p-4 text-sm text-muted-foreground"
         role="status"
         data-testid="needs-my-decision-clear"
       >
-        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
-        <span>
-          {t('approvals.my_decisions.clear', 'Nothing needs your decision. Every source answered:')}{' '}
-          {(data.sources ?? []).map((source) => source.label).join(', ')}
-        </span>
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+          <span>
+            {t(
+              'approvals.my_decisions.clear',
+              'Nothing needs your decision. Every source answered:',
+            )}{' '}
+            {(data.sources ?? []).map((source) => source.label).join(', ')}
+          </span>
+        </div>
+        {unattributedNote ? <div className="mt-2">{unattributedNote}</div> : null}
       </div>
     )
   }
@@ -297,17 +321,8 @@ export function NeedsMyDecisionPanel() {
         ))}
       </ul>
 
-      {unattributed > 0 ? (
-        <p
-          className="border-t border-border px-4 py-2 text-xs text-muted-foreground"
-          data-testid="needs-my-decision-unattributed"
-        >
-          {t(
-            'approvals.my_decisions.unattributed',
-            '{{count}} pending approval(s) name nobody as approver, so they are in no one\u2019s queue and need a workflow fix.',
-            { count: unattributed },
-          )}
-        </p>
+      {unattributedNote ? (
+        <div className="border-t border-border px-4 py-2">{unattributedNote}</div>
       ) : null}
     </section>
   )

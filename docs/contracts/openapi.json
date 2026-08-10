@@ -18029,7 +18029,7 @@
           },
           "unattributed": {
             "default": 0,
-            "description": "Rows this source holds whose current step names no approver, so they are outstanding for nobody and appear in no user's queue.",
+            "description": "Rows this source holds that name nobody \u2014 an approval step with no approvers, a review with no reviewer \u2014 so they are outstanding for no one and appear in no user's queue.",
             "title": "Unattributed",
             "type": "integer"
           }

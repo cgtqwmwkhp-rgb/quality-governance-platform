@@ -382,7 +382,7 @@
   "approvals.my_decisions.partial": "could not be read, so there may be more decisions than these.",
   "approvals.my_decisions.retry": "Try again",
   "approvals.my_decisions.title": "Needs my decision",
-  "approvals.my_decisions.unattributed": "{{count}} pending approval(s) name nobody as approver, so they are in no one’s queue and need a workflow fix.",
+  "approvals.my_decisions.unattributed": "{{count}} pending decision(s) name nobody, so they are in no one’s queue and need a workflow fix.",
   "approvals.my_decisions.unknown_body": "could not be read, so this is not a report that you are clear.",
   "approvals.my_decisions.unknown_title": "Cannot confirm whether anything needs your decision",
   "assurance.cert_shelf.empty.description": "Add register entries, Planet Mark credentials, UVDB certificates, or Library masters to populate the shelf.",
