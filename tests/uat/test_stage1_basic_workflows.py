@@ -511,16 +511,27 @@ class TestWorkflowApprovalWorkflows:
 
     @pytest.mark.asyncio
     async def test_uat_044_get_pending_approvals_requires_auth(self, client):
-        """UAT-044: Getting pending approvals requires authentication."""
-        response = await client.get("/api/v1/workflows/approvals/pending")
+        """UAT-044: Getting outstanding decisions requires authentication.
+
+        Was `/api/v1/workflows/approvals/pending`, deleted in FR-APPROVALS-01
+        because it answered every authenticated caller with an empty queue. The
+        replacement is per-user by construction, which makes authentication the
+        whole point of the check rather than a formality.
+        """
+        response = await client.get("/api/v1/approvals/my-decisions")
 
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_uat_045_approve_request_requires_auth(self, client):
-        """UAT-045: Approving requests requires authentication."""
+        """UAT-045: Recording an approval requires authentication.
+
+        Pointed at `/api/v1/workflows/approvals/{id}/approve` until
+        FR-APPROVALS-01. That endpoint recorded nothing, so the requirement it was
+        pinning did not matter; this one writes to the investigation.
+        """
         response = await client.post(
-            "/api/v1/workflows/approvals/test-approval-id/approve",
+            "/api/v1/investigations/1/approve",
             json={"notes": "Approved"},
         )
 

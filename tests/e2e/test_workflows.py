@@ -4,13 +4,15 @@ E2E Tests for Workflow Automation (Phase 3)
 Tests cover:
 - Workflow template management
 - Workflow instance creation and tracking
-- Approval chain processing
-- Bulk actions
-- Delegation management
 - Escalation detection
+
+Approval chains, bulk approval and delegation were covered here until
+FR-APPROVALS-01 deleted those endpoints: they ran on an engine that holds no
+state, so the queue was empty for everyone and each "approve" recorded nothing.
+What needs a decision is now read from the domains that hold it — see
+``tests/integration/test_approvals_my_decisions.py``.
 """
 
-from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -122,97 +124,29 @@ class TestWorkflowInstances:
 
 
 @pytest.mark.phase34
-class TestApprovals:
-    """Test approval management."""
+class TestTheApprovalSurfaceThatWasDeleted:
+    """`TestApprovals` and `TestDelegation` stood here until FR-APPROVALS-01.
 
-    def test_get_pending_approvals(self, auth_client: Any) -> None:
-        """Test getting pending approvals for current user."""
-        response = auth_client.get("/api/v1/workflows/approvals/pending")
-        assert response.status_code == 200
+    They asserted the fiction rather than catching it: ``result["status"] ==
+    "approved"`` against an endpoint that recorded nothing, ``processed == 3``
+    against a loop over ids it never looked up, and a delegation list that was one
+    hardcoded "Jane Smith / Annual leave" row served to every caller. Every one of
+    them passed, for as long as they existed, on a quality management system where
+    an approval is the audit record.
 
-        data = response.json()
-        assert "approvals" in data
-        assert "total" in data
+    What replaces them is one endpoint that reads the domains actually holding
+    pending decisions, covered by
+    ``tests/integration/test_approvals_my_decisions.py`` — including that all
+    eight deleted routes now answer 404.
+    """
 
-    def test_approve_request(self, auth_client: Any) -> None:
-        """Test approving a request."""
-        payload = {"notes": "Approved after review"}
-
-        response = auth_client.post("/api/v1/workflows/approvals/APR-001/approve", json=payload)
-        assert response.status_code == 200
-
-        result = response.json()
-        assert result["status"] == "approved"
-        assert "approved_by" in result
-
-    def test_reject_request_requires_reason(self, auth_client: Any) -> None:
-        """Test that rejection requires a reason."""
-        payload = {"notes": "Some notes but no reason"}
-
-        response = auth_client.post("/api/v1/workflows/approvals/APR-002/reject", json=payload)
-        assert response.status_code == 400
-
-    def test_reject_request_with_reason(self, auth_client: Any) -> None:
-        """Test rejecting a request with valid reason."""
-        payload = {"reason": "Insufficient documentation provided"}
-
-        response = auth_client.post("/api/v1/workflows/approvals/APR-002/reject", json=payload)
-        assert response.status_code == 200
-
-        result = response.json()
-        assert result["status"] == "rejected"
-
-    def test_bulk_approve(self, auth_client: Any) -> None:
-        """Test bulk approval of multiple requests."""
-        payload = {
-            "approval_ids": ["APR-001", "APR-002", "APR-003"],
-            "notes": "Bulk approved after batch review",
-        }
-
-        response = auth_client.post("/api/v1/workflows/approvals/bulk-approve", json=payload)
-        assert response.status_code == 200
-
-        result = response.json()
-        assert result["processed"] == 3
-        assert result["successful"] >= 0
-
-
-@pytest.mark.phase34
-class TestDelegation:
-    """Test out-of-office delegation."""
-
-    def test_get_delegations(self, auth_client: Any) -> None:
-        """Test getting current delegations."""
-        response = auth_client.get("/api/v1/workflows/delegations")
-        assert response.status_code == 200
-
-        data = response.json()
-        assert "delegations" in data
-
-    def test_set_delegation(self, auth_client: Any) -> None:
-        """Test setting up a delegation."""
-        payload = {
-            "delegate_id": 5,
-            "start_date": (datetime.utcnow() + timedelta(days=1)).isoformat(),
-            "end_date": (datetime.utcnow() + timedelta(days=7)).isoformat(),
-            "reason": "Annual leave",
-        }
-
-        response = auth_client.post("/api/v1/workflows/delegations", json=payload)
-        assert response.status_code == 200
-
-        result = response.json()
-        assert "id" in result
-        assert result["delegate_id"] == 5
-        assert result["status"] == "active"
-
-    def test_cancel_delegation(self, auth_client: Any) -> None:
-        """Test cancelling a delegation."""
-        response = auth_client.delete("/api/v1/workflows/delegations/DEL-001")
-        assert response.status_code == 200
-
-        result = response.json()
-        assert result["status"] == "cancelled"
+    def test_the_deleted_approval_routes_stay_deleted(self, auth_client: Any) -> None:
+        for path in (
+            "/api/v1/workflows/approvals/pending",
+            "/api/v1/workflows/delegations",
+            "/api/v1/workflows/stats",
+        ):
+            assert auth_client.get(path).status_code == 404, path
 
 
 @pytest.mark.phase34
@@ -242,18 +176,8 @@ class TestEscalation:
         assert result["new_priority"] == "critical"
 
 
-@pytest.mark.phase34
-class TestWorkflowStats:
-    """Test workflow statistics."""
-
-    def test_get_workflow_stats(self, auth_client: Any) -> None:
-        """Test getting workflow statistics."""
-        response = auth_client.get("/api/v1/workflows/stats")
-        assert response.status_code == 200
-
-        stats = response.json()
-        assert "active_workflows" in stats
-        assert "pending_approvals" in stats
-        assert "overdue" in stats
-        assert "sla_compliance_rate" in stats
-        assert "by_template" in stats
+# `TestWorkflowStats` also stood here. `/workflows/stats` reported
+# `active_workflows`, `overdue` and `sla_compliance_rate` from an engine that
+# persists no instances, so the figures were arithmetic over an empty dict
+# presented as a compliance rate. It went with the endpoint (FR-APPROVALS-01);
+# `test_the_deleted_approval_routes_stay_deleted` above holds the 404.

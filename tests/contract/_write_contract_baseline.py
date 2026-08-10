@@ -38,7 +38,10 @@ KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
     {
         "BuilderBriefRequest",
         "BuilderQaRequest",
-        "BulkApprovalRequest",
+        # "BulkApprovalRequest" and "DelegationRequest" left this set with their
+        # endpoints in FR-APPROVALS-01. Removed rather than left behind: a name
+        # kept here after the schema is gone hands a free pass to the next schema
+        # that happens to reuse it.
         "BulkReprocessRequest",
         "CampaignCreateRequestFE",
         "CampaignUpdateRequest",
@@ -62,7 +65,6 @@ KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
         "DefectActionCreate",
         "DefectCreate",
         "DefectUpdate",
-        "DelegationRequest",
         "DiscussionMessageCreate",
         "DiscussionThreadCreate",
         "DisposalExecuteRequest",

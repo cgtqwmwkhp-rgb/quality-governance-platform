@@ -405,10 +405,16 @@ class AdminUser(HttpUser):
         )
 
     @task(2)
-    def get_workflow_stats(self):
-        """Get workflow statistics."""
+    def get_my_decisions(self):
+        """Read the decisions outstanding for this user.
+
+        Replaces a task against `/api/v1/workflows/stats`, deleted in
+        FR-APPROVALS-01. This one is the load-test that matters more anyway: the
+        old endpoint computed its figures from an empty in-memory dict, so it
+        measured nothing but FastAPI, while this reads three domains per call.
+        """
         self.client.get(
-            "/api/v1/workflows/stats",
+            "/api/v1/approvals/my-decisions",
             headers=self.auth_headers,
         )
 

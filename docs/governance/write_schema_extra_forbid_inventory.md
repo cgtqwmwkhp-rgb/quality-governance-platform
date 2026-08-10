@@ -44,7 +44,6 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AnnotationCreate` — `POST /api/v1/documents/{document_id}/annotations`
 - `ApplyImportRequest` — `POST /api/v1/planet-mark/apply-import`
 - `ApprovalActionRequest` — `POST /api/v1/document-control/approvals/{instance_id}/action`
-- `ApprovalResponse` — `POST /api/v1/workflows/approvals/{approval_id}/approve`, `POST /api/v1/workflows/approvals/{approval_id}/reject`
 - `AskAssignmentQuestionRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/questions`
 - `AssessCompetencyRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/assess`
 - `AssessEntityRequest` — `POST /api/v1/knowledge-bank/entities/{entity_type}/{entity_id}/assess`
@@ -125,7 +124,6 @@ converting them is out of scope for the inventory lock PR.
 
 - `BuilderBriefRequest`
 - `BuilderQaRequest`
-- `BulkApprovalRequest`
 - `BulkReprocessRequest`
 - `CampaignCreateRequestFE`
 - `CampaignUpdateRequest`
@@ -149,7 +147,6 @@ converting them is out of scope for the inventory lock PR.
 - `DefectActionCreate`
 - `DefectCreate`
 - `DefectUpdate`
-- `DelegationRequest`
 - `DiscussionMessageCreate`
 - `DiscussionThreadCreate`
 - `DisposalExecuteRequest`

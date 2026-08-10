@@ -62,6 +62,7 @@ import {
 // Straight from the module, not via the `api/client` barrel: these are pure and
 // the barrel is what page tests stub out for network isolation.
 import { actionsAreComplete, describeUnavailableSources } from '../api/actionsClient'
+import { NeedsMyDecisionPanel } from '../components/NeedsMyDecisionPanel'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
 import { toast } from '../contexts/ToastContext'
 import {
@@ -774,6 +775,16 @@ export default function Actions() {
           {t('actions.create')}
         </Button>
       </div>
+
+      {/*
+        Decisions outstanding for this user, read from the domains that hold them
+        (FR-APPROVALS-01). Above the register because an approval blocking someone
+        else is more urgent than the caller's own action list, and because the
+        surface it replaces — /workflows/approvals/pending — showed every user an
+        empty queue forever. It fetches independently: a failure here must not take
+        the register down, and vice versa.
+      */}
+      <NeedsMyDecisionPanel />
 
       {error && !actionsViewUsesServerFilter(viewMode) ? (
         <div

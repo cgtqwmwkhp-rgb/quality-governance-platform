@@ -33,6 +33,7 @@ import api, {
   searchApi,
   evidenceAssetsApi,
   workflowsApi,
+  approvalsApi,
   executiveDashboardApi,
   formTemplatesApi,
   contractsApi,
@@ -554,21 +555,13 @@ describe('client inline API surfaces', () => {
     evidenceAssetsApi.delete(1)
     evidenceAssetsApi.getSignedUrl(1, 60)
     evidenceAssetsApi.getSignedUrl(1)
-    workflowsApi.getPendingApprovals()
-    workflowsApi.approveRequest('a1', { notes: 'ok' })
-    workflowsApi.rejectRequest('a1', { reason: 'no' })
-    workflowsApi.bulkApprove(['a1', 'a2'], { notes: 'ok' })
     workflowsApi.listInstances({ status: 'active', entity_type: 'incident' })
     workflowsApi.listInstances()
     workflowsApi.listTemplates()
-    workflowsApi.getStats()
-    workflowsApi.getDelegations()
-    workflowsApi.setDelegation({
-      delegate_id: 2,
-      start_date: '2026-01-01',
-      end_date: '2026-02-01',
-    })
-    workflowsApi.cancelDelegation('d1')
+    // The approvals, delegation and stats methods were deleted with their
+    // endpoints (FR-APPROVALS-01). Outstanding decisions come from
+    // approvalsApi.myDecisions, which reads the domains that hold them.
+    approvalsApi.myDecisions()
     executiveDashboardApi.getDashboard(14)
     executiveDashboardApi.getSummary()
     executiveDashboardApi.getAlerts()

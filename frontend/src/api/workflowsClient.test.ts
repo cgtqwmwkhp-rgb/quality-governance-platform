@@ -10,26 +10,6 @@ function mockApi() {
 }
 
 describe('createWorkflowsApi', () => {
-  it('getPendingApprovals hits pending approvals path', () => {
-    const api = mockApi()
-    createWorkflowsApi(api as never).getPendingApprovals()
-    expect(api.get).toHaveBeenCalledWith('/api/v1/workflows/approvals/pending')
-  })
-
-  it('approve/reject/bulkApprove use approval action paths', () => {
-    const api = mockApi()
-    const w = createWorkflowsApi(api as never)
-    w.approveRequest('a1', { notes: 'ok' })
-    w.rejectRequest('a2', { reason: 'no' })
-    w.bulkApprove(['a1', 'a2'], { notes: 'batch' })
-    expect(api.post).toHaveBeenCalledWith('/api/v1/workflows/approvals/a1/approve', { notes: 'ok' })
-    expect(api.post).toHaveBeenCalledWith('/api/v1/workflows/approvals/a2/reject', { reason: 'no' })
-    expect(api.post).toHaveBeenCalledWith('/api/v1/workflows/approvals/bulk-approve', {
-      approval_ids: ['a1', 'a2'],
-      notes: 'batch',
-    })
-  })
-
   it('listInstances builds optional query params', () => {
     const api = mockApi()
     createWorkflowsApi(api as never).listInstances({ status: 'active', entity_type: 'incident' })
@@ -38,28 +18,25 @@ describe('createWorkflowsApi', () => {
     )
   })
 
-  it('templates/stats/delegations paths match OpenAPI', () => {
+  it('listTemplates path matches OpenAPI', () => {
     const api = mockApi()
-    const w = createWorkflowsApi(api as never)
-    w.listTemplates()
-    w.getStats()
-    w.getDelegations()
-    w.setDelegation({
-      delegate_id: 3,
-      start_date: '2026-01-01',
-      end_date: '2026-01-31',
-      reason: 'leave',
-    })
-    w.cancelDelegation('d9')
+    createWorkflowsApi(api as never).listTemplates()
     expect(api.get).toHaveBeenCalledWith('/api/v1/workflows/templates')
-    expect(api.get).toHaveBeenCalledWith('/api/v1/workflows/stats')
-    expect(api.get).toHaveBeenCalledWith('/api/v1/workflows/delegations')
-    expect(api.post).toHaveBeenCalledWith('/api/v1/workflows/delegations', {
-      delegate_id: 3,
-      start_date: '2026-01-01',
-      end_date: '2026-01-31',
-      reason: 'leave',
-    })
-    expect(api.delete).toHaveBeenCalledWith('/api/v1/workflows/delegations/d9')
+  })
+
+  it('offers nothing for approvals, delegations or stats', () => {
+    /*
+     * Those methods, and the endpoints behind them, were deleted by
+     * FR-APPROVALS-01: the queue was `[]` for every user, the approve/reject
+     * writes recorded nothing, and the delegation list was one invented row.
+     *
+     * This assertion is the point of the test. The methods were unreachable from
+     * any page, so nothing failed when they stopped working — and because the api
+     * is mocked here, the old tests kept passing against URLs that now 404. A
+     * client method is an invitation to wire it up.
+     */
+    const workflows = createWorkflowsApi(mockApi() as never)
+
+    expect(Object.keys(workflows).sort()).toEqual(['listInstances', 'listTemplates'])
   })
 })

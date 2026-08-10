@@ -40,25 +40,21 @@ class TestWorkflowCenterSmoke:
         assert response.status_code == 200
         assert "instances" in response.json()
 
-    def test_pending_approvals_endpoint_available(self, auth_client: Any) -> None:
-        """Verify pending approvals endpoint is accessible."""
-        response = auth_client.get("/api/v1/workflows/approvals/pending")
-        assert response.status_code == 200
-        assert "approvals" in response.json()
+    def test_my_decisions_endpoint_available(self, auth_client: Any) -> None:
+        """The outstanding-decisions surface, which replaced three smoke tests here.
 
-    def test_delegations_endpoint_available(self, auth_client: Any) -> None:
-        """Verify delegations endpoint is accessible."""
-        response = auth_client.get("/api/v1/workflows/delegations")
+        Those three checked that `/workflows/approvals/pending`,
+        `/workflows/delegations` and `/workflows/stats` answered 200 with the
+        expected keys — which they always did, over an engine that stored nothing.
+        A smoke test that a route is wired cannot tell an empty queue from a queue
+        that cannot fill, so this one reads the completeness flag instead.
+        """
+        response = auth_client.get("/api/v1/approvals/my-decisions")
         assert response.status_code == 200
-        assert "delegations" in response.json()
-
-    def test_workflow_stats_endpoint_available(self, auth_client: Any) -> None:
-        """Verify workflow stats endpoint is accessible."""
-        response = auth_client.get("/api/v1/workflows/stats")
-        assert response.status_code == 200
-        stats = response.json()
-        assert "active_workflows" in stats
-        assert "pending_approvals" in stats
+        body = response.json()
+        assert "items" in body
+        assert "sources_complete" in body
+        assert body["sources"], "the endpoint must account for the sources it asked"
 
     def test_can_start_workflow(self, client: Any, admin_headers: dict) -> None:
         """Verify workflow can be started by a privileged (superuser) account."""
