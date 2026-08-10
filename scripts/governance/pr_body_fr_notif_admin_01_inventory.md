@@ -57,9 +57,9 @@
 
 ## 2) Impact Map (what changed)
 
-12 files, +2,598 / −20.
+13 files, +3,093 / −20 — 12 of code, tests and locales, plus this ledger.
 
-- **NEW `src/domain/notifications/inventory.py` (743 lines):** pure, no DB, no
+- **NEW `src/domain/notifications/inventory.py` (759 lines):** pure, no DB, no
   ORM, no `src.infrastructure` import.
   - `CHANNELS` — the 4 real channels (`in_app`, `email`, `sms`, `push`), each
     with the transport named concretely and the status helper that decides its
@@ -428,16 +428,17 @@ claimed.
 
 - Branch: `feat/notif-admin-01-inventory`
 - Base: `1c9d1bc00` (#1710 ADMIN-03), rebased onto it after it merged
-- Files: 12 changed, +2,598 / −20 — 1 new domain registry, 1 new route, 1 new
+- Files: 13 changed, +3,093 / −20 — 1 new domain registry, 1 new route, 1 new
   schema, 1 router mount, 1 frontend panel, 2 locale files, 3 new test files,
   1 extended frontend test file, plus this ledger
 - Registry contents: 4 real channels, 2 declared-absent channels, 22 producers
   (18 active, 4 with no production caller, 5 schedule-driven)
 - Alembic revisions added: **0**; `git diff origin/main...HEAD -- alembic/` empty
-- Local evidence: 6,565 backend unit tests green; 74 new backend/integration
-  tests; 12 frontend tests; mypy clean over 605 files; black / isort / flake8
-  clean; import boundaries OK; OpenAPI contract check passed; 3 registry tests
-  proven to fail under mutation (§5)
+- Local evidence on base `1c9d1bc00`: 6,625 backend unit tests green (control on
+  `origin/main`: 6,504 green); full frontend suite 2,829 green; 74 new
+  backend/integration tests; 12 frontend tests; mypy clean over 606 files;
+  black / isort / flake8 clean; import boundaries OK; OpenAPI contract check
+  passed; 5 groups of tests proven to fail under mutation (§5)
 - Registry re-verified on the post-ADMIN-03 base with five claims corrected (§3);
   85 tests green on that base
 - A red seen during preparation is explained in §5 as the deliberate permission
