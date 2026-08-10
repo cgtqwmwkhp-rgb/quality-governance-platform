@@ -287,7 +287,55 @@ writer remains), and legacy `documents.retention_*` / `retention_until` are not
 backfilled (CUT-1c). Documents filed before CUT-1 therefore still carry whatever
 date the old parser gave them until they are superseded or re-approved.
 
+*(Superseded in part by the CUT-1b amendment below: the column is now dropped.
+CUT-1c remains deferred.)*
+
 Design note: `docs/governance/library-cut1-retention-access-sor.md` §STEWARD-14.
+
+## Amendment — CUT-1b: the control layer stops holding a retention period
+
+**Status**: Accepted
+**Date**: 2026-08-10
+**Alembic**: `20261104_lib_cut1b_drop`
+
+The STEWARD-14 amendment above defers
+`controlled_documents.retention_period_years` "once no writer remains". There was
+a writer, and it was the flat seven years this ADR set out to retire:
+
+```python
+retention_period_years: Mapped[int] = mapped_column(Integer, default=7)
+```
+
+1. **The default was a writer, not a placeholder.** A SQLAlchemy `default` runs on
+   every INSERT, so every controlled document ever created carried seven years —
+   Citation (ATLAS)'s "7 Years / all employees" position expressed as code, on
+   documents whose category says three years, or forty. STEWARD-14 retired that
+   position for the Register while the control layer was still writing it.
+2. **The column is dropped and nothing replaces it.** F-7 §2 now has exactly one
+   retention home: the category's policy copied onto the Register row at file,
+   with `documents.retention_until` as the clock. The control record holds no
+   retention fact under any name, which is asserted rather than asserted-in-prose.
+3. **The obsolete archive derives its end date from the Register.** Being marked
+   obsolete is the document leaving the live set, so
+   `POST /document-control/{id}/obsolete` reads the Register's supersede-anchored
+   answer through the same helper the Register's own supersede path writes
+   through. It reads; it does not write. Where the Register cannot answer — an
+   unanchored control record, a legacy row with no policy, an event-anchored rule
+   — the archive's `retention_end_date` is **NULL**, which is "keep". Disposal
+   hard-deletes, so no shorter clock was invented to fill the gap.
+4. **The old value was not migrated forward.** It is a constructor default nobody
+   chose, so copying it onto the Register would launder Citation's seven years
+   into the system of record built to replace it. The migration logs how many
+   rows held anything other than seven before dropping, so the deploy record shows
+   what was actually destroyed rather than leaving it to inference.
+
+Still deliberately outstanding: legacy `documents.retention_*` / `retention_until`
+are not backfilled (CUT-1c, deferred), and control `document_access_logs` is not
+merged into `library_document_access_logs` (F-7 §3). `IMS 052` still records these
+documents as living in Citation with a flat seven-year retention and must be
+updated or withdrawn to match — a records action outside this repository.
+
+Design note: `docs/governance/library-cut1-retention-access-sor.md` §CUT-1b.
 
 ## Consequences
 

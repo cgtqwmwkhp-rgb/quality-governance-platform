@@ -39,6 +39,7 @@ from src.domain.models.document_control import (
     ObsoleteDocumentRecord,
 )
 from src.domain.models.user import User
+from src.domain.services.document_library_filing_service import supersede_retention_until
 from src.domain.services.document_version_service import assert_document_metadata_editable, document_version_service
 from src.domain.services.gkb_golden_thread import GoldenThreadContext, decide_golden_thread_publish
 from src.domain.services.legal_hold_enforcement import assert_controlled_document_not_held
@@ -312,6 +313,56 @@ async def _register_access_level(
             LibraryDocument.tenant_id == tenant_id,
         )
     )
+
+
+async def _archive_retention_end_date(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    library_document_id: Optional[int],
+    obsoleted_at: datetime,
+) -> Optional[datetime]:
+    """CUT-1b — when the obsolete archive may be destroyed, read from the Register.
+
+    Retention has one system of record and it is the Register row (F-7 §2): the
+    category's policy is copied onto ``documents.retention_years`` /
+    ``retention_anchor`` at file, and ``documents.retention_until`` is the clock.
+    Being marked obsolete is that document leaving the live set, so the archive's
+    end date is the Register's supersede-anchored answer —
+    :func:`supersede_retention_until`, the same function the Register's own
+    supersede path uses, so the two cannot drift.
+
+    Read-only on purpose. The control layer asking the Register a question is the
+    convergence; the control layer *writing* the Register's clock would be the
+    second writer CUT-1b exists to remove, arriving from the other direction.
+
+    ``None`` — the fail-safe — whenever the answer is not calculable: an
+    unanchored control record, a Register row this tenant cannot see, a document
+    filed before CUT-1 with no policy on it, or a policy anchored on an event QGP
+    does not hold. Disposal hard-deletes, so a record with no end date is kept
+    until someone decides, which is the only safe direction to be wrong in.
+    """
+    if library_document_id is None:
+        return None
+
+    from src.domain.models.document import Document as LibraryDocument
+
+    library_document = await db.scalar(
+        select(LibraryDocument).where(
+            LibraryDocument.id == library_document_id,
+            LibraryDocument.tenant_id == tenant_id,
+        )
+    )
+    if library_document is None:
+        return None
+
+    resolved = supersede_retention_until(library_document, obsoleted_at)
+    if resolved is None:
+        return None
+    # `obsolete_document_records.retention_end_date` is `timestamp without time
+    # zone`, so the aware value the Register works in is normalised the same way
+    # `_utcnow` does rather than handed to asyncpg as-is.
+    return resolved.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _converged_access_level(requested: Optional[str], *, register_level: Optional[str]) -> Optional[str]:
@@ -1153,6 +1204,10 @@ async def mark_document_obsolete(
     without recording its retention end date would satisfy the request and lose
     the reason the record exists. So while the retention table is absent, the
     honest outcome is that the document stays current and the caller is told why.
+
+    CUT-1b: the end date is derived from the Register row, not from a retention
+    period held on the control record. See :func:`_archive_retention_end_date` for
+    why an underivable date is recorded as ``NULL`` rather than guessed.
     """
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
@@ -1170,10 +1225,18 @@ async def mark_document_obsolete(
     await _refuse_write_if_unprovisioned(db, OBSOLETE_RECORD_TABLES, "An obsolete-document record")
     await assert_controlled_document_not_held(db, document, tenant_id=tenant_id, action="marked obsolete")
 
+    obsoleted_at = _utcnow()
+    retention_end_date = await _archive_retention_end_date(
+        db,
+        tenant_id=tenant_id,
+        library_document_id=document.library_document_id,
+        obsoleted_at=obsoleted_at,
+    )
+
     # Update document
     document.status = "obsolete"
     document.is_current = False
-    document.obsolete_date = _utcnow()
+    document.obsolete_date = obsoleted_at
     document.obsolete_reason = obsolete_data.obsolete_reason
     document.superseded_by = obsolete_data.superseded_by_id
 
@@ -1181,11 +1244,11 @@ async def mark_document_obsolete(
     record = ObsoleteDocumentRecord(
         tenant_id=tenant_id,
         document_id=document_id,
-        obsolete_date=_utcnow(),
+        obsolete_date=obsoleted_at,
         obsolete_reason=obsolete_data.obsolete_reason,
         superseded_by_id=obsolete_data.superseded_by_id,
         retention_required=True,
-        retention_end_date=_utcnow() + timedelta(days=document.retention_period_years * 365),
+        retention_end_date=retention_end_date,
     )
     db.add(record)
     await db.commit()

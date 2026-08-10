@@ -219,25 +219,50 @@ def _stored_policy(document: Document) -> Optional[RetentionPolicy]:
     )
 
 
-def apply_supersede_retention(document: Document, superseded_at: datetime) -> None:
-    """Start a supersede-anchored retention clock as the document leaves the live set.
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
 
-    Never brings a disposal date forward. A legacy row filed before CUT-1 already
-    carries a ``retention_until`` computed from its approval date, which for these
-    rules is too early; taking the later of the two repairs that row on supersede
+
+def supersede_retention_until(document: Document, superseded_at: datetime) -> Optional[datetime]:
+    """The document's disposal date once it leaves the live set — read, not written.
+
+    The Register row is the retention system of record (F-7 §2), so anything that
+    needs to know when a document may be destroyed asks this rather than keeping
+    its own clock. ``None`` means "not calculable", which is the keep direction:
+    an event-anchored or indefinite policy, a rule the CUT-1 grammar refused, or a
+    document that was filed before CUT-1 and carries no policy at all.
+
+    Never earlier than the date already on the row. A legacy row filed before
+    CUT-1 carries a ``retention_until`` computed from its approval date, which for
+    a supersede-anchored rule is too early; taking the later of the two repairs it
     instead of honouring a date the governance rule never sanctioned.
     """
+    current = _as_utc(getattr(document, "retention_until", None))
     policy = _stored_policy(document)
     if policy is None or policy.anchor is not RetentionAnchor.SUPERSEDE:
-        return
-    candidate = retention_until_for(policy, superseded_at=superseded_at)
+        return current
+    candidate = retention_until_for(policy, superseded_at=_as_utc(superseded_at))
     if candidate is None:
-        return
-    current = getattr(document, "retention_until", None)
-    if current is not None and current.tzinfo is None:
-        current = current.replace(tzinfo=timezone.utc)
+        return current
     if current is None or candidate > current:
-        document.retention_until = candidate
+        return candidate
+    return current
+
+
+def apply_supersede_retention(document: Document, superseded_at: datetime) -> None:
+    """Write the supersede-anchored clock onto the row as it leaves the live set.
+
+    The only writer of ``retention_until`` on supersede. It writes exactly what
+    :func:`supersede_retention_until` resolves, and only when that is later than
+    the date already there — so a document is never made disposable sooner by
+    being superseded, and a policy that cannot start a clock leaves the row alone.
+    """
+    resolved = supersede_retention_until(document, superseded_at)
+    current = _as_utc(getattr(document, "retention_until", None))
+    if resolved is not None and (current is None or resolved > current):
+        document.retention_until = resolved
 
 
 def assert_library_read_access(
