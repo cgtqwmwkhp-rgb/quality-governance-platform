@@ -586,14 +586,6 @@ async def complete_assessment(
                 tenant_id=run.tenant_id,
             )
 
-    notification_args = {
-        "assessment_run_id": run.id,
-        "engineer_user_id": engineer.user_id if engineer else None,
-        "supervisor_id": run.supervisor_id,
-        "outcome": score_result.outcome,
-        "tenant_id": run.tenant_id,
-    }
-
     try:
         await db.flush()
         response = _to_assessment_run_response(run)
@@ -605,11 +597,15 @@ async def complete_assessment(
     # Dispatch only once the run is durable: NotificationService commits and
     # fans out to WebSocket/email/push, which must not describe a rolled-back run.
     try:
-        await NotificationService(db).notify_assessment_complete(**notification_args)
-    except Exception:
-        logger.exception(
-            "Failed to send assessment completion notification for run %s", notification_args["assessment_run_id"]
+        await NotificationService(db).notify_assessment_complete(
+            assessment_run_id=run.id,
+            engineer_user_id=engineer.user_id if engineer else None,
+            supervisor_id=run.supervisor_id,
+            outcome=score_result.outcome,
+            tenant_id=run.tenant_id,
         )
+    except Exception:
+        logger.exception("Failed to send assessment completion notification for run %s", run.id)
         # Clear any half-written notification state so request teardown (which
         # commits) cannot turn a swallowed dispatch failure into a 500.
         await db.rollback()
