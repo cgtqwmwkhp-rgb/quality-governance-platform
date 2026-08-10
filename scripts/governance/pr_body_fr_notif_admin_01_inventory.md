@@ -160,13 +160,17 @@
 ADMIN-03 merged into `main` while this branch was open, and it changed what is
 true of the delivery path this registry describes. An inventory that shipped
 stale on the very base it merges onto would be the defect it exists to prevent,
-so the registry was re-read against the merged dispatcher and **five claims were
+so the registry was re-read against the merged dispatcher and **six claims were
 corrected**. Only `src/domain/notifications/inventory.py` changed; no dispatcher
-file was touched.
+file was touched. Each replacement below was checked against the merged source
+rather than against ADMIN-03's own ledger: `QUIET_HOURS_CHANNELS` is
+`{PUSH, SMS}`, `filter_channels` returns early for `CRITICAL` before both gates,
+its category gate iterates every requested channel including `IN_APP`, and
+`create_notification` inserts the row whether or not any channel survives.
 
 | Claim | Was | Now |
 | --- | --- | --- |
-| `in_app` channel | "Always attempted, and needs no configuration" | The row is written unconditionally *before* any channel decision, so nothing is lost; the websocket push is now subject to category preferences. Quiet hours do not hold it back — it is passive |
+| `in_app` channel | "Always attempted, and needs no configuration" | The row is written regardless of the channel decision, so nothing is lost; the websocket push is now subject to category preferences. Quiet hours do not hold it back — it is passive |
 | `email` channel | SMTP + worker only | Adds: subject to category preferences, and deliberately **not** held back by quiet hours, because no digest queue exists to defer it to |
 | `sms` channel | Critical/high priority + a phone number on the preference row | Adds: held back during the recipient's quiet hours unless the notification is critical |
 | `push` channel | VAPID keys + a browser subscription | Adds: held back during quiet hours unless critical |
