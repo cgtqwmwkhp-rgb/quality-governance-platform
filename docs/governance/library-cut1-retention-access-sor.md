@@ -6,7 +6,7 @@
 **Depends on:** WK-1 LIVE, WJ-1 PROD — both satisfied
 **ADR:** [ADR-0023](../adr/ADR-0023-governance-library-reference-scheme.md)
 **Inventory:** [F-7](library-home-inventory-f7.md) §2 (retention homes) · §3 (access homes)
-**Alembic head:** `20261103_lib_steward14` (revises `20261102_lib_cut1_sor`, which revises `20261101_lib_wj0_drop`)
+**Alembic head:** `20261104_lib_cut1b_drop` (revises `20261103_lib_steward14` → `20261102_lib_cut1_sor` → `20261101_lib_wj0_drop`)
 
 ## Why this slice exists
 
@@ -232,11 +232,50 @@ indefinitely. The accepted 2 years is longer than the prose requires, but it is
 the one rule where an accepted decision creates a disposal date the previous
 behaviour did not have.
 
+## CUT-1b — the second retention SoR is gone (shipped)
+
+**Alembic:** `20261104_lib_cut1b_drop` · **Date:** 2026-08-10
+
+CUT-1 deferred `controlled_documents.retention_period_years` "until no writer
+remains". There was one, and it was not a quiet one:
+
+```python
+retention_period_years: Mapped[int] = mapped_column(Integer, default=7)
+```
+
+A SQLAlchemy `default` runs on every INSERT. Every controlled document ever
+created was therefore stamped with **seven years** — Citation (ATLAS)'s flat
+"7 Years / all employees" position expressed as code, on documents whose category
+says three years, or forty. STEWARD-14 retired that position for the Register and
+CUT-1b removes the last place it was still being written.
+
+The single reader was `POST /document-control/{id}/obsolete`, which turned that
+seven into the archive's `retention_end_date` via `timedelta(days=years * 365)` —
+the same 365-day approximation, and the same made-up number.
+
+**What replaces it.** Being marked obsolete is the document leaving the live set,
+so the archive's end date is the Register's supersede-anchored answer, read
+through `document_library_filing_service.supersede_retention_until` — the same
+function the Register's own supersede path writes through, so the two cannot
+drift. The control layer *asks*; it does not write the Register's clock, because
+a second writer arriving from the other direction is the same defect.
+
+**The answer is `NULL` whenever the Register cannot answer**: an unanchored
+control record, a Register row this tenant cannot see, a legacy row filed before
+CUT-1 with no policy on it, or a policy anchored on an event QGP does not hold.
+Disposal hard-deletes, so an unanswerable question produces "keep". No shorter
+clock was invented to fill the gap, and no flat default was reintroduced under
+another name — `tests/unit/test_lib_cut1b_drop_control_retention_years.py`
+asserts the control record now holds **no** retention column under any name, and
+that no application code or later alembic revision names the dropped one.
+
+The old value is deliberately **not** migrated onto the Register. It is not a
+governance fact — it is a constructor default nobody chose — and copying it
+forward would launder Citation's seven years into the system of record built to
+replace it.
+
 ## Deliberately not in this slice
 
-- **`controlled_documents.retention_period_years` is not dropped.** CUT-1 stops
-  it being an independent SoR; the column drop waits until no writer remains.
-  F-7 §2 assigns the control-layer sync to the control converge wave.
 - **No backfill of `documents.retention_*` for legacy rows.** A filed document's
   retention was decided at file time; deriving it now from today's category would
   be inventing an attestation nobody made.
