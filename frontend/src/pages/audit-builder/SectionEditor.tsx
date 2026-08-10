@@ -27,6 +27,7 @@ export interface SectionEditorProps {
   questionValidationErrors?: Record<string, string[]>
   /** All questions across the template (for conditional-logic source pickers). */
   allQuestions?: Question[]
+  highlightedQuestionId?: string | null
 }
 
 function toggleValue<T>(list: T[] | null | undefined, value: T): T[] {
@@ -158,6 +159,7 @@ export default function SectionEditor({
   sectionValidationErrors = [],
   questionValidationErrors = {},
   allQuestions = [],
+  highlightedQuestionId = null,
 }: SectionEditorProps) {
   const { t } = useTranslation()
   // Sections repeat down the page, so every control here names the section it
@@ -275,6 +277,7 @@ export default function SectionEditor({
                   onDuplicate={onDuplicateQuestion}
                   validationErrors={questionValidationErrors[question.id] || []}
                   allQuestions={allQuestions}
+                  highlighted={highlightedQuestionId === question.id}
                 />
               ))}
               <button

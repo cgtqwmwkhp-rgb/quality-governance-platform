@@ -109,6 +109,8 @@ export interface QuestionEditorProps {
   validationErrors?: string[]
   /** All questions across the template, used to pick conditional-logic source questions. */
   allQuestions?: Question[]
+  /** Temporary ring highlight after a save failure scroll-to. */
+  highlighted?: boolean
 }
 
 const CHOICE_BASED_TYPES: QuestionType[] = ['multi_choice', 'checklist']
@@ -294,6 +296,7 @@ export default function QuestionEditor({
   onDuplicate,
   validationErrors = [],
   allQuestions = [],
+  highlighted = false,
 }: QuestionEditorProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -320,7 +323,14 @@ export default function QuestionEditor({
   const needsOptions = CHOICE_BASED_TYPES.includes(question.type)
 
   return (
-    <div className="bg-secondary/50 border border-border rounded-xl p-4 group">
+    <div
+      data-question-id={question.id}
+      className={`bg-secondary/50 border rounded-xl p-4 group transition-shadow ${
+        highlighted
+          ? 'border-destructive ring-2 ring-destructive/40 shadow-md'
+          : 'border-border'
+      }`}
+    >
       <div className="flex items-start gap-3 mb-4">
         <div className="p-1.5 bg-input rounded cursor-grab hover:bg-muted">
           <GripVertical className="w-4 h-4 text-muted-foreground" />

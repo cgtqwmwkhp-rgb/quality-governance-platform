@@ -148,6 +148,9 @@ class AuditQuestionUpdate(BaseModel):
     conditional_logic: Optional[List[ConditionalLogicRule]] = Field(None, validation_alias="conditional_logic_json")
     clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
+    # Risk scoring (parity with AuditQuestionBase / Create / Response)
+    risk_category: Optional[str] = None
+    risk_weight: Optional[float] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
     guidance: Optional[str] = None
