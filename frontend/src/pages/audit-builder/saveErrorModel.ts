@@ -32,7 +32,7 @@ const FIELD_GUIDANCE: Record<string, FieldGuidance> = {
   risk_category: {
     label: 'Risk level on a question',
     action:
-      'Open the question’s risk/criticality controls and save again. If this keeps failing, the server may not yet accept risk level on question updates.',
+      'Open the highlighted question and check Risk level / criticality, then save again.',
   },
   risk_weight: {
     label: 'Risk weight on a question',

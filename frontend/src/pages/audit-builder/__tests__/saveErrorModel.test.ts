@@ -35,7 +35,7 @@ describe('saveErrorModel', () => {
       context: 'Vehicle: Capture defect photo',
       locPath: 'body -> risk_category',
     })
-    expect(model.issues[0].action).toMatch(/risk\/criticality/i)
+    expect(model.issues[0].action).toMatch(/Risk level \/ criticality/i)
     expect(model.summary).toMatch(/Risk level/i)
     expect(firstIssueQuestionId(model)).toBe('q-13')
   })
