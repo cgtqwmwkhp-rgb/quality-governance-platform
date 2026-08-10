@@ -122,7 +122,6 @@ export default function Layout({
           icon: Award,
           label: t('nav.my_compliance_passport', { defaultValue: 'Compliance Passport' }),
         },
-        { path: '/workflows', icon: GitBranch, label: t('nav.workflow_center') },
       ],
     },
     {

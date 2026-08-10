@@ -147,8 +147,8 @@ class TestFrontendPagesSmoke:
 
         return os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
-    def test_workflow_center_page_loads(self, base_url: str) -> None:
-        """Verify Workflow Center page is accessible."""
+    def test_frozen_workflows_route_still_served(self, base_url: str) -> None:
+        """The frozen /workflows path must still be served (it client-redirects to /actions)."""
         try:
             response = requests.get(f"{base_url}/workflows", timeout=10)
             assert response.status_code in [200, 302]

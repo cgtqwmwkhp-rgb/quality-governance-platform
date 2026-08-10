@@ -137,7 +137,7 @@ describe('Layout', () => {
     )
 
     const hubs = [
-      ['nav.my_work', ['/actions', '/my-reading', '/my-compliance', '/workflows']],
+      ['nav.my_work', ['/actions', '/my-reading', '/my-compliance']],
       [
         'nav.safety_cases',
         [
@@ -336,6 +336,22 @@ describe('Layout', () => {
     }
   })
 
+  it('does not offer the frozen Workflow Center under My Work', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.my_work' }))
+
+    expect(navLink('/actions')).toBeInTheDocument()
+    expect(navLink('/workflows')).not.toBeInTheDocument()
+  })
+
   it('points the header Settings gear to Admin Console for superusers', async () => {
     const Layout = (await import('../Layout')).default
 
@@ -349,7 +365,7 @@ describe('Layout', () => {
   })
 
   it('auto-expands the hub containing the active child route', async () => {
-    window.history.pushState({}, '', '/workflows/active')
+    window.history.pushState({}, '', '/my-reading/42')
     const Layout = (await import('../Layout')).default
 
     render(
@@ -362,7 +378,7 @@ describe('Layout', () => {
       'aria-expanded',
       'true',
     )
-    expect(navLink('/workflows')).toBeInTheDocument()
+    expect(navLink('/my-reading')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'nav.assurance' })).toHaveAttribute(
       'aria-expanded',
       'false',
