@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import { RecentCasesPanel, type RecentCaseRow, type RecentCasesData } from '../RecentCasesPanel'
 
@@ -65,10 +65,34 @@ function makeData(): RecentCasesData {
   }
 }
 
-function renderPanel() {
+function renderPanel(data: RecentCasesData = makeData()) {
   return render(
     <MemoryRouter>
-      <RecentCasesPanel data={makeData()} />
+      <RecentCasesPanel data={data} />
+    </MemoryRouter>,
+  )
+}
+
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-probe">{location.pathname}</div>
+}
+
+/** Panel plus a probe, so a row activation can be read as a real route change. */
+function renderPanelWithLocation(data: RecentCasesData = makeData()) {
+  return render(
+    <MemoryRouter>
+      <Routes>
+        <Route
+          path="*"
+          element={
+            <>
+              <RecentCasesPanel data={data} />
+              <LocationProbe />
+            </>
+          }
+        />
+      </Routes>
     </MemoryRouter>,
   )
 }
@@ -120,5 +144,103 @@ describe('RecentCasesPanel date column (PX-122)', () => {
     // Supplied lowercase by the API fixture; must still read as a reference code.
     expect(within(panel).getByText('INC-2026-0022')).toBeInTheDocument()
     expect(within(panel).queryByText('inc-2026-0022')).toBeNull()
+  })
+})
+
+/**
+ * The reference cell was painted `text-primary` but was plain text, so the one
+ * thing on the dashboard that looked like a route into a case was not one.
+ */
+describe('RecentCasesPanel case links (FR-DASH-RECENT-01)', () => {
+  it('links each reference to its own case detail route, not the register', () => {
+    renderPanel()
+
+    const link = screen.getByRole('link', { name: 'INC-2026-0057' })
+    expect(link).toHaveAttribute('href', '/incidents/57')
+  })
+
+  it.each([
+    ['near_misses', 'NM-2026-0003', '/near-misses/3'],
+    ['complaints', 'CMP-2026-0004', '/complaints/4'],
+    ['rtas', 'RTA-2026-0005', '/rtas/5'],
+  ])('uses the %s detail route for its own rows', (tab, reference, href) => {
+    renderPanel()
+
+    fireEvent.click(screen.getByTestId(`recent-cases-tab-${tab}`))
+
+    expect(screen.getByRole('link', { name: reference })).toHaveAttribute('href', href)
+  })
+
+  it('keeps View All pointing at the register for the active tab', () => {
+    renderPanel()
+
+    expect(screen.getByTestId('recent-cases-view-all')).toHaveAttribute('href', '/incidents')
+
+    fireEvent.click(screen.getByTestId('recent-cases-tab-rtas'))
+    expect(screen.getByTestId('recent-cases-view-all')).toHaveAttribute('href', '/rtas')
+  })
+
+  it('opens the case when the row is clicked away from the reference cell', () => {
+    renderPanelWithLocation()
+
+    fireEvent.click(screen.getByText('Slip in yard'))
+
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/incidents/57')
+  })
+
+  it.each(['Enter', ' '])('opens the focused row on %s', (key) => {
+    renderPanelWithLocation()
+
+    const row = screen.getByLabelText('View incident: INC-2026-0057')
+    expect(row).toHaveAttribute('tabindex', '0')
+
+    row.focus()
+    fireEvent.keyDown(row, { key })
+
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/incidents/57')
+  })
+
+  it('names the row by the kind of case it opens', () => {
+    renderPanel()
+
+    fireEvent.click(screen.getByTestId('recent-cases-tab-near_misses'))
+
+    expect(screen.getByLabelText('View near miss: NM-2026-0003')).toBeInTheDocument()
+  })
+
+  it('does not navigate when a key is pressed inside a cell rather than on the row', () => {
+    renderPanelWithLocation()
+
+    fireEvent.keyDown(screen.getByText('Slip in yard'), { key: 'Enter' })
+
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/')
+    expect(screen.getByTestId('location-probe')).not.toHaveTextContent('/incidents/57')
+  })
+
+  it('leaves a row inert when the feed gave it no usable id', () => {
+    const data = makeData()
+    data.incidents = ok([
+      {
+        id: 0,
+        reference: 'INC-2026-0099',
+        title: 'Row with no id',
+        severity: 'low',
+        status: 'open',
+        date: '2026-07-25T12:00:00Z',
+      },
+    ])
+
+    renderPanelWithLocation(data)
+
+    // A guessed /incidents/0 would render as a case that cannot load.
+    expect(screen.queryByRole('link', { name: 'INC-2026-0099' })).toBeNull()
+    expect(screen.getByText('INC-2026-0099')).toBeInTheDocument()
+
+    const row = screen.getByTestId('recent-cases-row')
+    expect(row).not.toHaveAttribute('tabindex')
+
+    fireEvent.click(screen.getByText('Row with no id'))
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/')
+    expect(screen.getByTestId('location-probe')).not.toHaveTextContent('/incidents/0')
   })
 })
