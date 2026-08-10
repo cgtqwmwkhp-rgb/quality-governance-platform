@@ -48,6 +48,14 @@ rather than smooth it over:
     Additive, matching ``_ensure_user_management_enabled`` in
     :mod:`src.api.routes.users`. A row with ``enabled=False`` means off. An absent
     row means on.
+
+``requires_ui_key``
+    Another registered feature that must itself be open. For a flag whose own
+    setting is a *second* opener on top of a master switch — ``AI_COPILOT_INFERENCE_ENABLED``
+    on top of ``AI_COPILOT_ENABLED`` — reporting the second opener alone would put
+    a value on the wire that says a capability is live when the surface carrying it
+    is closed. The frontend would have to know to AND them, which is the guessing
+    this channel exists to stop.
 """
 
 from __future__ import annotations
@@ -78,6 +86,9 @@ class ClientFeature:
     required_permission: Optional[str]
     #: Why this flag is safe to disclose, and what the UI does with it.
     reason: str
+    #: Another ``ui_key`` in this registry that must also be open. Must be declared
+    #: earlier in :data:`CLIENT_FEATURES`, and must not itself require anything.
+    requires_ui_key: Optional[str] = None
 
 
 CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
@@ -289,6 +300,44 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         reason=(
             "Gates Job cell-link surfaces. Default off; pre-registered so later cell-link "
             "slices do not thrash the client feature catalogue."
+        ),
+    ),
+    # The copilot pair is registered so the panel can state what it actually is. It is
+    # the only consumer that needs these: the surface is mounted by its own build-time
+    # gate, and what these two decide is the wording, not the door.
+    ClientFeature(
+        ui_key="ai_copilot",
+        settings_attr="ai_copilot_enabled",
+        kill_switch_key="copilot_kill_switch",
+        enabling_flag_key=None,
+        required_permission=None,
+        reason=(
+            "Tells the copilot panel whether the API behind it is open, so it can say "
+            "'unavailable' rather than offer a chat box that 404s. Borrows the "
+            "copilot_kill_switch key rather than declaring ai_copilot_kill_switch: that "
+            "row is the one require_copilot_enabled already reads, and a second name "
+            "would let the panel and the endpoint disagree about being killed. Not "
+            "permission-gated because no copilot permission token exists to fold — the "
+            "routes require authentication and nothing finer — so a false here would "
+            "hide the disclosure from every caller. Discloses only that this deployment "
+            "opted the surface in, which its own 404s already reveal."
+        ),
+    ),
+    ClientFeature(
+        ui_key="ai_copilot_inference",
+        settings_attr="ai_copilot_inference_enabled",
+        kill_switch_key="copilot_kill_switch",
+        enabling_flag_key=None,
+        required_permission=None,
+        requires_ui_key="ai_copilot",
+        reason=(
+            "Distinguishes the two things the copilot can be: a keyword simulator, or "
+            "grounded answers phrased over server-computed register facts with citations. "
+            "Without it the panel has to hardcode one of those claims and is wrong in the "
+            "other environment. Shares copilot_kill_switch for the same reason the master "
+            "flag does — it is the row copilot_inference_is_enabled itself consults — and "
+            "requires ai_copilot because AI_COPILOT_INFERENCE_ENABLED is a second opener, "
+            "not an independent one: on with the master off means no inference at all."
         ),
     ),
 )

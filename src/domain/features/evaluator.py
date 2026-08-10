@@ -146,8 +146,22 @@ async def _feature_enabled(
 
 
 async def evaluate_client_features(user: Optional[User], session_factory: SessionFactory) -> Dict[str, bool]:
-    """Effective value of every registered client feature for this caller."""
-    return {feature.ui_key: await _feature_enabled(feature, user, session_factory) for feature in CLIENT_FEATURES}
+    """Effective value of every registered client feature for this caller.
+
+    A feature naming ``requires_ui_key`` is folded against the verdict already
+    reached for that key rather than re-evaluated, so a shared kill switch is read
+    once and the two answers cannot come from different moments. Registration order
+    is what makes the prerequisite available; a forward reference reports the
+    dependent feature closed, and ``tests/unit/test_client_feature_catalogue.py``
+    fails on one.
+    """
+    verdicts: Dict[str, bool] = {}
+    for feature in CLIENT_FEATURES:
+        enabled = await _feature_enabled(feature, user, session_factory)
+        if enabled and feature.requires_ui_key is not None:
+            enabled = verdicts.get(feature.requires_ui_key, False)
+        verdicts[feature.ui_key] = enabled
+    return verdicts
 
 
 __all__ = [

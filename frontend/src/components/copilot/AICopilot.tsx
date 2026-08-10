@@ -1,16 +1,21 @@
 /**
  * AI Copilot Component
  *
- * Demo-only conversational shell. Default-off via isAICopilotDemoEnabled().
+ * Conversational shell. Default-off via isAICopilotDemoEnabled().
  * Honesty rules (Run021 residual) live on the backend `/api/v1/copilot` routes:
  * - Never invent tenant compliance / risk figures or named records (PX-248)
  * - Never claim a write completed when nothing was written (PX-250)
  * - Render markdown in replies instead of raw markers (PX-249)
  *
  * This UI calls the API; it must not fall back to client-side canned answers.
+ *
+ * What the panel *says about itself* is not hardcoded either: the title, subtitle,
+ * banner and opening message come from the runtime feature flags in
+ * ./copilotDisclosure, because the same bundle is served to a deployment running the
+ * keyword simulator and to one running grounded inference over live registers.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import {
   Bot,
   Send,
@@ -27,7 +32,9 @@ import {
 import { Button } from '../ui/Button'
 import { cn } from '../../helpers/utils'
 import { isAICopilotDemoEnabled } from '../../config/aiCopilotDemo'
+import { useFeatureFlag } from '../../hooks/useFeatureFlag'
 import { CopilotMarkdown } from './CopilotMarkdown'
+import { copilotDisclosure, resolveCopilotDisclosureMode } from './copilotDisclosure'
 import {
   copilotApi,
   isCopilotUnavailableError,
@@ -65,10 +72,11 @@ interface AICopilotProps {
   contextData?: Record<string, unknown>
 }
 
-const WELCOME_CONTENT = `This is a demonstration of a planned AI assistant. It is not connected to any AI model or to your organisation's records.\n\nI will **refuse** live-data questions (compliance status, risk summaries) and will **not** claim to create incidents or actions. Concept explanations (for example CAPA or RIDDOR) are general guidance only.\n\nTry "what is CAPA" for a concept preview, or open Compliance / Risk Register for real figures.`
-
 const UNAVAILABLE_MESSAGE =
   'AI Copilot is not enabled in this environment. No simulated answers are available.'
+
+/** Local id of the opening message, which is rewritten if the runtime flags change. */
+const WELCOME_MESSAGE_ID = 0
 
 function mapApiMessage(msg: ApiCopilotMessage): Message {
   const contentType =
@@ -111,7 +119,6 @@ const AICopilot: React.FC<AICopilotProps> = ({
   const [isLoading, setIsLoading] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [isListening, setIsListening] = useState(false)
-  const [suggestions, setSuggestions] = useState<SuggestedAction[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [sessionId, setSessionId] = useState<number | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
@@ -121,25 +128,53 @@ const AICopilot: React.FC<AICopilotProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  const fetchSuggestions = useCallback(() => {
-    const contextSuggestions: SuggestedAction[] = []
+  // Both published by GET /api/v1/meta/features, folding the same configuration and
+  // kill switch require_copilot_enabled reads on the server side.
+  const copilotOpen = useFeatureFlag('ai_copilot')
+  const inferenceOpen = useFeatureFlag('ai_copilot_inference')
+
+  const disclosure = copilotDisclosure(
+    resolveCopilotDisclosureMode({ unavailable, copilotOpen, inferenceOpen }),
+  )
+  const grounded = disclosure.mode === 'grounded'
+
+  const suggestions = useMemo<SuggestedAction[]>(() => {
+    const items: SuggestedAction[] = []
 
     if (contextType === 'incident') {
-      contextSuggestions.push({
+      items.push({
         action: 'explain_capa',
         displayName: 'What is CAPA?',
         description: 'what is CAPA',
       })
     } else if (currentPage?.includes('audit')) {
-      contextSuggestions.push({
+      items.push({
         action: 'explain_iso',
         displayName: 'Explain ISO 45001',
         description: 'explain ISO 45001',
       })
     }
 
+    // Register questions are offered only where the server can ground them. Offered
+    // anywhere else they would walk the user straight into the refusal path, which
+    // reads as a broken feature rather than as the honesty guarantee it is (PX-248).
+    if (grounded) {
+      items.push(
+        {
+          action: 'incident_count',
+          displayName: 'How many incidents do we have?',
+          description: 'how many incidents do we have',
+        },
+        {
+          action: 'overdue_actions',
+          displayName: 'Which actions are overdue?',
+          description: 'which actions are overdue',
+        },
+      )
+    }
+
     // Suggestions must not steer users into fabricated live-data answers (PX-248).
-    contextSuggestions.push(
+    items.push(
       {
         action: 'explain_capa',
         displayName: 'What is CAPA?',
@@ -152,8 +187,8 @@ const AICopilot: React.FC<AICopilotProps> = ({
       },
     )
 
-    setSuggestions(contextSuggestions)
-  }, [contextType, currentPage])
+    return items
+  }, [contextType, currentPage, grounded])
 
   // Initialize backend session when the demo surface opens (context captured at open).
   useEffect(() => {
@@ -165,7 +200,6 @@ const AICopilot: React.FC<AICopilotProps> = ({
       setMessages([])
       setInput('')
       setIsMinimized(false)
-      setSuggestions([])
       return
     }
 
@@ -190,14 +224,13 @@ const AICopilot: React.FC<AICopilotProps> = ({
         setSessionReady(true)
         setMessages([
           {
-            id: 0,
+            id: WELCOME_MESSAGE_ID,
             role: 'assistant',
-            content: WELCOME_CONTENT,
+            content: disclosure.welcome,
             contentType: 'text',
             createdAt: new Date(),
           },
         ])
-        fetchSuggestions()
       } catch (err) {
         if (cancelled) return
         if (isCopilotUnavailableError(err)) {
@@ -222,6 +255,28 @@ const AICopilot: React.FC<AICopilotProps> = ({
     // Intentionally only re-init when the panel opens/closes — not on every context prop change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
+
+  // The flags are fetched asynchronously and default closed, so a grounded deployment
+  // can open its session while the panel still believes it is a simulator. Rewriting
+  // the opening message is what stops that first bubble claiming "not connected to any
+  // AI model" in an environment where a model is answering.
+  useEffect(() => {
+    if (!disclosure.welcome) return
+    setMessages((prev) => {
+      const stale = prev.some(
+        (message) =>
+          message.id === WELCOME_MESSAGE_ID &&
+          message.role === 'assistant' &&
+          message.content !== disclosure.welcome,
+      )
+      if (!stale) return prev
+      return prev.map((message) =>
+        message.id === WELCOME_MESSAGE_ID && message.role === 'assistant'
+          ? { ...message, content: disclosure.welcome }
+          : message,
+      )
+    })
+  }, [disclosure.welcome])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -350,7 +405,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
       <div className="fixed bottom-4 right-4 z-50">
         <Button onClick={() => setIsMinimized(false)} className="rounded-full gap-2 shadow-glow">
           <Bot className="w-5 h-5" />
-          <span className="font-medium">AI Copilot (Demo)</span>
+          <span className="font-medium">{disclosure.title}</span>
           {messages.length > 1 && (
             <span className="bg-primary-foreground/20 px-2 py-0.5 rounded-full text-xs">
               {messages.length - 1}
@@ -371,8 +426,8 @@ const AICopilot: React.FC<AICopilotProps> = ({
             <Bot className="w-6 h-6 text-primary-foreground" />
           </div>
           <div>
-            <h3 className="font-semibold text-primary-foreground">AI Copilot (Demo)</h3>
-            <p className="text-xs text-primary-foreground/70">Simulated — not live data</p>
+            <h3 className="font-semibold text-primary-foreground">{disclosure.title}</h3>
+            <p className="text-xs text-primary-foreground/70">{disclosure.subtitle}</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -400,15 +455,21 @@ const AICopilot: React.FC<AICopilotProps> = ({
         </div>
       </div>
 
-      <div
-        role="alert"
-        data-testid="ai-copilot-demo-banner"
-        className="px-4 py-2 bg-warning/15 border-b border-warning/40 text-xs text-foreground"
-      >
-        <strong>Demonstration only — no AI model is involved.</strong> Replies are fixed keyword
-        responses. Live-data questions are refused. Writes are never performed. Do not quote this
-        surface as organisational truth.
-      </div>
+      {disclosure.banner && (
+        <div
+          role="alert"
+          data-testid={disclosure.banner.testId}
+          data-copilot-mode={disclosure.mode}
+          className={cn(
+            'px-4 py-2 border-b text-xs text-foreground',
+            disclosure.banner.tone === 'warning'
+              ? 'bg-warning/15 border-warning/40'
+              : 'bg-info/10 border-info/30',
+          )}
+        >
+          <strong>{disclosure.banner.lead}</strong> {disclosure.banner.detail}
+        </div>
+      )}
 
       {unavailable && (
         <div
@@ -473,7 +534,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
                   )}
                   {message.actionStatus === 'not_performed' && (
                     <span className="text-muted-foreground" data-testid="copilot-action-not-performed">
-                      Not performed — demo cannot write or read live registers
+                      {disclosure.actionNotPerformed}
                     </span>
                   )}
                   {message.actionStatus === 'failed' && (
@@ -543,7 +604,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {suggestions.length > 0 && messages.length <= 2 && !unavailable && (
+      {sessionReady && messages.length <= 2 && !unavailable && (
         <div className="px-4 pb-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <Sparkles className="w-3 h-3" />
@@ -572,7 +633,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={unavailable ? 'Copilot unavailable' : 'Ask me anything...'}
+              placeholder={disclosure.inputPlaceholder}
               rows={1}
               disabled={inputDisabled}
               className={cn(

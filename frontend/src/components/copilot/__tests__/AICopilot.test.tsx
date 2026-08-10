@@ -52,10 +52,16 @@ function axiosLikeError(status: number, detail?: string) {
   }
 }
 
+/** Populate the object FeatureFlagProvider fills from GET /api/v1/meta/features. */
+function runtimeFlags(flags: Record<string, boolean>) {
+  window.__FEATURE_FLAGS__ = flags
+}
+
 describe('AICopilot', () => {
   const onClose = vi.fn()
 
   beforeEach(() => {
+    delete window.__FEATURE_FLAGS__
     onClose.mockClear()
     isAICopilotDemoEnabledMock.mockReset()
     isAICopilotDemoEnabledMock.mockReturnValue(false)
@@ -287,6 +293,102 @@ describe('AICopilot', () => {
     })
     expect(screen.queryByText('Compliance Status')).not.toBeInTheDocument()
     expect(screen.queryByText('Risk Summary')).not.toBeInTheDocument()
+  })
+
+  it('drops the demonstration claim and the "(Demo)" title once inference is on', async () => {
+    // The same bundle serves both kinds of deployment, so the banner has to come from
+    // the runtime flags: in this one a model really does phrase the answers.
+    isAICopilotDemoEnabledMock.mockReturnValue(true)
+    runtimeFlags({ ai_copilot: true, ai_copilot_inference: true })
+
+    await renderCopilot()
+
+    const banner = await screen.findByTestId('ai-copilot-grounded-banner')
+    expect(banner).toHaveTextContent(/your own register records/i)
+    expect(banner).toHaveTextContent(/fixed set of questions/i)
+    expect(banner).toHaveTextContent(/never created, edited or deleted/i)
+    expect(banner).not.toHaveTextContent(/no AI model is involved/i)
+
+    expect(screen.queryByTestId('ai-copilot-demo-banner')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'AI Copilot' })).toBeInTheDocument()
+    expect(screen.queryByText(/\(Demo\)/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the demonstration banner when the surface is open but inference is off', async () => {
+    isAICopilotDemoEnabledMock.mockReturnValue(true)
+    runtimeFlags({ ai_copilot: true, ai_copilot_inference: false })
+
+    await renderCopilot()
+
+    const banner = await screen.findByTestId('ai-copilot-demo-banner')
+    expect(banner).toHaveTextContent(/no AI model is involved/i)
+    expect(screen.getByRole('heading', { name: 'AI Copilot (Demo)' })).toBeInTheDocument()
+  })
+
+  it('does not claim grounded answers from the inference flag alone', async () => {
+    // AI_COPILOT_INFERENCE_ENABLED with the master switch off means the routes 404 and
+    // nothing is inferred, so the panel must not upgrade its claim.
+    isAICopilotDemoEnabledMock.mockReturnValue(true)
+    runtimeFlags({ ai_copilot: false, ai_copilot_inference: true })
+
+    await renderCopilot()
+
+    expect(await screen.findByTestId('ai-copilot-demo-banner')).toBeInTheDocument()
+    expect(screen.queryByTestId('ai-copilot-grounded-banner')).not.toBeInTheDocument()
+  })
+
+  it('states the grounded terms in the opening message instead of the demo wording', async () => {
+    isAICopilotDemoEnabledMock.mockReturnValue(true)
+    runtimeFlags({ ai_copilot: true, ai_copilot_inference: true })
+
+    await renderCopilot()
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('copilot-markdown')[0]).toHaveTextContent(
+        /fixed set of questions/i,
+      )
+    })
+    const welcome = screen.getAllByTestId('copilot-markdown')[0]
+    expect(welcome).not.toHaveTextContent(/not connected to any AI model/i)
+    expect(welcome).toHaveTextContent(/refuse/i)
+  })
+
+  it('offers register questions only where the server can ground them', async () => {
+    isAICopilotDemoEnabledMock.mockReturnValue(true)
+    runtimeFlags({ ai_copilot: true, ai_copilot_inference: true })
+
+    await renderCopilot()
+
+    expect(await screen.findByText('How many incidents do we have?')).toBeInTheDocument()
+    expect(screen.getByText('Which actions are overdue?')).toBeInTheDocument()
+  })
+
+  it('does not offer register questions while replies are simulated', async () => {
+    isAICopilotDemoEnabledMock.mockReturnValue(true)
+    runtimeFlags({ ai_copilot: true, ai_copilot_inference: false })
+
+    await renderCopilot()
+
+    await waitFor(() => {
+      expect(screen.getByText('What is CAPA?')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('How many incidents do we have?')).not.toBeInTheDocument()
+    expect(screen.queryByText('Which actions are overdue?')).not.toBeInTheDocument()
+  })
+
+  it('withdraws every capability claim when the API reports the copilot closed', async () => {
+    // A 404 outranks flags that say the surface is grounded: an operator can engage the
+    // kill switch mid-session, and the cached flags lag it by up to a minute.
+    isAICopilotDemoEnabledMock.mockReturnValue(true)
+    runtimeFlags({ ai_copilot: true, ai_copilot_inference: true })
+    createSessionMock.mockRejectedValue(axiosLikeError(404))
+
+    await renderCopilot()
+
+    expect(await screen.findByTestId('ai-copilot-unavailable')).toBeInTheDocument()
+    expect(screen.queryByTestId('ai-copilot-grounded-banner')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('ai-copilot-demo-banner')).not.toBeInTheDocument()
+    expect(screen.getByText('Not enabled here')).toBeInTheDocument()
   })
 
   it('does not call generateResponse-style local simulation — replies come from sendMessage', async () => {

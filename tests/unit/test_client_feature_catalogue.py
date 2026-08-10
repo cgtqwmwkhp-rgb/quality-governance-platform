@@ -105,3 +105,48 @@ def test_compliance_schedule_is_registered_with_its_permission():
     assert feature.settings_attr == "compliance_schedule_enabled"
     assert feature.kill_switch_key == "compliance_schedule_kill_switch"
     assert feature.required_permission == "compliance_schedule:read"
+
+
+def test_requires_ui_key_names_a_feature_declared_earlier():
+    """The evaluator folds prerequisites in registration order.
+
+    A prerequisite declared later — or not at all — has no verdict to fold
+    against, so the dependent feature would be reported permanently closed. That
+    is the safe direction, and therefore silent, which is exactly why it is
+    asserted here.
+    """
+    seen: set[str] = set()
+    for feature in CLIENT_FEATURES:
+        if feature.requires_ui_key is not None:
+            assert (
+                feature.requires_ui_key in CLIENT_FEATURES_BY_KEY
+            ), f"{feature.ui_key} requires {feature.requires_ui_key!r}, which is not registered"
+            assert (
+                feature.requires_ui_key in seen
+            ), f"{feature.ui_key} requires {feature.requires_ui_key!r}, which is declared after it"
+        seen.add(feature.ui_key)
+
+
+def test_prerequisites_are_not_themselves_dependent():
+    """One level only: the evaluator folds a single verdict, not a chain."""
+    for feature in CLIENT_FEATURES:
+        if feature.requires_ui_key is None:
+            continue
+        prerequisite = CLIENT_FEATURES_BY_KEY[feature.requires_ui_key]
+        assert prerequisite.requires_ui_key is None, (
+            f"{feature.ui_key} requires {prerequisite.ui_key}, which requires "
+            f"{prerequisite.requires_ui_key} — chains are not evaluated"
+        )
+
+
+def test_copilot_pair_is_registered_against_the_gates_the_api_uses():
+    """The panel's disclosure must fold the same switches require_copilot_enabled does."""
+    surface = CLIENT_FEATURES_BY_KEY["ai_copilot"]
+    assert surface.settings_attr == "ai_copilot_enabled"
+    assert surface.kill_switch_key == "copilot_kill_switch"
+    assert surface.requires_ui_key is None
+
+    inference = CLIENT_FEATURES_BY_KEY["ai_copilot_inference"]
+    assert inference.settings_attr == "ai_copilot_inference_enabled"
+    assert inference.kill_switch_key == "copilot_kill_switch"
+    assert inference.requires_ui_key == "ai_copilot"
