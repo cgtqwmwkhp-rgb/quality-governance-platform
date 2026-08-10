@@ -27,13 +27,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
 from src.domain.models.feature_flag import FeatureFlag
-from src.domain.notifications.inventory import (
-    ABSENT_CHANNELS,
-    CHANNELS,
-    PRODUCERS,
-    READINESS_VALUES,
-    can_send,
-)
+from src.domain.notifications.inventory import ABSENT_CHANNELS, CHANNELS, PRODUCERS, READINESS_VALUES, can_send
 from tests.integration.conftest import _ADMIN_PERMS, _generate_test_jwt
 
 INVENTORY_PATH = "/api/v1/notifications/inventory"
