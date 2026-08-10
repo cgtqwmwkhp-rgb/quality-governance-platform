@@ -1631,7 +1631,7 @@
   "notifications.pref.document_updates": "Diweddariadau Dogfennau",
   "notifications.pref.document_updates_desc": "Hysbysiadau pan fydd dogfennau'n cael eu diweddaru neu eu hadolygu",
   "notifications.pref.high_priority_alerts": "Rhybuddion Blaenoriaeth Uchel",
-  "notifications.pref.high_priority_alerts_desc": "Derbyn rhybuddion ar gyfer eitemau critigol a blaenoriaeth uchel",
+  "notifications.pref.high_priority_alerts_desc": "Derbyn rhybuddion ar gyfer eitemau blaenoriaeth uchel. Mae rhybuddion diogelwch critigol yn cael eu danfon bob amser.",
   "notifications.preferences": "Dewisiadau",
   "notifications.preferences_description": "Cyfluniwch sut a phryd rydych yn derbyn hysbysiadau",
   "notifications.preferences_title": "Dewisiadau Hysbysu",

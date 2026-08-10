@@ -2213,7 +2213,7 @@
   "notifications.pref.document_updates": "Document Updates",
   "notifications.pref.document_updates_desc": "Notifications when documents are updated or reviewed",
   "notifications.pref.high_priority_alerts": "High Priority Alerts",
-  "notifications.pref.high_priority_alerts_desc": "Receive alerts for critical and high priority items",
+  "notifications.pref.high_priority_alerts_desc": "Receive alerts for high priority items. Critical safety alerts are always delivered.",
   "notifications.preferences": "Preferences",
   "notifications.preferences_description": "Configure how and when you receive notifications",
   "notifications.preferences_title": "Notification Preferences",

@@ -29,6 +29,12 @@ from src.domain.models.notification import (
     NotificationType,
 )
 from src.domain.services.href_registry import absolute_href, assessment_run_href, induction_run_href
+from src.domain.services.notification_preferences import (
+    DEFAULT_QUIET_HOURS_TIMEZONE,
+    ChannelDecision,
+    PreferenceSnapshot,
+    filter_channels,
+)
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -102,12 +108,29 @@ class NotificationService:
             action_url: URL to navigate to on click
             sender_id: User who triggered the notification
             metadata: Additional data
-            channels: Specific channels to use (overrides preferences)
+            channels: Requested channels; still subject to category preferences
+                and quiet hours (FR-NOTIF-ADMIN-03)
             tenant_id: Tenant scope for the notification row
 
         Returns:
             Created Notification object
         """
+        # Resolve delivery before the insert: extra_data is a plain JSON column,
+        # so the suppression audit trail has to be present at construction time
+        # rather than mutated in afterwards.
+        decision = await self._resolve_delivery_channels(user_id, notification_type, priority, channels)
+        delivery_channels = decision.allowed
+
+        extra_data: Dict[str, Any] = dict(metadata or {})
+        if decision.has_suppressions:
+            extra_data["suppressed_channels"] = dict(decision.suppressed)
+            logger.info(
+                "Notification preferences suppressed channels for user %s (%s): %s",
+                user_id,
+                notification_type.value,
+                decision.suppressed,
+            )
+
         # Create notification record
         notification = Notification(
             tenant_id=tenant_id,
@@ -120,7 +143,7 @@ class NotificationService:
             entity_id=entity_id,
             action_url=action_url,
             sender_id=sender_id,
-            extra_data=metadata or {},
+            extra_data=extra_data,
             delivered_channels=[],
         )
 
@@ -128,9 +151,6 @@ class NotificationService:
             self.db.add(notification)
             await self.db.commit()
             await self.db.refresh(notification)
-
-        # Determine delivery channels
-        delivery_channels = channels or await self._get_delivery_channels(user_id, notification_type, priority)
 
         # Deliver to each channel
         for channel in delivery_channels:
@@ -179,16 +199,22 @@ class NotificationService:
             notifications.append(notification)
         return notifications
 
-    async def _get_delivery_channels(
-        self,
-        user_id: int,
-        notification_type: NotificationType,
+    async def _load_preferences(self, user_id: int) -> Optional[NotificationPreference]:
+        """Load a user's stored notification preferences, if any."""
+        if not self.db:
+            return None
+        result = await self.db.execute(select(NotificationPreference).where(NotificationPreference.user_id == user_id))
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _channels_from_toggles(
+        prefs: Optional[NotificationPreference],
         priority: NotificationPriority,
     ) -> List[NotificationChannel]:
-        """Determine which channels to use based on preferences"""
+        """Channels the user's top-level channel toggles opt them in to."""
         channels = [NotificationChannel.IN_APP]  # Always in-app
 
-        # Critical notifications always go to all enabled channels
+        # Critical notifications always go to all channels
         if priority == NotificationPriority.CRITICAL:
             channels.extend(
                 [
@@ -199,25 +225,64 @@ class NotificationService:
             )
             return channels
 
-        # Get user preferences
-        if self.db:
-            result = await self.db.execute(
-                select(NotificationPreference).where(NotificationPreference.user_id == user_id)
-            )
-            prefs = result.scalar_one_or_none()
-
-            if prefs:
-                if prefs.email_enabled:
-                    channels.append(NotificationChannel.EMAIL)
-                if prefs.sms_enabled and priority in [
-                    NotificationPriority.CRITICAL,
-                    NotificationPriority.HIGH,
-                ]:
-                    channels.append(NotificationChannel.SMS)
-                if prefs.push_enabled:
-                    channels.append(NotificationChannel.PUSH)
+        if prefs:
+            if prefs.email_enabled:
+                channels.append(NotificationChannel.EMAIL)
+            if prefs.sms_enabled and priority in [
+                NotificationPriority.CRITICAL,
+                NotificationPriority.HIGH,
+            ]:
+                channels.append(NotificationChannel.SMS)
+            if prefs.push_enabled:
+                channels.append(NotificationChannel.PUSH)
 
         return channels
+
+    async def _resolve_delivery_channels(
+        self,
+        user_id: int,
+        notification_type: NotificationType,
+        priority: NotificationPriority,
+        requested: Optional[List[NotificationChannel]] = None,
+    ) -> ChannelDecision:
+        """Resolve the channels a notification may actually use.
+
+        Category preferences and quiet hours are applied to caller-supplied
+        ``requested`` channels as well as to channels derived from the user's
+        toggles. Callers pass explicit channels to say which channels a message
+        *suits* (in-app only for a status change, for example), not to claim the
+        user consented to being interrupted on them.
+        """
+        prefs = await self._load_preferences(user_id)
+        base_channels = requested if requested else self._channels_from_toggles(prefs, priority)
+        return filter_channels(
+            base_channels,
+            snapshot=PreferenceSnapshot.from_row(prefs),
+            notification_type=notification_type,
+            priority=priority,
+            tz_name=self._quiet_hours_timezone(),
+        )
+
+    @staticmethod
+    def _quiet_hours_timezone() -> Optional[str]:
+        """Deployment-wide timezone for interpreting stored quiet-hours bounds."""
+        try:
+            from src.core.config import get_settings
+
+            return get_settings().notification_quiet_hours_timezone
+        except Exception:  # pragma: no cover - settings must never break dispatch
+            logger.debug("Could not read quiet-hours timezone from settings; using module default")
+            return DEFAULT_QUIET_HOURS_TIMEZONE
+
+    async def _get_delivery_channels(
+        self,
+        user_id: int,
+        notification_type: NotificationType,
+        priority: NotificationPriority,
+    ) -> List[NotificationChannel]:
+        """Determine which channels to use based on preferences"""
+        decision = await self._resolve_delivery_channels(user_id, notification_type, priority)
+        return decision.allowed
 
     async def _deliver_in_app(self, notification: Notification):
         """Deliver notification via WebSocket"""
