@@ -1,7 +1,6 @@
-# Change Ledger
+# Change Ledger (CL-LIB-WJ1-EDITOR-FRONT-SHEET-SCAFFOLD)
 
 **Depends:** WJ-0 `#1693` LIVE tip `409e585b960` (STG=PROD).
- (CL-LIB-WJ1-EDITOR-FRONT-SHEET-SCAFFOLD)
 
 ## 1) Summary
 - **Feature / Change name:** Library WJ-1 prep — native draft editor package shell + Front Sheet band stub (L-34…L-39 design lock)
