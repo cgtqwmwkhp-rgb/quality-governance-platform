@@ -164,15 +164,19 @@ class TestIntegrationSmoke:
     """Integration smoke tests."""
 
     def test_workflow_approval_flow(self, auth_client: Any) -> None:
-        """Test basic workflow approval flow."""
+        """Workflow templates plus the live outstanding-decisions surface.
+
+        Replaces checks against `/workflows/approvals/pending` and
+        `/workflows/stats`, which FR-APPROVALS-01 deleted.
+        """
         templates_resp = auth_client.get("/api/v1/workflows/templates")
         assert templates_resp.status_code == 200
 
-        approvals_resp = auth_client.get("/api/v1/workflows/approvals/pending")
-        assert approvals_resp.status_code == 200
-
-        stats_resp = auth_client.get("/api/v1/workflows/stats")
-        assert stats_resp.status_code == 200
+        decisions_resp = auth_client.get("/api/v1/approvals/my-decisions")
+        assert decisions_resp.status_code == 200
+        body = decisions_resp.json()
+        assert "items" in body
+        assert "sources_complete" in body
 
     def test_compliance_monitoring_flow(self, auth_client: Any) -> None:
         """Test basic compliance monitoring flow."""

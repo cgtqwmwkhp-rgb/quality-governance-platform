@@ -1,6 +1,6 @@
 """The write-schema extra=forbid ratchet must fail on the regressions it exists for.
 
-Board B-10 / w4-extra-forbid: 266 of 296 write request bodies still accept unknown
+Board B-10 / w4-extra-forbid: 206 of 318 write request bodies still accept unknown
 fields. The inventory lock does not convert them; it stops the forbid set from
 shrinking and the open set from growing. Every failure path is driven from a
 synthetic inventory so the committed main baseline is not required for these
@@ -164,9 +164,9 @@ def test_committed_baseline_shape() -> None:
     assert baseline.is_file()
     assert inventory_md.is_file()
     payload = json.loads(baseline.read_text(encoding="utf-8"))
-    assert payload["min_forbid_count"] == 88
-    assert payload["max_open_count"] == 208
-    assert payload["total_write_schemas"] == 296
+    assert payload["min_forbid_count"] == 112
+    assert payload["max_open_count"] == 206
+    assert payload["total_write_schemas"] == 318
     assert payload["forbid_schemas"] == [
         "AccessControlCreate",
         "AcknowledgementAction",
@@ -186,7 +186,6 @@ def test_committed_baseline_shape() -> None:
         "AnnotationCreate",
         "ApplyImportRequest",
         "ApprovalActionRequest",
-        "ApprovalResponse",
         "AskAssignmentQuestionRequest",
         "AssessCompetencyRequest",
         "AssessEntityRequest",
@@ -244,14 +243,39 @@ def test_committed_baseline_shape() -> None:
         "CreateProfileRequest",
         "CreateWatchActionRequest",
         "DefectCAPARequest",
+        "DocumentEdgeCreate",
+        "DocumentHoldScopeRequest",
         "FiveWhysRequest",
+        "FraOcrDraftConfirmRequest",
+        "FraOcrFileRequest",
+        "FraOcrFromEvidenceRequest",
+        "FraSignificantChangeRequest",
+        "JobCellDocumentsPut",
+        "JobCellLinkCreate",
+        "JobCellRequirementUpdate",
+        "JobLaneCreate",
+        "JobLaneUpdate",
+        "JobStepCreate",
+        "JobStepUpdate",
+        "JobTypeBaselineCreate",
+        "JobTypeCloneRequest",
+        "JobTypeCreate",
+        "JobTypeUpdate",
         "LoginRequest",
         "ObsoleteRequest",
         "PasswordChangeRequest",
         "PasswordResetConfirm",
         "PasswordResetRequest",
+        "PortalFireDrillCompleteRequest",
         "QuestionReplyRequest",
         "RecordAcknowledgmentRequest",
+        "RecordCompleteRequest",
+        "RecordEvidenceAttachRequest",
+        "RecordFileRequest",
+        "RegulatoryBasisClarifyRequest",
+        "RegulatoryBasisSuggestRequest",
+        "RequirementCreate",
+        "RequirementUpdate",
         "SetFishboneRootCauseRequest",
         "SetRootCauseRequest",
         "UpdateCAPAStatusRequest",

@@ -56,7 +56,7 @@
 - **Logs:** No new logging. Failure to read a source is carried in the response body (`sources[].reason`), which is what an operator needs and a log line would not give the user.
 - **Metrics:** No change. The deleted `/workflows/stats` tile is not replaced by another unmeasurable one.
 - **Alerts:** No change.
-- **Runbook updates:** `docs/governance/write_schema_extra_forbid_inventory.md` loses the three deleted schemas. Known and declared: `docs/governance/write_schema_extra_forbid_baseline.json` still lists `ApprovalResponse` in `forbid_schemas`, left alone deliberately — the entry is vacuous once the schema is gone (and stricter, not weaker), the file is a lock snapshotted verbatim by `tests/unit/test_write_schema_extra_forbid_ratchet.py`, and it is already stale by 25 schemas from other lanes. Its refresh belongs to a `--write-baseline` pass, not to this PR.
+- **Runbook updates:** `docs/governance/write_schema_extra_forbid_baseline.json` and `write_schema_extra_forbid_inventory.md` refreshed with `--write-baseline` after the stub approve/reject bodies left the write inventory (`ApprovalResponse` removed from the forbid set; floor 88→112 / open ceiling 208→206, picking up other lanes' conversions that had left the lock stale). CI seed role `ci_operator` gains `action:read` so smoke/locust `testuser` can call `GET /api/v1/approvals/my-decisions` (same gate as the Actions queue the panel sits beside).
 
 ## 8) Release Plan (Local -> Staging -> Canary -> Prod)
 - **Staging verification:** `GET /api/v1/approvals/my-decisions` as a user with a known pending investigation review: expect that row, `sources_complete: true`, and three sources listed. Open `/actions` and confirm the panel renders above the register and deep-links correctly.
