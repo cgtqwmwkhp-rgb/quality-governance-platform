@@ -219,7 +219,7 @@ router.include_router(
 # Planet Mark Carbon Management
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])
 # AI Copilot (Tier 2)
-router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
+router.include_router(copilot.router, prefix="/copilot", tags=["PlantEx Assist"])
 # Digital Signatures (Tier 2)
 router.include_router(signatures.router, prefix="/signatures", tags=["Digital Signatures"])
 # Multi-tenancy (Tier 1)

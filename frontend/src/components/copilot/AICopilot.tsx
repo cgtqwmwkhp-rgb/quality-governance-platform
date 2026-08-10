@@ -1,5 +1,5 @@
 /**
- * AI Copilot Component
+ * PlantEx Assist panel (technical module path: copilot/)
  *
  * Conversational shell. Default-off via isAICopilotDemoEnabled().
  * Honesty rules (Run021 residual) live on the backend `/api/v1/copilot` routes:
@@ -73,7 +73,7 @@ interface AICopilotProps {
 }
 
 const UNAVAILABLE_MESSAGE =
-  'AI Copilot is not enabled in this environment. No simulated answers are available.'
+  'PlantEx Assist is not enabled in this environment. No simulated answers are available.'
 
 /** Local id of the opening message, which is rewritten if the runtime flags change. */
 const WELCOME_MESSAGE_ID = 0
@@ -241,7 +241,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
           return
         }
         setSessionError(
-          getApiErrorMessage(err, 'Could not start AI Copilot session. Please try again.'),
+          getApiErrorMessage(err, 'Could not start PlantEx Assist session. Please try again.'),
         )
         setSessionReady(false)
       }

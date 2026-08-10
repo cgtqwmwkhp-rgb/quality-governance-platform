@@ -476,7 +476,7 @@ describe('Layout', () => {
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument()
   })
 
-  it('hides every AI Copilot entry point when the demo flag is off', async () => {
+  it('hides every PlantEx Assist entry point when the demo flag is off', async () => {
     const Layout = (await import('../Layout')).default
 
     render(
@@ -490,7 +490,7 @@ describe('Layout', () => {
     expect(navLink('/copilot')).not.toBeInTheDocument()
   })
 
-  it('lazy-mounts AI Copilot only after the header control is opened', async () => {
+  it('lazy-mounts PlantEx Assist only after the header control is opened', async () => {
     isAICopilotDemoEnabledMock.mockReturnValue(true)
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default

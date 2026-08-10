@@ -411,7 +411,7 @@ def create_application() -> FastAPI:
                 "description": "AI-powered insights and recommendations",
             },
             {
-                "name": "AI Copilot",
+                "name": "PlantEx Assist",
                 "description": "Interactive AI assistant for compliance guidance",
             },
             {"name": "Health", "description": "Health, liveness, and readiness probes"},

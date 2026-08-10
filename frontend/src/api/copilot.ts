@@ -1,5 +1,5 @@
 /**
- * AI Copilot API client.
+ * PlantEx Assist API client (path: /copilot).
  *
  * Honesty rules (PX-248 / PX-250) live on the backend. This client must never
  * fabricate replies locally — callers should surface API errors (including 404
