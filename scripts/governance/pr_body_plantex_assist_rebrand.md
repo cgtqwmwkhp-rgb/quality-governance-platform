@@ -25,8 +25,16 @@ disconnected demo:
 | Runtime state | What is actually true | Copy served |
 |---|---|---|
 | Inference off | No register is read; replies are keyword matches | “This PlantEx Assist demo is not connected to your registers…” |
-| Inference on, no matching intent | Registers are wired up; the **closed question set** is the limit | “That is outside the fixed set of questions PlantEx Assist answers from your registers…” |
+| Inference on, no answer served | Registers are wired up, so the connection is not the limit. Which limit it is — closed question set, missing caller permission, or module off for the tenant — is deliberately not disclosed | “I cannot answer from live organisation data here, and I will not invent counts… PlantEx Assist answers a fixed set of questions from your registers…” |
 | Inference on, citation check failed | Intent matched and figures were computed; the wording quoted something absent from them | “I could not verify every figure in that answer against your own registers, so I have dropped it…” |
+
+**Why the middle row does not blame the question.** `CopilotGroundingService.try_answer`
+returns `ungrounded` for an out-of-set question, a permission-gated one the caller may
+not read, *and* a module switched off for the tenant — collapsed on purpose, so that a
+caller cannot tell which gate closed. One string therefore serves all three, and “that
+is outside the fixed set of questions” would be false for two of them. It states the
+inability and the no-fabrication promise, and describes the fixed set as a property of
+the product rather than as the reason this ask failed.
 - **In scope:**
   - User-facing strings: disclosure titles/subtitles/banners/welcome/placeholders, nav label, OpenAPI tag, API disabled-detail and refuse copy
   - Mode-aware grounded refuse (no “demo is not connected” when inference is on)
@@ -91,9 +99,10 @@ red on CI; both are green now. The rename is non-breaking for
 - [x] AC-03: Nav control label (`nav.copilot`) is **PlantEx Assist** in en and cy.
 - [x] AC-04: When `copilot_inference_is_enabled()` and grounding refuses, response does **not** contain “demo is not connected”.
 - [x] AC-05: Simulated live-data refuse may still say demo, branded as PlantEx Assist demo.
-- [x] AC-10: A citation failure is worded as an unverified figure, **not** as “outside the fixed set” — the intent did match and the figures were computed.
+- [x] AC-10: A citation failure is worded as an unverified figure, **not** as a question outside the fixed set — the intent did match and the figures were computed.
 - [x] AC-11: With inference on, **every** fall-through branch (write, risk, unknown concept, navigation, catch-all) drops demo wording, not only the live-data refusal.
 - [x] AC-12: The permission-denied and no-intent cases stay indistinguishable from outside — wording keys off a deployment-wide flag, never off the caller.
+- [x] AC-13: The grounded live-data refusal makes no claim that is false on the permission-denied or module-off path — it does not assert the question was outside the fixed set, because the same string is served when it was inside it.
 - [x] AC-06: `/api/v1/copilot` path and `AI_COPILOT_*` env names are unchanged.
 - [x] AC-07: OpenAPI tag for the routes is **PlantEx Assist**.
 - [x] AC-08: No alembic revision; no test skipped/loosened to go green.
@@ -111,13 +120,22 @@ Observed locally, not inferred:
 - [x] `node scripts/i18n-check.mjs` — 4228 keys validated
 - [x] `black --check` clean on the touched Python file (it was already failing at base; this branch does not add to that)
 
+Re-observed after the refusal-copy correction and the rebase onto `main` (#1710):
+
+- [x] `pytest tests/unit/test_copilot_honesty.py tests/unit/test_copilot_grounded_inference.py` — **34 passed**
+- [x] `pytest tests/integration/test_copilot_grounded_compliance.py` — **12 passed** (the CI failure reproduced here before the fix)
+- [x] `pytest tests/unit/test_gt_openapi_list_routes.py` — **3 passed** (baseline/contract still in lockstep after the rebase)
+- [x] `black --check` clean on the three re-touched Python files
+- [ ] Full `tests/unit` and the frontend suites — not re-run locally after this correction; CI on this PR is the evidence
+
 New regression tests, each pinned to a sentence that was previously wrong:
 
-- `test_ungrounded_question_refuses_without_claiming_to_be_a_demo` — inference on, out-of-set question: asserts absence of “demo is not connected” and presence of the out-of-set copy
+- `test_ungrounded_question_refuses_without_claiming_to_be_a_demo` — inference on, out-of-set question: asserts absence of “demo is not connected”, presence of the fixed-set description and of the honest lead clause, and that it does **not** assert the question was outside the set
 - `test_ungrounded_write_request_refuses_without_demo_wording` — same for the write-refusal branch
 - `test_simulate_refusals_track_whether_the_registers_are_wired_up` — both wordings side by side, asserting the refusal itself (no figure, no invention) is identical either way
 - `test_simulate_grounded_fallbacks_never_call_themselves_a_demo` — sweeps all five reachable fall-through branches
-- `test_citation_failure_returns_honesty_refusal` — tightened: must say “could not verify”, must **not** say “outside the fixed set”
+- `test_citation_failure_returns_honesty_refusal` — tightened: must say “could not verify”, must **not** point at the fixed question set
+- `test_send_message_refuses_a_caller_without_the_permission` (pre-existing, `tests/integration/test_copilot_grounded_compliance.py`) — the guard that caught the first attempt at this rewrite serving a permission-denied caller an out-of-set claim; unchanged, and now green
 - `test_flag_off_skips_inference_path` — tightened: demo wording is *retained* where it is true
 - `copilotDisclosure.test.ts` “leaves no user-visible ‘Copilot’ wording in any mode” — sweeps every visible field of all three modes
 

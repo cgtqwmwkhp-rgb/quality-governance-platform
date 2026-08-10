@@ -76,8 +76,14 @@ def copilot_inference_is_enabled() -> bool:
 #
 #   * inference off      — no registers are read at all; the replies really are
 #                          hardcoded keyword matches, so "not connected" is true.
-#   * inference on, no   — the registers *are* wired up; the limit is the closed
-#     matching intent      question set, not the connection.
+#   * inference on, no   — the registers *are* wired up, so the limit is not the
+#     answer served        connection. It may be the closed question set, or a
+#                          permission the caller lacks, or the module being off
+#                          for the tenant: CopilotGroundingService.try_answer
+#                          collapses all three to ``ungrounded`` on purpose, so
+#                          that a caller cannot tell which one closed. One string
+#                          therefore has to serve all three, and it may not name
+#                          any of them as the cause.
 #   * inference on, the  — the question was in the set and the figures were
 #     citation check       computed, but the wording quoted something that is not
 #     failed               in them, so the answer is dropped unserved.
@@ -93,11 +99,17 @@ DEMO_LIVE_DATA_REFUSAL = (
     "risks, or reference numbers. Open the relevant module for real figures."
 )
 
-OUT_OF_SET_REFUSAL = (
-    "That is outside the fixed set of questions PlantEx Assist answers from your "
-    "registers, so I will not invent counts, percentages, named risks, or reference "
-    "numbers. Try a supported question — for example how many incidents we have, or "
-    "which actions are overdue — or open the relevant module for real figures."
+# Serves the out-of-set, no-permission and module-off cases alike, so it states the
+# inability and the no-fabrication promise without asserting a cause. "That is outside
+# the fixed set" would read well for the first case and be plainly false for the other
+# two, where the question *is* in the set — the same class of false disclaimer this
+# rewrite removes from the demo wording.
+GROUNDED_LIVE_DATA_REFUSAL = (
+    "I cannot answer from live organisation data here, and I will not invent counts, "
+    "percentages, named risks, or reference numbers instead. PlantEx Assist answers a "
+    "fixed set of questions from your registers — try one of those, for example how many "
+    "incidents we have or which actions are overdue, or open the relevant module for real "
+    "figures."
 )
 
 CITATION_REFUSAL = (
@@ -515,11 +527,12 @@ class CopilotService:
                 return CITATION_REFUSAL, None, "grounded-citation-refused"
 
         # ``ungrounded`` lands here: the intent is outside the closed set, or it is a
-        # permission-gated one the caller may not read. Both fall through to the same
-        # keyword replies, which is what keeps those two cases indistinguishable from
-        # outside (see CopilotGroundingService.try_answer). ``grounded`` only changes
-        # the wording, and it reads a deployment-wide flag rather than anything about
-        # this caller, so that indistinguishability survives.
+        # permission-gated one the caller may not read, or the module is off for the
+        # tenant. All three fall through to the same keyword replies, which is what
+        # keeps them indistinguishable from outside (see
+        # CopilotGroundingService.try_answer). ``grounded`` only changes the wording,
+        # and it reads a deployment-wide flag rather than anything about this caller,
+        # so that indistinguishability survives.
         response_content, action_data = self._simulate_ai_response(user_message, context, grounded=grounded)
         return response_content, action_data, "simulated-keyword-match"
 
@@ -535,12 +548,12 @@ class CopilotService:
         ``grounded`` says whether inference is open in this deployment, and it exists
         because the refusals below cannot be worded the same way in both cases. With
         inference off the surface really is a disconnected keyword demo and should say
-        so; with it on the registers are wired up and the limit is the closed question
-        set, so "this demo is not connected to your registers" would be a false
-        disclaimer about a surface that answers register questions two sentences later.
+        so; with it on the registers are wired up, so "this demo is not connected to
+        your registers" would be a false disclaimer about a surface that answers
+        register questions two sentences later.
         """
         message_lower = user_message.lower()
-        live_data_refusal = OUT_OF_SET_REFUSAL if grounded else DEMO_LIVE_DATA_REFUSAL
+        live_data_refusal = GROUNDED_LIVE_DATA_REFUSAL if grounded else DEMO_LIVE_DATA_REFUSAL
         write_refusal = GROUNDED_WRITE_REFUSAL if grounded else DEMO_WRITE_REFUSAL
 
         # Create incident — honest refusal, never "Shall I proceed?" + false success (PX-250).

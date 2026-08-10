@@ -63,7 +63,10 @@ def test_simulate_refusals_track_whether_the_registers_are_wired_up(service: Cop
 
     assert "demo is not connected" in demo.lower()
     assert "demo" not in grounded.lower()
-    assert "outside the fixed set" in grounded.lower()
+    assert "fixed set of questions from your registers" in grounded.lower()
+    # The grounded string also serves the no-permission and module-off cases, where the
+    # question *is* in the set, so it must not name the question as the reason.
+    assert "outside the fixed set" not in grounded.lower()
 
     # Wording is the only thing that moves: both still refuse the figure outright.
     assert "92%" not in grounded

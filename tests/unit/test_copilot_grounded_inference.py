@@ -151,12 +151,13 @@ async def test_flag_off_skips_inference_path(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ungrounded_question_refuses_without_claiming_to_be_a_demo(monkeypatch):
-    """FR-COPILOT-HONEST: with inference on, an out-of-set question is refused as
-    out of set — not as a demo that is "not connected to your registers".
+    """FR-COPILOT-HONEST: with inference on, the refusal states the closed question
+    set — not a demo that is "not connected to your registers".
 
-    The registers are wired up on this path; the limit is the closed question set.
-    Describing the surface as disconnected understates it, and a disclaimer that is
-    visibly wrong is one users learn to skip past.
+    The registers are wired up on this path, so describing the surface as
+    disconnected understates it, and a disclaimer that is visibly wrong is one users
+    learn to skip past. It stops short of blaming the question, because the identical
+    string is served when the caller lacks the permission or the module is off.
     """
     monkeypatch.setattr(settings, "ai_copilot_enabled", True)
     monkeypatch.setattr(settings, "ai_copilot_inference_enabled", True)
@@ -173,8 +174,12 @@ async def test_ungrounded_question_refuses_without_claiming_to_be_a_demo(monkeyp
     assert action["honesty"] == "not_performed"
     assert "92%" not in content
     assert "demo is not connected" not in content.lower()
-    assert "outside the fixed set" in content.lower()
+    assert "fixed set of questions from your registers" in content.lower()
+    assert "outside the fixed set" not in content.lower()
     assert "plantex assist" in content.lower()
+    # The lead clause the permission-gated path relies on too — see
+    # tests/integration/test_copilot_grounded_compliance.py.
+    assert "cannot answer from live organisation data" in content.lower()
     # The refusal still has to hold: no invented figures, and a pointer to the module.
     assert "will not invent" in content.lower()
 
@@ -231,12 +236,12 @@ async def test_citation_failure_returns_honesty_refusal(monkeypatch):
     assert model == "grounded-citation-refused"
     assert action is None
     # A citation failure means the intent *was* in the closed set and the figures were
-    # computed — the wording quoted something absent from them. Saying "outside the
-    # fixed set" or "this demo is not connected" would both misdescribe that.
+    # computed — the wording quoted something absent from them. Pointing at the fixed
+    # question set or at "this demo is not connected" would both misdescribe that.
     assert "could not verify" in content.lower()
     assert "plantex assist" in content.lower()
     assert "demo is not connected" not in content.lower()
-    assert "outside the fixed set" not in content.lower()
+    assert "fixed set" not in content.lower()
     assert "92%" not in content
 
 
