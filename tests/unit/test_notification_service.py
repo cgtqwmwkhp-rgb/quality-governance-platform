@@ -269,7 +269,7 @@ class TestEmailEnqueueDelivery:
 
         service = NotificationService(db=db)
         notification = self._notification(action_url="/compliance-schedule/3")
-        notification.message = 'Owner of <img src=x onerror=alert(1)> CSR'
+        notification.message = "Owner of <img src=x onerror=alert(1)> CSR"
 
         with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
             mock_send_email.delay = MagicMock()

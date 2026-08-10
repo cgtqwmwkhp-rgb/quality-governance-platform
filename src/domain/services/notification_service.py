@@ -51,10 +51,7 @@ def render_notification_email_html(
     """
     escaped = html.escape(message or "", quote=False)
     parts = [
-        (
-            '<div style="white-space:pre-wrap;font-family:sans-serif;'
-            f'font-size:14px;line-height:1.5">{escaped}</div>'
-        )
+        '<div style="white-space:pre-wrap;font-family:sans-serif;' f'font-size:14px;line-height:1.5">{escaped}</div>'
     ]
     absolute = absolute_href(action_url)
     if absolute:
