@@ -1,5 +1,8 @@
 /**
- * What the copilot panel is allowed to say it is, given what this deployment has on.
+ * What PlantEx Assist is allowed to say it is, given what this deployment has on.
+ *
+ * Product name: **PlantEx Assist** — the common PlantExpand name for AI surfaces.
+ * Technical identifiers remain `copilot` / `ai_copilot` (API path, feature flags, env).
  *
  * The panel used to state "Demonstration only — no AI model is involved" in every
  * environment, because the only signal it had was a build-time flag baked into a
@@ -9,7 +12,7 @@
  * in the direction of "we are only pretending" is still wrong.
  *
  * The two runtime flags come from `GET /api/v1/meta/features`, which folds the same
- * configuration and the same kill switch the copilot routes themselves read.
+ * configuration and the same kill switch the Assist routes themselves read.
  *
  * Which way the defaults lean
  * ---------------------------
@@ -68,18 +71,18 @@ export function resolveCopilotDisclosureMode({
 
 const UNAVAILABLE: CopilotDisclosure = {
   mode: 'unavailable',
-  title: 'AI Copilot',
+  title: 'PlantEx Assist',
   subtitle: 'Not enabled here',
   // The unavailable alert states this already; a second banner would only repeat it.
   banner: null,
   welcome: '',
-  inputPlaceholder: 'Copilot unavailable',
-  actionNotPerformed: 'Not performed — the copilot is not enabled here',
+  inputPlaceholder: 'PlantEx Assist unavailable',
+  actionNotPerformed: 'Not performed — PlantEx Assist is not enabled here',
 }
 
 const SIMULATED: CopilotDisclosure = {
   mode: 'simulated',
-  title: 'AI Copilot (Demo)',
+  title: 'PlantEx Assist (Demo)',
   subtitle: 'Simulated — not live data',
   banner: {
     testId: 'ai-copilot-demo-banner',
@@ -88,28 +91,28 @@ const SIMULATED: CopilotDisclosure = {
       'Replies are fixed keyword responses. Live-data questions are refused. Writes are never performed. Do not quote this surface as organisational truth.',
     tone: 'warning',
   },
-  welcome: `This is a demonstration of a planned AI assistant. It is not connected to any AI model or to your organisation's records.\n\nI will **refuse** live-data questions (compliance status, risk summaries) and will **not** claim to create incidents or actions. Concept explanations (for example CAPA or RIDDOR) are general guidance only.\n\nTry "what is CAPA" for a concept preview, or open Compliance / Risk Register for real figures.`,
+  welcome: `This is a demonstration of PlantEx Assist. It is not connected to any AI model or to your organisation's records.\n\nI will **refuse** live-data questions (compliance status, risk summaries) and will **not** claim to create incidents or actions. Concept explanations (for example CAPA or RIDDOR) are general guidance only.\n\nTry "what is CAPA" for a concept preview, or open Compliance / Risk Register for real figures.`,
   inputPlaceholder: 'Ask me anything...',
-  actionNotPerformed: 'Not performed — demo cannot write or read live registers',
+  actionNotPerformed: 'Not performed — PlantEx Assist Demo cannot write or read live registers',
 }
 
 const GROUNDED: CopilotDisclosure = {
   mode: 'grounded',
-  title: 'AI Copilot',
+  title: 'PlantEx Assist',
   subtitle: 'Live register facts — fixed question set',
   banner: {
     testId: 'ai-copilot-grounded-banner',
     lead: 'Answers come from your own register records, not from open chat.',
     // Every clause here is a property the server enforces, not a promise about
     // model behaviour: the intent set is closed, figures and reference numbers are
-    // validated against the computed facts, and the copilot has no write path.
+    // validated against the computed facts, and Assist has no write path.
     detail:
       'A fixed set of questions is answered by AI wording figures this platform computed from your registers, and every reference number and figure it quotes must appear in those facts — anything else is refused rather than guessed. Records are never created, edited or deleted.',
     tone: 'info',
   },
-  welcome: `I answer a fixed set of questions from your organisation's own registers — for example incident, near-miss and complaint counts, overdue actions, and compliance obligations.\n\nAnswers are worded by an AI model over figures this platform computed, and every reference number or figure I quote has to appear in those figures. Anything outside that set I will **refuse** rather than guess, and I **never** create, edit or delete records.\n\nTry "how many incidents do we have" or "which actions are overdue".`,
+  welcome: `I am PlantEx Assist. I answer a fixed set of questions from your organisation's own registers — for example incident, near-miss and complaint counts, overdue actions, and compliance obligations.\n\nAnswers are worded by an AI model over figures this platform computed, and every reference number or figure I quote has to appear in those figures. Anything outside that set I will **refuse** rather than guess, and I **never** create, edit or delete records.\n\nTry "how many incidents do we have" or "which actions are overdue".`,
   inputPlaceholder: 'Ask about your registers...',
-  actionNotPerformed: 'Not performed — the copilot never writes to registers',
+  actionNotPerformed: 'Not performed — PlantEx Assist never writes to registers',
 }
 
 export function copilotDisclosure(mode: CopilotDisclosureMode): CopilotDisclosure {

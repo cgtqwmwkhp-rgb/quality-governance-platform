@@ -62,6 +62,7 @@ from src.api.routes import (
     loler_inspections,
     meta,
     near_miss,
+    notification_inventory,
     notifications,
     ocr_ops,
     partner_auth,
@@ -218,7 +219,7 @@ router.include_router(
 # Planet Mark Carbon Management
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])
 # AI Copilot (Tier 2)
-router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
+router.include_router(copilot.router, prefix="/copilot", tags=["PlantEx Assist"])
 # Digital Signatures (Tier 2)
 router.include_router(signatures.router, prefix="/signatures", tags=["Digital Signatures"])
 # Multi-tenancy (Tier 1)
@@ -327,6 +328,13 @@ router.include_router(privacy.router, tags=["Privacy"])
 router.include_router(legal_holds.router, prefix="/legal-holds", tags=["Legal Holds"])
 # Push Notification Service (VAPID web-push)
 router.include_router(push_notifications.router, prefix="/notifications/push", tags=["Push Notifications"])
+# Read-only inventory of what this deployment can actually notify. Mounted apart
+# from the notifications router so the reporting surface holds no dispatch path.
+router.include_router(
+    notification_inventory.router,
+    prefix="/notifications/inventory",
+    tags=["Notifications"],
+)
 # Vehicle Checklists (PAMS Integration)
 router.include_router(
     vehicle_checklists.router,

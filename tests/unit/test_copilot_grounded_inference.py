@@ -144,10 +144,21 @@ async def test_flag_off_skips_inference_path(monkeypatch):
     assert model == "simulated-keyword-match"
     assert "cannot answer from live organisation data" in content.lower() or "not invent" in content.lower()
     assert action is None
+    # With inference off the surface really is a keyword demo, so it keeps saying so
+    # — this is the branch on which the demo wording is the true one.
+    assert "in this plantex assist demo" in content.lower()
 
 
 @pytest.mark.asyncio
-async def test_ungrounded_question_keeps_simulated_refusal(monkeypatch):
+async def test_ungrounded_question_refuses_without_claiming_to_be_a_demo(monkeypatch):
+    """FR-COPILOT-HONEST: with inference on, the refusal states the closed question
+    set — not a demo that is "not connected to your registers".
+
+    The registers are wired up on this path, so describing the surface as
+    disconnected understates it, and a disclaimer that is visibly wrong is one users
+    learn to skip past. It stops short of blaming the question, because the identical
+    string is served when the caller lacks the permission or the module is off.
+    """
     monkeypatch.setattr(settings, "ai_copilot_enabled", True)
     monkeypatch.setattr(settings, "ai_copilot_inference_enabled", True)
 
@@ -162,6 +173,36 @@ async def test_ungrounded_question_keeps_simulated_refusal(monkeypatch):
     assert action is not None
     assert action["honesty"] == "not_performed"
     assert "92%" not in content
+    assert "demo is not connected" not in content.lower()
+    assert "fixed set of questions from your registers" in content.lower()
+    assert "outside the fixed set" not in content.lower()
+    assert "plantex assist" in content.lower()
+    # The lead clause the permission-gated path relies on too — see
+    # tests/integration/test_copilot_grounded_compliance.py.
+    assert "cannot answer from live organisation data" in content.lower()
+    # The refusal still has to hold: no invented figures, and a pointer to the module.
+    assert "will not invent" in content.lower()
+
+
+@pytest.mark.asyncio
+async def test_ungrounded_write_request_refuses_without_demo_wording(monkeypatch):
+    """The write refusal carries the same disclosure, so it moves for the same reason."""
+    monkeypatch.setattr(settings, "ai_copilot_enabled", True)
+    monkeypatch.setattr(settings, "ai_copilot_inference_enabled", True)
+
+    service = CopilotService(db=SimpleNamespace())
+    content, action, model = await service._generate_response(
+        "create an incident for a slip in the yard",
+        history=[],
+        context={},
+        tenant_id=1,
+    )
+    assert model == "simulated-keyword-match"
+    assert action is not None
+    assert action["honesty"] == "not_performed"
+    assert "from this plantex assist demo" not in content.lower()
+    assert "never creates, edits or deletes records" in content.lower()
+    assert "nothing was written" in content.lower()
 
 
 @pytest.mark.asyncio
@@ -194,7 +235,13 @@ async def test_citation_failure_returns_honesty_refusal(monkeypatch):
     )
     assert model == "grounded-citation-refused"
     assert action is None
-    assert "cannot answer from live organisation data" in content.lower()
+    # A citation failure means the intent *was* in the closed set and the figures were
+    # computed — the wording quoted something absent from them. Pointing at the fixed
+    # question set or at "this demo is not connected" would both misdescribe that.
+    assert "could not verify" in content.lower()
+    assert "plantex assist" in content.lower()
+    assert "demo is not connected" not in content.lower()
+    assert "fixed set" not in content.lower()
     assert "92%" not in content
 
 

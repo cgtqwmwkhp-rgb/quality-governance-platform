@@ -57,7 +57,7 @@ import { isAIIntelligenceRouteEnabled } from '../config/aiIntelligenceRoute'
 import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubHelpers'
 import { usePreferencesStore } from '../stores/usePreferencesStore'
 
-/** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
+/** Deferred until the shell opens PlantEx Assist — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
 const GlobalSearchPalette = lazy(() => import('./search/GlobalSearchPalette'))
 /** Only ever rendered in the last two minutes of a session — keep it off the shell's critical path. */
@@ -509,13 +509,14 @@ export default function Layout({
             <Settings className="w-5 h-5" aria-hidden="true" />
           </NavLink>
 
-          {/* AI Copilot Toggle — demo only, hidden unless explicitly enabled (PX-248) */}
+          {/* PlantEx Assist toggle — hidden unless demo/surface flag enabled (PX-248) */}
           {copilotDemoEnabled && (
             <Button
               onClick={() => setCopilotOpen(!copilotOpen)}
               variant={copilotOpen ? 'default' : 'ghost'}
               size="sm"
               className={cn('gap-2', copilotOpen && 'shadow-glow')}
+              aria-label={t('nav.copilot')}
             >
               <Bot className="w-4 h-4" />
               <span className="hidden sm:inline">{t('nav.copilot')}</span>
@@ -848,7 +849,7 @@ export default function Layout({
         />
       )}
 
-      {/* AI Copilot — code-split; mount only when enabled and opened */}
+      {/* PlantEx Assist — code-split; mount only when enabled and opened */}
       {copilotDemoEnabled && copilotOpen ? (
         <Suspense fallback={null}>
           <AICopilot

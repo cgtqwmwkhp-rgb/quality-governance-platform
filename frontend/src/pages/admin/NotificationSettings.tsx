@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Mail, CalendarClock, UserPlus } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
+import { Badge } from '../../components/ui/Badge'
 import { API_BASE_URL } from '../../config/apiBase'
 import { getValidPlatformToken } from '../../utils/auth'
 
@@ -12,6 +13,49 @@ type PushReadiness = {
   private_key_present?: boolean
   library?: string
   note?: string
+}
+
+type InventoryChannel = {
+  id: string
+  label: string
+  implemented: boolean
+  transport?: string | null
+  readiness: string
+  can_send: boolean
+  status_detail?: string | null
+  note: string
+}
+
+type InventoryProducerFlag = {
+  key: string
+  enabled: boolean
+  persisted: boolean
+}
+
+type InventoryProducer = {
+  id: string
+  event: string
+  module: string
+  symbol: string
+  channels: string[]
+  trigger: string
+  schedule?: string | null
+  feature_flags: InventoryProducerFlag[]
+  status: string
+  note: string
+}
+
+type NotificationInventory = {
+  generated_at: string
+  channels: InventoryChannel[]
+  producers: InventoryProducer[]
+  summary: {
+    channels_implemented: number
+    channels_can_send: number
+    producers_total: number
+    producers_active: number
+    producers_without_caller: number
+  }
 }
 
 type FeatureFlagRow = {
@@ -57,6 +101,34 @@ export default function NotificationSettings() {
   const [csFlagsError, setCsFlagsError] = useState<string | null>(null)
   const [csFlagsLoading, setCsFlagsLoading] = useState(true)
   const [csSavingKey, setCsSavingKey] = useState<string | null>(null)
+  const [inventory, setInventory] = useState<NotificationInventory | null>(null)
+  // The failure is stored as a kind rather than as a translated sentence, so this
+  // loader does not close over `t`. A loader whose identity changes whenever the
+  // translation function is re-created re-runs on every render, which is a fetch
+  // loop rather than a fetch.
+  const [inventoryError, setInventoryError] = useState<'forbidden' | 'unavailable' | null>(null)
+  const [inventoryLoading, setInventoryLoading] = useState(true)
+
+  const loadInventory = useCallback(async () => {
+    setInventoryLoading(true)
+    setInventoryError(null)
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/notifications/inventory`, {
+        credentials: 'include',
+        headers: await authHeaders(),
+      })
+      if (res.status === 403) {
+        setInventoryError('forbidden')
+        return
+      }
+      if (!res.ok) throw new Error(`inventory HTTP ${res.status}`)
+      setInventory((await res.json()) as NotificationInventory)
+    } catch {
+      setInventoryError('unavailable')
+    } finally {
+      setInventoryLoading(false)
+    }
+  }, [])
 
   const loadCsFlags = useCallback(async () => {
     setCsFlagsLoading(true)
@@ -109,10 +181,11 @@ export default function NotificationSettings() {
     }
     void load()
     void loadCsFlags()
+    void loadInventory()
     return () => {
       cancelled = true
     }
-  }, [loadCsFlags])
+  }, [loadCsFlags, loadInventory])
 
   const toggleCsFlag = async (key: string) => {
     const current = csFlags[key] ?? true
@@ -140,6 +213,30 @@ export default function NotificationSettings() {
     }
   }
 
+  // Readiness is reported by the server; these only put the server's word into
+  // the page's language. Nothing here decides whether a channel is ready.
+  const readinessLabel = (readiness: string): string => {
+    switch (readiness) {
+      case 'ready':
+        return t('admin.notifications.inventory.readiness_ready', 'Ready')
+      case 'degraded':
+        return t('admin.notifications.inventory.readiness_degraded', 'Sends, needs attention')
+      case 'disabled':
+        return t('admin.notifications.inventory.readiness_disabled', 'Disabled by ops')
+      case 'not_implemented':
+        return t('admin.notifications.inventory.readiness_not_implemented', 'Does not exist')
+      default:
+        return t('admin.notifications.inventory.readiness_not_configured', 'Not configured')
+    }
+  }
+
+  const readinessVariant = (readiness: string): 'success' | 'warning' | 'secondary' | 'outline' => {
+    if (readiness === 'ready') return 'success'
+    if (readiness === 'degraded') return 'warning'
+    if (readiness === 'not_implemented') return 'outline'
+    return 'secondary'
+  }
+
   const pushStatusLabel =
     pushReadiness?.status === 'configured'
       ? 'VAPID ready'
@@ -159,6 +256,133 @@ export default function NotificationSettings() {
           {t('admin.notifications.subtitle', 'Configure how and when notifications are sent')}
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <h3 className="font-semibold">
+            {t('admin.notifications.inventory.title', 'What this deployment can actually notify')}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'admin.notifications.inventory.subtitle',
+              'Read-only. Channels and readiness come from server state; producers are the events that create notifications. Nothing on this panel can be switched.',
+            )}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {inventoryError && (
+            <p
+              className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2"
+              role="alert"
+              data-testid="notification-inventory-error"
+            >
+              {inventoryError === 'forbidden'
+                ? t(
+                    'admin.notifications.inventory.forbidden',
+                    'The admin:manage permission is required to read the notification inventory.',
+                  )
+                : t(
+                    'admin.notifications.inventory.error',
+                    'Could not read the notification inventory from the server.',
+                  )}
+            </p>
+          )}
+          {inventoryLoading && !inventory && (
+            <p className="text-sm text-muted-foreground">
+              {t('admin.notifications.inventory.loading', 'Reading inventory…')}
+            </p>
+          )}
+
+          {inventory && (
+            <div className="space-y-6" data-testid="notification-inventory">
+              <p className="text-sm text-muted-foreground" data-testid="notification-inventory-summary">
+                {t('admin.notifications.inventory.channels_can_send', 'Channels able to send')}:{' '}
+                <span className="font-medium text-foreground">
+                  {inventory.summary.channels_can_send}/{inventory.summary.channels_implemented}
+                </span>
+                {' · '}
+                {t('admin.notifications.inventory.producers_active', 'Events that notify someone')}:{' '}
+                <span className="font-medium text-foreground">
+                  {inventory.summary.producers_active}/{inventory.summary.producers_total}
+                </span>
+                {' · '}
+                {t('admin.notifications.inventory.producers_without_caller', 'Written but never triggered')}:{' '}
+                <span className="font-medium text-foreground">{inventory.summary.producers_without_caller}</span>
+              </p>
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('admin.notifications.inventory.channels_heading', 'Delivery channels')}
+                </h4>
+                {inventory.channels.map((channel) => (
+                  <div
+                    key={channel.id}
+                    className="py-2 border-b last:border-0"
+                    data-testid={`inventory-channel-${channel.id}`}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`font-medium ${channel.implemented ? '' : 'text-muted-foreground'}`}>
+                        {channel.label}
+                      </span>
+                      <Badge variant={readinessVariant(channel.readiness)}>{readinessLabel(channel.readiness)}</Badge>
+                      <span className="text-xs text-muted-foreground font-mono">{channel.id}</span>
+                    </div>
+                    {channel.transport && (
+                      <p className="text-xs text-muted-foreground mt-1">{channel.transport}</p>
+                    )}
+                    <p className="text-sm text-muted-foreground mt-1">{channel.status_detail || channel.note}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('admin.notifications.inventory.producers_heading', 'Events that produce notifications')}
+                </h4>
+                {inventory.producers.map((producer) => {
+                  const dead = producer.status === 'no_production_caller'
+                  return (
+                    <div
+                      key={producer.id}
+                      className={`py-2 border-b last:border-0 ${dead ? 'bg-amber-50/60 -mx-2 px-2 rounded' : ''}`}
+                      data-testid={`inventory-producer-${producer.id}`}
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{producer.event}</span>
+                        <Badge variant={dead ? 'warning' : 'success'}>
+                          {dead
+                            ? t('admin.notifications.inventory.status_no_caller', 'Notifies nobody')
+                            : t('admin.notifications.inventory.status_active', 'Active')}
+                        </Badge>
+                        {producer.channels.map((channel) => (
+                          <Badge key={channel} variant="outline">
+                            {channel}
+                          </Badge>
+                        ))}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{producer.note}</p>
+                      <p className="text-xs text-muted-foreground mt-1 font-mono">
+                        {producer.module}#{producer.symbol}
+                        {producer.schedule ? ` · ${producer.schedule}` : ''}
+                      </p>
+                      {producer.feature_flags.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {producer.feature_flags
+                            .map(
+                              (flag) =>
+                                `${flag.key}=${flag.enabled ? 'on' : 'off'}${flag.persisted ? '' : ' (default)'}`,
+                            )
+                            .join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
