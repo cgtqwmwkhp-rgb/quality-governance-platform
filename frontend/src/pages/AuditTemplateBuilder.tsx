@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
@@ -286,7 +286,7 @@ export default function AuditTemplateBuilder() {
     setSaveIssues(null)
   }
 
-  const focusQuestionFromIssue = (questionId: string) => {
+  const focusQuestionFromIssue = useCallback((questionId: string) => {
     setActiveTab('builder')
     setHighlightedQuestionId(questionId)
     if (highlightClearTimer.current) clearTimeout(highlightClearTimer.current)
@@ -303,15 +303,18 @@ export default function AuditTemplateBuilder() {
       const el = document.querySelector(`[data-question-id="${safeId}"]`)
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     })
-  }
+  }, [])
 
-  const applySaveFailure = (model: SaveIssueModel) => {
-    setSaveError(model.summary)
-    setSaveIssues(model.issues)
-    announce(model.summary, 'assertive')
-    const qid = firstIssueQuestionId(model)
-    if (qid) focusQuestionFromIssue(qid)
-  }
+  const applySaveFailure = useCallback(
+    (model: SaveIssueModel) => {
+      setSaveError(model.summary)
+      setSaveIssues(model.issues)
+      announce(model.summary, 'assertive')
+      const qid = firstIssueQuestionId(model)
+      if (qid) focusQuestionFromIssue(qid)
+    },
+    [announce, focusQuestionFromIssue],
+  )
 
   useEffect(() => {
     return () => {
@@ -380,7 +383,7 @@ export default function AuditTemplateBuilder() {
         setIsLoading(false)
       }
     })()
-  }, [templateId])
+  }, [templateId, applySaveFailure])
 
   const updateSections = (fn: (ss: Section[]) => Section[]) =>
     setTemplate((prev) => ({ ...prev, sections: fn(prev.sections) }))
