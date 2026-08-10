@@ -36,7 +36,6 @@ import {
   Package,
   ShieldAlert,
   Webhook,
-  Megaphone,
   PanelLeftClose,
   PanelLeft,
 } from 'lucide-react'
@@ -322,9 +321,9 @@ export default function Layout({
   const location = useLocation()
   const pathIsActive = (path: string) =>
     navItemIsActive(path, location.pathname, location.search)
-  const documentCampaignsNavActive = pathIsActive('/documents/campaigns')
-  const libraryNavActive =
-    (pathIsActive('/documents') && !documentCampaignsNavActive) || pathIsActive('/policies')
+  // Library shell owns Documents / Policies / Document campaigns tabs —
+  // keep the sidebar Library item active on all of those routes.
+  const libraryNavActive = pathIsActive('/documents') || pathIsActive('/policies')
   const activeHubId = hubs.find((hub) => hub.items.some((item) => pathIsActive(item.path)))?.id
   const [expandedHubs, setExpandedHubs] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -802,46 +801,6 @@ export default function Layout({
                             {t('nav.library')}
                           </span>
                           {libraryNavActive && (
-                            <div
-                              className={cn(
-                                'ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary',
-                                sidebarCollapsed && 'lg:hidden',
-                              )}
-                            />
-                          )}
-                        </Link>
-                        <Link
-                          to="/documents/campaigns"
-                          onClick={() => setSidebarOpen(false)}
-                          aria-current={documentCampaignsNavActive ? 'page' : undefined}
-                          data-testid="nav-document-campaigns"
-                          title={
-                            sidebarCollapsed
-                              ? t('nav.document_campaigns', { defaultValue: 'Document campaigns' })
-                              : undefined
-                          }
-                          className={cn(
-                            'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
-                            'transition-all duration-200 group',
-                            sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
-                            documentCampaignsNavActive
-                              ? 'bg-primary/10 text-primary border border-primary/20'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                          )}
-                        >
-                          <Megaphone
-                            className={cn(
-                              'w-5 h-5 shrink-0 transition-colors',
-                              documentCampaignsNavActive
-                                ? 'text-primary'
-                                : 'text-muted-foreground group-hover:text-foreground',
-                            )}
-                            aria-hidden="true"
-                          />
-                          <span className={cn('min-w-0 flex-1 leading-snug', sidebarCollapsed && 'lg:sr-only')}>
-                            {t('nav.document_campaigns', { defaultValue: 'Document campaigns' })}
-                          </span>
-                          {documentCampaignsNavActive && (
                             <div
                               className={cn(
                                 'ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary',
