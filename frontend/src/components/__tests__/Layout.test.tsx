@@ -156,8 +156,6 @@ describe('Layout', () => {
           '/workforce/assessments',
           '/workforce/training',
           '/workforce/engineers',
-          '/workforce/calendar',
-          '/workforce/competence-gaps',
         ],
       ],
       [
@@ -350,6 +348,29 @@ describe('Layout', () => {
 
     expect(navLink('/actions')).toBeInTheDocument()
     expect(navLink('/workflows')).not.toBeInTheDocument()
+  })
+
+  // FR-WFFORCE-CAL-01 / FR-WF-CG-01: both routes still resolve as redirects, so
+  // only the absent nav entry proves the duplicate and the orphan are gone.
+  it('does not offer the retired Workforce calendar or Competence gaps entries', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.workforce' }))
+
+    expect(navLink('/workforce/engineers')).toBeInTheDocument()
+    expect(navLink('/workforce/calendar')).not.toBeInTheDocument()
+    expect(navLink('/workforce/competence-gaps')).not.toBeInTheDocument()
+
+    // The surviving calendar is the unified one under Insights.
+    await user.click(screen.getByRole('button', { name: 'nav.insights' }))
+    expect(navLink('/calendar')).toBeInTheDocument()
   })
 
   it('points the header Settings gear to Admin Console for superusers', async () => {

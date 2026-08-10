@@ -5,7 +5,7 @@
 # P2 = Nice to have, can degrade gracefully
 
 version: "1.0"
-last_updated: "2026-08-01"
+last_updated: "2026-08-10"
 
 # ==============================================================================
 # PUBLIC ROUTES (No Authentication)
@@ -596,10 +596,10 @@ admin_routes:
     route: /workforce/calendar
     auth: jwt_admin
     criticality: P2
-    component: Calendar
-    expected_empty_state: "Calendar grid visible"
+    component: Navigate
+    expected_empty_state: null
     expected_degraded_state: null
-    description: "Workforce calendar"
+    description: "Retired duplicate → /calendar?types=training"
 
   - pageId: analytics-dashboards
     route: /analytics/dashboards
@@ -802,11 +802,11 @@ admin_routes:
   - pageId: workforce-competence-gaps
     route: /workforce/competence-gaps
     auth: jwt_admin
-    criticality: P1
-    component: CompetenceGaps
-    expected_empty_state: "Competence gaps board with no outstanding gaps"
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
     expected_degraded_state: null
-    description: "Workforce competence gap analysis"
+    description: "Retired orphan → /actions?sourceType=competence_gap"
 
   - pageId: safety-assets-analytics
     route: /safety-assets/analytics
@@ -1120,5 +1120,5 @@ admin_routes:
 summary:
   total_routes: 117
   p0_routes: 12
-  p1_routes: 61
-  p2_routes: 44
+  p1_routes: 60
+  p2_routes: 45

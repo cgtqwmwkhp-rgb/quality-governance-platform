@@ -192,6 +192,7 @@ type SourceTypeFilter =
   | 'capa_complaint'
   | 'regulatory_watch'
   | 'compliance_record'
+  | 'competence_gap'
 type SortMode = 'newest' | 'due_first'
 
 // Form state type for creating actions
@@ -1047,6 +1048,9 @@ export default function Actions() {
             <SelectItem value="capa_incident">CAPA (incident-linked)</SelectItem>
             <SelectItem value="capa_complaint">CAPA (complaint-linked)</SelectItem>
             <SelectItem value="regulatory_watch">Regulatory watch</SelectItem>
+            {/* Retired /workforce/competence-gaps redirects here. Without the option the
+                trigger would read "All Sources" while the register was still filtered. */}
+            <SelectItem value="competence_gap">Competence gaps</SelectItem>
             {/* Offered only where the module is on, for the same reason the nav
                 entry is: with the flag off no compliance record can exist, so
                 the option could only ever return an empty register. */}

@@ -108,10 +108,6 @@ export function computeRequirementsMatch(
   }
 }
 
-export function competenceGapsEngineerHref(engineerId: number): string {
-  return `/workforce/competence-gaps?engineer_id=${engineerId}`
-}
-
 type TicketFormState = {
   scheme: string
   ticket_number: string
@@ -455,13 +451,6 @@ export default function EngineerProfile() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <Link to="/workforce/engineers" className="text-muted-foreground hover:text-foreground">
           &larr; {t('workforce.engineers.title')}
-        </Link>
-        <Link
-          to={competenceGapsEngineerHref(engineer.id)}
-          className="text-sm text-primary hover:underline"
-          data-testid="engineer-competence-gaps-link"
-        >
-          {t('workforce.engineers.view_competence_gaps')}
         </Link>
       </div>
 

@@ -108,9 +108,7 @@ const WorkforceTraining = lazy(() => import('./pages/workforce/Training'))
 const WorkforceTrainingExecution = lazy(() => import('./pages/workforce/TrainingExecution'))
 const WorkforceEngineers = lazy(() => import('./pages/workforce/Engineers'))
 const WorkforceEngineerProfile = lazy(() => import('./pages/workforce/EngineerProfile'))
-const WorkforceCalendar = lazy(() => import('./pages/workforce/Calendar'))
 const WorkforceCompetencyDashboard = lazy(() => import('./pages/workforce/CompetencyDashboard'))
-const CompetenceGaps = lazy(() => import('./pages/CompetenceGaps'))
 const PortalNotFound = lazy(() => import('./pages/PortalNotFound'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
@@ -495,13 +493,12 @@ function App() {
                     </RequireRole>
                   }
                 />
+                {/* The workforce calendar duplicated /calendar with less coverage: the
+                    unified feed already loads assessment and induction runs as "training"
+                    events. Bookmarks land on that feed pre-filtered to training. */}
                 <Route
                   path="workforce/calendar"
-                  element={
-                    <RequireRole allowed={['admin', 'supervisor']}>
-                      <WorkforceCalendar />
-                    </RequireRole>
-                  }
+                  element={<Navigate to="/calendar?types=training" replace />}
                 />
                 <Route
                   path="workforce/dashboard"
@@ -511,13 +508,12 @@ function App() {
                     </RequireRole>
                   }
                 />
+                {/* Competence gaps had no home of its own: gaps are raised by the
+                    Knowledge Exchange evidence hook and only become work once they
+                    are a CAPA, so the register folds into Actions on that source. */}
                 <Route
                   path="workforce/competence-gaps"
-                  element={
-                    <RequireRole allowed={['admin', 'supervisor']}>
-                      <CompetenceGaps />
-                    </RequireRole>
-                  }
+                  element={<Navigate to="/actions?sourceType=competence_gap" replace />}
                 />
               </Route>
 
