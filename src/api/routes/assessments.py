@@ -38,7 +38,8 @@ from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecor
 from src.domain.models.user import User
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
-from src.domain.services.governance_service import GovernanceService, NotificationService
+from src.domain.services.governance_service import GovernanceService
+from src.domain.services.notification_service import NotificationService
 from src.domain.services.workforce_spine import enforce_competency_gate_on_start, resolve_reassessment_interval_days
 
 logger = logging.getLogger(__name__)
@@ -586,8 +587,17 @@ async def complete_assessment(
             )
 
     try:
-        await NotificationService.notify_assessment_complete(
-            db=db,
+        await db.flush()
+        response = _to_assessment_run_response(run)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    # Dispatch only once the run is durable: NotificationService commits and
+    # fans out to WebSocket/email/push, which must not describe a rolled-back run.
+    try:
+        await NotificationService(db).notify_assessment_complete(
             assessment_run_id=run.id,
             engineer_user_id=engineer.user_id if engineer else None,
             supervisor_id=run.supervisor_id,
@@ -596,15 +606,11 @@ async def complete_assessment(
         )
     except Exception:
         logger.exception("Failed to send assessment completion notification for run %s", run.id)
-
-    try:
-        await db.flush()
-        response = _to_assessment_run_response(run)
-        await db.commit()
-        return response
-    except Exception:
+        # Clear any half-written notification state so request teardown (which
+        # commits) cannot turn a swallowed dispatch failure into a 500.
         await db.rollback()
-        raise
+
+    return response
 
 
 @router.post(

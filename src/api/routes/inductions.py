@@ -37,7 +37,8 @@ from src.domain.models.induction import (
 from src.domain.models.user import User
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
-from src.domain.services.governance_service import GovernanceService, NotificationService
+from src.domain.services.governance_service import GovernanceService
+from src.domain.services.notification_service import NotificationService
 from src.domain.services.workforce_spine import enforce_competency_gate_on_start, resolve_reassessment_interval_days
 
 logger = logging.getLogger(__name__)
@@ -491,21 +492,31 @@ async def complete_induction(
             tenant_id=run.tenant_id,
         )
 
-    try:
-        await NotificationService.notify_induction_complete(
-            db=db,
-            induction_run_id=run.id,
-            engineer_user_id=engineer.user_id if engineer else None,
-            supervisor_id=run.supervisor_id,
-            not_yet_competent_count=score_result.not_yet_competent_count,
-            tenant_id=run.tenant_id,
-        )
-    except Exception:
-        logger.exception("Failed to send induction completion notification for run %s", run.id)
+    notification_args = {
+        "induction_run_id": run.id,
+        "engineer_user_id": engineer.user_id if engineer else None,
+        "supervisor_id": run.supervisor_id,
+        "not_yet_competent_count": score_result.not_yet_competent_count,
+        "tenant_id": run.tenant_id,
+    }
 
     await db.commit()
     await db.refresh(run)
-    return InductionRunResponse.model_validate(run)
+    response = InductionRunResponse.model_validate(run)
+
+    # Dispatch only once the run is durable: NotificationService commits and
+    # fans out to WebSocket/email/push, which must not describe a rolled-back run.
+    try:
+        await NotificationService(db).notify_induction_complete(**notification_args)
+    except Exception:
+        logger.exception(
+            "Failed to send induction completion notification for run %s", notification_args["induction_run_id"]
+        )
+        # Clear any half-written notification state so request teardown (which
+        # commits) cannot turn a swallowed dispatch failure into a 500.
+        await db.rollback()
+
+    return response
 
 
 @router.post(

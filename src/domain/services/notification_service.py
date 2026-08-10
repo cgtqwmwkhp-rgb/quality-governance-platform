@@ -28,7 +28,7 @@ from src.domain.models.notification import (
     NotificationPriority,
     NotificationType,
 )
-from src.domain.services.href_registry import absolute_href
+from src.domain.services.href_registry import absolute_href, assessment_run_href, induction_run_href
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,7 @@ class NotificationService:
         sender_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
         channels: Optional[List[NotificationChannel]] = None,
+        tenant_id: Optional[int] = None,
     ) -> Notification:
         """
         Create and deliver a notification to a user.
@@ -102,12 +103,14 @@ class NotificationService:
             sender_id: User who triggered the notification
             metadata: Additional data
             channels: Specific channels to use (overrides preferences)
+            tenant_id: Tenant scope for the notification row
 
         Returns:
             Created Notification object
         """
         # Create notification record
         notification = Notification(
+            tenant_id=tenant_id,
             user_id=user_id,
             type=notification_type,
             priority=priority,
@@ -468,6 +471,154 @@ class NotificationService:
                 "to_status": to_status,
             },
             channels=[NotificationChannel.IN_APP],
+        )
+
+    # ==================== Workforce Governance Dispatchers ====================
+    #
+    # Engineer-directed notifications deliberately carry no ``action_url``: every
+    # ``/workforce/**`` SPA route is gated by ``RequireRole(['admin','supervisor'])``,
+    # so a deep link would silently bounce an engineer back to ``/dashboard``.
+
+    ASSESSMENT_OUTCOME_MESSAGES = {
+        "pass": "Your competency assessment has been marked as PASS.",
+        "fail": "Your competency assessment has been marked as FAIL. CAPA actions will be generated.",
+        "conditional": "Your competency assessment has been marked as CONDITIONAL. Follow-up required.",
+    }
+
+    async def notify_assessment_complete(
+        self,
+        assessment_run_id: str,
+        engineer_user_id: Optional[int],
+        supervisor_id: int,
+        outcome: str,
+        tenant_id: Optional[int] = None,
+    ) -> List[Notification]:
+        """Notify the engineer and supervisor that a competency assessment completed."""
+        metadata = {"notification_type": "assessment_complete", "outcome": outcome}
+        created: List[Notification] = []
+
+        if engineer_user_id is not None:
+            created.append(
+                await self.create_notification(
+                    user_id=engineer_user_id,
+                    notification_type=NotificationType.AUDIT_COMPLETED,
+                    title="Assessment Complete",
+                    message=self.ASSESSMENT_OUTCOME_MESSAGES.get(
+                        outcome, f"Assessment completed with outcome: {outcome}"
+                    ),
+                    priority=NotificationPriority.MEDIUM,
+                    entity_type="assessment",
+                    entity_id=assessment_run_id,
+                    metadata=dict(metadata),
+                    tenant_id=tenant_id,
+                )
+            )
+
+        created.append(
+            await self.create_notification(
+                user_id=supervisor_id,
+                notification_type=NotificationType.AUDIT_COMPLETED,
+                title="Assessment Submitted",
+                message=f"Assessment {assessment_run_id} completed with outcome: {outcome}",
+                priority=NotificationPriority.MEDIUM,
+                entity_type="assessment",
+                entity_id=assessment_run_id,
+                action_url=assessment_run_href(assessment_run_id),
+                metadata=dict(metadata),
+                tenant_id=tenant_id,
+            )
+        )
+
+        logger.info("Notifications created for assessment %s", assessment_run_id)
+        return created
+
+    async def notify_induction_complete(
+        self,
+        induction_run_id: str,
+        engineer_user_id: Optional[int],
+        supervisor_id: int,
+        not_yet_competent_count: int,
+        tenant_id: Optional[int] = None,
+    ) -> List[Notification]:
+        """Notify the engineer and supervisor that an induction completed."""
+        metadata = {
+            "notification_type": "induction_complete",
+            "not_yet_competent_count": not_yet_competent_count,
+        }
+        created: List[Notification] = []
+
+        if engineer_user_id is not None:
+            if not_yet_competent_count > 0:
+                engineer_message = (
+                    f"Your induction has been completed with {not_yet_competent_count} item(s) marked as "
+                    "'Not Yet Competent'. CAPA actions will be generated."
+                )
+            else:
+                engineer_message = "Congratulations! Your induction has been completed successfully."
+            created.append(
+                await self.create_notification(
+                    user_id=engineer_user_id,
+                    notification_type=NotificationType.COMPLIANCE_ALERT,
+                    title="Induction Complete",
+                    message=engineer_message,
+                    priority=NotificationPriority.MEDIUM,
+                    entity_type="induction",
+                    entity_id=induction_run_id,
+                    metadata=dict(metadata),
+                    tenant_id=tenant_id,
+                )
+            )
+
+        if not_yet_competent_count > 0:
+            supervisor_message = (
+                f"Induction {induction_run_id} completed with {not_yet_competent_count} item(s) marked as "
+                "'Not Yet Competent'."
+            )
+        else:
+            supervisor_message = f"Induction {induction_run_id} completed successfully."
+
+        created.append(
+            await self.create_notification(
+                user_id=supervisor_id,
+                notification_type=NotificationType.COMPLIANCE_ALERT,
+                title="Induction Submitted",
+                message=supervisor_message,
+                priority=NotificationPriority.MEDIUM,
+                entity_type="induction",
+                entity_id=induction_run_id,
+                action_url=induction_run_href(induction_run_id),
+                metadata=dict(metadata),
+                tenant_id=tenant_id,
+            )
+        )
+
+        logger.info("Notification created for induction %s", induction_run_id)
+        return created
+
+    async def notify_competency_expiry(
+        self,
+        engineer_user_id: Optional[int],
+        asset_type_id: int,
+        days_until_expiry: int,
+        tenant_id: Optional[int] = None,
+    ) -> Optional[Notification]:
+        """Warn an engineer that a competency is about to expire."""
+        if engineer_user_id is None:
+            return None
+
+        return await self.create_notification(
+            user_id=engineer_user_id,
+            notification_type=NotificationType.CERTIFICATE_EXPIRING,
+            title="Competency Expiring Soon",
+            message=(
+                f"Your competency for asset type {asset_type_id} expires in "
+                f"{days_until_expiry} days. Please schedule a reassessment."
+            ),
+            priority=NotificationPriority.MEDIUM,
+            entity_type="competency",
+            entity_id=str(asset_type_id),
+            metadata={"notification_type": "competency_expiry_warning"},
+            tenant_id=tenant_id,
         )
 
     # ==================== Notification Management ====================
