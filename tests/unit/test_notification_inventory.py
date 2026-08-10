@@ -453,6 +453,28 @@ def test_scheduled_producers_name_a_real_celery_beat_entry() -> None:
     assert not problems, "\n".join(problems)
 
 
+def test_the_capa_closure_note_still_matches_the_category_map() -> None:
+    """Pin the two mapping facts the CAPA closure note asserts.
+
+    That note is specific about which of the producer's two outcomes a category
+    toggle can hold back, and it is specific because the first version of it
+    claimed both were gated when only one is. The claim depends on ADMIN-03's
+    ``CATEGORY_BY_TYPE``, which lives in another module and can change without
+    this file being opened, so the two facts are asserted rather than trusted.
+    """
+    from src.domain.models.notification import NotificationType
+    from src.domain.services.notification_preferences import CATEGORY_AUDIT_NOTIFICATIONS, CATEGORY_BY_TYPE
+
+    assert CATEGORY_BY_TYPE.get(NotificationType.AUDIT_FINDING) == CATEGORY_AUDIT_NOTIFICATIONS, (
+        "The pending-verification outcome is declared gated by audit_notifications. "
+        "That mapping has changed, so audit_finding_capa_closure's note is now wrong."
+    )
+    assert NotificationType.ACTION_COMPLETED not in CATEGORY_BY_TYPE, (
+        "The closure outcome is declared ungated because no category owns "
+        "ACTION_COMPLETED. A category now owns it, so the note is now wrong."
+    )
+
+
 def test_every_producer_trigger_is_known() -> None:
     for producer in PRODUCERS:
         assert producer.trigger in (TRIGGER_REQUEST, TRIGGER_SCHEDULE), f"{producer.id} has trigger {producer.trigger}"
