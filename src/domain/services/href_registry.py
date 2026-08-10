@@ -104,7 +104,33 @@ def registry_snapshot() -> Mapping[str, Callable[[int], str]]:
     return dict(_ENTITY_PATHS)
 
 
+def absolute_href(path: str | None) -> str | None:
+    """Turn an SPA-relative ``action_url`` into an absolute frontend URL for email.
+
+    Security: only ``http(s)://`` absolutes and paths starting with ``/`` are
+    accepted. ``javascript:`` / ``data:`` / bare hosts are rejected so a
+    DB-sourced ``action_url`` cannot become an unsafe ``<a href>``.
+    """
+    if path is None:
+        return None
+    raw = str(path).strip()
+    if not raw:
+        return None
+    lowered = raw.lower()
+    if lowered.startswith("https://") or lowered.startswith("http://"):
+        return raw
+    if not raw.startswith("/"):
+        return None
+    from src.core.config import settings
+
+    base = (getattr(settings, "frontend_url", None) or "").strip().rstrip("/")
+    if not base:
+        return None
+    return f"{base}{raw}"
+
+
 __all__ = [
+    "absolute_href",
     "audit_finding_href",
     "case_type_href",
     "clause_evidence_href",

@@ -285,11 +285,17 @@ async def _maybe_queue_due_reminder_email(
             results["emails_skipped"] += 1
             return
 
+        from src.domain.services.notification_service import render_notification_email_html
+
         pending_emails.append(
             {
                 "recipient": recipient,
                 "title": kwargs["title"],
-                "body": f"{kwargs['message']}\n\nOpen: {kwargs['action_url']}",
+                "body": render_notification_email_html(
+                    kwargs["message"],
+                    kwargs.get("action_url"),
+                    cta_label="Open the requirement",
+                ),
             }
         )
     except Exception:
@@ -321,7 +327,7 @@ def _flush_pending_due_reminder_emails(
 
     for item in pending_emails:
         try:
-            send_email.delay(item["recipient"], item["title"], item["body"], False)
+            send_email.delay(item["recipient"], item["title"], item["body"], True)
             results["emails_enqueued"] += 1
         except Exception:
             results["emails_skipped"] += 1
