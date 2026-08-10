@@ -28,7 +28,6 @@ LAYOUT_NAV_ROUTES = (
     "/admin/hseq-inbox",
     "/admin/notifications",
     "/admin/partner-webhooks",
-    "/workforce/competence-gaps",
 )
 
 # AdminDashboard tiles / hub deep-links that are not always in Layout nav but are
@@ -61,6 +60,10 @@ NAVIGATE_ALIAS_ROUTES = (
     "/exceptions",
     "/admin/campaign-compliance",
     "/admin/hsec-inbox",
+    # FR-WFFORCE-CAL-01 / FR-WF-CG-01: Layout no longer links either, but both stay
+    # mounted as redirects so existing bookmarks reach the live surface.
+    "/workforce/calendar",
+    "/workforce/competence-gaps",
 )
 
 # C-61 residual after #1484/#1486 — detail/execute/builder App.tsx routes under

@@ -135,7 +135,6 @@ vi.mock('../pages/workforce/TrainingExecution', () => ({
 }))
 vi.mock('../pages/workforce/Engineers', () => ({ default: () => <div>Engineers</div> }))
 vi.mock('../pages/workforce/EngineerProfile', () => ({ default: () => <div>EngineerProfile</div> }))
-vi.mock('../pages/workforce/Calendar', () => ({ default: () => <div>Calendar</div> }))
 vi.mock('../pages/workforce/CompetencyDashboard', () => ({
   default: () => <div>CompetencyDashboard</div>,
 }))
@@ -293,6 +292,39 @@ describe('App', () => {
 
     expect(window.location.pathname).toBe('/actions')
     expect(window.location.search).toBe('?view=mine')
+    expect(screen.getByText('Actions')).toBeInTheDocument()
+  })
+
+  // FR-WFFORCE-CAL-01: the workforce grid duplicated /calendar, which already
+  // carries assessment and induction runs as training events.
+  it('sends a bookmarked /workforce/calendar to the unified calendar feed', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/workforce/calendar')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(window.location.pathname).toBe('/calendar')
+    expect(window.location.search).toBe('?types=training')
+    expect(screen.getByText('CalendarView')).toBeInTheDocument()
+  })
+
+  // FR-WF-CG-01: the competence gap board is folded into Actions on that source.
+  it('sends a bookmarked /workforce/competence-gaps to the Actions register', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/workforce/competence-gaps')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(window.location.pathname).toBe('/actions')
+    expect(window.location.search).toBe('?sourceType=competence_gap')
     expect(screen.getByText('Actions')).toBeInTheDocument()
   })
 

@@ -471,7 +471,6 @@ async def confirm_evidence_link(
     )
     # Minimal Assessor → Workforce hook: competence_gap / nonconformity / gap → from-signal.
     competence_gap_id = None
-    competence_gap_href = None
     try:
         from src.domain.services.competence_gap_service import competence_gap_service
 
@@ -484,14 +483,14 @@ async def confirm_evidence_link(
         )
         if gap is not None:
             competence_gap_id = gap.id
-            competence_gap_href = f"/workforce/competence-gaps?id={gap.id}"
     except Exception:
         logger.exception("competence gap from-signal failed for evidence link %s", link_id)
     await db.commit()
     payload: dict[str, Any] = {"status": "confirmed", "link_id": link_id}
     if competence_gap_id is not None:
+        # No per-gap page any more: the gap id is the handle, and the work becomes
+        # visible in Actions once the gap is escalated to a CAPA.
         payload["competence_gap_id"] = competence_gap_id
-        payload["competence_gap_href"] = competence_gap_href
     return payload
 
 

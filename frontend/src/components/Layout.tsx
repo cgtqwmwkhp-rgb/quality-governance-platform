@@ -34,7 +34,6 @@ import {
   FileText,
   Download,
   Package,
-  ShieldAlert,
   Webhook,
   PanelLeftClose,
   PanelLeft,
@@ -165,12 +164,6 @@ export default function Layout({
                 label: t('nav.training'),
               },
               { path: '/workforce/engineers', icon: Users, label: t('nav.engineers') },
-              { path: '/workforce/calendar', icon: Calendar, label: t('nav.calendar') },
-              {
-                path: '/workforce/competence-gaps',
-                icon: ShieldAlert,
-                label: t('nav.competence_gaps'),
-              },
             ],
           },
         ]
