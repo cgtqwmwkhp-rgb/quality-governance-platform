@@ -262,10 +262,11 @@ PRODUCERS: tuple[ProducerDeclaration, ...] = (
         referenced=True,
         note=(
             "Status notifications are in-app only by construction: create_status passes "
-            "channels=[IN_APP] rather than letting the recipient's channel toggles widen it. Since "
-            "FR-NOTIF-ADMIN-03 an explicitly requested channel is still narrowed by category "
-            "preferences, so asking for in-app is not the same as guaranteeing the websocket push — "
-            "though the row is written either way."
+            "channels=[IN_APP] rather than letting the recipient's channel toggles widen it. The two "
+            "outcomes gate differently. Pending verification sends AUDIT_FINDING, which "
+            "FR-NOTIF-ADMIN-03 maps to audit_notifications, so that toggle can hold the websocket "
+            "push back. Closure sends ACTION_COMPLETED at MEDIUM priority, and no category owns that "
+            "type, so no toggle can suppress it. The row is written either way."
         ),
     ),
     ProducerDeclaration(
