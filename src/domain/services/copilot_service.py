@@ -294,7 +294,7 @@ Current context: {context}
 
 class CopilotService:
     """
-    AI Copilot conversation service.
+    PlantEx Assist conversation service.
     """
 
     def __init__(self, db: AsyncSession):
@@ -664,9 +664,7 @@ class CopilotService:
             "live-data questions and writes. I will not invent register data."
         )
         return (
-            f'I understand you\'re asking about: "{user_message}"\n\n'
-            f"{scope}\n\n"
-            f"What would you like to do?",
+            f'I understand you\'re asking about: "{user_message}"\n\n{scope}\n\nWhat would you like to do?',
             None,
         )
 
