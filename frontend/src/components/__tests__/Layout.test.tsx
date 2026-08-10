@@ -206,7 +206,7 @@ describe('Layout', () => {
     }
   })
 
-  it('exposes Library and Document campaigns sidebar entries', async () => {
+  it('exposes Library sidebar entry without a duplicate Document campaigns item', async () => {
     const Layout = (await import('../Layout')).default
 
     render(
@@ -219,16 +219,24 @@ describe('Layout', () => {
     expect(libraryLink).toBeInTheDocument()
     expect(libraryLink).toHaveTextContent('nav.library')
     expect(libraryLink).toHaveAttribute('href', '/documents')
-    expect(navLink('/documents/campaigns')).toBeInTheDocument()
+    // Document campaigns lives under LibraryShell tabs, not the vertical menu.
+    expect(navLink('/documents/campaigns')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('nav-document-campaigns')).not.toBeInTheDocument()
     expect(navLink('/policies')).not.toBeInTheDocument()
     expect(screen.queryByText('nav.documents')).not.toBeInTheDocument()
     expect(screen.queryByText('nav.policies')).not.toBeInTheDocument()
   })
 
-  it('marks Library active on /documents and /policies routes', async () => {
+  it('marks Library active on Library shell routes including campaigns', async () => {
     const Layout = (await import('../Layout')).default
 
-    for (const path of ['/documents', '/policies', '/documents/42', '/policies/7']) {
+    for (const path of [
+      '/documents',
+      '/policies',
+      '/documents/42',
+      '/policies/7',
+      '/documents/campaigns',
+    ]) {
       cleanup()
 
       render(
@@ -241,23 +249,8 @@ describe('Layout', () => {
         'aria-current',
         'page',
       )
+      expect(navLink('/documents/campaigns')).not.toBeInTheDocument()
     }
-  })
-
-  it('marks Document campaigns active on /documents/campaigns without Library', async () => {
-    const Layout = (await import('../Layout')).default
-
-    render(
-      <MemoryRouter initialEntries={['/documents/campaigns']}>
-        <Layout onLogout={onLogout} />
-      </MemoryRouter>,
-    )
-
-    expect(navLink('/documents/campaigns')).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'nav.library' })).not.toHaveAttribute(
-      'aria-current',
-      'page',
-    )
   })
 
   // docs/ops/BUTTON_REGISTRY.yml targets these hooks by name for the UX coverage
