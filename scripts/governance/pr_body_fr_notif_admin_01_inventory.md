@@ -245,14 +245,15 @@ alert, and those two alerts still have no caller to be muted.
 
 Run locally in `.worktrees/notif-admin-01-inventory` with
 `/Users/davidharris/quality-governance-platform/.venv/bin/python` (3.11.15). The
-bulk of the evidence below was gathered on `80d88bcc5`; everything was then
-**re-verified on the current base `1c9d1bc00`** after #1710 ADMIN-03 merged and
-after the registry corrections in §3 — see the re-verification entry at the end of
-this list.
+evidence below was gathered on `80d88bcc5` and then **re-run on the current base
+`1c9d1bc00`** after #1710 ADMIN-03 merged and after the registry corrections in
+§3. Where a figure is stated for one base specifically, the base is named.
 
-- [x] **Full backend unit suite** `pytest tests/unit -q` → **6,565 passed, 0
-  failed, 11 skipped** in 142s. The 11 skips are pre-existing and unrelated; they
-  skip identically on `origin/main`.
+- [x] **Full backend unit suite** on the current base `1c9d1bc00`,
+  `pytest tests/unit -q` → **6,625 passed, 0 failed, 11 skipped** in 224s. The 11
+  skips are pre-existing and unrelated; they skip identically on `origin/main`,
+  where the same suite is **6,504 passed, 0 failed, 11 skipped** — run as the
+  control described below.
 - [x] `pytest tests/unit/test_notification_inventory.py
   tests/unit/test_notification_inventory_route.py
   tests/unit/test_route_census_classification.py -q` → **78 passed, none
@@ -262,9 +263,9 @@ this list.
   (3 before this PR, +9 here). `tsc --noEmit` clean; `eslint` on both touched
   files clean.
 - [x] `mypy src/ --config-file pyproject.toml` → **Success: no issues found in
-  605 source files**.
-- [x] `black --check src/ tests/` → 1,415 files unchanged; `isort --check-only` →
-  clean; `flake8 src/ tests/` → clean.
+  606 source files**.
+- [x] `black --check src/ tests/` → 1,417 files unchanged; `isort --check-only` →
+  clean; `flake8 src/ tests/` → clean. `scripts/validate_type_ignores.py` → 216/216.
 - [x] `scripts/check_import_boundaries.py` → **OK: All import boundaries
   respected** (this is why readiness interpretation is pure and the
   `src.infrastructure` helpers are consulted by the route, not the domain module).
@@ -335,6 +336,23 @@ that the gate is enforced and the tests detect its removal, not evidence of
 non-determinism in the census walker or the integration auth override. With the
 tree clean the file is green, and the negative control is recorded above as
 intended rather than presented as a mystery.
+
+**A second red, also explained — and a warning for anyone re-running this.** One
+full-suite run in this worktree reported
+`test_page_registry_nav_routes.py::test_layout_nav_routes_registered_as_staff_p1`
+failed, 6,564 passed. That test is unrelated to this PR: it reads
+`docs/ops/PAGE_REGISTRY.yml`, a file this branch does not modify and which nothing
+in the repository writes. The cause was mechanical — the run overlapped a
+`git commit` and `git rebase` in the same worktree, so the rebase rewrote
+working-tree files, including that registry, while the test was reading them. It
+resolves the path **relative to the process CWD** and re-reads it on every call,
+so a tree changing underneath it is enough. Controls: the same test passes in
+isolation, passes alongside the three new test files, the full suite is green on
+this base (6,625) with the tree quiescent, and the full suite on `origin/main`
+itself is green (6,504). No test was touched. Recorded because it is a real
+pre-existing fragility in that governance test — a repo-relative read with no
+`Path(__file__)` anchor — worth its own fix, and because "run the suite while
+rebasing" is a mistake worth naming rather than hiding.
 
 **Not verified:** no browser was driven; the frontend evidence is jsdom only. No
 staging or production run. The integration tests use the suite's DB-free
