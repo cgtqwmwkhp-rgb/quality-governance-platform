@@ -159,9 +159,11 @@ CHANNELS: tuple[ChannelDeclaration, ...] = (
         transport="notifications table row, pushed over the /realtime websocket",
         readiness_source="none",
         note=(
-            "Always attempted, and needs no configuration: the row is persisted whether or not the "
+            "Needs no configuration, and the row is written regardless of the channel decision, so "
+            "an in-app notification is never lost, whether or not the "
             "recipient is connected. The websocket only decides whether they see it without "
-            "reloading, so an absent connection delays delivery rather than losing it."
+            "reloading, and since FR-NOTIF-ADMIN-03 that push is subject to the recipient's category "
+            "preferences. Quiet hours do not hold it back: it is passive."
         ),
     ),
     ChannelDeclaration(
@@ -172,7 +174,9 @@ CHANNELS: tuple[ChannelDeclaration, ...] = (
         note=(
             "Enqueued to the Celery notifications path, so a send needs a running worker as well as "
             "SMTP credentials. Without credentials EmailService reports itself disabled and the task "
-            "returns skipped rather than pretending to have sent."
+            "returns skipped rather than pretending to have sent. Subject to the recipient's category "
+            "preferences; deliberately not held back by quiet hours, since no digest queue exists to "
+            "defer it to."
         ),
     ),
     ChannelDeclaration(
@@ -182,8 +186,10 @@ CHANNELS: tuple[ChannelDeclaration, ...] = (
         readiness_source="twilio",
         note=(
             "Only ever selected for critical and high priority notifications, and only when the "
-            "recipient has a phone number on their NotificationPreference row. Both conditions are "
-            "per recipient, so a configured channel is still not a guaranteed send."
+            "recipient has a phone number on their NotificationPreference row. Since "
+            "FR-NOTIF-ADMIN-03 it is also held back during the recipient's quiet hours unless the "
+            "notification is critical. Every condition is per recipient, so a configured channel is "
+            "still not a guaranteed send."
         ),
     ),
     ChannelDeclaration(
@@ -192,9 +198,10 @@ CHANNELS: tuple[ChannelDeclaration, ...] = (
         transport="Celery send_push_notification task, then pywebpush with VAPID keys",
         readiness_source="vapid",
         note=(
-            "Needs a VAPID key pair and at least one browser subscription for the recipient. With no "
-            "subscription the task has nowhere to send and skips, which is indistinguishable from a "
-            "healthy send in the channel's own readiness."
+            "Needs a VAPID key pair and at least one browser subscription for the recipient, and "
+            "since FR-NOTIF-ADMIN-03 is held back during quiet hours unless the notification is "
+            "critical. With no subscription the task has nowhere to send and skips, which is "
+            "indistinguishable from a healthy send in the channel's own readiness."
         ),
     ),
 )
@@ -255,7 +262,10 @@ PRODUCERS: tuple[ProducerDeclaration, ...] = (
         referenced=True,
         note=(
             "Status notifications are in-app only by construction: create_status passes "
-            "channels=[IN_APP] rather than resolving recipient preferences."
+            "channels=[IN_APP] rather than letting the recipient's channel toggles widen it. Since "
+            "FR-NOTIF-ADMIN-03 an explicitly requested channel is still narrowed by category "
+            "preferences, so asking for in-app is not the same as guaranteeing the websocket push — "
+            "though the row is written either way."
         ),
     ),
     ProducerDeclaration(
@@ -418,7 +428,11 @@ PRODUCERS: tuple[ProducerDeclaration, ...] = (
         beat_task=None,
         feature_flags=(),
         referenced=True,
-        note="Writes the notification row and sends campaign mail through EmailService directly, not through NotificationService.",
+        note=(
+            "Writes the notification row and sends campaign mail through EmailService directly, not "
+            "through NotificationService — so the FR-NOTIF-ADMIN-03 category-preference and "
+            "quiet-hours gates do not apply to this mail."
+        ),
     ),
     ProducerDeclaration(
         id="document_campaign_reminder",

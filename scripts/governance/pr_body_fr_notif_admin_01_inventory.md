@@ -1,9 +1,14 @@
 # Change Ledger (CL-FR-NOTIF-ADMIN-01)
 
-> Base: `origin/main` @ `80d88bcc5` (#1709 FR-WFFORCE-CAL-01 / FR-WF-CG-01).
+> Base: `origin/main` @ `1c9d1bc00` (#1710 FR-NOTIF-ADMIN-03, preference and
+> quiet-hours enforcement on the dispatcher).
 > A new read-only surface and the registry behind it. **No alembic revision, no
-> column, no dispatcher edit.** Deliberately disjoint from #1710 ADMIN-03, which
-> is still open and owns the delivery path.
+> column, no dispatcher edit.**
+>
+> **ADMIN-03 merged while this branch was in flight.** This branch is rebased onto
+> it and re-verified, and because ADMIN-03 changed what is true of the delivery
+> path, five claims in the registry were corrected rather than left to rot — see
+> §3 "Kept honest against ADMIN-03". The two PRs still share zero source files.
 
 ## 1) Summary
 
@@ -36,8 +41,8 @@
 - **Out of scope / deliberately not done:**
   - **No dispatcher edit.** `notification_service.py`,
     `routes/notifications.py` and `routes/push_notifications.py` are untouched —
-    those are #1710 ADMIN-03's files and it is still open. See the anti-conflict
-    checklist.
+    those are the files #1710 ADMIN-03 changed, and this PR reports the delivery
+    path without editing it. See the anti-conflict checklist.
   - **No alembic revision, no column, no table.** Nothing here persists.
   - **The four dead producers are not wired up.** Giving `send_sos_alert` a
     caller is a safety-behaviour change that deserves its own PR and its own
@@ -83,7 +88,7 @@
 - **NEW `src/api/routes/notification_inventory.py` (132 lines):** one `GET`.
   Mounted at `/notifications/inventory` from its own router rather than inside
   `routes/notifications.py`, so the reporting surface cannot acquire a dispatch
-  side effect and so this lane does not edit a file ADMIN-03 owns.
+  side effect and so this lane does not edit a file ADMIN-03 changed.
   - Gated on `require_permission("admin:manage")` — an existing token, so the
     permission catalogue gains no vocabulary and the route census records no new
     debt. A superuser gate would have pushed `Posture.SUPERUSER` past the ceiling
@@ -145,9 +150,32 @@
   the namespace** — the same is already true of the `preferences`,
   `unread-count` and `mentions` literals — and is not introduced here. It is not
   fixed in this PR because the fix is a re-ordering inside `notifications.py`,
-  which is the file #1710 is concurrently changing. What is asserted instead is
-  that the fall-through is inert: `notification_id` is typed `int`, so the path
-  never resolves to a row, and the response is 403 or 422. **Follow-up owed.**
+  which is one of the files #1710 changed and which this lane undertook not to
+  touch. What is asserted instead is that the fall-through is inert:
+  `notification_id` is typed `int`, so the path never resolves to a row, and the
+  response is 403 or 422. **Follow-up owed.**
+
+### Kept honest against ADMIN-03
+
+ADMIN-03 merged into `main` while this branch was open, and it changed what is
+true of the delivery path this registry describes. An inventory that shipped
+stale on the very base it merges onto would be the defect it exists to prevent,
+so the registry was re-read against the merged dispatcher and **five claims were
+corrected**. Only `src/domain/notifications/inventory.py` changed; no dispatcher
+file was touched.
+
+| Claim | Was | Now |
+| --- | --- | --- |
+| `in_app` channel | "Always attempted, and needs no configuration" | The row is written unconditionally *before* any channel decision, so nothing is lost; the websocket push is now subject to category preferences. Quiet hours do not hold it back — it is passive |
+| `email` channel | SMTP + worker only | Adds: subject to category preferences, and deliberately **not** held back by quiet hours, because no digest queue exists to defer it to |
+| `sms` channel | Critical/high priority + a phone number on the preference row | Adds: held back during the recipient's quiet hours unless the notification is critical |
+| `push` channel | VAPID keys + a browser subscription | Adds: held back during quiet hours unless critical |
+| `audit_finding_capa_closure` producer | "passes `channels=[IN_APP]` **rather than resolving recipient preferences**" — now false | An explicitly requested channel is still narrowed by category preferences, so asking for in-app does not guarantee the websocket push, though the row is written either way |
+| `document_campaign_assignment` producer | Sends via `EmailService` directly | Adds the consequence: the ADMIN-03 category-preference and quiet-hours gates therefore **do not apply** to campaign mail |
+
+The critical-priority bypass is what makes the SOS and RIDDOR entries worse, not
+better: ADMIN-03 correctly refuses to let a preference toggle mute a life-safety
+alert, and those two alerts still have no caller to be muted.
 - **The report can be wrong in one direction, and the tests are what stop it.**
   A declaration is a human artefact; a producer added tomorrow could go
   undeclared. That is precisely what
@@ -209,14 +237,18 @@
   `alembic/` is empty.
 - [x] AC-14: No dispatcher file edited — no `notification_service.py`, no
   `routes/notifications.py`, no `routes/push_notifications.py` — so no conflict
-  with open PR #1710.
+  with #1710, which changed all three.
 - [x] AC-15: No existing test was skipped, loosened, renamed or deleted.
 - [x] AC-16: Change Ledger body present for the ledger gate / gate checklist.
 
 ## 5) Testing Evidence
 
-Run locally in `.worktrees/notif-admin-01-inventory` on `80d88bcc5` with
-`/Users/davidharris/quality-governance-platform/.venv/bin/python` (3.11.15).
+Run locally in `.worktrees/notif-admin-01-inventory` with
+`/Users/davidharris/quality-governance-platform/.venv/bin/python` (3.11.15). The
+bulk of the evidence below was gathered on `80d88bcc5`; everything was then
+**re-verified on the current base `1c9d1bc00`** after #1710 ADMIN-03 merged and
+after the registry corrections in §3 — see the re-verification entry at the end of
+this list.
 
 - [x] **Full backend unit suite** `pytest tests/unit -q` → **6,565 passed, 0
   failed, 11 skipped** in 142s. The 11 skips are pre-existing and unrelated; they
@@ -256,24 +288,53 @@ Run locally in `.worktrees/notif-admin-01-inventory` on `80d88bcc5` with
   - `safety_asset_expiry`'s `beat_task` pointed at a non-existent entry → exactly
     `test_scheduled_producers_name_a_real_celery_beat_entry` fails (**1 failed,
     48 passed**).
+  - The permission gate downgraded from `require_permission("admin:manage")` to
+    plain authentication → exactly 3 targeted tests fail
+    (`test_the_endpoint_requires_the_admin_manage_permission`,
+    `test_an_administrator_without_the_permission_is_refused`,
+    `test_the_endpoint_is_authorisation_checked_by_a_named_permission`) **and** the
+    repo-wide `test_route_authorisation_census.py` fails closed with
+    `authenticated_only GET /api/v1/notifications/inventory`, proving the route
+    cannot be silently downgraded past CI.
+  - The line dropping the VAPID public key removed → exactly 3 targeted tests
+    fail, at both `_readiness_payloads` and HTTP-response-body level.
+- [x] **Re-verified on the current base `1c9d1bc00` (after ADMIN-03 merged):**
+  `pytest tests/unit/test_notification_inventory.py
+  tests/unit/test_notification_inventory_route.py
+  tests/integration/test_notification_inventory_api.py
+  tests/integration/test_route_authorisation_census.py -q` → **85 passed, none
+  skipped**. The registry needed no structural change to survive ADMIN-03's merge —
+  the producer census did not flag the new
+  `src/domain/services/notification_preferences.py`, which resolves preferences
+  and creates no notification — and the 74 inventory tests pass again after the
+  §3 note corrections. `black`/`flake8` clean on the corrected module.
+- [x] **Governance gates on this base:** `test_route_authorisation_census.py`,
+  `test_route_shadowing_guard.py`, `test_permission_catalogue.py`,
+  `test_permission_routes_catalogue.py` → **129 passed, 4 xpassed, 0 failed**
+  (includes the 74 above). The census confirms no new authorisation debt.
+- [x] **Full frontend suite** `npx vitest run` → **406 files, 2,829 tests passed**,
+  0 failed, 0 skipped. `npm run i18n:check` → 4,199 keys validated.
+  `scripts/validate_registries.py` → all 3 registries pass.
 
-**Stated honestly — one unexplained red I could not reproduce.** The *first*
+**A red that appeared during preparation, now explained — not flake.** One
 execution of `tests/integration/test_notification_inventory_api.py` in this
 worktree failed 2 of 13:
-`test_an_administrator_without_the_permission_is_refused` (admin without the
+`test_an_administrator_without_the_permission_is_refused` (an admin without the
 permission was not refused) and
-`test_the_endpoint_is_authorisation_checked_by_a_named_permission` (census
-reported posture `authenticated_only` with no permissions). I then ran the file
-**six** more times — 13/13 green every time, over runtimes from 16s to 101s, so
-timing is not the differentiator — and both tests also pass in isolation. I
-inspected the mounted dependency tree directly and it is correct
-(`permission_checker` carrying `__qgp_required_permission__ = "admin:manage"`
-sits under the route), and `_iter_dependants` does no de-duplication that could
-drop it. **I could not reproduce the failure and I cannot explain it**, so I am
-not claiming this file is deterministically green, and I have not touched either
-test to make the red go away. If it recurs in CI it should be treated as a real
-signal about the census walker or the integration auth override, not as flake to
-be retried past.
+`test_the_endpoint_is_authorisation_checked_by_a_named_permission` (the census
+reported posture `authenticated_only` with no permissions). That run overlapped a
+**deliberate negative control in the same working tree**: the route's
+`require_permission("admin:manage")` had been temporarily replaced with plain
+authentication in order to prove these tests bite, and was reverted immediately
+afterwards. The observed failure signature is exactly the one that control is
+designed to produce — the same two tests, plus
+`test_the_endpoint_requires_the_admin_manage_permission` in the unit file that run
+did not include, and the repo-wide census failing closed with
+`authenticated_only GET /api/v1/notifications/inventory`. It is therefore evidence
+that the gate is enforced and the tests detect its removal, not evidence of
+non-determinism in the census walker or the integration auth override. With the
+tree clean the file is green, and the negative control is recorded above as
+intended rather than presented as a mystery.
 
 **Not verified:** no browser was driven; the frontend evidence is jsdom only. No
 staging or production run. The integration tests use the suite's DB-free
@@ -321,12 +382,12 @@ claimed.
 
 ## 8) Release Plan
 
-1. Open PR on tip `80d88bcc5`. **Do not merge** — raised for review only, per the
-   request.
-2. Merge only after the ledger / compliance gates and `CI - Default` are green,
-   and after #1710 ADMIN-03 has landed or been rebased — the two touch disjoint
-   files, but both add keys to `en.json` / `cy.json` and the second to merge may
-   need a trivial locale rebase.
+1. PR opened on tip `1c9d1bc00`. **Do not merge** — raised for review only, per
+   the request.
+2. Merge only after the ledger / compliance gates and `CI - Default` are green.
+   The #1710 ADMIN-03 sequencing note is discharged: it merged first, this branch
+   is rebased onto it, and the locale rebase it warned about has already been
+   taken.
 3. Tip-chase: `Build, Push and Deploy to Azure` success for the tip SHA, then
    verify the ACA image tag contains the tip SHA on the prod FQDN.
 4. Only then mark FR-NOTIF-ADMIN-01 conveyor **PROD → DONE**. Merge alone is not
@@ -348,7 +409,7 @@ claimed.
 ## 10) Evidence Pack (links)
 
 - Branch: `feat/notif-admin-01-inventory`
-- Base: `80d88bcc5` (#1709), rebased onto latest `origin/main`
+- Base: `1c9d1bc00` (#1710 ADMIN-03), rebased onto it after it merged
 - Files: 12 changed, +2,598 / −20 — 1 new domain registry, 1 new route, 1 new
   schema, 1 router mount, 1 frontend panel, 2 locale files, 3 new test files,
   1 extended frontend test file, plus this ledger
@@ -359,8 +420,10 @@ claimed.
   tests; 12 frontend tests; mypy clean over 605 files; black / isort / flake8
   clean; import boundaries OK; OpenAPI contract check passed; 3 registry tests
   proven to fail under mutation (§5)
-- Known unreproduced red on first integration run, recorded in §5 rather than
-  retried away
+- Registry re-verified on the post-ADMIN-03 base with five claims corrected (§3);
+  85 tests green on that base
+- A red seen during preparation is explained in §5 as the deliberate permission
+  negative control, not flake
 - CI / STG / PROD: pending after PR open
 
 ---
@@ -381,9 +444,11 @@ claimed.
 ## Anti-conflict checklist
 
 - [x] **No dispatcher edit.** `notification_service.py`, `routes/notifications.py`
-  and `routes/push_notifications.py` are untouched — the three files open PR
-  #1710 (ADMIN-03) changes. The two branches share **zero** source files; the
-  only common files are `en.json` / `cy.json`, where each adds its own keys
+  and `routes/push_notifications.py` are untouched — the three files #1710
+  (ADMIN-03) changed. The two PRs share **zero** source files; the only common
+  files are `en.json` / `cy.json`, where each adds its own keys. ADMIN-03 having
+  merged first, this branch is rebased onto it and the registry re-verified
+  against the merged dispatcher (§3)
 - [x] New endpoint mounted from its own router, so `routes/notifications.py` did
   not need to be opened at all
 - [x] No `Layout.tsx` and no nav edit of any kind
