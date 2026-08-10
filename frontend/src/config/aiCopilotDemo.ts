@@ -1,5 +1,5 @@
 /**
- * AI Copilot is a simulated demo (PX-248).
+ * PlantEx Assist (technical: AI Copilot module) is a simulated demo (PX-248).
  *
  * Its replies are hardcoded pattern matches — no inference runs and no tenant
  * data is queried — so it must never appear unless someone has deliberately

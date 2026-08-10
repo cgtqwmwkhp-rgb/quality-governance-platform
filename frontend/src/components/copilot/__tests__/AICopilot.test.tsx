@@ -47,7 +47,7 @@ function apiMessage(partial: Partial<CopilotMessage> & Pick<CopilotMessage, 'con
 function axiosLikeError(status: number, detail?: string) {
   return {
     isAxiosError: true,
-    response: { status, data: { detail: detail ?? 'AI Copilot is not enabled in this environment.' } },
+    response: { status, data: { detail: detail ?? 'PlantEx Assist is not enabled in this environment.' } },
     message: `Request failed with status code ${status}`,
   }
 }
@@ -130,7 +130,7 @@ describe('AICopilot', () => {
     expect(banner).toHaveTextContent(/no AI model is involved/i)
     expect(banner).toHaveTextContent(/refused/i)
     expect(banner).toHaveTextContent(/writes are never performed/i)
-    expect(screen.getByRole('heading', { name: 'AI Copilot (Demo)' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'PlantEx Assist (Demo)' })).toBeInTheDocument()
   })
 
   it('warns in the opening message that live-data answers are refused', async () => {
@@ -169,7 +169,7 @@ describe('AICopilot', () => {
     sendMessageMock.mockResolvedValue({
       data: apiMessage({
         content:
-          'I cannot answer from live organisation data. This demo is not connected to your registers.',
+          'I cannot answer from live organisation data. This PlantEx Assist demo is not connected to your registers.',
         content_type: 'action',
         action_type: 'get_compliance_status',
         action_status: 'not_performed',
@@ -310,7 +310,7 @@ describe('AICopilot', () => {
     expect(banner).not.toHaveTextContent(/no AI model is involved/i)
 
     expect(screen.queryByTestId('ai-copilot-demo-banner')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'AI Copilot' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'PlantEx Assist' })).toBeInTheDocument()
     expect(screen.queryByText(/\(Demo\)/)).not.toBeInTheDocument()
   })
 
@@ -322,7 +322,7 @@ describe('AICopilot', () => {
 
     const banner = await screen.findByTestId('ai-copilot-demo-banner')
     expect(banner).toHaveTextContent(/no AI model is involved/i)
-    expect(screen.getByRole('heading', { name: 'AI Copilot (Demo)' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'PlantEx Assist (Demo)' })).toBeInTheDocument()
   })
 
   it('does not claim grounded answers from the inference flag alone', async () => {

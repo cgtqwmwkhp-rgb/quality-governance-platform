@@ -24,6 +24,7 @@ from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPreference
 from src.domain.models.push_notification import NotificationLog, PushSubscription
 from src.domain.models.user import User
+from src.domain.services.notification_preferences import merge_category_preferences
 
 router = APIRouter(tags=["Push Notifications"])
 
@@ -369,7 +370,12 @@ async def update_notification_preferences(
     current_user: CurrentUser,
     db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
-    """Update notification preferences."""
+    """Update notification preferences.
+
+    Event-type flags are merged into ``category_preferences`` through the shared
+    helper, so this surface and ``PUT /api/v1/notifications/preferences`` agree
+    on update semantics for the JSON column they both write.
+    """
     result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
 
@@ -392,9 +398,7 @@ async def update_notification_preferences(
             cat_updates[key] = value
 
     if cat_updates:
-        existing_cat = dict(prefs.category_preferences or {})
-        existing_cat.update(cat_updates)
-        prefs.category_preferences = existing_cat
+        prefs.category_preferences = merge_category_preferences(prefs.category_preferences, cat_updates)
 
     await db.commit()
 

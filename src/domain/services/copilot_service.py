@@ -1,5 +1,5 @@
 """
-AI Copilot Service
+PlantEx Assist service (technical module: AI Copilot)
 
 Provides conversational AI assistance with:
 - Natural language understanding
@@ -65,6 +65,69 @@ def copilot_inference_is_enabled() -> bool:
     except ImportError:
         return True
     return not copilot_kill_switch_last_known()
+
+
+# ============================================================================
+# Refusal copy
+# ============================================================================
+#
+# Three different things can stop an answer, and one sentence cannot describe all
+# three without being false about two of them:
+#
+#   * inference off      — no registers are read at all; the replies really are
+#                          hardcoded keyword matches, so "not connected" is true.
+#   * inference on, no   — the registers *are* wired up, so the limit is not the
+#     answer served        connection. It may be the closed question set, or a
+#                          permission the caller lacks, or the module being off
+#                          for the tenant: CopilotGroundingService.try_answer
+#                          collapses all three to ``ungrounded`` on purpose, so
+#                          that a caller cannot tell which one closed. One string
+#                          therefore has to serve all three, and it may not name
+#                          any of them as the cause.
+#   * inference on, the  — the question was in the set and the figures were
+#     citation check       computed, but the wording quoted something that is not
+#     failed               in them, so the answer is dropped unserved.
+#
+# Wording the middle and last cases as a disconnected demo is the defect these
+# constants exist to remove: it understates a surface that answers register
+# questions in the very next breath, which teaches users to disbelieve the
+# disclaimers that matter.
+
+DEMO_LIVE_DATA_REFUSAL = (
+    "I cannot answer from live organisation data. This PlantEx Assist demo is not "
+    "connected to your registers, so I will not invent counts, percentages, named "
+    "risks, or reference numbers. Open the relevant module for real figures."
+)
+
+# Serves the out-of-set, no-permission and module-off cases alike, so it states the
+# inability and the no-fabrication promise without asserting a cause. "That is outside
+# the fixed set" would read well for the first case and be plainly false for the other
+# two, where the question *is* in the set — the same class of false disclaimer this
+# rewrite removes from the demo wording.
+GROUNDED_LIVE_DATA_REFUSAL = (
+    "I cannot answer from live organisation data here, and I will not invent counts, "
+    "percentages, named risks, or reference numbers instead. PlantEx Assist answers a "
+    "fixed set of questions from your registers — try one of those, for example how many "
+    "incidents we have or which actions are overdue, or open the relevant module for real "
+    "figures."
+)
+
+CITATION_REFUSAL = (
+    "I could not verify every figure in that answer against your own registers, so I "
+    "have dropped it rather than serve it. PlantEx Assist only quotes counts, "
+    "percentages and reference numbers that appear in the figures this platform "
+    "computed. Open the relevant module for the live register."
+)
+
+DEMO_WRITE_REFUSAL = (
+    "I cannot create or update records from this PlantEx Assist demo. Nothing was written. "
+    "Use the Incidents register (New) to log a real safety event."
+)
+
+GROUNDED_WRITE_REFUSAL = (
+    "PlantEx Assist never creates, edits or deletes records. Nothing was written. "
+    "Use the Incidents register (New) to log a real safety event."
+)
 
 
 # ============================================================================
@@ -243,7 +306,7 @@ Current context: {context}
 
 class CopilotService:
     """
-    AI Copilot conversation service.
+    PlantEx Assist conversation service.
     """
 
     def __init__(self, db: AsyncSession):
@@ -364,7 +427,7 @@ class CopilotService:
         # PX-248: the reply is fabricated, so refuse before anything is persisted.
         # The API layer already returns 404, but this closes non-HTTP callers too.
         if not copilot_is_enabled():
-            raise CopilotDisabledError("AI Copilot is disabled; simulated responses must not be served.")
+            raise CopilotDisabledError("PlantEx Assist is disabled; simulated responses must not be served.")
 
         # Second line behind the API guards, which are the ones that refresh the switch.
         # Deliberately does not read the database: this method runs on a caller's session
@@ -372,7 +435,7 @@ class CopilotService:
         # A process that has never refreshed therefore sees no kill here — see
         # copilot_kill_switch_last_known.
         if copilot_kill_switch_last_known():
-            raise CopilotDisabledError("AI Copilot has been closed by the runtime kill switch.")
+            raise CopilotDisabledError("PlantEx Assist has been closed by the runtime kill switch.")
 
         session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
         if not session:
@@ -448,7 +511,9 @@ class CopilotService:
         ``user_id`` is forwarded because some grounded intents are permission-gated
         and the tenant alone does not say whether this caller may see the figure.
         """
-        if copilot_inference_is_enabled():
+        grounded = copilot_inference_is_enabled()
+
+        if grounded:
             from src.domain.services.copilot_grounding import CopilotGroundingService
 
             outcome = await CopilotGroundingService(self.db).try_answer(
@@ -459,33 +524,37 @@ class CopilotService:
             if outcome.kind == "answered" and outcome.content is not None:
                 return outcome.content, None, outcome.model_used or "grounded-facts"
             if outcome.kind == "refused":
-                refusal = (
-                    "I cannot answer from live organisation data. This demo is not connected to "
-                    "your registers, so I will not invent counts, percentages, named risks, or "
-                    "reference numbers. Open the relevant module for real figures."
-                )
-                # Prefer the same refusal string the simulator uses for live-data asks.
-                return refusal, None, "grounded-citation-refused"
+                return CITATION_REFUSAL, None, "grounded-citation-refused"
 
-        response_content, action_data = self._simulate_ai_response(user_message, context)
+        # ``ungrounded`` lands here: the intent is outside the closed set, or it is a
+        # permission-gated one the caller may not read, or the module is off for the
+        # tenant. All three fall through to the same keyword replies, which is what
+        # keeps them indistinguishable from outside (see
+        # CopilotGroundingService.try_answer). ``grounded`` only changes the wording,
+        # and it reads a deployment-wide flag rather than anything about this caller,
+        # so that indistinguishability survives.
+        response_content, action_data = self._simulate_ai_response(user_message, context, grounded=grounded)
         return response_content, action_data, "simulated-keyword-match"
 
     def _simulate_ai_response(
         self,
         user_message: str,
         context: dict,
+        *,
+        grounded: bool = False,
     ) -> tuple[str, Optional[dict]]:
-        """Demo keyword replies — refuse live-data fabrication and false writes (PX-248/250)."""
+        """Keyword replies — refuse live-data fabrication and false writes (PX-248/250).
+
+        ``grounded`` says whether inference is open in this deployment, and it exists
+        because the refusals below cannot be worded the same way in both cases. With
+        inference off the surface really is a disconnected keyword demo and should say
+        so; with it on the registers are wired up, so "this demo is not connected to
+        your registers" would be a false disclaimer about a surface that answers
+        register questions two sentences later.
+        """
         message_lower = user_message.lower()
-        live_data_refusal = (
-            "I cannot answer from live organisation data. This demo is not connected to "
-            "your registers, so I will not invent counts, percentages, named risks, or "
-            "reference numbers. Open the relevant module for real figures."
-        )
-        write_refusal = (
-            "I cannot create or update records from this demo. Nothing was written. "
-            "Use the Incidents register (New) to log a real safety event."
-        )
+        live_data_refusal = GROUNDED_LIVE_DATA_REFUSAL if grounded else DEMO_LIVE_DATA_REFUSAL
+        write_refusal = GROUNDED_WRITE_REFUSAL if grounded else DEMO_WRITE_REFUSAL
 
         # Create incident — honest refusal, never "Shall I proceed?" + false success (PX-250).
         if "incident" in message_lower and any(word in message_lower for word in ("create", "log", "report", "new")):
@@ -559,10 +628,15 @@ class CopilotService:
                 "_General guidance only — not your compliance score._",
             }
 
+            no_lookup = (
+                "PlantEx Assist answers a fixed set of register questions and cannot look up "
+                "this term in your organisation's records."
+                if grounded
+                else "This PlantEx Assist demo cannot look up your organisation's records."
+            )
             explanation = explanations.get(
                 topic.lower(),
-                f"**{topic}** is a term used in quality and safety management. "
-                f"This demo cannot look up your organisation's records.",
+                f"**{topic}** is a term used in quality and safety management. {no_lookup}",
             )
 
             return (explanation, None)
@@ -578,11 +652,15 @@ class CopilotService:
                 "reports": "/reports",
             }
 
+            no_navigation = (
+                "PlantEx Assist does not perform navigation for you."
+                if grounded
+                else "This PlantEx Assist demo does not perform navigation for you."
+            )
             for dest, path in destinations.items():
                 if dest in message_lower:
                     return (
-                        f"Open {path} in the application navigation for the {dest} page. "
-                        f"This demo does not perform navigation for you.",
+                        f"Open {path} in the application navigation for the {dest} page. {no_navigation}",
                         {
                             "action": "navigate",
                             "parameters": {"destination": path},
@@ -590,11 +668,16 @@ class CopilotService:
                         },
                     )
 
+        scope = (
+            "PlantEx Assist answers a fixed set of questions from your registers and can "
+            "explain QHSE concepts. Anything outside that set I refuse rather than guess, "
+            "and I never write to a register."
+            if grounded
+            else "In this PlantEx Assist demo I can explain QHSE concepts and will refuse "
+            "live-data questions and writes. I will not invent register data."
+        )
         return (
-            f'I understand you\'re asking about: "{user_message}"\n\n'
-            f"In this demo I can explain QHSE concepts and will refuse live-data "
-            f"questions and writes. I will not invent register data.\n\n"
-            f"What would you like to do?",
+            f'I understand you\'re asking about: "{user_message}"\n\n{scope}\n\nWhat would you like to do?',
             None,
         )
 
@@ -616,11 +699,19 @@ class CopilotService:
                 "get_risk_summary",
                 "navigate",
             }:
+                # The stored reason is the machine-readable half of the same disclosure
+                # the panel shows, so it has to track the deployment for the same reason
+                # the wording does: "demo cannot read live data" is untrue of a
+                # deployment whose grounded intents are reading registers.
                 message.action_result = {
                     "performed": False,
                     "action": action_name,
                     "parameters": parameters,
-                    "reason": "demo_cannot_read_or_write_live_data",
+                    "reason": (
+                        "assist_never_writes_or_reads_outside_grounded_set"
+                        if copilot_inference_is_enabled()
+                        else "demo_cannot_read_or_write_live_data"
+                    ),
                 }
                 message.action_status = "not_performed"
             else:
