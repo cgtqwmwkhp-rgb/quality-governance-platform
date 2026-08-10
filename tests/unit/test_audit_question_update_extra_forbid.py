@@ -26,3 +26,10 @@ def test_audit_question_update_rejects_unknown_fields() -> None:
         )
     assert "tenant_id" in str(exc_info.value)
     assert "extra" in str(exc_info.value).lower() or "forbidden" in str(exc_info.value).lower()
+
+
+def test_audit_question_update_accepts_risk_category_and_weight() -> None:
+    """Parity with create/response: updates may set risk scoring fields."""
+    m = AuditQuestionUpdate(risk_category="high", risk_weight=1.5)
+    assert m.risk_category == "high"
+    assert m.risk_weight == 1.5

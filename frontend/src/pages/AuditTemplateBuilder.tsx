@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
@@ -25,7 +25,7 @@ import AITemplateGenerator from '../components/AITemplateGenerator'
 import CheckChallengeCoach from '../components/auditChallenge/CheckChallengeCoach'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import { Badge } from '../components/ui/Badge'
-import { auditsApi, getApiErrorMessage, safetyInsightsApi } from '../api/client'
+import { auditsApi, safetyInsightsApi } from '../api/client'
 import type { AuditBuilderCasePrefill } from '../components/AITemplateGenerator'
 import type {
   AuditTemplate,
@@ -43,6 +43,13 @@ import {
   getUnpublishableQuestionIssues,
   remapConditionalLogicSourceIds,
 } from './audit-builder/templateHelpers'
+import {
+  buildSaveIssueModel,
+  firstIssueQuestionId,
+  fromPublishValidationErrors,
+  type SaveIssue,
+  type SaveIssueModel,
+} from './audit-builder/saveErrorModel'
 import { QUESTION_TYPES } from './audit-builder/QuestionEditor'
 import SectionEditor from './audit-builder/SectionEditor'
 import TemplateHeader from './audit-builder/TemplateHeader'
@@ -258,6 +265,8 @@ export default function AuditTemplateBuilder() {
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveIssues, setSaveIssues] = useState<SaveIssue[] | null>(null)
+  const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
   const [backendId, setBackendId] = useState<number | null>(
     templateId && !isNaN(Number(templateId)) ? Number(templateId) : null,
@@ -270,6 +279,48 @@ export default function AuditTemplateBuilder() {
   const questionIdMap = useRef<Record<string, number>>({})
   const deletedSectionIds = useRef<number[]>([])
   const deletedQuestionIds = useRef<number[]>([])
+  const highlightClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearSaveIssues = () => {
+    setSaveError(null)
+    setSaveIssues(null)
+  }
+
+  const focusQuestionFromIssue = useCallback((questionId: string) => {
+    setActiveTab('builder')
+    setHighlightedQuestionId(questionId)
+    if (highlightClearTimer.current) clearTimeout(highlightClearTimer.current)
+    highlightClearTimer.current = setTimeout(() => {
+      setHighlightedQuestionId(null)
+      highlightClearTimer.current = null
+    }, 4000)
+    // Defer scroll until after tab/render so the node exists.
+    requestAnimationFrame(() => {
+      const safeId =
+        typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+          ? CSS.escape(questionId)
+          : questionId.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      const el = document.querySelector(`[data-question-id="${safeId}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [])
+
+  const applySaveFailure = useCallback(
+    (model: SaveIssueModel) => {
+      setSaveError(model.summary)
+      setSaveIssues(model.issues)
+      announce(model.summary, 'assertive')
+      const qid = firstIssueQuestionId(model)
+      if (qid) focusQuestionFromIssue(qid)
+    },
+    [announce, focusQuestionFromIssue],
+  )
+
+  useEffect(() => {
+    return () => {
+      if (highlightClearTimer.current) clearTimeout(highlightClearTimer.current)
+    }
+  }, [])
   const allQuestions = template.sections.flatMap((s) => s.questions)
   const validation = (() => {
     const questionErrors: Record<string, string[]> = {}
@@ -327,12 +378,12 @@ export default function AuditTemplateBuilder() {
         setTemplate(mapApiToTemplate(data, sectionIdMap.current, questionIdMap.current))
         setBackendId(data.id)
       } catch (error) {
-        setSaveError(getApiErrorMessage(error))
+        applySaveFailure(buildSaveIssueModel(error))
       } finally {
         setIsLoading(false)
       }
     })()
-  }, [templateId])
+  }, [templateId, applySaveFailure])
 
   const updateSections = (fn: (ss: Section[]) => Section[]) =>
     setTemplate((prev) => ({ ...prev, sections: fn(prev.sections) }))
@@ -361,6 +412,13 @@ export default function AuditTemplateBuilder() {
     )
   }
   const handleUpdateQuestion = (sid: string, qid: string, updates: Partial<Question>) => {
+    if (highlightedQuestionId === qid) {
+      setHighlightedQuestionId(null)
+      if (highlightClearTimer.current) {
+        clearTimeout(highlightClearTimer.current)
+        highlightClearTimer.current = null
+      }
+    }
     const prior = template.sections
       .find((s) => s.id === sid)
       ?.questions.find((q) => q.id === qid)
@@ -462,13 +520,12 @@ export default function AuditTemplateBuilder() {
 
   const handleSave = async () => {
     if (!template.name.trim()) {
-      const msg = 'Template name is required'
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      const model = fromPublishValidationErrors(['Template name is required.'])
+      applySaveFailure(model)
       return
     }
     setIsSaving(true)
-    setSaveError(null)
+    clearSaveIssues()
     try {
       const payload = {
         name: template.name,
@@ -497,14 +554,24 @@ export default function AuditTemplateBuilder() {
           sectionIdMap.current[section.id] = sid
         }
         for (const [qIdx, q] of section.questions.entries()) {
-          const qbid = questionIdMap.current[q.id]
-          if (qbid) await auditsApi.updateQuestion(qbid, buildQuestionPayload(q, qIdx))
-          else {
-            const { data } = await auditsApi.createQuestion(
-              tid!,
-              buildQuestionPayload(q, qIdx, sid),
-            )
-            questionIdMap.current[q.id] = data.id
+          const questionCtx = {
+            questionId: q.id,
+            sectionTitle: section.title || `Section ${sIdx + 1}`,
+            questionText: q.text,
+          }
+          try {
+            const qbid = questionIdMap.current[q.id]
+            if (qbid) await auditsApi.updateQuestion(qbid, buildQuestionPayload(q, qIdx))
+            else {
+              const { data } = await auditsApi.createQuestion(
+                tid!,
+                buildQuestionPayload(q, qIdx, sid),
+              )
+              questionIdMap.current[q.id] = data.id
+            }
+          } catch (questionError) {
+            applySaveFailure(buildSaveIssueModel(questionError, questionCtx))
+            return
           }
         }
       }
@@ -525,8 +592,22 @@ export default function AuditTemplateBuilder() {
           if (!changed) continue
           const qbid = questionIdMap.current[q.id]
           if (!qbid) continue
-          await auditsApi.updateQuestion(qbid, buildQuestionPayload({ ...q, conditionalLogicRules: remapped }, qIdx))
-          conditionalLogicUpdates.push({ sectionId: section.id, questionId: q.id, rules: remapped })
+          try {
+            await auditsApi.updateQuestion(
+              qbid,
+              buildQuestionPayload({ ...q, conditionalLogicRules: remapped }, qIdx),
+            )
+            conditionalLogicUpdates.push({ sectionId: section.id, questionId: q.id, rules: remapped })
+          } catch (questionError) {
+            applySaveFailure(
+              buildSaveIssueModel(questionError, {
+                questionId: q.id,
+                sectionTitle: section.title,
+                questionText: q.text,
+              }),
+            )
+            return
+          }
         }
       }
       if (conditionalLogicUpdates.length > 0) {
@@ -555,9 +636,7 @@ export default function AuditTemplateBuilder() {
       }
       deletedSectionIds.current = []
     } catch (error) {
-      const msg = getApiErrorMessage(error)
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      applySaveFailure(buildSaveIssueModel(error))
     } finally {
       setIsSaving(false)
     }
@@ -565,32 +644,29 @@ export default function AuditTemplateBuilder() {
 
   const handlePublish = async () => {
     if (validation.hasBlockingPublishErrors) {
-      const msg =
-        validation.publishErrors.length === 1
-          ? validation.publishErrors[0]
-          : `Fix ${validation.publishErrors.length} validation issues before publishing.`
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      const firstQuestionId = Object.keys(validation.questionErrors)[0]
+      const model = fromPublishValidationErrors(validation.publishErrors, {
+        questionErrors: validation.questionErrors,
+        firstQuestionId,
+      })
+      applySaveFailure(model)
       setActiveTab('builder')
       setShowPublishDialog(false)
       return
     }
     if (!backendId) {
-      const msg = 'Please save the template before publishing'
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      const model = fromPublishValidationErrors(['Please save the template before publishing'])
+      applySaveFailure(model)
       return
     }
     setIsPublishing(true)
-    setSaveError(null)
+    clearSaveIssues()
     try {
       await auditsApi.publishTemplate(backendId)
       setTemplate((prev) => ({ ...prev, status: 'published' }))
       setShowPublishDialog(false)
     } catch (error) {
-      const msg = getApiErrorMessage(error)
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      applySaveFailure(buildSaveIssueModel(error))
     } finally {
       setIsPublishing(false)
     }
@@ -619,6 +695,8 @@ export default function AuditTemplateBuilder() {
         canPublish={!!backendId && template.status !== 'published'}
         onAIAssist={() => setShowAIAssist(true)}
         saveError={saveError}
+        saveIssues={saveIssues}
+        onShowSaveIssueQuestion={focusQuestionFromIssue}
       />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
@@ -841,6 +919,7 @@ export default function AuditTemplateBuilder() {
                         sectionValidationErrors={validation.sectionErrors[section.id] || []}
                         questionValidationErrors={validation.questionErrors}
                         allQuestions={allQuestions}
+                        highlightedQuestionId={highlightedQuestionId}
                       />
                     ))}
                     <button

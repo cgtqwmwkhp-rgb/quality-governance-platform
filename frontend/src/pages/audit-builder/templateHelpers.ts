@@ -390,10 +390,12 @@ export function buildQuestionPayload(
       : undefined,
     evidence_requirements: buildEvidenceRequirements(q),
     failure_triggers_action: q.failureTriggersAction,
-    risk_category: q.riskLevel,
     positive_answer: q.positiveAnswer || undefined,
     criticality: q.criticality,
     conditional_logic: q.conditionalLogicRules?.length ? q.conditionalLogicRules : null,
+    // Omit empty risk_category so update payloads don't send useless extras
+    // under schemas that still forbid unknown/empty risk fields.
+    ...(q.riskLevel ? { risk_category: q.riskLevel } : {}),
   }
   if (sectionId !== undefined) return { ...base, section_id: sectionId }
   return base

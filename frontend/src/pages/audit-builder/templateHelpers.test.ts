@@ -128,6 +128,38 @@ describe('templateHelpers', () => {
         allowed_types: ['document'],
       },
     })
+    expect(payload).not.toHaveProperty('risk_category')
+  })
+
+  it('sends risk_category when set and omits it when empty', () => {
+    const withRisk = buildQuestionPayload(
+      {
+        id: 'q-risk',
+        text: 'Risked question',
+        type: 'yes_no',
+        required: true,
+        weight: 1,
+        evidenceRequired: false,
+        failureTriggersAction: false,
+        riskLevel: 'high',
+      },
+      0,
+    )
+    expect(withRisk).toMatchObject({ risk_category: 'high' })
+
+    const withoutRisk = buildQuestionPayload(
+      {
+        id: 'q-no-risk',
+        text: 'Plain question',
+        type: 'yes_no',
+        required: true,
+        weight: 1,
+        evidenceRequired: false,
+        failureTriggersAction: false,
+      },
+      0,
+    )
+    expect(withoutRisk).not.toHaveProperty('risk_category')
   })
 
   it('maps criticality and conditional_logic from backend questions', () => {
