@@ -289,10 +289,16 @@ async def update_notification_preferences(
     current_user: Annotated[User, Depends(require_permission("notifications:update"))],
     db: DbSession,
 ):
-    """Update notification preferences for the current user."""
+    """Update notification preferences for the current user.
+
+    ``category_preferences`` is merged rather than replaced: the push
+    preferences API writes its own event-type keys into the same JSON column, so
+    a wholesale replace here would wipe settings this surface cannot even show.
+    """
     from sqlalchemy import select
 
     from src.domain.models.notification import NotificationPreference
+    from src.domain.services.notification_preferences import merge_category_preferences
 
     result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
@@ -302,11 +308,19 @@ async def update_notification_preferences(
         db.add(prefs)
 
     for key, value in preferences.model_dump(exclude_unset=True).items():
-        if hasattr(prefs, key):
+        if key == "category_preferences":
+            prefs.category_preferences = merge_category_preferences(prefs.category_preferences, value)
+        elif hasattr(prefs, key):
             setattr(prefs, key, value)
 
     await db.commit()
-    return {"success": True, "preferences": preferences.model_dump(exclude_unset=True)}
+    return {
+        "success": True,
+        "preferences": {
+            **preferences.model_dump(exclude_unset=True),
+            "category_preferences": prefs.category_preferences or {},
+        },
+    }
 
 
 @router.get("/mentions/search", response_model=List[MentionSearchResult])

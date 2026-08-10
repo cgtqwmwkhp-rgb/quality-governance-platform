@@ -244,6 +244,10 @@ class Settings(BaseSettings):
     # Frontend URL — used for password reset links, email CTAs, etc.
     frontend_url: str = "https://purple-water-03205fa03.6.azurestaticapps.net"
 
+    # Notification quiet hours are stored as bare HH:MM strings with no per-user
+    # timezone column, so bounds are interpreted in this deployment-wide zone.
+    notification_quiet_hours_timezone: str = "Europe/London"
+
     # CORS - explicit allowlist for production safety
     # Production SWA origins must be listed explicitly (no wildcards)
     # Regex in main.py serves as fallback for staging/preview environments
