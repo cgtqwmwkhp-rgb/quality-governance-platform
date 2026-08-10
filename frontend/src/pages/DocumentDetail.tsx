@@ -87,6 +87,11 @@ import { DocumentCampaignPanel } from './DocumentCampaignPanel'
 import { DocumentCampaignResults } from './DocumentCampaignResults'
 
 const DocumentPdfPreview = lazy(() => import('../components/DocumentPdfPreview'))
+// WJ-1 / ADR-0024 — the Detail body (Front Sheet or native draft editor) is the
+// only import of `library-editor`, and it is dynamic on purpose: the editor
+// package must stay off the App shell and off the route chunk for this page.
+// See docs/governance/library-wj1-size-limit-notes.md.
+const DocumentBodyPanel = lazy(() => import('../library-editor/DocumentBodyPanel'))
 
 interface LibraryDocument {
   id: number
@@ -108,6 +113,28 @@ interface LibraryDocument {
   indexed_at?: string
   chunk_count?: number
   indexing_error?: string | null
+  // Front Sheet fields (L-36). Declared optional because a legacy row can be
+  // missing any of them, and the band renders "not recorded" rather than a
+  // plausible-looking blank.
+  pel_doc_ref?: string | null
+  cascade_level?: number | null
+  department?: string | null
+  access_level?: string | null
+  is_statutory?: boolean | null
+  controlled_document_id?: number | null
+  control_status?: string | null
+  legal_matter_reference?: string | null
+  legal_hold_active?: boolean | null
+  effective_date?: string | null
+  review_date?: string | null
+  // CUT-1 / R19 — the retention policy the disposal date was calculated from.
+  retention_until?: string | null
+  retention_years?: number | null
+  retention_anchor?: string | null
+  retention_basis?: string | null
+  // L-34. Not served by DocumentResponse yet (WJ-1-M2); read optionally so the
+  // native body activates when the API starts answering.
+  content_format?: string | null
 }
 
 interface LibraryVersionRow {
@@ -958,6 +985,16 @@ export default function DocumentDetail() {
         </TabsList>
 
         <TabsContent value="control" className="mt-4 space-y-4">
+          <Suspense
+            fallback={
+              <div className="flex justify-center py-6" data-testid="library-document-body-loading">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              </div>
+            }
+          >
+            <DocumentBodyPanel document={document} />
+          </Suspense>
+
           {canEditTitle && (
             <Card className="p-4 space-y-3" data-testid="document-title-edit">
               <h4 className="font-medium text-foreground">Document title</h4>

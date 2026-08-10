@@ -1,7 +1,7 @@
 # ADR-0024: Native draft editor and Front Sheet (Library WJ-1)
 
-**Status**: Proposed (prep scaffold only — implement after WJ-0 PROD)  
-**Date**: 2026-08-09  
+**Status**: Accepted — WJ-1-M1 mounted (Front Sheet live; native path awaits `content_format` in M2)  
+**Date**: 2026-08-09 (proposed) · 2026-08-10 (accepted at M1)  
 **Decision Makers**: David Harris (IT / business owner). Direction locked as L-14c on the Library spine 360 plan.
 
 ## Context
@@ -43,6 +43,21 @@ governs design only; code may land as an **unmounted package shell**.
   budget row).
 - WK-1 evidence packs stay on different surfaces and may prep in parallel.
 - CUT-1 retention/access converge waits for WJ-1 PROD.
+
+## Delivery split (added at M1)
+
+The decision landed in two slices rather than one, because decision 1
+(`content_format`) needs a schema change and decisions 3 and 4 do not.
+
+| Slice | Delivers | State |
+| --- | --- | --- |
+| **WJ-1-M1** | Detail body mount (lazy chunk), Front Sheet band bound to the Register row including CUT-1 retention, native draft shell with named backend gaps | Mounted |
+| **WJ-1-M2** | `content_format` column + alembic (decision 1), draft block persistence (2), render-on-publish + SHA-256 (4), draft lease API (5), hash-chained editor events (6) | Outstanding |
+
+Until M2 lands, `DocumentResponse` serves no `content_format`, so the whole
+estate takes the binary path exactly as decision 1 intends for the legacy set —
+conversion to native remains an act nobody has been able to perform yet, rather
+than a default that happened quietly.
 
 ## Out of scope (this ADR / prep)
 
