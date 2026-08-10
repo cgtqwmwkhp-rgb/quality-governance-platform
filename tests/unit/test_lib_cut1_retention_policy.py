@@ -422,16 +422,23 @@ def _migration_constant(name: str) -> object:
     raise AssertionError(f"{name} not found in {MIGRATION.name}")
 
 
-def test_migration_is_the_sole_head_on_wj0() -> None:
+def test_migration_declares_cut1_exactly_once_on_wj0() -> None:
+    """One file declares the CUT-1 revision, and it sits directly on WJ-0.
+
+    The check matches the `revision: str = ...` *declaration* rather than any
+    mention of the id, because a later revision naming CUT-1 as its
+    `down_revision` is the linear chain working as intended — two files declaring
+    the same id is the branch this guards against.
+    """
     text = MIGRATION.read_text(encoding="utf-8")
     assert f'revision: str = "{CUT1_REVISION}"' in text
     assert f'down_revision: Union[str, Sequence[str], None] = "{WJ0_HEAD}"' in text
-    siblings = [
+    declarers = [
         path
         for path in (REPO_ROOT / "alembic" / "versions").rglob("*.py")
-        if path.is_file() and CUT1_REVISION in path.read_text(encoding="utf-8")
+        if path.is_file() and f'revision: str = "{CUT1_REVISION}"' in path.read_text(encoding="utf-8")
     ]
-    assert siblings == [MIGRATION], f"exactly one file may declare {CUT1_REVISION}, found {siblings}"
+    assert declarers == [MIGRATION], f"exactly one file may declare {CUT1_REVISION}, found {declarers}"
 
 
 def test_migration_backfill_still_matches_the_resolver() -> None:

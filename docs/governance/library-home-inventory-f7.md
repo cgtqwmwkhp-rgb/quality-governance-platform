@@ -86,6 +86,7 @@ See `library-cut1-retention-access-sor.md`.
 | WI-2 | File-home links: carbon_evidence, UVDB presented, evidence_assets → `documents.id` |
 | WC-1 / control converge | controlled_* file + access + retention sync |
 | CUT-1 | Retention + access single SoR; Citation cutover — **shipped** (`20261102_lib_cut1_sor`). Access folded; retention made executable with a named refusal where prose cannot be read. Remainder: `controlled_documents.retention_period_years` column drop, control access-log merge, and the 14 steward retention decisions |
+| STEWARD-14 / CIT-1 | The 14 steward retention decisions accepted and applied — **shipped** (`20261103_lib_steward14`). New home: `specs/governance-library/steward_retention_decisions.json` holds `taxonomy_id` → years + anchor + rationale, and *only* that; `taxonomy.json` `retention_rule` remains the prose authority and R19 basis, unedited. The §2 gate ("Citation SoR retirement requires executable retention") reports 0 blockers for all 73 filable categories and runs with `--fail-on-blockers` in `CI - Default`. Citation (ATLAS)'s flat 7-year position is retired for the Register. Remainder unchanged: `controlled_documents.retention_period_years` column drop (CUT-1b), control access-log merge, legacy `documents.retention_*` backfill (CUT-1c) |
 
 ## References
 

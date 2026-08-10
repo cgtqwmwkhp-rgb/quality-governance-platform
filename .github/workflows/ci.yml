@@ -2318,6 +2318,17 @@ jobs:
       - name: Ratchet audit-trail coverage inventory (w1-px155)
         run: python3 scripts/validate_audit_trail_coverage_ratchet.py
 
+      # CIT-1 / ADR-0023 / F-7 §2: Citation (ATLAS) is retired as the retention
+      # authority for the library Register only while every filable category has an
+      # executable retention. STEWARD-14 cleared the last fourteen, so a taxonomy
+      # edit that re-opens a blocker — or a steward decision aimed at a taxonomy_id
+      # no category carries — now fails the build instead of quietly un-retiring
+      # Citation for that category.
+      - name: Citation cutover readiness gate (CIT-1)
+        env:
+          PYTHONPATH: .
+        run: python3 -m scripts.governance.library.citation_cutover_readiness --fail-on-blockers
+
   error-code-coverage:
     name: Error Code Test Coverage Gate (D14)
     runs-on: ubuntu-latest

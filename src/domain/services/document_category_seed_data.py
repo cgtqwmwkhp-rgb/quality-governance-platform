@@ -9,12 +9,16 @@ only — no ORM/session imports, so it is safe for both the sync migration
 context and the async service context to import.
 
 See ``specs/governance-library/README.md`` for the decisions this data
-encodes (06.04 deactivated; ISO standards tags dropped).
+encodes (06.04 deactivated; ISO standards tags dropped). Machine-readable
+retention comes from ``library_steward_retention`` — accepted steward decisions
+first, the CUT-1 prose grammar second.
 """
 
 import json
 from pathlib import Path
 from typing import Any, TypedDict
+
+from src.domain.services.library_steward_retention import resolve_category_retention
 
 # Level-2 taxonomy_id values that must always seed inactive.
 # 06.04 = "O-Licence & Tachograph" (HGV operator-licence compliance) —
@@ -74,6 +78,28 @@ TAG_SEED: list[TagSeedRow] = [
 ]
 
 
+def machine_readable_retention(taxonomy_id: str | None, retention_rule: str | None) -> dict[str, Any]:
+    """CUT-1 / STEWARD-14 — the category's `retention_years` + `retention_anchor`.
+
+    A steward decision for this `taxonomy_id` wins; otherwise the prose is read
+    by the CUT-1 grammar. `retention_rule` itself is never rewritten — it is the
+    governance authority and the R19 basis, and a second hand-maintained copy of
+    the same decision beside it is the parallel home F-7 §4 forbids.
+
+    A rule with no steward decision that the grammar refuses leaves both columns
+    NULL. That category is still a Citation cutover blocker, and NULL is never a
+    disposal candidate, so the conservative outcome of unreadable prose stays
+    "keep".
+    """
+    decision = resolve_category_retention(taxonomy_id, retention_rule)
+    if decision.policy is None:
+        return {"retention_years": None, "retention_anchor": None}
+    return {
+        "retention_years": decision.policy.years,
+        "retention_anchor": decision.policy.anchor.value,
+    }
+
+
 def load_taxonomy_categories(taxonomy_path: Path | None = None) -> list[dict[str, Any]]:
     """Parse taxonomy.json into row dicts keyed to `DocumentCategory` columns.
 
@@ -81,12 +107,18 @@ def load_taxonomy_categories(taxonomy_path: Path | None = None) -> list[dict[str
     "04.04"); `active` is forced False for `DEACTIVATED_TAXONOMY_IDS`
     regardless of what taxonomy.json says, so re-seeding never silently
     reactivates a category the business has deliberately retired.
+
+    `retention_years` / `retention_anchor` are projected here rather than left to
+    the caller, so the one row-building function answers for every
+    `DocumentCategory` column it is named for and the seed cannot drift from the
+    accepted steward decisions.
     """
     path = taxonomy_path or TAXONOMY_JSON_PATH
     raw = json.loads(path.read_text(encoding="utf-8"))
     rows: list[dict[str, Any]] = []
     for cat in raw["categories"]:
         taxonomy_id = cat["id"]
+        retention_rule = cat.get("retention_rule")
         rows.append(
             {
                 "taxonomy_id": taxonomy_id,
@@ -101,9 +133,10 @@ def load_taxonomy_categories(taxonomy_path: Path | None = None) -> list[dict[str
                 "access_note": cat.get("access_note"),
                 "suggested_owner_role": cat.get("suggested_owner_role"),
                 "review_cycle": cat.get("review_cycle"),
-                "retention_rule": cat.get("retention_rule"),
+                "retention_rule": retention_rule,
                 "typical_contents": cat.get("typical_contents"),
                 "active": taxonomy_id not in DEACTIVATED_TAXONOMY_IDS,
+                **machine_readable_retention(taxonomy_id, retention_rule),
             }
         )
     return rows

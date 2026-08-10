@@ -240,6 +240,55 @@ importantly, makes its *remainder* visible instead of assumed.
 
 Design note: `docs/governance/library-cut1-retention-access-sor.md`.
 
+## Amendment — STEWARD-14 / CIT-1: the gate is clear; Citation's flat 7 years is retired for the Register
+
+**Status**: Accepted
+**Date**: 2026-08-10
+**Alembic**: `20261103_lib_steward14`
+
+The CUT-1 amendment above says cutover "remains gated, and the gate is runnable",
+and that Citation (ATLAS) "is not retired for a category until a steward has given
+that category a retention decision". Fourteen categories had no decision. They
+now do.
+
+1. **All fourteen decisions are accepted and recorded.**
+   `specs/governance-library/steward_retention_decisions.json` holds
+   `taxonomy_id` → years + anchor + rationale, accepted 2026-08-10. It records
+   *only* the decision: `taxonomy.json` `retention_rule` is unchanged and remains
+   the governance authority and the R19 basis. No period in the prose was
+   shortened, lengthened or reworded to make a decision fit, and every decision
+   is at least as long as the longest period its prose names.
+2. **The gate reports zero blockers.** 73 filable categories → **42 executable,
+   31 clockless by design, 0 blocked**. `--fail-on-blockers` is wired into
+   `CI - Default`, so a taxonomy edit that re-opens a blocker fails the build
+   rather than quietly un-retiring Citation for that category.
+3. **Citation (ATLAS)'s flat "7 Years / all employees" retention position is
+   therefore retired for the library Register.** The per-category gate this ADR
+   made a precondition is clear for every category, so the sentence in *Decision*
+   above — "the taxonomy's access defaults and retention rules replace Citation's
+   flat 7-year / all-staff position on migration" — is now true of the whole
+   Register rather than true per category on some future date.
+4. **The retirement is operational and documented, not flag-gated.** There is no
+   Citation system-of-record feature flag in QGP, and there never was: Citation
+   is an external system that QGP does not read retention from at runtime. A flag
+   would be a switch with nothing on the other end of it. What makes the
+   retirement real is (a) executable retention on every category, (b) the CI gate
+   that keeps it that way, and (c) this amendment. `IMS 052` should be updated or
+   withdrawn to match, which is a records action outside this repository.
+5. **A reseed can no longer erase a decision.** Before this slice the seed
+   re-derived both retention columns from prose on every run, so a steward's
+   resolution of a blocker was wiped by the next redeploy or admin "reload seed"
+   — which would have silently re-opened the gate on production while CI stayed
+   green against the checked-in files.
+
+Still deliberately outstanding, and **not** part of this retirement:
+`controlled_documents.retention_period_years` is not dropped (CUT-1b, once no
+writer remains), and legacy `documents.retention_*` / `retention_until` are not
+backfilled (CUT-1c). Documents filed before CUT-1 therefore still carry whatever
+date the old parser gave them until they are superseded or re-approved.
+
+Design note: `docs/governance/library-cut1-retention-access-sor.md` §STEWARD-14.
+
 ## Consequences
 
 **Positive:** the reference is meaningful where the estate is most concentrated;

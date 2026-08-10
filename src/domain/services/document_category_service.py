@@ -50,7 +50,6 @@ from src.domain.services.document_category_seed_data import (
     load_library_functions,
     load_taxonomy_categories,
 )
-from src.domain.services.library_retention_policy import resolve_retention_rule
 from src.domain.services.library_rules import assert_pel_identity
 
 
@@ -70,21 +69,18 @@ class CategorySeedResult:
     total_tags: int
 
 
-def _machine_readable_retention(retention_rule: Optional[str]) -> dict[str, Any]:
-    """CUT-1 — project the taxonomy prose onto the category's retention columns.
+def _machine_readable_retention(row: dict[str, Any]) -> dict[str, Any]:
+    """The category's retention columns, as already projected by the seed loader.
 
-    Derived at seed time through the one resolver rather than carried as extra
-    keys in ``taxonomy.json``: the prose is the governance authority, and a
-    second hand-maintained copy of the same decision in the seed file is exactly
-    the parallel home F-7 §4 forbids. A rule the grammar refuses leaves both
-    columns NULL — that category is a Citation cutover blocker, not a default.
+    ``load_taxonomy_categories`` builds these two keys through
+    ``library_steward_retention.resolve_category_retention`` — accepted steward
+    decision first, CUT-1 prose grammar second — so this reads them off the row
+    rather than deriving a second opinion. Deriving here as well is how the seed
+    came to overwrite steward decisions in the first place.
     """
-    decision = resolve_retention_rule(retention_rule)
-    if decision.policy is None:
-        return {"retention_years": None, "retention_anchor": None}
     return {
-        "retention_years": decision.policy.years,
-        "retention_anchor": decision.policy.anchor.value,
+        "retention_years": row["retention_years"],
+        "retention_anchor": row["retention_anchor"],
     }
 
 
@@ -130,7 +126,7 @@ async def seed_document_categories(db: AsyncSession) -> CategorySeedResult:
                     retention_rule=row["retention_rule"],
                     typical_contents=row["typical_contents"],
                     active=row["active"],
-                    **_machine_readable_retention(row["retention_rule"]),
+                    **_machine_readable_retention(row),
                 )
                 db.add(created)
                 await db.flush()
@@ -149,10 +145,16 @@ async def seed_document_categories(db: AsyncSession) -> CategorySeedResult:
                 existing.suggested_owner_role = row["suggested_owner_role"]
                 existing.review_cycle = row["review_cycle"]
                 existing.retention_rule = row["retention_rule"]
-                # The projection is re-derived, never merged: if the prose has
-                # changed in the seed, a steward's override of the *old* prose is
-                # no longer an answer to the new rule.
-                for column, value in _machine_readable_retention(row["retention_rule"]).items():
+                # Reasserted from the seed on every run, exactly like `active`
+                # below. Before STEWARD-14 that reassertion was destructive,
+                # because the seed could only re-derive from prose and so wiped a
+                # steward's resolution of a blocker on the next reseed, redeploy
+                # or admin "reload seed". The decision is now part of the seed
+                # (`specs/governance-library/steward_retention_decisions.json`),
+                # so reasserting it restores the decision instead of erasing it —
+                # and the decision file, not an untraceable database edit, is the
+                # one place a category's retention override lives.
+                for column, value in _machine_readable_retention(row).items():
                     setattr(existing, column, value)
                 existing.typical_contents = row["typical_contents"]
                 # Wave W0 deactivation list always wins on reseed, even if a

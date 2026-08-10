@@ -1,12 +1,12 @@
 # CUT-1 — one retention · one Access · QGP as system of record
 
-**Status:** Implemented — schema, resolver, filing/supersede paths and cutover gate shipped
+**Status:** Implemented — schema, resolver, filing/supersede paths and cutover gate shipped; **gate cleared by STEWARD-14 (see below)**
 **Date:** 2026-08-10
-**Programme:** Library spine · conveyor CUT-1 (final converge; no parallel slice)
+**Programme:** Library spine · conveyor CUT-1 (final converge; no parallel slice) → CIT-1 (cutover)
 **Depends on:** WK-1 LIVE, WJ-1 PROD — both satisfied
 **ADR:** [ADR-0023](../adr/ADR-0023-governance-library-reference-scheme.md)
 **Inventory:** [F-7](library-home-inventory-f7.md) §2 (retention homes) · §3 (access homes)
-**Alembic head:** `20261102_lib_cut1_sor` (revises `20261101_lib_wj0_drop`)
+**Alembic head:** `20261103_lib_steward14` (revises `20261102_lib_cut1_sor`, which revises `20261101_lib_wj0_drop`)
 
 ## Why this slice exists
 
@@ -116,9 +116,10 @@ category.
 PYTHONPATH=. python3 -m scripts.governance.library.citation_cutover_readiness
 ```
 
-At this commit: **73 filable categories — 28 executable, 31 with no disposal
+As CUT-1 shipped: **73 filable categories — 28 executable, 31 with no disposal
 clock by design, 14 blocked on a steward decision** (11 scoped clauses,
-3 conditional).
+3 conditional). After STEWARD-14 (below): **42 executable, 31 clockless,
+0 blocked**, and the gate runs with `--fail-on-blockers` in `CI - Default`.
 
 ## The safety invariant
 
@@ -126,7 +127,11 @@ Converging retention is allowed to keep documents **longer**. It is never allowe
 to make one disposable earlier, because disposal is destruction.
 `tests/unit/test_lib_cut1_retention_policy.py::test_cut1_never_brings_a_disposal_date_forward`
 reproduces the pre-CUT-1 expression and asserts this over every rule in the
-checked-in taxonomy. It holds with no exceptions.
+checked-in taxonomy. It holds with no exceptions. STEWARD-14 re-asserts it over
+the fourteen decisions in
+`test_no_decision_disposes_earlier_than_the_pre_cut1_parser`, and adds the
+stronger form the decisions actually need —
+`test_no_decision_is_shorter_than_the_longest_period_its_prose_names`.
 
 `apply_supersede_retention` carries the same property into the data: it takes the
 *later* of the stored date and the newly calculated one, so a legacy row whose
@@ -134,10 +139,98 @@ date was computed from approval is repaired on supersede rather than honoured.
 
 ## Resolving a blocker
 
-A steward sets `retention_years` + `retention_anchor` on the category. The prose
-stays as written — it is the governance authority and the R19 basis — and the
-resolver prefers the explicit columns over its own reading. Nothing about
-`taxonomy.json` needs editing to record a retention decision.
+A steward records `retention_years` + `retention_anchor` for the category in
+`specs/governance-library/steward_retention_decisions.json`, with a short
+rationale. The prose stays as written — it is the governance authority and the
+R19 basis — and nothing about `taxonomy.json` needs editing to record a retention
+decision.
+
+> **Changed by STEWARD-14.** CUT-1 originally said to set the two columns on the
+> `document_categories` row. That was wrong in one specific way: the seed
+> re-derived both columns from prose on every run, so the next reseed, redeploy or
+> admin "reload seed" erased the decision and silently re-opened the blocker on
+> production while CI stayed green against the checked-in files. A database edit
+> is also an unattributed retention decision, which R19 does not permit. The
+> decision file is now an *input* to the seed, so a reseed restores the decision
+> rather than destroying it — the same way the 06.04 deactivation list is
+> reasserted. A raw database override is no longer a supported route and will be
+> overwritten by the next reseed.
+
+Filing still reads the *stored* category columns first and falls back to the
+prose (`document_library_filing_service.retention_policy_for_category`). It does
+not read the decision file: once the seed or `20261103_lib_steward14` has run, the
+decision is on the row, and reading the file at file time too would add a third
+precedence layer to a decision that already has a system of record.
+
+## STEWARD-14 / CIT-1 — the fourteen decisions, and what that retires
+
+All fourteen were accepted on 2026-08-10 by the Governance Library steward. The
+principle applied to every one of them, and enforced by
+`tests/unit/test_lib_steward14_retention_decisions.py`:
+
+- Where the prose names more than one period, **the longest leg governs** the
+  whole category. One integer cannot hold two, and keeping a record longer than
+  required is recoverable — destroying it early is not.
+- A period stated in months **rounds up** to the next whole year (R19 makes
+  retention a count of years).
+- Where the prose says the current issue is kept, the anchor is **`supersede`**,
+  so a live document has no disposal date at all.
+- A per-document extension the register cannot evaluate ("longer if
+  incident-related", "to age 21 if a minor", "if contractual") is **not** a
+  category default. It stays a steward action on the individual document.
+
+| Category | Prose (unchanged) | Decision |
+| --- | --- | --- |
+| 02.02 COSHH | `Current; 40 years where linked to exposure monitoring` | 40y · supersede |
+| 02.04 Method Statements & SSoW | `Current + 3 years (contract life + 6 years if contractual)` | 6y · supersede |
+| 02.05 Permits to Work | `3 years (longer if incident-related)` | 3y · issue |
+| 02.06 Checklists & Inspection Forms | `Completed: 3 years` | 3y · issue |
+| 02.07 Incident Management | `3 years minimum (to age 21 if a minor); investigations 6 years` | 6y · issue |
+| 02.08 Occupational Health | `Health records: 40 years` | 40y · issue |
+| 03.04 Drills, Evacuation & PEEPs | `3 years (PEEPs: current, restricted)` | 3y · supersede |
+| 04.08 Asbestos | `Register current; exposure records 40 years` | 40y · supersede |
+| 04.10 Insurance | `EL certificates: 40 years recommended; others 6 years` | 40y · issue |
+| 06.02 Daily Walkaround & Defect Reports | `15 months (longer if incident-related)` | 2y · issue |
+| 06.04 O-Licence & Tachograph | `Tacho data 12 months; working time records 2 years` | 2y · issue |
+| 07.03 External Audits & Certification | `Certificates current; reports 6 years` | 6y · supersede |
+| 08.03 Waste Management | `Consignment notes 3 years; transfer notes 2 years` | 3y · issue |
+| 08.04 Environmental Aspects & Spill Response | `Register current; incidents 6 years` | 6y · supersede |
+
+`20261103_lib_steward14` writes the same fourteen onto existing
+`document_categories` rows so the database matches the seed without waiting for a
+reseed. It is pure data — no DDL — and touches nothing else. Downgrade returns
+those fourteen to NULL, which is the state CUT-1 left them in and is the fail-safe
+direction (no policy → no disposal date → kept).
+
+### What this retires
+
+ADR-0023 made executable retention the precondition for retiring Citation
+(ATLAS)'s flat "7 Years / all employees" position. The gate now reports **zero
+blockers for all 73 filable categories**, so that position is retired for the
+library Register.
+
+**There is no feature flag, and one was not invented.** Citation is an external
+system that QGP does not read retention from at runtime, so a `CITATION_SOR`
+boolean would be a switch with nothing on the other end — a hollow flag that
+looks like control while changing no behaviour. What makes the retirement real is
+executable retention on every category, the `--fail-on-blockers` gate in
+`CI - Default` that keeps it that way, and the ADR-0023 amendment recording the
+decision. `IMS 052` should be updated or withdrawn to match; that is a records
+action outside this repository.
+
+### The one place a document becomes disposable that was not before
+
+Relative to **CUT-1 as it is live today**, all fourteen categories move from "no
+disposal date, ever" to a calculable one. That is the intended effect — the whole
+point of making retention executable — and it is why the longest-leg rule above
+is enforced by test rather than by convention.
+
+Relative to **pre-CUT-1**, thirteen of the fourteen become disposable *later* than
+they already were. The exception is **06.02**, whose prose says `15 months`: the
+old regex matched only `\d+ years?`, found nothing, and kept those records
+indefinitely. The accepted 2 years is longer than the prose requires, but it is
+the one rule where an accepted decision creates a disposal date the previous
+behaviour did not have.
 
 ## Deliberately not in this slice
 
