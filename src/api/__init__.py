@@ -7,6 +7,7 @@ from src.api.routes import (
     ai_intelligence,
     ai_templates,
     analytics,
+    approvals,
     assessments,
     asset_health_analytics,
     asset_imports,
@@ -117,6 +118,10 @@ router.include_router(xml_import.router, prefix="/xml-import", tags=["XML Templa
 router.include_router(risks.router, prefix="/risks", tags=["Operational Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 router.include_router(actions.router, prefix="/actions", tags=["Actions"])
+# Read-only "needs my decision" aggregate over domain approval queues. Owns no
+# table: it reads the domains that raise the decisions. See
+# src/domain/services/approvals_read_model.py for why this is not an engine.
+router.include_router(approvals.router, prefix="/approvals", tags=["Approvals"])
 router.include_router(rtas.router, prefix="/rtas", tags=["Road Traffic Collisions"])
 router.include_router(
     investigation_templates.router,

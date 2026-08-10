@@ -528,20 +528,24 @@ class TestWorkflowAutomationE2E:
             assert isinstance(instances_data, (list, dict))
 
     def test_approval_workflow(self, client, auth_headers):
-        """E2E: Approval workflow."""
+        """E2E: the decisions outstanding for the caller.
+
+        Was pointed at `/api/v1/workflows/approvals/pending` and accepted 200 *or*
+        404, so it could not fail — which is how it stayed green over an endpoint
+        that returned `[]` to everyone. That route is gone (FR-APPROVALS-01) and
+        this asserts the surface that replaced it, unconditionally.
+        """
         if not auth_headers:
             pytest.skip("Auth required")
 
-        # Get pending approvals
         response = client.get(
-            "/api/v1/workflows/approvals/pending",
+            "/api/v1/approvals/my-decisions",
             headers=auth_headers,
         )
-        # TODO: Remove 404 when endpoint is implemented
-        assert response.status_code in [200, 404]
-        if response.status_code == 200:
-            data = response.json()
-            assert isinstance(data, (list, dict))
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert "sources_complete" in data
 
 
 # ============================================================================

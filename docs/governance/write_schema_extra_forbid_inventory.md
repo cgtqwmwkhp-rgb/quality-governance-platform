@@ -9,17 +9,17 @@ JSON request body model. `additionalProperties: false` means
 
 | Metric | Count |
 | --- | ---: |
-| Distinct write schemas | 296 |
-| `extra="forbid"` (strict) | 88 |
-| Open / lax (unknown fields ignored) | 208 |
-| Write operations (POST/PUT/PATCH) | 314 |
+| Distinct write schemas | 318 |
+| `extra="forbid"` (strict) | 112 |
+| Open / lax (unknown fields ignored) | 206 |
+| Write operations (POST/PUT/PATCH) | 335 |
 
 ## Committed ratchet
 
 | Floor / ceiling | Value |
 | --- | ---: |
-| `min_forbid_count` | 88 |
-| `max_open_count` | 208 |
+| `min_forbid_count` | 112 |
+| `max_open_count` | 206 |
 
 CI fails if forbid count decreases or open count increases above these
 values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
@@ -44,7 +44,6 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `AnnotationCreate` — `POST /api/v1/documents/{document_id}/annotations`
 - `ApplyImportRequest` — `POST /api/v1/planet-mark/apply-import`
 - `ApprovalActionRequest` — `POST /api/v1/document-control/approvals/{instance_id}/action`
-- `ApprovalResponse` — `POST /api/v1/workflows/approvals/{approval_id}/approve`, `POST /api/v1/workflows/approvals/{approval_id}/reject`
 - `AskAssignmentQuestionRequest` — `POST /api/v1/document-campaigns/assignments/{assignment_id}/questions`
 - `AssessCompetencyRequest` — `POST /api/v1/auditor-competence/profiles/{user_id}/assess`
 - `AssessEntityRequest` — `POST /api/v1/knowledge-bank/entities/{entity_type}/{entity_id}/assess`
@@ -102,14 +101,39 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 - `CreateProfileRequest` — `POST /api/v1/auditor-competence/profiles`
 - `CreateWatchActionRequest` — `POST /api/v1/knowledge-bank/regulatory-watch/impacts/{impact_id}/create-action`
 - `DefectCAPARequest` — `POST /api/v1/vehicles/defects/create-capa`
+- `DocumentEdgeCreate` — `POST /api/v1/document-graph/edges`
+- `DocumentHoldScopeRequest` — `PUT /api/v1/legal-holds/documents/{document_id}`
 - `FiveWhysRequest` — `POST /api/v1/ai/root-cause/5-whys`
+- `FraOcrDraftConfirmRequest` — `POST /api/v1/compliance-schedule/fra-ocr/drafts/{draft_id}/confirm`
+- `FraOcrFileRequest` — `POST /api/v1/compliance-schedule/fra-ocr/drafts/{draft_id}/file`
+- `FraOcrFromEvidenceRequest` — `POST /api/v1/compliance-schedule/records/{record_id}/fra-ocr/drafts/from-evidence`
+- `FraSignificantChangeRequest` — `POST /api/v1/incidents/{incident_id}/fra-significant-change`
+- `JobCellDocumentsPut` — `PUT /api/v1/job-lifecycle/job-types/{job_type_id}/cells/{lane_id}/{step_id}/documents`
+- `JobCellLinkCreate` — `POST /api/v1/job-lifecycle/job-types/{job_type_id}/cells/{lane_id}/{step_id}/links`
+- `JobCellRequirementUpdate` — `PATCH /api/v1/job-lifecycle/job-types/{job_type_id}/cells/{lane_id}/{step_id}`
+- `JobLaneCreate` — `POST /api/v1/job-lifecycle/job-types/{job_type_id}/lanes`
+- `JobLaneUpdate` — `PATCH /api/v1/job-lifecycle/lanes/{lane_id}`
+- `JobStepCreate` — `POST /api/v1/job-lifecycle/job-types/{job_type_id}/steps`
+- `JobStepUpdate` — `PATCH /api/v1/job-lifecycle/steps/{step_id}`
+- `JobTypeBaselineCreate` — `POST /api/v1/job-lifecycle/job-types/{job_type_id}/baselines`
+- `JobTypeCloneRequest` — `POST /api/v1/job-lifecycle/job-types/{job_type_id}/clone`
+- `JobTypeCreate` — `POST /api/v1/job-lifecycle/job-types`
+- `JobTypeUpdate` — `PATCH /api/v1/job-lifecycle/job-types/{job_type_id}`
 - `LoginRequest` — `POST /api/v1/auth/login`
 - `ObsoleteRequest` — `POST /api/v1/document-control/{document_id}/obsolete`
 - `PasswordChangeRequest` — `POST /api/v1/auth/change-password`
 - `PasswordResetConfirm` — `POST /api/v1/auth/password-reset/confirm`
 - `PasswordResetRequest` — `POST /api/v1/auth/password-reset/request`
+- `PortalFireDrillCompleteRequest` — `POST /api/v1/portal/fire-drills/{requirement_id}/complete`
 - `QuestionReplyRequest` — `POST /api/v1/document-campaigns/questions/{thread_id}/reply`
 - `RecordAcknowledgmentRequest` — `POST /api/v1/policy-acknowledgments/{acknowledgment_id}/acknowledge`
+- `RecordCompleteRequest` — `POST /api/v1/compliance-schedule/requirements/{requirement_id}/records`
+- `RecordEvidenceAttachRequest` — `POST /api/v1/compliance-schedule/records/{record_id}/evidence`
+- `RecordFileRequest` — `POST /api/v1/compliance-schedule/records/{record_id}/file`
+- `RegulatoryBasisClarifyRequest` — `POST /api/v1/compliance-schedule/regulatory-basis/clarify`
+- `RegulatoryBasisSuggestRequest` — `POST /api/v1/compliance-schedule/regulatory-basis/suggest`
+- `RequirementCreate` — `POST /api/v1/compliance-schedule/requirements`
+- `RequirementUpdate` — `PATCH /api/v1/compliance-schedule/requirements/{requirement_id}`
 - `SetFishboneRootCauseRequest` — `POST /api/v1/rca-tools/fishbone/{diagram_id}/set-root-cause`
 - `SetRootCauseRequest` — `POST /api/v1/rca-tools/five-whys/{analysis_id}/set-root-cause`
 - `UpdateCAPAStatusRequest` — `PATCH /api/v1/rca-tools/capa/{capa_id}/status`
@@ -117,7 +141,7 @@ values (see `docs/governance/write_schema_extra_forbid_baseline.json`).
 
 ## Open schemas (unknown fields silently ignored)
 
-208 schemas. Full list is the remediation backlog;
+206 schemas. Full list is the remediation backlog;
 converting them is out of scope for the inventory lock PR.
 
 <details>
@@ -125,7 +149,6 @@ converting them is out of scope for the inventory lock PR.
 
 - `BuilderBriefRequest`
 - `BuilderQaRequest`
-- `BulkApprovalRequest`
 - `BulkReprocessRequest`
 - `CampaignCreateRequestFE`
 - `CampaignUpdateRequest`
@@ -149,7 +172,6 @@ converting them is out of scope for the inventory lock PR.
 - `DefectActionCreate`
 - `DefectCreate`
 - `DefectUpdate`
-- `DelegationRequest`
 - `DiscussionMessageCreate`
 - `DiscussionThreadCreate`
 - `DisposalExecuteRequest`

@@ -55,6 +55,11 @@ OBSOLETE_TABLE = "obsolete_document_records"
 
 TENANT_ID = 1
 USER_ID = 1
+# Peers used by cross-tenant / "somebody else" assertions. Postgres enforces the
+# FKs that SQLite often leaves soft, so these rows must exist before a seed can
+# name them on controlled_documents / investigation_runs / signature_request_signers.
+OTHER_TENANT_ID = TENANT_ID + 77
+OTHER_USER_ID = USER_ID + 4242
 
 
 class ScratchDatabase:
@@ -80,7 +85,12 @@ class ScratchDatabase:
             return await conn.run_sync(lambda sync_conn: sa.inspect(sync_conn).has_table(name))
 
     async def seed_tenant_and_user(self) -> None:
-        """The two rows every document write needs a foreign key onto."""
+        """The rows every document write needs a foreign key onto.
+
+        Seeds the caller's tenant/user plus an isolation peer tenant and a
+        same-tenant "somebody else" user so tests can name them without
+        violating ``*_tenant_id_fkey`` / ``*_user_id_fkey`` on Postgres.
+        """
         from tests.factories import TenantFactory, UserFactory
 
         async with self.sessions() as session:
@@ -92,11 +102,29 @@ class ScratchDatabase:
                     admin_email="admin@scratch.example.com",
                 )
             )
+            session.add(
+                TenantFactory.build(
+                    id=OTHER_TENANT_ID,
+                    name="Scratch Other Tenant",
+                    slug=f"scratch-other-{uuid.uuid4().hex[:8]}",
+                    admin_email="other-admin@scratch.example.com",
+                )
+            )
             await session.flush()
             session.add(
                 UserFactory.build(
                     id=USER_ID,
                     email=f"scratch-{uuid.uuid4().hex[:8]}@example.com",
+                    hashed_password="unused",
+                    is_active=True,
+                    is_superuser=False,
+                    tenant_id=TENANT_ID,
+                )
+            )
+            session.add(
+                UserFactory.build(
+                    id=OTHER_USER_ID,
+                    email=f"scratch-other-{uuid.uuid4().hex[:8]}@example.com",
                     hashed_password="unused",
                     is_active=True,
                     is_superuser=False,

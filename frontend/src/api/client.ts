@@ -14,6 +14,7 @@ import { createRiskRegisterApi } from './riskRegisterClient'
 import { createNotificationsApi } from './notificationsClient'
 import { createInvestigationsApi } from './investigationsClient'
 import { createActionsApi } from './actionsClient'
+import { createApprovalsApi } from './approvalsClient'
 import { createIncidentsApi } from './incidentsClient'
 import { createPoliciesApi } from './policiesClient'
 import { createRtasApi } from './rtasClient'
@@ -1178,6 +1179,11 @@ export const standardsApi = createStandardsApi(api)
 
 // ============ Actions API (extracted: actionsClient.ts) ============
 export const actionsApi = createActionsApi(api)
+
+// ============ Approvals read model (approvalsClient.ts) ============
+// Read-only: decisions are recorded by the domain that raised them, so there is
+// no approve/reject here.
+export const approvalsApi = createApprovalsApi(api)
 
 export type {
   CarbonReportingYear,
@@ -2385,13 +2391,7 @@ export interface GlobalSearchResponse {
 }
 
 // ============ Workflows API (extracted: workflowsClient.ts) ============
-export type {
-  WorkflowApprovalRecord,
-  WorkflowInstanceRecord,
-  WorkflowTemplateRecord,
-  WorkflowDelegationRecord,
-  WorkflowStatsResponse,
-} from './workflowsClient'
+export type { WorkflowInstanceRecord, WorkflowTemplateRecord } from './workflowsClient'
 export const workflowsApi = createWorkflowsApi(api)
 
 // ============ Executive Dashboard ============

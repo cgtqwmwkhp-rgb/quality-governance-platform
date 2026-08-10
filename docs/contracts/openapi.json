@@ -1784,36 +1784,6 @@
         "title": "ApprovalActionRequest",
         "type": "object"
       },
-      "ApprovalResponse": {
-        "additionalProperties": false,
-        "description": "Approval/Rejection response.\n\n``extra=\"forbid\"`` so a misspelled or unsupported field fails loudly instead\nof the approval succeeding while the unknown key is silently dropped (B-10).",
-        "properties": {
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          }
-        },
-        "title": "ApprovalResponse",
-        "type": "object"
-      },
       "ArchiveTemplateResponse": {
         "description": "Schema for archived audit template response.",
         "properties": {
@@ -6066,6 +6036,28 @@
               }
             ],
             "title": "Regulatory Reference"
+          },
+          "risk_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Category"
+          },
+          "risk_weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Weight"
           },
           "sign_off_required": {
             "anyOf": [
@@ -10500,34 +10492,6 @@
         "title": "BuilderQaRequest",
         "type": "object"
       },
-      "BulkApprovalRequest": {
-        "description": "Bulk approval request",
-        "properties": {
-          "approval_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Approval Ids",
-            "type": "array"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          }
-        },
-        "required": [
-          "approval_ids"
-        ],
-        "title": "BulkApprovalRequest",
-        "type": "object"
-      },
       "BulkConfirmRequest": {
         "additionalProperties": false,
         "properties": {
@@ -12212,6 +12176,246 @@
           }
         },
         "title": "CampaignUpdateRequest",
+        "type": "object"
+      },
+      "CascadeAggregateResponse": {
+        "additionalProperties": false,
+        "description": "Whole-estate cascade payload for Structure map L1\u2013L5 bands (one request).\n\nConfirmed ``implements`` edges only \u2014 proposed stay out of the explorer.\nReplaces the Structure map's previous 1+N per-document edge fetches.",
+        "properties": {
+          "bands": {
+            "items": {
+              "$ref": "#/components/schemas/CascadeBandSummary"
+            },
+            "title": "Bands",
+            "type": "array"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/CascadeDocumentItem"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentEdgeResponse"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "orphans": {
+            "$ref": "#/components/schemas/CascadeOrphanSummary"
+          },
+          "returned_documents": {
+            "minimum": 0.0,
+            "title": "Returned Documents",
+            "type": "integer"
+          },
+          "returned_edges": {
+            "minimum": 0.0,
+            "title": "Returned Edges",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "documents",
+          "edges",
+          "bands",
+          "orphans",
+          "returned_documents",
+          "returned_edges"
+        ],
+        "title": "CascadeAggregateResponse",
+        "type": "object"
+      },
+      "CascadeBandSummary": {
+        "additionalProperties": false,
+        "description": "Count of readable documents at one cascade level (or unset).",
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          }
+        },
+        "required": [
+          "label",
+          "count"
+        ],
+        "title": "CascadeBandSummary",
+        "type": "object"
+      },
+      "CascadeDocumentItem": {
+        "additionalProperties": false,
+        "description": "One active library document in the estate cascade aggregate (NS-EXP / W8).\n\nTitles are omitted when the library ACL would refuse the by-id route for the\nsame operator \u2014 the Structure map never invents a second ACL.",
+        "properties": {
+          "cascade_level": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cascade Level"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "document_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Type"
+          },
+          "href": {
+            "title": "Href",
+            "type": "string"
+          },
+          "parent_document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Document Id"
+          },
+          "parent_pel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Pel"
+          },
+          "pel_doc_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pel Doc Ref"
+          },
+          "readable": {
+            "title": "Readable",
+            "type": "boolean"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "document_id",
+          "href",
+          "readable"
+        ],
+        "title": "CascadeDocumentItem",
+        "type": "object"
+      },
+      "CascadeOrphanSummary": {
+        "additionalProperties": false,
+        "description": "Workbook orphan types among readable documents (CAS-3 honesty counts).\n\nIds are listable so the Structure map can surface them without a twin\norphan board page. Counts match the id lists \u2014 never a facet total over\ndocuments the operator cannot read.",
+        "properties": {
+          "uncontrolled_record_count": {
+            "minimum": 0.0,
+            "title": "Uncontrolled Record Count",
+            "type": "integer"
+          },
+          "uncontrolled_record_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Uncontrolled Record Ids",
+            "type": "array"
+          },
+          "unimplemented_policy_count": {
+            "minimum": 0.0,
+            "title": "Unimplemented Policy Count",
+            "type": "integer"
+          },
+          "unimplemented_policy_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Unimplemented Policy Ids",
+            "type": "array"
+          },
+          "unparented_count": {
+            "minimum": 0.0,
+            "title": "Unparented Count",
+            "type": "integer"
+          },
+          "unparented_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Unparented Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "unimplemented_policy_ids",
+          "unparented_ids",
+          "uncontrolled_record_ids",
+          "unimplemented_policy_count",
+          "unparented_count",
+          "uncontrolled_record_count"
+        ],
+        "title": "CascadeOrphanSummary",
         "type": "object"
       },
       "CaseClosureBlockingItem": {
@@ -17778,6 +17982,66 @@
         "title": "DecideStandardLinkRequest",
         "type": "object"
       },
+      "DecisionSourceResponse": {
+        "description": "Whether a domain could be asked, and what it said.",
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when `status` is `unavailable`. Zero only ever means zero.",
+            "title": "Count"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "description": "`live` (read; `count` is a measurement) or `unavailable`.",
+            "title": "Status",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "description": "True when a per-source cap cut the list, making `count` a floor for this source.",
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "unattributed": {
+            "default": 0,
+            "description": "Rows this source holds that name nobody \u2014 an approval step with no approvers, a review with no reviewer \u2014 so they are outstanding for no one and appear in no user's queue.",
+            "title": "Unattributed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "status"
+        ],
+        "title": "DecisionSourceResponse",
+        "type": "object"
+      },
       "DeclineInput": {
         "properties": {
           "reason": {
@@ -18250,57 +18514,6 @@
         "title": "DefectUpdate",
         "type": "object"
       },
-      "DelegationRequest": {
-        "description": "Set delegation request",
-        "properties": {
-          "delegate_id": {
-            "title": "Delegate Id",
-            "type": "integer"
-          },
-          "end_date": {
-            "format": "date-time",
-            "title": "End Date",
-            "type": "string"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "start_date": {
-            "format": "date-time",
-            "title": "Start Date",
-            "type": "string"
-          },
-          "workflow_types": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Workflow Types"
-          }
-        },
-        "required": [
-          "delegate_id",
-          "start_date",
-          "end_date"
-        ],
-        "title": "DelegationRequest",
-        "type": "object"
-      },
       "DependencyCurrentTip": {
         "properties": {
           "published_at": {
@@ -18578,10 +18791,43 @@
             ],
             "title": "Reference Number"
           },
+          "retention_anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Anchor"
+          },
+          "retention_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Basis"
+          },
           "retention_until": {
             "format": "date-time",
             "title": "Retention Until",
             "type": "string"
+          },
+          "retention_years": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Years"
           },
           "status": {
             "title": "Status",
@@ -19031,7 +19277,7 @@
       "DocumentCreate": {
         "properties": {
           "access_level": {
-            "default": "internal",
+            "default": "all_staff",
             "title": "Access Level",
             "type": "string"
           },
@@ -20230,6 +20476,28 @@
             "title": "Reference Number",
             "type": "string"
           },
+          "retention_anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Anchor"
+          },
+          "retention_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Basis"
+          },
           "retention_until": {
             "anyOf": [
               {
@@ -20241,6 +20509,17 @@
               }
             ],
             "title": "Retention Until"
+          },
+          "retention_years": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Years"
           },
           "review_date": {
             "anyOf": [
@@ -22608,6 +22887,17 @@
             ],
             "title": "Description"
           },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
           "file_size_bytes": {
             "anyOf": [
               {
@@ -22843,6 +23133,18 @@
             ],
             "title": "Description"
           },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Register documents.id this asset has been filed under (WI-2 / L-32). Null clears the link; the Register document must already exist in this tenant.",
+            "title": "Document Id"
+          },
           "latitude": {
             "anyOf": [
               {
@@ -23036,6 +23338,33 @@
             ],
             "title": "Confidence"
           },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By Id"
+          },
+          "cover_kind": {
+            "default": "evidences",
+            "title": "Cover Kind",
+            "type": "string"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -23188,6 +23517,11 @@
             ],
             "title": "Confidence"
           },
+          "cover_kind": {
+            "default": "evidences",
+            "title": "Cover Kind",
+            "type": "string"
+          },
           "entity_id": {
             "title": "Entity Id",
             "type": "string"
@@ -23248,6 +23582,33 @@
               }
             ],
             "title": "Confidence"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By Id"
+          },
+          "cover_kind": {
+            "default": "evidences",
+            "title": "Cover Kind",
+            "type": "string"
           },
           "created_at": {
             "title": "Created At",
@@ -23342,6 +23703,17 @@
       },
       "EvidencePatch": {
         "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
           "is_verified": {
             "anyOf": [
               {
@@ -34741,6 +35113,46 @@
         "title": "LibraryDocumentPatch",
         "type": "object"
       },
+      "LibraryIssueRequest": {
+        "description": "Northern Star W6 / NS-WF issue (approved \u2192 issued).\n\n``review_cycle_months`` / ``review_cycle_basis`` are optional here only\nbecause a document may already state them; R20 refuses the issue when\nneither the document nor the request supplies both. Nothing defaults them.",
+        "properties": {
+          "review_cycle_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Cycle Basis"
+          },
+          "review_cycle_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Cycle Months"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "title": "LibraryIssueRequest",
+        "type": "object"
+      },
       "LibraryLifecycleResponse": {
         "description": "Lifecycle transition result.",
         "properties": {
@@ -36144,6 +36556,51 @@
           "total"
         ],
         "title": "MyAssignmentsResponse",
+        "type": "object"
+      },
+      "MyDecisionsResponse": {
+        "description": "Decisions attributed to the caller, plus the state of every source asked.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PendingDecisionResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionSourceResponse"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "sources_complete": {
+            "description": "False when at least one source could not be read. An empty `items` with this false is NOT a report that nothing is outstanding.",
+            "title": "Sources Complete",
+            "type": "boolean"
+          },
+          "total": {
+            "description": "Rows in `items`. A floor rather than a total whenever `sources_complete` is false.",
+            "title": "Total",
+            "type": "integer"
+          },
+          "unavailable_sources": {
+            "description": "Source keys that could not be read, e.g. ['document_approval'].",
+            "items": {
+              "type": "string"
+            },
+            "title": "Unavailable Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "sources_complete",
+          "sources"
+        ],
+        "title": "MyDecisionsResponse",
         "type": "object"
       },
       "MyPassportResponse": {
@@ -38488,6 +38945,254 @@
           "email"
         ],
         "title": "PasswordResetRequest",
+        "type": "object"
+      },
+      "PendingDecisionResponse": {
+        "description": "One outstanding decision, as the owning domain reported it.",
+        "properties": {
+          "decision": {
+            "description": "The verb the owning domain uses, e.g. `approve`, `review`, `sign`.",
+            "title": "Decision",
+            "type": "string"
+          },
+          "deep_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Route to the screen that owns the record, or null when this product has no screen that reads it. Null must be rendered as 'no screen yet', never substituted with a guessed route.",
+            "title": "Deep Link"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "key": {
+            "description": "`{source}:{id}`. Stable within a source; not an id on its own.",
+            "title": "Key",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "requested_at_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What `requested_at` is a record of: `submitted` (approval was requested then), `raised` (the request was created then) or `last_updated` (the domain does not timestamp the transition, so this is the last change to the record). Render the date with this qualifier rather than as a request time.",
+            "title": "Requested At Basis"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "source",
+          "source_label",
+          "decision",
+          "title"
+        ],
+        "title": "PendingDecisionResponse",
+        "type": "object"
+      },
+      "PendingDocumentEdgeItem": {
+        "additionalProperties": false,
+        "description": "A proposed / needs_review Doc Graph edge awaiting operator confirmation.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_method": {
+            "$ref": "#/components/schemas/DocumentEdgeMethod"
+          },
+          "dst": {
+            "$ref": "#/components/schemas/PendingEdgeEndpoint"
+          },
+          "edge_id": {
+            "title": "Edge Id",
+            "type": "integer"
+          },
+          "edge_type": {
+            "$ref": "#/components/schemas/DocumentEdgeType"
+          },
+          "impact_driving": {
+            "title": "Impact Driving",
+            "type": "boolean"
+          },
+          "is_primary_parent": {
+            "title": "Is Primary Parent",
+            "type": "boolean"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "src": {
+            "$ref": "#/components/schemas/PendingEdgeEndpoint"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentEdgeStatus"
+          }
+        },
+        "required": [
+          "edge_id",
+          "edge_type",
+          "status",
+          "created_method",
+          "is_primary_parent",
+          "impact_driving",
+          "created_at",
+          "src",
+          "dst"
+        ],
+        "title": "PendingDocumentEdgeItem",
+        "type": "object"
+      },
+      "PendingDocumentEdgeListResponse": {
+        "additionalProperties": false,
+        "description": "One page of the Doc Graph confirm queue \u2014 never a global facet total.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PendingDocumentEdgeItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "returned": {
+            "title": "Returned",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "returned",
+          "limit",
+          "truncated"
+        ],
+        "title": "PendingDocumentEdgeListResponse",
+        "type": "object"
+      },
+      "PendingEdgeEndpoint": {
+        "additionalProperties": false,
+        "description": "One end of a queued edge, enriched so the queue avoids N+1 document reads.\n\n``readable`` is false when the library ACL would refuse this operator the\ndocument by id; ``title`` is then withheld rather than guessed at.",
+        "properties": {
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "href": {
+            "title": "Href",
+            "type": "string"
+          },
+          "readable": {
+            "title": "Readable",
+            "type": "boolean"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "document_id",
+          "href",
+          "readable"
+        ],
+        "title": "PendingEdgeEndpoint",
         "type": "object"
       },
       "PolicyAcknowledgmentListResponse": {
@@ -45167,6 +45872,17 @@
               }
             ],
             "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
           },
           "reference_number": {
             "title": "Reference Number",
@@ -66103,6 +66819,33 @@
         ]
       }
     },
+    "/api/v1/approvals/my-decisions": {
+      "get": {
+        "description": "Decisions waiting on the caller, gathered from the domains that hold them.\n\nRequires `action:read` \u2014 the same permission as the personal work queue this\npanel sits beside. It is not gated on the permissions of the underlying\ndomains, because every row returned is one the caller is named on, and a user\nwho cannot see their own outstanding approval cannot act on it.\n\nRead `sources_complete` before rendering: `items: []` with\n`sources_complete: false` means at least one domain could not be read, which\nis not the same answer as \"you have nothing\".",
+        "operationId": "list_my_decisions_api_v1_approvals_my_decisions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyDecisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List My Decisions",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
     "/api/v1/assessments/": {
       "get": {
         "description": "List assessment runs with filtering and pagination.",
@@ -80414,7 +81157,7 @@
     },
     "/api/v1/document-control/{document_id}/obsolete": {
       "post": {
-        "description": "Mark document as obsolete.\n\nRefused rather than partially applied. The retention record and the status\nchange are one transaction on purpose: obsoleting a controlled document\nwithout recording its retention end date would satisfy the request and lose\nthe reason the record exists. So while the retention table is absent, the\nhonest outcome is that the document stays current and the caller is told why.",
+        "description": "Mark document as obsolete.\n\nRefused rather than partially applied. The retention record and the status\nchange are one transaction on purpose: obsoleting a controlled document\nwithout recording its retention end date would satisfy the request and lose\nthe reason the record exists. So while the retention table is absent, the\nhonest outcome is that the document stays current and the caller is told why.\n\nCUT-1b: the end date is derived from the Register row, not from a retention\nperiod held on the control record. See :func:`_archive_retention_end_date` for\nwhy an underivable date is recorded as ``NULL`` rather than guessed.",
         "operationId": "mark_document_obsolete_api_v1_document_control__document_id__obsolete_post",
         "parameters": [
           {
@@ -80734,6 +81477,33 @@
         ]
       }
     },
+    "/api/v1/document-graph/cascade": {
+      "get": {
+        "description": "Whole-estate cascade aggregate for Structure map L1\u2013L5 bands (NS-EXP / W8).\n\nOne request returns readable documents (with cascade level + primary Parent\nPEL), confirmed ``implements`` edges, band counts, and workbook orphan ids.\nReplaces the Structure map's previous 1+N edge fetches. Gated by master\n``document_graph`` \u2014 404 when closed.",
+        "operationId": "get_cascade_aggregate_api_v1_document_graph_cascade_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CascadeAggregateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Cascade Aggregate",
+        "tags": [
+          "Document Relationship Graph"
+        ]
+      }
+    },
     "/api/v1/document-graph/clauses/{clause_id}/documents": {
       "get": {
         "description": "ISO reverse: library documents evidencing a clause, with CEL tip freshness.",
@@ -81036,6 +81806,91 @@
           }
         ],
         "summary": "Create Document Edge",
+        "tags": [
+          "Document Relationship Graph"
+        ]
+      }
+    },
+    "/api/v1/document-graph/edges/pending": {
+      "get": {
+        "description": "Tenant-wide Doc Graph confirm queue for the Knowledge Exceptions inbox (WE-1).\n\n``document_edges`` remains the source of truth \u2014 nothing is mirrored into CEL,\nand confirm/reject stay on the existing edge routes.",
+        "operationId": "list_pending_document_edges_api_v1_document_graph_edges_pending_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "edge_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DocumentEdgeType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Edge Type"
+            }
+          },
+          {
+            "description": "proposed | needs_review only \u2014 the queue refuses settled statuses.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DocumentEdgeStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "proposed | needs_review only \u2014 the queue refuses settled statuses.",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingDocumentEdgeListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Pending Document Edges",
         "tags": [
           "Document Relationship Graph"
         ]
@@ -82115,6 +82970,71 @@
           }
         ],
         "summary": "Approve Document Version",
+        "tags": [
+          "Document Library"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/issue": {
+      "post": {
+        "description": "Northern Star W6 / NS-WF: issue an approved document (approved \u2192 issued).\n\nThe governed route to live. Unlike ``/publish`` it refuses anything that is\nnot already approved and applies the pack's issue-time blocks (R07, R10, R11,\nR14 approval leg, R18, R20, R22, R23). It produces no rendition and claims\nnone: R15's footer stamping needs a rendering pipeline that does not exist.",
+        "operationId": "issue_document_version_api_v1_documents__document_id__issue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LibraryIssueRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryVersionHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue Document Version",
         "tags": [
           "Document Library"
         ]
@@ -84395,6 +85315,56 @@
         ]
       }
     },
+    "/api/v1/evidence-assets/{asset_id}/promote-to-library": {
+      "post": {
+        "description": "Link this asset to the Register document it already is (WI-2 / L-32).\n\nThe match path: a link is written only when the same content hash or the\nidentical blob path is already on the Register in this tenant. Nothing is\ninserted into ``documents``, so an asset the Register has never seen comes\nback ``unmatched`` and is left exactly as it was \u2014 a promote is not an upload.\n\nThe outcome is returned rather than swallowed: ``unmatched`` and ``ambiguous``\nare both \"no link\", and a steward needs to know which, because the second one\nmeans the Register already holds two candidates.",
+        "operationId": "promote_asset_to_library_api_v1_evidence_assets__asset_id__promote_to_library_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Promote Asset To Library Api V1 Evidence Assets  Asset Id  Promote To Library Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Promote Asset To Library",
+        "tags": [
+          "Evidence Assets"
+        ]
+      }
+    },
     "/api/v1/evidence-assets/{asset_id}/signed-url": {
       "get": {
         "description": "Get a signed URL for downloading or previewing an evidence asset.\n\nReturns a time-limited signed URL for secure download. Preview-safe assets\n(images, PDF, video, audio) may be requested inline for authenticated browser\npreviews; all other assets are served as attachments even if inline is asked.",
@@ -85889,7 +86859,7 @@
         ]
       },
       "get": {
-        "description": "Get a specific feature flag by key.",
+        "description": "Get a specific feature flag by key.\n\nCompliance Schedule notify keys are seeded on read so Admin Notification\nSettings can toggle them without first hitting the paginated list endpoint.",
         "operationId": "get_feature_flag_api_v1_feature_flags__key__get",
         "parameters": [
           {
@@ -85935,7 +86905,7 @@
         ]
       },
       "patch": {
-        "description": "Update a feature flag (admin only).",
+        "description": "Update a feature flag (admin only).\n\nSeed CS notify keys first so a fresh DB can persist toggles from\nNotification Settings without a prior list call.",
         "operationId": "update_feature_flag_api_v1_feature_flags__key__patch",
         "parameters": [
           {
@@ -99081,6 +100051,65 @@
           }
         ],
         "summary": "Get Evidence Download Url",
+        "tags": [
+          "Planet Mark Carbon"
+        ]
+      }
+    },
+    "/api/v1/planet-mark/years/{year_id}/evidence/{evidence_id}/promote-to-library": {
+      "post": {
+        "description": "File this Planet Mark evidence under the Register document it already is.\n\nWI-2 / L-32 match path. A link is written only where the Register already\nholds this exact file in this tenant \u2014 same content hash, or the identical\nblob path. This endpoint never creates a ``documents`` row, so evidence the\nRegister has not seen returns ``unmatched`` and keeps its Planet Mark blob and\nmetadata untouched; a steward files it and links it explicitly.",
+        "operationId": "promote_evidence_to_library_api_v1_planet_mark_years__year_id__evidence__evidence_id__promote_to_library_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "year_id",
+            "required": true,
+            "schema": {
+              "title": "Year Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "evidence_id",
+            "required": true,
+            "schema": {
+              "title": "Evidence Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Promote Evidence To Library Api V1 Planet Mark Years  Year Id  Evidence  Evidence Id  Promote To Library Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Promote Evidence To Library",
         "tags": [
           "Planet Mark Carbon"
         ]
@@ -114370,302 +115399,6 @@
         ]
       }
     },
-    "/api/v1/workflows/approvals/bulk-approve": {
-      "post": {
-        "description": "Bulk approve multiple requests.",
-        "operationId": "bulk_approve_requests_api_v1_workflows_approvals_bulk_approve_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkApprovalRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Bulk Approve Requests",
-        "tags": [
-          "Workflow Automation"
-        ]
-      }
-    },
-    "/api/v1/workflows/approvals/pending": {
-      "get": {
-        "description": "Get pending approvals for current user.",
-        "operationId": "get_pending_approvals_api_v1_workflows_approvals_pending_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Pending Approvals",
-        "tags": [
-          "Workflow Automation"
-        ]
-      }
-    },
-    "/api/v1/workflows/approvals/{approval_id}/approve": {
-      "post": {
-        "description": "Approve an approval request.",
-        "operationId": "approve_request_api_v1_workflows_approvals__approval_id__approve_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "approval_id",
-            "required": true,
-            "schema": {
-              "title": "Approval Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApprovalResponse"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Approve Request",
-        "tags": [
-          "Workflow Automation"
-        ]
-      }
-    },
-    "/api/v1/workflows/approvals/{approval_id}/reject": {
-      "post": {
-        "description": "Reject an approval request.",
-        "operationId": "reject_request_api_v1_workflows_approvals__approval_id__reject_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "approval_id",
-            "required": true,
-            "schema": {
-              "title": "Approval Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApprovalResponse"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Reject Request",
-        "tags": [
-          "Workflow Automation"
-        ]
-      }
-    },
-    "/api/v1/workflows/delegations": {
-      "get": {
-        "description": "Get current user's delegations.",
-        "operationId": "get_my_delegations_api_v1_workflows_delegations_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get My Delegations",
-        "tags": [
-          "Workflow Automation"
-        ]
-      },
-      "post": {
-        "description": "Set up out-of-office delegation.",
-        "operationId": "set_delegation_api_v1_workflows_delegations_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DelegationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Set Delegation",
-        "tags": [
-          "Workflow Automation"
-        ]
-      }
-    },
-    "/api/v1/workflows/delegations/{delegation_id}": {
-      "delete": {
-        "description": "Cancel a delegation.",
-        "operationId": "cancel_delegation_api_v1_workflows_delegations__delegation_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "delegation_id",
-            "required": true,
-            "schema": {
-              "title": "Delegation Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Cancel Delegation",
-        "tags": [
-          "Workflow Automation"
-        ]
-      }
-    },
     "/api/v1/workflows/escalations/pending": {
       "get": {
         "description": "Get workflows pending escalation.",
@@ -115148,31 +115881,6 @@
           }
         ],
         "summary": "Start Workflow",
-        "tags": [
-          "Workflow Automation"
-        ]
-      }
-    },
-    "/api/v1/workflows/stats": {
-      "get": {
-        "description": "Get workflow statistics.\n\nScoped to the caller: `pending_approvals` counts the same queue returned by\n`GET /approvals/pending` (PX-286). Metrics the engine cannot measure are\nreturned as null \u2014 never fabricated organisation-wide constants.\n\nClients that render the pending list alongside this tile should treat the\nlist length as authoritative if the two ever diverge.",
-        "operationId": "get_workflow_stats_api_v1_workflows_stats_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Workflow Stats",
         "tags": [
           "Workflow Automation"
         ]
