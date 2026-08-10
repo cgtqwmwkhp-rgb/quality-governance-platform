@@ -34,13 +34,15 @@ from typing import Any, Optional
 import pytest
 from httpx import AsyncClient
 
-from tests.integration._document_control_scratch import TENANT_ID, USER_ID, ScratchDatabase
+from tests.integration._document_control_scratch import (
+    OTHER_TENANT_ID,
+    OTHER_USER_ID,
+    TENANT_ID,
+    USER_ID,
+    ScratchDatabase,
+)
 
 ENDPOINT = "/api/v1/approvals/my-decisions"
-
-OTHER_USER_ID = USER_ID + 4242
-OTHER_TENANT_ID = TENANT_ID + 77
-
 
 def _naive_utc(offset_days: int = 0) -> datetime:
     """Every ``DateTime`` column touched here is declared without ``timezone=True``.
