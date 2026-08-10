@@ -10,6 +10,23 @@
 - **Problem:**
   1. UI still said “AI Copilot” / “Copilot” while PlantExpand’s common AI name is PlantEx Assist.
   2. PROD correctly discloses grounded mode (`ai_copilot` + `ai_copilot_inference` true → “Live register facts — fixed question set”), but citation/out-of-set refusals still returned “This demo is not connected to your registers…” — so the panel looked unimplemented even when it was live and honest about limits.
+
+> **Honesty note — read before treating PROD output as a bug.**
+> If PROD shows the demo banner and “not connected” wording, check
+> `AI_COPILOT_INFERENCE_ENABLED` before filing a defect. With inference **off**
+> that copy is correct and is `FR-COPILOT-HONEST` working as designed. This PR
+> renames the product and corrects the wording on the paths where inference is
+> **on**; it does **not** turn inference on, and it changes no flag default.
+
+**Three refusal paths, three different true sentences.** The earlier fix collapsed
+these into one string, which is why a live deployment described itself as a
+disconnected demo:
+
+| Runtime state | What is actually true | Copy served |
+|---|---|---|
+| Inference off | No register is read; replies are keyword matches | “This PlantEx Assist demo is not connected to your registers…” |
+| Inference on, no matching intent | Registers are wired up; the **closed question set** is the limit | “That is outside the fixed set of questions PlantEx Assist answers from your registers…” |
+| Inference on, citation check failed | Intent matched and figures were computed; the wording quoted something absent from them | “I could not verify every figure in that answer against your own registers, so I have dropped it…” |
 - **In scope:**
   - User-facing strings: disclosure titles/subtitles/banners/welcome/placeholders, nav label, OpenAPI tag, API disabled-detail and refuse copy
   - Mode-aware grounded refuse (no “demo is not connected” when inference is on)
@@ -23,9 +40,35 @@
 ## 2) Impact Map
 
 - **Frontend:** `copilotDisclosure.ts`, `AICopilot.tsx`, `Layout.tsx` (aria-label + comments), `en.json` / `cy.json` `nav.copilot`, tests
-- **Backend:** `copilot_service.py` refuse strings, `copilot.py` disabled detail + action reason, OpenAPI tag “PlantEx Assist” in `src/api/__init__.py` + `src/main.py`
-- **Docs:** This Change Ledger
+- **Backend:** `copilot_service.py` refuse strings + mode-aware simulator, `copilot.py` disabled detail + action reason, OpenAPI tag “PlantEx Assist” in `src/api/__init__.py` + `src/main.py`
+- **Docs:** This Change Ledger; one-line tag edit in `docs/contracts/openapi.json`
 - **No alembic / no schema / no new flag**
+
+**Residual technical identifiers, left on purpose.** Renaming any of these is a
+breaking change for deployed config, stored rows or client URLs, and none of them
+is a string a user reads:
+
+- Route prefix `/api/v1/copilot`; router module `src/api/routes/copilot.py`
+- Env / settings `AI_COPILOT_ENABLED`, `AI_COPILOT_INFERENCE_ENABLED`
+- Client feature keys `ai_copilot`, `ai_copilot_inference`; kill-switch row `copilot_kill_switch`
+- ORM models `CopilotSession` / `CopilotMessage` / `CopilotAction` / `CopilotFeedback` / `CopilotKnowledge` and table names
+- React module folder `components/copilot/`, component `AICopilot`, `data-testid`s (`ai-copilot-demo-banner`, `ai-copilot-grounded-banner`), i18n key `nav.copilot`
+- Remaining docstrings/log lines that read “AI Copilot” (e.g. `copilot_kill_switch.py`) — developer- and operator-facing only
+
+**`/api/v1/meta/features` does not expose a product name**, and this PR does not
+add one. The endpoint returns effective flag state only, and adding a field means
+a `ClientFeatureFlagsResponse` schema change plus a contract regeneration — worth
+doing deliberately, not as a side effect of a rename. The panel gets its name from
+the bundle today, which is accurate because the name is build-time constant.
+
+**`docs/contracts/openapi.json` was edited surgically (tag string only), not
+regenerated.** The checked-in contract is already stale against `main` by many
+merged PRs: a full `scripts/generate_openapi.py` run produced **916 added lines**
+of drift belonging to other changes. Importing that into a rename PR would have
+made the diff unreviewable and silently claimed those contract changes as this
+one's. `openapi-baseline.json` still records the old tag by design — it is a
+frozen historical snapshot used only for breaking-change comparison, and
+`check_openapi_compatibility.py` inspects `paths`/`schemas`, never `tags`.
 
 ## 3) Compatibility & Data Safety
 
@@ -41,6 +84,9 @@
 - [x] AC-03: Nav control label (`nav.copilot`) is **PlantEx Assist** in en and cy.
 - [x] AC-04: When `copilot_inference_is_enabled()` and grounding refuses, response does **not** contain “demo is not connected”.
 - [x] AC-05: Simulated live-data refuse may still say demo, branded as PlantEx Assist demo.
+- [x] AC-10: A citation failure is worded as an unverified figure, **not** as “outside the fixed set” — the intent did match and the figures were computed.
+- [x] AC-11: With inference on, **every** fall-through branch (write, risk, unknown concept, navigation, catch-all) drops demo wording, not only the live-data refusal.
+- [x] AC-12: The permission-denied and no-intent cases stay indistinguishable from outside — wording keys off a deployment-wide flag, never off the caller.
 - [x] AC-06: `/api/v1/copilot` path and `AI_COPILOT_*` env names are unchanged.
 - [x] AC-07: OpenAPI tag for the routes is **PlantEx Assist**.
 - [x] AC-08: No alembic revision; no test skipped/loosened to go green.
@@ -48,15 +94,35 @@
 
 ## 5) Testing Evidence
 
-- [x] `python3.11 -m pytest tests/unit/test_copilot_grounded_inference.py::test_citation_failure_returns_honesty_refusal tests/unit/test_copilot_honesty.py` — 7 passed
-- [x] `npx vitest run src/components/copilot/__tests__/copilotDisclosure.test.ts src/components/copilot/__tests__/AICopilot.test.tsx` — 31 passed
-- [ ] Full PR CI suite — in flight after ledger fix
+Observed locally, not inferred:
+
+- [x] `pytest tests/unit -k copilot` — **155 passed, 0 skipped** (covers honesty, grounded inference, grounded compliance, kill switch, feature flag, session scoping, knowledge authz, OpenAPI exclusion)
+- [x] `npx vitest run src/components/copilot src/components/__tests__/Layout.test.tsx src/components/__tests__/Layout.a11y.test.tsx src/__tests__/App.test.tsx` — **69 passed**
+- [x] `npx tsc --noEmit` — clean
+- [x] `npx eslint` on every changed frontend file — clean
+- [x] `node scripts/i18n-check.mjs` — 4228 keys validated
+- [x] `black --check` clean on the touched Python file (it was already failing at base; this branch does not add to that)
+
+New regression tests, each pinned to a sentence that was previously wrong:
+
+- `test_ungrounded_question_refuses_without_claiming_to_be_a_demo` — inference on, out-of-set question: asserts absence of “demo is not connected” and presence of the out-of-set copy
+- `test_ungrounded_write_request_refuses_without_demo_wording` — same for the write-refusal branch
+- `test_simulate_refusals_track_whether_the_registers_are_wired_up` — both wordings side by side, asserting the refusal itself (no figure, no invention) is identical either way
+- `test_simulate_grounded_fallbacks_never_call_themselves_a_demo` — sweeps all five reachable fall-through branches
+- `test_citation_failure_returns_honesty_refusal` — tightened: must say “could not verify”, must **not** say “outside the fixed set”
+- `test_flag_off_skips_inference_path` — tightened: demo wording is *retained* where it is true
+- `copilotDisclosure.test.ts` “leaves no user-visible ‘Copilot’ wording in any mode” — sweeps every visible field of all three modes
+
+**Not verified here:** no staging or production run; no browser session against a
+deployment with inference on. CI on this PR is the first end-to-end evidence.
+
+- [ ] Full PR CI suite — in flight
 - [ ] Staging / PROD tip-chase after merge
 
 ## 6) Critical Journeys Verified (CUJ)
 
-- [x] CUJ-01: With surface + inference on, header shows PlantEx Assist + grounded banner; refuse outside fixed set does not say “demo”.
-- [x] CUJ-02: With surface on and inference off, header shows PlantEx Assist (Demo) and demonstration banner.
+- [x] CUJ-01: With surface + inference on, header shows PlantEx Assist + grounded banner; refuse outside fixed set does not say “demo”. *(Verified at unit/component level, not in a browser.)*
+- [x] CUJ-02: With surface on and inference off, header shows PlantEx Assist (Demo) and demonstration banner — unchanged behaviour, only the name moves.
 - [ ] CUJ-03: Same journeys on staging after tip deploy — post-merge conveyor
 - [ ] CUJ-04: Same journeys on PROD after tip deploy — post-merge conveyor
 
