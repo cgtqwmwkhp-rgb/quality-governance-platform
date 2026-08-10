@@ -93,6 +93,16 @@
   header link removed. The link carried an `engineer_id` filter that no
   surviving surface honours, so it is deleted rather than silently widened to
   every engineer's gaps (retiring AC-04 of the earlier `pr_body_wf_profile`).
+  The alternative — repointing the same link at
+  `/actions?sourceType=competence_gap` — was rejected on evidence, not taste:
+  `list_actions` offers no engineer filter at all, and the only person-shaped
+  filter it has (`assigned_to`) resolves to the CAPA **owner**, which
+  `competence_gap_service.create_capa` sets from `owner_id` / `owner_email` /
+  `created_by_id` — never the engineer the gap is about. A link labelled with
+  one engineer that lands on every engineer's gap work is the same class of
+  lie this PR is removing, so the affordance goes rather than degrades. The
+  engineer's own competency picture stays on the profile (competency records,
+  state KPIs, requirements coverage), all untouched.
 - **Frontend — locales:** 46 lines removed from **each** of `en.json` and
   `cy.json` (parity preserved): the 44 `competenceGaps.*` strings,
   `nav.competence_gaps`, and `workforce.engineers.view_competence_gaps`.
@@ -115,6 +125,11 @@
   `p2_routes` 44 → 45 (`total_routes` unchanged at 117 — no entry was added or
   removed). This was caught by
   `test_page_registry_summary_matches_measured_counts`, not by inspection.
+  `last_updated` is bumped `2026-08-01` → `2026-08-10`, which is what
+  `validate_registries.py` asks for when a registry's content is reviewed and
+  changed. `docs/evidence/registry-validation-report.json` is a shared
+  generated artifact whose only diff on this branch was its own regeneration
+  timestamps, so it is deliberately **not** committed.
 - **Tests:** see §5. Net: 3 test files deleted (they tested deleted code), 3
   updated, 1 backend governance list updated.
 - **Dependencies:** None added, removed or updated.
@@ -236,6 +251,8 @@ Run locally in the worktree `.worktrees/p2-calendar-cg-cut` on `5cd4a43fb`:
 - [x] `python scripts/validate_registries.py` → all 3 registries pass. (The
   evidence JSON it rewrites was reverted — it is a shared generated artifact and
   its only diff was a regeneration timestamp unrelated to this PR.)
+- [x] `mypy src/api/routes/governed_knowledge.py` → "Success: no issues found in
+  1 source file".
 - [x] **Every new/changed test proven to bite (negative controls, each reverted
   afterwards):**
   - Restoring `Layout.tsx` from `origin/main` → exactly the new nav-absence test
@@ -272,7 +289,12 @@ Run locally in the worktree `.worktrees/p2-calendar-cg-cut` on `5cd4a43fb`:
 - [ ] Full CI — on PR.
 - [ ] Staging / Prod tip verify — after merge per conveyor (DONE ≠ merge).
 
-**Not verified:** no real browser was driven. Redirect evidence is
+**Not verified:** `ruff` is not installed in this local toolchain, so the two
+changed Python files were checked with `mypy` only; CI's lint job is the first
+`ruff` run on them. The Python diff is three deleted lines plus a comment in one
+route function and a two-entry move between two module-level tuples in one test.
+
+No real browser was driven. Redirect evidence is
 `window.location` after render in jsdom, not a browser navigation. The Playwright
 UX-coverage specs (`link-audit`, `page-audit`, `a11y-audit`) are registry-driven
 and run against a deployed app; they were not executed locally, so the claim
@@ -344,7 +366,7 @@ No load or performance testing was done (none is relevant to a deletion).
 - Files: 18 changed excluding this ledger — 6 source, 2 locale, 1 registry,
   4 frontend test files, 1 backend governance test, 3 pages/clients deleted,
   1 e2e spec deleted
-- Net excluding the ledger: **88 insertions, 2,154 deletions** across 18 files;
+- Net excluding the ledger: **89 insertions, 2,155 deletions** across 18 files;
   the only non-test production addition is 4 lines in `Actions.tsx`
 - Local evidence: 2,820 frontend tests green; 50 backend tests green across 4
   files; all new tests proven to fail without their change; `tsc` / eslint /
