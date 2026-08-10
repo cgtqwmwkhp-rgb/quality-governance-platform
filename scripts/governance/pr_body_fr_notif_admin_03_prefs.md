@@ -1,302 +1,422 @@
 # Change Ledger (CL-FR-NOTIF-ADMIN-03)
 
-> Base: `origin/main` @ `5cd4a43fb` (#1707 honesty sweep, LIVE).
-> Backend + two i18n strings — no alembic, no API contract change, no new flag.
+> Base: `origin/main` @ `5cd4a43fb` (#1707 FR-HONESTY-SWEEP-01, which itself sits on
+> #1704 KILL-1 canonical dispatcher).
+> Backend enforcement + a merge-semantics fix. **No alembic revision. No new
+> column. No new settings table.** Two locale strings changed so the on-screen
+> promise matches what is now enforced.
 
 ## 1) Summary
 
 - **Feature / Change name:** FR-NOTIF-ADMIN-03 — notification category
-  preferences and quiet hours actually gate delivery, and the two preference
-  write surfaces stop overwriting each other
-- **User goal (1–2 lines):** When a user turns off email for a category, the
-  email stops arriving. When a user has quiet hours set, their phone stops
-  buzzing overnight. Saving preferences on one screen does not silently wipe
-  what they saved on the other.
-- **Problem:** Two independent faults, both invisible until you look.
-  1. `NotificationPreference.category_preferences`, `quiet_hours_enabled`,
-     `quiet_hours_start` and `quiet_hours_end` were **stored and read back to
-     the UI but never consulted by any delivery path**. `_get_delivery_channels`
-     looked only at the three top-level `*_enabled` booleans. Every per-category
-     toggle in the Notifications settings tab was decorative, and quiet hours
-     had no enforcement site anywhere in `src/`.
-  2. `PUT /api/v1/notifications/preferences` and
-     `PUT /api/v1/notifications/push/preferences` both write the single
-     `category_preferences` JSON column with **different key namespaces**. The
-     canonical route did a wholesale replace. The user-facing tab only knows the
-     five `CATEGORY_IDS`, so every save silently deleted `incident_alerts`,
-     `compliance_updates` and `mentions` — keys the push surface owns and this
-     surface cannot even display.
+  preferences and quiet hours actually gate delivery on the canonical dispatcher
+- **User goal (1–2 lines):** A user who turns off "Audit Notifications → email",
+  or sets quiet hours 22:00–07:00, should stop being emailed and stop being
+  buzzed overnight. Until this PR both settings were stored faithfully and then
+  ignored by the only code that sends anything.
+- **Problem:** Three defects, all provable in the code as shipped on
+  `5cd4a43fb`:
+  1. **`category_preferences` was write-only.**
+     `NotificationService._get_delivery_channels` read `email_enabled`,
+     `sms_enabled` and `push_enabled` and nothing else. The five per-category
+     channel toggles on the Notifications → Preferences tab persisted into
+     `category_preferences` and were then read by no delivery code anywhere.
+     #1707 §"Out of scope" recorded this explicitly and left it for this item.
+  2. **Quiet hours were decorative.** `quiet_hours_enabled`,
+     `quiet_hours_start` and `quiet_hours_end` exist on
+     `notification_preferences` and are editable through both preference APIs.
+     No line of code compared the current time to them. A user could set
+     22:00–07:00 and still be pushed and SMS'd at 03:00.
+  3. **The prefs clobber (found during #1707).**
+     `PUT /api/v1/notifications/preferences` did
+     `setattr(prefs, "category_preferences", value)` — a wholesale replace —
+     while `PUT /api/v1/notifications/push/preferences` merged flat event-type
+     flags into the same JSON column. The frontend always sends the full
+     five-category map on save, so any save from the Notifications page silently
+     deleted `incident_alerts`, `compliance_updates` and `mentions` written
+     through the push route. Asymmetric data loss between two surfaces sharing
+     one column.
 - **In scope:**
-  - NEW `src/domain/services/notification_preferences.py` — one pure,
-    database-free module holding category mapping, channel-opinion reading,
-    quiet-hours evaluation and merge semantics
-  - `NotificationService.create_notification` resolves channels through that
-    module, so preferences bind on the canonical dispatcher
-  - Suppression audit trail written into `extra_data["suppressed_channels"]`
-  - Merge-not-clobber on both preference write surfaces, via one shared helper
-  - `notification_quiet_hours_timezone` setting (default `Europe/London`)
-  - Two i18n strings corrected to stop over-promising (en + cy)
-- **Out of scope / deferred:**
-  - A quiet-hours UI. No frontend control writes `quiet_hours_enabled` today
-    (see §3) — this PR makes the stored value load-bearing, it does not add the
-    control that sets it.
-  - Making the `document_updates` toggle real. No `NotificationType` models a
-    document event, so there is nothing to gate (see §3).
-  - Per-user timezones for quiet hours. There is no column for one.
-  - A digest queue to defer email suppressed overnight.
-- **Feature flag / kill switch:** None — rollback is revert. Deliberate: a flag
-  would mean shipping a preference system that may or may not be listening,
-  which is the fault being fixed.
+  - New pure rules module `notification_preferences.py`: category-per-type map,
+    both stored value shapes, quiet-hours window arithmetic, and one merge
+    function used by both write surfaces
+  - `NotificationService` consults it on every `create_notification` — including
+    when the caller passed explicit `channels=`
+  - Merge-not-clobber on `PUT /api/v1/notifications/preferences`; the push route
+    switched onto the same shared helper so the two cannot drift apart again
+  - A `suppressed_channels` audit trail on the notification row when a
+    preference held a channel back
+  - Tests: 63 in the two touched/added unit files, incl. negative controls
+- **Out of scope / deliberately not done:**
+  - **No alembic revision, and none is required.** Every field enforced here
+    already exists on `notification_preferences`
+    (`category_preferences`, `quiet_hours_enabled/_start/_end`). No second
+    alembic head; no column added, widened or renamed.
+  - **No new settings table.** The existing `NotificationPreference` model is
+    the store, exactly as briefed.
+  - **N1 notification inventory UI and N2 feature flags are not started here.**
+  - `Layout.tsx` / nav: untouched. Audit Builder: untouched. Dashboard
+    `RecentCasesPanel`: untouched. `admin/NotificationSettings` cosmetic cards:
+    already deleted in #1707 and not resurrected.
+  - **`WorkflowRule` is not wired in.** The brief allowed enhancing
+    "WorkflowRule/prefs model"; the prefs model is the one that actually holds
+    per-user consent, and `workflow_rules` has no relationship to
+    `notification_preferences` and no per-user notification consent to enhance
+    (`WorkflowEngine` queues Celery email directly and never touches
+    `NotificationPreference`). Enhancing the prefs model was the smaller, real
+    change; inventing a link to `workflow_rules` would have been scope for its
+    own sake. Stated here rather than silently skipped.
+  - **`document_updates` is still a no-op toggle** — see §3.
+  - **Email is not deferred during quiet hours** — see §3.
+  - Notification paths that bypass the canonical service (compliance-schedule
+    sweep task, standards-assessment notifications, document campaigns) insert
+    `Notification` rows directly and are **not** covered — see §3.
+- **Feature flag / kill switch:** None, deliberately. This makes stored consent
+  effective; hiding that behind a flag would leave the dishonest path as the
+  default. `NOTIFICATION_QUIET_HOURS_TIMEZONE` is a config knob, not a gate:
+  quiet hours only apply when a user has enabled them.
 
 ## 2) Impact Map (what changed)
 
-- **Backend:**
-  - NEW `src/domain/services/notification_preferences.py` (358 lines) —
-    `CATEGORY_BY_TYPE`, `categories_for`, `is_channel_muted`, `parse_hhmm`,
-    `in_quiet_window`, `is_quiet_hours`, `filter_channels`,
-    `merge_category_preferences`, plus `PreferenceSnapshot` / `ChannelDecision`.
-    No database access, so it is exhaustively testable and both routes and the
-    dispatcher share exactly one definition of the rules.
-  - `src/domain/services/notification_service.py` — `create_notification` calls
-    the new `_resolve_delivery_channels` **before** constructing the row, so the
-    suppression record is present at insert. `_get_delivery_channels` split into
-    `_load_preferences` + `_channels_from_toggles` and retained as a thin
-    wrapper (existing callers and tests unchanged).
-  - `src/api/routes/notifications.py` — `category_preferences` merged, not
-    replaced; the response now reports merged state rather than echoing the
-    request.
-  - `src/api/routes/push_notifications.py` — its hand-rolled merge replaced by
-    the shared helper, so both surfaces cannot drift apart again.
-  - `src/core/config.py` — `notification_quiet_hours_timezone`.
-- **Frontend:** two i18n values only (`en.json`, `cy.json`). No component,
-  no route, **no `Layout.tsx` or navigation shell edit**.
-- **APIs:** No contract change. Same paths, same request schemas, same status
-  codes. `PUT /api/v1/notifications/preferences` returns a strictly richer
-  `preferences.category_preferences` (merged state); no field was removed.
-- **Database:** None. No alembic revision. Every column read already exists.
+- **NEW `src/domain/services/notification_preferences.py` (358 lines):** pure,
+  DB-free, no ORM writes.
+  - `CATEGORY_BY_TYPE` — which category owns each `NotificationType`.
+    `assignment` / `reassignment` / `action_assigned` →
+    `assignment_notifications`; `action_due_soon` / `action_overdue` →
+    `action_reminders` (they are reminders, not assignments); the four `audit_*`
+    → `audit_notifications`; the three `incident_*` plus `sos_alert` /
+    `riddor_incident` → `incident_alerts`; `compliance_alert` /
+    `certificate_expiring` / `certificate_expired` → `compliance_updates`;
+    `mention` → `mentions`.
+  - `categories_for()` — adds `high_priority_alerts` for `HIGH` priority on top
+    of the type's own category, so either toggle can hold a channel back.
+  - `PreferenceSnapshot.from_row()` — read-only view built with `getattr`
+    defaults, so a partially-populated row degrades to "no opinion" instead of
+    raising mid-dispatch.
+  - `filter_channels()` — returns a `ChannelDecision(allowed, suppressed)` where
+    `suppressed` maps channel → reason (`category:<id>` or `quiet_hours`).
+  - `merge_category_preferences()` — the single merge rule (see §3).
+  - `parse_hhmm()` / `in_quiet_window()` / `is_quiet_hours()` — bounds parsing
+    and window arithmetic including the across-midnight case.
+  - `_now_utc()` exists as a one-line clock seam so quiet-hours tests freeze
+    time instead of racing it.
+- **`src/domain/services/notification_service.py`:**
+  - `_get_delivery_channels` split into `_load_preferences` (one query),
+    `_channels_from_toggles` (the previous channel-toggle logic, unchanged) and
+    `_resolve_delivery_channels` (toggles → category gate → quiet-hours gate).
+    `_get_delivery_channels` is kept as a thin wrapper so its existing callers
+    and tests are unaffected.
+  - `create_notification` now resolves channels **before** inserting the row,
+    because `extra_data` is a plain `JSON` column: writing
+    `suppressed_channels` at construction time means SQLAlchemy actually
+    persists it, rather than relying on an in-place mutation it does not track.
+  - Explicit `channels=` arguments are now gated too. Callers pass channels to
+    say which channels a message *suits* (`create_status` → in-app only), not to
+    assert the user consented to be interrupted on them. Without this,
+    `create_status`, the compliance-schedule assignment notifier
+    (`[IN_APP, EMAIL]`), the CES proposal notifier and the training-matrix
+    notifier would all have bypassed preferences entirely.
+- **`src/api/routes/notifications.py`:** `category_preferences` routed through
+  `merge_category_preferences` instead of `setattr`. The response now reports
+  the **merged** state of `category_preferences` rather than echoing only what
+  the caller sent, so a client cannot mistake its own payload for the stored
+  truth.
+- **`src/api/routes/push_notifications.py`:** its hand-rolled
+  `existing.update(cat_updates)` replaced by the same shared helper. Behaviour
+  is equivalent for flat flags and now additionally channel-merges nested
+  entries. One rule, two callers.
+- **`src/core/config.py`:** one new setting,
+  `notification_quiet_hours_timezone: str = "Europe/London"` (env
+  `NOTIFICATION_QUIET_HOURS_TIMEZONE`). Reason in §3.
+- **Frontend:** `en.json` / `cy.json` — one string each.
+  `notifications.pref.high_priority_alerts_desc` said "Receive alerts for
+  critical and high priority items". Critical alerts (SOS, RIDDOR) deliberately
+  **cannot** be muted, so the old copy promised a control the code must not
+  honour. Now: "Receive alerts for high priority items. Critical safety alerts
+  are always delivered." Keys unchanged, parity preserved. No component, page,
+  nav or client file touched.
+- **APIs:** No path, parameter, request body or response schema changed. The
+  only OpenAPI difference is the `description` text of the two PUT operations
+  (their docstrings). Verified by diffing `app.openapi()` against
+  `openapi-baseline.json`: `differing operation fields: ['description']` for
+  both, and zero notification paths added or removed.
+- **Database:** **None.** No alembic revision. No column added, dropped,
+  renamed or re-typed. No backfill, no data migration.
 - **Tests:** NEW `tests/unit/test_notification_preference_enforcement.py`
-  (56 tests); `tests/unit/test_notifications_routes.py` extended (+4).
+  (56 tests); `tests/unit/test_notifications_routes.py` +4 tests. Detail in §5.
 - **Docs:** This Change Ledger.
+- **Dependencies:** None. `zoneinfo` is stdlib (Python 3.11 is already the
+  floor — `tests/conftest.py` hard-fails below it).
 
 ## 3) Compatibility & Data Safety
 
-- **Absent means "no opinion", never "off".** A user with no stored preferences,
-  or a category key that was never written, keeps exactly the delivery they had
-  before this PR. `test_user_without_stored_preferences_keeps_previous_behaviour`
-  is the regression guard. This is the single most important compatibility
-  property here: the failure mode of getting it wrong is mass silent muting.
-- **Two stored value shapes, both honoured.** The user-facing tab writes
-  `{"email": bool, "push": bool, "in_app": bool}`; the push API writes bare
-  booleans. A bare `false` suppresses **push only**, because that route governs
-  no other channel — widening it to email/SMS would enforce an intent the user
-  never expressed. Malformed or unknown shapes degrade to "no opinion" rather
-  than raising mid-dispatch.
-- **CRITICAL bypasses both gates.** `SOS_ALERT` and `RIDDOR_INCIDENT` cannot be
-  muted by any toggle or quiet-hours window. Asserted twice.
-- **Quiet hours hold back push and SMS only.** In-app is passive and email is
-  pull-based; suppressing email would drop the only durable off-platform record,
-  and there is no digest queue to defer it to. Suppressing `in_app` (possible
-  via an explicit category toggle) skips the live WebSocket nudge only — the row
-  is still inserted and still appears in the list on next fetch.
-- **Equal quiet-hours bounds describe no window,** so a mis-saved `22:00`/`22:00`
-  cannot mute a user around the clock. Unparseable bounds do not gate at all.
-- **Timezone:** bounds are bare `HH:MM` with no per-user timezone column, so
-  they are interpreted in a deployment-wide setting rather than pretending to be
-  per-user. An unknown zone name falls back to UTC with a warning instead of
-  raising.
-- **Merge is key-wise, and channel-wise when both sides are maps,** so a partial
-  payload cannot drop a channel the user never touched. A non-mapping update
-  (`None`, a string) is treated as "no change" — no caller has a legitimate
-  reason to blank every other surface's settings. The helper returns a fresh
-  dict, which is what makes SQLAlchemy notice the JSON column changed.
-- **Breaking changes:** None to any contract. One intended behaviour change,
-  stated plainly below.
-- **Migration plan:** N/A.
-- **Rollback strategy:** Revert the merge commit. No schema, no flag, no data
-  written that a revert would strand.
-
-### Intended behaviour change (blast radius, measured not guessed)
-
-Explicitly-requested `channels=[...]` are now gated too. A caller passes
-channels to say what a message *suits*, not to assert the user consented to be
-interrupted. Three call sites pass explicit channels:
-
-| Call site | Type / priority | Effect |
-| --- | --- | --- |
-| `notification_service.notify_status_change` | `ACTION_COMPLETED` / MEDIUM, in-app only | None — uncategorised type, and quiet hours do not gate in-app |
-| `ces_asset_import_service` (safety lookups) | `APPROVAL_REQUESTED` / **HIGH**, in-app + email | Email now suppressed **iff** the user set `high_priority_alerts.email = false` |
-| `api/routes/training_matrix` (frequency change) | `APPROVAL_REQUESTED` / **HIGH**, in-app + email | Same |
-
-That is the toggle doing what its label promises. Users who never opened the
-settings tab have no stored key and are unaffected; users who saved it with the
-shipped defaults have `high_priority_alerts.email = true` and are also
-unaffected.
-
-### Known gaps — stated, not silently papered over
-
-- **No UI enables quiet hours.** `quiet_hours_enabled` is accepted by
-  `PUT /api/v1/notifications/preferences` and is now enforced, but no frontend
-  control writes it; `notificationsClient.ts` declares the fields and nothing
-  sends them. Enforcement is the prerequisite for that control, not a
-  substitute for it. **This PR does not claim user-facing quiet hours work.**
-- **The push API writes `quiet_hours_start`/`quiet_hours_end` but never
-  `quiet_hours_enabled`,** so bounds set through that surface stay dormant. Not
-  auto-enabled here on purpose: inferring consent from two bounds would switch
-  on suppression for anyone who ever set them, which is the opposite of the
-  "absent means no opinion" rule this PR is built on.
-- **The `document_updates` toggle still does nothing.** No `NotificationType`
-  models a document event, and document campaign notifications are inserted
-  directly rather than dispatched through `NotificationService`. Making it real
-  means routing those inserts through the service first. Recorded in the module
-  docstring as follow-up rather than faked with a mapping that never fires.
-  Four of the five user-facing categories are now live; this one is not.
+- **A user who has never saved preferences sees no change.** Absent keys mean
+  "no opinion", never "off". `filter_channels` with an empty snapshot returns
+  the requested channels untouched. This is locked by
+  `test_user_without_stored_preferences_keeps_previous_behaviour` and
+  `test_no_stored_preferences_suppresses_nothing` — both pass identically on
+  `origin/main` and on this branch, which is exactly what makes them useful as
+  regression guards rather than bite tests.
+- **Critical alerts can never be muted.** `filter_channels` returns early for
+  `NotificationPriority.CRITICAL`, before both gates. `send_sos_alert` and
+  `send_riddor_alert` are `CRITICAL`, so no category toggle and no quiet-hours
+  window can suppress a lone-worker SOS or a RIDDOR alert. Two tests assert
+  this, one with every channel explicitly disabled *and* quiet hours active.
+- **No notification is ever lost, only channels are.** The `notifications` row
+  is always inserted regardless of suppression, so a suppressed message still
+  appears in the bell and in `GET /api/v1/notifications/`. Suppression removes
+  the interruption, not the record.
+- **Merge rule, stated precisely** (`merge_category_preferences`):
+  - stored keys absent from the update survive it — this is the clobber fix;
+  - a key present in the update replaces the stored value for that key;
+  - when both stored and incoming values are channel maps, channels merge
+    individually, so `{"push": false}` cannot drop a stored `email` opinion;
+  - a shape change on one key (nested map → bare boolean) takes the explicit
+    write, because it is an explicit write to that one key;
+  - a non-mapping update (`null`, a string, `0`) is treated as **no change** —
+    no caller has a legitimate reason to blank every other surface's settings,
+    and the previous code would have persisted `None` over the lot;
+  - a fresh dict is always returned, never the stored dict mutated in place,
+    which is what makes SQLAlchemy notice the change on a plain `JSON` column
+    (asserted by `test_result_does_not_alias_stored_dicts`).
+  - **Consequence, stated plainly:** merge semantics mean a category key cannot
+    be *deleted* through either PUT, only overwritten. The vocabulary is fixed
+    and small, no client attempts deletion, and #1707 already established that
+    a stale key in the JSON is ignored rather than rendered. Deletion, if ever
+    needed, wants an explicit DELETE, not a silently destructive PUT.
+- **Quiet hours are evaluated in a deployment-wide timezone, not the user's.**
+  There is no timezone column on `notification_preferences` (nor on `users`) and
+  the brief forbids a migration, so bounds are interpreted in
+  `NOTIFICATION_QUIET_HOURS_TIMEZONE`, default `Europe/London`. For a UK
+  platform this is right far more often than UTC would be — and it is correct
+  through BST, which UTC is not. **It is wrong for a user in another timezone,
+  and that is a schema limitation, not a solved problem.** Per-user quiet hours
+  need a column and therefore a migration; I stopped rather than land one.
+  Tested: 21:30 UTC in July is 22:30 in London and is treated as quiet, while
+  the same instant in UTC is not.
+- **Quiet hours hold back push and SMS only; in-app and email still go.**
+  In-app is passive, and email is pull-based. Suppressing email would silently
+  drop the only durable off-platform record, because the `email_digest_*`
+  columns have no digest queue behind them to defer it to (#1707 removed the
+  weekly-digest UI for exactly that reason). Deferring email properly needs that
+  queue; that is a follow-up, not something to fake by dropping mail.
+- **A mis-saved quiet-hours window cannot mute a user around the clock.**
+  Equal bounds (`22:00`–`22:00`) describe no window rather than a whole day, and
+  unparseable or missing bounds disable gating entirely with a debug log. Both
+  are tested.
+- **Bare booleans from the push API suppress push only.** The push route governs
+  push; widening a `false` written there to email or SMS would enforce an intent
+  the user never expressed. Documented in the module docstring and tested.
+- **Malformed stored values degrade to "no opinion", not to silence.** A string
+  where a channel map was expected, or `{"email": "true"}`, suppresses nothing.
+  Tested.
+- **Known no-op left in place, on purpose:** the `document_updates` category has
+  no `NotificationType` behind it — no notification type models a document
+  event, and document-campaign notifications are inserted directly rather than
+  dispatched. The toggle therefore still gates nothing. Deleting the row is a UI
+  change this PR is scoped out of, and faking a mapping would be worse. Recorded
+  in a comment in `CATEGORY_BY_TYPE` and flagged here as follow-up.
+- **Paths that bypass the canonical dispatcher are still unenforced**, and this
+  PR does not claim otherwise: `compliance_schedule_notification_tasks.py`,
+  `standards_assessment_notifications.py` and `document_campaign_service.py`
+  each construct `Notification` rows directly and send email on their own.
+  Routing them through `NotificationService` is the natural next KILL step; it
+  is a behaviour change across three modules and does not belong in this PR.
+- **Performance:** the preference query now also runs on the explicit-`channels`
+  path, which previously skipped it — one indexed lookup on
+  `notification_preferences.user_id` (unique) per notification. `create_bulk_
+  notifications` already performed one insert and one commit per user, so this
+  does not change its order of cost.
+- **Breaking changes:** none for any API consumer. For users, delivery now
+  narrows for anyone who had already opted out or configured quiet hours —
+  which is the point of the change, and is why the copy fix in §2 ships with it.
+- **Migration plan:** N/A — no schema change.
+- **Rollback strategy (DB):** no DB change; revert the merge commit. Stored
+  `category_preferences` and quiet-hours values remain valid either way, since
+  the previous code simply ignored them.
 
 ## Compliance Delta
 
 | Control / concern | Before | After |
 | --- | --- | --- |
-| Category preference enforcement | Stored, echoed to UI, **never read by any delivery path** — five decorative toggles | Read on every `create_notification`; four of five categories genuinely gate email/push/SMS/in-app |
-| Quiet hours enforcement | `quiet_hours_*` columns existed with **zero enforcement sites in `src/`** | Enforced on the canonical dispatcher for push and SMS; UI control still absent and declared as such |
-| Life-safety override | No gate existed, so nothing could mute an SOS — safe by accident | Safe by construction: CRITICAL bypasses both gates, asserted by test |
-| Cross-surface preference writes | Canonical route replaced `category_preferences` wholesale, silently deleting the push API's `incident_alerts` / `compliance_updates` / `mentions` | Both surfaces merge through one shared helper; neither can delete keys it cannot display |
-| Update semantics drift | Two routes, two hand-rolled behaviours, no shared definition | One `merge_category_preferences`; divergence now requires deleting a test |
-| Suppression auditability | N/A — nothing was suppressed | Every suppression records channel and reason (`category:<id>` or `quiet_hours`) in `extra_data`, written at insert so no post-hoc JSON mutation is relied on |
-| Response honesty (`PUT` prefs) | Echoed the caller's own payload back, so a client could not see merged state | Returns the persisted merged `category_preferences` |
-| Copy honesty | "Receive alerts for critical and high priority items" — implied the toggle could mute critical alerts | "Critical safety alerts are always delivered" — matches the CRITICAL bypass (en + cy) |
-| Timezone honesty | — | Deployment-wide setting, documented as not per-user, rather than implying per-user quiet hours |
+| Per-category channel toggles | Persisted to `category_preferences`, read by no delivery code | Enforced on every `create_notification`, per channel |
+| Quiet hours | Three columns, editable on two APIs, compared to the clock nowhere | Push and SMS held back inside the window; in-app and email unaffected |
+| Explicit `channels=` callers | Bypassed preferences entirely (`create_status`, CS assignment notifier, CES, training matrix) | Gated on the same rules; explicit channels state suitability, not consent |
+| Critical safety alerts | Always delivered (no prefs consulted at all) | Always delivered, now by an explicit early return with two tests on it |
+| `PUT /notifications/preferences` | Replaced `category_preferences` wholesale, deleting push-route keys | Key-wise merge; stored keys the payload cannot express survive |
+| `PUT /notifications/push/preferences` | Hand-rolled merge, no channel-level merge | Same shared helper as the other surface — one rule, two callers |
+| Partial category payload | Would drop untouched channels for that category | Channels merge individually |
+| `category_preferences: null` | Persisted `None`, wiping both surfaces' settings | Treated as no change |
+| PUT response body | Echoed the caller's own payload | Reports the merged stored state |
+| Suppression visibility | Nothing to see; delivery just did not respect prefs | `extra_data.suppressed_channels` records channel → reason, plus one INFO log |
+| Quiet-hours timezone | N/A (never evaluated) | `Europe/London` by default, overridable by env; per-user TZ honestly declared as needing a migration |
+| `high_priority_alerts` copy | Promised control over "critical and high priority items" | States that critical safety alerts are always delivered |
+| Alembic heads | 1 | 1 — no revision added |
+| Tests on prefs enforcement | None (`category_preferences` had one persistence test) | 63 tests across the two files, 5 proven to fail without the change |
 
 ## 4) Acceptance Criteria (AC)
 
-- [x] AC-01: A category opt-out stops that channel on the canonical dispatcher —
-  `assignment_notifications.email = false` means `_deliver_email` is never
-  awaited, while in-app and push still are.
-- [x] AC-02: Quiet hours suppress push and SMS but keep in-app and email; the
-  window is evaluated in the configured timezone and handles the
-  across-midnight case (23:30 UTC in July = 00:30 London → quiet).
-- [x] AC-03: CRITICAL bypasses everything — an `SOS_ALERT` during quiet hours
-  with `incident_alerts` switched off still delivers push and SMS, and records
-  no suppression.
-- [x] AC-04: `PUT /api/v1/notifications/preferences` cannot delete keys it does
-  not display — `incident_alerts` and `mentions` survive a save from the
-  settings tab, and the response reports the merged state.
-- [x] AC-05: The reverse direction holds too — the push API's flat flags do not
-  drop the tab's nested channel maps.
-- [x] AC-06: A partial channel map (`{"push": false}`) leaves `email` and
-  `in_app` untouched rather than dropping them.
-- [x] AC-07: A user with no stored preferences receives exactly what they
-  received before this change; nothing is suppressed.
-- [x] AC-08: Every suppression is auditable — `extra_data["suppressed_channels"]`
-  names the channel and whether a category or quiet hours caused it.
-- [x] AC-09: Malformed stored data cannot break dispatch — a string entry, a
-  non-boolean channel value, and unparseable `HH:MM` bounds all degrade to "no
-  opinion".
-- [x] AC-10: Change Ledger body present for the ledger gate / checklist.
-- [ ] AC-11: Quiet-hours UI control writing `quiet_hours_enabled` — **deferred**,
-  not delivered here (see §3).
-- [ ] AC-12: `document_updates` toggle made real — **deferred**, requires
-  routing document campaign inserts through `NotificationService` (see §3).
+- [x] AC-01: A user with `{"audit_notifications": {"email": false}}` stored
+  receives no email for an audit notification, while in-app and push still fire.
+- [x] AC-02: Enforcement applies when the caller passed explicit `channels=`,
+  not only on the preference-derived path.
+- [x] AC-03: Inside a user's quiet-hours window, push and SMS are not
+  dispatched; in-app and email are, and the notification row still exists.
+- [x] AC-04: A quiet-hours window spanning midnight (22:00–07:00) is treated as
+  quiet at 23:30 and at 02:00, and not quiet at 12:00.
+- [x] AC-05: `CRITICAL` notifications (SOS, RIDDOR) deliver on every requested
+  channel even with every category disabled and quiet hours active.
+- [x] AC-06: A user with no stored preferences receives exactly what they
+  received before this PR.
+- [x] AC-07: `PUT /api/v1/notifications/preferences` with the full five-category
+  map preserves `incident_alerts` / `mentions` written by the push route.
+- [x] AC-08: `PUT /api/v1/notifications/push/preferences` preserves nested
+  channel maps written by the main route.
+- [x] AC-09: A partial category payload (`{"action_reminders": {"push": false}}`)
+  leaves the other channels of that category intact.
+- [x] AC-10: No alembic revision is added; `alembic heads` reports the single
+  head `20261104_lib_cut1b_drop`, and `git diff` shows zero changes under
+  `alembic/`.
+- [x] AC-11: No `Layout.tsx`, nav, Audit Builder, dashboard Recent-cases or
+  admin Notifications file is touched; no N1 inventory UI or N2 flag work.
+- [x] AC-12: No API path, parameter or response schema changes; the OpenAPI
+  compatibility check passes.
+- [x] AC-13: No existing test was skipped, loosened, renamed or deleted to go
+  green.
+- [x] AC-14: Change Ledger body present for the ledger gate / gate checklist.
 
 ## 5) Testing Evidence
 
-Run locally in the worktree, base `5cd4a43fb`:
+Run locally in `.worktrees/notif-admin-03-prefs` with
+`/Users/davidharris/quality-governance-platform/.venv/bin/python` (3.11.15):
 
+- [x] **Full backend unit suite** `pytest tests/unit -q` → **6,564 passed, 0
+  failed, 11 skipped** in 146s. The 11 skips are pre-existing and unrelated (the
+  one in the notification neighbourhood is
+  `test_retention_rules_are_answerable.py:46`, "notification_logs is
+  operational, not governed by a retention policy" — it skips identically on
+  `origin/main`).
 - [x] `pytest tests/unit/test_notification_preference_enforcement.py
-  tests/unit/test_notifications_routes.py` → **63 passed, 0 skipped**
-- [x] Regression sweep across the notification surface —
-  `test_notification_service.py`, `test_action_assignment_notify.py`,
-  `test_workforce_notifications.py`,
-  `test_standards_assessment_notifications.py`,
-  `test_compliance_schedule_notifications.py`,
-  `test_compliance_schedule_assignment_notify.py`,
-  `test_document_campaign_overdue_notifications.py`,
-  `test_c67_push_migration_adoption.py`, `test_audit_capa_closure_bridge.py`
-  → **123 passed, 0 skipped**
-- [x] `black --check` → clean (7 files)
-- [x] `isort --check-only --settings-path pyproject.toml` → clean
-- [x] `flake8 --count` → **0**
+  tests/unit/test_notifications_routes.py -q` → **63 passed, none skipped**.
+- [x] Notification neighbourhood
+  (`-k "notif or push or mention or assignment or workforce or sms or capa"`) →
+  **503 passed, 1 skipped** (the retention skip above).
 - [x] `mypy src/ --config-file pyproject.toml` → **Success: no issues found in
-  602 source files**
-- [x] `scripts/validate_type_ignores.py` → passed
-- [x] `scripts/check_mock_data.py --repo-root .` → `[PASS]`
-- [ ] Full CI — on PR
-- [ ] Staging / Prod tip verify — after merge per conveyor (DONE ≠ merge)
+  602 source files**.
+- [x] `black --check src/ tests/` → 1,410 files unchanged;
+  `isort --check-only --settings-path pyproject.toml src/ tests/` → clean;
+  `flake8 src/ tests/` → clean.
+- [x] `scripts/validate_type_ignores.py` → passed (216/216; the 190 untagged
+  ignores are pre-existing and non-blocking, none added here).
+- [x] `scripts/check_mock_data.py --repo-root .` → `[PASS] No mock data patterns
+  detected`.
+- [x] `scripts/check_openapi_compatibility.py openapi-baseline.json <generated>`
+  → **Contract check PASSED**, no breaking changes. Additionally diffed the two
+  PUT operations against the baseline directly: the only differing operation
+  field is `description`, and no notification path was added or removed.
+- [x] **New tests proven to bite (each revert reverted afterwards):**
+  - `git checkout origin/main -- src/api/routes/notifications.py
+    src/api/routes/push_notifications.py` → exactly the two clobber tests fail
+    (`test_update_preferences_merges_instead_of_clobbering_push_keys`,
+    `test_update_preferences_partial_category_payload_keeps_other_channels`);
+    **2 failed, 5 passed**.
+  - `git checkout origin/main -- src/domain/services/notification_service.py` →
+    exactly the three dispatcher tests fail
+    (`test_category_opt_out_stops_email_delivery`,
+    `test_explicitly_requested_channels_are_still_gated`,
+    `test_quiet_hours_stop_push_and_sms_but_keep_the_in_app_record`);
+    **3 failed, 53 passed**.
+- [x] Coverage of the pure rules: category mapping (4), category suppression
+  (9 incl. malformed values), quiet-hours window arithmetic (parsing 12,
+  windows 4), quiet-hours evaluation (8 incl. BST and unknown-timezone
+  fallback), channel gating (3), dispatcher behaviour (5), merge semantics (10).
 
-**Not verified.** Frontend tests were not run: `frontend/node_modules` is not
-installed in this worktree. The frontend change is two i18n *values* — no key
-added or removed, so locale-parity checks are unaffected — and a repo-wide grep
-found no test asserting the old English copy. That is reasoning, not a green
-run, and CI is the actual check. Also not verified: behaviour against a real
-Postgres row or a live WebSocket/APNs path; enforcement is proven against the
-dispatcher with mocked delivery methods and a mocked session.
+**Stated honestly — tests that are guards, not bite tests:** the two
+"unchanged behaviour" tests (AC-06) and the push-route merge test (AC-08) pass on
+`origin/main` too. The push route already merged flat flags; that test exists to
+freeze the behaviour now that it runs through the shared helper, and to catch the
+reverse-direction clobber if the helper ever regresses. Claiming them as proof of
+new behaviour would be false.
+
+**Not verified:** no frontend test or lint run — `frontend/node_modules` is not
+installed in this worktree, and the only frontend change is two locale string
+values with unchanged keys (both files re-parsed as valid JSON: 4,228 / 3,894
+keys, unchanged counts). No integration or smoke test was run: the enforcement
+tests exercise the service with a stubbed session, so **no evidence here comes
+from a real database or a real WebSocket/Celery delivery**. No browser was
+driven. Quiet hours were tested with a frozen clock, not by waiting for 23:30.
+
+- [ ] Full CI — on PR.
+- [ ] Staging / Prod tip verify — after merge per conveyor (DONE ≠ merge).
 
 ## 6) Critical Journeys Verified (CUJ)
 
-- [x] CUJ-01: A user turns off email for assignments and is still notified
-  in-app and by push — the opt-out is precise, not a blanket mute.
-- [x] CUJ-02: A user with quiet hours 22:00–07:00 gets an overdue-action email
-  and in-app record at 23:30 but no push and no SMS; the suppression reason is
-  recorded as `quiet_hours`.
-- [x] CUJ-03: A lone worker triggers an SOS at 23:30 with quiet hours on and
-  incident alerts off — push and SMS both deliver.
-- [x] CUJ-04: A user saves the Notifications settings tab; their previously
-  stored `incident_alerts` and `mentions` push preferences survive.
-- [x] CUJ-05: A user who has never opened notification settings sees no change
-  in what they receive.
-- [ ] CUJ-06: End-to-end quiet hours from the UI — **cannot be exercised**; no
-  UI writes `quiet_hours_enabled` yet (§3).
+- [x] CUJ-01: User opens Notifications → Preferences, turns off email for Audit
+  Notifications, saves; a later audit-completion notification arrives in-app but
+  sends no email. (Unit-level: stubbed session, delivery methods asserted.)
+- [x] CUJ-02: User sets quiet hours 22:00–07:00; an overdue-action notification
+  at 23:30 London writes the row and emails, and does not push or SMS.
+- [x] CUJ-03: A lone worker triggers SOS during that same window with every
+  category switched off — all four channels still dispatch.
+- [x] CUJ-04: A user who has saved preferences through the push API then saves
+  the Notifications page; their `incident_alerts` and `mentions` flags survive.
+- [ ] CUJ-05: The same four journeys against real tenant data with a live
+  Postgres, Celery and WebSocket — to verify on tip after deploy.
 
 ## 7) Observability & Ops
 
-- **Logs:** one `INFO` per notification that had any channel suppressed, naming
-  user, notification type and the channel→reason map. Silent suppression would
-  make this feature undebuggable in production, which is how the original
-  toggles stayed decorative for so long.
-- **Per-notification audit:** `extra_data["suppressed_channels"]` on the row
-  itself, so "why did I not get this?" is answerable from the database without
-  correlating logs.
-- **New setting:** `notification_quiet_hours_timezone` (default
-  `Europe/London`). An unknown value logs a warning and falls back to UTC rather
-  than failing dispatch.
-- **Metrics:** none new.
-- **Ops note:** if support reports missing notifications after this ships, the
-  first query is `extra_data->>'suppressed_channels'` on the affected rows —
-  that distinguishes "preference honoured" from "delivery broken".
+- **New signal:** when a preference holds a channel back, the notification row
+  carries `extra_data.suppressed_channels` as `{channel: reason}` where reason is
+  `category:<id>` or `quiet_hours`, and one INFO line is logged with user id,
+  notification type and the same map. That makes "why did I not get emailed?"
+  answerable from the row itself instead of by re-deriving preferences.
+- **No message content is logged** — user id, type and channel reasons only.
+- **New config:** `NOTIFICATION_QUIET_HOURS_TIMEZONE` (default `Europe/London`).
+  An unknown zone name logs a WARNING and falls back to UTC rather than raising;
+  a failure reading settings at all falls back to the module default and logs at
+  debug, because a config read must not break dispatch.
+- **Metrics / alerts:** none added. If suppression volume needs watching, the
+  INFO log is the hook to count on; no dashboard is claimed here.
+- **Runbook:** no operational procedure changes. Support answering "I stopped
+  getting emails" should check `category_preferences` and quiet hours first —
+  those settings now have an effect, which was not previously true.
 
 ## 8) Release Plan
 
-1. Open PR on tip `5cd4a43fb` (#1707 LIVE). **Do not merge** — review requested.
-2. Merge only after the ledger/compliance gates and `CI - Default` are green.
+1. Open PR on tip `5cd4a43fb` (#1707 merged). **Do not merge** — raised for
+   review only, per the request.
+2. Merge only after the ledger / compliance gates and `CI - Default` are green.
 3. Tip-chase: `Build, Push and Deploy to Azure` success for the tip SHA, then
-   verify the ACA image tag contains that SHA on the prod FQDN.
+   verify the ACA image tag contains the tip SHA on the prod FQDN.
 4. Only then mark FR-NOTIF-ADMIN-03 conveyor **PROD → DONE**. Merge alone is not
    done.
-5. Follow-on: AC-11 (quiet-hours UI) and AC-12 (`document_updates`).
 
 ## 9) Rollback Plan
 
-- **Trigger:** Users report notifications going missing that they did not opt
-  out of; or `extra_data.suppressed_channels` shows suppressions for users with
-  no stored preferences; or dispatch latency regresses from the extra
-  preference read.
-- **Rollback steps:** Revert the merge commit on `main` and let the pipeline
-  deploy the reverted tip. No schema change, no flag, no migration, so the
-  revert is complete on its own — the preference columns simply return to being
-  unread, which is the pre-PR behaviour. No data repair needed; nothing written
-  by this PR is destructive, and the merge semantics only ever preserve more
-  data than before. `Emergency Rollback - Production` can restore the previous
-  container image first if the backend needs to move faster than a revert
-  deploy.
-- **Owner:** Platform Engineering (Notifications lane) — David Harris.
+- **Trigger:** users report missing notifications they expected, i.e. the
+  category mapping suppresses more than intended, or quiet hours fire outside
+  the intended window for a non-UK user.
+- **Rollback steps:** revert the merge commit and let the pipeline deploy the
+  reverted tip. No schema change, no data migration, no flag to flip, so the
+  revert is complete on its own — stored `category_preferences` and quiet-hours
+  values stay valid and simply become inert again.
+- **Partial mitigation without a revert:** a user's own quiet hours can be
+  disabled through either preferences API, and
+  `NOTIFICATION_QUIET_HOURS_TIMEZONE` can be repointed by env var without a
+  code change.
+- **Owner:** Platform Engineering (Governance UX lane) — David Harris.
 
 ## 10) Evidence Pack (links)
 
 - Branch: `feat/notif-admin-03-prefs`
-- Base: `5cd4a43fb` (#1707, PROD LIVE)
-- Files: 9 changed (+1200 / −37); 2 new
-- New module: `src/domain/services/notification_preferences.py` (358 lines,
-  no database access)
-- Local evidence: 63 + 123 pytest green; black / isort / flake8 / mypy clean;
-  type-ignore and mock-data gates pass (see §5)
+- Base: `5cd4a43fb` (#1707, which includes #1704 KILL-1)
+- Files: 9 changed — 1 new domain module, 1 dispatcher, 2 routes, 1 config,
+  2 locale strings, 1 new test file, 1 extended test file, plus this ledger
+- Alembic revisions added: **0**. `alembic heads` → single head
+  `20261104_lib_cut1b_drop`; `git diff HEAD -- alembic/` is empty.
+- Local evidence: 6,564 backend unit tests green; mypy clean over 602 files;
+  black / isort / flake8 clean; OpenAPI contract check passed; 5 new tests proven
+  to fail without their change (see §5)
 - CI / STG / PROD: pending after PR open
 
 ---
@@ -304,23 +424,29 @@ dispatcher with mocked delivery methods and a mocked session.
 # Gate Checklist (must be complete before merge)
 
 - [x] **Gate 0:** Scope lock + AC + Change Ledger
-- [x] **Gate 1:** Contracts — no API contract change, no schema, no alembic
-  revision; response payload strictly additive
+- [x] **Gate 1:** Contracts — no path, parameter, request or response schema
+  change; only two operation `description` strings differ from
+  `openapi-baseline.json`; compatibility check passes; no alembic revision, no
+  column change, no new table
 - [ ] **Gate 2:** CI green — on PR
 - [ ] **Gate 3:** Staging tip verify
-- [x] **Gate 4:** Canary — N/A (no flag; behavioural fix guarded by the
-  no-stored-preferences regression test)
+- [x] **Gate 4:** Canary — N/A. No flag: this makes already-stored consent
+  effective, and gating that would keep the dishonest default
 - [ ] **Gate 5:** Production tip LIVE before DONE
 
 ## Anti-conflict checklist
 
-- [x] No `Layout.tsx` / navigation shell edits
-- [x] No alembic revision; no model column added, removed or retyped
-- [x] No API route, request schema or status-code change
-- [x] Frontend touched only in two i18n values — no component, no client, no
-  test file
-- [x] Builds on #1707's honesty sweep rather than reversing it: that PR deleted
-  controls nothing implemented, this PR implements the ones worth keeping and
-  names the two that are still not real
-- [x] `_get_delivery_channels` retained as a wrapper, so existing callers and
-  `test_notification_service.py` need no edits
+- [x] No `Layout.tsx` and no nav edit of any kind
+- [x] No Audit Builder / `AuditTemplateBuilder` / `audit-builder` edits
+- [x] No `RecentCasesPanel.tsx` or dashboard edits (no overlap with #1706)
+- [x] No `admin/NotificationSettings.tsx` edit — the cosmetic cards deleted in
+  #1707 are not resurrected
+- [x] No alembic revision; no second head. Every enforced field already exists
+  on `notification_preferences`
+- [x] No new settings table — `NotificationPreference` is the store, as briefed
+- [x] No N1 notification inventory UI and no N2 feature-flag work
+- [x] No test skipped, loosened, renamed or deleted to go green
+- [x] Frontend change is two locale **values**; no key added or removed, no
+  component, page or API client touched
+- [x] `notification_service` is the only dispatcher edited, and it is edited to
+  finish what #1704 KILL-1 started rather than to add a parallel path
