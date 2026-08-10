@@ -47,17 +47,18 @@
 ## 5) Testing Evidence (link to runs)
 - [ ] Targeted Vitest `libraryEditorScaffold.test.tsx` — run on PR
 - [ ] Full CI — on PR
-- [ ] Staging / Prod tip verify — N/A until merge after WJ-0 LIVE
+- [ ] Staging / Prod tip verify — after merge (WJ-0 already LIVE)
 
 ## 6) Critical Journeys Verified (CUJ)
 - [x] CUJ-01: Package imports resolve; shell shows WJ-0 waiting honesty; Front Sheet renders stub fields (unit)
+- [x] CUJ-02: Scaffold does not mount into DocumentDetail / Documents list — grep allowlist holds (NEW `library-editor/**` + docs only)
 
 ## 7) Observability & Ops
 - **Logs / Metrics / Alerts:** None
 - **Runbook updates:** None until implement PR
 
 ## 8) Release Plan (Local → Staging → Canary → Prod)
-- **OPEN PR** after WJ-0 PROD. Merge only as prep ahead of Detail mount, or squash into WJ-1 implement PR.
+- **OPEN PR** — WJ-0 PROD LIVE. Merge scaffold when CI green; Detail mount remains a later PR.
 - **DONE bar:** Conveyor marks WJ-1 PROD only after editor + Front Sheet LIVE on tip with size-limit green — not this scaffold alone.
 
 ## 9) Rollback Plan (Mandatory)
@@ -67,12 +68,14 @@
 
 ## 10) Evidence Pack (links)
 - CI run(s): Linked after PR checks complete
-- Depends: WJ-0 DROP collaborative_* PROD
+- Depends: WJ-0 `#1693` LIVE tip `409e585b960`
 
 ---
 
 # Gate Checklist (must be complete before merge)
 - [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
-- [ ] **Gate 1:** WJ-0 PROD LIVE (hard dependency for mount; merge of scaffold-only may proceed earlier if conveyor allows docs/FE-unmounted prep — confirm at open-PR time)
+- [x] **Gate 1:** WJ-0 `#1693` PROD LIVE tip `409e585b960` (STG=PROD healthz 200)
 - [ ] **Gate 2:** CI green
-- [ ] **Gate 3:** No DocumentDetail / publish path in diff
+- [x] **Gate 3:** No DocumentDetail / publish path in diff (scaffold NEW files only)
+- [x] **Gate 4:** No alembic / CEL / graph / upload wizard conflict
+- [ ] **Gate 5:** DONE = tip LIVE after merge (scaffold ships with app tip)
