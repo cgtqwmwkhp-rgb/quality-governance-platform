@@ -17,13 +17,14 @@ from src.core.config import settings
 from src.domain.features.evaluator import reset_client_feature_cache
 from src.domain.models.feature_flag import FeatureFlag
 from src.domain.services.compliance_schedule_kill_switch import reset_compliance_schedule_kill_switch_cache
+from src.domain.services.copilot_kill_switch import reset_copilot_kill_switch_cache
 from src.domain.services.feature_flag_service import FeatureFlagService
 
 ENDPOINT = "/api/v1/meta/features"
 
 
 def _reset_every_flag_cache() -> None:
-    """Clear all three caches that read the ``feature_flags`` table.
+    """Clear every cache that reads the ``feature_flags`` table.
 
     ``FeatureFlagService`` is included even though this endpoint does not use it:
     its module-level cache has no TTL and holds ORM instances, so a row this
@@ -32,6 +33,7 @@ def _reset_every_flag_cache() -> None:
     """
     reset_client_feature_cache()
     reset_compliance_schedule_kill_switch_cache()
+    reset_copilot_kill_switch_cache()
     FeatureFlagService.clear_cache()
 
 
@@ -82,6 +84,43 @@ def compliance_schedule_off(monkeypatch):
     reset_compliance_schedule_kill_switch_cache()
 
 
+@pytest.fixture
+def copilot_settings(monkeypatch):
+    """Set both copilot openers, clearing the kill-switch cache around the change.
+
+    The copilot switch keeps its verdict for 30s in a module global, so a test that
+    engages the kill would otherwise close the copilot for whatever ran next.
+    """
+
+    def _set(*, surface: bool, inference: bool):
+        monkeypatch.setattr(settings, "ai_copilot_enabled", surface)
+        monkeypatch.setattr(settings, "ai_copilot_inference_enabled", inference)
+        reset_copilot_kill_switch_cache()
+
+    return _set
+
+
+@pytest.fixture
+def copilot_off(copilot_settings):
+    copilot_settings(surface=False, inference=False)
+    yield
+    reset_copilot_kill_switch_cache()
+
+
+@pytest.fixture
+def copilot_on(copilot_settings):
+    copilot_settings(surface=True, inference=False)
+    yield
+    reset_copilot_kill_switch_cache()
+
+
+@pytest.fixture
+def copilot_inference_on(copilot_settings):
+    copilot_settings(surface=True, inference=True)
+    yield
+    reset_copilot_kill_switch_cache()
+
+
 async def test_anonymous_caller_gets_200_and_never_401(unauth_client: AsyncClient):
     """A 401 here would make the first call of every session race token refresh."""
     response = await unauth_client.get(ENDPOINT)
@@ -130,6 +169,36 @@ async def test_kill_switch_closes_the_feature(superuser_client: AsyncClient, com
 
     flags = (await superuser_client.get(ENDPOINT)).json()["flags"]
     assert flags["compliance_schedule"] is False
+
+
+async def test_copilot_pair_is_published(unauth_client: AsyncClient, copilot_off):
+    """The panel reads both halves; a missing key would send it back to a hardcoded claim."""
+    flags = (await unauth_client.get(ENDPOINT)).json()["flags"]
+    assert flags["ai_copilot"] is False
+    assert flags["ai_copilot_inference"] is False
+
+
+async def test_copilot_open_without_inference(unauth_client: AsyncClient, copilot_on):
+    """Surface open, inference off — the keyword simulator, and the panel must say so."""
+    flags = (await unauth_client.get(ENDPOINT)).json()["flags"]
+    assert flags["ai_copilot"] is True
+    assert flags["ai_copilot_inference"] is False
+
+
+async def test_copilot_inference_open_when_both_configured(unauth_client: AsyncClient, copilot_inference_on):
+    """Grounded answers really are phrased by a model, so the flag has to admit it."""
+    flags = (await unauth_client.get(ENDPOINT)).json()["flags"]
+    assert flags["ai_copilot"] is True
+    assert flags["ai_copilot_inference"] is True
+
+
+async def test_copilot_kill_switch_closes_both(unauth_client: AsyncClient, copilot_inference_on, flag_row):
+    """Engaging the kill must withdraw the grounded claim, not only 404 the API."""
+    await flag_row("copilot_kill_switch", enabled=True)
+
+    flags = (await unauth_client.get(ENDPOINT)).json()["flags"]
+    assert flags["ai_copilot"] is False
+    assert flags["ai_copilot_inference"] is False
 
 
 async def test_admin_user_management_defaults_open(unauth_client: AsyncClient):

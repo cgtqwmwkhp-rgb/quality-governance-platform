@@ -52,6 +52,12 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   job_lifecycle: false,
   job_cell_links: false,
 
+  // AI Copilot disclosure pair — mirrors AI_COPILOT_ENABLED and
+  // AI_COPILOT_INFERENCE_ENABLED. Both default closed so the panel understates what
+  // it is until the backend has said otherwise (see components/copilot/copilotDisclosure).
+  ai_copilot: false,
+  ai_copilot_inference: false,
+
   // Other feature flags can be added here
   portal_offline_mode: false,
   admin_ai_copilot: false,
