@@ -61,14 +61,21 @@ a `ClientFeatureFlagsResponse` schema change plus a contract regeneration — wo
 doing deliberately, not as a side effect of a rename. The panel gets its name from
 the bundle today, which is accurate because the name is build-time constant.
 
-**`docs/contracts/openapi.json` was edited surgically (tag string only), not
-regenerated.** The checked-in contract is already stale against `main` by many
-merged PRs: a full `scripts/generate_openapi.py` run produced **916 added lines**
-of drift belonging to other changes. Importing that into a rename PR would have
-made the diff unreviewable and silently claimed those contract changes as this
-one's. `openapi-baseline.json` still records the old tag by design — it is a
-frozen historical snapshot used only for breaking-change comparison, and
-`check_openapi_compatibility.py` inspects `paths`/`schemas`, never `tags`.
+**`docs/contracts/openapi.json` and `openapi-baseline.json` were edited
+surgically (tag string only, one line each), not regenerated.** The checked-in
+contract is already stale against `main` by many merged PRs: a full
+`scripts/generate_openapi.py` run produced **916 added lines** of drift belonging
+to other changes. Importing that into a rename PR would have made the diff
+unreviewable and silently claimed those contract changes as this one's.
+
+The two artifacts must move together: `test_openapi_baseline_matches_contracts_artifact`
+and `test_paginated_assessment_history_is_published_without_breaking_legacy_array`
+both assert the files are equal to each other. (Neither compares against the live
+`app.openapi()`, which is why the pre-existing staleness is not itself a failure.)
+An earlier commit on this branch changed only the contract and turned that pair
+red on CI; both are green now. The rename is non-breaking for
+`check_openapi_compatibility.py`, which inspects `paths` and `schemas` and never
+`tags`, and no operation carries the tag — only the top-level metadata entry.
 
 ## 3) Compatibility & Data Safety
 
@@ -96,6 +103,7 @@ frozen historical snapshot used only for breaking-change comparison, and
 
 Observed locally, not inferred:
 
+- [x] `pytest tests/unit` — **6507 passed, 0 failed, 11 skipped** (the 11 skips are pre-existing and unrelated)
 - [x] `pytest tests/unit -k copilot` — **155 passed, 0 skipped** (covers honesty, grounded inference, grounded compliance, kill switch, feature flag, session scoping, knowledge authz, OpenAPI exclusion)
 - [x] `npx vitest run src/components/copilot src/components/__tests__/Layout.test.tsx src/components/__tests__/Layout.a11y.test.tsx src/__tests__/App.test.tsx` — **69 passed**
 - [x] `npx tsc --noEmit` — clean
