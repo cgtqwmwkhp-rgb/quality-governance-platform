@@ -72,6 +72,13 @@ describe('copilotDisclosure copy', () => {
     expect(copilotDisclosure('grounded').welcome).not.toMatch(/not connected to any AI model/i)
   })
 
+  it('uses the PlantEx Assist product name in every mode', () => {
+    expect(copilotDisclosure('unavailable').title).toBe('PlantEx Assist')
+    expect(copilotDisclosure('simulated').title).toBe('PlantEx Assist (Demo)')
+    expect(copilotDisclosure('grounded').title).toBe('PlantEx Assist')
+    expect(copilotDisclosure('grounded').welcome).toMatch(/PlantEx Assist/)
+  })
+
   it('drops "(Demo)" from the title once answers are grounded', () => {
     expect(copilotDisclosure('simulated').title).toContain('(Demo)')
     expect(copilotDisclosure('grounded').title).not.toContain('Demo')

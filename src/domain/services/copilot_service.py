@@ -364,7 +364,7 @@ class CopilotService:
         # PX-248: the reply is fabricated, so refuse before anything is persisted.
         # The API layer already returns 404, but this closes non-HTTP callers too.
         if not copilot_is_enabled():
-            raise CopilotDisabledError("AI Copilot is disabled; simulated responses must not be served.")
+            raise CopilotDisabledError("PlantEx Assist is disabled; simulated responses must not be served.")
 
         # Second line behind the API guards, which are the ones that refresh the switch.
         # Deliberately does not read the database: this method runs on a caller's session
@@ -372,7 +372,7 @@ class CopilotService:
         # A process that has never refreshed therefore sees no kill here — see
         # copilot_kill_switch_last_known.
         if copilot_kill_switch_last_known():
-            raise CopilotDisabledError("AI Copilot has been closed by the runtime kill switch.")
+            raise CopilotDisabledError("PlantEx Assist has been closed by the runtime kill switch.")
 
         session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
         if not session:
@@ -460,9 +460,11 @@ class CopilotService:
                 return outcome.content, None, outcome.model_used or "grounded-facts"
             if outcome.kind == "refused":
                 refusal = (
-                    "I cannot answer from live organisation data. This demo is not connected to "
-                    "your registers, so I will not invent counts, percentages, named risks, or "
-                    "reference numbers. Open the relevant module for real figures."
+                    "That question is outside the fixed set PlantEx Assist can answer from your "
+                    "registers, so I will not invent counts, percentages, named risks, or "
+                    "reference numbers. Try a supported question (for example how many "
+                    "incidents we have, or which actions are overdue), or open the relevant "
+                    "module for real figures."
                 )
                 # Prefer the same refusal string the simulator uses for live-data asks.
                 return refusal, None, "grounded-citation-refused"
@@ -478,12 +480,12 @@ class CopilotService:
         """Demo keyword replies — refuse live-data fabrication and false writes (PX-248/250)."""
         message_lower = user_message.lower()
         live_data_refusal = (
-            "I cannot answer from live organisation data. This demo is not connected to "
-            "your registers, so I will not invent counts, percentages, named risks, or "
-            "reference numbers. Open the relevant module for real figures."
+            "I cannot answer from live organisation data. This PlantEx Assist demo is not "
+            "connected to your registers, so I will not invent counts, percentages, named "
+            "risks, or reference numbers. Open the relevant module for real figures."
         )
         write_refusal = (
-            "I cannot create or update records from this demo. Nothing was written. "
+            "I cannot create or update records from this PlantEx Assist demo. Nothing was written. "
             "Use the Incidents register (New) to log a real safety event."
         )
 

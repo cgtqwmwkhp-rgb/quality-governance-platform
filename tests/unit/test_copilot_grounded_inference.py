@@ -194,7 +194,10 @@ async def test_citation_failure_returns_honesty_refusal(monkeypatch):
     )
     assert model == "grounded-citation-refused"
     assert action is None
-    assert "cannot answer from live organisation data" in content.lower()
+    # Grounded refuse must not pretend the surface is a disconnected demo.
+    assert "outside the fixed set" in content.lower()
+    assert "plantex assist" in content.lower()
+    assert "demo is not connected" not in content.lower()
     assert "92%" not in content
 
 
