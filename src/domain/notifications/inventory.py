@@ -32,9 +32,11 @@ source agree. That test does three things a scan could not:
 That third property is the point. Four helpers on ``NotificationService`` —
 SOS alerts, RIDDOR alerts, competency expiry and @mention fan-out — are fully
 written and reachable only from unit tests. An inventory that listed them
-alongside the seventeen live producers would be the same category of dishonesty
-as the toggles that were deleted, so they are declared with
-``referenced=False`` and reported as having no production caller.
+alongside the live producers would be the same category of dishonesty as the
+toggles that were deleted, so they are declared with ``referenced=False`` and
+reported as having no production caller. The number of live producers is
+deliberately not written out here: a count in prose is a claim no test checks,
+and this one had already drifted.
 
 What this file does not do
 --------------------------
