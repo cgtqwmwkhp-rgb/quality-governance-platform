@@ -40,7 +40,7 @@
 
 ## 2) Impact Map (what changed)
 
-2 files, +30 / −6.
+2 files, +27 / −4, plus this ledger.
 
 - **`src/domain/notifications/inventory.py`:** the
   `audit_finding_capa_closure` note now states the split explicitly — which
@@ -147,7 +147,7 @@ notification, and no behaviour claim is made beyond the two mappings asserted.
 
 - Branch: `fix/notif-admin-01-capa-note`
 - Base: `d3c92175f` (#1711)
-- Files: 2 changed, +30 / −6, plus this ledger
+- Files: 2 changed, +27 / −4, plus this ledger
 - Source of the finding: Bugbot review on #1711, verified independently
 - CI / STG / PROD: pending after PR open
 
