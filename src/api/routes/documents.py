@@ -116,6 +116,13 @@ class DocumentResponse(BaseModel):
     access_level: Optional[str] = None
     is_statutory: bool = False
     retention_until: Optional[datetime] = None
+    # CUT-1 / R19 — retention as a number of years with a basis, so a reader can
+    # see why a document is kept until that date (or why no date exists yet).
+    # `retention_anchor` names the event the years run from: issue, supersede,
+    # event (one QGP does not hold a date for) or indefinite.
+    retention_years: Optional[int] = None
+    retention_anchor: Optional[str] = None
+    retention_basis: Optional[str] = None
     duplicate_warning: bool = False
     duplicate_warning_detail: Optional[list] = None
     department: Optional[str]
@@ -231,6 +238,9 @@ def _document_to_response(
         access_level=getattr(document, "access_level", None),
         is_statutory=bool(getattr(document, "is_statutory", False)),
         retention_until=getattr(document, "retention_until", None),
+        retention_years=getattr(document, "retention_years", None),
+        retention_anchor=getattr(document, "retention_anchor", None),
+        retention_basis=getattr(document, "retention_basis", None),
         duplicate_warning=bool(getattr(document, "duplicate_warning", False)),
         duplicate_warning_detail=_coerce_json_list(getattr(document, "duplicate_warning_detail", None)),
         department=document.department,
@@ -345,6 +355,10 @@ class DisposalCandidateResponse(BaseModel):
     title: str
     status: str
     retention_until: datetime
+    # CUT-1 — the policy this date was calculated from, read off the document.
+    retention_years: Optional[int] = None
+    retention_anchor: Optional[str] = None
+    retention_basis: Optional[str] = None
     category_retention_rule: Optional[str] = None
 
 

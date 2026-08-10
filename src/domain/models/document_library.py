@@ -118,6 +118,16 @@ class DocumentCategory(Base, TimestampMixin):
     suggested_owner_role: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     review_cycle: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     retention_rule: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # CUT-1 / F-7 §2 — the machine-readable form of `retention_rule`, derived by
+    # `library_retention_policy.resolve_retention_rule` at seed time. The prose
+    # stays: it is the governance authority and the R19 "basis", and these two
+    # are its projection, never a second rule someone can edit independently.
+    # NULL where the grammar refuses the prose (a scoped or conditional rule) —
+    # those categories are the Citation cutover blocker list, not a default.
+    retention_years: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    retention_anchor: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     typical_contents: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # False for retired/out-of-scope categories (e.g. 06.04 HGV O-Licence).

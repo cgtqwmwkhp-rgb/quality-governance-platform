@@ -42,16 +42,21 @@ for WI-2 / CUT — not this docs PR.
 
 | Home | Columns | Role today | Disposition | Target |
 | --- | --- | --- | --- | --- |
-| `document_categories` | `retention_rule` (free text) | Taxonomy default prose | **migrate** | Machine-readable category defaults (`retention_years` + `retention_basis`) then copy onto document at file |
-| `documents` | `retention_until` | Executable disposal candidate | **keep** | Single document-level retention clock for Library SoR |
-| `controlled_documents` | `retention_period_years` | Parallel years integer | **migrate** | Derive from / sync to library document; stop independent SoR |
+| `document_categories` | `retention_rule` (free text) → **+ `retention_years`, `retention_anchor`** | Taxonomy default prose plus its machine-readable projection | **migrated (CUT-1)** | Projection derived by `library_retention_policy` at seed time; prose stays as the R19 basis, so there is no second text column |
+| `documents` | `retention_until` → **+ `retention_years`, `retention_anchor`, `retention_basis`** | Executable disposal candidate + the policy that produced it | **keep** | Single document-level retention clock for Library SoR; policy copied on at file so a taxonomy edit cannot re-date filed documents |
+| `controlled_documents` | `retention_period_years` | Parallel years integer | **migrate** (part-done) | Derive from / sync to library document; stop independent SoR. CUT-1 converged access, not this column — the drop waits until no writer remains |
 | `obsolete_document_records` | `retention_required`, `retention_end_date` | Obsolete control archive | **keep** (archive) | Archive concern after supersede — not a second live policy |
 | `evidence_assets` | `retention_policy`, `retention_expires_at` | Case evidence retention | **keep** | Case/legal evidence policy; link to library only when filed |
 | Audit log config | `retention_days` | Platform audit retention | **keep** | Not document library |
 
 **Cutover gate (ADR-0023):** Citation SoR retirement requires executable
 retention on library documents — free-text `retention_rule` alone is
-insufficient.
+insufficient. **CUT-1 built the gate and made it answerable**:
+`scripts/governance/library/citation_cutover_readiness.py` classifies every
+filable category, and 14 of 73 still name two periods or a condition that no
+single number can represent. Those are steward decisions, not code — documents
+filed under them keep `retention_until` NULL and are never disposal candidates.
+See `library-cut1-retention-access-sor.md`.
 
 ---
 
@@ -60,8 +65,8 @@ insufficient.
 | Home | Columns | Role today | Disposition | Target |
 | --- | --- | --- | --- | --- |
 | `document_categories` | `default_access` | Filing default (`all_staff` / `managers` / `restricted`) | **keep** (default only) | Default at file time; not live ACL SoT |
-| `documents` | `access_level` | Library document access | **keep** | Single live access field for Register documents |
-| `controlled_documents` | `access_level` (`internal` default) | Parallel vocabulary | **migrate** | Align enum + sync from / to library; one vocabulary |
+| `documents` | `access_level` | Library document access | **keep** | Single live access field for Register documents. Vocabulary now defined once, in `library_rules.LIBRARY_ACCESS_LEVELS` |
+| `controlled_documents` | `access_level` (was `internal` default) | ~~Parallel vocabulary~~ | **migrated (CUT-1)** | Folded onto the Library vocabulary; an anchored control row takes the Register row's level, an off-vocabulary write is refused |
 | `library_document_access_logs` | (log rows) | Library access audit | **keep** | Observability, not policy |
 | `document_access_logs` (control) | (log rows) | Control-layer access audit | **migrate** / merge writers | Prefer one access-log spine once control folds |
 | `iso27001` / `permissions` `access_level` | module ACL | Unrelated to library filing | **keep** | Out of Library programme scope |
@@ -80,10 +85,11 @@ insufficient.
 | --- | --- |
 | WI-2 | File-home links: carbon_evidence, UVDB presented, evidence_assets → `documents.id` |
 | WC-1 / control converge | controlled_* file + access + retention sync |
-| CUT-1 | Retention + access single SoR; Citation cutover |
+| CUT-1 | Retention + access single SoR; Citation cutover — **shipped** (`20261102_lib_cut1_sor`). Access folded; retention made executable with a named refusal where prose cannot be read. Remainder: `controlled_documents.retention_period_years` column drop, control access-log merge, and the 14 steward retention decisions |
 
 ## References
 
+- CUT-1 converge design note: `docs/governance/library-cut1-retention-access-sor.md`
 - Anti-dupe baseline: `docs/governance/library_anti_dupe_baseline.json`
 - ADR-0023 (QGP SoR + retention executable gate):
   `docs/adr/ADR-0023-governance-library-reference-scheme.md`

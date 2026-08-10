@@ -303,7 +303,17 @@ KNOWN_ASYMMETRIC_RESPONSE_FIELDS: dict[str, tuple[str, ...]] = {
         "is_public",
         "is_statutory",
         "pel_doc_ref",
+        # CUT-1: these four are derived from the category's retention policy when
+        # the document is filed, and sit here for the same reason
+        # ``retention_until`` already did. Do **not** clear them by adding a
+        # document-level retention writer: letting a client PATCH
+        # ``retention_years`` would let one document's retention be shortened
+        # with no governance basis and no audit. The steward path is on the
+        # (admin-only) category — see library-cut1-retention-access-sor.md.
+        "retention_anchor",
+        "retention_basis",
         "retention_until",
+        "retention_years",
         "sensitivity",
         "site_location_id",
         "status",

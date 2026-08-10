@@ -18,7 +18,7 @@ from src.domain.models.document import Document, DocumentVersion
 from src.domain.models.document_library import DocumentCategory
 from src.domain.models.enums import DocumentStatus
 from src.domain.services.document_library_filing_service import (
-    compute_retention_until,
+    apply_category_retention,
     supersede_prior_approved_by_pel_doc_ref,
 )
 from src.domain.services.document_version_service import assert_version_mutable, version_is_immutable
@@ -167,12 +167,18 @@ async def approve_document(
             tenant_id=document.tenant_id,
             pel_doc_ref=document.pel_doc_ref,
             current_document_id=document.id,
+            superseded_at=now,
         )
 
     if document.category_id is not None:
         category = await db.get(DocumentCategory, document.category_id)
         if category is not None:
-            document.retention_until = compute_retention_until(category, now)
+            # CUT-1 — the policy is copied onto the document, and only an
+            # issue-anchored one gets a date now. A "Current + superseded N
+            # years" rule starts its clock when this document is itself
+            # superseded, not today; dating it from approval is what let a
+            # document be disposed the day it stopped being current.
+            apply_category_retention(document, category, issued_at=now)
 
     await db.flush()
     return version

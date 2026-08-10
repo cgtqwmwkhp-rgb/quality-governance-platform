@@ -21,7 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
-from src.domain.exceptions import ConflictError, FeatureNotProvisionedError, MeasurementUnavailableError, NotFoundError
+from src.domain.exceptions import (
+    ConflictError,
+    FeatureNotProvisionedError,
+    MeasurementUnavailableError,
+    NotFoundError,
+    ValidationError,
+)
 from src.domain.models.document_control import (
     ControlledDocument,
     ControlledDocumentVersion,
@@ -36,6 +42,7 @@ from src.domain.models.user import User
 from src.domain.services.document_version_service import assert_document_metadata_editable, document_version_service
 from src.domain.services.gkb_golden_thread import GoldenThreadContext, decide_golden_thread_publish
 from src.domain.services.legal_hold_enforcement import assert_controlled_document_not_held
+from src.domain.services.library_rules import LIBRARY_ACCESS_LEVELS, normalize_access_level
 from src.domain.services.schema_presence import absent_tables
 
 router = APIRouter()
@@ -164,7 +171,11 @@ class DocumentCreate(BaseModel):
     review_frequency_months: int = Field(default=12, ge=1, le=60)
     relevant_standards: Optional[list[str]] = None
     relevant_clauses: Optional[list[str]] = None
-    access_level: str = Field(default="internal")
+    #: CUT-1 / F-7 §3 — the one Library vocabulary. The old `internal` default
+    #: was a second vocabulary for the same fact; it is still accepted and folds
+    #: onto `all_staff`, but a control record anchored to a Register row takes
+    #: that row's level instead, because the Register is the access SoR.
+    access_level: str = Field(default="all_staff")
     is_confidential: bool = False
     training_required: bool = False
 
@@ -286,6 +297,52 @@ async def _assert_anchor_is_available(
         )
 
 
+async def _register_access_level(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    library_document_id: int,
+) -> Optional[str]:
+    """The anchored Register row's access level — the SoR for this control record."""
+    from src.domain.models.document import Document as LibraryDocument
+
+    return await db.scalar(
+        select(LibraryDocument.access_level).where(
+            LibraryDocument.id == library_document_id,
+            LibraryDocument.tenant_id == tenant_id,
+        )
+    )
+
+
+def _converged_access_level(requested: Optional[str], *, register_level: Optional[str]) -> Optional[str]:
+    """Resolve one access level for a control record (CUT-1 / F-7 §3).
+
+    The Register wins whenever the control record is anchored to one: F-7 keeps
+    ``documents.access_level`` as the single live access field, so a control row
+    holding a different answer for the same document is the parallel vocabulary
+    CUT-1 exists to retire. Unanchored records keep their own value, folded onto
+    the one vocabulary.
+
+    An off-vocabulary value is refused rather than defaulted. Defaulting would
+    write an access decision nobody made, and every value the existing UI sends
+    (``internal``) has an honest mapping.
+    """
+    if register_level:
+        normalised_register = normalize_access_level(register_level)
+        if normalised_register is not None:
+            return normalised_register
+    if requested is None:
+        return None
+    converged = normalize_access_level(requested)
+    if converged is None:
+        raise ValidationError(
+            f"access_level {requested!r} is not a Library access level. "
+            f"Use one of {list(LIBRARY_ACCESS_LEVELS)} (F-7 §3 — one access vocabulary).",
+            details={"access_level": requested, "allowed": list(LIBRARY_ACCESS_LEVELS)},
+        )
+    return converged
+
+
 # ============ Document CRUD Endpoints ============
 
 
@@ -377,13 +434,22 @@ async def create_document(
 ) -> dict[str, Any]:
     """Create a new controlled document, optionally anchored to a Register row."""
     tenant_id = _tenant_id(current_user)
+    register_access_level: Optional[str] = None
     if document_data.library_document_id is not None:
         await _assert_anchor_is_available(
+            db, tenant_id=tenant_id, library_document_id=document_data.library_document_id
+        )
+        register_access_level = await _register_access_level(
             db, tenant_id=tenant_id, library_document_id=document_data.library_document_id
         )
     type_prefix = document_data.document_type[:3].upper()
     unique_suffix = uuid.uuid4().hex[:8].upper()
     document_number = f"{type_prefix}-{unique_suffix}"
+
+    fields = document_data.model_dump()
+    converged_access = _converged_access_level(fields.get("access_level"), register_level=register_access_level)
+    if converged_access is not None:
+        fields["access_level"] = converged_access
 
     document = ControlledDocument(
         tenant_id=tenant_id,
@@ -392,7 +458,7 @@ async def create_document(
         major_version=1,
         minor_version=0,
         status="draft",
-        **document_data.model_dump(),
+        **fields,
     )
 
     db.add(document)
@@ -562,6 +628,23 @@ async def update_document(
     assert_document_metadata_editable(document.status)
 
     update_data = document_data.model_dump(exclude_unset=True)
+    if "access_level" in update_data:
+        register_level = (
+            await _register_access_level(
+                db,
+                tenant_id=_tenant_id(current_user),
+                library_document_id=document.library_document_id,
+            )
+            if document.library_document_id is not None
+            else None
+        )
+        converged = _converged_access_level(update_data["access_level"], register_level=register_level)
+        if converged is None:
+            # An explicit `"access_level": null` with nothing to inherit is a
+            # no-op, not a write of NULL into a NOT NULL column.
+            update_data.pop("access_level")
+        else:
+            update_data["access_level"] = converged
     for key, value in update_data.items():
         setattr(document, key, value)
 
