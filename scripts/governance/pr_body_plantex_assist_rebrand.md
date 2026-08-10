@@ -31,3 +31,20 @@
 
 - pytest: `test_citation_failure_returns_honesty_refusal` + honesty suite — pass
 - vitest: `copilotDisclosure.test.ts` + `AICopilot.test.tsx` — 31 pass
+
+## 5) Compliance Delta
+
+- No new personal data processing.
+- Disclosure honesty improved (grounded refuse no longer mislabels as demo).
+- DPIA still required before broader “inference-true / open chat” claims.
+
+## 6) Risk & Rollback
+
+- Low: string/copy change. Rollback = revert PR.
+- Residual: code identifiers still say `copilot` / `ai_copilot` by design.
+
+## 7) DoD
+
+- [x] Change Ledger complete
+- [x] Focused unit tests green
+- [ ] Tip CI / STG / PROD after merge (conveyor)
