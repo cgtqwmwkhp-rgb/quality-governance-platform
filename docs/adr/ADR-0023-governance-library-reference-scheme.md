@@ -204,6 +204,42 @@ fold for **forward** Library work. Execution SSOT: Cursor canvas
   SoT; no twin Confirm Queue / Documents-360 page; ADR-0020 remains Compliance
   Schedule only.
 
+## Amendment — CUT-1: the retention prerequisite is now built, not yet cleared
+
+**Status**: Accepted
+**Date**: 2026-08-10
+**Alembic**: `20261102_lib_cut1_sor`
+
+The retention risk below said machine-readable retention is "a prerequisite of
+cutover, not a follow-up". CUT-1 builds that prerequisite and, just as
+importantly, makes its *remainder* visible instead of assumed.
+
+1. **Retention is executable where the prose permits it.** `retention_years` +
+   `retention_anchor` land on `document_categories` and, copied at file time,
+   on `documents` alongside a frozen `retention_basis`.
+   `documents.retention_until` remains the single disposal clock.
+2. **The anchor is now part of the rule.** "Current + superseded 6 years" counts
+   six years from *supersede*, not from approval. Counting it from approval —
+   which is what the platform did — made a document disposable the day it
+   stopped being current.
+3. **An unreadable rule is refused, never guessed.** Fourteen of the seventy-three
+   filable categories name two periods or a condition that one integer cannot
+   represent. They resolve to no policy, so documents filed under them carry no
+   disposal date and can never reach the disposal queue.
+4. **Cutover therefore remains gated, and the gate is runnable.**
+   `scripts/governance/library/citation_cutover_readiness.py` reports the
+   blockers. Citation (ATLAS) is not retired for a category until a steward has
+   given that category a retention decision. This ADR's "the taxonomy's …
+   retention rules replace Citation's flat 7-year position on migration" is
+   therefore true per category, on the day that category becomes computable —
+   not on the day the code shipped.
+5. **Access has one vocabulary.** `library_rules.LIBRARY_ACCESS_LEVELS` is the
+   single definition; `controlled_documents.access_level` folds onto it and an
+   anchored control record takes the Register row's level. No alias widens
+   access, and read-side RBAC is unchanged and still fails closed.
+
+Design note: `docs/governance/library-cut1-retention-access-sor.md`.
+
 ## Consequences
 
 **Positive:** the reference is meaningful where the estate is most concentrated;

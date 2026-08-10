@@ -26,7 +26,7 @@ renumbered).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +50,7 @@ from src.domain.services.document_category_seed_data import (
     load_library_functions,
     load_taxonomy_categories,
 )
+from src.domain.services.library_retention_policy import resolve_retention_rule
 from src.domain.services.library_rules import assert_pel_identity
 
 
@@ -67,6 +68,24 @@ class CategorySeedResult:
     total_categories: int
     total_functions: int
     total_tags: int
+
+
+def _machine_readable_retention(retention_rule: Optional[str]) -> dict[str, Any]:
+    """CUT-1 — project the taxonomy prose onto the category's retention columns.
+
+    Derived at seed time through the one resolver rather than carried as extra
+    keys in ``taxonomy.json``: the prose is the governance authority, and a
+    second hand-maintained copy of the same decision in the seed file is exactly
+    the parallel home F-7 §4 forbids. A rule the grammar refuses leaves both
+    columns NULL — that category is a Citation cutover blocker, not a default.
+    """
+    decision = resolve_retention_rule(retention_rule)
+    if decision.policy is None:
+        return {"retention_years": None, "retention_anchor": None}
+    return {
+        "retention_years": decision.policy.years,
+        "retention_anchor": decision.policy.anchor.value,
+    }
 
 
 async def seed_document_categories(db: AsyncSession) -> CategorySeedResult:
@@ -111,6 +130,7 @@ async def seed_document_categories(db: AsyncSession) -> CategorySeedResult:
                     retention_rule=row["retention_rule"],
                     typical_contents=row["typical_contents"],
                     active=row["active"],
+                    **_machine_readable_retention(row["retention_rule"]),
                 )
                 db.add(created)
                 await db.flush()
@@ -129,6 +149,11 @@ async def seed_document_categories(db: AsyncSession) -> CategorySeedResult:
                 existing.suggested_owner_role = row["suggested_owner_role"]
                 existing.review_cycle = row["review_cycle"]
                 existing.retention_rule = row["retention_rule"]
+                # The projection is re-derived, never merged: if the prose has
+                # changed in the seed, a steward's override of the *old* prose is
+                # no longer an answer to the new rule.
+                for column, value in _machine_readable_retention(row["retention_rule"]).items():
+                    setattr(existing, column, value)
                 existing.typical_contents = row["typical_contents"]
                 # Wave W0 deactivation list always wins on reseed, even if a
                 # prior manual edit reactivated the category.

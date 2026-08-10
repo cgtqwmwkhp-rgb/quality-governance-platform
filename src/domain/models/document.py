@@ -229,6 +229,18 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     access_level: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # all_staff|managers|restricted
     is_statutory: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     retention_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # CUT-1 / ADR-0023 / F-7 §2 — machine-readable retention, copied onto the
+    # document when it is filed. `retention_until` stays the single disposal
+    # clock; these three record the policy that produced it, which is what makes
+    # a disposal decision answerable (R19 "a number of years with a basis") and
+    # what stops a later taxonomy edit silently re-dating documents already
+    # filed under the old rule. Nullable: a category rule the CUT-1 grammar
+    # refuses to read leaves them unset, and unset means "keep", never "dispose".
+    retention_years: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    retention_anchor: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    retention_basis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     duplicate_warning: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duplicate_warning_detail: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 

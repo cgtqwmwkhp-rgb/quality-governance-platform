@@ -4,6 +4,14 @@ The queue is intentionally conservative: it only lists inactive lifecycle
 documents whose explicit ``retention_until`` date has passed. Category
 retention rules remain visible as provenance, but are not parsed into an
 automated deletion date.
+
+CUT-1 keeps that conservatism and makes it answerable: each candidate now also
+carries the machine-readable policy recorded on the document
+(``retention_years`` / ``retention_anchor`` / ``retention_basis``), so the
+reviewer can see *which rule* produced the date they are being asked to act on
+rather than inferring it from category prose that may have been edited since.
+A document whose category rule the CUT-1 grammar refuses to read has no
+``retention_until`` at all and therefore never reaches this queue.
 """
 
 from __future__ import annotations
@@ -46,6 +54,13 @@ class DisposalCandidate:
     title: str
     status: str
     retention_until: datetime
+    #: CUT-1 — the policy recorded on the document itself, which is what the
+    #: disposal date was actually calculated from (F-7 §2: the document is the
+    #: retention SoR once filed). The category rule below stays as provenance
+    #: only; it can have been edited since this document was filed.
+    retention_years: int | None
+    retention_anchor: str | None
+    retention_basis: str | None
     category_retention_rule: str | None
 
 
@@ -76,6 +91,9 @@ def _candidate_from_row(document: Document, retention_rule: str | None) -> Dispo
         title=document.title,
         status=str(status),
         retention_until=retention_until,
+        retention_years=getattr(document, "retention_years", None),
+        retention_anchor=getattr(document, "retention_anchor", None),
+        retention_basis=getattr(document, "retention_basis", None),
         category_retention_rule=retention_rule,
     )
 

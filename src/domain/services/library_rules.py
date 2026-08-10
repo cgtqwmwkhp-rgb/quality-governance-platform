@@ -15,6 +15,13 @@ listeners (NS-1). R06 / R29 remain enforced by the banded allocator (counters
 only ever advance; exhausted bands refuse). This module is the single place
 the *checkable* identity rules are named so staged hardness (M-08) has one
 home — Wave W6+ will add issue-time blocks beside these create-time ones.
+
+Because R26 is the rule that names the access vocabulary, CUT-1 makes this the
+one place that vocabulary is defined (``LIBRARY_ACCESS_LEVELS`` +
+``normalize_access_level``). F-7 §3 keeps ``documents.access_level`` as the
+single live access field and folds the control layer's parallel ``internal``
+spelling onto it; the retention half of that converge lives in
+``library_retention_policy``.
 """
 
 from __future__ import annotations
@@ -35,7 +42,33 @@ _PACK_PATH = _REPO_ROOT / "specs" / "governance-library" / "northern-star-v6.jso
 # until later waves (WF, nightly, explorer).
 RULE_A_IDS: Final[frozenset[str]] = frozenset({"R01", "R02", "R03", "R04", "R05", "R06", "R26", "R29", "R32"})
 
-_ALLOWED_ACCESS_LEVELS: Final[frozenset[str]] = frozenset({"all_staff", "managers", "restricted"})
+#: CUT-1 / F-7 §3 — the one Library access vocabulary, least restrictive first.
+#: Every module that needs the allowed set imports this rather than re-typing the
+#: literals; the control layer's parallel ``internal`` vocabulary folds onto it
+#: through :func:`normalize_access_level`.
+LIBRARY_ACCESS_LEVELS: Final[tuple[str, ...]] = ("all_staff", "managers", "restricted")
+
+_ALLOWED_ACCESS_LEVELS: Final[frozenset[str]] = frozenset(LIBRARY_ACCESS_LEVELS)
+
+# Control-layer and legacy spellings → the one vocabulary (F-7 §3 "align enum").
+# Every alias resolves to a level at least as restrictive as the original, so
+# folding the vocabularies can never widen who may read a document:
+# ``internal`` / ``public`` are both "everyone inside the tenant" (external
+# publication is ``documents.is_public``, a separate field this does not touch),
+# and ``confidential`` folds up to ``restricted``.
+_ACCESS_LEVEL_ALIASES: Final[dict[str, str]] = {
+    "all staff": "all_staff",
+    "all_employees": "all_staff",
+    "all employees": "all_staff",
+    "staff": "all_staff",
+    "internal": "all_staff",
+    "public": "all_staff",
+    "manager": "managers",
+    "management": "managers",
+    "managers only": "managers",
+    "confidential": "restricted",
+    "restricted_access": "restricted",
+}
 
 
 @lru_cache(maxsize=1)
@@ -97,6 +130,27 @@ def assert_pel_identity(
         )
     if ref_function != code:
         raise ValidationError(f"R03: function {ref_function!r} in {ref!r} does not equal " f"function field {code!r}")
+
+
+def normalize_access_level(access_level: str | None) -> str | None:
+    """Fold any known spelling onto the one Library vocabulary, else ``None``.
+
+    Used at *write* boundaries only — the control layer's create/update path and
+    the CUT-1 data migration. Deliberately not used by
+    ``document_library_rbac.user_can_read_library_document``: that comparison
+    fails closed on an unrecognised value today, and normalising on read would
+    turn a value nobody validated into a grant. Converging the vocabulary is a
+    write-side decision, not a read-side amnesty.
+
+    Returns ``None`` for a value with no honest mapping, so the caller decides
+    whether to refuse or to leave the field alone. It never guesses a level.
+    """
+    value = (access_level or "").strip().lower()
+    if not value:
+        return None
+    if value in _ALLOWED_ACCESS_LEVELS:
+        return value
+    return _ACCESS_LEVEL_ALIASES.get(value)
 
 
 def assert_access_level_required(access_level: str | None) -> str:
