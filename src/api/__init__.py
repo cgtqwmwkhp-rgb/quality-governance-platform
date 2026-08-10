@@ -62,6 +62,7 @@ from src.api.routes import (
     loler_inspections,
     meta,
     near_miss,
+    notification_inventory,
     notifications,
     ocr_ops,
     partner_auth,
@@ -327,6 +328,13 @@ router.include_router(privacy.router, tags=["Privacy"])
 router.include_router(legal_holds.router, prefix="/legal-holds", tags=["Legal Holds"])
 # Push Notification Service (VAPID web-push)
 router.include_router(push_notifications.router, prefix="/notifications/push", tags=["Push Notifications"])
+# Read-only inventory of what this deployment can actually notify. Mounted apart
+# from the notifications router so the reporting surface holds no dispatch path.
+router.include_router(
+    notification_inventory.router,
+    prefix="/notifications/inventory",
+    tags=["Notifications"],
+)
 # Vehicle Checklists (PAMS Integration)
 router.include_router(
     vehicle_checklists.router,
