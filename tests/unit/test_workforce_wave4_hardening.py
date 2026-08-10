@@ -92,9 +92,10 @@ async def test_complete_assessment_reuses_existing_competency_record(monkeypatch
         "src.api.routes.assessments.CompetencyScoringService.score_assessment",
         lambda responses, questions: types.SimpleNamespace(outcome="pass", scorable_items=1),
     )
+    notify_assessment_complete = AsyncMock()
     monkeypatch.setattr(
         "src.api.routes.assessments.NotificationService.notify_assessment_complete",
-        AsyncMock(),
+        notify_assessment_complete,
     )
     monkeypatch.setattr(
         "src.api.routes.assessments._to_assessment_run_response",
@@ -113,6 +114,13 @@ async def test_complete_assessment_reuses_existing_competency_record(monkeypatch
     db.add.assert_not_called()
     db.flush.assert_awaited()
     db.commit.assert_awaited()
+    notify_assessment_complete.assert_awaited_once_with(
+        assessment_run_id="asm-run-5",
+        engineer_user_id=77,
+        supervisor_id=42,
+        outcome="pass",
+        tenant_id=1,
+    )
 
 
 @pytest.mark.asyncio

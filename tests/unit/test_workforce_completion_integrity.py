@@ -187,3 +187,60 @@ async def test_complete_induction_rejects_missing_template_answers():
     assert exc.value.detail["code"] == "VALIDATION_ERROR"
     assert exc.value.detail["details"]["missing_question_ids"] == [102]
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_complete_assessment_commits_before_notification_dispatch(monkeypatch):
+    """The run must be durable before notifications fan out, and a dispatch
+    failure must neither fail the request nor leave the session dirty."""
+    response = types.SimpleNamespace(
+        question_id=101,
+        verdict=CompetencyVerdict.COMPETENT,
+        feedback="done",
+    )
+    run = types.SimpleNamespace(
+        id="asm-run-005",
+        supervisor_id=42,
+        engineer_id=9,
+        template_id=10,
+        asset_type_id=None,
+        tenant_id=1,
+        status=AssessmentStatus.IN_PROGRESS,
+        completed_at=None,
+        outcome=None,
+        responses=[response],
+    )
+    template = types.SimpleNamespace(questions=[types.SimpleNamespace(id=101, is_active=True)])
+    engineer = types.SimpleNamespace(id=9, user_id=77)
+    call_order: list[str] = []
+    db = types.SimpleNamespace(
+        execute=AsyncMock(side_effect=[_FakeResult(run), _FakeResult(template), _FakeResult(engineer)]),
+        flush=AsyncMock(),
+        commit=AsyncMock(side_effect=lambda: call_order.append("commit")),
+        refresh=AsyncMock(),
+        rollback=AsyncMock(side_effect=lambda: call_order.append("rollback")),
+    )
+    user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
+
+    async def _exploding_dispatch(_service, **_kwargs):
+        call_order.append("dispatch")
+        raise RuntimeError("smtp down")
+
+    monkeypatch.setattr("src.api.routes.assessments._assert_assessment_access", AsyncMock())
+    monkeypatch.setattr(
+        "src.api.routes.assessments.CompetencyScoringService.score_assessment",
+        lambda responses, questions: types.SimpleNamespace(outcome="pass", scorable_items=1),
+    )
+    monkeypatch.setattr(
+        "src.api.routes.assessments._to_assessment_run_response",
+        lambda run_obj, **_extra: run_obj,
+    )
+    monkeypatch.setattr(
+        "src.api.routes.assessments.NotificationService.notify_assessment_complete",
+        _exploding_dispatch,
+    )
+
+    result = await complete_assessment("asm-run-005", db, user)
+
+    assert result is run
+    assert call_order == ["commit", "dispatch", "rollback"]

@@ -80,6 +80,30 @@ def audit_finding_href(*, run_id: int, finding_id: int | None = None) -> str:
     return f"/audits/{run_id}/execute"
 
 
+def assessment_run_href(run_id: str | int) -> str:
+    """Deep-link into a workforce assessment run execute surface.
+
+    Assessment run ids are opaque strings (e.g. ``asm-run-5``) so they cannot
+    use the int ``_ENTITY_PATHS`` map — same pattern as ``audit_finding_href``.
+    """
+    from urllib.parse import quote
+
+    key = str(run_id or "").strip()
+    if not key:
+        raise ValueError("run_id must be non-empty")
+    return f"/workforce/assessments/{quote(key, safe='')}/execute"
+
+
+def induction_run_href(run_id: str | int) -> str:
+    """Deep-link into a workforce induction run execute surface."""
+    from urllib.parse import quote
+
+    key = str(run_id or "").strip()
+    if not key:
+        raise ValueError("run_id must be non-empty")
+    return f"/workforce/training/{quote(key, safe='')}/execute"
+
+
 def clause_evidence_href(clause_id: str) -> str:
     """Deep-link into Compliance Evidence filtered to a catalogue clause id.
 
@@ -131,11 +155,13 @@ def absolute_href(path: str | None) -> str | None:
 
 __all__ = [
     "absolute_href",
+    "assessment_run_href",
     "audit_finding_href",
     "case_type_href",
     "clause_evidence_href",
     "document_href",
     "href_for",
+    "induction_run_href",
     "job_type_href",
     "register_href",
     "registered_entity_types",
