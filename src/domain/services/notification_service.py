@@ -10,6 +10,7 @@ Features:
 - Mention parsing and handling
 """
 
+import html
 import logging
 import re
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ from src.domain.models.notification import (
     NotificationPriority,
     NotificationType,
 )
+from src.domain.services.href_registry import absolute_href
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -34,6 +36,32 @@ logger = logging.getLogger(__name__)
 
 # Mention regex pattern: @[username] or @username
 MENTION_PATTERN = re.compile(r"@\[([^\]]+)\]|@(\w+)")
+
+
+def render_notification_email_html(
+    message: str,
+    action_url: str | None = None,
+    *,
+    cta_label: str = "Open in QGP",
+) -> str:
+    """Build HTML email body: escaped message + optional absolute deep-link CTA.
+
+    ``action_url`` may be SPA-relative (``/compliance-schedule/3``); only a
+    resolved ``http(s)`` absolute URL yields an ``<a href>``.
+    """
+    escaped = html.escape(message or "", quote=False)
+    parts = [
+        (
+            '<div style="white-space:pre-wrap;font-family:sans-serif;'
+            f'font-size:14px;line-height:1.5">{escaped}</div>'
+        )
+    ]
+    absolute = absolute_href(action_url)
+    if absolute:
+        href = html.escape(absolute, quote=True)
+        label = html.escape(cta_label, quote=False)
+        parts.append(f'<p style="margin-top:16px"><a href="{href}">{label}</a></p>')
+    return "\n".join(parts)
 
 
 class NotificationService:
@@ -214,12 +242,16 @@ class NotificationService:
         if not recipient:
             raise ValueError(f"Cannot deliver email for user {notification.user_id}: missing recipient email")
 
+        html_body = render_notification_email_html(
+            notification.message or "",
+            getattr(notification, "action_url", None),
+        )
         try:
             send_email.delay(
                 recipient,
                 notification.title,
-                notification.message,
-                False,
+                html_body,
+                True,
             )
         except Exception as exc:
             raise RuntimeError(f"Failed to enqueue email for user {notification.user_id}: {exc}") from exc

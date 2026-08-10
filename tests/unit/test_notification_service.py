@@ -222,13 +222,14 @@ class TestMarkAsRead:
 class TestEmailEnqueueDelivery:
     """WCS-A03: _deliver_email must enqueue Celery send_email, not theatre-log."""
 
-    def _notification(self, user_id: int = 7):
+    def _notification(self, user_id: int = 7, action_url: str | None = "/actions/42"):
         return SimpleNamespace(
             id=101,
             user_id=user_id,
             title="Action assigned",
             message="Please review CAPA-42",
             type="assignment",
+            action_url=action_url,
             delivered_channels=[],
             extra_data={},
         )
@@ -248,12 +249,56 @@ class TestEmailEnqueueDelivery:
             mock_send_email.delay = MagicMock()
             await service._deliver_email(notification)
 
-        mock_send_email.delay.assert_called_once_with(
-            "engineer@example.com",
-            "Action assigned",
-            "Please review CAPA-42",
-            False,
-        )
+        mock_send_email.delay.assert_called_once()
+        recipient, title, body, is_html = mock_send_email.delay.call_args.args
+        assert recipient == "engineer@example.com"
+        assert title == "Action assigned"
+        assert is_html is True
+        assert "Please review CAPA-42" in body
+        assert 'href="' in body
+        assert "/actions/42" in body
+        assert "<pre>" not in body
+
+    @pytest.mark.asyncio
+    async def test_deliver_email_escapes_html_in_message(self):
+        db = AsyncMock()
+        user = SimpleNamespace(id=7, email="engineer@example.com")
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = user
+        db.execute = AsyncMock(return_value=result)
+
+        service = NotificationService(db=db)
+        notification = self._notification(action_url="/compliance-schedule/3")
+        notification.message = 'Owner of <img src=x onerror=alert(1)> CSR'
+
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_send_email.delay = MagicMock()
+            await service._deliver_email(notification)
+
+        body = mock_send_email.delay.call_args.args[2]
+        assert "<img" not in body
+        assert "&lt;img" in body
+        assert "/compliance-schedule/3" in body
+
+    @pytest.mark.asyncio
+    async def test_deliver_email_rejects_unsafe_action_url_scheme(self):
+        db = AsyncMock()
+        user = SimpleNamespace(id=7, email="engineer@example.com")
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = user
+        db.execute = AsyncMock(return_value=result)
+
+        service = NotificationService(db=db)
+        notification = self._notification(action_url="javascript:alert(1)")
+
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_send_email.delay = MagicMock()
+            await service._deliver_email(notification)
+
+        body = mock_send_email.delay.call_args.args[2]
+        assert "<a href" not in body
+        assert "javascript:" not in body
+        assert "Please review CAPA-42" in body
 
     @pytest.mark.asyncio
     async def test_deliver_email_missing_user_email_raises(self):

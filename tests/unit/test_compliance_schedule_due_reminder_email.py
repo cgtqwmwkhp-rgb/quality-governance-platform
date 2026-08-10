@@ -53,6 +53,13 @@ async def test_queue_email_defers_send_until_flush() -> None:
         _flush_pending_due_reminder_emails(pending, results)
 
     send_email.delay.assert_called_once()
+    recipient, title, body, is_html = send_email.delay.call_args.args
+    assert recipient == "owner@example.com"
+    assert is_html is True
+    assert "CSR-1 is due within 7 days." in body
+    assert "/compliance-schedule/11" in body
+    assert 'href="' in body
+    assert "Open the requirement" in body
     assert results["emails_enqueued"] == 1
     assert results["emails_skipped"] == 0
 
