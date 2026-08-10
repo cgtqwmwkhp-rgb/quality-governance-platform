@@ -51,6 +51,40 @@ def test_simulate_refuses_incident_create_without_false_proceed(service: Copilot
     assert action["honesty"] == "not_performed"
 
 
+def test_simulate_refusals_track_whether_the_registers_are_wired_up(service: CopilotService):
+    """The same refusal is worded two ways because two different things are true.
+
+    Off, the surface is a disconnected keyword demo. On, the registers are read for
+    the closed question set and only the set is the limit — so the demo sentence
+    would be a false disclaimer, not a cautious one.
+    """
+    demo, demo_action = service._simulate_ai_response("Compliance Status", {})
+    grounded, grounded_action = service._simulate_ai_response("Compliance Status", {}, grounded=True)
+
+    assert "demo is not connected" in demo.lower()
+    assert "demo" not in grounded.lower()
+    assert "outside the fixed set" in grounded.lower()
+
+    # Wording is the only thing that moves: both still refuse the figure outright.
+    assert "92%" not in grounded
+    assert "will not invent" in grounded.lower()
+    assert demo_action["honesty"] == grounded_action["honesty"] == "not_performed"
+    assert demo_action["action"] == grounded_action["action"] == "get_compliance_status"
+
+
+def test_simulate_grounded_fallbacks_never_call_themselves_a_demo(service: CopilotService):
+    """Every branch the ungrounded fall-through can reach, not just the refusals."""
+    for question in (
+        "create an incident for a slip",
+        "Risk Summary",
+        "what is quokka governance",
+        "go to incidents",
+        "how is the weather",
+    ):
+        content, _ = service._simulate_ai_response(question, {}, grounded=True)
+        assert "demo" not in content.lower(), question
+
+
 @pytest.mark.asyncio
 async def test_execute_action_never_marks_write_completed(service: CopilotService):
     class _Msg:

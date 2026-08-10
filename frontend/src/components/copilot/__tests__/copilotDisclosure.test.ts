@@ -79,6 +79,25 @@ describe('copilotDisclosure copy', () => {
     expect(copilotDisclosure('grounded').welcome).toMatch(/PlantEx Assist/)
   })
 
+  it('leaves no user-visible "Copilot" wording in any mode', () => {
+    // The technical spelling survives in the API path, the flags and the module
+    // folder; none of it is allowed to reach a string a user reads.
+    for (const mode of ['unavailable', 'simulated', 'grounded'] as const) {
+      const { title, subtitle, welcome, inputPlaceholder, actionNotPerformed, banner } =
+        copilotDisclosure(mode)
+      const visible = [
+        title,
+        subtitle,
+        welcome,
+        inputPlaceholder,
+        actionNotPerformed,
+        banner?.lead ?? '',
+        banner?.detail ?? '',
+      ].join(' ')
+      expect(visible).not.toMatch(/copilot/i)
+    }
+  })
+
   it('drops "(Demo)" from the title once answers are grounded', () => {
     expect(copilotDisclosure('simulated').title).toContain('(Demo)')
     expect(copilotDisclosure('grounded').title).not.toContain('Demo')

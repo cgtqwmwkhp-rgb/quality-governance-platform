@@ -93,7 +93,7 @@ const SIMULATED: CopilotDisclosure = {
   },
   welcome: `This is a demonstration of PlantEx Assist. It is not connected to any AI model or to your organisation's records.\n\nI will **refuse** live-data questions (compliance status, risk summaries) and will **not** claim to create incidents or actions. Concept explanations (for example CAPA or RIDDOR) are general guidance only.\n\nTry "what is CAPA" for a concept preview, or open Compliance / Risk Register for real figures.`,
   inputPlaceholder: 'Ask me anything...',
-  actionNotPerformed: 'Not performed — demo cannot write or read live registers',
+  actionNotPerformed: 'Not performed — PlantEx Assist Demo cannot write or read live registers',
 }
 
 const GROUNDED: CopilotDisclosure = {
