@@ -750,13 +750,16 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/workflow/sla-configs/{config_id}"),
         ("GET", "/api/v1/workflow/sla-status/{entity_type}/{entity_id}"),
         # src.api.routes.workflows
-        ("GET", "/api/v1/workflows/approvals/pending"),
-        ("GET", "/api/v1/workflows/delegations"),
+        #
+        # Three entries left this list with the endpoints themselves in
+        # FR-APPROVALS-01: /workflows/approvals/pending, /workflows/delegations and
+        # /workflows/stats. Their replacement, GET /api/v1/approvals/my-decisions,
+        # requires action:read, so it is authorisation-checked and needs no entry
+        # here — the debt went down by three rather than moving.
         ("GET", "/api/v1/workflows/escalations/pending"),
         ("GET", "/api/v1/workflows/instances"),
         ("GET", "/api/v1/workflows/instances/{workflow_id}"),
         ("GET", "/api/v1/workflows/routing-rules/{entity_type}"),
-        ("GET", "/api/v1/workflows/stats"),
         ("GET", "/api/v1/workflows/templates"),
         ("GET", "/api/v1/workflows/templates/{template_code}"),
         # src.api.routes.workforce_competence_gaps
@@ -773,7 +776,11 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: "add my new route to the list". Lowering one is ordinary progress; raising one
 #: is a deliberate decision that a reviewer sees as a changed number in a file
 #: about unprotected endpoints.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 467
+#: Lowered 467 -> 464 by FR-APPROVALS-01, which deleted three authenticated-only
+#: endpoints (/workflows/approvals/pending, /workflows/delegations,
+#: /workflows/stats). Lowered rather than left at 467 because a ceiling that keeps
+#: room freed by a deletion hands the next three undeclared routes a free pass.
+MAX_AUTHENTICATED_ONLY_DEBT: int = 464
 #: Raised 50 -> 51 for GET /api/v1/meta/features. The alternative was to make it
 #: require authentication, which would land it in AUTHENTICATED_ONLY_DEBT — a list
 #: that is at its ceiling and deliberately closed to new entries. Requiring a
