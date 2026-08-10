@@ -15,6 +15,8 @@ export interface TemplateHeaderProps {
   onBack: () => void
   onSave: () => void
   isSaving: boolean
+  /** How far a save in progress has got, e.g. "Saving questions… 6 of 19 saved". */
+  saveProgress?: string | null
   onPublish: () => void
   canPublish: boolean
   onAIAssist: () => void
@@ -35,6 +37,7 @@ export default function TemplateHeader({
   onBack,
   onSave,
   isSaving,
+  saveProgress = null,
   onPublish,
   canPublish,
   onAIAssist,
@@ -111,6 +114,15 @@ export default function TemplateHeader({
             </button>
 
             <div className="flex items-center gap-2">
+              {isSaving && saveProgress ? (
+                <span
+                  className="text-xs text-muted-foreground"
+                  data-testid="save-progress"
+                  aria-live="polite"
+                >
+                  {saveProgress}
+                </span>
+              ) : null}
               <button
                 onClick={onPublish}
                 disabled={!canPublish}

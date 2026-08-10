@@ -2,7 +2,7 @@
  * Audits API client extracted from `client.ts` (Path-to-10 FE lane).
  * Instantiated from `client.ts` with the shared axios instance to avoid cycles.
  */
-import type { AxiosInstance } from 'axios'
+import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 
 /** Minimal paginated shape used by audits list responses. */
 export interface PaginatedResponse<T> {
@@ -561,10 +561,13 @@ export function createAuditsApi(api: AxiosInstance) {
     )
   },
   getTemplate: (id: number) => api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),
-  createTemplate: (data: AuditTemplateCreate) =>
-    api.post<AuditTemplate>('/api/v1/audits/templates', data),
-  updateTemplate: (id: number, data: AuditTemplateUpdate) =>
-    api.patch<AuditTemplate>(`/api/v1/audits/templates/${id}`, data),
+  // Template/section/question writes accept a per-request config so long
+  // multi-section builder saves can raise their own timeout without changing the
+  // 45s default every other write relies on.
+  createTemplate: (data: AuditTemplateCreate, config?: AxiosRequestConfig) =>
+    api.post<AuditTemplate>('/api/v1/audits/templates', data, config),
+  updateTemplate: (id: number, data: AuditTemplateUpdate, config?: AxiosRequestConfig) =>
+    api.patch<AuditTemplate>(`/api/v1/audits/templates/${id}`, data, config),
   publishTemplate: (id: number) =>
     api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/publish`),
   cloneTemplate: (id: number) => api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/clone`),
@@ -577,18 +580,20 @@ export function createAuditsApi(api: AxiosInstance) {
     api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/restore`),
 
   // Sections
-  createSection: (templateId: number, data: AuditSectionCreate) =>
-    api.post<AuditSection>(`/api/v1/audits/templates/${templateId}/sections`, data),
-  updateSection: (sectionId: number, data: AuditSectionUpdate) =>
-    api.patch<AuditSection>(`/api/v1/audits/sections/${sectionId}`, data),
-  deleteSection: (sectionId: number) => api.delete(`/api/v1/audits/sections/${sectionId}`),
+  createSection: (templateId: number, data: AuditSectionCreate, config?: AxiosRequestConfig) =>
+    api.post<AuditSection>(`/api/v1/audits/templates/${templateId}/sections`, data, config),
+  updateSection: (sectionId: number, data: AuditSectionUpdate, config?: AxiosRequestConfig) =>
+    api.patch<AuditSection>(`/api/v1/audits/sections/${sectionId}`, data, config),
+  deleteSection: (sectionId: number, config?: AxiosRequestConfig) =>
+    api.delete(`/api/v1/audits/sections/${sectionId}`, config),
 
   // Questions
-  createQuestion: (templateId: number, data: AuditQuestionCreate) =>
-    api.post<AuditQuestion>(`/api/v1/audits/templates/${templateId}/questions`, data),
-  updateQuestion: (questionId: number, data: AuditQuestionUpdate) =>
-    api.patch<AuditQuestion>(`/api/v1/audits/questions/${questionId}`, data),
-  deleteQuestion: (questionId: number) => api.delete(`/api/v1/audits/questions/${questionId}`),
+  createQuestion: (templateId: number, data: AuditQuestionCreate, config?: AxiosRequestConfig) =>
+    api.post<AuditQuestion>(`/api/v1/audits/templates/${templateId}/questions`, data, config),
+  updateQuestion: (questionId: number, data: AuditQuestionUpdate, config?: AxiosRequestConfig) =>
+    api.patch<AuditQuestion>(`/api/v1/audits/questions/${questionId}`, data, config),
+  deleteQuestion: (questionId: number, config?: AxiosRequestConfig) =>
+    api.delete(`/api/v1/audits/questions/${questionId}`, config),
 
   // Runs
   listRuns: (page = 1, pageSize = 10) =>

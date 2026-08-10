@@ -42,6 +42,7 @@ import api, {
   externalAuditImportsApi,
   externalAuditRecordsApi,
 } from './client'
+import { BUILDER_SAVE_TIMEOUT_MS } from '../pages/audit-builder/saveConcurrency'
 
 function axiosErr(partial: {
   code?: string
@@ -117,6 +118,14 @@ describe('client pure helpers', () => {
     expect(resolveRequestTimeout('delete')).toBe(45000)
     expect(resolveRequestTimeout('post', 120000)).toBe(120000)
     expect(resolveRequestTimeout('get', 300000)).toBe(300000)
+  })
+
+  it('keeps the audit builder save override instead of the 45s write default', () => {
+    // FR-AUDIT-SAVE-01: multi-section builder saves need longer than 45s per
+    // request; every other write must keep the default.
+    expect(resolveRequestTimeout('patch', BUILDER_SAVE_TIMEOUT_MS)).toBe(BUILDER_SAVE_TIMEOUT_MS)
+    expect(resolveRequestTimeout('post', BUILDER_SAVE_TIMEOUT_MS)).toBe(BUILDER_SAVE_TIMEOUT_MS)
+    expect(BUILDER_SAVE_TIMEOUT_MS).not.toBe(resolveRequestTimeout('post'))
   })
 
   it('timeout/abort does not mark Offline when navigator.onLine is true', () => {
