@@ -2,6 +2,11 @@
  * Structured save/publish error model for Audit Template Builder.
  * Parses FastAPI/axios 422 detail arrays and string messages into actionable issues.
  */
+import {
+  TIMEOUT_STATUS_CODES,
+  classifyWriteTimeoutDisposition,
+  isTimeoutOrAbortError,
+} from '../../api/timeoutClassification'
 
 export interface SaveIssue {
   id: string
@@ -18,12 +23,21 @@ export interface SaveIssue {
 export interface SaveIssueModel {
   summary: string
   issues: SaveIssue[]
+  /** Transport timeout rather than anything the author can fix by editing. */
+  isTimeout?: boolean
+  /** Timed-out write: the server may still have committed it. Reconcile, don't re-enter. */
+  maybeCommitted?: boolean
 }
 
 export interface SaveIssueContext {
   questionId?: string
   sectionTitle?: string
   questionText?: string
+  /**
+   * How far the save had got when it failed, e.g. "6 of 19 questions saved".
+   * Used for timeouts, where "which field is wrong" is the wrong question.
+   */
+  progress?: string
 }
 
 type FieldGuidance = { label: string; action: string }
@@ -252,10 +266,114 @@ function summarize(issues: SaveIssue[]): string {
   return `Couldn’t save — fix ${issues.length} issues, then try again.`
 }
 
+type TimeoutShapedError = {
+  code?: string
+  message?: string
+  name?: string
+  isTimeout?: boolean
+  maybeCommitted?: boolean
+  classifiedMessage?: string
+  config?: { method?: string }
+  response?: { status?: number }
+}
+
+export interface SaveTimeoutClassification {
+  isTimeout: boolean
+  /** True when the request that timed out may still have been committed server-side. */
+  maybeCommitted: boolean
+}
+
+const NOT_A_TIMEOUT: SaveTimeoutClassification = { isTimeout: false, maybeCommitted: false }
+
+/**
+ * Decide whether a save failure is a transport/gateway timeout.
+ *
+ * Trusts the flags the axios response interceptor already stamped on the error
+ * (`isTimeout` / `maybeCommitted`) and falls back to the raw axios shape so this
+ * still classifies correctly for errors raised outside that interceptor.
+ */
+export function classifySaveTimeout(error: unknown): SaveTimeoutClassification {
+  if (!error || typeof error !== 'object') return NOT_A_TIMEOUT
+  const candidate = error as TimeoutShapedError
+  const method = candidate.config?.method
+  const writeMayHaveLanded = () =>
+    classifyWriteTimeoutDisposition({ code: 'ECONNABORTED' }, method) === 'maybe_committed'
+
+  if (candidate.isTimeout === true) {
+    return {
+      isTimeout: true,
+      maybeCommitted: candidate.maybeCommitted ?? writeMayHaveLanded(),
+    }
+  }
+
+  const status = candidate.response?.status
+  if (status !== undefined) {
+    // A response came back: only the server's own timeout statuses count. Anything
+    // else (422, 500, …) is a real answer and must keep its validation/server copy.
+    if (TIMEOUT_STATUS_CODES.has(status)) {
+      return { isTimeout: true, maybeCommitted: writeMayHaveLanded() }
+    }
+    return NOT_A_TIMEOUT
+  }
+
+  if (
+    isTimeoutOrAbortError({
+      code: candidate.code,
+      message: candidate.message ?? candidate.classifiedMessage,
+      name: candidate.name,
+    })
+  ) {
+    return { isTimeout: true, maybeCommitted: writeMayHaveLanded() }
+  }
+  return NOT_A_TIMEOUT
+}
+
+function timeoutRaw(error: unknown): string {
+  const candidate = (error ?? {}) as TimeoutShapedError
+  const raw = candidate.message || candidate.classifiedMessage
+  return typeof raw === 'string' && raw.trim() ? raw : 'Request timed out'
+}
+
+function timeoutIssueModel(
+  error: unknown,
+  classification: SaveTimeoutClassification,
+  ctx?: SaveIssueContext,
+): SaveIssueModel {
+  const progress = ctx?.progress?.trim()
+  const where = progress ? ` (${progress})` : ''
+  const action = classification.maybeCommitted
+    ? 'Some of your changes may already have been saved. Reload this template to see what saved before you try again — re-entering the changes now could duplicate them.'
+    : 'The request timed out before the server answered. Check your connection, then save again.'
+  const summary = classification.maybeCommitted
+    ? `Save timed out${where}. Some changes may already have been saved — reload this template to check before saving again.`
+    : `Save timed out${where}. Check your connection, then save again.`
+
+  return {
+    summary,
+    // No questionId: a timeout is not a fault in any one question, and offering
+    // "Show question" would frame it as something to fix by editing.
+    issues: [
+      {
+        id: 'issue-timeout',
+        field: null,
+        label: 'Save timed out',
+        action,
+        raw: timeoutRaw(error),
+        context: progress,
+      },
+    ],
+    isTimeout: true,
+    maybeCommitted: classification.maybeCommitted,
+  }
+}
+
 /**
  * Build a structured save-issue model from an axios/FastAPI (or generic) error.
  */
 export function buildSaveIssueModel(error: unknown, ctx?: SaveIssueContext): SaveIssueModel {
+  const timeout = classifySaveTimeout(error)
+  if (timeout.isTimeout) return timeoutIssueModel(error, timeout, ctx)
+
   const detail = extractDetail(error)
 
   let issues: SaveIssue[] = []

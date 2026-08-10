@@ -58,15 +58,58 @@ describe('createAuditsApi', () => {
     audits.createQuestion(1, { question_text: 'q', question_type: 'yes_no' } as never)
     audits.updateQuestion(3, { question_text: 'q2' } as never)
     audits.deleteQuestion(3)
-    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/templates/1/sections', { title: 's' })
-    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/sections/2', { title: 's2' })
-    expect(api.delete).toHaveBeenCalledWith('/api/v1/audits/sections/2')
-    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/templates/1/questions', {
-      question_text: 'q',
-      question_type: 'yes_no',
-    })
-    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/questions/3', { question_text: 'q2' })
-    expect(api.delete).toHaveBeenCalledWith('/api/v1/audits/questions/3')
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/v1/audits/templates/1/sections',
+      { title: 's' },
+      undefined,
+    )
+    expect(api.patch).toHaveBeenCalledWith(
+      '/api/v1/audits/sections/2',
+      { title: 's2' },
+      undefined,
+    )
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/audits/sections/2', undefined)
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/v1/audits/templates/1/questions',
+      {
+        question_text: 'q',
+        question_type: 'yes_no',
+      },
+      undefined,
+    )
+    expect(api.patch).toHaveBeenCalledWith(
+      '/api/v1/audits/questions/3',
+      { question_text: 'q2' },
+      undefined,
+    )
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/audits/questions/3', undefined)
+  })
+
+  it('forwards a per-request config so the builder save path can raise its timeout', () => {
+    const api = mockApi()
+    const audits = createAuditsApi(api as never)
+    const config = { timeout: 90000 }
+    audits.createTemplate({ name: 't', audit_type: 'internal' } as never, config)
+    audits.updateTemplate(1, { name: 't2' } as never, config)
+    audits.createSection(1, { title: 's' } as never, config)
+    audits.updateSection(2, { title: 's2' } as never, config)
+    audits.deleteSection(2, config)
+    audits.createQuestion(1, { question_text: 'q' } as never, config)
+    audits.updateQuestion(3, { question_text: 'q2' } as never, config)
+    audits.deleteQuestion(3, config)
+
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/templates', { name: 't', audit_type: 'internal' }, config)
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/templates/1', { name: 't2' }, config)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/templates/1/sections', { title: 's' }, config)
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/sections/2', { title: 's2' }, config)
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/audits/sections/2', config)
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/v1/audits/templates/1/questions',
+      { question_text: 'q' },
+      config,
+    )
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/questions/3', { question_text: 'q2' }, config)
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/audits/questions/3', config)
   })
 
   it('run lifecycle paths match OpenAPI', () => {

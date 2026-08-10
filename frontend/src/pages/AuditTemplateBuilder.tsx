@@ -50,6 +50,12 @@ import {
   type SaveIssue,
   type SaveIssueModel,
 } from './audit-builder/saveErrorModel'
+import {
+  BUILDER_SAVE_CONCURRENCY,
+  BUILDER_SAVE_REQUEST_CONFIG,
+  formatQuestionProgress,
+  runWithConcurrency,
+} from './audit-builder/saveConcurrency'
 import { QUESTION_TYPES } from './audit-builder/QuestionEditor'
 import SectionEditor from './audit-builder/SectionEditor'
 import TemplateHeader from './audit-builder/TemplateHeader'
@@ -264,6 +270,7 @@ export default function AuditTemplateBuilder() {
 
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder')
   const [isSaving, setIsSaving] = useState(false)
+  const [saveProgress, setSaveProgress] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveIssues, setSaveIssues] = useState<SaveIssue[] | null>(null)
   const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null)
@@ -526,6 +533,17 @@ export default function AuditTemplateBuilder() {
     }
     setIsSaving(true)
     clearSaveIssues()
+    // Where the save had got to, for both the progress line and — if a request
+    // times out mid-save — the honest "this much is already saved" message.
+    const totalQuestions = template.sections.reduce((n, s) => n + s.questions.length, 0)
+    let savedQuestions = 0
+    let stage = 'template details'
+    const enterStage = (detail: string, uiLabel?: string) => {
+      stage = detail
+      setSaveProgress(uiLabel ?? `Saving ${detail}…`)
+    }
+    const questionStage = () => formatQuestionProgress(savedQuestions, totalQuestions)
+    enterStage(stage)
     try {
       const payload = {
         name: template.name,
@@ -537,42 +555,60 @@ export default function AuditTemplateBuilder() {
         estimated_duration: template.estimatedDuration,
       }
       let tid = backendId
-      if (tid) await auditsApi.updateTemplate(tid, payload)
+      if (tid) await auditsApi.updateTemplate(tid, payload, BUILDER_SAVE_REQUEST_CONFIG)
       else {
-        const { data } = await auditsApi.createTemplate(payload)
+        const { data } = await auditsApi.createTemplate(payload, BUILDER_SAVE_REQUEST_CONFIG)
         tid = data.id
         setBackendId(tid)
       }
 
       for (const [sIdx, section] of template.sections.entries()) {
+        enterStage(`section ${sIdx + 1} of ${template.sections.length}`)
         let sid = sectionIdMap.current[section.id]
         const sp = buildSectionPayload(section, sIdx)
-        if (sid) await auditsApi.updateSection(sid, sp)
+        if (sid) await auditsApi.updateSection(sid, sp, BUILDER_SAVE_REQUEST_CONFIG)
         else {
-          const { data } = await auditsApi.createSection(tid!, sp)
+          const { data } = await auditsApi.createSection(tid!, sp, BUILDER_SAVE_REQUEST_CONFIG)
           sid = data.id
           sectionIdMap.current[section.id] = sid
         }
-        for (const [qIdx, q] of section.questions.entries()) {
-          const questionCtx = {
-            questionId: q.id,
-            sectionTitle: section.title || `Section ${sIdx + 1}`,
-            questionText: q.text,
-          }
-          try {
+        // Questions in a section are independent rows with explicit sort_order,
+        // so a few can go at once; the section itself stays sequential because
+        // its id is what the question payloads point at.
+        const failure = await runWithConcurrency(
+          section.questions,
+          BUILDER_SAVE_CONCURRENCY,
+          async (q, qIdx) => {
             const qbid = questionIdMap.current[q.id]
-            if (qbid) await auditsApi.updateQuestion(qbid, buildQuestionPayload(q, qIdx))
-            else {
+            if (qbid) {
+              await auditsApi.updateQuestion(
+                qbid,
+                buildQuestionPayload(q, qIdx),
+                BUILDER_SAVE_REQUEST_CONFIG,
+              )
+            } else {
               const { data } = await auditsApi.createQuestion(
                 tid!,
                 buildQuestionPayload(q, qIdx, sid),
+                BUILDER_SAVE_REQUEST_CONFIG,
               )
               questionIdMap.current[q.id] = data.id
             }
-          } catch (questionError) {
-            applySaveFailure(buildSaveIssueModel(questionError, questionCtx))
-            return
-          }
+            savedQuestions += 1
+            enterStage(questionStage(), `Saving questions… ${questionStage()}`)
+          },
+        )
+        if (failure) {
+          const q = failure.item
+          applySaveFailure(
+            buildSaveIssueModel(failure.error, {
+              questionId: q.id,
+              sectionTitle: section.title || `Section ${sIdx + 1}`,
+              questionText: q.text,
+              progress: questionStage(),
+            }),
+          )
+          return
         }
       }
 
@@ -592,10 +628,12 @@ export default function AuditTemplateBuilder() {
           if (!changed) continue
           const qbid = questionIdMap.current[q.id]
           if (!qbid) continue
+          enterStage('conditional logic', 'Saving conditional logic…')
           try {
             await auditsApi.updateQuestion(
               qbid,
               buildQuestionPayload({ ...q, conditionalLogicRules: remapped }, qIdx),
+              BUILDER_SAVE_REQUEST_CONFIG,
             )
             conditionalLogicUpdates.push({ sectionId: section.id, questionId: q.id, rules: remapped })
           } catch (questionError) {
@@ -604,6 +642,7 @@ export default function AuditTemplateBuilder() {
                 questionId: q.id,
                 sectionTitle: section.title,
                 questionText: q.text,
+                progress: stage,
               }),
             )
             return
@@ -626,19 +665,28 @@ export default function AuditTemplateBuilder() {
         )
       }
 
-      for (const deletedQuestionId of [...new Set(deletedQuestionIds.current)]) {
-        await auditsApi.deleteQuestion(deletedQuestionId)
+      const questionsToDelete = [...new Set(deletedQuestionIds.current)]
+      if (questionsToDelete.length > 0) {
+        enterStage('deleted questions', 'Removing deleted questions…')
+      }
+      for (const deletedQuestionId of questionsToDelete) {
+        await auditsApi.deleteQuestion(deletedQuestionId, BUILDER_SAVE_REQUEST_CONFIG)
       }
       deletedQuestionIds.current = []
 
-      for (const deletedSectionId of [...new Set(deletedSectionIds.current)]) {
-        await auditsApi.deleteSection(deletedSectionId)
+      const sectionsToDelete = [...new Set(deletedSectionIds.current)]
+      if (sectionsToDelete.length > 0) {
+        enterStage('deleted sections', 'Removing deleted sections…')
+      }
+      for (const deletedSectionId of sectionsToDelete) {
+        await auditsApi.deleteSection(deletedSectionId, BUILDER_SAVE_REQUEST_CONFIG)
       }
       deletedSectionIds.current = []
     } catch (error) {
-      applySaveFailure(buildSaveIssueModel(error))
+      applySaveFailure(buildSaveIssueModel(error, { progress: stage }))
     } finally {
       setIsSaving(false)
+      setSaveProgress(null)
     }
   }
 
@@ -691,6 +739,7 @@ export default function AuditTemplateBuilder() {
         onBack={() => navigate('/audit-templates')}
         onSave={handleSave}
         isSaving={isSaving}
+        saveProgress={saveProgress}
         onPublish={() => setShowPublishDialog(true)}
         canPublish={!!backendId && template.status !== 'published'}
         onAIAssist={() => setShowAIAssist(true)}

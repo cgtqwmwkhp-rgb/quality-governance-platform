@@ -35,6 +35,20 @@ import { createWorkforceApi } from './workforceClient'
 import { createEngineersApi } from './engineersClient'
 import { createPlanetMarkApi } from './planetMarkClient'
 import { humaniseCodedText } from '../helpers/displayLabels'
+import {
+  WRITE_METHODS,
+  classifyWriteTimeoutDisposition,
+  isTimeoutOrAbortError,
+} from './timeoutClassification'
+
+// Timeout classification lives in its own module so UI code (e.g. the audit
+// builder's save error model) can reuse it without importing this file's axios
+// instance and store wiring. Re-exported here for existing callers.
+export {
+  classifyWriteTimeoutDisposition,
+  isMaybeCommittedTimeout,
+  isTimeoutOrAbortError,
+} from './timeoutClassification'
 import { createUvdbApi } from './uvdbClient'
 import { createUsersApi } from './usersClient'
 import { createWorkflowsApi } from './workflowsClient'
@@ -100,8 +114,6 @@ const UPLOAD_TIMEOUT_MS = 120000
 // Extended timeout for import processing (5 minutes)
 // PDF extraction + OCR + dual AI analysis (Mistral + Gemini) runs synchronously
 const PROCESSING_TIMEOUT_MS = 300000
-
-const WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 
 /**
  * Resolve per-request timeout. Preserves explicit caller overrides (e.g. uploads).
@@ -590,17 +602,6 @@ interface ClassifiedAxiosError extends AxiosError {
   maybeCommitted?: boolean
 }
 
-/** Timeout / AbortController cancel (axios ECONNABORTED / CanceledError). */
-export function isTimeoutOrAbortError(error: {
-  code?: string
-  message?: string
-  name?: string
-}): boolean {
-  if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') return true
-  if (error.name === 'CanceledError' || error.name === 'AbortError') return true
-  return typeof error.message === 'string' && error.message.toLowerCase().includes('timeout')
-}
-
 /**
  * Whether a transport failure should drive OfflineIndicator via connectionStatus.
  * PX-029: timeout/abort while navigator.onLine must NOT mark the app Offline.
@@ -618,31 +619,6 @@ export function shouldMarkConnectionDisconnected(error: {
     return false
   }
   return true
-}
-
-/**
- * Classify write-timeout disposition for UX. POST (and other mutations) that
- * time out are maybe-committed — reconcile/list before retrying; Idempotency-Key
- * makes a deliberate retry safe, but blind retry is discouraged.
- */
-export function classifyWriteTimeoutDisposition(
-  error: { code?: string; message?: string; name?: string },
-  method?: string,
-): 'maybe_committed' | 'safe_retry_read' | 'not_timeout' {
-  if (!isTimeoutOrAbortError(error)) return 'not_timeout'
-  const m = (method ?? 'get').toLowerCase()
-  if (WRITE_METHODS.has(m) && m !== 'delete') {
-    // DELETE is usually idempotent; POST/PUT/PATCH creates/updates may have landed.
-    return 'maybe_committed'
-  }
-  if (m === 'delete') return 'maybe_committed'
-  return 'safe_retry_read'
-}
-
-export function isMaybeCommittedTimeout(
-  error: { code?: string; message?: string; name?: string; config?: { method?: string } },
-): boolean {
-  return classifyWriteTimeoutDisposition(error, error.config?.method) === 'maybe_committed'
 }
 
 api.interceptors.response.use(
