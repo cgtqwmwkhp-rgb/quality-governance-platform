@@ -1,4 +1,7 @@
-# Change Ledger (CL-LIB-WJ1-EDITOR-FRONT-SHEET-SCAFFOLD)
+# Change Ledger
+
+**Depends:** WJ-0 `#1693` LIVE tip `409e585b960` (STG=PROD).
+ (CL-LIB-WJ1-EDITOR-FRONT-SHEET-SCAFFOLD)
 
 ## 1) Summary
 - **Feature / Change name:** Library WJ-1 prep — native draft editor package shell + Front Sheet band stub (L-34…L-39 design lock)
@@ -40,7 +43,7 @@
 - [x] AC-03: `.size-limit.json` untouched; size-limit notes document future chunk budget
 - [x] AC-04: ADR-0024 + design note land under docs/
 - [x] AC-05: Vitest scaffold suite passes locally
-- [ ] AC-06: Full CI — on PR (HOLD until WJ-0 PROD gate for merge)
+- [ ] AC-06: Full CI — on PR (OPEN after WJ-0 PROD gate for merge)
 
 ## 5) Testing Evidence (link to runs)
 - [ ] Targeted Vitest `libraryEditorScaffold.test.tsx` — run on PR
@@ -55,7 +58,7 @@
 - **Runbook updates:** None until implement PR
 
 ## 8) Release Plan (Local → Staging → Canary → Prod)
-- **HOLD PR** until WJ-0 PROD. Merge only as prep ahead of Detail mount, or squash into WJ-1 implement PR.
+- **OPEN PR** after WJ-0 PROD. Merge only as prep ahead of Detail mount, or squash into WJ-1 implement PR.
 - **DONE bar:** Conveyor marks WJ-1 PROD only after editor + Front Sheet LIVE on tip with size-limit green — not this scaffold alone.
 
 ## 9) Rollback Plan (Mandatory)
