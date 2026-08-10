@@ -44,6 +44,7 @@ from tests.integration._document_control_scratch import (
 
 ENDPOINT = "/api/v1/approvals/my-decisions"
 
+
 def _naive_utc(offset_days: int = 0) -> datetime:
     """Every ``DateTime`` column touched here is declared without ``timezone=True``.
 
