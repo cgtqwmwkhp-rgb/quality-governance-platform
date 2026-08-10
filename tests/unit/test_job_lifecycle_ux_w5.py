@@ -117,7 +117,7 @@ def test_migration_chains_serially_from_the_w4_head():
 
 def test_the_w5_revision_is_the_only_head(tmp_path):
     heads = _alembic_revision_map(tmp_path)["heads"]
-    assert heads == ["20261102_lib_cut1_sor"], f"expected CUT-1 as the single head, found {heads}"
+    assert heads == ["20261103_lib_steward14"], f"expected STEWARD-14 as the single head, found {heads}"
 
 
 def test_only_the_w5_revision_sits_on_the_w4_head(tmp_path):

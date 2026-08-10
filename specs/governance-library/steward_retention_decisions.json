@@ -1,0 +1,106 @@
+{
+  "schema": "governance-library/steward-retention-decisions/v1",
+  "title": "STEWARD-14 — accepted retention decisions for the fourteen categories CUT-1 refused",
+  "accepted_by": "David Harris",
+  "accepted_role": "Governance Library steward (HSEQ)",
+  "accepted_on": "2026-08-10",
+  "authority": {
+    "adr": "docs/adr/ADR-0023-governance-library-reference-scheme.md",
+    "inventory": "docs/governance/library-home-inventory-f7.md",
+    "northern_star_rule": "R19 — retention is a number of years with a basis; a disposal date must be calculable",
+    "gate": "scripts/governance/library/citation_cutover_readiness.py"
+  },
+  "basis_note": "The R19 basis stays where it already lives: specs/governance-library/taxonomy.json `retention_rule`. This file records only the steward's reading of that prose — taxonomy_id, years, anchor and a short rationale. No prose is copied here, and none of it was edited to make these decisions fit (F-7 §4: one home per fact).",
+  "principle": [
+    "Where the prose names more than one period, the longest leg governs the whole category. One category-level integer cannot hold two, and keeping a record longer than its rule requires is recoverable; destroying it early is not.",
+    "A period stated in months rounds UP to the next whole year, because R19 makes retention a count of years.",
+    "Where the prose says the current issue is kept ('Current …', 'Register current', 'Certificates current'), the anchor is `supersede`, so a live document has no disposal date at all and the clock starts the day it leaves the live set. Anchoring those at `issue` is what made a document disposable the day it stopped being current.",
+    "A per-document extension the register cannot evaluate ('longer if incident-related', 'to age 21 if a minor', 'if contractual') is NOT a category default. It stays a steward action on the individual document, and the category carries the period that applies without it."
+  ],
+  "decisions": [
+    {
+      "taxonomy_id": "02.02",
+      "retention_years": 40,
+      "retention_anchor": "supersede",
+      "rationale": "Longest leg (exposure-monitoring linked records, 40 years) governs the whole category; supersede anchor honours the 'Current' leg, so a live COSHH assessment has no disposal date."
+    },
+    {
+      "taxonomy_id": "02.04",
+      "retention_years": 6,
+      "retention_anchor": "supersede",
+      "rationale": "The register does not record whether a method statement is contractual, so the longer conditional leg (contract life + 6 years) governs unconditionally. Supersede anchor preserves the 'Current +' reading."
+    },
+    {
+      "taxonomy_id": "02.05",
+      "retention_years": 3,
+      "retention_anchor": "issue",
+      "rationale": "Base period 3 years from issue. 'Longer if incident-related' is a per-permit extension a steward applies to the document; it cannot be a category default because the register does not know which permits are incident-related."
+    },
+    {
+      "taxonomy_id": "02.06",
+      "retention_years": 3,
+      "retention_anchor": "issue",
+      "rationale": "'Completed' describes the only record type this category holds, so the colon introduces a scope word rather than a second period. 3 years from issue."
+    },
+    {
+      "taxonomy_id": "02.07",
+      "retention_years": 6,
+      "retention_anchor": "issue",
+      "rationale": "Longest leg (investigations, 6 years) governs the whole category; '3 years minimum' is a floor, not a ceiling, and the age-21 extension for a minor stays a per-document steward action."
+    },
+    {
+      "taxonomy_id": "02.08",
+      "retention_years": 40,
+      "retention_anchor": "issue",
+      "rationale": "'Health records' is the whole content of this category, so the colon is a scope word, not a second period. 40 years from issue."
+    },
+    {
+      "taxonomy_id": "03.04",
+      "retention_years": 3,
+      "retention_anchor": "supersede",
+      "rationale": "3 years anchored on supersede satisfies both legs with one rule: a live PEEP has no disposal date ('PEEPs: current'), a superseded drill record keeps 3 years. 'restricted' is an access statement and is already carried by default_access."
+    },
+    {
+      "taxonomy_id": "04.08",
+      "retention_years": 40,
+      "retention_anchor": "supersede",
+      "rationale": "Longest leg (exposure records, 40 years) governs the whole category; supersede anchor honours 'Register current'."
+    },
+    {
+      "taxonomy_id": "04.10",
+      "retention_years": 40,
+      "retention_anchor": "issue",
+      "rationale": "Longest leg (EL certificates, 40 years) governs the whole category, and 'recommended' is read as required rather than optional. Issue anchor: an insurance certificate's clock starts on the day it is issued, and it is never superseded in place."
+    },
+    {
+      "taxonomy_id": "06.02",
+      "retention_years": 2,
+      "retention_anchor": "issue",
+      "rationale": "15 months rounded up to the next whole year. 2 years from issue is longer than the prose requires and never shorter; a 1-year rounding would have been."
+    },
+    {
+      "taxonomy_id": "06.04",
+      "retention_years": 2,
+      "retention_anchor": "issue",
+      "rationale": "Longest leg (working time records, 2 years) governs the whole category, which also covers the 12-month tachograph leg. The category is seeded inactive — Plantexpand runs no HGVs under an O-licence — so this governs rows already filed, not new ones."
+    },
+    {
+      "taxonomy_id": "07.03",
+      "retention_years": 6,
+      "retention_anchor": "supersede",
+      "rationale": "Longest leg (reports, 6 years) with a supersede anchor, which also satisfies 'Certificates current' — a live certificate has no disposal date."
+    },
+    {
+      "taxonomy_id": "08.03",
+      "retention_years": 3,
+      "retention_anchor": "issue",
+      "rationale": "Longest leg (consignment notes, 3 years) governs the whole category, which also covers the 2-year transfer-note leg."
+    },
+    {
+      "taxonomy_id": "08.04",
+      "retention_years": 6,
+      "retention_anchor": "supersede",
+      "rationale": "Longest leg (incidents, 6 years) with a supersede anchor, honouring 'Register current'."
+    }
+  ]
+}
