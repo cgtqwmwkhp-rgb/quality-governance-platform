@@ -107,11 +107,7 @@ from scripts.ops.run027._remediate import (
     verify_remediation,
 )
 from scripts.ops.run027._soft_links import delete_soft_links, soft_link_hits
-from scripts.ops.run027._uvdb_catalogue import (
-    UvdbCataloguePlan,
-    apply_uvdb_catalogue,
-    plan_uvdb_catalogue,
-)
+from scripts.ops.run027._uvdb_catalogue import UvdbCataloguePlan, apply_uvdb_catalogue, plan_uvdb_catalogue
 
 __all__ = [
     "FR_DEDUP_01_REFERENCES",
