@@ -9,9 +9,9 @@ import pytest
 from src.api.schemas.audit import AuditRunCreate
 from src.domain.models.audit import AuditStatus
 from src.domain.services.external_audit_idempotency import (
+    _survivor_sort_key,
     conflict_details_for_run,
     normalize_external_reference,
-    _survivor_sort_key,
 )
 
 
