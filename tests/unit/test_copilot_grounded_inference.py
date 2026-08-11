@@ -53,6 +53,17 @@ def _facts(*, tenant_id: int = 1, count: int = 2, refs: list[GroundedRef] | None
         ("How many complaints are there?", "complaint_count"),
         ("Show overdue actions", "overdue_actions"),
         ("Which actions are past due?", "overdue_actions"),
+        (
+            "Can you tell me what the biggest and the highest issues are for vehicle checks?",
+            "vehicle_check_top_failures",
+        ),
+        (
+            "Can you ask me what the highest incidence of negative vehicle checks is?",
+            "vehicle_check_top_failures",
+        ),
+        ("top failing van checklist items", "vehicle_check_top_failures"),
+        ("how many open vehicle defects", "vehicle_check_defect_summary"),
+        ("how many P1 vehicle check defects", "vehicle_check_defect_summary"),
         ("What's our ISO 9001 status?", None),
         ("Create an incident for a slip", None),
         ("What is CAPA?", None),
@@ -61,6 +72,35 @@ def _facts(*, tenant_id: int = 1, count: int = 2, refs: list[GroundedRef] | None
 )
 def test_detect_grounded_intent_closed_set(message, expected):
     assert detect_grounded_intent(message) == expected
+
+
+def test_vehicle_check_plain_facts_pass_citation_validator(grounding: CopilotGroundingService):
+    facts = GroundedFacts(
+        intent="vehicle_check_top_failures",
+        tenant_id=1,
+        label="Vehicle-check failure heatmap (defect count)",
+        count=12,
+        refs=[
+            GroundedRef(
+                module="vehicle_defect",
+                id=7,
+                reference_number="VD-7",
+                path="/vehicle-checklists",
+            )
+        ],
+        extras={"top_failure_fields": 2},
+        breakdowns=[
+            (
+                "Top failed check fields",
+                [("Lights (daily)", 5), ("Tyres (monthly)", 3)],
+            )
+        ],
+    )
+    plain = grounding.format_facts_plain(facts)
+    assert "Lights (daily)" in plain
+    assert "VD-7" in plain
+    assert "/vehicle-checklists" in plain
+    assert grounding.validate_citations(plain, facts) is True
 
 
 # --------------------------------------------------------------------------- citations

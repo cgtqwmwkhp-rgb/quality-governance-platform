@@ -26,6 +26,7 @@ from src.domain.models.compliance_schedule import ComplianceRequirement
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction, IncidentStatus
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.user import User
+from src.domain.models.vehicle_defect import DefectStatus, VehicleDefect
 from src.domain.services.compliance_schedule_authz import can_read_compliance_schedule
 from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_is_open_last_known
 
@@ -42,6 +43,8 @@ GROUNDED_INTENTS = frozenset(
         "overdue_actions",
         "compliance_overdue",
         "compliance_due_soon",
+        "vehicle_check_top_failures",
+        "vehicle_check_defect_summary",
     }
 )
 
@@ -53,7 +56,17 @@ _MODULE_PATH = {
     "incident_action": "/actions/{key}",
     "complaint_action": "/actions/{key}",
     "compliance_requirement": "/compliance-schedule/{id}",
+    "vehicle_defect": "/vehicle-checklists",
 }
+
+_OPEN_DEFECT_STATUSES = (
+    DefectStatus.OPEN,
+    DefectStatus.AUTO_DETECTED,
+    DefectStatus.ACKNOWLEDGED,
+    DefectStatus.ACTION_ASSIGNED,
+)
+
+_HEATMAP_TOP_N = 20
 
 # Intents that read the Compliance Schedule register. Unlike the four above, these
 # are gated twice before any query runs: the module's own feature gate, and the
@@ -218,6 +231,14 @@ def detect_grounded_intent(message: str) -> Optional[str]:
         if _asks_due_soon(text):
             return "compliance_due_soon"
 
+    # Van / vehicle checklist defects — before generic counts so "how many vehicle
+    # check defects" does not fall through as ungrounded.
+    if _mentions_vehicle_checks(text):
+        if _asks_vehicle_defect_summary(text):
+            return "vehicle_check_defect_summary"
+        # Default vehicle-check ask → failure heatmap (ops "issues" / "negative checks").
+        return "vehicle_check_top_failures"
+
     if "near" in text and "miss" in text and _asks_for_count(text):
         return "near_miss_count"
     if "complaint" in text and _asks_for_count(text):
@@ -236,6 +257,24 @@ def detect_grounded_intent(message: str) -> Optional[str]:
             return "incident_count"
 
     return None
+
+
+def _mentions_vehicle_checks(text: str) -> bool:
+    """Vehicle / van checklist register language (not asset register alone)."""
+    if re.search(r"\bvehicle\s+checks?\b", text) or re.search(r"\bvan\s+checks?\b", text):
+        return True
+    if re.search(r"\b(vehicle|van)\b", text) and re.search(r"\b(checklist|checklists|defects?|checks?)\b", text):
+        return True
+    return bool(re.search(r"\bpams\b", text) and re.search(r"\b(check|defect|van)\b", text))
+
+
+def _asks_vehicle_defect_summary(text: str) -> bool:
+    """Open / priority defect totals rather than the failure heatmap."""
+    if re.search(r"\b(p1|p2|p3)\b", text):
+        return True
+    if re.search(r"\bopen\b", text) and re.search(r"\bdefects?\b", text):
+        return True
+    return bool(_asks_for_count(text) and re.search(r"\bdefects?\b", text))
 
 
 def _asks_injury_or_manual_handling(text: str) -> bool:
@@ -349,6 +388,10 @@ class CopilotGroundingService:
             return await self._compliance_overdue(tenant_id)
         if intent == "compliance_due_soon":
             return await self._compliance_due_soon(tenant_id)
+        if intent == "vehicle_check_top_failures":
+            return await self._vehicle_check_top_failures(tenant_id)
+        if intent == "vehicle_check_defect_summary":
+            return await self._vehicle_check_defect_summary(tenant_id)
         # Reachable only if GROUNDED_INTENTS gains a member without a branch here.
         # Previously the last intent was an unguarded fallthrough, so that mistake
         # would have answered the wrong question with real data instead of failing.
@@ -957,6 +1000,107 @@ class CopilotGroundingService:
                 ComplianceRequirement.next_due_date <= horizon,
             ),
             extras={"horizon_days": _DUE_SOON_HORIZON_DAYS},
+        )
+
+    async def _vehicle_check_top_failures(self, tenant_id: int) -> GroundedFacts:
+        """Heatmap-equivalent: most frequent failed check fields from vehicle_defects."""
+        total = int(
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(VehicleDefect).where(VehicleDefect.tenant_id == tenant_id)
+                )
+            ).scalar()
+            or 0
+        )
+        heat_rows = (
+            await self.db.execute(
+                select(
+                    VehicleDefect.check_field,
+                    VehicleDefect.pams_table,
+                    func.count().label("failure_count"),
+                )
+                .where(VehicleDefect.tenant_id == tenant_id)
+                .group_by(VehicleDefect.check_field, VehicleDefect.pams_table)
+                .order_by(func.count().desc())
+                .limit(_HEATMAP_TOP_N)
+            )
+        ).all()
+        failure_rows = [(f"{str(row[0] or 'unknown')} ({str(row[1] or 'unknown')})", int(row[2])) for row in heat_rows]
+        sample = (
+            await self.db.execute(
+                select(VehicleDefect.id, VehicleDefect.check_field, VehicleDefect.vehicle_reg)
+                .where(VehicleDefect.tenant_id == tenant_id)
+                .order_by(VehicleDefect.id.desc())
+                .limit(_MAX_SAMPLE_REFS)
+            )
+        ).all()
+        refs = [
+            GroundedRef(
+                module="vehicle_defect",
+                id=int(row.id),
+                reference_number=f"VD-{int(row.id)}",
+                path="/vehicle-checklists",
+            )
+            for row in sample
+        ]
+        return GroundedFacts(
+            intent="vehicle_check_top_failures",
+            tenant_id=tenant_id,
+            label="Vehicle-check failure heatmap (defect count)",
+            count=total,
+            refs=refs,
+            extras={"top_failure_fields": len(failure_rows)},
+            breakdowns=[("Top failed check fields", failure_rows)],
+        )
+
+    async def _vehicle_check_defect_summary(self, tenant_id: int) -> GroundedFacts:
+        """Open defect totals by priority — mirrors vehicle checklist analytics summary."""
+        open_filter = and_(
+            VehicleDefect.tenant_id == tenant_id,
+            VehicleDefect.status.in_(_OPEN_DEFECT_STATUSES),
+        )
+        open_total = int(
+            (await self.db.execute(select(func.count()).select_from(VehicleDefect).where(open_filter))).scalar() or 0
+        )
+        priority_rows: list[tuple[str, int]] = []
+        for label in ("P1", "P2", "P3"):
+            val = int(
+                (
+                    await self.db.execute(
+                        select(func.count())
+                        .select_from(VehicleDefect)
+                        .where(open_filter, VehicleDefect.priority == label)
+                    )
+                ).scalar()
+                or 0
+            )
+            priority_rows.append((label, val))
+        sample = (
+            await self.db.execute(
+                select(VehicleDefect.id).where(open_filter).order_by(VehicleDefect.id.desc()).limit(_MAX_SAMPLE_REFS)
+            )
+        ).all()
+        refs = [
+            GroundedRef(
+                module="vehicle_defect",
+                id=int(row.id),
+                reference_number=f"VD-{int(row.id)}",
+                path="/vehicle-checklists",
+            )
+            for row in sample
+        ]
+        return GroundedFacts(
+            intent="vehicle_check_defect_summary",
+            tenant_id=tenant_id,
+            label="Open vehicle-check defects",
+            count=open_total,
+            refs=refs,
+            extras={
+                "open_p1": priority_rows[0][1],
+                "open_p2": priority_rows[1][1],
+                "open_p3": priority_rows[2][1],
+            },
+            breakdowns=[("Open defects by priority", priority_rows)],
         )
 
 
