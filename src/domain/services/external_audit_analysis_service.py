@@ -97,6 +97,20 @@ class ExternalAuditAnalysisService:
         ("satisfactory", "low", "positive_practice", 0.78),
         ("well managed", "low", "positive_practice", 0.82),
     )
+    # Near-duplicate flood from per-page keyword scans (FR-DEDUP-03).
+    _POSITIVE_CLUSTER_TRIGGERS: frozenset[str] = frozenset(
+        {
+            "compliant",
+            "fully compliant",
+            "competent",
+            "effective",
+        }
+    )
+    _CLAUSE_PIPE_RE = re.compile(r"\b(\d{1,2}(?:\.\d{1,3}){1,3})\s*\|")
+    _CLAUSE_LABEL_RE = re.compile(
+        r"\b(?:clause|cl\.?|section)\s*(\d{1,2}(?:\.\d{1,3}){1,3})\b",
+        re.IGNORECASE,
+    )
     _CONFIDENCE_BOOSTERS: tuple[str, ...] = (
         "compliant",
         "conforms",
@@ -685,15 +699,121 @@ class ExternalAuditAnalysisService:
         return f"{scheme_label}: {human_trigger}"
 
     def _dedupe_findings(self, findings: list[DraftFindingCandidate]) -> list[DraftFindingCandidate]:
-        seen: set[tuple[str, str]] = set()
-        deduped: list[DraftFindingCandidate] = []
+        """Cluster near-identical drafts; keep the strongest representative.
+
+        Clustering keys (in priority order):
+        - normalized title + extracted clause id (e.g. ``7.1 | …``)
+        - normalized title + finding_type for Compliant / Competent / Effective
+          positives (collapses per-page keyword-scan floods)
+        - otherwise exact ``(title, description[:140])`` so distinct findings /
+          observations without a shared clause stay separate
+        """
+        clusters: dict[tuple[str, ...], DraftFindingCandidate] = {}
         for finding in findings:
-            key = (finding.title.lower(), finding.description[:140].lower())
-            if key in seen:
+            key = self._finding_cluster_key(finding)
+            existing = clusters.get(key)
+            if existing is None:
+                clusters[key] = finding
                 continue
-            seen.add(key)
-            deduped.append(finding)
-        return deduped
+            clusters[key] = self._prefer_clustered_finding(existing, finding)
+        return list(clusters.values())
+
+    @classmethod
+    def _normalize_finding_title(cls, title: str) -> str:
+        return re.sub(r"\s+", " ", title).strip().lower()
+
+    @classmethod
+    def _extract_clause_id_from_finding(cls, finding: DraftFindingCandidate) -> str | None:
+        """Return a clause id from provenance or snippet text when present."""
+        provenance = finding.provenance or {}
+        for field_name in ("clause_reference", "clause_id", "clause_number"):
+            raw = provenance.get(field_name)
+            if raw is None:
+                continue
+            text = str(raw).strip()
+            if not text:
+                continue
+            pipe = cls._CLAUSE_PIPE_RE.search(text)
+            if pipe:
+                return pipe.group(1)
+            labelled = cls._CLAUSE_LABEL_RE.search(text)
+            if labelled:
+                return labelled.group(1)
+            # Bare clause tokens already stored as ``7.1`` / ``7.1.2``.
+            if re.fullmatch(r"\d{1,2}(?:\.\d{1,3}){1,3}", text):
+                return text
+
+        haystacks = (
+            finding.title or "",
+            finding.description or "",
+            " ".join(finding.evidence_snippets or []),
+        )
+        for haystack in haystacks:
+            pipe = cls._CLAUSE_PIPE_RE.search(haystack)
+            if pipe:
+                return pipe.group(1)
+            labelled = cls._CLAUSE_LABEL_RE.search(haystack)
+            if labelled:
+                return labelled.group(1)
+        return None
+
+    @classmethod
+    def _is_positive_cluster_candidate(cls, finding: DraftFindingCandidate) -> bool:
+        if finding.finding_type != "positive_practice":
+            return False
+        trigger = str((finding.provenance or {}).get("trigger") or "").strip().lower()
+        if trigger in cls._POSITIVE_CLUSTER_TRIGGERS:
+            return True
+        title_norm = cls._normalize_finding_title(finding.title)
+        return any(
+            title_norm.endswith(f": {token}") or title_norm.endswith(token) for token in cls._POSITIVE_CLUSTER_TRIGGERS
+        )
+
+    @classmethod
+    def _finding_cluster_key(cls, finding: DraftFindingCandidate) -> tuple[str, ...]:
+        title_norm = cls._normalize_finding_title(finding.title)
+        clause_id = cls._extract_clause_id_from_finding(finding)
+        if clause_id:
+            return ("clause", title_norm, clause_id)
+        if cls._is_positive_cluster_candidate(finding):
+            return ("positive", title_norm, finding.finding_type)
+        return ("exact", title_norm, (finding.description or "")[:140].lower())
+
+    @staticmethod
+    def _prefer_clustered_finding(
+        current: DraftFindingCandidate,
+        candidate: DraftFindingCandidate,
+    ) -> DraftFindingCandidate:
+        """Keep highest confidence, then longest snippet; merge page provenance."""
+        current_score = (current.confidence_score, len(current.description or ""))
+        candidate_score = (candidate.confidence_score, len(candidate.description or ""))
+        if candidate_score > current_score:
+            winner, loser = candidate, current
+        else:
+            winner, loser = current, candidate
+
+        merged_pages = sorted({*winner.source_pages, *loser.source_pages})
+        winner.source_pages = merged_pages
+
+        snippets: list[str] = []
+        seen_snips: set[str] = set()
+        for snip in [*winner.evidence_snippets, *loser.evidence_snippets]:
+            key = snip.strip().lower()
+            if not key or key in seen_snips:
+                continue
+            seen_snips.add(key)
+            snippets.append(snip)
+        winner.evidence_snippets = snippets[:8]
+
+        cluster_size = int(winner.provenance.get("cluster_size", 1) or 1) + int(
+            loser.provenance.get("cluster_size", 1) or 1
+        )
+        winner.provenance = {
+            **winner.provenance,
+            "cluster_size": cluster_size,
+            "cluster_merged": True,
+        }
+        return winner
 
     def _detect_scheme(self, text: str, assurance_scheme: str | None) -> dict[str, object]:
         lowered = text.lower()
