@@ -206,6 +206,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "00019685",
             },
             headers=auth_headers,
         )
@@ -218,6 +219,61 @@ class TestAuditsAPI:
         assert data["status"] == "pending_review"
         assert data["is_external_audit_import"] is True
         assert data["is_external_import_intake"] is True
+
+    @pytest.mark.asyncio
+    async def test_create_external_audit_run_refuses_duplicate_external_reference(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """FR-DEDUP-02: second Achilles intake with the same supplier id returns 409."""
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
+        template = AuditTemplate(
+            name="ZZZ External Audit Intake (System)",
+            category="System",
+            audit_type="external_import",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+            is_published=True,
+            tags_json=["external_audit_intake", "external_audit_intake:achilles_uvdb"],
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        first = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Achilles follow-up audit",
+                "external_audit_type": "achilles_uvdb",
+                "external_reference": "00019685",
+            },
+            headers=auth_headers,
+        )
+        assert first.status_code == 201
+        first_body = first.json()
+
+        second = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Achilles twin should be refused",
+                "external_audit_type": "achilles_uvdb",
+                "external_reference": "00019685",
+            },
+            headers=auth_headers,
+        )
+        assert second.status_code == 409
+        payload = second.json()
+        detail = payload.get("detail", payload)
+        assert "already exists" in str(detail).lower() or "EXTERNAL_AUDIT_REFERENCE_EXISTS" in str(detail)
+        details = detail.get("details") if isinstance(detail, dict) else None
+        if details:
+            assert details["existing_run_id"] == first_body["id"]
+            assert details["existing_reference_number"] == first_body["reference_number"]
 
     @pytest.mark.asyncio
     async def test_get_audit_run_detail_marks_external_import_intake(
@@ -248,6 +304,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "00019685",
             },
             headers=auth_headers,
         )
@@ -290,6 +347,7 @@ class TestAuditsAPI:
                 "template_id": 999999,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "00019685",
             },
             headers=auth_headers,
         )
@@ -329,6 +387,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Imported Achilles outcome",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "00019685",
             },
             headers=auth_headers,
         )
@@ -390,6 +449,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Imported Achilles outcome",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "00019685",
             },
             headers=auth_headers,
         )
@@ -434,6 +494,7 @@ class TestAuditsAPI:
                 "template_id": 999999,
                 "title": "Planet Mark import",
                 "external_audit_type": "planet_mark",
+                "external_reference": "PM-CERT-001",
             },
             headers=auth_headers,
         )

@@ -543,6 +543,16 @@ class AuditRunCreate(AuditRunBase):
         if self.external_audit_type == "iso" and not (self.assurance_scheme or "").strip():
             raise ValueError("assurance_scheme is required when external_audit_type is 'iso'")
 
+        # Achilles / Planet Mark twins were created by re-importing without a stable
+        # supplier/report id. Require the id up front so FR-DEDUP-02 can refuse duplicates.
+        if self.external_audit_type in ("achilles_uvdb", "planet_mark") and not (
+            self.external_reference or ""
+        ).strip():
+            raise ValueError(
+                "external_reference is required when external_audit_type is "
+                f"'{self.external_audit_type}' (supplier / certificate id)"
+            )
+
         return self
 
 

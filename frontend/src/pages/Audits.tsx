@@ -193,11 +193,30 @@ function getStructuredErrorMessage(error: unknown): string | null {
   }
   if (detail && typeof detail === 'object') {
     const message = (detail as { message?: unknown }).message
+    const details = (detail as { details?: Record<string, unknown> }).details
+    const existingRef =
+      details && typeof details.existing_reference_number === 'string'
+        ? details.existing_reference_number
+        : null
     if (typeof message === 'string' && message.trim()) {
+      if (existingRef && !message.includes(existingRef)) {
+        return `${message} Existing run: ${existingRef}.`
+      }
       return message
     }
   }
   return null
+}
+
+function getExternalAuditConflictRunId(error: unknown): number | null {
+  const detail = (error as { response?: { data?: { detail?: unknown }; status?: number } })
+    ?.response
+  if (!detail || detail.status !== 409) return null
+  const body = detail.data?.detail
+  if (!body || typeof body !== 'object') return null
+  const details = (body as { details?: Record<string, unknown> }).details
+  const id = details?.existing_run_id
+  return typeof id === 'number' ? id : typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : null
 }
 
 function isExternalAuditImportRun(audit: AuditRun): boolean {
@@ -866,6 +885,14 @@ export default function Audits() {
     controlId: (name) => AUDIT_CONTROL_IDS[name],
     toErrorMessage: (err) => {
       if (import.meta.env.DEV) console.error('Failed to create audit:', err)
+      const conflictRunId = getExternalAuditConflictRunId(err)
+      if (conflictRunId != null) {
+        // Deep-link to the survivor instead of leaving the operator stuck on a failed create.
+        setTimeout(() => {
+          handleCloseModal()
+          navigate(`/audits/${conflictRunId}/import-review`)
+        }, 1500)
+      }
       return (
         getStructuredErrorMessage(err) ||
         (modalMode === 'import'
