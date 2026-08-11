@@ -69,4 +69,24 @@
 
 ## 9) Rollback Plan
 
-- Revert squash on `main`; redeploy prior tip.
+- **Trigger:** Fleet group missing, wrong hub nesting, or Safety children lost.
+- **Steps:** Revert squash on `main`; redeploy prior tip via standard CD.
+- **Owner:** Platform / conveyor
+
+## 10) Evidence Pack
+
+- Unit: `npx vitest run src/components/__tests__/Layout.test.tsx` → **23 passed**
+- Manual: expand Safety & Cases → Fleet & assets label + Van Checklists + Asset Register links
+- CI / tip LIVE: after merge via conveyor allowlist `1722`
+
+---
+
+# Gate Checklist
+
+- [x] **Gate 0:** Scope lock + AC + Change Ledger
+- [x] **Gate 1:** Contracts — Layout/i18n only; no API/schema
+- [ ] **Gate 2:** CI green
+- [ ] **Gate 3:** Staging verification
+- [ ] **Gate 4:** Canary (N/A — App Service tip-chase)
+- [x] **Gate 5:** Rollback = revert merge + redeploy prior tip
+- [~] **UX Coverage Gate:** HOLD — ignored per conveyor instruction
