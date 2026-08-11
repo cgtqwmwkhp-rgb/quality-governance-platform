@@ -888,10 +888,8 @@ export default function Audits() {
       const conflictRunId = getExternalAuditConflictRunId(err)
       if (conflictRunId != null) {
         // Deep-link to the survivor instead of leaving the operator stuck on a failed create.
-        setTimeout(() => {
-          handleCloseModal()
-          navigate(`/audits/${conflictRunId}/import-review`)
-        }, 1500)
+        handleCloseModal()
+        navigate(`/audits/${conflictRunId}/import-review`)
       }
       return (
         getStructuredErrorMessage(err) ||
