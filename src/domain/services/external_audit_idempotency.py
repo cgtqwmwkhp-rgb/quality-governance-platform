@@ -67,9 +67,7 @@ async def find_existing_external_audit_run(
     scheme_norm = normalize_external_reference(assurance_scheme)
     if scheme_norm:
         scheme_matched = [
-            run
-            for run in candidates
-            if normalize_external_reference(run.assurance_scheme) == scheme_norm
+            run for run in candidates if normalize_external_reference(run.assurance_scheme) == scheme_norm
         ]
         if scheme_matched:
             candidates = scheme_matched

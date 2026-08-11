@@ -85,9 +85,7 @@ async def test_find_existing_external_audit_run_returns_best_survivor():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     # Minimal table for the columns the lookup touches.
     async with engine.begin() as conn:
-        await conn.run_sync(
-            lambda sync_conn: AuditRun.__table__.create(sync_conn, checkfirst=True)
-        )
+        await conn.run_sync(lambda sync_conn: AuditRun.__table__.create(sync_conn, checkfirst=True))
 
     Session = async_sessionmaker(engine, expire_on_commit=False)
     async with Session() as db:
