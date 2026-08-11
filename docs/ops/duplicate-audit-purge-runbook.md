@@ -5,7 +5,7 @@ audit, risk, action and case registers for other duplicates.
 
 | | |
 |---|---|
-| Scripts | `scripts/ops/run027/purge_duplicate_audit_runs.py`, `scripts/ops/run027/inventory_duplicate_registers.py` |
+| Scripts | `scripts/ops/run027/purge_duplicate_audit_runs.py`, `scripts/ops/run027/inventory_duplicate_registers.py`, `scripts/ops/run027/_remediate.py` |
 | Tests | `tests/unit/test_run027_duplicate_audit_purge.py` |
 | Requires | Direct database access. **Not** wired into CI, deploy, or the conveyor. |
 | Default | Dry run. `--apply` is opt-in and needs `--i-understand-prod` on production. |
@@ -13,24 +13,85 @@ audit, risk, action and case registers for other duplicates.
 > **This was not executed against production.** The environment the change was
 > authored in has no `DATABASE_URL` and no route to the production database. The
 > scripts, the refusals and the runbook below are the deliverable; an operator with
-> database access performs the run.
+> database access performs the run. **Do not run `--apply` until the dry run is
+> clean (exit 1) and a named human has approved it.**
 
 ---
 
 ## 1. What FR-DEDUP-01 authorises
 
-Production shows the same B2 audit for Plantexpand Limited three times. All three
-carry the title `B2 Audit - 2026-02-20T00:00:00 - Kevin Game`, a score of 97.7%, and
-status `completed`.
+Production holds duplicate Achilles 2026 Audit re-imports for Plantexpand Limited
+(tenant 1). The PROD dry-run named these two for purge:
 
-| Reference | Disposition |
-|---|---|
-| `AUD-2026-0043` | **Purge.** Re-import. |
-| `AUD-2026-0048` | **Purge.** Re-import. |
-| the earlier audit that was subsequently updated | **Survives.** Not named on the command line, and the purge refuses if it is not there. |
+| Reference | Id | Status | Score | Disposition |
+|---|---|---|---|---|
+| `AUD-2026-0043` | 43 | `pending_review` | null | **Purge.** |
+| `AUD-2026-0048` | 48 | `completed` | 99.0 | **Purge.** |
+| earlier Achilles import (operator-named via `--survivor-reference`) | — | varies | varies | **Survives.** |
+
+The original fixture narrative used a B2 audit at 97.7% `completed`. The PROD
+dry-run that blocked apply showed Achilles UVDB with **diverging lifecycle
+columns** (`status` / `score_percentage`), which is why 0048 alone fails the
+identity-group survivor check — see blocker C below.
 
 Nothing is deleted unless it is named with `--reference`. There is no flag that
-selects duplicates automatically, and the scanner in section 5 cannot delete.
+selects duplicates automatically, and the scanner cannot delete.
+
+---
+
+## 1a. PROD dry-run blockers (exit 3) — resolve before apply
+
+The governed dry-run completed and **refused apply**. Would-delete inventory was
+250 rows (`audit_finding_risks` 44, `audit_findings` 97, `audit_runs` 2,
+`external_audit_import_drafts` 103, `external_audit_import_jobs` 2,
+`external_audit_records` 2). Three blockers stopped it:
+
+### A — 970 `compliance_evidence_links` (must-not-touch)
+
+Live links with `entity_type='audit_finding'` pointing at doomed findings. These
+links are what make an ISO clause count as covered (or record a gap). Deleting
+them changes the tenant's stated compliance position; leaving them dangling
+overstates coverage with evidence that no longer exists.
+
+**Clear with:** `--survivor-reference <SURVIVOR>` + `--remap-evidence-links` +
+`--expect-evidence-links N` (N = live hit count from the dry run). Matching
+survivor findings are chosen by title/description/finding_type/severity. Where
+the survivor already covers the same `(clause_id, cover_kind)`, the doomed link
+is **soft-deleted** (`deleted_at`) as `WITHDRAW_REDUNDANT`. Unmappable links
+require `--withdraw-unmappable-evidence` or they refuse again.
+
+### B — 10 `capa_actions` (ids 18, 60–68) (must-not-touch)
+
+`source_type='audit_finding'` pointing at doomed findings. CAPAs are a governed
+register with their own reference numbers, owners and verification history.
+
+**Clear with:** `--survivor-reference <SURVIVOR>` + `--reassign-capa-to-survivor`
++ `--expect-capa-action ID` for **every** CAPA id (exact set match). This
+updates `source_id` only — title, status, verification history and
+`reference_number` are untouched.
+
+**There is no CAPA withdraw in this script.** `CAPAStatus` has no `withdrawn`
+value; faking `closed` or nulling `source_type` would corrupt the register. If a
+CAPA must go away rather than be reassigned, withdraw it through the CAPA
+process first, then re-run the dry run (it will no longer appear).
+
+### C — `AUD-2026-0048` has no identity-group survivor
+
+Audit identity includes `status` and `score_percentage`. 0048 is
+`completed` @ 99 while its siblings are `pending_review` with null score, so
+the group size for 0048 is 1. Using `--allow-no-survivor` would write "destroying
+the only copy" into the trail, which is the wrong claim when an earlier twin
+exists.
+
+**Clear with:** `--survivor-reference <SURVIVOR_AUD_REF>`. That **authorises**
+the survivor (exists, same tenant, not itself being purged) and **corroborates**
+content identity ignoring lifecycle columns (`status`, `score_percentage`). The
+scanner's default identity is unchanged — lifecycle columns stay in grouping for
+duplicate review.
+
+Confirm the survivor's `reference_number` and `created_at` against the scanner
+output before naming it. A wrong but plausible survivor would receive 970
+repointed evidence links.
 
 ---
 
@@ -73,9 +134,9 @@ just leaves them pointing at nothing:
 | `assignments` | `entity_type`/`entity_id` | purge — work allocation on a record that will not exist |
 | `audit_log_entries` | `entity_type`/`entity_id` | **retain** — see section 3 |
 | `ai_decision_logs` | `entity_type`/`entity_id` | **retain** — account of an automated decision |
-| `capa_actions` | `source_type`/`source_id` | **refuse** — see section 4 |
-| `compliance_evidence_links` | `entity_type`/`entity_id` | **refuse** — changes a compliance claim |
-| `job_cell_links` | `entity_type`/`entity_id` (`kind="app"`) | **refuse** — no `ON DELETE` to clear this one |
+| `capa_actions` | `source_type`/`source_id` | **refuse** by default; opt-in reassign — see §1a B |
+| `compliance_evidence_links` | `entity_type`/`entity_id` | **refuse** by default; opt-in remap/withdraw — see §1a A |
+| `job_cell_links` | `entity_type`/`entity_id` (`kind="app"`) | **refuse** — no remediation flag; clear by hand |
 
 Any *other* table found referencing the purge set stops the script until somebody
 classifies it. That is deliberate: sweeping it would destroy records nobody
@@ -92,7 +153,8 @@ break verification for every entry written afterwards and destroy the only evide
 that the audit existed. Those rows are meant to outlive their subject.
 
 So the purge **appends** an entry (`action=delete`, `entity_type=audit_run`) carrying
-the full pre-delete contents of the audit rows, **in the same transaction as the
+the full pre-delete contents of the audit rows **and** the remediation summary in
+`new_values.remediation` (hash-covered), **in the same transaction as the
 deletes**. If the trail cannot be written, nothing is deleted.
 
 ---
@@ -107,18 +169,17 @@ Each of these is a refusal, not a warning. Resolve it, then re-run the dry run.
    unique, so being pointed at the wrong database resolves it perfectly to the wrong
    record. `--tenant-id` is asserted and checked.
 3. **No survivor.** If nothing sharing the audit's identity would remain, this is not
-   deduplication. Override: `--allow-no-survivor`.
-4. **A CAPA raised from a doomed finding.** Corrective actions have their own
-   reference numbers, owners and verification history, and the reference may already
-   be in an external auditor's notes. Withdraw or repoint it at the surviving audit
-   first — through the CAPA process, not this script.
-5. **Compliance evidence links, or a `kind="app"` job cell link.** Repoint at the
-   survivor or remove deliberately.
+   deduplication. Prefer `--survivor-reference` (see §1a C). Override of last resort:
+   `--allow-no-survivor` — does **not** rescue a bad/missing/cross-tenant
+   `--survivor-reference`.
+4. **A CAPA raised from a doomed finding.** Clear with `--reassign-capa-to-survivor`
+   + exact `--expect-capa-action` list, or withdraw via the CAPA process first.
+5. **Compliance evidence links.** Clear with `--remap-evidence-links` +
+   `--expect-evidence-links N` (+ `--withdraw-unmappable-evidence` if needed).
+   A `kind="app"` job cell link still refuses — clear by hand.
 6. **Reference-number reuse or collision.** `ReferenceNumberService` mints
    `max(MAX(suffix), COUNT(*)) + 1`, so deleting rows can only lower the next value.
-   `AUD-2026-0048` is likely the highest audit reference for 2026; the same applies to
-   the `FND` and `AIM` sequences of the findings and import jobs being deleted. Read
-   the `reference_arithmetic` block — it shows the sum both ways — then override with
+   Read the `reference_arithmetic` block, then override with
    `--accept-reference-reuse-risk` only with a named human's acceptance.
    - `REISSUE` — a future genuine record carries a reference already used. Quiet.
    - `COLLISION` — the reference columns are UNIQUE, so the next insert **fails**.
@@ -139,15 +200,14 @@ env DATABASE_URL='postgresql+asyncpg://USER:PASS@HOST:5432/DB' \
   --tenant-id 1 --json | tee /tmp/dedup-scan.json
 ```
 
-Read `registers_skipped` first. "No duplicates found" and "not looked at" are
-different answers, and this is where they are told apart. On an audit group,
-`import_derived` counts members that have an import job: all members import-derived is
-the signature of a re-imported report; none is more likely two genuine audits sharing
-a name.
+Read `registers_skipped` first. Pick the intended survivor reference from the
+Achilles group and confirm it against Audit Status.
 
-This script has no `--apply` and cannot modify anything.
+### Step 2 — dry run the purge (with remediation flags)
 
-### Step 2 — dry run the purge
+Replace `SURVIVOR_REF` with the confirmed survivor. Pass the live CEL count and
+every CAPA id from the previous refused dry run (or the new dry run's
+`soft_references` / remediation blockers).
 
 ```bash
 env DATABASE_URL='postgresql+asyncpg://USER:PASS@HOST:5432/DB' \
@@ -155,6 +215,14 @@ env DATABASE_URL='postgresql+asyncpg://USER:PASS@HOST:5432/DB' \
   --tenant-id 1 \
   --reference AUD-2026-0043 \
   --reference AUD-2026-0048 \
+  --survivor-reference SURVIVOR_REF \
+  --remap-evidence-links --expect-evidence-links 970 \
+  --withdraw-unmappable-evidence \
+  --reassign-capa-to-survivor \
+  --expect-capa-action 18 \
+  --expect-capa-action 60 --expect-capa-action 61 --expect-capa-action 62 \
+  --expect-capa-action 63 --expect-capa-action 64 --expect-capa-action 65 \
+  --expect-capa-action 66 --expect-capa-action 67 --expect-capa-action 68 \
   --json --manifest /tmp/dedup-audit-twins-manifest.json \
   | tee /tmp/dedup-dryrun.json
 ```
@@ -162,15 +230,18 @@ env DATABASE_URL='postgresql+asyncpg://USER:PASS@HOST:5432/DB' \
 Exit code `1` means a clean dry run; `3` means it refused. Check, in order:
 
 - `blockers` — empty.
-- `duplicate_group_survivors` — every entry names the surviving reference.
+- `remediation` — finding matches, evidence dispositions (`REMAP` /
+  `WITHDRAW_REDUNDANT` / `WITHDRAW_UNMAPPABLE`), CAPA reassigns.
+- `duplicate_group_survivors` / `remediation.named_survivors` — intended survivor.
 - `rows_per_table` and `deletion_order` — children before parents, `audit_runs` last.
-- `soft_references` — nothing marked `refuse`.
-- `rows_set_to_null_outside_purge` — job cell links you accept clearing.
-- `collateral_risks` — risks escalated from a doomed finding. The link goes, the risk
-  stays. If the risk is itself a duplicate, withdraw it separately afterwards.
-- `reference_arithmetic` — every verdict `safe`.
+- `soft_references` — CEL/CAPA still reported as `refuse` (disposition unchanged);
+  blockers deferred only because remediation covers them.
+- `collateral_risks` — risks escalated from a doomed finding. Link goes, risk stays.
+- `reference_arithmetic` — every verdict `safe` (or accepted explicitly).
 
-Attach `/tmp/dedup-dryrun.json` and the manifest to the change record.
+Attach `/tmp/dedup-dryrun.json` and the manifest to the change record. The
+manifest's `remediation_pre_update_rows` holds CEL/CAPA rows before UPDATE — those
+are reversible from the manifest; the deletes are not.
 
 ### Step 3 — apply
 
@@ -182,18 +253,25 @@ env DATABASE_URL='postgresql+asyncpg://USER:PASS@HOST:5432/DB' APP_ENV=productio
   --tenant-id 1 \
   --reference AUD-2026-0043 \
   --reference AUD-2026-0048 \
+  --survivor-reference SURVIVOR_REF \
+  --remap-evidence-links --expect-evidence-links 970 \
+  --withdraw-unmappable-evidence \
+  --reassign-capa-to-survivor \
+  --expect-capa-action 18 \
+  --expect-capa-action 60 --expect-capa-action 61 --expect-capa-action 62 \
+  --expect-capa-action 63 --expect-capa-action 64 --expect-capa-action 65 \
+  --expect-capa-action 66 --expect-capa-action 67 --expect-capa-action 68 \
   --apply --i-understand-prod \
   --actor-email david.harris@plantexpand.com \
   --manifest /tmp/dedup-audit-twins-manifest.json \
   --json | tee /tmp/dedup-apply.json
 ```
 
-`--manifest` is mandatory with `--apply`: it captures every column of every row
-before deletion, and it is the only remaining record of what was destroyed.
+`--manifest` is mandatory with `--apply`. Order inside the transaction:
+remediation UPDATEs → soft PURGE deletes → FK closure deletes → trail append →
+verification queries → commit.
 
-Exit code `0` and `"outcome": "applied"` is success. Everything happens in one
-transaction — deletes, soft-reference cleanup, and the trail entry — so a failure
-leaves the register exactly as it was.
+Exit code `0` and `"outcome": "applied"` is success.
 
 ### Step 4 — verify
 
@@ -202,50 +280,42 @@ leaves the register exactly as it was.
 env DATABASE_URL='...' python -m scripts.ops.run027.purge_duplicate_audit_runs \
   --tenant-id 1 --reference AUD-2026-0043 --reference AUD-2026-0048 --json; echo "exit=$?"
 
-# 2. The register shows the audit once.
+# 2. No live CEL / CAPA still points at the purged finding ids.
+psql "$PGURL" -c "SELECT COUNT(*) FROM compliance_evidence_links
+                  WHERE entity_type = 'audit_finding'
+                    AND entity_id IN (SELECT id::text FROM audit_findings WHERE run_id IN (43, 48))
+                    AND deleted_at IS NULL;"
+# (should be 0 — findings are gone too; also check known pre-purge finding id lists)
+
+# 3. The register shows the audit once under the survivor reference.
 psql "$PGURL" -c "SELECT reference_number, status, score_percentage, created_at
                   FROM audit_runs
                   WHERE tenant_id = 1
-                    AND title = 'B2 Audit - 2026-02-20T00:00:00 - Kevin Game'
+                    AND lower(title) LIKE '%achilles 2026%'
                   ORDER BY created_at;"
 
-# 3. Nothing orphaned survived.
-psql "$PGURL" -c "SELECT 'records' AS t, COUNT(*) FROM external_audit_records WHERE audit_run_id IN (43, 48)
-                  UNION ALL SELECT 'jobs', COUNT(*) FROM external_audit_import_jobs WHERE audit_run_id IN (43, 48)
-                  UNION ALL SELECT 'findings', COUNT(*) FROM audit_findings WHERE run_id IN (43, 48)
-                  UNION ALL SELECT 'responses', COUNT(*) FROM audit_responses WHERE run_id IN (43, 48);"
-
-# 4. The purge is on the trail, and the chain still verifies.
+# 4. The purge is on the trail (new_values includes remediation), chain verifies.
 psql "$PGURL" -c "SELECT sequence, action, entity_type, entity_id, user_email
                   FROM audit_log_entries WHERE tenant_id = 1
                   ORDER BY sequence DESC LIMIT 3;"
 ```
 
-Then confirm the Audit Status screen for Plantexpand Limited shows one B2 audit at
-97.7%, and check the audit trail verification endpoint reports the chain valid.
-
 ---
 
 ## 6. Rollback
 
-There is none. This is a hard delete, which is the requirement.
+There is none for the hard deletes. That is the requirement.
 
-Recovery is a point-in-time restore of the database to just before the apply, or
-manual reconstruction from the manifest — which is why `--manifest` is mandatory and
-why the dry run must be read rather than skimmed. Confirm the backup or PITR window
-covers the change before running step 3.
+CEL remaps/withdrawals and CAPA reassignments **are** reversible from the
+manifest's `remediation_pre_update_rows` (`id`, old `entity_id`/`source_id`, old
+`deleted_at`). Recovery for deletes is PITR or reconstruction from the manifest.
+Confirm the backup or PITR window covers the change before running step 3.
 
 ---
 
 ## 7. Other duplicates
 
-Groups from step 1 are **candidates for human review, not a work queue.** Two
-inspections of the same yard on the same day by the same auditor may be a double
-import or a morning and an afternoon visit, and nothing in the database
-distinguishes them.
-
-Once a group has been reviewed and a decision recorded, remove the agreed duplicates
-by naming each reference explicitly, exactly as in steps 2 and 3. Registers other
-than `audit_runs` have no purge script: the closure, dispositions and reference
-arithmetic here were reviewed for audits only, and pointing this script at a
-complaint would be acting on an approval nobody gave.
+Groups from step 1 are **candidates for human review, not a work queue.** Once a
+group has been reviewed and a decision recorded, remove the agreed duplicates by
+naming each reference explicitly, with `--survivor-reference` and remediation
+flags as needed. Registers other than `audit_runs` have no purge script.

@@ -19,7 +19,7 @@ Nothing here imports the FastAPI app. The ops scripts do not need it.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -29,7 +29,7 @@ from sqlalchemy.pool import NullPool
 from scripts.ops.run027 import inventory_duplicate_registers as scanner
 from scripts.ops.run027 import purge_duplicate_audit_runs as purge
 from scripts.ops.run027._closure import AUDIT_RUN_CHILD_DISPOSITIONS, Disposition, descendant_closure
-from scripts.ops.run027._duplicates import MIN_IDENTITY_COLUMNS, REGISTERS
+from scripts.ops.run027._duplicates import LIFECYCLE_IDENTITY_COLUMNS, MIN_IDENTITY_COLUMNS, REGISTERS
 from scripts.ops.run027._soft_links import SOFT_LINK_DISPOSITIONS
 from scripts.ops.run027.purge_duplicate_audit_runs import FR_DEDUP_01_REFERENCES, FR_DEDUP_01_TENANT
 from scripts.ops.run027.purge_duplicate_audit_runs import main as purge_main
@@ -104,6 +104,7 @@ _SCHEMA: tuple[str, ...] = (
         title VARCHAR(300),
         description TEXT,
         severity VARCHAR(50),
+        finding_type VARCHAR(50),
         status VARCHAR(50),
         tenant_id INTEGER,
         FOREIGN KEY (run_id) REFERENCES audit_runs(id) ON DELETE CASCADE
@@ -233,6 +234,36 @@ _SCHEMA: tuple[str, ...] = (
         created_at DATETIME
     )
     """,
+    # Mirrors PostgreSQL migration d3e4f5a6b7c8. SQLite does not get that index from
+    # Alembic (dialect-gated), so the fixture creates it or CAPA collision tests would
+    # pass against a database incapable of failing.
+    """
+    CREATE UNIQUE INDEX uq_capa_actions_tenant_audit_finding_source
+    ON capa_actions (tenant_id, source_id)
+    WHERE source_type = 'audit_finding' AND source_id IS NOT NULL
+    """,
+    """
+    CREATE TABLE compliance_evidence_links (
+        id INTEGER PRIMARY KEY,
+        tenant_id INTEGER NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id VARCHAR(100) NOT NULL,
+        clause_id VARCHAR(50) NOT NULL,
+        cover_kind VARCHAR(20) NOT NULL DEFAULT 'evidences',
+        signal_type VARCHAR(30),
+        status VARCHAR(30),
+        linked_by VARCHAR(20),
+        notes TEXT,
+        deleted_at DATETIME,
+        created_at DATETIME,
+        updated_at DATETIME
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX ux_cel_tenant_entity_clause_cover_live
+    ON compliance_evidence_links (tenant_id, entity_type, entity_id, clause_id, cover_kind)
+    WHERE deleted_at IS NULL
+    """,
     """
     CREATE TABLE audit_log_entries (
         id INTEGER PRIMARY KEY,
@@ -354,7 +385,8 @@ class _TwinsDb:
                 conn.execute(
                     text(
                         "INSERT INTO audit_findings (id, run_id, reference_number, title, description, "
-                        "severity, status, tenant_id) VALUES (:id, :run, :ref, :title, 'd', 'minor', 'open', 1)"
+                        "severity, finding_type, status, tenant_id) "
+                        "VALUES (:id, :run, :ref, :title, 'd', 'minor', 'nonconformity', 'open', 1)"
                     ),
                     {
                         "id": suffix,
@@ -507,6 +539,65 @@ class _TwinsDb:
 
     def dispose(self) -> None:
         self._engine.dispose()
+
+    def seed_finding_twins_for_remediation(self) -> None:
+        """Make doomed findings 10 and 11 match survivor findings 1 and 2 by content.
+
+        Default seed titles are unique per id, so remapping would find nothing.
+        Opt-in only — existing tests assert finding counts and titles.
+        """
+        with self._engine.begin() as conn:
+            for doomed_id, survivor_id in ((10, 1), (11, 2)):
+                survivor = (
+                    conn.execute(
+                        text("SELECT title, description, severity, finding_type FROM audit_findings " "WHERE id = :id"),
+                        {"id": survivor_id},
+                    )
+                    .mappings()
+                    .one()
+                )
+                conn.execute(
+                    text(
+                        "UPDATE audit_findings SET title = :title, description = :description, "
+                        "severity = :severity, finding_type = :finding_type WHERE id = :id"
+                    ),
+                    {
+                        "id": doomed_id,
+                        "title": survivor["title"],
+                        "description": survivor["description"],
+                        "severity": survivor["severity"],
+                        "finding_type": survivor["finding_type"],
+                    },
+                )
+
+    def seed_evidence_link(
+        self,
+        *,
+        link_id: int,
+        entity_type: str,
+        entity_id: str,
+        clause_id: str,
+        cover_kind: str = "evidences",
+        deleted_at: Optional[str] = None,
+    ) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO compliance_evidence_links "
+                    "(id, tenant_id, entity_type, entity_id, clause_id, cover_kind, "
+                    "signal_type, linked_by, deleted_at, created_at, updated_at) "
+                    "VALUES (:id, 1, :etype, :eid, :clause, :cover, 'evidence', 'auto', "
+                    ":deleted, '2026-05-01 00:00:00', '2026-05-01 00:00:00')"
+                ),
+                {
+                    "id": link_id,
+                    "etype": entity_type,
+                    "eid": entity_id,
+                    "clause": clause_id,
+                    "cover": cover_kind,
+                    "deleted": deleted_at,
+                },
+            )
 
 
 def _wire(db: _TwinsDb, monkeypatch) -> None:
@@ -1200,3 +1291,516 @@ async def test_the_closure_of_an_audit_with_no_children_is_just_itself(twins_db)
     assert closure.purge_keys == {("audit_runs", 200)}
     assert closure.blockers == []
     assert closure.found == []
+
+
+# --------------------------------------------------------------------------- #
+# FR-DEDUP-01 follow-up: CEL remap, CAPA reassign, --survivor-reference.
+# --------------------------------------------------------------------------- #
+
+
+def test_audit_identity_still_includes_lifecycle_columns():
+    """Lifecycle columns stay in REGISTERS so the scanner's grouping does not widen."""
+    audits = next(spec for spec in REGISTERS if spec.table == "audit_runs")
+    assert "status" in audits.identity_candidates
+    assert "score_percentage" in audits.identity_candidates
+    assert LIFECYCLE_IDENTITY_COLUMNS == frozenset({"status", "score_percentage"})
+
+
+@pytest.mark.anyio
+async def test_a_compliance_evidence_link_on_a_doomed_finding_stops_the_purge(twins_db):
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+
+    result = await plan(references=list(FR_DEDUP_01_REFERENCES), tenant_id=1, limit=500)
+
+    assert any("compliance_evidence_links" in blocker and "must-not-touch" in blocker for blocker in result["blockers"])
+    assert any(
+        entry["table"] == "compliance_evidence_links" and entry["disposition"] == "refuse"
+        for entry in result["soft_references"]
+    )
+
+
+@pytest.mark.anyio
+async def test_remap_evidence_without_survivor_reference_refuses(twins_db):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+
+    result = await plan(
+        references=list(FR_DEDUP_01_REFERENCES),
+        tenant_id=1,
+        limit=500,
+        remap_evidence_links=True,
+        expect_evidence_links=1,
+    )
+
+    assert any("require --survivor-reference" in blocker for blocker in result["blockers"])
+
+
+@pytest.mark.anyio
+async def test_remap_evidence_without_expect_count_refuses_and_states_the_count(twins_db):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+
+    result = await plan(
+        references=list(FR_DEDUP_01_REFERENCES),
+        tenant_id=1,
+        limit=500,
+        survivor_references=[SURVIVOR_REFERENCE],
+        remap_evidence_links=True,
+    )
+
+    assert any("--expect-evidence-links" in blocker for blocker in result["blockers"])
+    assert any("1 actionable" in blocker or "1 soft-link" in blocker for blocker in result["blockers"])
+
+
+@pytest.mark.anyio
+async def test_remap_evidence_with_wrong_expect_count_refuses(twins_db):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+
+    result = await plan(
+        references=list(FR_DEDUP_01_REFERENCES),
+        tenant_id=1,
+        limit=500,
+        survivor_references=[SURVIVOR_REFERENCE],
+        remap_evidence_links=True,
+        expect_evidence_links=970,
+    )
+
+    assert any("expect-evidence-links 970 but found 1" in blocker for blocker in result["blockers"])
+
+
+def test_apply_remaps_evidence_link_to_matching_survivor_finding(twins_db, tmp_path, capsys):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+    # Survivor already covers a different clause — must stay untouched.
+    twins_db.seed_evidence_link(link_id=4600, entity_type="audit_finding", entity_id="1", clause_id="7.5")
+
+    manifest = tmp_path / "manifest.json"
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--apply",
+                "--manifest",
+                str(manifest),
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--remap-evidence-links",
+                "--expect-evidence-links",
+                "1",
+                "--actor-email",
+                "david.harris@plantexpand.com",
+            )
+        )
+        == 0
+    )
+
+    rows = twins_db.rows("SELECT id, entity_id, clause_id, deleted_at FROM compliance_evidence_links ORDER BY id")
+    by_id = {row["id"]: row for row in rows}
+    assert by_id[4501]["entity_id"] == "1"
+    assert by_id[4501]["deleted_at"] is None
+    assert by_id[4600]["entity_id"] == "1"
+    assert by_id[4600]["clause_id"] == "7.5"
+    assert twins_db.count("audit_runs", "id IN (43, 48)") == 0
+    assert twins_db.count("audit_runs", f"id = {SURVIVOR_ID}") == 1
+
+
+def test_apply_withdraws_redundant_evidence_when_survivor_already_covers_clause(twins_db, tmp_path):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+    twins_db.seed_evidence_link(link_id=4600, entity_type="audit_finding", entity_id="1", clause_id="4.1")
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--apply",
+                "--manifest",
+                str(tmp_path / "m.json"),
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--remap-evidence-links",
+                "--expect-evidence-links",
+                "1",
+                "--actor-email",
+                "ops@example.com",
+            )
+        )
+        == 0
+    )
+
+    rows = twins_db.rows(
+        "SELECT id, entity_id, deleted_at FROM compliance_evidence_links WHERE clause_id = '4.1' ORDER BY id"
+    )
+    live = [row for row in rows if row["deleted_at"] is None]
+    assert len(live) == 1
+    assert live[0]["id"] == 4600
+    withdrawn = next(row for row in rows if row["id"] == 4501)
+    assert withdrawn["deleted_at"] is not None
+
+
+def test_unmappable_evidence_refuses_until_withdraw_flag(twins_db, tmp_path):
+    # Doomed finding 10 keeps a unique title — no survivor twin.
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--remap-evidence-links",
+                "--expect-evidence-links",
+                "1",
+            )
+        )
+        == 3
+    )
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--apply",
+                "--manifest",
+                str(tmp_path / "m.json"),
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--remap-evidence-links",
+                "--expect-evidence-links",
+                "1",
+                "--withdraw-unmappable-evidence",
+                "--actor-email",
+                "ops@example.com",
+            )
+        )
+        == 0
+    )
+    row = twins_db.rows("SELECT deleted_at FROM compliance_evidence_links WHERE id = 4501")[0]
+    assert row["deleted_at"] is not None
+
+
+def test_already_soft_deleted_evidence_is_retained_and_not_counted(twins_db, tmp_path):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.seed_evidence_link(
+        link_id=4501,
+        entity_type="audit_finding",
+        entity_id="10",
+        clause_id="4.1",
+        deleted_at="2026-04-01 00:00:00",
+    )
+    twins_db.seed_evidence_link(link_id=4502, entity_type="audit_finding", entity_id="10", clause_id="4.2")
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--apply",
+                "--manifest",
+                str(tmp_path / "m.json"),
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--remap-evidence-links",
+                "--expect-evidence-links",
+                "1",
+                "--actor-email",
+                "ops@example.com",
+            )
+        )
+        == 0
+    )
+    rows = {row["id"]: row for row in twins_db.rows("SELECT id, entity_id, deleted_at FROM compliance_evidence_links")}
+    assert rows[4501]["deleted_at"] is not None
+    assert rows[4501]["entity_id"] == "10"  # not remapped
+    assert rows[4502]["entity_id"] == "1"
+    assert rows[4502]["deleted_at"] is None
+
+
+def test_audit_run_level_evidence_link_repoints_to_survivor_run(twins_db, tmp_path):
+    twins_db.seed_evidence_link(link_id=4700, entity_type="audit_run", entity_id="43", clause_id="9.2")
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--apply",
+                "--manifest",
+                str(tmp_path / "m.json"),
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--remap-evidence-links",
+                "--expect-evidence-links",
+                "1",
+                "--actor-email",
+                "ops@example.com",
+            )
+        )
+        == 0
+    )
+    row = twins_db.rows("SELECT entity_id, deleted_at FROM compliance_evidence_links WHERE id = 4700")[0]
+    assert row["entity_id"] == str(SURVIVOR_ID)
+    assert row["deleted_at"] is None
+
+
+def test_capa_reassign_requires_exact_expect_ids(twins_db):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.execute(
+        "INSERT INTO capa_actions (id, tenant_id, reference_number, title, capa_type, status, "
+        "source_type, source_id) VALUES (18, 1, 'CAPA-2026-0018', 'Fix A', 'corrective', "
+        "'open', 'audit_finding', 10)"
+    )
+    twins_db.execute(
+        "INSERT INTO capa_actions (id, tenant_id, reference_number, title, capa_type, status, "
+        "source_type, source_id) VALUES (60, 1, 'CAPA-2026-0060', 'Fix B', 'corrective', "
+        "'open', 'audit_finding', 11)"
+    )
+
+    # Subset refuses.
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--reassign-capa-to-survivor",
+                "--expect-capa-action",
+                "18",
+            )
+        )
+        == 3
+    )
+    # Superset refuses.
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--reassign-capa-to-survivor",
+                "--expect-capa-action",
+                "18",
+                "--expect-capa-action",
+                "60",
+                "--expect-capa-action",
+                "99",
+            )
+        )
+        == 3
+    )
+
+
+def test_apply_reassigns_capa_to_survivor_finding(twins_db, tmp_path):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.execute(
+        "INSERT INTO capa_actions (id, tenant_id, reference_number, title, capa_type, status, "
+        "source_type, source_id) VALUES (18, 1, 'CAPA-2026-0018', 'Fix A', 'corrective', "
+        "'open', 'audit_finding', 10)"
+    )
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--apply",
+                "--manifest",
+                str(tmp_path / "m.json"),
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--reassign-capa-to-survivor",
+                "--expect-capa-action",
+                "18",
+                "--actor-email",
+                "ops@example.com",
+            )
+        )
+        == 0
+    )
+    row = twins_db.rows("SELECT source_id, reference_number, title, status FROM capa_actions WHERE id = 18")[0]
+    assert row["source_id"] == 1
+    assert row["reference_number"] == "CAPA-2026-0018"
+    assert row["title"] == "Fix A"
+    assert row["status"] == "open"
+
+
+def test_two_capas_converging_on_one_survivor_finding_refuse(twins_db):
+    twins_db.seed_finding_twins_for_remediation()
+    # Both doomed findings map to survivor finding 1 — make 11 also match finding 1.
+    twins_db.execute(
+        "UPDATE audit_findings SET title = (SELECT title FROM audit_findings WHERE id = 1), "
+        "description = (SELECT description FROM audit_findings WHERE id = 1), "
+        "severity = (SELECT severity FROM audit_findings WHERE id = 1), "
+        "finding_type = (SELECT finding_type FROM audit_findings WHERE id = 1) WHERE id = 11"
+    )
+    twins_db.execute(
+        "INSERT INTO capa_actions (id, tenant_id, reference_number, title, capa_type, status, "
+        "source_type, source_id) VALUES (18, 1, 'CAPA-2026-0018', 'Fix A', 'corrective', "
+        "'open', 'audit_finding', 10)"
+    )
+    twins_db.execute(
+        "INSERT INTO capa_actions (id, tenant_id, reference_number, title, capa_type, status, "
+        "source_type, source_id) VALUES (60, 1, 'CAPA-2026-0060', 'Fix B', 'corrective', "
+        "'open', 'audit_finding', 11)"
+    )
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--reassign-capa-to-survivor",
+                "--expect-capa-action",
+                "18",
+                "--expect-capa-action",
+                "60",
+            )
+        )
+        == 3
+    )
+
+
+def test_unmappable_capa_has_no_withdraw_override(twins_db):
+    twins_db.execute(
+        "INSERT INTO capa_actions (id, tenant_id, reference_number, title, capa_type, status, "
+        "source_type, source_id) VALUES (18, 1, 'CAPA-2026-0018', 'Fix A', 'corrective', "
+        "'open', 'audit_finding', 10)"
+    )
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--reassign-capa-to-survivor",
+                "--expect-capa-action",
+                "18",
+                "--remap-evidence-links",
+                "--expect-evidence-links",
+                "0",
+                "--withdraw-unmappable-evidence",
+                "--allow-no-survivor",
+            )
+        )
+        == 3
+    )
+
+
+def test_named_survivor_supersedes_identity_group_when_lifecycle_diverges(twins_db):
+    """PROD shape: 0048 completed@99 while siblings are pending — identity group alone fails."""
+    twins_db.execute(
+        "UPDATE audit_runs SET status = 'pending_review', score_percentage = NULL " "WHERE id = :id",
+        id=SURVIVOR_ID,
+    )
+    twins_db.execute("UPDATE audit_runs SET status = 'pending_review', score_percentage = NULL WHERE id = 43")
+    twins_db.execute("UPDATE audit_runs SET status = 'completed', score_percentage = 99.0 WHERE id = 48")
+
+    assert purge_main(_dry_run_args("--json")) == 3
+    assert purge_main(_dry_run_args("--json", "--survivor-reference", SURVIVOR_REFERENCE)) == 1
+
+
+def test_bad_survivor_reference_is_not_rescued_by_allow_no_survivor(twins_db):
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--survivor-reference",
+                "AUD-2026-9999",
+                "--allow-no-survivor",
+            )
+        )
+        == 3
+    )
+    twins_db.execute("UPDATE audit_runs SET tenant_id = 2 WHERE id = :id", id=SURVIVOR_ID)
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--allow-no-survivor",
+            )
+        )
+        == 3
+    )
+
+
+def test_without_remediation_flags_cli_still_refuses_on_cel_and_capa(twins_db):
+    """Regression guard on blocker deferral: empty remediable must not drop refusals."""
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+    twins_db.execute(
+        "INSERT INTO capa_actions (id, tenant_id, reference_number, title, capa_type, status, "
+        "source_type, source_id) VALUES (18, 1, 'CAPA-2026-0018', 'Fix A', 'corrective', "
+        "'open', 'audit_finding', 10)"
+    )
+    assert purge_main(_dry_run_args("--json")) == 3
+
+
+@pytest.mark.anyio
+async def test_without_flags_soft_refuse_blockers_still_name_both_tables(twins_db):
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+    twins_db.execute(
+        "INSERT INTO capa_actions (id, tenant_id, reference_number, title, capa_type, status, "
+        "source_type, source_id) VALUES (18, 1, 'CAPA-2026-0018', 'Fix A', 'corrective', "
+        "'open', 'audit_finding', 10)"
+    )
+
+    result = await plan(references=list(FR_DEDUP_01_REFERENCES), tenant_id=1, limit=500)
+    joined = " | ".join(result["blockers"])
+    assert "compliance_evidence_links" in joined and "must-not-touch" in joined
+    assert "capa_actions" in joined and "must-not-touch" in joined
+
+
+def test_remediation_is_recorded_in_trail_new_values(twins_db, tmp_path):
+    twins_db.seed_finding_twins_for_remediation()
+    twins_db.seed_evidence_link(link_id=4501, entity_type="audit_finding", entity_id="10", clause_id="4.1")
+
+    assert (
+        purge_main(
+            _dry_run_args(
+                "--json",
+                "--apply",
+                "--manifest",
+                str(tmp_path / "m.json"),
+                "--survivor-reference",
+                SURVIVOR_REFERENCE,
+                "--remap-evidence-links",
+                "--expect-evidence-links",
+                "1",
+                "--actor-email",
+                "ops@example.com",
+            )
+        )
+        == 0
+    )
+    import json as _json
+
+    entry = twins_db.rows(
+        "SELECT new_values, old_values, entry_hash, sequence, previous_hash, entity_type, "
+        "entity_id, action, timestamp FROM audit_log_entries ORDER BY sequence DESC LIMIT 1"
+    )[0]
+    new_values = entry["new_values"]
+    old_values = entry["old_values"]
+    if isinstance(new_values, str):
+        new_values = _json.loads(new_values)
+    if isinstance(old_values, str):
+        old_values = _json.loads(old_values)
+    assert "remediation" in new_values
+    assert new_values["remediation"]["evidence_summary"]["REMAP"] == 1
+
+    from datetime import datetime
+
+    from src.domain.models.audit_log import AuditLogEntry
+
+    recomputed = AuditLogEntry.compute_hash(
+        sequence=entry["sequence"],
+        previous_hash=entry["previous_hash"],
+        entity_type=entry["entity_type"],
+        entity_id=entry["entity_id"],
+        action=entry["action"],
+        user_id=None,
+        timestamp=datetime.fromisoformat(str(entry["timestamp"])),
+        old_values=old_values,
+        new_values=new_values,
+    )
+    assert recomputed == entry["entry_hash"]
