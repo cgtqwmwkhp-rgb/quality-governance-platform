@@ -1160,6 +1160,38 @@ async def create_run(
         )
         raise NotFoundError("Published template not found")
 
+    # FR-DEDUP-02: refuse a second external intake for the same real-world report id.
+    if run_data.external_audit_type is not None and current_user.tenant_id is not None:
+        from src.domain.services.external_audit_idempotency import (
+            conflict_details_for_run,
+            find_existing_external_audit_run,
+            normalize_external_reference,
+        )
+
+        external_ref = normalize_external_reference(run_data.external_reference)
+        if external_ref:
+            existing = await find_existing_external_audit_run(
+                db,
+                tenant_id=current_user.tenant_id,
+                external_reference=run_data.external_reference or "",
+                assurance_scheme=run_data.assurance_scheme,
+            )
+            if existing is not None:
+                _record_audit_endpoint_event(
+                    "POST /api/v1/audits/runs",
+                    409,
+                    (time.perf_counter() - started) * 1000,
+                    "external_reference_duplicate",
+                )
+                raise ConflictError(
+                    (
+                        f"An audit for external reference '{existing.external_reference}' already exists "
+                        f"({existing.reference_number}). Open that run instead of creating a twin."
+                    ),
+                    code="EXTERNAL_AUDIT_REFERENCE_EXISTS",
+                    details=conflict_details_for_run(existing),
+                )
+
     payload = _normalize_run_create_payload(run_data)
     payload["template_id"] = template.id
 
