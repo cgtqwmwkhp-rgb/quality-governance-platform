@@ -209,7 +209,7 @@ async def test_a_tenant_with_no_obligations_is_told_zero(test_session):
 
     assert outcome.kind == "answered"
     assert outcome.content is not None
-    assert "Overdue compliance obligation count: 0." in outcome.content
+    assert "Overdue compliance obligation count: **0**." in outcome.content
     assert "No matching records in this organisation." in outcome.content
 
 
@@ -237,7 +237,7 @@ async def test_everything_overdue_is_reported_as_everything(test_session):
     outcome = await service.try_answer(OVERDUE_QUESTION, tenant_id=tenant_id, user_id=reader)
     assert outcome.kind == "answered"
     assert outcome.content is not None
-    assert "Overdue compliance obligation count: 3." in outcome.content
+    assert "Overdue compliance obligation count: **3**." in outcome.content
 
 
 # --------------------------------------------------------------------------- gates
@@ -327,7 +327,7 @@ async def test_send_message_serves_the_real_count_to_a_reader(test_session, regi
     )
 
     assert message.model_used == "grounded-facts"
-    assert "Overdue compliance obligation count: 2." in message.content
+    assert "Overdue compliance obligation count: **2**." in message.content
     assert "CSR-2026-0001" in message.content
     assert "CSR-2026-0900" not in message.content
 
@@ -384,4 +384,4 @@ async def test_send_message_due_soon_answers_a_reader(test_session, register):
     )
 
     assert message.model_used == "grounded-facts"
-    assert "Compliance obligations due soon: 2." in message.content
+    assert "Compliance obligations due soon: **2**." in message.content
