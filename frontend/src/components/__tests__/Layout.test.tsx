@@ -164,7 +164,7 @@ describe('Layout', () => {
           '/compliance',
           '/knowledge-exceptions',
           '/document-control',
-          '/assurance/certificates',
+          '/compliance-schedule',
           '/compliance-automation',
         ],
       ],
@@ -222,7 +222,9 @@ describe('Layout', () => {
     expect(within(safetyPanel).queryByRole('link', { name: /safety_asset_register/i })).not.toBeInTheDocument()
   })
 
-  it('places Certificate shelf under Compliance, not Assurance', async () => {
+  // FR-CS-CERT-IN-SCHEDULE: the shelf is a view of the Compliance Schedule, so it
+  // has no nav entry of its own in any hub — reaching it goes through the schedule.
+  it('does not list the Certificate shelf as a nav item beside the schedule', async () => {
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
 
@@ -234,11 +236,18 @@ describe('Layout', () => {
 
     await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
     const compliancePanel = screen.getByTestId('nav-hub-compliance-sustainability')
-    expect(within(compliancePanel).getByRole('link', { name: /assurance_cert_shelf/i })).toBeInTheDocument()
+    expect(
+      within(compliancePanel).queryByRole('link', { name: /assurance_cert_shelf/i }),
+    ).not.toBeInTheDocument()
+    expect(within(compliancePanel).getByRole('link', { name: /compliance_schedule/i })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'nav.assurance' }))
     const assurancePanel = screen.getByTestId('nav-hub-assurance')
-    expect(within(assurancePanel).queryByRole('link', { name: /assurance_cert_shelf/i })).not.toBeInTheDocument()
+    expect(
+      within(assurancePanel).queryByRole('link', { name: /assurance_cert_shelf/i }),
+    ).not.toBeInTheDocument()
+
+    expect(navLink('/assurance/certificates')).not.toBeInTheDocument()
   })
 
   it('exposes Library sidebar entry without a duplicate Document campaigns item', async () => {

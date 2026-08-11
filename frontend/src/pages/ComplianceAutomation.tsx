@@ -789,7 +789,7 @@ export default function ComplianceAutomation() {
               {t('compliance.automation.cert_expiry_tracking', 'Certificate Expiry Tracking')}
             </h3>
             <Link
-              to="/assurance/certificates"
+              to="/compliance-schedule?view=certificates"
               className="flex items-center gap-2 px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm transition-colors"
               data-testid="monitoring-certificates-open-shelf"
             >

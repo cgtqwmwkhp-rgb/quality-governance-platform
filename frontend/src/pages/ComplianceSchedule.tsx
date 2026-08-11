@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { CalendarClock, Plus } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { ErrorState } from '../components/ui/async'
+import { cn } from '../helpers/utils'
+import AssuranceCertShelfPanel from './assurance/AssuranceCertShelfPanel'
 import { getCurrentUserId } from '../utils/auth'
 import { complianceScheduleApi, getApiErrorMessage } from '../api/client'
 import type {
@@ -23,8 +25,20 @@ import type {
   ComplianceImportValidationReport,
 } from '../api/complianceScheduleClient'
 
+const SCHEDULE_VIEWS = ['obligations', 'certificates'] as const
+type ScheduleView = (typeof SCHEDULE_VIEWS)[number]
+
+function parseScheduleView(raw: string | null): ScheduleView {
+  return raw === 'certificates' ? 'certificates' : 'obligations'
+}
+
 export default function ComplianceSchedule() {
   const { t, i18n } = useTranslation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Certificates are a view of the schedule rather than a sibling page, so the
+  // URL is the only place the choice lives — a deep link or a reload lands on
+  // the same view, and back leaves it.
+  const view = parseScheduleView(searchParams.get('view'))
   const cov = coverageCopy(i18n.language)
   const imp = importCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
@@ -85,8 +99,19 @@ export default function ComplianceSchedule() {
   }, [statusFilter, showInactive])
 
   useEffect(() => {
+    // The certificates view reads a different endpoint; loading the obligation
+    // register behind it would spend three calls on a list nobody is looking at.
+    if (view !== 'obligations') return
     void load()
-  }, [load])
+  }, [load, view])
+
+  const selectView = (next: ScheduleView) => {
+    if (next === view) return
+    const params = new URLSearchParams(searchParams)
+    if (next === 'obligations') params.delete('view')
+    else params.set('view', next)
+    setSearchParams(params, { replace: true })
+  }
 
   const activate = async (key: string) => {
     setActivating(key)
@@ -164,13 +189,16 @@ export default function ComplianceSchedule() {
             <CalendarClock className="h-6 w-6" />
             {t('compliance.schedule.title', 'Compliance Schedule')}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t(
-              'compliance.schedule.subtitle',
-              'Organisation and location obligations — Current, Due soon, or Overdue.',
-            )}
-          </p>
+          {view === 'obligations' && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {t(
+                'compliance.schedule.subtitle',
+                'Organisation and location obligations — Current, Due soon, or Overdue.',
+              )}
+            </p>
+          )}
         </div>
+        {view === 'obligations' && (
         <div className="flex flex-wrap items-center gap-2">
           {(['', 'current', 'due_soon', 'overdue'] as const).map((s) => (
             <Button
@@ -216,9 +244,39 @@ export default function ComplianceSchedule() {
             </Button>
           )}
         </div>
+        )}
       </div>
 
-      {loadError ? (
+      <div
+        className="flex w-fit rounded-xl border border-border bg-surface p-1"
+        role="group"
+        aria-label={t('compliance.schedule.view.label', 'Schedule view')}
+        data-testid="compliance-schedule-view-switcher"
+      >
+        {SCHEDULE_VIEWS.map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => selectView(mode)}
+            aria-pressed={view === mode}
+            className={cn(
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+              view === mode
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            data-testid={`compliance-schedule-view-${mode}`}
+          >
+            {mode === 'certificates'
+              ? t('compliance.schedule.view.certificates', 'Certificates')
+              : t('compliance.schedule.view.obligations', 'Obligations')}
+          </button>
+        ))}
+      </div>
+
+      {view === 'certificates' ? (
+        <AssuranceCertShelfPanel />
+      ) : loadError ? (
         <ErrorState
           title={t('compliance.schedule.load_error', 'Could not load Compliance Schedule')}
           description={t(

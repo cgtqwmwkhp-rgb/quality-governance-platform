@@ -224,11 +224,6 @@ export default function Layout({
           icon: FileText,
           label: t('nav.document_control', { defaultValue: 'Document Control' }),
         },
-        {
-          path: '/assurance/certificates',
-          icon: Shield,
-          label: t('nav.assurance_cert_shelf', { defaultValue: 'Certificate shelf' }),
-        },
         ...(canAccessComplianceSchedule
           ? [
               {
