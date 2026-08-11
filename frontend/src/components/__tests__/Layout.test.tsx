@@ -147,6 +147,7 @@ describe('Layout', () => {
           '/complaints',
           '/investigations',
           '/vehicle-checklists',
+          '/safety-assets',
         ],
       ],
       [
@@ -202,6 +203,26 @@ describe('Layout', () => {
         expect(navLink(path)).toBeInTheDocument()
       }
     }
+  })
+
+  it('nests Van Checklists and Asset Register under Fleet & assets inside Safety', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.safety_cases' }))
+
+    const group = screen.getByTestId('nav-group-fleet-assets')
+    expect(group).toHaveTextContent('nav.fleet_assets_group')
+    expect(navLink('/vehicle-checklists')).toBeInTheDocument()
+    expect(navLink('/safety-assets')).toBeInTheDocument()
+    // Still under Safety hub — not a first-level hub button.
+    expect(screen.queryByRole('button', { name: 'nav.fleet_assets_group' })).not.toBeInTheDocument()
   })
 
   it('exposes Library sidebar entry without a duplicate Document campaigns item', async () => {
