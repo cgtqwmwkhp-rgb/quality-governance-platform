@@ -33,12 +33,12 @@
 
 ## 4) Acceptance Criteria
 
-- [x] AC-01: ASSIST_TOOLS names == GROUNDED_INTENTS; every required_permission ∈ ENFORCED_PERMISSIONS or auth_only_reason set
-- [x] AC-02: try_answer without entitlement → UNGROUNDED (no figures)
-- [x] AC-03: Compliance kill-switch still short-circuits before user/register lookup
-- [x] AC-04: Vehicle top-failures / open-defect intents gather with tenant filter
-- [x] AC-05: Permission catalogue scan includes Assist dynamic site
-- [x] AC-06: No test skipped/loosened
+- [x] **AC-01:** ASSIST_TOOLS names == GROUNDED_INTENTS; every required_permission ∈ ENFORCED_PERMISSIONS or auth_only_reason set
+- [x] **AC-02:** try_answer without entitlement → UNGROUNDED (no figures)
+- [x] **AC-03:** Compliance kill-switch still short-circuits before user/register lookup
+- [x] **AC-04:** Vehicle top-failures / open-defect intents gather with tenant filter
+- [x] **AC-05:** Permission catalogue scan includes Assist dynamic site
+- [x] **AC-06:** No test skipped/loosened
 
 ## 5) Testing Evidence
 
@@ -47,18 +47,39 @@
 
 ## 6) Critical Journeys
 
-- [x] CUJ-01: Admin (superuser) asks incident count → answered
-- [x] CUJ-02: User without incident:read asks incident count → ungrounded refuse path
-- [x] CUJ-03: Module-off compliance → ungrounded, zero SQL
+- [x] **CUJ-01:** Admin (superuser) asks incident count → answered
+- [x] **CUJ-02:** User without incident:read asks incident count → ungrounded refuse path
+- [x] **CUJ-03:** Module-off compliance → ungrounded, zero SQL
 
-## 7–10) Ops / Release / Rollback / Evidence
+## 7) Observability & Ops
 
-Serial tip-chase STG→PROD with `release_sha`. Rollback = revert deploy. Evidence = unit suite above.
+- Existing citation-drop warning retained.
+- No new metrics.
+
+## 8) Release Plan
+
+1. Merge after CI green (admin-merge authorised).
+2. Main CI → STG → PROD with `release_sha` = tip.
+3. Spot-check: user without `incident:read` no longer receives incident counts via Assist.
+
+## 9) Rollback Plan
+
+- **Trigger:** Unexpected Assist silence for entitled admins; catalogue scan false positive.
+- **Steps:** Revert merge commit; redeploy prior tip. No DB unwind.
+- **Owner:** Platform Engineering — David Harris
+
+## 10) Evidence Pack
+
+- Unit: registry contracts, RBAC refuse, compliance short-circuit, permission catalogue
+- Change Ledger: this body
 
 ---
 
 # Gate Checklist
 
-- [x] Gate 0–3
-- [ ] Gate 4 CI green
-- [ ] Gate 5 tip LIVE
+- [x] **Gate 0:** Scope lock + AC + Change Ledger
+- [x] **Gate 1:** Additive registry (no schema)
+- [x] **Gate 2:** Tests observed green for touched suite
+- [x] **Gate 3:** Rollback = revert deploy
+- [ ] **Gate 4:** CI green on PR
+- [ ] **Gate 5:** Tip LIVE verified
