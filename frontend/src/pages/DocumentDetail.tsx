@@ -49,6 +49,7 @@ import { cn } from '../helpers/utils'
 import {
   PROPOSED_EVIDENCE_ANCHOR_ID,
   documentDetailSectionDomId,
+  documentLayerHref,
   resolveDocumentDetailSection,
   resolveDocumentDetailTab,
   shouldScrollToProposedEvidence,
@@ -127,6 +128,7 @@ interface LibraryDocument {
   legal_hold_active?: boolean | null
   effective_date?: string | null
   review_date?: string | null
+  review_notes?: string | null
   // CUT-1 / R19 — the retention policy the disposal date was calculated from.
   retention_until?: string | null
   retention_years?: number | null
@@ -260,6 +262,8 @@ export default function DocumentDetail() {
   const [publishDegradedReasons, setPublishDegradedReasons] = useState<string[]>([])
   const [titleDraft, setTitleDraft] = useState('')
   const [savingTitle, setSavingTitle] = useState(false)
+  const [reviewNotesDraft, setReviewNotesDraft] = useState('')
+  const [savingReviewNotes, setSavingReviewNotes] = useState(false)
   const [showInlinePreview, setShowInlinePreview] = useState(false)
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
   const [campaignOffer, setCampaignOffer] = useState<CampaignOffer | null>(null)
@@ -412,6 +416,17 @@ export default function DocumentDetail() {
     if (document) setTitleDraft(document.title)
   }, [document])
 
+  useEffect(() => {
+    if (document) setReviewNotesDraft(document.review_notes ?? '')
+  }, [document])
+
+  // Preview tab is its own view — open the inline reader when that layer is selected.
+  useEffect(() => {
+    if (defaultTab === 'preview') {
+      setShowInlinePreview(true)
+    }
+  }, [defaultTab])
+
   const canEditTitle = useMemo(() => {
     const status = (versionHistory?.status ?? document?.status ?? '').toLowerCase()
     return !['published', 'approved', 'active', 'superseded', 'retired', 'obsolete', 'archived'].includes(
@@ -477,6 +492,22 @@ export default function DocumentDetail() {
       reportFailure(err)
     } finally {
       setSavingTitle(false)
+    }
+  }
+
+  const handleSaveReviewNotes = async () => {
+    if (!documentId) return
+    setSavingReviewNotes(true)
+    try {
+      await api.patch(`/api/v1/documents/${documentId}`, {
+        review_notes: reviewNotesDraft,
+      })
+      toast.success('Review notes saved for the next review')
+      await loadDocument()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setSavingReviewNotes(false)
     }
   }
 
@@ -982,6 +1013,9 @@ export default function DocumentDetail() {
           <TabsTrigger value="assurance" data-testid="document-layer-assurance">
             {t('documents.detail.layer_assurance', 'Assurance')}
           </TabsTrigger>
+          <TabsTrigger value="preview" data-testid="document-layer-preview">
+            {t('documents.detail.layer_preview', 'Preview')}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="control" className="mt-4 space-y-4">
@@ -1094,44 +1128,27 @@ export default function DocumentDetail() {
             </Card>
           )}
 
-          <Card>
+          <Card data-testid="document-control-preview-handoff">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <FileText className="w-4 h-4 text-primary" />
-                Preview
+                {t('documents.detail.preview_handoff_title', 'Document file')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">{document.file_name}</p>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => void handleOpenPreview(false)}>
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open document
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowInlinePreview((prev) => !prev)}
-                >
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'documents.detail.preview_handoff_body',
+                  'Open the Preview tab for the full inline reader and next-review notes.',
+                )}
+              </p>
+              <Button variant="outline" size="sm" asChild>
+                <Link to={documentLayerHref(document.id, 'preview')} data-testid="document-open-preview-tab">
                   <Eye className="w-4 h-4 mr-2" />
-                  {showInlinePreview ? 'Hide inline preview' : 'Show inline preview'}
-                </Button>
-              </div>
-              {showInlinePreview ? (
-                <Suspense
-                  fallback={
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                    </div>
-                  }
-                >
-                  <DocumentPdfPreview
-                    documentId={document.id}
-                    fileType={document.file_type}
-                    fileName={document.file_name}
-                  />
-                </Suspense>
-              ) : null}
+                  {t('documents.detail.open_preview_tab', 'Open Preview')}
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1664,6 +1681,112 @@ export default function DocumentDetail() {
               </div>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="preview" className="mt-4 space-y-4" data-testid="document-preview-layer">
+          <Card data-testid="document-preview-reader">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Eye className="w-4 h-4 text-primary" />
+                {t('documents.detail.preview_title', 'Preview')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{document.file_name}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => void handleOpenPreview(false)}>
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  {t('documents.detail.open_document', 'Open document')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowInlinePreview((prev) => !prev)}
+                  data-testid="document-preview-toggle-inline"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  {showInlinePreview
+                    ? t('documents.detail.hide_inline_preview', 'Hide inline preview')
+                    : t('documents.detail.show_inline_preview', 'Show inline preview')}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => void handleOpenPreview(true)}>
+                  <Download className="w-4 h-4 mr-2" />
+                  {t('documents.detail.download', 'Download')}
+                </Button>
+              </div>
+              {showInlinePreview ? (
+                <Suspense
+                  fallback={
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    </div>
+                  }
+                >
+                  <DocumentPdfPreview
+                    documentId={document.id}
+                    fileType={document.file_type}
+                    fileName={document.file_name}
+                  />
+                </Suspense>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card data-testid="document-next-review-notes">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="w-4 h-4 text-primary" />
+                {t('documents.detail.next_review_notes_title', 'Notes for next review')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'documents.detail.next_review_notes_help',
+                  'Capture progress notes and context to take into the next review. These notes stay with the document and do not open a new version.',
+                )}
+              </p>
+              {document.review_date ? (
+                <p className="text-sm text-foreground" data-testid="document-next-review-date">
+                  {t('documents.detail.next_review_date_label', 'Next review')}:{' '}
+                  {new Date(document.review_date).toLocaleDateString()}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground" data-testid="document-next-review-date-missing">
+                  {t(
+                    'documents.detail.next_review_date_missing',
+                    'No next review date recorded on this document yet.',
+                  )}
+                </p>
+              )}
+              <Textarea
+                value={reviewNotesDraft}
+                onChange={(e) => setReviewNotesDraft(e.target.value)}
+                rows={6}
+                placeholder={t(
+                  'documents.detail.next_review_notes_placeholder',
+                  'What should the next review update? Outstanding actions, wording to change, evidence gaps…',
+                )}
+                data-testid="document-review-notes-input"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => void handleSaveReviewNotes()}
+                  disabled={
+                    savingReviewNotes || reviewNotesDraft === (document.review_notes ?? '')
+                  }
+                  data-testid="document-review-notes-save"
+                >
+                  {savingReviewNotes ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    t('documents.detail.save_review_notes', 'Save review notes')
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
