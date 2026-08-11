@@ -373,7 +373,11 @@ describe('Layout', () => {
     expect(navLink('/calendar')).toBeInTheDocument()
   })
 
-  it('points the header Settings gear to Admin Console for superusers', async () => {
+  it('points the header Settings gear to Admin Console for admin-capable roles', async () => {
+    hasRoleMock.mockImplementation((...roles: string[]) =>
+      roles.some((role) => ['admin', 'manager', 'hsec'].includes(role)),
+    )
+    isSuperuserMock.mockReturnValue(false)
     const Layout = (await import('../Layout')).default
 
     render(
@@ -383,6 +387,20 @@ describe('Layout', () => {
     )
 
     expect(screen.getByRole('link', { name: 'nav.settings' })).toHaveAttribute('href', '/admin')
+  })
+
+  it('points the header Settings gear to the dashboard when Admin is not allowed', async () => {
+    hasRoleMock.mockReturnValue(false)
+    isSuperuserMock.mockReturnValue(false)
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: 'nav.settings' })).toHaveAttribute('href', '/dashboard')
   })
 
   it('auto-expands the hub containing the active child route', async () => {
@@ -449,8 +467,31 @@ describe('Layout', () => {
     expect(navLink('/compliance-automation')).not.toBeInTheDocument()
   })
 
-  it('only shows the Admin hub when user management is enabled for a superuser', async () => {
+  it('shows the Admin hub for roles that can deep-link /admin', async () => {
+    const user = userEvent.setup()
+    // Align with App.tsx RequireRole(['admin','manager','hsec']) — not isSuperuser.
+    hasRoleMock.mockImplementation((...roles: string[]) =>
+      roles.some((role) => ['admin', 'manager', 'hsec'].includes(role)),
+    )
+    isSuperuserMock.mockReturnValue(false)
     useFeatureFlagMock.mockReturnValue(false)
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const adminHub = screen.getByRole('button', { name: 'nav.admin' })
+    await user.click(adminHub)
+    expect(navLink('/admin')).toBeInTheDocument()
+  })
+
+  it('hides the Admin hub when the user cannot deep-link /admin', async () => {
+    hasRoleMock.mockReturnValue(false)
+    isSuperuserMock.mockReturnValue(true)
+    useFeatureFlagMock.mockReturnValue(true)
     const Layout = (await import('../Layout')).default
 
     render(
