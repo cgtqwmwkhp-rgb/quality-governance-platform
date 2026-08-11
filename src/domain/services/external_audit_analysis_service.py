@@ -805,9 +805,19 @@ class ExternalAuditAnalysisService:
             snippets.append(snip)
         winner.evidence_snippets = snippets[:8]
 
-        cluster_size = int(winner.provenance.get("cluster_size", 1) or 1) + int(
-            loser.provenance.get("cluster_size", 1) or 1
-        )
+        def _cluster_size(provenance: dict[str, object]) -> int:
+            raw = provenance.get("cluster_size", 1)
+            if isinstance(raw, bool):
+                return 1
+            if isinstance(raw, int):
+                return raw
+            if isinstance(raw, float):
+                return int(raw)
+            if isinstance(raw, str) and raw.strip().isdigit():
+                return int(raw.strip())
+            return 1
+
+        cluster_size = _cluster_size(winner.provenance) + _cluster_size(loser.provenance)
         winner.provenance = {
             **winner.provenance,
             "cluster_size": cluster_size,
