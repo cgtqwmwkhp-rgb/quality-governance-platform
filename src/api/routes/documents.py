@@ -147,6 +147,9 @@ class DocumentResponse(BaseModel):
     review_date: Optional[datetime] = None
     effective_date: Optional[datetime] = None
 
+    # Next-review working notes (survive on published rows; not a version bump).
+    review_notes: Optional[str] = None
+
     # Computed: latest published tip DocumentVersion.published_at for this document.
     live_at: Optional[datetime] = None
 
@@ -262,6 +265,7 @@ def _document_to_response(
         expiry_date=getattr(document, "expiry_date", None),
         review_date=getattr(document, "review_date", None),
         effective_date=getattr(document, "effective_date", None),
+        review_notes=getattr(document, "review_notes", None),
         live_at=live_at,
         created_by_id=getattr(document, "created_by_id", None),
         created_by_name=created_by_name,
@@ -459,13 +463,19 @@ class LibraryVersionCreate(BaseModel):
 
 
 class LibraryDocumentPatch(BaseModel):
-    """Patch library metadata on draft/working rows without a version bump."""
+    """Patch library metadata without a version bump.
+
+    Title/description/dates remain draft/working-only. ``review_notes`` may be
+    updated on published rows so operators can capture context for the next
+    review without opening a revision.
+    """
 
     title: Optional[str] = None
     description: Optional[str] = None
     expiry_date: Optional[datetime] = None
     review_date: Optional[datetime] = None
     effective_date: Optional[datetime] = None
+    review_notes: Optional[str] = None
 
 
 class LibraryRejectRequest(BaseModel):
@@ -1552,10 +1562,27 @@ async def patch_document_metadata(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("document:update"))],
 ):
-    """Update title/description on draft/working rows without opening a new version."""
+    """Update library metadata without opening a new version.
+
+    Content fields (title/description/dates) require a draft/working status.
+    ``review_notes`` alone may be saved on published/approved rows for the
+    next-review working pad.
+    """
     document = await _get_document_or_404(db, document_id, current_user)
-    assert_library_metadata_editable(document.status)
     await assert_document_not_held(db, document, action="edited")
+
+    content_touch = any(
+        value is not None
+        for value in (
+            payload.title,
+            payload.description,
+            payload.expiry_date,
+            payload.review_date,
+            payload.effective_date,
+        )
+    )
+    if content_touch:
+        assert_library_metadata_editable(document.status)
 
     if payload.title is not None:
         title = payload.title.strip()
@@ -1570,6 +1597,9 @@ async def patch_document_metadata(
         document.review_date = payload.review_date
     if payload.effective_date is not None:
         document.effective_date = payload.effective_date
+    if payload.review_notes is not None:
+        notes = payload.review_notes.strip()
+        document.review_notes = notes or None
 
     await db.commit()
     await db.refresh(document)
