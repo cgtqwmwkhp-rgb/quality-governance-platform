@@ -377,10 +377,15 @@ async def test_try_answer_plain_facts_when_no_provider(monkeypatch):
         "_provider_available",
         staticmethod(lambda: False),
     )
+
+    async def _admin(self, user_id, *, tenant_id):
+        return SimpleNamespace(is_superuser=True, id=user_id, tenant_id=tenant_id)
+
+    monkeypatch.setattr(CopilotGroundingService, "_load_caller", _admin)
     rows = [SimpleNamespace(id=1, reference_number="INC-2026-0001")]
     db = _RecordingSession(_incident_depth_responses(total=1, refs=rows))
     service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
-    outcome = await service.try_answer("How many incidents do we have?", tenant_id=1)
+    outcome = await service.try_answer("How many incidents do we have?", tenant_id=1, user_id=1)
     assert outcome.kind == "answered"
     assert outcome.model_used == "grounded-facts"
     assert outcome.content is not None
@@ -401,13 +406,18 @@ async def test_try_answer_drops_invented_llm_refs(monkeypatch):
 
     monkeypatch.setattr(CopilotGroundingService, "_phrase_over_facts", _fake_phrase)
 
+    async def _admin(self, user_id, *, tenant_id):
+        return SimpleNamespace(is_superuser=True, id=user_id, tenant_id=tenant_id)
+
+    monkeypatch.setattr(CopilotGroundingService, "_load_caller", _admin)
+
     rows = [
         SimpleNamespace(id=10, reference_number="INC-2026-0001"),
         SimpleNamespace(id=11, reference_number="INC-2026-0002"),
     ]
     db = _RecordingSession(_incident_depth_responses(total=2, refs=rows))
     service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
-    outcome = await service.try_answer("How many incidents?", tenant_id=1)
+    outcome = await service.try_answer("How many incidents?", tenant_id=1, user_id=1)
     assert outcome.kind == "refused"
     assert outcome.content is None
 
@@ -419,12 +429,17 @@ async def test_closed_followup_uses_closed_count(monkeypatch):
         "_provider_available",
         staticmethod(lambda: False),
     )
+
+    async def _admin(self, user_id, *, tenant_id):
+        return SimpleNamespace(is_superuser=True, id=user_id, tenant_id=tenant_id)
+
+    monkeypatch.setattr(CopilotGroundingService, "_load_caller", _admin)
     rows = [SimpleNamespace(id=3, reference_number="INC-2026-0003")]
     db = _RecordingSession(
         _incident_depth_responses(total=38, refs=rows, closed=12, injury=8, back=4, mh=2, back_or_mh=5)
     )
     service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
-    outcome = await service.try_answer("How many of those incidents are closed?", tenant_id=1)
+    outcome = await service.try_answer("How many of those incidents are closed?", tenant_id=1, user_id=1)
     assert outcome.kind == "answered"
     assert outcome.content is not None
     assert "Closed incident count: **12**" in outcome.content
@@ -439,6 +454,11 @@ async def test_injury_mh_followup_resolves_from_fact_pack(monkeypatch):
         "_provider_available",
         staticmethod(lambda: False),
     )
+
+    async def _admin(self, user_id, *, tenant_id):
+        return SimpleNamespace(is_superuser=True, id=user_id, tenant_id=tenant_id)
+
+    monkeypatch.setattr(CopilotGroundingService, "_load_caller", _admin)
     rows = [SimpleNamespace(id=9, reference_number="INC-2026-0009")]
     db = _RecordingSession(
         _incident_depth_responses(total=38, refs=rows, closed=12, injury=8, back=4, mh=2, back_or_mh=5)
@@ -447,8 +467,34 @@ async def test_injury_mh_followup_resolves_from_fact_pack(monkeypatch):
     outcome = await service.try_answer(
         "How many of those incidents are either to do with back injuries or manual handling?",
         tenant_id=1,
+        user_id=1,
     )
     assert outcome.kind == "answered"
     assert outcome.content is not None
     assert "5" in outcome.content
     assert "manual_handling_text_match" in outcome.content or "back_or_manual_handling" in outcome.content
+
+
+@pytest.mark.asyncio
+async def test_try_answer_refuses_incident_without_read_permission(monkeypatch):
+    """CORE-01 security: lacking incident:read must not leak register figures."""
+    monkeypatch.setattr(
+        CopilotGroundingService,
+        "_provider_available",
+        staticmethod(lambda: False),
+    )
+
+    async def _viewer(self, user_id, *, tenant_id):
+        return SimpleNamespace(
+            is_superuser=False,
+            id=user_id,
+            tenant_id=tenant_id,
+            has_permission=lambda perm: False,
+        )
+
+    monkeypatch.setattr(CopilotGroundingService, "_load_caller", _viewer)
+    rows = [SimpleNamespace(id=1, reference_number="INC-2026-0001")]
+    db = _RecordingSession(_incident_depth_responses(total=1, refs=rows))
+    service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
+    outcome = await service.try_answer("How many incidents do we have?", tenant_id=1, user_id=9)
+    assert outcome.kind == "ungrounded"
