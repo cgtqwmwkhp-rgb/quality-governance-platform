@@ -28,6 +28,7 @@ import {
   Sparkles,
   ChevronRight,
   History,
+  Download,
 } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { cn } from '../../helpers/utils'
@@ -41,6 +42,10 @@ import {
   type CopilotMessage as ApiCopilotMessage,
 } from '../../api/copilot'
 import { getApiErrorMessage } from '../../api/client'
+import {
+  buildAssistTranscriptMarkdown,
+  downloadAssistTranscriptMarkdown,
+} from './assistTranscriptExport'
 
 interface Message {
   id: number
@@ -362,6 +367,18 @@ const AICopilot: React.FC<AICopilotProps> = ({
     inputRef.current?.focus()
   }
 
+  const handleExportTranscript = () => {
+    const markdown = buildAssistTranscriptMarkdown(
+      messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+      })),
+      { origin: window.location.origin, title: `${disclosure.title} transcript` },
+    )
+    downloadAssistTranscriptMarkdown(markdown)
+  }
+
   const toggleVoiceInput = () => {
     if (isListening) {
       setIsListening(false)
@@ -431,6 +448,16 @@ const AICopilot: React.FC<AICopilotProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleExportTranscript}
+            className="p-2 hover:bg-primary-foreground/10 rounded-lg transition-colors text-primary-foreground/80 hover:text-primary-foreground"
+            title="Export transcript (Markdown)"
+            data-testid="copilot-export-transcript"
+            disabled={messages.length === 0}
+          >
+            <Download className="w-4 h-4" />
+          </button>
           <button
             onClick={() => setShowHistory(!showHistory)}
             className="p-2 hover:bg-primary-foreground/10 rounded-lg transition-colors text-primary-foreground/80 hover:text-primary-foreground"
