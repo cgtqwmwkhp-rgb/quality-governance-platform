@@ -96,10 +96,10 @@ jobs:
       frontend_url_source: ${{ steps.resolve.outputs.frontend_url_source }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -135,7 +135,7 @@ jobs:
       staging_reachable: ${{ steps.tokens.outputs.token_failure_reason != 'STAGING_UNREACHABLE_TIMEOUT' && steps.tokens.outputs.token_failure_reason != 'STAGING_UNREACHABLE_MAX_ATTEMPTS' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -169,7 +169,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -228,7 +228,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -283,7 +283,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -338,7 +338,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -396,7 +396,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -504,7 +504,7 @@ jobs:
           echo "[OK] All five audit jobs succeeded"
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
