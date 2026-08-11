@@ -109,7 +109,21 @@ export default function Layout({
   const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
   const canAccessComplianceSchedule = complianceScheduleEnabled && canAccessAdvancedNav
 
-  const hubs = [
+  // Optional `group` nests siblings under a non-hub section label inside a hub
+  // (FR-NAV-FLEET-ASSETS-01). Not a first-level hub — KILL "Assets as new hub".
+  type NavHubItem = {
+    path: string
+    icon: typeof ListTodo
+    label: string
+    group?: string
+  }
+
+  const hubs: Array<{
+    id: string
+    title: string
+    icon: typeof ListTodo
+    items: NavHubItem[]
+  }> = [
     {
       id: 'my-work',
       title: t('nav.my_work'),
@@ -134,11 +148,17 @@ export default function Layout({
         { path: '/rtas', icon: Car, label: t('nav.rtas') },
         { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
         { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
-        { path: '/vehicle-checklists', icon: Truck, label: t('nav.vehicle_checklists') },
+        {
+          path: '/vehicle-checklists',
+          icon: Truck,
+          label: t('nav.vehicle_checklists'),
+          group: 'fleet-assets',
+        },
         {
           path: '/safety-assets',
           icon: Package,
           label: t('nav.safety_asset_register', { defaultValue: 'Asset Register' }),
+          group: 'fleet-assets',
         },
       ],
     },
@@ -719,48 +739,69 @@ export default function Layout({
                           id={`nav-hub-${hub.id}`}
                           className={cn('mt-1 space-y-1 pl-4', sidebarCollapsed && 'lg:hidden')}
                         >
-                          {hub.items.map((item) => {
+                          {hub.items.map((item, itemIndex) => {
                             const itemActive = navItemIsActive(
                               item.path,
                               location.pathname,
                               location.search,
                             )
+                            const previous = hub.items[itemIndex - 1]
+                            const showGroupLabel =
+                              Boolean(item.group) && item.group !== previous?.group
+                            const groupLabel =
+                              item.group === 'fleet-assets'
+                                ? t('nav.fleet_assets_group', {
+                                    defaultValue: 'Fleet & assets',
+                                  })
+                                : item.group
+                                  ? t(`nav.group_${item.group}`, { defaultValue: item.group })
+                                  : null
                             return (
-                              <NavLink
-                                key={item.path}
-                                to={item.path}
-                                onClick={() => setSidebarOpen(false)}
-                                aria-current={itemActive ? 'page' : undefined}
-                                className={cn(
-                                  'flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium',
-                                  'transition-all duration-200 group',
-                                  itemActive
-                                    ? 'bg-primary/10 text-primary border border-primary/20'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                                )}
-                              >
-                                <item.icon
-                                  className={cn(
-                                    'w-4 h-4 shrink-0 transition-colors',
-                                    itemActive
-                                      ? 'text-primary'
-                                      : 'text-muted-foreground group-hover:text-foreground',
-                                  )}
-                                />
-                                <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
-                                {item.path === '/admin/lookups' && pendingSafetyLookups > 0 ? (
-                                  <span
-                                    className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground"
-                                    data-testid="nav-lookups-pending-badge"
-                                    aria-label={`${pendingSafetyLookups} pending`}
+                              <Fragment key={item.path}>
+                                {showGroupLabel && groupLabel ? (
+                                  <div
+                                    className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80"
+                                    data-testid={`nav-group-${item.group}`}
                                   >
-                                    {pendingSafetyLookups > 99 ? '99+' : pendingSafetyLookups}
-                                  </span>
+                                    {groupLabel}
+                                  </div>
                                 ) : null}
-                                {itemActive && (
-                                  <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
-                                )}
-                              </NavLink>
+                                <NavLink
+                                  to={item.path}
+                                  onClick={() => setSidebarOpen(false)}
+                                  aria-current={itemActive ? 'page' : undefined}
+                                  className={cn(
+                                    'flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium',
+                                    'transition-all duration-200 group',
+                                    item.group && 'ml-2 border-l border-border/60 pl-3',
+                                    itemActive
+                                      ? 'bg-primary/10 text-primary border border-primary/20'
+                                      : 'text-muted-foreground hover:text-foreground hover:bg-surface',
+                                  )}
+                                >
+                                  <item.icon
+                                    className={cn(
+                                      'w-4 h-4 shrink-0 transition-colors',
+                                      itemActive
+                                        ? 'text-primary'
+                                        : 'text-muted-foreground group-hover:text-foreground',
+                                    )}
+                                  />
+                                  <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
+                                  {item.path === '/admin/lookups' && pendingSafetyLookups > 0 ? (
+                                    <span
+                                      className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground"
+                                      data-testid="nav-lookups-pending-badge"
+                                      aria-label={`${pendingSafetyLookups} pending`}
+                                    >
+                                      {pendingSafetyLookups > 99 ? '99+' : pendingSafetyLookups}
+                                    </span>
+                                  ) : null}
+                                  {itemActive && (
+                                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                                  )}
+                                </NavLink>
+                              </Fragment>
                             )
                           })}
                         </div>
