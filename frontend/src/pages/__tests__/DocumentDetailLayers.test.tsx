@@ -172,7 +172,7 @@ function renderDetail(path: string) {
   )
 }
 
-describe('DocumentDetail six layers (WB-1)', () => {
+describe('DocumentDetail seven layers (WB-1 + Preview)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     flagState.document_graph = false
@@ -202,7 +202,7 @@ describe('DocumentDetail six layers (WB-1)', () => {
     })
   })
 
-  it('renders exactly six layers in Control→Assurance order with flags off', async () => {
+  it('renders seven layers in Control→Preview order with flags off', async () => {
     renderDetail('/documents/42')
     await waitFor(() => {
       expect(screen.getByTestId('document-detail-layer-list')).toBeInTheDocument()
@@ -216,12 +216,13 @@ describe('DocumentDetail six layers (WB-1)', () => {
       'used-by',
       'history',
       'assurance',
+      'preview',
     ])
     expect(screen.getByTestId('document-related-graph-off')).toBeInTheDocument()
     expect(mockListEdges).not.toHaveBeenCalled()
   })
 
-  it('still shows six layers when Doc Graph and Entity360 are on', async () => {
+  it('still shows seven layers when Doc Graph and Entity360 are on', async () => {
     flagState.document_graph = true
     flagState.entity_360 = true
     renderDetail('/documents/42')
@@ -229,7 +230,7 @@ describe('DocumentDetail six layers (WB-1)', () => {
       expect(screen.getByTestId('document-detail-layer-list')).toBeInTheDocument()
     })
     const tabs = within(screen.getByTestId('document-detail-layer-list')).getAllByRole('tab')
-    expect(tabs).toHaveLength(6)
+    expect(tabs).toHaveLength(7)
     expect(screen.getByTestId('relationships-panel-mock')).toBeInTheDocument()
     expect(screen.queryByTestId('document-related-graph-off')).not.toBeInTheDocument()
   })
@@ -265,6 +266,21 @@ describe('DocumentDetail six layers (WB-1)', () => {
       )
     })
     expect(screen.getByTestId('document-assurance-qa')).toBeInTheDocument()
+  })
+
+  it('opens Preview as its own layer with reader and next-review notes', async () => {
+    renderDetail('/documents/42?tab=preview')
+    await waitFor(() => {
+      expect(screen.getByTestId('document-detail-layers')).toHaveAttribute(
+        'data-default-tab',
+        'preview',
+      )
+    })
+    expect(screen.getByTestId('tabs-content-preview')).toBeInTheDocument()
+    expect(screen.getByTestId('document-preview-reader')).toBeInTheDocument()
+    expect(screen.getByTestId('document-next-review-notes')).toBeInTheDocument()
+    expect(screen.getByTestId('document-review-notes-input')).toBeInTheDocument()
+    expect(screen.getByTestId('document-control-preview-handoff')).toBeInTheDocument()
   })
 
   it('mounts Entity360Strip once inside Used by, not in the header', async () => {

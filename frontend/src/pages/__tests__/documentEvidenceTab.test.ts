@@ -21,6 +21,7 @@ describe('DOCUMENT_DETAIL_LAYERS', () => {
       'used-by',
       'history',
       'assurance',
+      'preview',
     ])
   })
 })

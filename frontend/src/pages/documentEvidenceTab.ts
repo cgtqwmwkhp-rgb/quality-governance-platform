@@ -13,6 +13,7 @@ export const DOCUMENT_DETAIL_LAYERS = [
   'used-by',
   'history',
   'assurance',
+  'preview',
 ] as const
 
 export type DocumentDetailLayer = (typeof DOCUMENT_DETAIL_LAYERS)[number]
