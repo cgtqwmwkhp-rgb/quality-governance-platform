@@ -378,6 +378,52 @@ def _resolve_client_feature_tokens(src_root: Path) -> set[str]:
     return tokens
 
 
+def _resolve_assist_tool_tokens(src_root: Path) -> set[str]:
+    """Tokens Assist checks via ``tool_is_visible``, read from ``ASSIST_TOOLS``.
+
+    Same posture as :func:`_resolve_client_feature_tokens`: registering a tool
+    against a new permission changes the derived set and trips the catalogue test.
+    """
+    module = src_root / "domain" / "services" / "assist" / "registry.py"
+    if not module.exists():
+        raise ResolverContractError(f"expected Assist registry at {module}")
+
+    tree = ast.parse(module.read_text(encoding="utf-8"))
+    assignment: Optional[ast.expr] = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+            value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+            value = node.value if node.value is not None else ast.Constant(value=None)
+        else:
+            continue
+        if any(isinstance(target, ast.Name) and target.id == "ASSIST_TOOLS" for target in targets):
+            assignment = value
+    if assignment is None:
+        raise ResolverContractError("ASSIST_TOOLS is no longer a module-level assignment")
+    if not isinstance(assignment, ast.Tuple):
+        raise ResolverContractError("ASSIST_TOOLS is no longer a tuple literal")
+
+    tokens: set[str] = set()
+    constructors = 0
+    for element in assignment.elts:
+        if not isinstance(element, ast.Call) or _callee_name(element.func) != "AssistTool":
+            raise ResolverContractError("ASSIST_TOOLS holds something other than AssistTool(...) calls")
+        constructors += 1
+        for keyword in element.keywords:
+            if keyword.arg != "required_permission":
+                continue
+            if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                tokens.add(keyword.value.value)
+            elif not (isinstance(keyword.value, ast.Constant) and keyword.value.value is None):
+                raise ResolverContractError("an AssistTool.required_permission is neither a string literal nor None")
+    if constructors == 0:
+        raise ResolverContractError("ASSIST_TOOLS is empty, so Assist can enforce nothing")
+    return tokens
+
+
 #: Non-literal call sites that are known and accounted for. Keyed by
 #: ``<path relative to repo root>::<enclosing qualname>`` so the key survives
 #: edits above the call, unlike a line number.
@@ -415,6 +461,14 @@ DECLARED_DYNAMIC_SITES: tuple[DeclaredDynamicSite, ...] = (
             "from ClientFeature.required_permission in the feature catalogue."
         ),
         resolver=_resolve_client_feature_tokens,
+    ),
+    DeclaredDynamicSite(
+        site="src/domain/services/assist/permissions.py::tool_is_visible",
+        reason=(
+            "Checks AssistTool.required_permission via user.has_permission. Tokens "
+            "are derived from AssistTool.required_permission in the Assist registry."
+        ),
+        resolver=_resolve_assist_tool_tokens,
     ),
 )
 

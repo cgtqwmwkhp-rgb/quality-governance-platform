@@ -32,6 +32,7 @@ from src.domain.services.compliance_schedule_kill_switch import compliance_sched
 logger = logging.getLogger(__name__)
 
 # Closed set — anything else stays on the simulated refusal path.
+# Tool names match ASSIST_TOOLS in src.domain.services.assist.registry.
 GROUNDED_INTENTS = frozenset(
     {
         "incident_count",
@@ -42,6 +43,8 @@ GROUNDED_INTENTS = frozenset(
         "overdue_actions",
         "compliance_overdue",
         "compliance_due_soon",
+        "vehicle_check_top_failures",
+        "vehicle_check_defect_summary",
     }
 )
 
@@ -53,6 +56,7 @@ _MODULE_PATH = {
     "incident_action": "/actions/{key}",
     "complaint_action": "/actions/{key}",
     "compliance_requirement": "/compliance-schedule/{id}",
+    "vehicle_defect": "/vehicle-checklists",
 }
 
 # Intents that read the Compliance Schedule register. Unlike the four above, these
@@ -218,6 +222,11 @@ def detect_grounded_intent(message: str) -> Optional[str]:
         if _asks_due_soon(text):
             return "compliance_due_soon"
 
+    if _mentions_vehicle_checks(text):
+        if _asks_vehicle_defect_summary(text):
+            return "vehicle_check_defect_summary"
+        return "vehicle_check_top_failures"
+
     if "near" in text and "miss" in text and _asks_for_count(text):
         return "near_miss_count"
     if "complaint" in text and _asks_for_count(text):
@@ -236,6 +245,24 @@ def detect_grounded_intent(message: str) -> Optional[str]:
             return "incident_count"
 
     return None
+
+
+def _mentions_vehicle_checks(text: str) -> bool:
+    """Vehicle / van checklist register language (not asset register alone)."""
+    if re.search(r"\bvehicle\s+checks?\b", text) or re.search(r"\bvan\s+checks?\b", text):
+        return True
+    if re.search(r"\b(vehicle|van)\b", text) and re.search(r"\b(checklist|checklists|defects?|checks?)\b", text):
+        return True
+    return bool(re.search(r"\bpams\b", text) and re.search(r"\b(check|defect|van)\b", text))
+
+
+def _asks_vehicle_defect_summary(text: str) -> bool:
+    """Open / priority defect totals rather than the failure heatmap."""
+    if re.search(r"\b(p1|p2|p3)\b", text):
+        return True
+    if re.search(r"\bopen\b", text) and re.search(r"\bdefects?\b", text):
+        return True
+    return bool(_asks_for_count(text) and re.search(r"\bdefects?\b", text))
 
 
 def _asks_injury_or_manual_handling(text: str) -> bool:
@@ -294,26 +321,32 @@ class CopilotGroundingService:
         tenant_id: int,
         user_id: Optional[int] = None,
     ) -> GroundingOutcome:
-        """Attempt a grounded answer for a closed-set intent.
+        """Attempt a grounded answer for a registry tool the caller may invoke.
 
-        ``user_id`` identifies the caller for the intents that are permission-gated.
-        It defaults to ``None`` because the four original intents do not consult it,
-        but an omitted caller can never satisfy a permission check, so the compliance
-        intents refuse rather than assume.
+        ``user_id`` identifies the caller for RBAC. Every Assist tool declares a
+        ``required_permission`` (or auth-only reason); missing / unentitled callers
+        receive ``UNGROUNDED`` — same outward string as module-off — so the reply
+        is not an oracle for module existence.
         """
+        from src.domain.services.assist.permissions import tool_is_visible
+        from src.domain.services.assist.registry import get_assist_tool
+
         intent = detect_grounded_intent(question)
         if intent is None:
             return UNGROUNDED
 
-        if intent in COMPLIANCE_SCHEDULE_INTENTS and not await self._may_read_compliance(
-            tenant_id=tenant_id,
-            user_id=user_id,
-        ):
-            # UNGROUNDED rather than refused, so the caller falls through to the
-            # simulator's ordinary live-data refusal. A distinct "you are not
-            # permitted" reply would itself disclose that the module is switched on
-            # for this tenant, and the flag-off and no-permission cases would then
-            # be told apart from each other. All three look identical from outside.
+        tool = get_assist_tool(intent)
+        if tool is None:
+            return UNGROUNDED
+
+        # Module kill-switch before any user/register lookup (compliance only).
+        if intent in COMPLIANCE_SCHEDULE_INTENTS and not compliance_schedule_is_open_last_known():
+            return UNGROUNDED
+
+        user = None
+        if user_id is not None:
+            user = await self._load_caller(user_id, tenant_id=tenant_id)
+        if not tool_is_visible(user, tool):
             return UNGROUNDED
 
         facts = await self.gather_facts(intent, tenant_id=tenant_id)
@@ -349,6 +382,14 @@ class CopilotGroundingService:
             return await self._compliance_overdue(tenant_id)
         if intent == "compliance_due_soon":
             return await self._compliance_due_soon(tenant_id)
+        if intent == "vehicle_check_top_failures":
+            from src.domain.services.assist.tools.vehicles import gather_vehicle_check_top_failures
+
+            return await gather_vehicle_check_top_failures(self.db, tenant_id=tenant_id)
+        if intent == "vehicle_check_defect_summary":
+            from src.domain.services.assist.tools.vehicles import gather_vehicle_check_defect_summary
+
+            return await gather_vehicle_check_defect_summary(self.db, tenant_id=tenant_id)
         # Reachable only if GROUNDED_INTENTS gains a member without a branch here.
         # Previously the last intent was an unguarded fallthrough, so that mistake
         # would have answered the wrong question with real data instead of failing.
