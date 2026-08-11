@@ -47,6 +47,13 @@ import sqlalchemy as sa
 #: anything. Two — a title plus at least one independent discriminator.
 MIN_IDENTITY_COLUMNS = 2
 
+#: Columns that record where an audit has got to, not what it is. A re-import and
+#: the audit it duplicates diverge in these the moment anyone works either one.
+#: Used only by the purge's ``--survivor-reference`` corroboration — the scanner
+#: and the default identity group still include them, because stripping them from
+#: ``REGISTERS`` would widen every duplicate group humans read to approve deletes.
+LIFECYCLE_IDENTITY_COLUMNS: frozenset[str] = frozenset({"status", "score_percentage"})
+
 
 @dataclass(frozen=True)
 class RegisterSpec:
@@ -276,10 +283,22 @@ def _normalise(value: Any) -> Any:
     return value
 
 
-def identity_key(row: dict[str, Any], register: ResolvedRegister) -> tuple[Any, ...]:
-    """The group key for one row: its tenant, then its identity columns in order."""
+def identity_key(
+    row: dict[str, Any],
+    register: ResolvedRegister,
+    *,
+    ignore: frozenset[str] = frozenset(),
+) -> tuple[Any, ...]:
+    """The group key for one row: its tenant, then its identity columns in order.
+
+    ``ignore`` drops named identity columns from the key. The purge uses this with
+    :data:`LIFECYCLE_IDENTITY_COLUMNS` when corroborating a ``--survivor-reference``
+    against a doomed audit whose status or score has drifted. The scanner never
+    passes ``ignore``, so its grouping is unchanged.
+    """
     tenant = row.get("tenant_id") if register.has_tenant else None
-    return (tenant, *(_normalise(row.get(column)) for column in register.identity_columns))
+    columns = tuple(column for column in register.identity_columns if column not in ignore)
+    return (tenant, *(_normalise(row.get(column)) for column in columns))
 
 
 async def fetch_rows(

@@ -40,7 +40,12 @@ production-looking environment. On top of that it refuses, rather than warns, on
   silently swept them, or silently orphaned them, would be worse than one that stops.
 * **A CAPA action raised from a doomed finding.** Corrective actions are a governed
   register with their own reference numbers and verification history. They are
-  reported and the purge stops; a human withdraws or reassigns them first.
+  reported and the purge stops unless ``--reassign-capa-to-survivor`` (with
+  ``--expect-capa-action`` and ``--survivor-reference``) remaps ``source_id``.
+  There is no CAPA withdraw in this script.
+* **Compliance evidence links on doomed findings.** Same refusal unless
+  ``--remap-evidence-links`` (with ``--expect-evidence-links`` and
+  ``--survivor-reference``) remaps or soft-deletes them.
 * **Freeing a reference number for reuse or collision.** ``ReferenceNumberService``
   mints ``max(MAX(suffix), COUNT(*)) + 1``, so deleting rows can only lower the next
   value. ``AUD-2026-0048`` is very likely the highest audit reference for the year.
@@ -88,6 +93,13 @@ from scripts.ops.run025._references import mixed_reference_schemes, reference_ar
 from scripts.ops.run027._chain import record_purge
 from scripts.ops.run027._closure import descendant_closure, row_snapshots
 from scripts.ops.run027._duplicates import REGISTERS, fetch_rows, identity_key, resolve
+from scripts.ops.run027._remediate import (
+    REMEDIABLE_SOFT_TABLES,
+    RemediationPlan,
+    apply_remediation,
+    plan_remediation,
+    verify_remediation,
+)
 from scripts.ops.run027._soft_links import delete_soft_links, soft_link_hits
 
 __all__ = [
@@ -275,8 +287,23 @@ async def _collateral_risks(db: Any, finding_ids: list[int]) -> list[dict[str, A
     ]
 
 
-async def plan(*, references: list[str], tenant_id: Optional[int], limit: int) -> dict[str, Any]:
+async def plan(
+    *,
+    references: list[str],
+    tenant_id: Optional[int],
+    limit: int,
+    survivor_references: Optional[list[str]] = None,
+    remap_evidence_links: bool = False,
+    expect_evidence_links: Optional[int] = None,
+    withdraw_unmappable_evidence: bool = False,
+    reassign_capa_to_survivor: bool = False,
+    expect_capa_actions: Optional[list[int]] = None,
+) -> dict[str, Any]:
     """Work out exactly what would be deleted and whether it is safe. Read-only."""
+    survivor_references = list(survivor_references or [])
+    expect_capa_actions = list(expect_capa_actions) if expect_capa_actions is not None else None
+    empty_remediation = RemediationPlan()
+
     async with await open_session() as db:
         roots, blockers = await _roots_by_reference(db, references, tenant_id=tenant_id)
         if blockers:
@@ -299,29 +326,86 @@ async def plan(*, references: list[str], tenant_id: Optional[int], limit: int) -
                 "soft_references": [],
                 "collateral_risks": [],
                 "duplicate_group_survivors": [],
+                "remediation": empty_remediation.as_report(),
                 "reference_arithmetic": [],
                 "reference_scheme_caveats": [],
                 "blockers": blockers,
                 "_survivor_blockers": [],
+                "_survivor_auth_blockers": [],
                 "_hazards": [],
                 "_order": [],
                 "_snapshots": {},
                 "_soft_hits": [],
                 "_roots": roots,
                 "_key_columns": {},
+                "_remediation": empty_remediation,
             }
 
         root_keys: list[RowKey] = [(ROOT_TABLE, int(row["id"])) for row in roots]
         closure = await descendant_closure(db, roots=root_keys)
         blockers.extend(closure.blockers)
 
-        soft_hits, soft_blockers = await soft_link_hits(db, purge_keys=sorted(closure.purge_keys))
+        remediable: frozenset[str] = frozenset()
+        if remap_evidence_links:
+            remediable |= frozenset({"compliance_evidence_links"})
+        if reassign_capa_to_survivor:
+            remediable |= frozenset({"capa_actions"})
+        # Only defer tables this module can actually remediate.
+        remediable &= REMEDIABLE_SOFT_TABLES
+
+        soft_hits, soft_blockers = await soft_link_hits(
+            db, purge_keys=sorted(closure.purge_keys), remediable=remediable
+        )
         blockers.extend(soft_blockers)
 
         survivors, survivor_blockers = await _survivor_check(db, roots, tenant_id=tenant_id)
 
         snapshots = await row_snapshots(db, sorted(closure.purge_keys), closure.key_columns)
         collateral = await _collateral_risks(db, closure.ids_for("audit_findings"))
+
+        resolved, _skipped = await db.run_sync(resolve, [spec for spec in REGISTERS if spec.table == ROOT_TABLE])
+        register = resolved[0] if resolved else None
+
+        remediation = await plan_remediation(
+            db,
+            soft_hits=soft_hits,
+            doomed_roots=roots,
+            doomed_findings=snapshots.get("audit_findings", []),
+            survivor_references=survivor_references,
+            doomed_references=references,
+            tenant_id=tenant_id,
+            register=register,
+            remap_evidence=remap_evidence_links,
+            expect_evidence_links=expect_evidence_links,
+            withdraw_unmappable_evidence=withdraw_unmappable_evidence,
+            reassign_capa=reassign_capa_to_survivor,
+            expect_capa_ids=expect_capa_actions,
+        )
+        # Authorisation failures on --survivor-reference are hard and must not be
+        # overridden by --allow-no-survivor. Corroboration failures sit in
+        # remediation.blockers and are folded into _survivor_blockers below so the
+        # existing override still applies to content-identity drift only.
+        survivor_auth_blockers = [
+            blocker
+            for blocker in remediation.blockers
+            if blocker.startswith("--survivor-reference")
+            and ("does not exist" in blocker or "belongs to tenant" in blocker or "also named" in blocker)
+        ]
+        corroboration_blockers = [blocker for blocker in remediation.blockers if "does not corroborate" in blocker]
+        other_remediation_blockers = [
+            blocker
+            for blocker in remediation.blockers
+            if blocker not in survivor_auth_blockers and blocker not in corroboration_blockers
+        ]
+        blockers.extend(survivor_auth_blockers)
+        blockers.extend(other_remediation_blockers)
+
+        # Named survivors supersede the identity-group survivor check. The group
+        # report is still returned as context.
+        if survivor_references and not survivor_auth_blockers:
+            effective_survivor_blockers = list(corroboration_blockers)
+        else:
+            effective_survivor_blockers = list(survivor_blockers) + list(corroboration_blockers)
 
         # Reference arithmetic for every purged table that mints references, not just
         # audit_runs: deleting findings moves the FND sequence by exactly the same
@@ -375,16 +459,19 @@ async def plan(*, references: list[str], tenant_id: Optional[int], limit: int) -
         "soft_references": [hit.as_report() for hit in soft_hits],
         "collateral_risks": collateral,
         "duplicate_group_survivors": survivors,
+        "remediation": remediation.as_report(),
         "reference_arithmetic": arithmetic,
         "reference_scheme_caveats": caveats,
         "blockers": blockers,
-        "_survivor_blockers": survivor_blockers,
+        "_survivor_blockers": effective_survivor_blockers,
+        "_survivor_auth_blockers": survivor_auth_blockers,
         "_hazards": hazards,
         "_order": order,
         "_snapshots": snapshots,
         "_soft_hits": soft_hits,
         "_roots": roots,
         "_key_columns": closure.key_columns,
+        "_remediation": remediation,
     }
 
 
@@ -397,16 +484,27 @@ async def apply_plan(
     references: list[str],
     tenant_id: int,
     actor_email: Optional[str],
+    remediation: Optional[RemediationPlan] = None,
 ) -> dict[str, Any]:
     """Delete the planned rows and record the purge, in one transaction.
 
-    Everything happens inside a single transaction: the soft-referencing rows, the
-    foreign-key closure children-first, and the audit trail entry. A failure at any
-    point leaves the register exactly as it was, and there is no state in which the
-    rows are gone but the trail does not say so.
+    Everything happens inside a single transaction: remediation UPDATEs first, then
+    soft-referencing PURGE rows, then the foreign-key closure children-first, then
+    the audit trail entry. A failure at any point leaves the register exactly as it
+    was, and there is no state in which the rows are gone but the trail does not
+    say so.
     """
     deleted: dict[str, int] = {}
+    remediation = remediation or RemediationPlan()
+    doomed_finding_ids = [int(row["id"]) for row in snapshots.get("audit_findings", [])]
+    doomed_run_ids = [int(row["id"]) for row in snapshots.get("audit_runs", [])]
+
     async with await open_session() as db:
+        try:
+            remediated = await apply_remediation(db, remediation)
+        except RuntimeError as exc:
+            raise PurgeBlocked(f"Remediation failed: {exc}") from exc
+
         soft_deleted = await delete_soft_links(db, soft_hits)
 
         for table, row_id in order:
@@ -426,6 +524,7 @@ async def apply_plan(
                 )
             deleted[table] = deleted.get(table, 0) + affected
 
+        remediation_report = remediation.as_report()
         trail = await record_purge(
             db,
             tenant_id=tenant_id,
@@ -435,10 +534,22 @@ async def apply_plan(
                 "script": "scripts.ops.run027.purge_duplicate_audit_runs",
                 "requirement": "FR-DEDUP-01",
                 "rows_deleted_per_table": {**soft_deleted, **deleted},
+                "remediation_counts": remediated,
                 "reason": "duplicate re-import of an audit report already present in the register",
             },
             actor_email=actor_email,
+            remediation=remediation_report,
         )
+
+        try:
+            await verify_remediation(
+                db,
+                doomed_finding_ids=doomed_finding_ids,
+                doomed_run_ids=doomed_run_ids,
+                remediation=remediation,
+            )
+        except RuntimeError as exc:
+            raise PurgeBlocked(f"Post-remediation verification failed: {exc}") from exc
 
         # Prove the rows are gone before committing, rather than inferring it from
         # rowcounts. A residual row here means the plan and the schema disagree.
@@ -461,7 +572,12 @@ async def apply_plan(
 
         await db.commit()
 
-    return {"foreign_key_rows": deleted, "soft_reference_rows": soft_deleted, "audit_trail_entry": trail}
+    return {
+        "foreign_key_rows": deleted,
+        "soft_reference_rows": soft_deleted,
+        "remediation_rows": remediated,
+        "audit_trail_entry": trail,
+    }
 
 
 def _write_manifest(path: Path, payload: dict[str, Any]) -> None:
@@ -474,14 +590,29 @@ async def _amain(args: argparse.Namespace) -> int:
     require_database_url()
 
     references = list(dict.fromkeys(args.reference or []))
-    result = await plan(references=references, tenant_id=args.tenant_id, limit=args.limit)
+    survivor_references = list(dict.fromkeys(args.survivor_reference or []))
+    expect_capa_actions = list(dict.fromkeys(args.expect_capa_action or [])) or None
+
+    result = await plan(
+        references=references,
+        tenant_id=args.tenant_id,
+        limit=args.limit,
+        survivor_references=survivor_references,
+        remap_evidence_links=args.remap_evidence_links,
+        expect_evidence_links=args.expect_evidence_links,
+        withdraw_unmappable_evidence=args.withdraw_unmappable_evidence,
+        reassign_capa_to_survivor=args.reassign_capa_to_survivor,
+        expect_capa_actions=expect_capa_actions,
+    )
 
     order = result.pop("_order")
     snapshots = result.pop("_snapshots")
     soft_hits = result.pop("_soft_hits")
     result.pop("_roots")
     key_columns = result.pop("_key_columns")
+    remediation = result.pop("_remediation")
     survivor_blockers = result.pop("_survivor_blockers", [])
+    result.pop("_survivor_auth_blockers", [])
     hazards = result.pop("_hazards", [])
 
     blockers = list(result["blockers"])
@@ -495,6 +626,10 @@ async def _amain(args: argparse.Namespace) -> int:
         )
     if args.apply and args.tenant_id is None:
         blockers.append("--apply requires --tenant-id: the tenant must be asserted and checked, not inferred")
+    if args.remap_evidence_links and not survivor_references:
+        blockers.append("--remap-evidence-links requires --survivor-reference")
+    if args.reassign_capa_to_survivor and not survivor_references:
+        blockers.append("--reassign-capa-to-survivor requires --survivor-reference")
     result["blockers"] = blockers
 
     payload: dict[str, Any] = {"script": "purge_duplicate_audit_runs", "mode": mode, **result}
@@ -508,6 +643,7 @@ async def _amain(args: argparse.Namespace) -> int:
                 "mode": mode,
                 "captured_at": utc_now_iso(),
                 "references": references,
+                "survivor_references": survivor_references,
                 "tenant_id": args.tenant_id,
                 "deletion_order": result["deletion_order"],
                 "rows": snapshots,
@@ -515,13 +651,21 @@ async def _amain(args: argparse.Namespace) -> int:
                 "rows_set_to_null_outside_purge": result["rows_set_to_null_outside_purge"],
                 "collateral_risks": result["collateral_risks"],
                 "duplicate_group_survivors": result["duplicate_group_survivors"],
+                "remediation": result.get("remediation"),
+                "remediation_pre_update_rows": {
+                    "compliance_evidence_links": [
+                        action.pre_update for action in remediation.evidence_actions if action.pre_update
+                    ],
+                    "capa_actions": [action.pre_update for action in remediation.capa_actions if action.pre_update],
+                },
                 "reference_arithmetic": result["reference_arithmetic"],
                 "blockers": blockers,
                 "note": (
                     "Full contents of every row proposed for deletion, captured before any delete ran. "
-                    "The purge is also recorded in the tenant's hash-chained audit_log_entries; this "
-                    "file is the row-level detail that the trail entry summarises. Attach it to the "
-                    "change record."
+                    "The remediation_pre_update_rows block holds CEL/CAPA rows as they were before "
+                    "remap/withdraw/reassign — unlike the deletes, those UPDATEs are reversible from "
+                    "this block. The purge is also recorded in the tenant's hash-chained "
+                    "audit_log_entries. Attach this file to the change record."
                 ),
             },
         )
@@ -564,6 +708,7 @@ async def _amain(args: argparse.Namespace) -> int:
             references=references,
             tenant_id=int(args.tenant_id),
             actor_email=args.actor_email,
+            remediation=remediation,
         )
     except PurgeBlocked as exc:
         payload["outcome"] = "refused"
@@ -616,6 +761,71 @@ def main(argv: Optional[list[str]] = None) -> int:
         default=False,
         dest="accept_reference_reuse_risk",
         help="Proceed even though a deleted reference could later be reissued or collide.",
+    )
+    parser.add_argument(
+        "--survivor-reference",
+        action="append",
+        default=None,
+        metavar="AUD-YYYY-NNNN",
+        dest="survivor_reference",
+        help=(
+            "Audit reference that must survive. Repeatable. Authorises the survivor (exists, "
+            "same tenant, not itself being purged) and corroborates content identity ignoring "
+            "status/score_percentage. Required by --remap-evidence-links and "
+            "--reassign-capa-to-survivor. Supersedes the identity-group survivor check."
+        ),
+    )
+    parser.add_argument(
+        "--remap-evidence-links",
+        action="store_true",
+        default=False,
+        dest="remap_evidence_links",
+        help=(
+            "Remap live compliance_evidence_links from doomed findings to matching survivor "
+            "findings (or soft-delete when redundant / unmappable). Requires "
+            "--survivor-reference and --expect-evidence-links."
+        ),
+    )
+    parser.add_argument(
+        "--expect-evidence-links",
+        type=int,
+        default=None,
+        metavar="N",
+        dest="expect_evidence_links",
+        help="Live compliance_evidence_links hit count the operator has reviewed. Must match exactly.",
+    )
+    parser.add_argument(
+        "--withdraw-unmappable-evidence",
+        action="store_true",
+        default=False,
+        dest="withdraw_unmappable_evidence",
+        help=(
+            "Soft-delete compliance_evidence_links whose doomed finding has no matching "
+            "survivor finding. Without this flag those links refuse the purge."
+        ),
+    )
+    parser.add_argument(
+        "--reassign-capa-to-survivor",
+        action="store_true",
+        default=False,
+        dest="reassign_capa_to_survivor",
+        help=(
+            "Reassign capa_actions.source_id from doomed findings to matching survivor "
+            "findings. Requires --survivor-reference and --expect-capa-action for every CAPA. "
+            "There is no CAPA withdraw in this script."
+        ),
+    )
+    parser.add_argument(
+        "--expect-capa-action",
+        action="append",
+        default=None,
+        type=int,
+        metavar="ID",
+        dest="expect_capa_action",
+        help=(
+            "CAPA id that must be reassigned. Repeatable. The named set must equal the set "
+            "found pointing at doomed findings."
+        ),
     )
     args = parser.parse_args(argv)
     return asyncio.run(_amain(args))

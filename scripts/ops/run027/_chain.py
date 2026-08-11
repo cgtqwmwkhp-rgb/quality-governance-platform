@@ -77,12 +77,18 @@ async def record_purge(
     old_values: dict[str, Any],
     metadata: dict[str, Any],
     actor_email: Optional[str] = None,
+    remediation: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Append one ``delete`` entry describing the purge. Does not commit.
 
     ``old_values`` carries the audit rows as they were, so the entry is not merely a
     note that something was deleted but a record of what. The caller passes the same
     snapshot it writes to the manifest.
+
+    ``remediation`` (CEL remaps/withdrawals, CAPA reassignments) is merged into
+    ``new_values``, not ``entry_metadata``. ``AuditLogEntry.compute_hash`` covers
+    ``old_values``/``new_values`` and *not* ``entry_metadata``, so putting the row
+    mutations in metadata would leave them outside the hash chain.
     """
     from src.domain.models.audit_log import AuditLogEntry
 
@@ -108,6 +114,8 @@ async def record_purge(
 
     entity_id = ",".join(references)
     new_values: dict[str, Any] = {"purged": True, "references": references}
+    if remediation:
+        new_values["remediation"] = remediation
 
     entry_hash = AuditLogEntry.compute_hash(
         sequence=sequence,
@@ -120,7 +128,6 @@ async def record_purge(
         old_values=old_values,
         new_values=new_values,
     )
-
     entry = AuditLogEntry(
         tenant_id=tenant_id,
         sequence=sequence,

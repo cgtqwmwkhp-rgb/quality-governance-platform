@@ -246,12 +246,21 @@ async def soft_link_hits(
     *,
     purge_keys: Sequence[RowKey],
     dispositions: Optional[dict[str, ChildDisposition]] = None,
+    remediable: frozenset[str] = frozenset(),
 ) -> tuple[list[SoftLinkHit], list[str]]:
     """Non-FK references into the purge set, and any reason they block the purge.
 
     Read-only. Returns ``(hits, blockers)``; a hit whose table has no reviewed
     disposition contributes a blocker, so an unclassified table cannot be swept or
     silently orphaned.
+
+    ``remediable`` is the set of REFUSE tables the caller has opted to clear via
+    :mod:`scripts.ops.run027._remediate`. Hits against those tables are still
+    recorded with ``disposition=refuse`` — the disposition is never rewritten to
+    ``purge``, because that would let :func:`delete_soft_links` destroy them —
+    but the soft-link blocker is deferred. Ownership of covering every hit row id
+    then passes to the remediation planner. An empty ``remediable`` set (the
+    default) keeps behaviour byte-identical to the pre-remediation script.
     """
     policy = SOFT_LINK_DISPOSITIONS if dispositions is None else dispositions
 
@@ -330,7 +339,7 @@ async def soft_link_hits(
                         rationale=rule.rationale,
                     )
                 )
-                if rule.disposition is Disposition.REFUSE:
+                if rule.disposition is Disposition.REFUSE and table not in remediable:
                     blockers.append(
                         f"{len(matched)} row(s) in {table} reference {target_table} as "
                         f"{type_column}={alias!r} and that table is marked must-not-touch. "
