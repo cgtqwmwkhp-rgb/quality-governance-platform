@@ -380,9 +380,10 @@ async def test_overdue_answer_states_the_count_and_cites_only_real_refs(module_o
     assert outcome.kind == "answered"
     assert outcome.model_used == "grounded-facts"
     assert outcome.content is not None
-    assert "Overdue compliance obligation count: 3." in outcome.content
+    assert "Overdue compliance obligation count: **3**." in outcome.content
     assert "Statutory overdue: 2." in outcome.content
     assert "CSR-2026-0001" in outcome.content and "CSR-2026-0002" in outcome.content
+    assert "[CSR-2026-0001](/compliance-schedule/" in outcome.content
     assert "showing 2 of 3" in outcome.content
 
 
@@ -395,7 +396,7 @@ async def test_zero_overdue_says_so_without_inventing_a_reference(module_on):
 
     assert outcome.kind == "answered"
     assert outcome.content is not None
-    assert "Overdue compliance obligation count: 0." in outcome.content
+    assert "Overdue compliance obligation count: **0**." in outcome.content
     assert "No matching records in this organisation." in outcome.content
     assert "CSR-" not in outcome.content
 
@@ -435,8 +436,9 @@ async def test_due_soon_reports_its_horizon(module_on):
 
     assert outcome.kind == "answered"
     assert outcome.content is not None
-    assert "Compliance obligations due soon: 5." in outcome.content
+    assert "Compliance obligations due soon: **5**." in outcome.content
     assert "Horizon days: 30." in outcome.content
+    assert "[CSR-2026-0003](/compliance-schedule/" in outcome.content
 
 
 # --------------------------------------------------------------------------- SQL shape

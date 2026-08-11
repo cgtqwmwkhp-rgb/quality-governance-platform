@@ -15,14 +15,15 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from urllib.parse import quote
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.compliance_schedule import ComplianceRequirement
-from src.domain.models.incident import ActionStatus, Incident, IncidentAction
+from src.domain.models.incident import ActionStatus, Incident, IncidentAction, IncidentStatus
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.user import User
 from src.domain.services.compliance_schedule_authz import can_read_compliance_schedule
@@ -34,6 +35,8 @@ logger = logging.getLogger(__name__)
 GROUNDED_INTENTS = frozenset(
     {
         "incident_count",
+        "incident_closed_count",
+        "incident_injury_category",
         "near_miss_count",
         "complaint_count",
         "overdue_actions",
@@ -41,6 +44,16 @@ GROUNDED_INTENTS = frozenset(
         "compliance_due_soon",
     }
 )
+
+# SoR routes for quoted refs — relative in-app; export absolutises with the app origin.
+_MODULE_PATH = {
+    "incident": "/incidents/{id}",
+    "near_miss": "/near-misses/{id}",
+    "complaint": "/complaints/{id}",
+    "incident_action": "/actions/{key}",
+    "complaint_action": "/actions/{key}",
+    "compliance_requirement": "/compliance-schedule/{id}",
+}
 
 # Intents that read the Compliance Schedule register. Unlike the four above, these
 # are gated twice before any query runs: the module's own feature gate, and the
@@ -66,10 +79,13 @@ _FIGURE_RE = re.compile(r"(?<![A-Z0-9-])(\d+(?:\.\d+)?)(?![A-Z0-9%.-])")
 _MAX_SAMPLE_REFS = 10
 
 _PHRASE_SYSTEM = (
-    "You phrase answers for a QHSE governance platform. "
+    "You phrase detailed review answers for a QHSE governance platform. "
     "Use ONLY the Facts JSON. Do not invent reference numbers, counts, "
-    "percentages, or named records. Cite only reference_number values that "
-    "appear in Facts. If Facts do not answer the question, say so briefly."
+    "percentages, or named records. Cite every figure you use. "
+    "When Facts include multi-dimension breakdowns, present them as a markdown "
+    "pipe table. Cite only reference_number values that appear in Facts, and "
+    "when a ref has a path, write it as a markdown link [REF](path). "
+    "If Facts do not answer the question, say so briefly — never guess."
 )
 
 
@@ -97,6 +113,19 @@ class GroundedRef:
     module: str
     id: int
     reference_number: str
+    path: str = ""
+
+    def sor_path(self) -> str:
+        """In-app SoR route for this ref, or empty when unknown."""
+        if self.path:
+            return self.path
+        template = _MODULE_PATH.get(self.module)
+        if not template:
+            return ""
+        if "{key}" in template:
+            key = quote(f"{self.module}:{self.id}", safe="")
+            return template.format(key=key)
+        return template.format(id=self.id)
 
 
 @dataclass
@@ -107,6 +136,7 @@ class GroundedFacts:
     count: int
     refs: list[GroundedRef] = field(default_factory=list)
     extras: dict[str, Any] = field(default_factory=dict)
+    breakdowns: list[tuple[str, list[tuple[str, int]]]] = field(default_factory=list)
 
     def allowed_refs(self) -> set[str]:
         return {r.reference_number.upper() for r in self.refs if r.reference_number}
@@ -114,9 +144,10 @@ class GroundedFacts:
     def allowed_figures(self) -> set[str]:
         """Canonical string forms of every numeric figure the reply may use."""
         figures: set[str] = {str(self.count), str(float(self.count))}
-        for value in self.extras.values():
+
+        def _add_number(value: Any) -> None:
             if isinstance(value, bool):
-                continue
+                return
             if isinstance(value, int):
                 figures.add(str(value))
                 figures.add(str(float(value)))
@@ -124,6 +155,20 @@ class GroundedFacts:
                 figures.add(str(value))
                 if value == int(value):
                     figures.add(str(int(value)))
+            elif isinstance(value, dict):
+                for nested in value.values():
+                    _add_number(nested)
+            elif isinstance(value, (list, tuple)):
+                for nested in value:
+                    _add_number(nested)
+
+        for value in self.extras.values():
+            _add_number(value)
+        for _title, rows in self.breakdowns:
+            for _label, value in rows:
+                _add_number(value)
+        for ref in self.refs:
+            _add_number(ref.id)
         figures.add(str(len(self.refs)))
         figures.add(str(float(len(self.refs))))
         return figures
@@ -135,11 +180,16 @@ class GroundedFacts:
             "label": self.label,
             "count": self.count,
             "extras": self.extras,
+            "breakdowns": [
+                {"title": title, "rows": [{"label": label, "count": count} for label, count in rows]}
+                for title, rows in self.breakdowns
+            ],
             "refs": [
                 {
                     "module": r.module,
                     "id": r.id,
                     "reference_number": r.reference_number,
+                    "path": r.sor_path(),
                 }
                 for r in self.refs
             ],
@@ -172,10 +222,29 @@ def detect_grounded_intent(message: str) -> Optional[str]:
         return "near_miss_count"
     if "complaint" in text and _asks_for_count(text):
         return "complaint_count"
-    if "incident" in text and _asks_for_count(text):
-        return "incident_count"
+
+    # Incident follow-ups before the generic incident count — registers already hold
+    # status / injury / manual-handling signals; refusing them was the depth gap.
+    if "incident" in text:
+        if re.search(r"\bclosed\b", text) and (
+            _asks_for_count(text) or re.search(r"\b(how many|are|of (those|them|these))\b", text)
+        ):
+            return "incident_closed_count"
+        if _asks_injury_or_manual_handling(text):
+            return "incident_injury_category"
+        if _asks_for_count(text):
+            return "incident_count"
 
     return None
+
+
+def _asks_injury_or_manual_handling(text: str) -> bool:
+    """Whether the ask is about injury category / body part / manual handling."""
+    if re.search(r"\bmanual[- ]handling\b", text):
+        return True
+    if re.search(r"\b(back injuries|back injury|injuries?|injury category|body parts?)\b", text):
+        return True
+    return bool(re.search(r"\b(lti|riddor|lost time)\b", text) and re.search(r"\b(how many|number|count)\b", text))
 
 
 def _asks_for_count(text: str) -> bool:
@@ -268,8 +337,8 @@ class CopilotGroundingService:
     async def gather_facts(self, intent: str, *, tenant_id: int) -> GroundedFacts:
         if intent not in GROUNDED_INTENTS:
             raise ValueError(f"Unknown grounded intent: {intent}")
-        if intent == "incident_count":
-            return await self._count_incidents(tenant_id)
+        if intent in {"incident_count", "incident_closed_count", "incident_injury_category"}:
+            return await self._count_incidents(tenant_id, intent=intent)
         if intent == "near_miss_count":
             return await self._count_near_misses(tenant_id)
         if intent == "complaint_count":
@@ -287,13 +356,33 @@ class CopilotGroundingService:
 
     def format_facts_plain(self, facts: GroundedFacts) -> str:
         lines = [
-            f"{facts.label}: {facts.count}.",
+            f"{facts.label}: **{facts.count}**.",
         ]
-        if facts.extras:
+        for title, rows in facts.breakdowns:
+            if not rows:
+                continue
+            lines.append("")
+            lines.append(f"**{title}**")
+            lines.append("| Dimension | Count |")
+            lines.append("|---|---|")
+            for label, value in rows:
+                lines.append(f"| {label} | {value} |")
+        # Prefer breakdown tables for multi-dim packs; only dump flat extras when
+        # there is no table (keeps overdue/compliance replies unchanged).
+        if facts.extras and not facts.breakdowns:
             for key, value in facts.extras.items():
+                if isinstance(value, (dict, list, tuple)):
+                    continue
                 lines.append(f"{key.replace('_', ' ').capitalize()}: {value}.")
         if facts.refs:
-            listed = ", ".join(r.reference_number for r in facts.refs)
+            linked = []
+            for ref in facts.refs:
+                path = ref.sor_path()
+                if path:
+                    linked.append(f"[{ref.reference_number}]({path})")
+                else:
+                    linked.append(ref.reference_number)
+            listed = ", ".join(linked)
             suffix = "" if facts.count <= len(facts.refs) else f" (showing {len(facts.refs)} of {facts.count})"
             lines.append(f"References{suffix}: {listed}.")
         else:
@@ -313,8 +402,11 @@ class CopilotGroundingService:
 
         allowed_refs = facts.allowed_refs()
         allowed_figures = facts.allowed_figures()
+        # Deeplink paths carry numeric ids; strip markdown destinations so path
+        # segments are not mistaken for invented figures.
+        scrubbed = re.sub(r"\]\([^)]+\)", "]", reply)
 
-        for match in _REF_RE.finditer(reply.upper()):
+        for match in _REF_RE.finditer(scrubbed.upper()):
             token = match.group(1)
             # Only enforce tokens that look like platform refs (contain a hyphen
             # and a digit), so ordinary words are not treated as citations.
@@ -323,18 +415,18 @@ class CopilotGroundingService:
             if token not in allowed_refs:
                 return False
 
-        for match in _PERCENT_RE.finditer(reply):
+        for match in _PERCENT_RE.finditer(scrubbed):
             raw = match.group(1)
             if raw not in allowed_figures and f"{raw}%" not in allowed_figures:
                 # Percentages are never produced by our count intents today —
                 # any percentage in a grounded reply is invented.
                 return False
 
-        for match in _FIGURE_RE.finditer(reply):
+        for match in _FIGURE_RE.finditer(scrubbed):
             raw = match.group(1)
             # Skip fragments that are part of a reference we already checked.
             start = match.start(1)
-            window = reply[max(0, start - 12) : match.end(1) + 1]
+            window = scrubbed[max(0, start - 12) : match.end(1) + 1]
             if re.search(r"[A-Za-z]{2,}-", window):
                 continue
             if raw not in allowed_figures:
@@ -402,13 +494,15 @@ class CopilotGroundingService:
             prompt = (
                 f"Question:\n{question}\n\n"
                 f"Facts (JSON):\n{json.dumps(facts.to_prompt_dict(), indent=2)}\n\n"
-                "Write a short plain-language answer using only these facts."
+                "Write a detailed plain-language review using only these facts. "
+                "Cite every figure. Use a markdown pipe table for any breakdowns. "
+                "Link each reference_number as [REF](path) when path is present."
             )
             return await client.complete(
                 prompt=prompt,
                 system_prompt=_PHRASE_SYSTEM,
                 temperature=0.1,
-                max_tokens=600,
+                max_tokens=1200,
             )
         except Exception as exc:  # noqa: BLE001 — provider outage → plain facts
             logger.info(
@@ -417,23 +511,132 @@ class CopilotGroundingService:
             )
             return None
 
-    async def _count_incidents(self, tenant_id: int) -> GroundedFacts:
-        count_stmt = (
-            select(func.count())
-            .select_from(Incident)
-            .where(
-                Incident.tenant_id == tenant_id,
-                Incident.deleted_at.is_(None),
-            )
+    async def _count_incidents(self, tenant_id: int, *, intent: str = "incident_count") -> GroundedFacts:
+        """Incident register facts with status / injury / MH (manual handling) dims.
+
+        FR-ASSIST-DEPTH-01: follow-ups (closed counts, injury category, back / manual
+        handling) resolve from the same computed pack rather than refusing for
+        missing dimensions the register already holds.
+        """
+        base = (
+            Incident.tenant_id == tenant_id,
+            Incident.deleted_at.is_(None),
         )
-        count = int((await self.db.execute(count_stmt)).scalar() or 0)
+        total = int((await self.db.execute(select(func.count()).select_from(Incident).where(*base))).scalar() or 0)
+        closed = int(
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(Incident).where(*base, Incident.status == IncidentStatus.CLOSED)
+                )
+            ).scalar()
+            or 0
+        )
+        open_count = max(0, total - closed)
+        injury = int(
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(Incident).where(*base, Incident.is_injury.is_(True))
+                )
+            ).scalar()
+            or 0
+        )
+        minor_injury = int(
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(Incident).where(*base, Incident.is_minor_injury.is_(True))
+                )
+            ).scalar()
+            or 0
+        )
+        lti = int(
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(Incident).where(*base, Incident.is_lti.is_(True))
+                )
+            ).scalar()
+            or 0
+        )
+        riddor = int(
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(Incident).where(*base, Incident.is_riddor_reportable.is_(True))
+                )
+            ).scalar()
+            or 0
+        )
+        # Portable JSON text match (Postgres + SQLite hermetic / CI).
+        body_parts_text = cast(Incident.body_parts, String)
+        back_injury = int(
+            (
+                await self.db.execute(
+                    select(func.count())
+                    .select_from(Incident)
+                    .where(*base, body_parts_text.is_not(None), body_parts_text.ilike("%back%"))
+                )
+            ).scalar()
+            or 0
+        )
+        mh_filter = or_(
+            Incident.title.ilike("%manual handling%"),
+            Incident.title.ilike("%manual-handling%"),
+            Incident.description.ilike("%manual handling%"),
+            Incident.description.ilike("%manual-handling%"),
+            body_parts_text.ilike("%manual%handling%"),
+        )
+        manual_handling = int(
+            (await self.db.execute(select(func.count()).select_from(Incident).where(*base, mh_filter))).scalar() or 0
+        )
+        back_or_mh = int(
+            (
+                await self.db.execute(
+                    select(func.count())
+                    .select_from(Incident)
+                    .where(
+                        *base,
+                        or_(
+                            and_(body_parts_text.is_not(None), body_parts_text.ilike("%back%")),
+                            mh_filter,
+                        ),
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+
+        type_rows = (
+            await self.db.execute(
+                select(Incident.incident_type, func.count())
+                .where(*base)
+                .group_by(Incident.incident_type)
+                .order_by(func.count().desc())
+            )
+        ).all()
+        type_breakdown = [(str(getattr(row[0], "value", row[0]) or "unknown"), int(row[1])) for row in type_rows]
+
+        sample_filters = list(base)
+        sample_order = Incident.id.desc()
+        primary_count = total
+        label = "Incident register count"
+        if intent == "incident_closed_count":
+            sample_filters.append(Incident.status == IncidentStatus.CLOSED)
+            primary_count = closed
+            label = "Closed incident count"
+        elif intent == "incident_injury_category":
+            sample_filters.append(
+                or_(
+                    Incident.is_injury.is_(True),
+                    Incident.is_minor_injury.is_(True),
+                    and_(body_parts_text.is_not(None), body_parts_text.ilike("%back%")),
+                    mh_filter,
+                )
+            )
+            primary_count = back_or_mh if back_or_mh else injury
+            label = "Incident injury / manual-handling count"
+
         sample_stmt = (
             select(Incident.id, Incident.reference_number)
-            .where(
-                Incident.tenant_id == tenant_id,
-                Incident.deleted_at.is_(None),
-            )
-            .order_by(Incident.id.desc())
+            .where(*sample_filters)
+            .order_by(sample_order)
             .limit(_MAX_SAMPLE_REFS)
         )
         rows = (await self.db.execute(sample_stmt)).all()
@@ -442,12 +645,47 @@ class CopilotGroundingService:
             for row in rows
             if row.reference_number
         ]
+
+        status_rows = [
+            ("closed", closed),
+            ("not_closed", open_count),
+            ("total", total),
+        ]
+        injury_rows = [
+            ("is_injury", injury),
+            ("is_minor_injury", minor_injury),
+            ("is_lti", lti),
+            ("riddor_reportable", riddor),
+            ("back_body_part", back_injury),
+            ("manual_handling_text_match", manual_handling),
+            ("back_or_manual_handling", back_or_mh),
+        ]
+        breakdowns: list[tuple[str, list[tuple[str, int]]]] = [
+            ("Status breakdown", status_rows),
+            ("Injury / MH category", injury_rows),
+        ]
+        if type_breakdown:
+            breakdowns.append(("Incident type", type_breakdown))
+
         return GroundedFacts(
-            intent="incident_count",
+            intent=intent,
             tenant_id=tenant_id,
-            label="Open register incident count",
-            count=count,
+            label=label,
+            count=primary_count,
             refs=refs,
+            extras={
+                "total_incidents": total,
+                "closed_incidents": closed,
+                "not_closed_incidents": open_count,
+                "injury_incidents": injury,
+                "minor_injury_incidents": minor_injury,
+                "lti_incidents": lti,
+                "riddor_incidents": riddor,
+                "back_body_part_incidents": back_injury,
+                "manual_handling_incidents": manual_handling,
+                "back_or_manual_handling_incidents": back_or_mh,
+            },
+            breakdowns=breakdowns,
         )
 
     async def _count_near_misses(self, tenant_id: int) -> GroundedFacts:

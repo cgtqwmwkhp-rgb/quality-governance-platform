@@ -25,7 +25,7 @@ def _facts(*, tenant_id: int = 1, count: int = 2, refs: list[GroundedRef] | None
     return GroundedFacts(
         intent="incident_count",
         tenant_id=tenant_id,
-        label="Open register incident count",
+        label="Incident register count",
         count=count,
         refs=refs
         or [
@@ -43,6 +43,11 @@ def _facts(*, tenant_id: int = 1, count: int = 2, refs: list[GroundedRef] | None
     [
         ("How many incidents do we have?", "incident_count"),
         ("what's the number of incidents", "incident_count"),
+        ("How many of those incidents are closed?", "incident_closed_count"),
+        (
+            "How many of those incidents are either to do with back injuries or manual handling?",
+            "incident_injury_category",
+        ),
         ("How many near misses this month?", "near_miss_count"),
         ("total near-miss count", "near_miss_count"),
         ("How many complaints are there?", "complaint_count"),
@@ -245,6 +250,51 @@ async def test_citation_failure_returns_honesty_refusal(monkeypatch):
     assert "92%" not in content
 
 
+def _incident_depth_responses(
+    *,
+    total: int,
+    refs: list,
+    closed: int = 0,
+    injury: int = 0,
+    minor: int = 0,
+    lti: int = 0,
+    riddor: int = 0,
+    back: int = 0,
+    mh: int = 0,
+    back_or_mh: int = 0,
+    type_rows: list | None = None,
+) -> list:
+    """Queued DB responses for ``_count_incidents`` (FR-ASSIST-DEPTH-01)."""
+    return [
+        _Result(scalar=total),
+        _Result(scalar=closed),
+        _Result(scalar=injury),
+        _Result(scalar=minor),
+        _Result(scalar=lti),
+        _Result(scalar=riddor),
+        _Result(scalar=back),
+        _Result(scalar=mh),
+        _Result(scalar=back_or_mh),
+        _Result(rows=type_rows or []),
+        _Result(rows=refs),
+    ]
+
+
+def test_format_facts_plain_includes_breakdown_and_deeplinks(grounding: CopilotGroundingService):
+    facts = _facts(count=2)
+    facts.breakdowns = [("Status breakdown", [("closed", 1), ("not_closed", 1), ("total", 2)])]
+    plain = grounding.format_facts_plain(facts)
+    assert "| closed | 1 |" in plain
+    assert "[INC-2026-0001](/incidents/10)" in plain
+    assert grounding.validate_citations(plain, facts) is True
+
+
+def test_validate_citations_ignores_figures_inside_deeplink_paths(grounding: CopilotGroundingService):
+    facts = _facts(count=2)
+    reply = "There are 2 incidents including [INC-2026-0001](/incidents/10) and INC-2026-0002."
+    assert grounding.validate_citations(reply, facts) is True
+
+
 # --------------------------------------------------------------------------- tenant isolation
 
 
@@ -285,12 +335,7 @@ async def test_gather_facts_scopes_incident_count_to_tenant():
         SimpleNamespace(id=10, reference_number="INC-2026-0001"),
         SimpleNamespace(id=11, reference_number="INC-2026-0002"),
     ]
-    db = _RecordingSession(
-        [
-            _Result(scalar=2),
-            _Result(rows=rows),
-        ]
-    )
+    db = _RecordingSession(_incident_depth_responses(total=2, refs=rows, closed=1))
     service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
     facts = await service.gather_facts("incident_count", tenant_id=42)
 
@@ -316,7 +361,7 @@ async def test_gather_facts_never_returns_other_tenant_refs():
     # If gather_facts ever stopped filtering, a careless mock could leak this.
     # Our session only returns tenant-7 rows, mirroring a correct WHERE.
     own = SimpleNamespace(id=1, reference_number="INC-2026-0007")
-    db = _RecordingSession([_Result(scalar=1), _Result(rows=[own])])
+    db = _RecordingSession(_incident_depth_responses(total=1, refs=[own]))
     service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
     facts = await service.gather_facts("incident_count", tenant_id=7)
 
@@ -333,7 +378,7 @@ async def test_try_answer_plain_facts_when_no_provider(monkeypatch):
         staticmethod(lambda: False),
     )
     rows = [SimpleNamespace(id=1, reference_number="INC-2026-0001")]
-    db = _RecordingSession([_Result(scalar=1), _Result(rows=rows)])
+    db = _RecordingSession(_incident_depth_responses(total=1, refs=rows))
     service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
     outcome = await service.try_answer("How many incidents do we have?", tenant_id=1)
     assert outcome.kind == "answered"
@@ -360,8 +405,50 @@ async def test_try_answer_drops_invented_llm_refs(monkeypatch):
         SimpleNamespace(id=10, reference_number="INC-2026-0001"),
         SimpleNamespace(id=11, reference_number="INC-2026-0002"),
     ]
-    db = _RecordingSession([_Result(scalar=2), _Result(rows=rows)])
+    db = _RecordingSession(_incident_depth_responses(total=2, refs=rows))
     service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
     outcome = await service.try_answer("How many incidents?", tenant_id=1)
     assert outcome.kind == "refused"
     assert outcome.content is None
+
+
+@pytest.mark.asyncio
+async def test_closed_followup_uses_closed_count(monkeypatch):
+    monkeypatch.setattr(
+        CopilotGroundingService,
+        "_provider_available",
+        staticmethod(lambda: False),
+    )
+    rows = [SimpleNamespace(id=3, reference_number="INC-2026-0003")]
+    db = _RecordingSession(
+        _incident_depth_responses(total=38, refs=rows, closed=12, injury=8, back=4, mh=2, back_or_mh=5)
+    )
+    service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
+    outcome = await service.try_answer("How many of those incidents are closed?", tenant_id=1)
+    assert outcome.kind == "answered"
+    assert outcome.content is not None
+    assert "Closed incident count: **12**" in outcome.content
+    assert "| closed | 12 |" in outcome.content
+    assert "[INC-2026-0003](/incidents/3)" in outcome.content
+
+
+@pytest.mark.asyncio
+async def test_injury_mh_followup_resolves_from_fact_pack(monkeypatch):
+    monkeypatch.setattr(
+        CopilotGroundingService,
+        "_provider_available",
+        staticmethod(lambda: False),
+    )
+    rows = [SimpleNamespace(id=9, reference_number="INC-2026-0009")]
+    db = _RecordingSession(
+        _incident_depth_responses(total=38, refs=rows, closed=12, injury=8, back=4, mh=2, back_or_mh=5)
+    )
+    service = CopilotGroundingService(db=db)  # type: ignore[arg-type]
+    outcome = await service.try_answer(
+        "How many of those incidents are either to do with back injuries or manual handling?",
+        tenant_id=1,
+    )
+    assert outcome.kind == "answered"
+    assert outcome.content is not None
+    assert "5" in outcome.content
+    assert "manual_handling_text_match" in outcome.content or "back_or_manual_handling" in outcome.content
