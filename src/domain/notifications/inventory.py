@@ -317,9 +317,12 @@ PRODUCERS: tuple[ProducerDeclaration, ...] = (
         trigger=TRIGGER_REQUEST,
         schedule=None,
         beat_task=None,
-        feature_flags=(),
+        feature_flags=("incident_owner_assignment_notify",),
         referenced=True,
-        note="Fires on reassignment as well as first allocation.",
+        note=(
+            "Fires on reassignment as well as first allocation. Gated by "
+            "incident_owner_assignment_notify (default-off: missing row means no send)."
+        ),
     ),
     ProducerDeclaration(
         id="portal_intake_triaged",
@@ -668,21 +671,32 @@ def build_producers(flag_states: Mapping[str, Optional[bool]]) -> list[dict[str,
     """Describe each producer, folding in the state of the flags that gate it.
 
     ``flag_states`` maps a feature-flag key to its persisted value, or to ``None``
-    when no row exists. ``None`` is reported rather than defaulted, because these
-    flags default to *on* when absent and showing them as off would invert the
+    when no row exists. ``None`` is reported as each flag family's default rather
+    than forced off: Compliance Schedule notify flags default **on**; Incident
+    notify flags default **off**. Showing the wrong default would invert the
     behaviour an operator is trying to understand.
     """
+    from src.domain.services.incident_notify_flags import DEFAULT_OFF_FLAG_KEYS
+
     producers: list[dict[str, Any]] = []
     for declaration in PRODUCERS:
-        flags = [
-            {
-                "key": key,
-                # Absent row means on: see compliance_schedule_notify_flags.
-                "enabled": True if flag_states.get(key) is None else bool(flag_states.get(key)),
-                "persisted": flag_states.get(key) is not None,
-            }
-            for key in declaration.feature_flags
-        ]
+        flags = []
+        for key in declaration.feature_flags:
+            persisted_value = flag_states.get(key)
+            if persisted_value is None:
+                default_on = key not in DEFAULT_OFF_FLAG_KEYS
+                enabled = default_on
+                persisted = False
+            else:
+                enabled = bool(persisted_value)
+                persisted = True
+            flags.append(
+                {
+                    "key": key,
+                    "enabled": enabled,
+                    "persisted": persisted,
+                }
+            )
         producers.append(
             {
                 "id": declaration.id,

@@ -257,22 +257,30 @@ def test_producer_channels_are_known() -> None:
     assert not unknown, f"producers naming channels that do not exist: {unknown}"
 
 
-def test_producer_feature_flags_are_the_compliance_schedule_notify_flags() -> None:
-    """The only producers gated by a flag today are the Compliance Schedule pair.
+def test_producer_feature_flags_are_known_notify_flag_modules() -> None:
+    """Every producer-declared flag key must belong to a real notify-flag module.
 
-    This pins the claim the admin page makes: the toggles it still renders are the
+    This pins the claim the admin page makes: the toggles it renders are the
     flags these producers actually read. A new flag key here without a matching
-    row in ``compliance_schedule_notify_flags`` — or elsewhere — would be a
-    toggle with nothing behind it, which is what FR-HONESTY-SWEEP-01 removed.
+    row in a notify-flags helper would be a toggle with nothing behind it.
     """
-    from src.domain.services.compliance_schedule_notify_flags import NOTIFY_FLAG_KEYS
+    from src.domain.services.compliance_schedule_notify_flags import NOTIFY_FLAG_KEYS as CS_KEYS
+    from src.domain.services.incident_notify_flags import NOTIFY_FLAG_KEYS as INCIDENT_KEYS
 
+    known = set(CS_KEYS) | set(INCIDENT_KEYS)
     declared = set(referenced_flag_keys())
-    assert declared <= set(NOTIFY_FLAG_KEYS), (
-        f"{sorted(declared - set(NOTIFY_FLAG_KEYS))} are declared as gating a producer but are not "
-        "Compliance Schedule notify flags. Either the flag is real and its module should say so, or "
+    assert declared <= known, (
+        f"{sorted(declared - known)} are declared as gating a producer but are not "
+        "in a notify-flags module. Either the flag is real and its module should say so, or "
         "the producer is not actually gated."
     )
+
+
+def test_incident_owner_assigned_declares_default_off_flag() -> None:
+    from src.domain.services.incident_notify_flags import ASSIGNMENT_NOTIFY_FLAG
+
+    producer = next(p for p in PRODUCERS if p.id == "incident_owner_assigned")
+    assert producer.feature_flags == (ASSIGNMENT_NOTIFY_FLAG,)
 
 
 # --------------------------------------------------------------------------- #
@@ -574,15 +582,25 @@ def test_readiness_payload_is_passed_through_as_diagnostics() -> None:
     assert email["status_detail"] == "why"
 
 
-def test_a_missing_flag_row_reports_its_default_rather_than_off() -> None:
-    """These flags default to on when absent; reporting them off would invert them."""
+def test_a_missing_flag_row_reports_its_family_default() -> None:
+    """CS defaults on when absent; Incident defaults off — inventory must match."""
+    from src.domain.services.compliance_schedule_notify_flags import NOTIFY_FLAG_KEYS as CS_KEYS
+    from src.domain.services.incident_notify_flags import NOTIFY_FLAG_KEYS as INCIDENT_KEYS
+
     inventory = build_inventory(readiness_payloads={}, flag_states={key: None for key in referenced_flag_keys()})
     flags = [flag for producer in inventory["producers"] for flag in producer["feature_flags"]]
 
     assert flags, "no producer flags in the report"
-    for flag in flags:
-        assert flag["enabled"] is True
-        assert flag["persisted"] is False
+    by_key = {flag["key"]: flag for flag in flags}
+    for key in CS_KEYS:
+        if key not in by_key:
+            continue
+        assert by_key[key]["enabled"] is True
+        assert by_key[key]["persisted"] is False
+    for key in INCIDENT_KEYS:
+        assert key in by_key, f"{key} must appear on a producer for inventory honesty"
+        assert by_key[key]["enabled"] is False
+        assert by_key[key]["persisted"] is False
 
 
 def test_a_disabled_flag_row_is_reported_disabled() -> None:

@@ -162,10 +162,19 @@ describe('NotificationSettings', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows the Incident assignment notify flag', async () => {
+    render(<NotificationSettings />)
+
+    expect(
+      await screen.findByTestId('incident-notify-flag-incident_owner_assignment_notify'),
+    ).toBeInTheDocument()
+  })
+
   it('offers no channel toggle that fails to persist', async () => {
     render(<NotificationSettings />)
 
     await screen.findByTestId('cs-notify-flag-compliance_schedule_assignment_notify')
+    await screen.findByTestId('incident-notify-flag-incident_owner_assignment_notify')
 
     for (const label of [
       'Email Notifications',
@@ -176,9 +185,12 @@ describe('NotificationSettings', () => {
       expect(screen.queryByText(label)).not.toBeInTheDocument()
     }
 
-    // Every remaining toggle belongs to a Compliance Schedule flag row, so no
+    // Every remaining toggle belongs to a persisted notify flag row, so no
     // control on this page can be clicked without a PATCH behind it.
-    const rows = screen.getAllByTestId(/^cs-notify-flag-/)
+    const rows = [
+      ...screen.getAllByTestId(/^cs-notify-flag-/),
+      ...screen.getAllByTestId(/^incident-notify-flag-/),
+    ]
     const toggles = screen.getAllByRole('button')
     expect(toggles).toHaveLength(rows.length)
   })
@@ -252,11 +264,15 @@ describe('NotificationSettings', () => {
 
       await screen.findByTestId('notification-inventory')
       await screen.findByTestId('cs-notify-flag-compliance_schedule_assignment_notify')
+      await screen.findByTestId('incident-notify-flag-incident_owner_assignment_notify')
 
       // The inventory is a report. If it ever grows a button, that button is a
       // notification setting nothing persists — the thing FR-HONESTY-SWEEP-01
       // deleted from this page.
-      const rows = screen.getAllByTestId(/^cs-notify-flag-/)
+      const rows = [
+        ...screen.getAllByTestId(/^cs-notify-flag-/),
+        ...screen.getAllByTestId(/^incident-notify-flag-/),
+      ]
       expect(screen.getAllByRole('button')).toHaveLength(rows.length)
       expect(screen.queryAllByRole('switch')).toHaveLength(0)
       expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
