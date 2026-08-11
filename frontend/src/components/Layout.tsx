@@ -109,8 +109,8 @@ export default function Layout({
   const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
   const canAccessComplianceSchedule = complianceScheduleEnabled && canAccessAdvancedNav
 
-  // Optional `group` nests siblings under a non-hub section label inside a hub
-  // (FR-NAV-FLEET-ASSETS-01). Not a first-level hub — KILL "Assets as new hub".
+  // Optional `group` nests siblings under a non-hub section label inside a hub.
+  // Fleet & Assets is a first-level hub (FR-NAV-FLEET-01) — not a Safety subsection.
   type NavHubItem = {
     path: string
     icon: typeof ListTodo
@@ -148,17 +148,22 @@ export default function Layout({
         { path: '/rtas', icon: Car, label: t('nav.rtas') },
         { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
         { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
+      ],
+    },
+    {
+      id: 'fleet-assets',
+      title: t('nav.fleet_assets', { defaultValue: 'Fleet & Assets' }),
+      icon: Truck,
+      items: [
         {
           path: '/vehicle-checklists',
           icon: Truck,
           label: t('nav.vehicle_checklists'),
-          group: 'fleet-assets',
         },
         {
           path: '/safety-assets',
           icon: Package,
           label: t('nav.safety_asset_register', { defaultValue: 'Asset Register' }),
-          group: 'fleet-assets',
         },
       ],
     },
@@ -198,11 +203,6 @@ export default function Layout({
         { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
         { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
         { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
-        {
-          path: '/assurance/certificates',
-          icon: Shield,
-          label: t('nav.assurance_cert_shelf', { defaultValue: 'Certificate shelf' }),
-        },
         { path: CUSTOMER_AUDITS_PROGRAMME_PATH, icon: Users, label: t('nav.customer_audits') },
       ],
     },
@@ -223,6 +223,11 @@ export default function Layout({
           path: '/document-control',
           icon: FileText,
           label: t('nav.document_control', { defaultValue: 'Document Control' }),
+        },
+        {
+          path: '/assurance/certificates',
+          icon: Shield,
+          label: t('nav.assurance_cert_shelf', { defaultValue: 'Certificate shelf' }),
         },
         ...(canAccessComplianceSchedule
           ? [
