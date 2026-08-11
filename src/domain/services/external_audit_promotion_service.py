@@ -1096,6 +1096,19 @@ class ExternalAuditPromotionService:
             )
         )
         uvdb_audit = result.scalar_one_or_none()
+        # FR-DEDUP-02 defensive: same Achilles supplier id must not mint a second
+        # catalogue row when the promoting run's reference differs from an older twin.
+        if uvdb_audit is None and (run.external_reference or "").strip():
+            company_id = (run.external_reference or "").strip()
+            by_company = await self.db.execute(
+                select(UVDBAudit).where(
+                    UVDBAudit.tenant_id == tenant_id,
+                    UVDBAudit.company_id == company_id,
+                )
+            )
+            uvdb_audit = by_company.scalar_one_or_none()
+            if uvdb_audit is not None and uvdb_audit.audit_reference != run.reference_number:
+                uvdb_audit.audit_reference = run.reference_number
         if uvdb_audit is None:
             uvdb_audit = UVDBAudit(
                 tenant_id=tenant_id,
