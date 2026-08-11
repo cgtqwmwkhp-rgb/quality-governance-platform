@@ -101,14 +101,10 @@ async def get_feature_flag(
     Notification Settings can toggle them without first hitting the paginated
     list endpoint.
     """
-    from src.domain.services.compliance_schedule_notify_flags import (
-        NOTIFY_FLAG_KEYS as CS_NOTIFY_FLAG_KEYS,
-        ensure_compliance_schedule_notify_flags,
-    )
-    from src.domain.services.incident_notify_flags import (
-        NOTIFY_FLAG_KEYS as INCIDENT_NOTIFY_FLAG_KEYS,
-        ensure_incident_notify_flags,
-    )
+    from src.domain.services.compliance_schedule_notify_flags import NOTIFY_FLAG_KEYS as CS_NOTIFY_FLAG_KEYS
+    from src.domain.services.compliance_schedule_notify_flags import ensure_compliance_schedule_notify_flags
+    from src.domain.services.incident_notify_flags import NOTIFY_FLAG_KEYS as INCIDENT_NOTIFY_FLAG_KEYS
+    from src.domain.services.incident_notify_flags import ensure_incident_notify_flags
 
     if key in CS_NOTIFY_FLAG_KEYS or key in INCIDENT_NOTIFY_FLAG_KEYS:
         try:
@@ -146,14 +142,10 @@ async def update_feature_flag(
     Seed CS / Incident notify keys first so a fresh DB can persist toggles from
     Notification Settings without a prior list call.
     """
-    from src.domain.services.compliance_schedule_notify_flags import (
-        NOTIFY_FLAG_KEYS as CS_NOTIFY_FLAG_KEYS,
-        ensure_compliance_schedule_notify_flags,
-    )
-    from src.domain.services.incident_notify_flags import (
-        NOTIFY_FLAG_KEYS as INCIDENT_NOTIFY_FLAG_KEYS,
-        ensure_incident_notify_flags,
-    )
+    from src.domain.services.compliance_schedule_notify_flags import NOTIFY_FLAG_KEYS as CS_NOTIFY_FLAG_KEYS
+    from src.domain.services.compliance_schedule_notify_flags import ensure_compliance_schedule_notify_flags
+    from src.domain.services.incident_notify_flags import NOTIFY_FLAG_KEYS as INCIDENT_NOTIFY_FLAG_KEYS
+    from src.domain.services.incident_notify_flags import ensure_incident_notify_flags
 
     if key in CS_NOTIFY_FLAG_KEYS or key in INCIDENT_NOTIFY_FLAG_KEYS:
         try:

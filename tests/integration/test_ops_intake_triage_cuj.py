@@ -10,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.notification import Assignment, Notification, NotificationType
+from src.domain.services.feature_flag_service import FeatureFlagService
+from src.domain.services.incident_notify_flags import ASSIGNMENT_NOTIFY_FLAG, ensure_incident_notify_flags
 
 
 @pytest.mark.asyncio
@@ -18,7 +20,16 @@ async def test_ops_intake_triage_incident_owner_and_action_notify(
     auth_headers: dict[str, str],
     test_session: AsyncSession,
 ) -> None:
-    """Portal-like incident starts unassigned; PATCH owner notifies; action assign notifies."""
+    """Portal-like incident starts unassigned; PATCH owner notifies; action assign notifies.
+
+    Incident owner-assignment notify is default-off (FR-NOTIF-ADMIN-02). Enable the
+    flag here so this CUJ still proves the notify path when the admin toggle is on.
+    """
+    FeatureFlagService.clear_cache()
+    await ensure_incident_notify_flags(test_session)
+    await FeatureFlagService(test_session).update_flag(ASSIGNMENT_NOTIFY_FLAG, enabled=True)
+    await test_session.commit()
+
     incident_payload = {
         "title": "CUJ triage wet floor intake",
         "description": "Portal submission with no case owner",
