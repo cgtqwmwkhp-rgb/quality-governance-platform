@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import { usePreferencesStore } from '../../stores/usePreferencesStore'
@@ -140,16 +140,9 @@ describe('Layout', () => {
       ['nav.my_work', ['/actions', '/my-reading', '/my-compliance']],
       [
         'nav.safety_cases',
-        [
-          '/incidents',
-          '/near-misses',
-          '/rtas',
-          '/complaints',
-          '/investigations',
-          '/vehicle-checklists',
-          '/safety-assets',
-        ],
+        ['/incidents', '/near-misses', '/rtas', '/complaints', '/investigations'],
       ],
+      ['nav.fleet_assets', ['/vehicle-checklists', '/safety-assets']],
       [
         'nav.workforce',
         [
@@ -171,6 +164,7 @@ describe('Layout', () => {
           '/compliance',
           '/knowledge-exceptions',
           '/document-control',
+          '/assurance/certificates',
           '/compliance-automation',
         ],
       ],
@@ -205,7 +199,7 @@ describe('Layout', () => {
     }
   })
 
-  it('nests Van Checklists and Asset Register under Fleet & assets inside Safety', async () => {
+  it('exposes Fleet & Assets as a first-level hub (not a Safety subsection)', async () => {
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
 
@@ -215,14 +209,36 @@ describe('Layout', () => {
       </BrowserRouter>,
     )
 
-    await user.click(screen.getByRole('button', { name: 'nav.safety_cases' }))
+    const fleetHub = screen.getByRole('button', { name: 'nav.fleet_assets' })
+    await user.click(fleetHub)
+    const fleetPanel = screen.getByTestId('nav-hub-fleet-assets')
+    expect(within(fleetPanel).getByRole('link', { name: /vehicle_checklists|Van/i })).toBeTruthy()
+    expect(within(fleetPanel).getByRole('link', { name: /safety_asset_register|Asset Register/i })).toBeTruthy()
+    expect(screen.queryByTestId('nav-group-fleet-assets')).not.toBeInTheDocument()
 
-    const group = screen.getByTestId('nav-group-fleet-assets')
-    expect(group).toHaveTextContent('nav.fleet_assets_group')
-    expect(navLink('/vehicle-checklists')).toBeInTheDocument()
-    expect(navLink('/safety-assets')).toBeInTheDocument()
-    // Still under Safety hub — not a first-level hub button.
-    expect(screen.queryByRole('button', { name: 'nav.fleet_assets_group' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'nav.safety_cases' }))
+    const safetyPanel = screen.getByTestId('nav-hub-safety-cases')
+    expect(within(safetyPanel).queryByRole('link', { name: /vehicle_checklists/i })).not.toBeInTheDocument()
+    expect(within(safetyPanel).queryByRole('link', { name: /safety_asset_register/i })).not.toBeInTheDocument()
+  })
+
+  it('places Certificate shelf under Compliance, not Assurance', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
+    const compliancePanel = screen.getByTestId('nav-hub-compliance-sustainability')
+    expect(within(compliancePanel).getByRole('link', { name: /assurance_cert_shelf/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'nav.assurance' }))
+    const assurancePanel = screen.getByTestId('nav-hub-assurance')
+    expect(within(assurancePanel).queryByRole('link', { name: /assurance_cert_shelf/i })).not.toBeInTheDocument()
   })
 
   it('exposes Library sidebar entry without a duplicate Document campaigns item', async () => {
