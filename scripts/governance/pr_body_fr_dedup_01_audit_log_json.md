@@ -40,7 +40,7 @@
 - [x] **AC-01:** `_json_safe` converts datetime-bearing nested dicts to JSON-serializable structures.
 - [x] **AC-02:** Unit test covers AC-01.
 - [x] **AC-03:** Change Ledger present for PR gates.
-- [ ] **AC-04:** After tip LIVE, PROD keep-0048 apply succeeds and `AUD-2026-0043` is gone (ops, post-merge).
+- [x] **AC-04:** PROD keep-0048 apply succeeded (2026-08-11): `AUD-2026-0043` gone; CAPA 18 → source_id 832; trail seq 165.
 
 ## 5) Testing Evidence
 
