@@ -1,7 +1,4 @@
-from src.domain.services.external_audit_analysis_service import (
-    DraftFindingCandidate,
-    ExternalAuditAnalysisService,
-)
+from src.domain.services.external_audit_analysis_service import DraftFindingCandidate, ExternalAuditAnalysisService
 
 
 def test_outcome_status_prioritizes_failures_over_observations() -> None:
