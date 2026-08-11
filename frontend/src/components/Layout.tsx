@@ -102,8 +102,9 @@ export default function Layout({
   const [isDesktop, setIsDesktop] = useState(false)
   const canAccessWorkforce = hasRole('admin', 'supervisor')
   const canAccessAdvancedNav = canAccessWorkforce || isSuperuser()
-  const canManageUsers = isSuperuser()
-  const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
+  // Match App.tsx `/admin` RequireRole — hub must be discoverable to roles that
+  // can already deep-link the Admin Console (not only isSuperuser + flag).
+  const canAccessAdmin = hasRole('admin', 'manager', 'hsec')
   const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
   const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
   const canAccessComplianceSchedule = complianceScheduleEnabled && canAccessAdvancedNav
@@ -259,7 +260,7 @@ export default function Layout({
           : []),
       ],
     },
-    ...(canManageUsers && adminUserManagementEnabled
+    ...(canAccessAdmin
       ? [
           {
             id: 'admin',
@@ -389,7 +390,7 @@ export default function Layout({
   }, [])
 
   const fetchPendingSafetyLookups = useCallback(() => {
-    if (!(canManageUsers && adminUserManagementEnabled)) {
+    if (!canAccessAdmin) {
       setPendingSafetyLookups(0)
       return
     }
@@ -400,7 +401,7 @@ export default function Layout({
         // Fail closed — clear stale badge rather than leave an outdated count.
         setPendingSafetyLookups(0)
       })
-  }, [canManageUsers, adminUserManagementEnabled])
+  }, [canAccessAdmin])
 
   useEffect(() => {
     fetchUnreadCount()
@@ -502,7 +503,7 @@ export default function Layout({
           </NavLink>
 
           <NavLink
-            to={canManageUsers && adminUserManagementEnabled ? '/admin' : '/dashboard'}
+            to={canAccessAdmin ? '/admin' : '/dashboard'}
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg transition-colors"
             {...iconOnlyControlProps(t('nav.settings'))}
           >
