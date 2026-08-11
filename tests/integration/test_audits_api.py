@@ -206,7 +206,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
-                "external_reference": "00019685",
+                "external_reference": "EXT-NORM-0001",
             },
             headers=auth_headers,
         )
@@ -243,13 +243,14 @@ class TestAuditsAPI:
         await test_session.commit()
         await test_session.refresh(template)
 
+        shared_ref = "EXT-DEDUP-02-SAME"
         first = await client.post(
             "/api/v1/audits/runs",
             json={
                 "template_id": template.id,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
-                "external_reference": "00019685",
+                "external_reference": shared_ref,
             },
             headers=auth_headers,
         )
@@ -262,7 +263,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Achilles twin should be refused",
                 "external_audit_type": "achilles_uvdb",
-                "external_reference": "00019685",
+                "external_reference": shared_ref,
             },
             headers=auth_headers,
         )
@@ -304,7 +305,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
-                "external_reference": "00019685",
+                "external_reference": "EXT-DETAIL-0001",
             },
             headers=auth_headers,
         )
@@ -347,7 +348,7 @@ class TestAuditsAPI:
                 "template_id": 999999,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
-                "external_reference": "00019685",
+                "external_reference": "EXT-NOTPL-0001",
             },
             headers=auth_headers,
         )
@@ -387,7 +388,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Imported Achilles outcome",
                 "external_audit_type": "achilles_uvdb",
-                "external_reference": "00019685",
+                "external_reference": "EXT-START-0001",
             },
             headers=auth_headers,
         )
@@ -449,7 +450,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Imported Achilles outcome",
                 "external_audit_type": "achilles_uvdb",
-                "external_reference": "00019685",
+                "external_reference": "EXT-RESP-0001",
             },
             headers=auth_headers,
         )
