@@ -83,9 +83,17 @@ async def _notify_case_owner_assignment(
     assigned_to_user_id: int,
     assigned_by_user_id: int,
     reference: str,
+    tenant_id: int | None = None,
 ) -> None:
-    """In-app assignment notify; never rewrite NotificationService — call site only."""
+    """In-app assignment notify; never rewrite NotificationService — call site only.
+
+    Gated by ``incident_owner_assignment_notify`` (default-off / missing → no send).
+    """
     try:
+        from src.domain.services.incident_notify_flags import assignment_notify_enabled
+
+        if not await assignment_notify_enabled(db, tenant_id=tenant_id):
+            return
         service = NotificationService(db)
         await service.create_assignment(
             entity_type=entity_type,
@@ -958,6 +966,7 @@ async def update_incident(
                 assigned_to_user_id=updates["owner_id"],
                 assigned_by_user_id=current_user.id,
                 reference=incident.reference_number,
+                tenant_id=incident.tenant_id or current_user.tenant_id,
             )
             # NotificationService.create_assignment may commit or abort; re-load safely
             try:

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Mail, CalendarClock, UserPlus } from 'lucide-react'
+import { Mail, CalendarClock, UserPlus, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
@@ -68,24 +68,52 @@ type FeatureFlagRow = {
 const CS_NOTIFY_FLAGS = [
   {
     key: 'compliance_schedule_assignment_notify',
-    label: 'Compliance Schedule — owner assignment',
-    description: 'Notify when someone is allocated as schedule owner (in-app; email when email channel is on).',
+    labelKey: 'admin.notifications.cs.assignment_label',
+    labelFallback: 'Compliance Schedule — owner assignment',
+    descriptionKey: 'admin.notifications.cs.assignment_description',
+    descriptionFallback:
+      'Notify when someone is allocated as schedule owner (in-app; email when email channel is on).',
     icon: <UserPlus className="w-5 h-5" />,
+    defaultEnabled: true,
   },
   {
     key: 'compliance_schedule_due_reminder_notify',
-    label: 'Compliance Schedule — due reminders',
-    description:
+    labelKey: 'admin.notifications.cs.due_reminder_label',
+    labelFallback: 'Compliance Schedule — due reminders',
+    descriptionKey: 'admin.notifications.cs.due_reminder_description',
+    descriptionFallback:
       'Daily 08:15 UTC sweep reminders for due/overdue obligations. Completing a cycle rolls next_due_date and stops that occurrence’s reminders.',
     icon: <CalendarClock className="w-5 h-5" />,
+    defaultEnabled: true,
   },
   {
     key: 'compliance_schedule_email_enabled',
-    label: 'Compliance Schedule — email channel',
-    description: 'Master email channel for CS assignment and due-reminder mail (also requires SMTP and user email preference).',
+    labelKey: 'admin.notifications.cs.email_label',
+    labelFallback: 'Compliance Schedule — email channel',
+    descriptionKey: 'admin.notifications.cs.email_description',
+    descriptionFallback:
+      'Master email channel for CS assignment and due-reminder mail (also requires SMTP and user email preference).',
     icon: <Mail className="w-5 h-5" />,
+    defaultEnabled: true,
   },
 ] as const
+
+const INCIDENT_NOTIFY_FLAGS = [
+  {
+    key: 'incident_owner_assignment_notify',
+    labelKey: 'admin.notifications.incident.assignment_label',
+    labelFallback: 'Incident — case owner assignment',
+    descriptionKey: 'admin.notifications.incident.assignment_description',
+    descriptionFallback:
+      'Notify when an incident is allocated to a case owner (in-app). Default off until enabled.',
+    icon: <AlertTriangle className="w-5 h-5" />,
+    defaultEnabled: false,
+  },
+] as const
+
+type NotifyFlagDef =
+  | (typeof CS_NOTIFY_FLAGS)[number]
+  | (typeof INCIDENT_NOTIFY_FLAGS)[number]
 
 async function authHeaders(): Promise<HeadersInit> {
   const token = getValidPlatformToken()
@@ -101,6 +129,10 @@ export default function NotificationSettings() {
   const [csFlagsError, setCsFlagsError] = useState<string | null>(null)
   const [csFlagsLoading, setCsFlagsLoading] = useState(true)
   const [csSavingKey, setCsSavingKey] = useState<string | null>(null)
+  const [incidentFlags, setIncidentFlags] = useState<Record<string, boolean>>({})
+  const [incidentFlagsError, setIncidentFlagsError] = useState<string | null>(null)
+  const [incidentFlagsLoading, setIncidentFlagsLoading] = useState(true)
+  const [incidentSavingKey, setIncidentSavingKey] = useState<string | null>(null)
   const [inventory, setInventory] = useState<NotificationInventory | null>(null)
   // The failure is stored as a kind rather than as a translated sentence, so this
   // loader does not close over `t`. A loader whose identity changes whenever the
@@ -130,40 +162,55 @@ export default function NotificationSettings() {
     }
   }, [])
 
+  const loadFlagGroup = useCallback(async (defs: readonly NotifyFlagDef[]) => {
+    const headers = await authHeaders()
+    const next: Record<string, boolean> = {}
+    // Fetch each key directly. A paginated list + "missing => default"
+    // misreads flags that exist but sit past the first page.
+    await Promise.all(
+      defs.map(async (def) => {
+        const res = await fetch(`${API_BASE_URL}/api/v1/feature-flags/${encodeURIComponent(def.key)}`, {
+          credentials: 'include',
+          headers,
+        })
+        if (res.ok) {
+          const flag = (await res.json()) as FeatureFlagRow
+          next[def.key] = Boolean(flag.enabled)
+          return
+        }
+        if (res.status === 404) {
+          next[def.key] = def.defaultEnabled
+          return
+        }
+        throw new Error(`flag ${def.key} HTTP ${res.status}`)
+      }),
+    )
+    return next
+  }, [])
+
   const loadCsFlags = useCallback(async () => {
     setCsFlagsLoading(true)
     setCsFlagsError(null)
     try {
-      const headers = await authHeaders()
-      const next: Record<string, boolean> = {}
-      // Fetch each CS key directly. A paginated list + "missing => enabled"
-      // misreads flags that exist but sit past the first page.
-      await Promise.all(
-        CS_NOTIFY_FLAGS.map(async (def) => {
-          const res = await fetch(`${API_BASE_URL}/api/v1/feature-flags/${encodeURIComponent(def.key)}`, {
-            credentials: 'include',
-            headers,
-          })
-          if (res.ok) {
-            const flag = (await res.json()) as FeatureFlagRow
-            next[def.key] = Boolean(flag.enabled)
-            return
-          }
-          if (res.status === 404) {
-            // Seed default is enabled when the row is not yet materialised.
-            next[def.key] = true
-            return
-          }
-          throw new Error(`flag ${def.key} HTTP ${res.status}`)
-        }),
-      )
-      setCsFlags(next)
+      setCsFlags(await loadFlagGroup(CS_NOTIFY_FLAGS))
     } catch {
       setCsFlagsError('Could not load Compliance Schedule notification flags.')
     } finally {
       setCsFlagsLoading(false)
     }
-  }, [])
+  }, [loadFlagGroup])
+
+  const loadIncidentFlags = useCallback(async () => {
+    setIncidentFlagsLoading(true)
+    setIncidentFlagsError(null)
+    try {
+      setIncidentFlags(await loadFlagGroup(INCIDENT_NOTIFY_FLAGS))
+    } catch {
+      setIncidentFlagsError('Could not load Incident notification flags.')
+    } finally {
+      setIncidentFlagsLoading(false)
+    }
+  }, [loadFlagGroup])
 
   useEffect(() => {
     let cancelled = false
@@ -181,17 +228,23 @@ export default function NotificationSettings() {
     }
     void load()
     void loadCsFlags()
+    void loadIncidentFlags()
     void loadInventory()
     return () => {
       cancelled = true
     }
-  }, [loadCsFlags, loadInventory])
+  }, [loadCsFlags, loadIncidentFlags, loadInventory])
 
-  const toggleCsFlag = async (key: string) => {
-    const current = csFlags[key] ?? true
+  const patchFlag = async (
+    key: string,
+    current: boolean,
+    setSaving: (k: string | null) => void,
+    setError: (e: string | null) => void,
+    setFlags: (updater: (prev: Record<string, boolean>) => Record<string, boolean>) => void,
+  ) => {
     const next = !current
-    setCsSavingKey(key)
-    setCsFlagsError(null)
+    setSaving(key)
+    setError(null)
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/feature-flags/${encodeURIComponent(key)}`, {
         method: 'PATCH',
@@ -200,17 +253,34 @@ export default function NotificationSettings() {
         body: JSON.stringify({ enabled: next }),
       })
       if (!res.ok) {
-        const detail = res.status === 403 ? 'Superuser required to change feature flags.' : `Save failed (${res.status}).`
-        setCsFlagsError(detail)
+        const detail =
+          res.status === 403
+            ? 'Superuser required to change feature flags.'
+            : `Save failed (${res.status}).`
+        setError(detail)
         return
       }
       const updated = (await res.json()) as FeatureFlagRow
-      setCsFlags((prev) => ({ ...prev, [key]: Boolean(updated.enabled) }))
+      setFlags((prev) => ({ ...prev, [key]: Boolean(updated.enabled) }))
     } catch {
-      setCsFlagsError('Failed to update feature flag.')
+      setError('Failed to update feature flag.')
     } finally {
-      setCsSavingKey(null)
+      setSaving(null)
     }
+  }
+
+  const toggleCsFlag = async (key: string, defaultEnabled: boolean) => {
+    await patchFlag(key, csFlags[key] ?? defaultEnabled, setCsSavingKey, setCsFlagsError, setCsFlags)
+  }
+
+  const toggleIncidentFlag = async (key: string, defaultEnabled: boolean) => {
+    await patchFlag(
+      key,
+      incidentFlags[key] ?? defaultEnabled,
+      setIncidentSavingKey,
+      setIncidentFlagsError,
+      setIncidentFlags,
+    )
   }
 
   // Readiness is reported by the server; these only put the server's word into
@@ -386,10 +456,14 @@ export default function NotificationSettings() {
 
       <Card>
         <CardHeader>
-          <h3 className="font-semibold">Compliance Schedule notifications</h3>
+          <h3 className="font-semibold">
+            {t('admin.notifications.cs.section_title', 'Compliance Schedule notifications')}
+          </h3>
           <p className="text-sm text-muted-foreground">
-            Persisted feature flags (superuser). Module opener and kill switch still close the whole
-            Compliance Schedule surface.
+            {t(
+              'admin.notifications.cs.section_subtitle',
+              'Persisted feature flags (superuser). Module opener and kill switch still close the whole Compliance Schedule surface. Missing rows default on.',
+            )}
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -399,10 +473,12 @@ export default function NotificationSettings() {
             </p>
           )}
           {csFlagsLoading ? (
-            <p className="text-sm text-muted-foreground">Loading flags…</p>
+            <p className="text-sm text-muted-foreground">
+              {t('admin.notifications.flags.loading', 'Loading flags…')}
+            </p>
           ) : (
             CS_NOTIFY_FLAGS.map((def) => {
-              const enabled = csFlags[def.key] ?? true
+              const enabled = csFlags[def.key] ?? def.defaultEnabled
               return (
                 <div
                   key={def.key}
@@ -418,8 +494,10 @@ export default function NotificationSettings() {
                       {def.icon}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-medium">{def.label}</p>
-                      <p className="text-sm text-muted-foreground">{def.description}</p>
+                      <p className="font-medium">{t(def.labelKey, def.labelFallback)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {t(def.descriptionKey, def.descriptionFallback)}
+                      </p>
                       <p className="text-xs text-muted-foreground mt-1 font-mono">{def.key}</p>
                     </div>
                   </div>
@@ -427,9 +505,79 @@ export default function NotificationSettings() {
                     variant={enabled ? 'default' : 'outline'}
                     size="sm"
                     disabled={csSavingKey === def.key}
-                    onClick={() => void toggleCsFlag(def.key)}
+                    onClick={() => void toggleCsFlag(def.key, def.defaultEnabled)}
                   >
-                    {csSavingKey === def.key ? 'Saving…' : enabled ? 'Enabled' : 'Disabled'}
+                    {csSavingKey === def.key
+                      ? t('admin.notifications.flags.saving', 'Saving…')
+                      : enabled
+                        ? t('admin.notifications.flags.enabled', 'Enabled')
+                        : t('admin.notifications.flags.disabled', 'Disabled')}
+                  </Button>
+                </div>
+              )
+            })
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h3 className="font-semibold">
+            {t('admin.notifications.incident.section_title', 'Incident notifications')}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'admin.notifications.incident.section_subtitle',
+              'Persisted feature flags (superuser). Missing rows default off — assignment notify stays silent until enabled.',
+            )}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {incidentFlagsError && (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2" role="alert">
+              {incidentFlagsError}
+            </p>
+          )}
+          {incidentFlagsLoading ? (
+            <p className="text-sm text-muted-foreground">
+              {t('admin.notifications.flags.loading', 'Loading flags…')}
+            </p>
+          ) : (
+            INCIDENT_NOTIFY_FLAGS.map((def) => {
+              const enabled = incidentFlags[def.key] ?? def.defaultEnabled
+              return (
+                <div
+                  key={def.key}
+                  className="flex items-center justify-between gap-4 py-2 border-b last:border-0"
+                  data-testid={`incident-notify-flag-${def.key}`}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                        enabled ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-400'
+                      }`}
+                    >
+                      {def.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium">{t(def.labelKey, def.labelFallback)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {t(def.descriptionKey, def.descriptionFallback)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 font-mono">{def.key}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant={enabled ? 'default' : 'outline'}
+                    size="sm"
+                    disabled={incidentSavingKey === def.key}
+                    onClick={() => void toggleIncidentFlag(def.key, def.defaultEnabled)}
+                  >
+                    {incidentSavingKey === def.key
+                      ? t('admin.notifications.flags.saving', 'Saving…')
+                      : enabled
+                        ? t('admin.notifications.flags.enabled', 'Enabled')
+                        : t('admin.notifications.flags.disabled', 'Disabled')}
                   </Button>
                 </div>
               )
