@@ -1088,6 +1088,28 @@ def test_the_trail_entry_hash_matches_the_models_own_computation(twins_db, tmp_p
     assert entry["entry_hash"] == recomputed
 
 
+def test_json_safe_round_trips_datetimes_for_the_audit_log_binder():
+    """PROD apply failed when row snapshots carried ``datetime`` into JSON columns.
+
+    ``compute_hash`` already uses ``default=str``; the ORM JSON binder does not.
+    ``_json_safe`` is the bridge so apply does not roll back after deletes are planned.
+    """
+    from datetime import datetime, timezone
+
+    from scripts.ops.run027._chain import _json_safe
+
+    stamped = datetime(2026, 2, 20, 0, 0, tzinfo=timezone.utc)
+    payload = {
+        "audit_runs": [{"reference_number": "AUD-2026-0043", "created_at": stamped, "completed_at": None}],
+        "nested": {"when": stamped},
+    }
+    safe = _json_safe(payload)
+    # Must be plain JSON types — no datetime left for the binder to choke on.
+    json.dumps(safe)
+    assert "datetime" not in repr(type(safe["audit_runs"][0]["created_at"])).lower()
+    assert safe["audit_runs"][0]["reference_number"] == "AUD-2026-0043"
+
+
 def test_a_second_apply_refuses_because_the_references_are_gone(twins_db, tmp_path):
     """The purge is not idempotent by design: a reference that is already gone is
     indistinguishable from one that was mistyped."""

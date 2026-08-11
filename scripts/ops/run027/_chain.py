@@ -40,6 +40,7 @@ runbook asks for a maintenance window rather than trusting this alone.
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -51,6 +52,18 @@ GENESIS_HASH = "0" * 64
 #: Namespace for the advisory lock, so it cannot collide with the reference-number
 #: locks taken by ``ReferenceNumberService`` on the same database.
 _LOCK_NAMESPACE = "run027:audit_log_chain"
+
+
+def _json_safe(value: Any) -> Any:
+    """Make a value safe for SQLAlchemy's JSON column binder.
+
+    ``AuditLogEntry.compute_hash`` already uses ``json.dumps(..., default=str)``, but
+    the ORM JSON binder does not — datetime values in row snapshots (``created_at``,
+    ``completed_at``, …) raise ``TypeError: Object of type datetime is not JSON
+    serializable`` on flush and roll the whole purge transaction back. Round-trip
+    through ``default=str`` so apply matches the hash path.
+    """
+    return json.loads(json.dumps(value, default=str))
 
 
 def _advisory_lock_key(tenant_id: int) -> int:
@@ -116,6 +129,10 @@ async def record_purge(
     new_values: dict[str, Any] = {"purged": True, "references": references}
     if remediation:
         new_values["remediation"] = remediation
+
+    old_values = _json_safe(old_values)
+    new_values = _json_safe(new_values)
+    metadata = _json_safe(metadata)
 
     entry_hash = AuditLogEntry.compute_hash(
         sequence=sequence,
