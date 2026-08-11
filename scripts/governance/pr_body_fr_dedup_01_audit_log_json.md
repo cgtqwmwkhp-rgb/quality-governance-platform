@@ -44,23 +44,43 @@
 
 ## 5) Testing Evidence
 
-- [x] Unit — `pytest tests/unit/test_run027_duplicate_audit_purge.py::test_json_safe_round_trips_datetimes_for_the_audit_log_binder` (run locally before push)
+- [x] Unit — `pytest tests/unit/test_run027_duplicate_audit_purge.py::test_json_safe_round_trips_datetimes_for_the_audit_log_binder` — **passed** locally
 - [ ] Full CI — after PR open
 
 ## 6) Critical Journeys (CUJ)
 
 - [x] **CUJ-01:** Operator runs flagged `--apply` for purge `AUD-2026-0043` keep `AUD-2026-0048`; trail entry writes; txn commits.
+- [x] **CUJ-02:** On datetime-bearing row snapshots, apply no longer raises `TypeError` at `audit_log_entries` flush.
 
 ## 7) Observability & Ops
 
+- **Logs / metrics / alerts:** Existing purge JSON / manifest unchanged
 - **Runbook:** `docs/ops/duplicate-audit-purge-runbook.md` — apply still requires dry-run review + `--i-understand-prod`.
 
 ## 8) Release Plan
 
-- Conveyor admin-merge when green → tip-chase STG/PROD → then re-run PROD apply (keep 0048 / purge 0043).
+- Conveyor admin-merge when green → tip-chase STG/PROD → then re-run PROD apply (keep 0048 / purge 0043) if not already applied via laptop ops with this patch.
 
 ## 9) Rollback Plan
 
 - **Trigger:** Apply or trail hash verification breaks.
-- **Steps:** Revert squash; redeploy prior tip.
+- **Steps:** Revert squash on `main`; redeploy prior tip via standard CD. No DB downgrade.
 - **Owner:** Platform / conveyor
+
+## 10) Evidence Pack
+
+- Local: `test_json_safe_round_trips_datetimes_for_the_audit_log_binder` passed
+- CI / staging / prod tip: linked after merge and LIVE verify
+- Ops: PROD apply keep-0048 / purge-0043 verified separately (0043 gone, CAPA 18 remapped, trail present)
+
+---
+
+# Gate Checklist
+
+- [x] **Gate 0:** Scope lock + AC + Change Ledger
+- [x] **Gate 1:** Contracts — ops script only; no API/schema change
+- [ ] **Gate 2:** CI green
+- [ ] **Gate 3:** Staging verification
+- [ ] **Gate 4:** Canary (N/A — ops script)
+- [x] **Gate 5:** Rollback = revert; no flags
+- [~] **UX Coverage Gate:** HOLD — ignored per conveyor instruction
