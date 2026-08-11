@@ -22,6 +22,12 @@ violation and rolls back, and the operator sees a stack trace rather than a purg
 So every row is deleted explicitly, children first, in an order computed from the
 reflected foreign keys. See ``_closure``.
 
+FR-DEDUP-01d — UVDB catalogue is not on that FK graph. ``uvdb_audit`` stores
+``audit_reference`` equal to the purged ``audit_runs.reference_number`` with **no**
+foreign key to ``audit_runs``, so a register-only purge left twins on
+``/uvdb``. See ``_uvdb_catalogue``: plan and delete those rows (and
+``uvdb_audit_response`` / ``uvdb_kpi_record``) in the same transaction.
+
 What it refuses to do
 ---------------------
 Dry-run is the default; ``--apply`` is opt-in and needs ``--i-understand-prod`` on a
@@ -101,6 +107,7 @@ from scripts.ops.run027._remediate import (
     verify_remediation,
 )
 from scripts.ops.run027._soft_links import delete_soft_links, soft_link_hits
+from scripts.ops.run027._uvdb_catalogue import UvdbCataloguePlan, apply_uvdb_catalogue, plan_uvdb_catalogue
 
 __all__ = [
     "FR_DEDUP_01_REFERENCES",
@@ -326,6 +333,7 @@ async def plan(
                 "soft_references": [],
                 "collateral_risks": [],
                 "duplicate_group_survivors": [],
+                "uvdb_catalogue": UvdbCataloguePlan().as_report(),
                 "remediation": empty_remediation.as_report(),
                 "reference_arithmetic": [],
                 "reference_scheme_caveats": [],
@@ -339,6 +347,7 @@ async def plan(
                 "_roots": roots,
                 "_key_columns": {},
                 "_remediation": empty_remediation,
+                "_uvdb_catalogue": UvdbCataloguePlan(),
             }
 
         root_keys: list[RowKey] = [(ROOT_TABLE, int(row["id"])) for row in roots]
@@ -434,7 +443,15 @@ async def plan(
             order = []
             blockers.append(str(exc))
 
+        # No FK to audit_runs — plan by audit_reference == purged reference_number.
+        uvdb_plan = await plan_uvdb_catalogue(db, references=references, tenant_id=tenant_id)
+
     hazards = [entry for entry in arithmetic if entry["verdict"].startswith(("COLLISION", "REISSUE"))]
+
+    rows_per_table = dict(closure.rows_per_table())
+    for table, count in uvdb_plan.rows_per_table().items():
+        rows_per_table[table] = rows_per_table.get(table, 0) + count
+    uvdb_row_total = sum(uvdb_plan.rows_per_table().values())
 
     return {
         "references": references,
@@ -450,8 +467,8 @@ async def plan(
             }
             for row in roots
         ],
-        "rows_to_delete": len(closure.purge_keys),
-        "rows_per_table": closure.rows_per_table(),
+        "rows_to_delete": len(closure.purge_keys) + uvdb_row_total,
+        "rows_per_table": rows_per_table,
         "deletion_order": [f"{table}#{row_id}" for table, row_id in order],
         "child_inventory": closure.found[: max(1, limit)],
         "child_inventory_total": len(closure.found),
@@ -459,6 +476,7 @@ async def plan(
         "soft_references": [hit.as_report() for hit in soft_hits],
         "collateral_risks": collateral,
         "duplicate_group_survivors": survivors,
+        "uvdb_catalogue": uvdb_plan.as_report(),
         "remediation": remediation.as_report(),
         "reference_arithmetic": arithmetic,
         "reference_scheme_caveats": caveats,
@@ -472,6 +490,7 @@ async def plan(
         "_roots": roots,
         "_key_columns": closure.key_columns,
         "_remediation": remediation,
+        "_uvdb_catalogue": uvdb_plan,
     }
 
 
@@ -485,17 +504,19 @@ async def apply_plan(
     tenant_id: int,
     actor_email: Optional[str],
     remediation: Optional[RemediationPlan] = None,
+    uvdb_plan: Optional[UvdbCataloguePlan] = None,
 ) -> dict[str, Any]:
     """Delete the planned rows and record the purge, in one transaction.
 
     Everything happens inside a single transaction: remediation UPDATEs first, then
     soft-referencing PURGE rows, then the foreign-key closure children-first, then
-    the audit trail entry. A failure at any point leaves the register exactly as it
-    was, and there is no state in which the rows are gone but the trail does not
-    say so.
+    UVDB catalogue rows (FR-DEDUP-01d — not on the FK graph), then the audit trail
+    entry. A failure at any point leaves the register exactly as it was, and there
+    is no state in which the rows are gone but the trail does not say so.
     """
     deleted: dict[str, int] = {}
     remediation = remediation or RemediationPlan()
+    uvdb_plan = uvdb_plan or UvdbCataloguePlan()
     doomed_finding_ids = [int(row["id"]) for row in snapshots.get("audit_findings", [])]
     doomed_run_ids = [int(row["id"]) for row in snapshots.get("audit_runs", [])]
 
@@ -524,16 +545,24 @@ async def apply_plan(
                 )
             deleted[table] = deleted.get(table, 0) + affected
 
+        try:
+            uvdb_deleted = await apply_uvdb_catalogue(db, uvdb_plan)
+        except RuntimeError as exc:
+            raise PurgeBlocked(f"UVDB catalogue purge failed: {exc}") from exc
+
         remediation_report = remediation.as_report()
         trail = await record_purge(
             db,
             tenant_id=tenant_id,
             references=references,
-            old_values={"audit_runs": snapshots.get("audit_runs", [])},
+            old_values={
+                "audit_runs": snapshots.get("audit_runs", []),
+                "uvdb_audit": uvdb_plan.audits,
+            },
             metadata={
                 "script": "scripts.ops.run027.purge_duplicate_audit_runs",
-                "requirement": "FR-DEDUP-01",
-                "rows_deleted_per_table": {**soft_deleted, **deleted},
+                "requirement": "FR-DEDUP-01 / FR-DEDUP-01d",
+                "rows_deleted_per_table": {**soft_deleted, **deleted, **uvdb_deleted},
                 "remediation_counts": remediated,
                 "reason": "duplicate re-import of an audit report already present in the register",
             },
@@ -554,6 +583,7 @@ async def apply_plan(
         # Prove the rows are gone before committing, rather than inferring it from
         # rowcounts. A residual row here means the plan and the schema disagree.
         placeholders = ", ".join(f":ref_{index}" for index in range(len(references)))
+        ref_params = {f"ref_{index}": reference for index, reference in enumerate(references)}
         residual = (
             (
                 await db.execute(
@@ -561,7 +591,7 @@ async def apply_plan(
                         f"SELECT reference_number FROM {ROOT_TABLE} "  # noqa: S608
                         f"WHERE reference_number IN ({placeholders})"
                     ),
-                    {f"ref_{index}": reference for index, reference in enumerate(references)},
+                    ref_params,
                 )
             )
             .scalars()
@@ -570,11 +600,26 @@ async def apply_plan(
         if residual:
             raise PurgeBlocked(f"{sorted(residual)} still present after the delete. Rolling back")
 
+        if uvdb_plan.table_present and uvdb_plan.audits:
+            residual_uvdb = (
+                (
+                    await db.execute(
+                        sa.text("SELECT audit_reference FROM uvdb_audit " f"WHERE audit_reference IN ({placeholders})"),
+                        ref_params,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if residual_uvdb:
+                raise PurgeBlocked(f"UVDB catalogue still has {sorted(residual_uvdb)} after the delete. Rolling back")
+
         await db.commit()
 
     return {
         "foreign_key_rows": deleted,
         "soft_reference_rows": soft_deleted,
+        "uvdb_catalogue_rows": uvdb_deleted,
         "remediation_rows": remediated,
         "audit_trail_entry": trail,
     }
@@ -611,6 +656,7 @@ async def _amain(args: argparse.Namespace) -> int:
     result.pop("_roots")
     key_columns = result.pop("_key_columns")
     remediation = result.pop("_remediation")
+    uvdb_plan = result.pop("_uvdb_catalogue")
     survivor_blockers = result.pop("_survivor_blockers", [])
     result.pop("_survivor_auth_blockers", [])
     hazards = result.pop("_hazards", [])
@@ -647,6 +693,7 @@ async def _amain(args: argparse.Namespace) -> int:
                 "tenant_id": args.tenant_id,
                 "deletion_order": result["deletion_order"],
                 "rows": snapshots,
+                "uvdb_catalogue": result.get("uvdb_catalogue"),
                 "soft_references": result["soft_references"],
                 "rows_set_to_null_outside_purge": result["rows_set_to_null_outside_purge"],
                 "collateral_risks": result["collateral_risks"],
@@ -709,6 +756,7 @@ async def _amain(args: argparse.Namespace) -> int:
             tenant_id=int(args.tenant_id),
             actor_email=args.actor_email,
             remediation=remediation,
+            uvdb_plan=uvdb_plan,
         )
     except PurgeBlocked as exc:
         payload["outcome"] = "refused"

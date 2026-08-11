@@ -295,6 +295,40 @@ _SCHEMA: tuple[str, ...] = (
         retention_days INTEGER NOT NULL
     )
     """,
+    # FR-DEDUP-01d: UVDB Audit Status catalogue. No FK to audit_runs — only
+    # audit_reference string equality. Children cascade from uvdb_audit.id in
+    # Postgres; fixture deletes are still explicit in the purge helper.
+    """
+    CREATE TABLE uvdb_audit (
+        id INTEGER PRIMARY KEY,
+        tenant_id INTEGER,
+        audit_reference VARCHAR(50) NOT NULL UNIQUE,
+        company_name VARCHAR(255) NOT NULL,
+        company_id VARCHAR(50),
+        audit_type VARCHAR(50) NOT NULL,
+        status VARCHAR(30) NOT NULL,
+        percentage_score FLOAT
+    )
+    """,
+    """
+    CREATE TABLE uvdb_audit_response (
+        id INTEGER PRIMARY KEY,
+        tenant_id INTEGER,
+        audit_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        mse_response INTEGER,
+        FOREIGN KEY (audit_id) REFERENCES uvdb_audit(id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE uvdb_kpi_record (
+        id INTEGER PRIMARY KEY,
+        tenant_id INTEGER,
+        audit_id INTEGER NOT NULL,
+        kpi_name VARCHAR(100),
+        FOREIGN KEY (audit_id) REFERENCES uvdb_audit(id) ON DELETE CASCADE
+    )
+    """,
 )
 
 
@@ -483,6 +517,35 @@ class _TwinsDb:
                 text(
                     "INSERT INTO job_cell_links (id, tenant_id, cell_id, kind, label, audit_run_id, sort_order) "
                     "VALUES (1, 1, 70, 'audit_outcome', 'B2 outcome', 43, 0)"
+                )
+            )
+
+            # UVDB Audit Status catalogue twins (FR-DEDUP-01d). Same reference as the
+            # audit_runs rows, no FK — exactly the PROD gap that left /uvdb showing
+            # AUD-2026-0043 after the register purge.
+            for catalogue_id, suffix in ((31, SURVIVOR_ID), (43, 43), (48, 48)):
+                conn.execute(
+                    text(
+                        "INSERT INTO uvdb_audit (id, tenant_id, audit_reference, company_name, "
+                        "company_id, audit_type, status, percentage_score) "
+                        "VALUES (:id, 1, :ref, 'Plantexpand Limited', '00019685', 'B2', "
+                        "'completed', :score)"
+                    ),
+                    {
+                        "id": catalogue_id,
+                        "ref": f"AUD-2026-{suffix:04d}",
+                        "score": TWIN_SCORE if suffix in (SURVIVOR_ID, *TWIN_IDS) else 80.0,
+                    },
+                )
+            conn.execute(
+                text(
+                    "INSERT INTO uvdb_audit_response (id, tenant_id, audit_id, question_id, mse_response) "
+                    "VALUES (1, 1, 43, 1, 3), (2, 1, 48, 1, 2)"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO uvdb_kpi_record (id, tenant_id, audit_id, kpi_name) " "VALUES (1, 1, 43, 'MSE score')"
                 )
             )
 
@@ -736,6 +799,10 @@ async def test_the_closure_reaches_a_grandchild_nobody_listed(twins_db):
         "external_audit_import_drafts": 2,
         "external_audit_import_jobs": 2,
         "external_audit_records": 2,
+        # FR-DEDUP-01d: catalogue matched by audit_reference (not FK closure).
+        "uvdb_audit": 2,
+        "uvdb_audit_response": 2,
+        "uvdb_kpi_record": 1,
     }
 
 
@@ -956,7 +1023,10 @@ def test_dry_run_is_the_default_and_writes_nothing(twins_db, capsys):
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["outcome"] == "dry-run"
-    assert payload["rows_to_delete"] == 14
+    # 14 FK-closure rows + 2 uvdb_audit + 2 uvdb_audit_response + 1 uvdb_kpi_record
+    assert payload["rows_to_delete"] == 19
+    assert payload["uvdb_catalogue"]["row_count"] == 2
+    assert payload["rows_per_table"]["uvdb_audit"] == 2
     assert {table: twins_db.count(table) for table in before} == before
 
 
@@ -1012,6 +1082,11 @@ def test_apply_removes_the_twins_and_their_children_and_leaves_the_survivor(twin
     assert twins_db.count("external_audit_import_drafts", "audit_run_id IN (43, 48)") == 0
     assert twins_db.count("external_audit_records", "audit_run_id IN (43, 48)") == 0
     assert twins_db.count("audit_finding_risks") == 0
+    # FR-DEDUP-01d: catalogue twins gone; survivor UVDB row remains.
+    assert twins_db.scalars("SELECT audit_reference FROM uvdb_audit ORDER BY id") == [f"AUD-2026-{SURVIVOR_ID:04d}"]
+    assert twins_db.count("uvdb_audit_response") == 0
+    assert twins_db.count("uvdb_kpi_record") == 0
+    assert payload["deleted"]["uvdb_catalogue_rows"]["uvdb_audit"] == 2
 
     # The survivor and the rest of the register are untouched.
     assert twins_db.count("audit_runs") == DEFAULT_TOP_SUFFIX - 2
@@ -1057,11 +1132,11 @@ def test_apply_appends_one_chained_trail_entry_describing_the_purge(twins_db, tm
     assert appended["action"] == "delete"
     assert appended["entity_type"] == "audit_run"
     assert appended["entity_id"] == ",".join(FR_DEDUP_01_REFERENCES)
-    assert json.loads(appended["entry_metadata"])["requirement"] == "FR-DEDUP-01"
+    assert json.loads(appended["entry_metadata"])["requirement"] == "FR-DEDUP-01 / FR-DEDUP-01d"
     # The entry records what was destroyed, not merely that something was.
-    assert [row["reference_number"] for row in json.loads(appended["old_values"])["audit_runs"]] == list(
-        FR_DEDUP_01_REFERENCES
-    )
+    old_values = json.loads(appended["old_values"])
+    assert [row["reference_number"] for row in old_values["audit_runs"]] == list(FR_DEDUP_01_REFERENCES)
+    assert [row["audit_reference"] for row in old_values["uvdb_audit"]] == list(FR_DEDUP_01_REFERENCES)
 
 
 def test_the_trail_entry_hash_matches_the_models_own_computation(twins_db, tmp_path):
