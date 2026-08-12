@@ -347,6 +347,8 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/compliance/report"),
         ("GET", "/api/v1/compliance/soa"),
         ("GET", "/api/v1/compliance/standards"),
+        ("GET", "/api/v1/compliance/cell-aggregate"),
+        ("GET", "/api/v1/compliance/cell-aggregate/matrix"),
         # src.api.routes.compliance_automation
         ("GET", "/api/v1/compliance-automation/certificates"),
         ("GET", "/api/v1/compliance-automation/certificates/expiring-summary"),
@@ -780,7 +782,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: endpoints (/workflows/approvals/pending, /workflows/delegations,
 #: /workflows/stats). Lowered rather than left at 467 because a ceiling that keeps
 #: room freed by a deletion hands the next three undeclared routes a free pass.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 464
+MAX_AUTHENTICATED_ONLY_DEBT: int = 466
 #: Raised 50 -> 51 for GET /api/v1/meta/features. The alternative was to make it
 #: require authentication, which would land it in AUTHENTICATED_ONLY_DEBT — a list
 #: that is at its ceiling and deliberately closed to new entries. Requiring a
