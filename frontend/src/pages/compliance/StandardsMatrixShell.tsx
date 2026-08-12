@@ -166,7 +166,7 @@ export function StandardsMatrixShell({
   selected = null,
 }: StandardsMatrixShellProps) {
   const { t } = useTranslation()
-  const [preset, setPreset] = useState<MatrixPresetId>('core')
+  const [preset, setPreset] = useState<MatrixPresetId>('iso')
   const [columnFilters, setColumnFilters] = useState<FrameworkId[]>(() =>
     initialFrameworkId ? [initialFrameworkId] : [],
   )

@@ -985,8 +985,8 @@
   "compliance.evidence.search_placeholder": "Chwilio cymalau neu allweddeiriau...",
   "compliance.evidence.select_clause": "Dewiswch Gymal",
   "compliance.evidence.select_clause_hint": "Cliciwch ar unrhyw gymal yn y golwg goeden i weld manylion a thystiolaeth gysylltiedig",
-  "compliance.evidence.subtitle": "Storfa ganolog ar gyfer pob tystiolaeth gydymffurfiaeth wedi'i mapio i safonau ISO",
-  "compliance.evidence.title": "Canolfan Tystiolaeth Cydymffurfiaeth ISO",
+  "compliance.evidence.subtitle": "Storfa fyw ar gyfer tystiolaeth aml-fframwaith, cwmpas cymalau, a dolenni rhaglenni arbenigol",
+  "compliance.evidence.title": "Canolfan Tystiolaeth Safonau",
   "compliance.evidence.shell.tabs_aria": "Adranau cydymffurfiaeth ISO",
   "compliance.evidence.shell.section.clauses": "Golwg Cymal",
   "compliance.evidence.shell.section.evidence": "Rhestr Tystiolaeth",
@@ -3993,5 +3993,8 @@
   "compliance.standards_workspace.empty.evidence": "No evidence links for this clause yet.",
   "compliance.standards_workspace.evidence": "evidence",
   "compliance.standards_workspace.risks_trap_note": "Risk links respect framework trap rules (e.g. 6.1.2 DIFFERENT).",
-  "compliance.standards_workspace.empty.risks": "No linked risks for this clause."
+  "compliance.standards_workspace.empty.risks": "No linked risks for this clause.",
+  "compliance.standards_matrix.preset.iso": "ISO",
+  "compliance.standards_matrix.preset.environment": "Amgylchedd",
+  "compliance.standards_matrix.preset.bcp": "BCP"
 }

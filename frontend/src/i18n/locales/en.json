@@ -1245,8 +1245,8 @@
   "compliance.evidence.shell.section.gaps": "Gap Analysis",
   "compliance.evidence.shell.section.imported": "Imported Audits",
   "compliance.evidence.shell.tabs_aria": "ISO compliance sections",
-  "compliance.evidence.subtitle": "Central repository for all compliance evidence mapped to ISO standards",
-  "compliance.evidence.title": "ISO Compliance Evidence Center",
+  "compliance.evidence.subtitle": "Live repository for multi-framework evidence, clause coverage, and specialist programme deep-links",
+  "compliance.evidence.title": "Standards Evidence Center",
   "compliance.subtitle": "Track compliance across standards",
   "compliance.title": "ISO Compliance",
   "confirm": "Confirm",
@@ -4345,5 +4345,8 @@
   "compliance.standards_workspace.empty.evidence": "No evidence links for this clause yet.",
   "compliance.standards_workspace.evidence": "evidence",
   "compliance.standards_workspace.risks_trap_note": "Risk links respect framework trap rules (e.g. 6.1.2 DIFFERENT).",
-  "compliance.standards_workspace.empty.risks": "No linked risks for this clause."
+  "compliance.standards_workspace.empty.risks": "No linked risks for this clause.",
+  "compliance.standards_matrix.preset.iso": "ISO",
+  "compliance.standards_matrix.preset.environment": "Environment",
+  "compliance.standards_matrix.preset.bcp": "BCP"
 }

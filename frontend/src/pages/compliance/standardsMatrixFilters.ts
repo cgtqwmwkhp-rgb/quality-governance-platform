@@ -1,6 +1,7 @@
 /**
  * Standards matrix filter helpers (Wave 1 PR-A shell).
  * Live cell joins land in PR-B — this module is pure chrome/filter logic.
+ * Wave 3 PR-F: shared Matrix ↔ Evidence theme presets + Evidence API bridges.
  */
 
 export type FrameworkId =
@@ -19,7 +20,15 @@ export type FrameworkId =
 
 export type FrameworkKind = 'standard' | 'scheme' | 'accreditation'
 
-export type MatrixPresetId = 'core' | 'cyber' | 'people' | 'buyer' | 'all'
+export type MatrixPresetId =
+  | 'iso'
+  | 'core'
+  | 'cyber'
+  | 'people'
+  | 'environment'
+  | 'bcp'
+  | 'buyer'
+  | 'all'
 
 export interface FrameworkDef {
   id: FrameworkId
@@ -125,13 +134,28 @@ export const STANDARDS_MATRIX_FRAMEWORKS: FrameworkDef[] = [
 
 export const MATRIX_PRESET_FRAMEWORKS: Record<MatrixPresetId, FrameworkId[]> = {
   all: STANDARDS_MATRIX_FRAMEWORKS.map((f) => f.id),
+  /** Full ISO family including BCP (22301). */
+  iso: ['9001', '14001', '45001', '27001', '22301'],
+  /** Legacy HSEQ three — kept for callers that still pass `core`. */
   core: ['9001', '14001', '45001'],
   cyber: ['27001', '22301', 'ce', 'cep'],
   people: ['iip', 'chas', 'ssip'],
-  buyer: ['uvdb', 'pm'],
+  environment: ['14001', 'pm'],
+  bcp: ['22301'],
+  /** Awarding-body / buyer schemes — CHAS + SSIP + UVDB + Planet Mark. */
+  buyer: ['chas', 'ssip', 'uvdb', 'pm'],
 }
 
-export const MATRIX_PRESET_IDS: MatrixPresetId[] = ['core', 'cyber', 'people', 'buyer', 'all']
+/** Theme presets shown in Matrix + Evidence chrome (legacy `core` omitted from UI). */
+export const MATRIX_PRESET_IDS: MatrixPresetId[] = [
+  'iso',
+  'people',
+  'environment',
+  'bcp',
+  'cyber',
+  'buyer',
+  'all',
+]
 
 export interface CatalogueRowLike {
   id: string
@@ -165,14 +189,35 @@ export function visibleFrameworks(
   selected: FrameworkId[] | null | undefined,
 ): FrameworkDef[] {
   const presetIds = new Set(resolvePresetFrameworks(preset))
-  const selectedSet =
-    selected && selected.length > 0 ? new Set(selected) : null
+  const selectedSet = selected && selected.length > 0 ? new Set(selected) : null
 
   return STANDARDS_MATRIX_FRAMEWORKS.filter((fw) => {
     if (!presetIds.has(fw.id)) return false
     if (selectedSet && !selectedSet.has(fw.id)) return false
     return true
   })
+}
+
+/**
+ * Bridge matrix FrameworkId → Compliance Evidence API standard id (iso9001, …).
+ * Returns null when the framework has no clause-coverage API row yet.
+ */
+export function complianceStandardIdFromFrameworkId(id: FrameworkId): string | null {
+  const map: Partial<Record<FrameworkId, string>> = {
+    '9001': 'iso9001',
+    '14001': 'iso14001',
+    '45001': 'iso45001',
+    '27001': 'iso27001',
+    pm: 'planetmark',
+    uvdb: 'uvdb',
+  }
+  return map[id] ?? null
+}
+
+/** In-app specialist homes — deep-link, do not fork SoR into Evidence. */
+export const SPECIALIST_FRAMEWORK_ROUTES: Partial<Record<FrameworkId, string>> = {
+  pm: '/planet-mark',
+  uvdb: '/uvdb',
 }
 
 /** Map Assist / Standards `code` query (e.g. ISO9001) onto a matrix framework id. */

@@ -6,6 +6,8 @@ import {
   resolvePresetFrameworks,
   STANDARDS_MATRIX_FRAMEWORKS,
   visibleFrameworks,
+  complianceStandardIdFromFrameworkId,
+  SPECIALIST_FRAMEWORK_ROUTES,
 } from '../standardsMatrixFilters'
 
 describe('standardsMatrixFilters', () => {
@@ -58,14 +60,29 @@ describe('standardsMatrixFilters', () => {
 
   it('resolves presets and column intersections', () => {
     expect(resolvePresetFrameworks('core')).toEqual(['9001', '14001', '45001'])
+    expect(resolvePresetFrameworks('iso')).toEqual(['9001', '14001', '45001', '27001', '22301'])
+    expect(resolvePresetFrameworks('environment')).toEqual(['14001', 'pm'])
+    expect(resolvePresetFrameworks('bcp')).toEqual(['22301'])
     expect(visibleFrameworks('cyber', null).map((f) => f.id)).toEqual([
       '27001',
       '22301',
       'ce',
       'cep',
     ])
-    expect(visibleFrameworks('buyer', null).map((f) => f.id)).toEqual(['pm', 'uvdb'])
+    expect(visibleFrameworks('buyer', null).map((f) => f.id)).toEqual([
+      'pm',
+      'chas',
+      'ssip',
+      'uvdb',
+    ])
     expect(visibleFrameworks('all', ['uvdb', '9001']).map((f) => f.id)).toEqual(['9001', 'uvdb'])
+  })
+
+  it('bridges framework ids to Evidence API standard ids and specialist routes', () => {
+    expect(complianceStandardIdFromFrameworkId('9001')).toBe('iso9001')
+    expect(complianceStandardIdFromFrameworkId('ce')).toBeNull()
+    expect(SPECIALIST_FRAMEWORK_ROUTES.pm).toBe('/planet-mark')
+    expect(SPECIALIST_FRAMEWORK_ROUTES.uvdb).toBe('/uvdb')
   })
 
   it('maps Assist codes onto framework ids', () => {
