@@ -297,9 +297,7 @@ def test_an_unloaded_guard_permits_everything_and_says_so():
     assert decision.allowed is True
     assert "no alignment matrix imported" in decision.reason
 
-    kept, blocked = guard.filter_cross_framework_tokens(
-        framework="9001", clause_number="6.1.2", tokens=["45001-6.1.2"]
-    )
+    kept, blocked = guard.filter_cross_framework_tokens(framework="9001", clause_number="6.1.2", tokens=["45001-6.1.2"])
     assert kept == ["45001-6.1.2"]
     assert blocked == []
 

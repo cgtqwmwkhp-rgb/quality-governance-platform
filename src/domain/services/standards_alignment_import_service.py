@@ -311,10 +311,7 @@ def build_edges(payload: dict[str, Any]) -> tuple[list[BuiltEdge], list[str]]:
 
         frameworks_raw = row.get("frameworks") or {}
         frameworks = sorted(str(key).strip().lower() for key in frameworks_raw if str(key).strip())
-        labels = {
-            str(key).strip().lower(): (frameworks_raw[key] or {}).get("label")
-            for key in frameworks_raw
-        }
+        labels = {str(key).strip().lower(): (frameworks_raw[key] or {}).get("label") for key in frameworks_raw}
         clause_numbers = {
             str(key).strip().lower(): (frameworks_raw[key] or {}).get("clause_number") or clause_ref
             for key in frameworks_raw
@@ -412,9 +409,7 @@ def build_edges(payload: dict[str, Any]) -> tuple[list[BuiltEdge], list[str]]:
                 _clause_key(str(right[0]), str(right[1])),
             )
             if (src_fw, src_key) == (dst_fw, dst_key):
-                warnings.append(
-                    f"{clause_ref}: supplementary pair {pair!r} refers to itself — skipped."
-                )
+                warnings.append(f"{clause_ref}: supplementary pair {pair!r} refers to itself — skipped.")
                 continue
             add(
                 BuiltEdge(
@@ -585,9 +580,7 @@ class StandardsAlignmentImportService:
 
         edges, warnings = build_edges(payload)
         if not edges:
-            raise AlignmentImportError(
-                "Payload produced no alignment edges: " + ("; ".join(warnings) or "no rows")
-            )
+            raise AlignmentImportError("Payload produced no alignment edges: " + ("; ".join(warnings) or "no rows"))
 
         active = await self._active_version(tenant_id=tenant_id, source_ref=source_ref)
         previous: dict[EdgeKey, AlignmentEdge] = {}
@@ -607,9 +600,7 @@ class StandardsAlignmentImportService:
             previous=previous,
             accepted_tokens=accepted_tokens,
         )
-        checksum = compute_checksum(
-            source_ref=source_ref, version_label=version_label, edges=resulting
-        )
+        checksum = compute_checksum(source_ref=source_ref, version_label=version_label, edges=resulting)
 
         if active is not None and active.source_checksum == checksum:
             # Nothing about the outcome changed. Re-applying must not create a
@@ -653,10 +644,7 @@ class StandardsAlignmentImportService:
             status=MatrixVersionStatus.DRAFT,
             row_count=len({edge.row_key for edge in resulting}),
             edge_count=len(resulting),
-            excluded_frameworks=", ".join(
-                str(x) for x in (payload.get("excluded_frameworks") or [])
-            )
-            or None,
+            excluded_frameworks=", ".join(str(x) for x in (payload.get("excluded_frameworks") or [])) or None,
             notes=payload.get("notes"),
             imported_by_id=imported_by_id,
         )

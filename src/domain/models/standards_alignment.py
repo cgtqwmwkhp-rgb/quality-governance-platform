@@ -99,9 +99,7 @@ VERDICT_RESTRICTIVENESS: tuple[AlignmentVerdict, ...] = (
 #: ``NEAR`` is included because the requirement genuinely is the same one — but
 #: only when the named addition is carried, which is why callers are handed
 #: ``addition_text`` rather than a bare boolean.
-SHAREABLE_VERDICTS: frozenset[AlignmentVerdict] = frozenset(
-    {AlignmentVerdict.EXACT, AlignmentVerdict.NEAR}
-)
+SHAREABLE_VERDICTS: frozenset[AlignmentVerdict] = frozenset({AlignmentVerdict.EXACT, AlignmentVerdict.NEAR})
 
 _VERDICT_VALUES = ", ".join(f"'{m.value}'" for m in AlignmentVerdict)
 _STATUS_VALUES = ", ".join(f"'{m.value}'" for m in MatrixVersionStatus)

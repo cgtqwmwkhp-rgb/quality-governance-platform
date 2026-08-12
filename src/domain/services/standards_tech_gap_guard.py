@@ -125,8 +125,7 @@ TECHNICAL_REQUIREMENTS: dict[str, TechnicalRequirement] = {
             "live directory."
         ),
         source_position=(
-            "Gap 5: LIVE GAP — MFA was found failing in production and Conditional "
-            "Access does not exist."
+            "Gap 5: LIVE GAP — MFA was found failing in production and Conditional " "Access does not exist."
         ),
     ),
 }

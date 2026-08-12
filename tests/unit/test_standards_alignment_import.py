@@ -122,8 +122,7 @@ async def test_only_one_edition_is_active_after_a_real_change(session, payload):
 
     changed = {**payload, "version_label": "1.1"}
     changed["rows"] = [
-        {**row, "verdict": "DIFFERENT"} if row["clause_ref"] == "7.5" else row
-        for row in changed["rows"]
+        {**row, "verdict": "DIFFERENT"} if row["clause_ref"] == "7.5" else row for row in changed["rows"]
     ]
     second = await service.apply(tenant_id=TENANT_ID, payload=changed)
     await session.commit()
@@ -132,13 +131,17 @@ async def test_only_one_edition_is_active_after_a_real_change(session, payload):
     assert second.superseded_version_id == first.matrix_version_id
 
     active = (
-        await session.execute(
-            select(MatrixVersion).where(
-                MatrixVersion.tenant_id == TENANT_ID,
-                MatrixVersion.status == MatrixVersionStatus.ACTIVE,
+        (
+            await session.execute(
+                select(MatrixVersion).where(
+                    MatrixVersion.tenant_id == TENANT_ID,
+                    MatrixVersion.status == MatrixVersionStatus.ACTIVE,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(active) == 1
     assert active[0].id == second.matrix_version_id
 
@@ -158,10 +161,7 @@ def test_checksum_ignores_provenance_but_not_verdicts(payload):
 
     # Neither is the sheet/row the verdict was read from: a re-issued workbook with
     # rows inserted above shifts every source_row without changing a single verdict.
-    moved = [
-        replace(edge, source_row=(edge.source_row or 0) + 100, source_sheet="moved sheet")
-        for edge in edges
-    ]
+    moved = [replace(edge, source_row=(edge.source_row or 0) + 100, source_sheet="moved sheet") for edge in edges]
     assert compute_checksum(source_ref="X", version_label="1.0", edges=moved) == baseline
 
     # A verdict is part of the identity, so flipping one must change the checksum.
@@ -169,9 +169,7 @@ def test_checksum_ignores_provenance_but_not_verdicts(payload):
     original = flipped[0].verdict
     flipped[0] = replace(
         flipped[0],
-        verdict=(
-            AlignmentVerdict.EXACT if original is not AlignmentVerdict.EXACT else AlignmentVerdict.DIFFERENT
-        ),
+        verdict=(AlignmentVerdict.EXACT if original is not AlignmentVerdict.EXACT else AlignmentVerdict.DIFFERENT),
     )
     assert compute_checksum(source_ref="X", version_label="1.0", edges=flipped) != baseline
 
@@ -203,13 +201,17 @@ async def test_declining_a_change_keeps_the_live_verdict(session):
     await session.commit()
 
     stored = (
-        await session.execute(
-            select(AlignmentEdge).where(
-                AlignmentEdge.tenant_id == TENANT_ID,
-                AlignmentEdge.matrix_version_id == result.matrix_version_id,
+        (
+            await session.execute(
+                select(AlignmentEdge).where(
+                    AlignmentEdge.tenant_id == TENANT_ID,
+                    AlignmentEdge.matrix_version_id == result.matrix_version_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(stored) == 1
     assert stored[0].verdict == AlignmentVerdict.DIFFERENT
 
@@ -228,12 +230,16 @@ async def test_accepting_a_change_applies_it(session):
     await session.commit()
 
     stored = (
-        await session.execute(
-            select(AlignmentEdge).where(
-                AlignmentEdge.matrix_version_id == result.matrix_version_id,
+        (
+            await session.execute(
+                select(AlignmentEdge).where(
+                    AlignmentEdge.matrix_version_id == result.matrix_version_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert [edge.verdict for edge in stored] == [AlignmentVerdict.NEAR]
 
 
@@ -255,12 +261,16 @@ async def test_declining_a_removal_keeps_the_pair(session):
     await session.commit()
 
     stored = (
-        await session.execute(
-            select(AlignmentEdge).where(
-                AlignmentEdge.matrix_version_id == result.matrix_version_id,
+        (
+            await session.execute(
+                select(AlignmentEdge).where(
+                    AlignmentEdge.matrix_version_id == result.matrix_version_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     verdicts = sorted(edge.verdict.value for edge in stored)
     assert "different" in verdicts, "the declined removal kept the original pair"
 
@@ -320,10 +330,10 @@ async def test_apply_refuses_a_payload_that_produces_no_edges(session, payload):
         await service.apply(tenant_id=TENANT_ID, payload={"source_ref": "PEL-HSEQ-5064", "rows": []})
 
     active = (
-        await session.execute(
-            select(MatrixVersion).where(MatrixVersion.status == MatrixVersionStatus.ACTIVE)
-        )
-    ).scalars().all()
+        (await session.execute(select(MatrixVersion).where(MatrixVersion.status == MatrixVersionStatus.ACTIVE)))
+        .scalars()
+        .all()
+    )
     assert len(active) == 1
     assert active[0].id == first.matrix_version_id, "the live edition survived the refused import"
 

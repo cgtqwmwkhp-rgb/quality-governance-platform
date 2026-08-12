@@ -849,7 +849,13 @@ async def get_standards_cell_aggregate_matrix(
 
 
 class AlignmentImportRequest(BaseModel):
-    """Import request. Omitting ``payload`` uses the checked-in 5064 edition."""
+    """Import request. Omitting ``payload`` uses the checked-in 5064 edition.
+
+    ``extra="forbid"`` so an unrecognised field returns 422 instead of being
+    silently dropped (PX-168).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     payload: Optional[dict[str, Any]] = None
     accepted_tokens: Optional[list[str]] = None

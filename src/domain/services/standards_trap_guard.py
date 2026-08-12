@@ -183,9 +183,7 @@ class TrapGuard:
             # Row verdict for display: keep the most restrictive verdict seen on
             # the row, which is what a reader needs warning about.
             current = self._rows.get(edge.clause_ref)
-            if current is None or _RESTRICTIVENESS_RANK[verdict] < _RESTRICTIVENESS_RANK[
-                _verdict_of(current)
-            ]:
+            if current is None or _RESTRICTIVENESS_RANK[verdict] < _RESTRICTIVENESS_RANK[_verdict_of(current)]:
                 self._rows[edge.clause_ref] = edge
 
     # ------------------------------------------------------------------ loading
@@ -257,9 +255,7 @@ class TrapGuard:
 
     def unique_edge_for(self, framework: str, clause_number: str) -> Optional[AlignmentEdge]:
         """The UNIQUE edge for a clause, if the matrix says only one framework asks."""
-        return self._unique.get(
-            ((framework or "").strip().lower(), clause_key(framework, clause_number))
-        )
+        return self._unique.get(((framework or "").strip().lower(), clause_key(framework, clause_number)))
 
     def row_verdict(self, clause_ref: str) -> Optional[AlignmentVerdict]:
         """The most restrictive verdict on a printed matrix row, for display."""

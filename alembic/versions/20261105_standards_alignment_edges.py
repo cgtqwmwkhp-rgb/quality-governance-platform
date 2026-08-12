@@ -105,6 +105,9 @@ PLAIN_INDEXES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("ix_matrix_versions_tenant_id", VERSIONS_TABLE, ("tenant_id",)),
     ("ix_matrix_versions_tenant_status", VERSIONS_TABLE, ("tenant_id", "status")),
     ("ix_matrix_versions_deleted_at", VERSIONS_TABLE, ("deleted_at",)),
+    # TimestampMixin declares created_at with index=True — must exist in DB or
+    # Alembic drift reports CreateIndexOp on a brand-new table (ratchet fail).
+    ("ix_matrix_versions_created_at", VERSIONS_TABLE, ("created_at",)),
     ("ix_alignment_edges_tenant_id", EDGES_TABLE, ("tenant_id",)),
     (
         "ix_alignment_edges_tenant_version_row",
@@ -115,6 +118,7 @@ PLAIN_INDEXES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("ix_alignment_edges_tenant_dst", EDGES_TABLE, ("tenant_id", "dst_framework", "dst_clause_key")),
     ("ix_alignment_edges_tenant_verdict", EDGES_TABLE, ("tenant_id", "verdict")),
     ("ix_alignment_edges_deleted_at", EDGES_TABLE, ("deleted_at",)),
+    ("ix_alignment_edges_created_at", EDGES_TABLE, ("created_at",)),
 )
 
 
