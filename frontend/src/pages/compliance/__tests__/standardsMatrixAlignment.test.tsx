@@ -15,6 +15,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type {
   AlignmentCatalogueResponse,
   AlignmentCatalogueRow,
@@ -61,7 +62,6 @@ const catalogue = (
   rows: [row()],
   frameworks: ['9001', '14001', '45001'],
   excluded_frameworks: ['constructionline'],
-  unresolvable_frameworks: [],
   ...overrides,
 })
 
@@ -174,5 +174,26 @@ describe('Standards matrix alignment axis (PR-C)', () => {
       expect(screen.getByText('6.1.2')).toBeInTheDocument()
     })
     expect(screen.queryByText('Planet Mark scheme shell')).not.toBeInTheDocument()
+  })
+
+  it('links the CE column header to the official NCSC Cyber Essentials page', async () => {
+    getAlignmentCatalogue.mockResolvedValue({ data: catalogue() })
+    renderShell()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('standards-matrix-table')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId('standards-matrix-preset-all'))
+
+    const ceCol = await screen.findByTestId('standards-matrix-col-ce')
+    expect(ceCol).toHaveAttribute('href', 'https://www.ncsc.gov.uk/cyberessentials/resources')
+    expect(ceCol).toHaveAttribute('target', '_blank')
+    expect(ceCol.getAttribute('rel') || '').toContain('noopener')
+    expect(ceCol).toHaveAccessibleName(/Cyber Essentials/i)
+
+    const cepCol = screen.getByTestId('standards-matrix-col-cep')
+    expect(cepCol).toHaveAttribute('href', 'https://www.ncsc.gov.uk/cyberessentials/resources')
+    expect(cepCol).toHaveAccessibleName(/Cyber Essentials Plus/i)
   })
 })

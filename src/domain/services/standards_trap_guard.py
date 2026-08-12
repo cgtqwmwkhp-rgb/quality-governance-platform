@@ -53,23 +53,22 @@ logger = logging.getLogger(__name__)
 
 #: Framework ids that may prefix a stored clause token. Kept here rather than
 #: imported from ``standards_cell_aggregate_service`` so the dependency runs one
-#: way only (the aggregate imports this module). A unit test asserts this stays a
-#: subset of the aggregate's ``FRAMEWORK_ALIASES`` plus the alignment-only ids.
+#: way only (the aggregate imports this module). A unit test asserts this matches
+#: the aggregate's ``FRAMEWORK_ALIASES`` keys exactly.
 ALIGNMENT_FRAMEWORK_IDS: tuple[str, ...] = (
     "9001",
     "14001",
     "45001",
     "27001",
     "22301",
+    # Cyber Essentials / Cyber Essentials Plus (NCSC scheme).
+    "ce",
+    "cep",
     "iip",
     "pm",
     "chas",
     "ssip",
     "uvdb",
-    # Alignment-only: Cyber Essentials has no matrix column, because "ce" is taken
-    # by Carbon Evolve. See standards_tech_gap_guard.CYBER_ESSENTIALS_ID.
-    "cyber_essentials",
-    "cyber_essentials_plus",
 )
 
 #: ``iso9001:7.5`` and ``9001-7.5`` name the same framework.

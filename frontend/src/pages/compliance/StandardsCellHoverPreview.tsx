@@ -7,6 +7,8 @@ export type CellVerdictStub = CellVerdict
 
 export interface StandardsCellHoverPreviewProps {
   frameworkLabel: string
+  /** Official home page for the framework; renders the label as a link when set. */
+  frameworkHomeUrl?: string | null
   clauseNumber: string
   clauseTitle: string
   verdict: CellVerdictStub
@@ -40,6 +42,7 @@ const verdictTone: Record<CellVerdictStub, string> = {
  */
 export function StandardsCellHoverPreview({
   frameworkLabel,
+  frameworkHomeUrl = null,
   clauseNumber,
   clauseTitle,
   verdict,
@@ -60,7 +63,21 @@ export function StandardsCellHoverPreview({
       className={cn('space-y-2 max-w-xs text-left', className)}
       data-testid="standards-cell-hover-preview"
     >
-      <div className="text-xs font-medium text-muted-foreground">{frameworkLabel}</div>
+      <div className="text-xs font-medium text-muted-foreground">
+        {frameworkHomeUrl ? (
+          <a
+            href={frameworkHomeUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline-offset-2 hover:underline"
+            data-testid="standards-cell-hover-framework-link"
+          >
+            {frameworkLabel}
+          </a>
+        ) : (
+          frameworkLabel
+        )}
+      </div>
       <div className="text-sm font-semibold text-foreground">
         {clauseNumber}
         <span className="font-normal text-muted-foreground"> · {clauseTitle}</span>

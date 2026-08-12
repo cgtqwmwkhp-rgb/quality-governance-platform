@@ -29,7 +29,6 @@ from src.domain.models.standards_alignment import (
     MatrixVersion,
     MatrixVersionStatus,
 )
-from src.domain.services import standards_tech_gap_guard as tech_gap_guard
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +93,6 @@ class StandardsAlignmentReadService:
                 "rows": [],
                 "frameworks": [],
                 "excluded_frameworks": [],
-                "unresolvable_frameworks": tech_gap_guard.unresolvable_frameworks(),
                 "fallback_note": (
                     "No alignment matrix edition has been imported for this tenant. "
                     "The clause axis shown is the shell's own static list, not "
@@ -204,7 +202,6 @@ class StandardsAlignmentReadService:
             "excluded_frameworks": [
                 part.strip() for part in (version.excluded_frameworks or "").split(",") if part.strip()
             ],
-            "unresolvable_frameworks": tech_gap_guard.unresolvable_frameworks(),
             "row_count": len(ordered),
             "edge_count": len(edges),
             "sor_note": (

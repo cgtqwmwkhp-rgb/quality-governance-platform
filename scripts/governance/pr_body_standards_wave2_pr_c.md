@@ -15,6 +15,7 @@
 | SG-C-03 | DIFFERENT traps | Number-only matching risk | TrapGuard blocks auto-cross / shared cover invent |
 | SG-C-04 | Tech gaps | Unenforced in matrix | TechGapGuard flags MFA/CE-class gaps |
 | SG-C-05 | CEL writes | Multiple direct writers | Primary path via `compliance_evidence_link_writer` |
+| SG-C-06 | Framework catalogue | `ce`/`cep` labelled Carbon Evolve; Cyber Essentials had no column | `ce`/`cep` are Cyber Essentials / CE Plus with official NCSC links |
 
 - **Backend:** models, alembic `20261105_standards_alignment`, import/read/trap/tech-gap services, compliance routes.
 - **Frontend:** StandardsMatrixShell + hover consume alignment; i18n flat keys.
@@ -35,6 +36,7 @@
 | 6.1.2 DIFFERENT trap | Risk of false shared cover | TrapGuard blocks auto-cross |
 | Constructionline | Product-out | Excluded from seed frameworks |
 | CEL write path | Fragmented | Writer service for primary compliance routes |
+| CE / CEP matrix ids | Mislabelled Carbon Evolve | Cyber Essentials / Plus + NCSC home links |
 | LIVE-08 single SoR | Cell aggregate read-model | Alignment annotates; no second Standards DB |
 
 ## 4) Acceptance Criteria (AC)

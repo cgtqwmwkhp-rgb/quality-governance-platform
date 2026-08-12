@@ -4274,6 +4274,7 @@
   "compliance.standards_matrix.preset.all": "All",
   "compliance.standards_matrix.columns_aria": "Framework columns",
   "compliance.standards_matrix.clause_col": "Clause",
+  "compliance.standards_matrix.framework_home_link": "Open the official {{name}} page (new tab)",
   "compliance.standards_matrix.scheme_tag": "scheme",
   "compliance.standards_matrix.scheme_column_note": "Scheme identity column — quarantined from clause catalogue rows",
   "compliance.standards_matrix.verdict.covered": "Covered",

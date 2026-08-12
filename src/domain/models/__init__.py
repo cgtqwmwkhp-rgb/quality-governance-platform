@@ -279,14 +279,7 @@ from src.domain.models.safety_insight import (
 )
 from src.domain.models.sso_provisioning import SSOProvisioningMatchBasis, SSOProvisioningRequest, SSOProvisioningStatus
 from src.domain.models.standard import Clause, Control, Standard
-
-# Standards alignment matrix (PEL-HSEQ-5064, Wave 2 PR-C)
-from src.domain.models.standards_alignment import (
-    AlignmentEdge,
-    AlignmentVerdict,
-    MatrixVersion,
-    MatrixVersionStatus,
-)
+from src.domain.models.standards_alignment import AlignmentEdge, AlignmentVerdict, MatrixVersion, MatrixVersionStatus
 from src.domain.models.tenant import Tenant, TenantInvitation, TenantUser
 from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.models.training_matrix import (

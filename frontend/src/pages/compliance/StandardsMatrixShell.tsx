@@ -386,9 +386,10 @@ export function StandardsMatrixShell({
                   data-testid={`standards-matrix-fw-${fw.id}`}
                   title={
                     fw.kind === 'scheme'
-                      ? t('compliance.standards_matrix.scheme_column_note', {
-                          defaultValue: 'Scheme identity column — quarantined from clause catalogue rows',
-                        })
+                      ? `${fw.label} — ${t('compliance.standards_matrix.scheme_column_note', {
+                          defaultValue:
+                            'Scheme identity column — quarantined from clause catalogue rows',
+                        })}`
                       : fw.label
                   }
                 >
@@ -422,7 +423,27 @@ export function StandardsMatrixShell({
                       key={col.id}
                       className="px-2 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap"
                     >
-                      {col.shortLabel}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <a
+                            href={col.homeUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="underline-offset-2 hover:underline"
+                            data-testid={`standards-matrix-col-${col.id}`}
+                            aria-label={t('compliance.standards_matrix.framework_home_link', {
+                              defaultValue: 'Open the official {{name}} page (new tab)',
+                              name: col.label,
+                            })}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {col.shortLabel}
+                          </a>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {col.label}
+                        </TooltipContent>
+                      </Tooltip>
                     </th>
                   ))}
                 </tr>
@@ -519,6 +540,7 @@ export function StandardsMatrixShell({
                               <TooltipContent side="top" className="p-3">
                                 <StandardsCellHoverPreview
                                   frameworkLabel={col.label}
+                                  frameworkHomeUrl={col.homeUrl}
                                   clauseNumber={clauseNumber}
                                   clauseTitle={title}
                                   verdict={live.verdict}

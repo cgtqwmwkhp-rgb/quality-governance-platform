@@ -205,7 +205,6 @@ export type AlignmentCatalogueResponse = {
   rows: AlignmentCatalogueRow[]
   frameworks: string[]
   excluded_frameworks: string[]
-  unresolvable_frameworks: Array<{ framework: string; label: string; reason: string }>
   row_count?: number
   edge_count?: number
   fallback_note?: string

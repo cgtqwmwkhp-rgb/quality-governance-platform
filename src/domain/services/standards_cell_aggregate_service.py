@@ -40,13 +40,13 @@ from src.domain.models.compliance_evidence import ComplianceEvidenceLink
 from src.domain.models.external_audit_record import ExternalAuditRecord
 from src.domain.models.risk import Risk
 from src.domain.models.risk_register import EnterpriseRisk, EnterpriseRiskControl
+from src.domain.services import standards_tech_gap_guard as tech_gap_guard
 from src.domain.services.assurance_cert_shelf_service import AssuranceCertShelfService
 from src.domain.services.iso_compliance_service import (
     OPERATIONAL_SIGNAL_TYPES,
     counts_toward_compliance_coverage,
     iso_compliance_service,
 )
-from src.domain.services import standards_tech_gap_guard as tech_gap_guard
 from src.domain.services.standards_trap_guard import TrapGuard
 
 OPEN_FINDING_STATUSES = frozenset(
@@ -137,14 +137,14 @@ FRAMEWORK_ALIASES: dict[str, dict[str, Any]] = {
     "ce": {
         "iso": None,
         "prefix": "ce",
-        "cert_schemes": ("carbon_evolve", "ce", "register"),
-        "record_schemes": ("carbon_evolve", "ce"),
+        "cert_schemes": ("cyber_essentials", "ce", "register"),
+        "record_schemes": ("cyber_essentials", "ce"),
     },
     "cep": {
         "iso": None,
         "prefix": "cep",
-        "cert_schemes": ("carbon_evolve_plus", "cep", "register"),
-        "record_schemes": ("carbon_evolve_plus", "cep"),
+        "cert_schemes": ("cyber_essentials_plus", "cep", "register"),
+        "record_schemes": ("cyber_essentials_plus", "cep"),
     },
     "iip": {
         "iso": None,

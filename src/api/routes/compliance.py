@@ -33,10 +33,7 @@ from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
 from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
-from src.domain.services.compliance_evidence_link_writer import (
-    soft_delete_evidence_link,
-    upsert_evidence_links,
-)
+from src.domain.services.compliance_evidence_link_writer import soft_delete_evidence_link, upsert_evidence_links
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 from src.infrastructure.monitoring.azure_monitor import get_tracer
 

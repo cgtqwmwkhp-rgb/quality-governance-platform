@@ -31,15 +31,13 @@ from src.domain.models.standards_alignment import (
 )
 from src.domain.services.standards_alignment_import_service import build_edges, load_payload
 from src.domain.services.standards_cell_aggregate_service import FRAMEWORK_ALIASES
+from src.domain.services.standards_tech_gap_guard import CYBER_ESSENTIALS_ID, CYBER_ESSENTIALS_PLUS_ID
+from src.domain.services.standards_tech_gap_guard import requirement_for as tech_gap_requirement_for
 from src.domain.services.standards_trap_guard import (
     ALIGNMENT_FRAMEWORK_IDS,
     TrapGuard,
     clause_number_from_token,
     framework_from_clause_token,
-)
-from src.domain.services.standards_tech_gap_guard import (
-    CYBER_ESSENTIALS_ID,
-    CYBER_ESSENTIALS_PLUS_ID,
 )
 
 
@@ -128,7 +126,7 @@ def guard_5064() -> TrapGuard:
         ("14001-9.1.2", "14001", "9.1.2"),
         ("iso9001:7.5", "9001", "7.5"),
         ("iso_45001-6.1.2", "45001", "6.1.2"),
-        ("cyber_essentials-a.8.5", "cyber_essentials", "a.8.5"),
+        ("ce-a.8.5", "ce", "a.8.5"),
         # A bare clause number commits to no framework, so it can never be a
         # cross-framework claim and must never be blocked.
         ("7.5", None, "7.5"),
@@ -142,14 +140,18 @@ def test_token_framework_and_clause_are_parsed(token, expected_framework, expect
 
 
 def test_alignment_framework_ids_agree_with_the_matrix_column_registry():
-    """The guard's id list must not drift from the aggregate's framework aliases.
+    """Every alignment id has a matrix column; there are no alignment-only ids."""
+    assert set(ALIGNMENT_FRAMEWORK_IDS) == set(FRAMEWORK_ALIASES)
 
-    The two lists are separate so the import dependency runs one way only. This
-    asserts the only ids the guard knows that the matrix does not are the two
-    Cyber Essentials ids, which deliberately have no column.
-    """
-    alignment_only = set(ALIGNMENT_FRAMEWORK_IDS) - set(FRAMEWORK_ALIASES)
-    assert alignment_only == {CYBER_ESSENTIALS_ID, CYBER_ESSENTIALS_PLUS_ID}
+
+def test_cyber_essentials_is_keyed_to_its_own_matrix_column():
+    """`ce` is Cyber Essentials, not a carbon scheme."""
+    assert CYBER_ESSENTIALS_ID == "ce"
+    assert CYBER_ESSENTIALS_PLUS_ID == "cep"
+    assert FRAMEWORK_ALIASES[CYBER_ESSENTIALS_ID]["cert_schemes"][0] == "cyber_essentials"
+    requirement = tech_gap_requirement_for("ce", "user_access_control")
+    assert requirement is not None
+    assert "27001" in requirement.frameworks
 
 
 # ------------------------------------------------------------ the 6.1.2 traps

@@ -3922,6 +3922,7 @@
   "compliance.standards_matrix.preset.all": "Pob un",
   "compliance.standards_matrix.columns_aria": "Colofnau fframwaith",
   "compliance.standards_matrix.clause_col": "Cymal",
+  "compliance.standards_matrix.framework_home_link": "Agor tudalen swyddogol {{name}} (tab newydd)",
   "compliance.standards_matrix.scheme_tag": "cynllun",
   "compliance.standards_matrix.scheme_column_note": "Colofn hunaniaeth cynllun — wedi'i chwarantîn o resi catalog cymalau",
   "compliance.standards_matrix.verdict.covered": "Wedi'i gwmpasu",

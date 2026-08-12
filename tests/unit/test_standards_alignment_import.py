@@ -29,12 +29,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from src.domain.models.standards_alignment import (
-    AlignmentEdge,
-    AlignmentVerdict,
-    MatrixVersion,
-    MatrixVersionStatus,
-)
+from src.domain.models.standards_alignment import AlignmentEdge, AlignmentVerdict, MatrixVersion, MatrixVersionStatus
 from src.domain.services.standards_alignment_import_service import (
     AlignmentImportError,
     StandardsAlignmentImportService,

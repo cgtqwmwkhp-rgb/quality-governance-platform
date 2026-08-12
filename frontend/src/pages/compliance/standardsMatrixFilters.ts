@@ -27,31 +27,108 @@ export interface FrameworkDef {
   /** Short column header */
   shortLabel: string
   kind: FrameworkKind
+  /**
+   * Official home page for the standard or scheme. Required so a mislabelled
+   * column is visible the moment someone checks the source (CE was Carbon Evolve).
+   */
+  homeUrl: string
   /** Constructionline is intentionally excluded from this catalogue. */
 }
 
 /** Programme frameworks shown in the matrix chrome (Constructionline out). */
 export const STANDARDS_MATRIX_FRAMEWORKS: FrameworkDef[] = [
-  { id: '9001', label: 'ISO 9001', shortLabel: '9001', kind: 'standard' },
-  { id: '14001', label: 'ISO 14001', shortLabel: '14001', kind: 'standard' },
-  { id: '45001', label: 'ISO 45001', shortLabel: '45001', kind: 'standard' },
-  { id: '27001', label: 'ISO 27001', shortLabel: '27001', kind: 'standard' },
-  { id: '22301', label: 'ISO 22301', shortLabel: '22301', kind: 'standard' },
-  { id: 'ce', label: 'Carbon Evolve', shortLabel: 'CE', kind: 'standard' },
-  { id: 'cep', label: 'Carbon Evolve Plus', shortLabel: 'CEP', kind: 'standard' },
-  { id: 'iip', label: 'Investors in People', shortLabel: 'IiP', kind: 'accreditation' },
-  { id: 'pm', label: 'Planet Mark', shortLabel: 'PM', kind: 'scheme' },
-  { id: 'chas', label: 'CHAS', shortLabel: 'CHAS', kind: 'accreditation' },
-  { id: 'ssip', label: 'SSIP', shortLabel: 'SSIP', kind: 'accreditation' },
-  { id: 'uvdb', label: 'UVDB', shortLabel: 'UVDB', kind: 'scheme' },
+  {
+    id: '9001',
+    label: 'ISO 9001',
+    shortLabel: '9001',
+    kind: 'standard',
+    homeUrl: 'https://www.iso.org/iso-9001-quality-management.html',
+  },
+  {
+    id: '14001',
+    label: 'ISO 14001',
+    shortLabel: '14001',
+    kind: 'standard',
+    homeUrl: 'https://www.iso.org/iso-14001-environmental-management.html',
+  },
+  {
+    id: '45001',
+    label: 'ISO 45001',
+    shortLabel: '45001',
+    kind: 'standard',
+    homeUrl: 'https://www.iso.org/iso-45001-occupational-health-and-safety.html',
+  },
+  {
+    id: '27001',
+    label: 'ISO 27001',
+    shortLabel: '27001',
+    kind: 'standard',
+    homeUrl: 'https://www.iso.org/standard/27001',
+  },
+  {
+    id: '22301',
+    label: 'ISO 22301',
+    shortLabel: '22301',
+    kind: 'standard',
+    homeUrl: 'https://www.iso.org/standard/75106.html',
+  },
+  {
+    id: 'ce',
+    label: 'Cyber Essentials',
+    shortLabel: 'CE',
+    kind: 'standard',
+    homeUrl: 'https://www.ncsc.gov.uk/cyberessentials/resources',
+  },
+  {
+    id: 'cep',
+    label: 'Cyber Essentials Plus',
+    shortLabel: 'CEP',
+    kind: 'standard',
+    homeUrl: 'https://www.ncsc.gov.uk/cyberessentials/resources',
+  },
+  {
+    id: 'iip',
+    label: 'Investors in People',
+    shortLabel: 'IiP',
+    kind: 'accreditation',
+    homeUrl: 'https://www.investorsinpeople.com/',
+  },
+  {
+    id: 'pm',
+    label: 'Planet Mark',
+    shortLabel: 'PM',
+    kind: 'scheme',
+    homeUrl: 'https://www.planetmark.com/',
+  },
+  {
+    id: 'chas',
+    label: 'CHAS',
+    shortLabel: 'CHAS',
+    kind: 'accreditation',
+    homeUrl: 'https://www.chas.co.uk/',
+  },
+  {
+    id: 'ssip',
+    label: 'SSIP',
+    shortLabel: 'SSIP',
+    kind: 'accreditation',
+    homeUrl: 'https://ssip.org.uk/',
+  },
+  {
+    id: 'uvdb',
+    label: 'UVDB',
+    shortLabel: 'UVDB',
+    kind: 'scheme',
+    homeUrl: 'https://www.achilles.com/community/uvdb/',
+  },
 ]
 
 export const MATRIX_PRESET_FRAMEWORKS: Record<MatrixPresetId, FrameworkId[]> = {
   all: STANDARDS_MATRIX_FRAMEWORKS.map((f) => f.id),
   core: ['9001', '14001', '45001'],
-  cyber: ['27001', '22301'],
+  cyber: ['27001', '22301', 'ce', 'cep'],
   people: ['iip', 'chas', 'ssip'],
-  buyer: ['uvdb', 'pm', 'ce', 'cep'],
+  buyer: ['uvdb', 'pm'],
 }
 
 export const MATRIX_PRESET_IDS: MatrixPresetId[] = ['core', 'cyber', 'people', 'buyer', 'all']
@@ -115,6 +192,8 @@ export function frameworkIdFromCode(code: string | null | undefined): FrameworkI
     '22301': '22301',
     CE: 'ce',
     CEP: 'cep',
+    CYBERESSENTIALS: 'ce',
+    CYBERESSENTIALSPLUS: 'cep',
     IIP: 'iip',
     PM: 'pm',
     PLANETMARK: 'pm',

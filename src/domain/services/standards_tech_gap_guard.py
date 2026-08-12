@@ -25,16 +25,11 @@ is recorded as a stub rather than as a passing check so it cannot be mistaken fo
 one. When an attestation source lands, it is added to that set and these
 requirements become answerable rather than merely blocked.
 
-The Cyber Essentials naming conflict
-------------------------------------
-The matrix chrome shipped in Wave 1 PR-A uses framework id ``ce`` for **Carbon
-Evolve** and ``cep`` for Carbon Evolve Plus. Cyber Essentials — a wholly different
-scheme, and the one gap 5 is about — therefore has *no* column in the matrix.
-This module uses :data:`CYBER_ESSENTIALS_ID` (``cyber_essentials``) and refuses to
-resolve Cyber Essentials onto ``ce``. Silently reusing ``ce`` would attach an
-information security technical gap to a carbon scheme, which is the same class of
-error as reading across a clause number. The conflict is reported by
-:func:`naming_conflict` so it is visible rather than folklore.
+Matrix ids
+----------
+``ce`` and ``cep`` are the Cyber Essentials and Cyber Essentials Plus columns in
+the matrix chrome. :data:`TECHNICAL_REQUIREMENTS` is keyed on those same ids so a
+technical gap lands on the column an assessor will test.
 """
 
 from __future__ import annotations
@@ -45,15 +40,9 @@ from typing import Any, Iterable, Optional
 
 logger = logging.getLogger(__name__)
 
-#: Framework id for Cyber Essentials in alignment data. Deliberately *not* ``ce``.
-CYBER_ESSENTIALS_ID = "cyber_essentials"
-CYBER_ESSENTIALS_PLUS_ID = "cyber_essentials_plus"
-
-#: Ids already taken by an unrelated scheme in the matrix chrome.
-CONFLICTING_MATRIX_IDS: dict[str, str] = {
-    "ce": "Carbon Evolve",
-    "cep": "Carbon Evolve Plus",
-}
+#: Matrix column ids for Cyber Essentials / Cyber Essentials Plus (NCSC scheme).
+CYBER_ESSENTIALS_ID = "ce"
+CYBER_ESSENTIALS_PLUS_ID = "cep"
 
 #: Entity types that are documents in some form. They can support a technical
 #: control but cannot demonstrate one is switched on.
@@ -232,50 +221,3 @@ def assess(
             "no attestation source yet. " + requirement.source_position
         ),
     )
-
-
-def naming_conflict(framework_id: str) -> Optional[dict[str, Any]]:
-    """Report the Carbon Evolve / Cyber Essentials id collision for a framework id.
-
-    Returns ``None`` for any id that is not contested. Callers surface this rather
-    than resolving it, because resolving it here would mean choosing which scheme
-    ``ce`` means — a decision for the framework catalogue, not for a guard.
-    """
-    key = (framework_id or "").strip().lower()
-    occupant = CONFLICTING_MATRIX_IDS.get(key)
-    if occupant is None:
-        return None
-    return {
-        "framework_id": key,
-        "occupied_by": occupant,
-        "not_to_be_read_as": "Cyber Essentials",
-        "cyber_essentials_id": CYBER_ESSENTIALS_ID,
-        "detail": (
-            f"Matrix framework id {key!r} is {occupant}. Cyber Essentials has no "
-            f"matrix column and is keyed {CYBER_ESSENTIALS_ID!r} in alignment data. "
-            "The two schemes must not be conflated: one is carbon, one is "
-            "information security."
-        ),
-    }
-
-
-def unresolvable_frameworks() -> list[dict[str, Any]]:
-    """Frameworks the matrix cannot currently paint, and why. For honest UI."""
-    return [
-        {
-            "framework": CYBER_ESSENTIALS_ID,
-            "label": "Cyber Essentials",
-            "reason": (
-                "No matrix column: the 'ce' id is held by Carbon Evolve. Cyber "
-                "Essentials alignment data is stored but not painted."
-            ),
-        },
-        {
-            "framework": CYBER_ESSENTIALS_PLUS_ID,
-            "label": "Cyber Essentials Plus",
-            "reason": (
-                "No matrix column: the 'cep' id is held by Carbon Evolve Plus. "
-                "CE Plus tests the same five controls independently."
-            ),
-        },
-    ]
