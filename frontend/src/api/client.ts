@@ -1826,6 +1826,14 @@ export const complianceAutomationApi = {
   },
   submitRiddor: (incidentId: number) =>
     api.post<unknown>(`/api/v1/compliance-automation/riddor/submit/${incidentId}`),
+  getStandardsDigests: (params?: { due_soon_days?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.due_soon_days) sp.set('due_soon_days', String(params.due_soon_days))
+    const qs = sp.toString()
+    return api.get<Record<string, unknown>>(
+      `/api/v1/compliance-automation/standards-digests${qs ? `?${qs}` : ''}`,
+    )
+  },
 }
 
 // ============ IMS Dashboard API ============

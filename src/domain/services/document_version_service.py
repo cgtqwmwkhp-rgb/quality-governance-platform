@@ -418,6 +418,43 @@ class DocumentVersionService:
             .limit(1)
         )
 
+    async def resolve_tip_library_version_ids(
+        self,
+        db: AsyncSession,
+        *,
+        document_ids: list[int],
+        tenant_id: int,
+    ) -> dict[int, tuple[int | None, str | None]]:
+        """Batch tip resolution for digest freshness (same tip rule as single-row).
+
+        Returns ``{document_id: (tip_version_id, tip_version_number)}``. Documents
+        with no published/approved tip are omitted (callers treat missing as unknown).
+        """
+        if not document_ids:
+            return {}
+        unique_ids = sorted({int(doc_id) for doc_id in document_ids})
+        result = await db.execute(
+            select(DocumentVersion)
+            .where(
+                DocumentVersion.document_id.in_(unique_ids),
+                DocumentVersion.tenant_id == tenant_id,
+                DocumentVersion.status.in_(("published", "approved")),
+            )
+            .order_by(
+                DocumentVersion.document_id.asc(),
+                case((DocumentVersion.status == "published", 0), else_=1),
+                DocumentVersion.published_at.desc().nulls_last(),
+                DocumentVersion.id.desc(),
+            )
+        )
+        tips: dict[int, tuple[int | None, str | None]] = {}
+        for version in result.scalars().all():
+            doc_id = int(version.document_id)
+            if doc_id in tips:
+                continue  # first row per document is the tip (order_by matches single-row)
+            tips[doc_id] = (int(version.id), str(version.version_number))
+        return tips
+
     async def revise_library(
         self,
         db: AsyncSession,

@@ -54,17 +54,24 @@ import {
   CERT_EXPIRY_WINDOW_DAYS,
   countOverdueMonitoringRuns,
   countPendingChangesInbox,
+  countStandardsDigestBacklog,
   countUnreviewedRegulatoryUpdates,
+  digestStalePinsLabel,
+  formatDigestRate,
   hasLiveComplianceScore,
   isOpenWatchImpact,
   mapRiddorSubmissionsToPacks,
   mapRunsToMonitoringRows,
+  mapStandardsDigest,
   MONITORING_AUDITS_HANDOFF_PATH,
   MONITORING_SCORE_HANDOFF_EVIDENCE,
   MONITORING_SCORE_HANDOFF_IMS,
+  standardsDigestClauseHref,
+  standardsDigestFrameworkLabel,
   summariseCertificateShelf,
   type MonitoringAuditRunRow,
   type MonitoringRiddorPack,
+  type StandardsDigest,
 } from './complianceAutomationHelpers'
 
 interface RegulatoryUpdate {
@@ -117,7 +124,7 @@ const HSE_RIDDOR_GUIDE_URL = 'https://www.hse.gov.uk/riddor/reporting/how-to-mak
 export default function ComplianceAutomation() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<
-    'changes' | 'certificates' | 'audits' | 'riddor'
+    'changes' | 'certificates' | 'audits' | 'riddor' | 'standards'
   >('changes')
   const [updates, setUpdates] = useState<RegulatoryUpdate[]>([])
   const [certificates, setCertificates] = useState<Certificate[]>([])
@@ -137,6 +144,9 @@ export default function ComplianceAutomation() {
   const [riddorLoading, setRiddorLoading] = useState(false)
   const [riddorError, setRiddorError] = useState<string | null>(null)
   const [watchError, setWatchError] = useState<string | null>(null)
+  const [standardsDigest, setStandardsDigest] = useState<StandardsDigest | null>(null)
+  const [digestLoading, setDigestLoading] = useState(false)
+  const [digestError, setDigestError] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -296,9 +306,28 @@ export default function ComplianceAutomation() {
     }
   }
 
+  const loadStandardsDigests = async () => {
+    setDigestLoading(true)
+    setDigestError(null)
+    try {
+      const response = await complianceAutomationApi.getStandardsDigests({
+        due_soon_days: CERT_EXPIRY_WINDOW_DAYS,
+      })
+      setStandardsDigest(mapStandardsDigest(response.data))
+    } catch (err) {
+      setDigestError(getApiErrorMessage(err))
+      setStandardsDigest(null)
+    } finally {
+      setDigestLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (activeTab === 'riddor') {
       void loadRiddorSubmissions()
+    }
+    if (activeTab === 'standards') {
+      void loadStandardsDigests()
     }
   }, [activeTab])
 
@@ -323,6 +352,12 @@ export default function ComplianceAutomation() {
       label: 'Scheduled Audits',
       icon: Calendar,
       count: countOverdueMonitoringRuns(auditRuns),
+    },
+    {
+      id: 'standards',
+      label: t('compliance.automation.standards_digest.tab', 'Standards health'),
+      icon: BookOpen,
+      count: countStandardsDigestBacklog(standardsDigest),
     },
     { id: 'riddor', label: 'RIDDOR', icon: FileText },
   ]
@@ -975,6 +1010,354 @@ export default function ComplianceAutomation() {
         </div>
       )}
 
+      {/* Standards health digests (Wave 3 PR-F3) */}
+      {activeTab === 'standards' && (
+        <div className="space-y-6" data-testid="monitoring-standards-digest">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">
+                {t('compliance.automation.standards_digest.title', 'Standards health')}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {t(
+                  'compliance.automation.standards_digest.description',
+                  'Freshness, ingest backlog, open NC by clause, recurrence, and certificate shelf — read-only digests with deep-links to systems of record.',
+                )}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void loadStandardsDigests()}
+              disabled={digestLoading}
+              data-testid="monitoring-digest-refresh"
+            >
+              <RefreshCw className={cn('w-4 h-4 mr-1.5', digestLoading && 'animate-spin')} />
+              {t('compliance.automation.standards_digest.refresh', 'Refresh')}
+            </Button>
+          </div>
+
+          {digestError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              data-testid="monitoring-digest-error"
+            >
+              {digestError}
+            </div>
+          )}
+
+          {digestLoading && !standardsDigest ? (
+            <div className="flex items-center justify-center min-h-[200px]">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent" />
+            </div>
+          ) : standardsDigest ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="bg-card/50 border border-border rounded-xl p-4" data-testid="monitoring-digest-stale-tile">
+                  <div className="text-sm text-muted-foreground mb-1">
+                    {t('compliance.automation.standards_digest.stale_pins', 'Stale evidence pins')}
+                  </div>
+                  <div className="text-2xl font-bold text-foreground">
+                    {digestStalePinsLabel(standardsDigest.freshness)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {standardsDigest.freshness.trackedDocumentLinks === 0
+                      ? t('compliance.automation.standards_digest.no_pins', 'No document pins tracked')
+                      : t('compliance.automation.standards_digest.stale_of_tracked', {
+                          stale: standardsDigest.freshness.stale,
+                          tracked: standardsDigest.freshness.trackedDocumentLinks,
+                          defaultValue: '{{stale}} of {{tracked}} tracked',
+                        })}
+                  </div>
+                </div>
+                <div className="bg-card/50 border border-border rounded-xl p-4" data-testid="monitoring-digest-backlog-tile">
+                  <div className="text-sm text-muted-foreground mb-1">
+                    {t('compliance.automation.standards_digest.ingest_backlog', 'Ingest backlog')}
+                  </div>
+                  <div className="text-2xl font-bold text-foreground">
+                    {standardsDigest.ingestBacklog.total}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {t('compliance.automation.standards_digest.proposed_needs_review', 'Proposed + needs review')}
+                  </div>
+                </div>
+                <div className="bg-card/50 border border-border rounded-xl p-4" data-testid="monitoring-digest-nc-tile">
+                  <div className="text-sm text-muted-foreground mb-1">
+                    {t('compliance.automation.standards_digest.open_nc', 'Open NCs')}
+                  </div>
+                  <div className="text-2xl font-bold text-foreground">
+                    {standardsDigest.nonconformity.openNcTotal}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {t('compliance.automation.standards_digest.clauses_with_open', {
+                      count: standardsDigest.nonconformity.clausesWithOpenNc,
+                      defaultValue: '{{count}} clauses with open NC',
+                    })}
+                  </div>
+                </div>
+                <div className="bg-card/50 border border-border rounded-xl p-4" data-testid="monitoring-digest-recurrence-tile">
+                  <div className="text-sm text-muted-foreground mb-1">
+                    {t('compliance.automation.standards_digest.recurrence_rate', 'Recurrence rate')}
+                  </div>
+                  <div className="text-2xl font-bold text-foreground">
+                    {formatDigestRate(standardsDigest.nonconformity.recurrenceRate)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {t('compliance.automation.standards_digest.recurring_clauses', {
+                      count: standardsDigest.nonconformity.recurringClauses,
+                      defaultValue: '{{count}} recurring clauses',
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="bg-card/50 border border-border rounded-xl overflow-hidden"
+                data-testid="monitoring-digest-nc-table"
+              >
+                <div className="p-4 border-b border-border">
+                  <h4 className="font-medium text-foreground">
+                    {t('compliance.automation.standards_digest.nc_by_clause', 'Open NC by clause')}
+                  </h4>
+                </div>
+                {standardsDigest.nonconformity.byClause.length === 0 ? (
+                  <EmptyState
+                    title={t(
+                      'compliance.automation.standards_digest.empty_nc',
+                      'No open nonconformities on clauses',
+                    )}
+                    description={t(
+                      'compliance.automation.standards_digest.empty_nc_desc',
+                      'When audit findings name clauses, open NCs appear here with matrix deep-links.',
+                    )}
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40 text-muted-foreground">
+                        <tr>
+                          <th className="text-left px-4 py-2 font-medium">Framework</th>
+                          <th className="text-left px-4 py-2 font-medium">Clause</th>
+                          <th className="text-right px-4 py-2 font-medium">Open</th>
+                          <th className="text-right px-4 py-2 font-medium">Closed</th>
+                          <th className="text-left px-4 py-2 font-medium">Recurrence</th>
+                          <th className="text-left px-4 py-2 font-medium">Open cell</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {standardsDigest.nonconformity.byClause.map((row) => (
+                          <tr key={row.clauseKey || `${row.framework}-${row.clauseNumber}`} className="border-t border-border">
+                            <td className="px-4 py-2">{standardsDigestFrameworkLabel(row.framework)}</td>
+                            <td className="px-4 py-2 font-mono text-xs">{row.clauseNumber}</td>
+                            <td className="px-4 py-2 text-right">{row.openNcCount}</td>
+                            <td className="px-4 py-2 text-right">{row.closedNcCount}</td>
+                            <td className="px-4 py-2">{row.recurrence ? 'Yes' : '—'}</td>
+                            <td className="px-4 py-2">
+                              <Link
+                                to={standardsDigestClauseHref(row)}
+                                className="text-primary hover:underline inline-flex items-center gap-1"
+                              >
+                                Matrix <ExternalLink className="w-3 h-3" />
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div
+                  className="bg-card/50 border border-border rounded-xl overflow-hidden"
+                  data-testid="monitoring-digest-freshness-table"
+                >
+                  <div className="p-4 border-b border-border">
+                    <h4 className="font-medium text-foreground">
+                      {t('compliance.automation.standards_digest.stale_list', 'Stale document pins')}
+                    </h4>
+                  </div>
+                  {standardsDigest.freshness.trackedDocumentLinks === 0 ? (
+                    <EmptyState
+                      title={t('compliance.automation.standards_digest.no_pins', 'No document pins tracked')}
+                      description={t(
+                        'compliance.automation.standards_digest.no_pins_desc',
+                        'Document evidence links appear here once pinned to a library version.',
+                      )}
+                    />
+                  ) : standardsDigest.freshness.staleItems.length === 0 ? (
+                    <EmptyState
+                      title={t('compliance.automation.standards_digest.all_current', 'All pins current')}
+                      description={t(
+                        'compliance.automation.standards_digest.all_current_desc',
+                        'Pinned document versions still match the library tip.',
+                      )}
+                    />
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {standardsDigest.freshness.staleItems.map((item) => (
+                        <li key={`${item.evidenceLinkId}-${item.documentId}`} className="px-4 py-3 text-sm">
+                          <div className="font-medium text-foreground">
+                            {item.title || `Document ${item.documentId ?? '—'}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {standardsDigestFrameworkLabel(item.framework)} · {item.clauseNumber || item.clauseId || '—'}
+                            {item.tipVersionNumber ? ` · tip ${item.tipVersionNumber}` : ''}
+                          </div>
+                          <div className="flex gap-3 mt-2">
+                            {item.clausePath && (
+                              <Link to={item.clausePath} className="text-primary text-xs hover:underline">
+                                Matrix cell
+                              </Link>
+                            )}
+                            {item.documentPath && (
+                              <Link to={item.documentPath} className="text-primary text-xs hover:underline">
+                                Document
+                              </Link>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div
+                  className="bg-card/50 border border-border rounded-xl overflow-hidden"
+                  data-testid="monitoring-digest-backlog"
+                >
+                  <div className="p-4 border-b border-border">
+                    <h4 className="font-medium text-foreground">
+                      {t('compliance.automation.standards_digest.backlog_title', 'Ingest backlog')}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {standardsDigest.ingestBacklog.autoConfirmRule}
+                    </p>
+                  </div>
+                  {standardsDigest.ingestBacklog.total === 0 ? (
+                    <EmptyState
+                      title={t('compliance.automation.standards_digest.empty_backlog', 'Ingest backlog clear')}
+                      description={t(
+                        'compliance.automation.standards_digest.empty_backlog_desc',
+                        'No proposed or needs-review evidence links waiting in Exceptions.',
+                      )}
+                    />
+                  ) : (
+                    <div className="p-4 space-y-3">
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {Object.entries(standardsDigest.ingestBacklog.byStatus).map(([status, count]) => (
+                          <span key={status} className="rounded-md bg-muted px-2 py-1 text-muted-foreground">
+                            {status}: {count}
+                          </span>
+                        ))}
+                      </div>
+                      <ul className="space-y-2">
+                        {standardsDigest.ingestBacklog.byClause.map((row) => (
+                          <li key={row.clauseId} className="flex items-center justify-between text-sm gap-3">
+                            <span>
+                              {standardsDigestFrameworkLabel(row.framework)} · {row.clauseNumber}{' '}
+                              <span className="text-muted-foreground">({row.count})</span>
+                            </span>
+                            <Link to={row.inboxPath} className="text-primary text-xs hover:underline">
+                              Exceptions
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={standardsDigest.ingestBacklog.inboxPath}>
+                          {t('compliance.automation.standards_digest.open_exceptions', 'Open Exceptions inbox')}
+                        </Link>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="bg-card/50 border border-border rounded-xl overflow-hidden"
+                data-testid="monitoring-digest-cert-board"
+              >
+                <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="font-medium text-foreground">
+                      {t('compliance.automation.standards_digest.cert_board', 'Certificate expiry board')}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {t(
+                        'compliance.automation.standards_digest.cert_board_note',
+                        'Unified shelf (register + Planet Mark + UVDB + library), not the Certificates tab list alone.',
+                      )}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={standardsDigest.certExpiry.shelfPath}>
+                      {t('compliance.automation.standards_digest.open_shelf', 'Open certificate shelf')}
+                    </Link>
+                  </Button>
+                </div>
+                {standardsDigest.certExpiry.tracked === 0 ? (
+                  <EmptyState
+                    title={t('compliance.automation.standards_digest.empty_certs', 'No certificates on the shelf')}
+                    description={t(
+                      'compliance.automation.standards_digest.empty_certs_desc',
+                      'When certificates are tracked, due-soon and expired items appear here.',
+                    )}
+                  />
+                ) : (
+                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-2">By scheme</div>
+                      <ul className="space-y-1 text-sm">
+                        {standardsDigest.certExpiry.byScheme.map((row) => (
+                          <li key={row.scheme} className="flex justify-between gap-3">
+                            <span>{row.scheme}</span>
+                            <span className="text-muted-foreground">
+                              {row.dueSoon} due / {row.expired} expired / {row.tracked} tracked
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-2">Soonest</div>
+                      <ul className="space-y-2 text-sm">
+                        {standardsDigest.certExpiry.soonest.map((row) => (
+                          <li key={row.shelfKey || row.name}>
+                            <div className="font-medium">{row.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {row.scheme} · {row.readinessStatus}
+                              {row.daysRemaining !== null ? ` · ${row.daysRemaining}d` : ''}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {standardsDigest.sorNote && (
+                <p className="text-xs text-muted-foreground" data-testid="monitoring-digest-sor-note">
+                  {standardsDigest.sorNote}
+                </p>
+              )}
+            </>
+          ) : (
+            !digestError && (
+              <EmptyState
+                title={t('compliance.automation.standards_digest.unavailable', 'Digest unavailable')}
+                description={t(
+                  'compliance.automation.standards_digest.unavailable_desc',
+                  'Open this tab again to load Standards health digests.',
+                )}
+              />
+            )
+          )}
+        </div>
+      )}
 
       {/* RIDDOR Tab */}
       {activeTab === 'riddor' && (
