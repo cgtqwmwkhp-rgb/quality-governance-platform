@@ -63,6 +63,15 @@ ISO_STANDARD_SPECS: tuple[dict[str, Any], ...] = (
         "description": "Requirements for an information security management system",
         "matchers": ("27001",),
     },
+    {
+        "iso": ISOStandard.ISO_22301,
+        "code": "ISO22301",
+        "name": "ISO 22301:2019",
+        "full_name": "Security and resilience — Business continuity management systems — Requirements",
+        "version": "2019",
+        "description": "Requirements for a business continuity management system",
+        "matchers": ("22301",),
+    },
 )
 
 SCHEME_STANDARD_SPECS: tuple[dict[str, str], ...] = (
@@ -79,6 +88,41 @@ SCHEME_STANDARD_SPECS: tuple[dict[str, str], ...] = (
         "full_name": "Planet Mark Business Certification",
         "version": "GHG",
         "description": "Planet Mark carbon scheme identity (reporting remains in planet_mark_*)",
+    },
+    {
+        "code": "CYBER_ESSENTIALS",
+        "name": "Cyber Essentials",
+        "full_name": "NCSC Cyber Essentials",
+        "version": "current",
+        "description": "Cyber Essentials scheme identity (requirement axis in Int-W5)",
+    },
+    {
+        "code": "CYBER_ESS_PLUS",
+        "name": "Cyber Essentials Plus",
+        "full_name": "NCSC Cyber Essentials Plus",
+        "version": "current",
+        "description": "Cyber Essentials Plus scheme identity (requirement axis in Int-W5)",
+    },
+    {
+        "code": "CHAS_CAS",
+        "name": "CHAS",
+        "full_name": "CHAS Common Assessment Standard",
+        "version": "CAS",
+        "description": "CHAS scheme identity (requirement axis provisional until publisher pin)",
+    },
+    {
+        "code": "SSIP_CORE",
+        "name": "SSIP",
+        "full_name": "Safety Schemes in Procurement Core Criteria",
+        "version": "core",
+        "description": "SSIP scheme identity (requirement axis provisional until publisher pin)",
+    },
+    {
+        "code": "IIP_2018",
+        "name": "Investors in People",
+        "full_name": "We invest in people Standard",
+        "version": "2018",
+        "description": "Investors in People scheme identity (requirement axis in Int-W5)",
     },
 )
 

@@ -21,6 +21,7 @@ class ISOStandard(str, Enum):
     ISO_14001 = "iso14001"
     ISO_45001 = "iso45001"
     ISO_27001 = "iso27001"
+    ISO_22301 = "iso22301"
 
 
 @dataclass
@@ -145,6 +146,7 @@ def serialize_audit_pack_link(
 #   ISO 14001:2015 — 28 sub-clauses (complete)
 #   ISO 45001:2018 — 36 sub-clauses (complete)
 #   ISO 27001:2022 — 93 Annex A controls + 18 core clauses (complete)
+#   ISO 22301:2019 — Northern Star iso22301_map (Int-W5 first-class)
 #
 # Normative requirement text embedded in `description` field enables the LLM
 # to reason accurately against official clause requirements without hallucination.
@@ -2562,7 +2564,362 @@ ISO_27001_CLAUSES = [
     ),
 ]
 
-ALL_CLAUSES = ISO_9001_CLAUSES + ISO_14001_CLAUSES + ISO_45001_CLAUSES + ISO_27001_CLAUSES
+ISO_22301_CLAUSES = [
+    ISOClause(
+        "22301-4",
+        ISOStandard.ISO_22301,
+        "4",
+        "Clause 4",
+        "ISO 22301:2019 clause 4 group",
+        ["business continuity", "BCMS"],
+    ),
+    ISOClause(
+        "22301-5",
+        ISOStandard.ISO_22301,
+        "5",
+        "Clause 5",
+        "ISO 22301:2019 clause 5 group",
+        ["business continuity", "BCMS"],
+    ),
+    ISOClause(
+        "22301-6",
+        ISOStandard.ISO_22301,
+        "6",
+        "Clause 6",
+        "ISO 22301:2019 clause 6 group",
+        ["business continuity", "BCMS"],
+    ),
+    ISOClause(
+        "22301-7",
+        ISOStandard.ISO_22301,
+        "7",
+        "Clause 7",
+        "ISO 22301:2019 clause 7 group",
+        ["business continuity", "BCMS"],
+    ),
+    ISOClause(
+        "22301-8",
+        ISOStandard.ISO_22301,
+        "8",
+        "Clause 8",
+        "ISO 22301:2019 clause 8 group",
+        ["business continuity", "BCMS"],
+    ),
+    ISOClause(
+        "22301-9",
+        ISOStandard.ISO_22301,
+        "9",
+        "Clause 9",
+        "ISO 22301:2019 clause 9 group",
+        ["business continuity", "BCMS"],
+    ),
+    ISOClause(
+        "22301-10",
+        ISOStandard.ISO_22301,
+        "10",
+        "Clause 10",
+        "ISO 22301:2019 clause 10 group",
+        ["business continuity", "BCMS"],
+    ),
+    ISOClause(
+        "22301-4.1",
+        ISOStandard.ISO_22301,
+        "4.1",
+        "Context of the organization",
+        "Determine external and internal issues relevant to purpose that affect the intended outcomes of the BCMS.",
+        ["business continuity", "BCMS", "4.1"],
+        "22301-4",
+        2
+    ),
+    ISOClause(
+        "22301-4.2",
+        ISOStandard.ISO_22301,
+        "4.2",
+        "Interested parties",
+        "Determine interested parties and their requirements, including legal, regulatory and CONTRACTUAL continuity requirements.",
+        ["business continuity", "BCMS", "4.2"],
+        "22301-4",
+        2
+    ),
+    ISOClause(
+        "22301-4.3",
+        ISOStandard.ISO_22301,
+        "4.3",
+        "Scope of the BCMS",
+        "Determine boundaries, considering the parts of the organization included, and document which products and services are in scope.",
+        ["business continuity", "BCMS", "4.3"],
+        "22301-4",
+        2
+    ),
+    ISOClause(
+        "22301-5.1",
+        ISOStandard.ISO_22301,
+        "5.1",
+        "Leadership and commitment",
+        "Top management demonstrates leadership: policy, objectives, integration, resources, communication, outcomes.",
+        ["business continuity", "BCMS", "5.1"],
+        "22301-5",
+        2
+    ),
+    ISOClause(
+        "22301-5.2",
+        ISOStandard.ISO_22301,
+        "5.2",
+        "Business continuity policy",
+        "Establish a BC policy appropriate to purpose, providing a framework for objectives, with commitments to satisfy requirements and continual improvement. Available as documented information.",
+        ["business continuity", "BCMS", "5.2"],
+        "22301-5",
+        2
+    ),
+    ISOClause(
+        "22301-5.3",
+        ISOStandard.ISO_22301,
+        "5.3",
+        "Roles, responsibilities and authorities",
+        "Assign and communicate responsibilities for the BCMS and for reporting its performance.",
+        ["business continuity", "BCMS", "5.3"],
+        "22301-5",
+        2
+    ),
+    ISOClause(
+        "22301-6.1",
+        ISOStandard.ISO_22301,
+        "6.1",
+        "Risks and opportunities",
+        "Determine risks and opportunities to the BCMS itself and plan actions.",
+        ["business continuity", "BCMS", "6.1"],
+        "22301-6",
+        2
+    ),
+    ISOClause(
+        "22301-6.2",
+        ISOStandard.ISO_22301,
+        "6.2",
+        "BC objectives and planning",
+        "Establish measurable continuity objectives at relevant functions, monitored, communicated, updated.",
+        ["business continuity", "BCMS", "6.2"],
+        "22301-6",
+        2
+    ),
+    ISOClause(
+        "22301-7.1",
+        ISOStandard.ISO_22301,
+        "7.1",
+        "Resources",
+        "Determine and provide resources for the BCMS.",
+        ["business continuity", "BCMS", "7.1"],
+        "22301-7",
+        2
+    ),
+    ISOClause(
+        "22301-7.2",
+        ISOStandard.ISO_22301,
+        "7.2",
+        "Competence",
+        "Ensure persons are competent; retain evidence.",
+        ["business continuity", "BCMS", "7.2"],
+        "22301-7",
+        2
+    ),
+    ISOClause(
+        "22301-7.3",
+        ISOStandard.ISO_22301,
+        "7.3",
+        "Awareness",
+        "Persons aware of the policy, their role in incidents, and the implications of not conforming.",
+        ["business continuity", "BCMS", "7.3"],
+        "22301-7",
+        2
+    ),
+    ISOClause(
+        "22301-7.4",
+        ISOStandard.ISO_22301,
+        "7.4",
+        "Communication",
+        "Determine internal and external communications for the BCMS, including with interested parties, and alerting and warning.",
+        ["business continuity", "BCMS", "7.4"],
+        "22301-7",
+        2
+    ),
+    ISOClause(
+        "22301-7.5",
+        ISOStandard.ISO_22301,
+        "7.5",
+        "Documented information",
+        "BCMS documentation created, updated and controlled.",
+        ["business continuity", "BCMS", "7.5"],
+        "22301-7",
+        2
+    ),
+    ISOClause(
+        "22301-8.1",
+        ISOStandard.ISO_22301,
+        "8.1",
+        "Operational planning and control",
+        "Plan, implement and control the processes needed to meet BCMS requirements, including outsourced processes.",
+        ["business continuity", "BCMS", "8.1"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.2.1",
+        ISOStandard.ISO_22301,
+        "8.2.1",
+        "BIA and risk assessment, general",
+        "Implement and maintain systematic processes for business impact analysis and continuity risk assessment.",
+        ["business continuity", "BCMS", "8.2.1"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.2.2",
+        ISOStandard.ISO_22301,
+        "8.2.2",
+        "Business impact analysis",
+        "Identify activities supporting products and services; assess impacts over time of not performing them; set prioritized timeframes (RTO/MTPD) and dependencies.",
+        ["business continuity", "BCMS", "8.2.2"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.2.3",
+        ISOStandard.ISO_22301,
+        "8.2.3",
+        "Risk assessment",
+        "Identify and analyse risks of disruption to prioritized activities and their dependencies.",
+        ["business continuity", "BCMS", "8.2.3"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.3",
+        ISOStandard.ISO_22301,
+        "8.3",
+        "Business continuity strategies and solutions",
+        "Identify and select strategies based on the BIA and risk assessment, considering timeframes and resource requirements.",
+        ["business continuity", "BCMS", "8.3"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.4.1",
+        ISOStandard.ISO_22301,
+        "8.4.1",
+        "Response structure, general",
+        "Implement a response structure with teams, competence and authority to manage an incident through its lifecycle.",
+        ["business continuity", "BCMS", "8.4.1"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.4.2",
+        ISOStandard.ISO_22301,
+        "8.4.2",
+        "Warning and communication",
+        "Document procedures for detecting, monitoring, alerting and communicating during disruption, internally and externally.",
+        ["business continuity", "BCMS", "8.4.2"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.4.3",
+        ISOStandard.ISO_22301,
+        "8.4.3",
+        "Business continuity plans",
+        "Documented plans and procedures for each prioritized activity: purpose and scope, objectives, activation, roles, actions, information flow, internal and external interdependencies, resource requirements, reporting, stand down.",
+        ["business continuity", "BCMS", "8.4.3"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.4.4",
+        ISOStandard.ISO_22301,
+        "8.4.4",
+        "Recovery",
+        "Documented processes to restore and return business activities from temporary measures.",
+        ["business continuity", "BCMS", "8.4.4"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.5",
+        ISOStandard.ISO_22301,
+        "8.5",
+        "Exercise programme",
+        "Exercise and test continuity procedures at planned intervals; exercises consistent with scope, based on scenarios, minimizing risk of disruption; post exercise reports; review and improvement.",
+        ["business continuity", "BCMS", "8.5"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-8.6",
+        ISOStandard.ISO_22301,
+        "8.6",
+        "Evaluation of BC documentation and capabilities",
+        "Evaluate the continuing suitability, adequacy and effectiveness of the BCMS at planned intervals and after incidents.",
+        ["business continuity", "BCMS", "8.6"],
+        "22301-8",
+        2
+    ),
+    ISOClause(
+        "22301-9.1",
+        ISOStandard.ISO_22301,
+        "9.1",
+        "Monitoring, measurement, analysis and evaluation",
+        "Determine what to monitor, methods, when; evaluate BCMS performance and effectiveness.",
+        ["business continuity", "BCMS", "9.1"],
+        "22301-9",
+        2
+    ),
+    ISOClause(
+        "22301-9.2",
+        ISOStandard.ISO_22301,
+        "9.2",
+        "Internal audit",
+        "Audit the BCMS at planned intervals.",
+        ["business continuity", "BCMS", "9.2"],
+        "22301-9",
+        2
+    ),
+    ISOClause(
+        "22301-9.3",
+        ISOStandard.ISO_22301,
+        "9.3",
+        "Management review",
+        "Top management reviews the BCMS, with specific inputs including exercise results and post incident reviews, and outputs including changes and resource needs.",
+        ["business continuity", "BCMS", "9.3"],
+        "22301-9",
+        2
+    ),
+    ISOClause(
+        "22301-10.1",
+        ISOStandard.ISO_22301,
+        "10.1",
+        "Nonconformity and corrective action",
+        "React, correct, evaluate cause, act, review effectiveness.",
+        ["business continuity", "BCMS", "10.1"],
+        "22301-10",
+        2
+    ),
+    ISOClause(
+        "22301-10.2",
+        ISOStandard.ISO_22301,
+        "10.2",
+        "Continual improvement",
+        "Continually improve suitability, adequacy and effectiveness of the BCMS.",
+        ["business continuity", "BCMS", "10.2"],
+        "22301-10",
+        2
+    ),
+]
+
+ALL_CLAUSES = (
+    ISO_9001_CLAUSES
+    + ISO_14001_CLAUSES
+    + ISO_45001_CLAUSES
+    + ISO_27001_CLAUSES
+    + ISO_22301_CLAUSES
+)
 
 
 class ISOComplianceService:
@@ -3086,6 +3443,7 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                 "iso14001": self._standard_coverage(coverage_links, ISOStandard.ISO_14001),
                 "iso45001": self._standard_coverage(coverage_links, ISOStandard.ISO_45001),
                 "iso27001": self._standard_coverage(coverage_links, ISOStandard.ISO_27001),
+                "iso22301": self._standard_coverage(coverage_links, ISOStandard.ISO_22301),
             },
         }
 

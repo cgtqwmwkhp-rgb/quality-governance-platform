@@ -82,6 +82,7 @@ describe('standardsMatrixFilters', () => {
 
   it('bridges framework ids to Evidence API standard ids and specialist routes', () => {
     expect(complianceStandardIdFromFrameworkId('9001')).toBe('iso9001')
+    expect(complianceStandardIdFromFrameworkId('22301')).toBe('iso22301')
     expect(complianceStandardIdFromFrameworkId('ce')).toBeNull()
     expect(SPECIALIST_FRAMEWORK_ROUTES.pm).toBe('/planet-mark')
     expect(SPECIALIST_FRAMEWORK_ROUTES.uvdb).toBe('/uvdb')

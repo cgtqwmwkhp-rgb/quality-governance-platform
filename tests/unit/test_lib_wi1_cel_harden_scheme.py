@@ -189,7 +189,13 @@ def test_all_clauses_catalogue_keys_are_unique_and_non_empty() -> None:
 def test_iso_and_scheme_standard_upsert_plans() -> None:
     inserts, found = build_iso_standard_upserts([])
     assert found == {}
-    assert {row["code"] for row in inserts} == {"ISO9001", "ISO14001", "ISO45001", "ISO27001"}
+    assert {row["code"] for row in inserts} == {
+        "ISO9001",
+        "ISO14001",
+        "ISO45001",
+        "ISO27001",
+        "ISO22301",
+    }
     assert all(row["kind"] == "iso" for row in inserts)
 
     schemes = build_scheme_standard_upserts([])
@@ -208,10 +214,11 @@ def test_build_clause_catalogue_rows_cover_every_all_clauses_id() -> None:
         ISOStandard.ISO_14001: 2,
         ISOStandard.ISO_45001: 3,
         ISOStandard.ISO_27001: 4,
+        ISOStandard.ISO_22301: 5,
     }
     rows = build_clause_catalogue_rows(iso_to_id)
     assert {row["catalogue_key"] for row in rows} == set(catalogue_keys())
-    assert all(row["standard_id"] in {1, 2, 3, 4} for row in rows)
+    assert all(row["standard_id"] in {1, 2, 3, 4, 5} for row in rows)
 
 
 def test_match_iso_standard_row_ignores_scheme_shells() -> None:

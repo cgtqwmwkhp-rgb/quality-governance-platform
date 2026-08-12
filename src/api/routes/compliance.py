@@ -62,6 +62,7 @@ _STANDARD_DB_MATCHERS: dict[ISOStandard, tuple[str, ...]] = {
     ISOStandard.ISO_14001: ("14001",),
     ISOStandard.ISO_45001: ("45001",),
     ISOStandard.ISO_27001: ("27001",),
+    ISOStandard.ISO_22301: ("22301",),
 }
 
 _STANDARD_DEFAULTS: dict[ISOStandard, dict[str, str]] = {
@@ -84,6 +85,11 @@ _STANDARD_DEFAULTS: dict[ISOStandard, dict[str, str]] = {
         "code": "ISO 27001:2022",
         "name": "Information Security Management System",
         "description": "Requirements for establishing, implementing, maintaining and continually improving an ISMS",
+    },
+    ISOStandard.ISO_22301: {
+        "code": "ISO 22301:2019",
+        "name": "Business Continuity Management System",
+        "description": "Requirements for establishing, implementing, maintaining and continually improving a BCMS",
     },
 }
 
