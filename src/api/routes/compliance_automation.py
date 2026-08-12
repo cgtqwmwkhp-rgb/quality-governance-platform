@@ -318,3 +318,28 @@ async def submit_riddor(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     await db.commit()
     return response
+
+
+@router.get("/standards-digests")
+async def get_standards_digests(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:read"))],
+    due_soon_days: int = 30,
+):
+    """Standards hygiene digests for Monitoring (SG-F-05 / SG-F-06).
+
+    Read-model only — freshness, ingest backlog, NC-by-clause + recurrence, and
+    cert-expiry board composed from live SoRs. Does not change the auto-confirm gate.
+    """
+    from src.domain.exceptions import BadRequestError
+    from src.domain.services.standards_digest_service import StandardsDigestService
+
+    if due_soon_days < 1 or due_soon_days > 365:
+        raise BadRequestError("due_soon_days must be between 1 and 365")
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+
+    service = StandardsDigestService(db)
+    return await service.build(tenant_id=tenant_id, due_soon_days=due_soon_days)

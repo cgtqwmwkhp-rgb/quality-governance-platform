@@ -6,18 +6,24 @@ import {
   countOpenWatchImpacts,
   countOverdueMonitoringRuns,
   countPendingChangesInbox,
+  countStandardsDigestBacklog,
   countUnreviewedRegulatoryUpdates,
   deriveMonitoringAuditRunStatus,
+  digestStalePinsLabel,
+  formatDigestRate,
   formatStandardCode,
   hasLiveComplianceScore,
   isOpenWatchImpact,
   mapRiddorSubmissionToPack,
   mapRiddorSubmissionsToPacks,
   mapRunsToMonitoringRows,
+  mapStandardsDigest,
   MONITORING_AUDITS_HANDOFF_PATH,
   MONITORING_SCORE_HANDOFF_EVIDENCE,
   MONITORING_SCORE_HANDOFF_IMS,
   scoreBarColor,
+  standardsDigestClauseHref,
+  standardsDigestFrameworkLabel,
 } from '../complianceAutomationHelpers'
 
 function makeRun(overrides: Partial<AuditRun> = {}): AuditRun {
@@ -213,6 +219,44 @@ describe('complianceAutomationHelpers', () => {
         persisted: true,
       })
       expect(mapRiddorSubmissionToPack({ id: 1 })).toBeNull()
+    })
+  })
+
+  describe('standards digests helpers', () => {
+    it('formats rates honestly and labels frameworks', () => {
+      expect(formatDigestRate(null)).toBe('—')
+      expect(formatDigestRate(0.189)).toBe('18.9%')
+      expect(standardsDigestFrameworkLabel(null)).toBe('Unattributed')
+      expect(standardsDigestFrameworkLabel('9001')).toBe('ISO 9001')
+      expect(standardsDigestFrameworkLabel('unknown-fw')).toBe('unknown-fw')
+    })
+
+    it('maps digest payload safely and builds clause hrefs', () => {
+      expect(mapStandardsDigest(null)).toBeNull()
+      expect(mapStandardsDigest({})).toMatchObject({
+        freshness: { trackedDocumentLinks: 0, stale: 0, staleRate: null },
+        nonconformity: { openNcTotal: 0, recurrenceRate: null, byClause: [] },
+      })
+      const mapped = mapStandardsDigest({
+        nonconformity: {
+          by_clause: [{ framework: '9001', clause_number: '8.7', open_nc_count: 2, recurrence: true }],
+        },
+        ingest_backlog: { total: 3 },
+        freshness: { tracked_document_links: 0, stale: 0 },
+      })
+      expect(mapped?.nonconformity.byClause[0]?.clauseNumber).toBe('8.7')
+      expect(standardsDigestClauseHref(mapped!.nonconformity.byClause[0]!)).toBe(
+        '/compliance?code=9001&clause=8.7',
+      )
+      expect(
+        standardsDigestClauseHref({
+          framework: '9001',
+          clauseNumber: '8.7',
+          clausePath: '/compliance?code=9001&clause=8.7&view=matrix',
+        }),
+      ).toBe('/compliance?code=9001&clause=8.7&view=matrix')
+      expect(digestStalePinsLabel(mapped!.freshness)).toBe('—')
+      expect(countStandardsDigestBacklog(mapped)).toBe(3)
     })
   })
 })
