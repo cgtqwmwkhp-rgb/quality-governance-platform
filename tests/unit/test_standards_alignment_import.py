@@ -96,6 +96,7 @@ async def test_applying_the_same_payload_twice_writes_nothing_the_second_time(se
     second = await service.apply(tenant_id=TENANT_ID, payload=payload)
     await session.commit()
     assert second.created is False
+    assert second.reactivated is False
     assert second.edges_written == 0
     assert second.matrix_version_id == first.matrix_version_id
 
@@ -108,6 +109,60 @@ async def test_applying_the_same_payload_twice_writes_nothing_the_second_time(se
         select(func.count()).select_from(AlignmentEdge).where(AlignmentEdge.tenant_id == TENANT_ID)
     )
     assert edges == first.edges_written, "edges must not be duplicated by a re-apply"
+
+
+async def test_reapplying_a_superseded_edition_makes_it_live_again(session):
+    """Re-applying an older payload must reactivate that edition, not no-op."""
+    service = StandardsAlignmentImportService(session)
+    first = await service.apply(tenant_id=TENANT_ID, payload=_minimal_payload("DIFFERENT"))
+    await session.commit()
+
+    loosened = _minimal_payload("NEAR")
+    plan = await service.plan(tenant_id=TENANT_ID, payload=loosened)
+    accept = [item.token for item in plan.items if item.change_type == "changed"]
+    second = await service.apply(
+        tenant_id=TENANT_ID,
+        payload=loosened,
+        accepted_tokens=accept,
+    )
+    await session.commit()
+    assert second.created is True
+    assert second.superseded_version_id == first.matrix_version_id
+
+    rollback = await service.apply(tenant_id=TENANT_ID, payload=_minimal_payload("DIFFERENT"))
+    await session.commit()
+    assert rollback.created is False
+    assert rollback.reactivated is True
+    assert rollback.matrix_version_id == first.matrix_version_id
+    assert rollback.superseded_version_id == second.matrix_version_id
+
+    active = (
+        (
+            await session.execute(
+                select(MatrixVersion).where(
+                    MatrixVersion.tenant_id == TENANT_ID,
+                    MatrixVersion.status == MatrixVersionStatus.ACTIVE,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(active) == 1
+    assert active[0].id == first.matrix_version_id
+
+    superseded = await session.get(MatrixVersion, second.matrix_version_id)
+    assert superseded is not None
+    assert superseded.status == MatrixVersionStatus.SUPERSEDED
+
+    edge_count = await session.scalar(
+        select(func.count()).select_from(AlignmentEdge).where(AlignmentEdge.tenant_id == TENANT_ID)
+    )
+    assert edge_count == first.edges_written + second.edges_written
+
+    catalogue = await StandardsAlignmentReadService(session).catalogue(tenant_id=TENANT_ID)
+    assert catalogue["matrix_loaded"] is True
+    assert any(row["verdict"] == "DIFFERENT" for row in catalogue["rows"])
 
 
 async def test_only_one_edition_is_active_after_a_real_change(session, payload):

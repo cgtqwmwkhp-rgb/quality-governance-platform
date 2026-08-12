@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Grid3X3, Filter } from 'lucide-react'
 import {
@@ -231,20 +231,51 @@ export function StandardsMatrixShell({
     return map
   }, [alignmentRows])
 
-  const clauseNumbers = useMemo(
-    () => catalogueRows.map((row) => row.clauseNumber || row.id).filter(Boolean),
-    [catalogueRows],
+  /**
+   * Framework-local clause numbers that differ from the printed row number
+   * (e.g. ISO 45001 puts Annex SL 6.3 at 8.1.3). Used for live-cell fetch and
+   * workspace open so evidence lands on the right cell.
+   */
+  const relocatedClauses = useMemo(() => {
+    const map: Record<string, Record<string, string>> = {}
+    for (const row of alignmentRows || []) {
+      const perFramework: Record<string, string> = {}
+      for (const [frameworkId, entry] of Object.entries(row.frameworks || {})) {
+        const clause = (entry?.clause_number || '').trim()
+        if (clause && clause !== row.clauseNumber) perFramework[frameworkId] = clause
+      }
+      if (Object.keys(perFramework).length > 0) map[row.clauseNumber] = perFramework
+    }
+    return map
+  }, [alignmentRows])
+
+  const cellClause = useCallback(
+    (frameworkId: FrameworkId, displayClause: string) =>
+      relocatedClauses[displayClause]?.[frameworkId] || displayClause,
+    [relocatedClauses],
   )
+
+  // One request for the whole grid: union of the clause numbers the visible
+  // columns actually use. Asking per column would be a matrix-sized N+1.
+  const requestedClauses = useMemo(() => {
+    const wanted = new Set<string>()
+    for (const row of catalogueRows) {
+      const display = row.clauseNumber || row.id
+      if (!display) continue
+      for (const col of columns) wanted.add(cellClause(col.id, display))
+    }
+    return Array.from(wanted)
+  }, [catalogueRows, columns, cellClause])
 
   useEffect(() => {
     const frameworks = columns.map((c) => c.id)
-    if (frameworks.length === 0 || clauseNumbers.length === 0) return
+    if (frameworks.length === 0 || requestedClauses.length === 0) return
 
     let cancelled = false
     setLiveLoading(true)
     setLiveError(null)
     standardsCellAggregateApi
-      .getMatrix(frameworks, clauseNumbers)
+      .getMatrix(frameworks, requestedClauses)
       .then((res) => {
         if (cancelled) return
         const next: Record<string, CellLiveState> = {}
@@ -277,7 +308,7 @@ export function StandardsMatrixShell({
     return () => {
       cancelled = true
     }
-  }, [columns, clauseNumbers])
+  }, [columns, requestedClauses])
 
   const toggleFramework = (id: FrameworkId) => {
     setColumnFilters((prev) => {
@@ -287,7 +318,7 @@ export function StandardsMatrixShell({
   }
 
   const resolveCell = (frameworkId: FrameworkId, clauseNumber: string): CellLiveState => {
-    const hit = liveCells[`${frameworkId}:${clauseNumber}`]
+    const hit = liveCells[`${frameworkId}:${cellClause(frameworkId, clauseNumber)}`]
     if (hit) return hit
     return {
       verdict: 'unknown',
@@ -508,8 +539,10 @@ export function StandardsMatrixShell({
                       </td>
                       {columns.map((col) => {
                         const live = resolveCell(col.id, clauseNumber)
+                        const cellClauseNumber = cellClause(col.id, clauseNumber)
                         const isSelected =
-                          selected?.frameworkId === col.id && selected?.clauseNumber === clauseNumber
+                          selected?.frameworkId === col.id &&
+                          selected?.clauseNumber === cellClauseNumber
                         return (
                           <td key={col.id} className="px-1.5 py-1.5 text-center">
                             <Tooltip>
@@ -525,12 +558,12 @@ export function StandardsMatrixShell({
                                   onClick={() =>
                                     onSelectCell({
                                       frameworkId: col.id,
-                                      clauseNumber,
+                                      clauseNumber: cellClauseNumber,
                                       clauseTitle: title,
                                     })
                                   }
                                   data-testid={`standards-matrix-cell-${col.id}-${clauseNumber}`}
-                                  aria-label={`${col.label} ${clauseNumber}`}
+                                  aria-label={`${col.label} ${cellClauseNumber}`}
                                 >
                                   {t(`compliance.standards_matrix.verdict.${live.verdict}`, {
                                     defaultValue: live.verdict,
@@ -541,7 +574,7 @@ export function StandardsMatrixShell({
                                 <StandardsCellHoverPreview
                                   frameworkLabel={col.label}
                                   frameworkHomeUrl={col.homeUrl}
-                                  clauseNumber={clauseNumber}
+                                  clauseNumber={cellClauseNumber}
                                   clauseTitle={title}
                                   verdict={live.verdict}
                                   topEvidenceLabel={live.topEvidenceLabel}
