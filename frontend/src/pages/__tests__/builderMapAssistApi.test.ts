@@ -12,11 +12,13 @@ import api from '../../api/client'
 
 describe('standardsHrefForIsoRef', () => {
   it('maps 9001-7.2 to Standards deep-link', () => {
-    expect(standardsHrefForIsoRef('9001-7.2')).toBe('/standards?code=ISO9001&clause=7.2')
+    expect(standardsHrefForIsoRef('9001-7.2')).toBe(
+      '/compliance?view=matrix&code=ISO9001&clause=7.2',
+    )
   })
 
   it('maps bare clause to search param', () => {
-    expect(standardsHrefForIsoRef('7.2')).toBe('/standards?clause=7.2')
+    expect(standardsHrefForIsoRef('7.2')).toBe('/compliance?view=matrix&clause=7.2')
   })
 })
 

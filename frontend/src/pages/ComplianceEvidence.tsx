@@ -79,6 +79,16 @@ import {
 } from './compliance/standardCoverageHonesty'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { ClauseDocumentsFreshnessPanel } from './ClauseDocumentsFreshnessPanel'
+import { StandardsMatrixShell } from './compliance/StandardsMatrixShell'
+import {
+  EvidenceWorkspaceHost,
+  type EvidenceWorkspaceSelection,
+} from './compliance/EvidenceWorkspaceHost'
+import {
+  frameworkIdFromCode,
+  parseComplianceShellView,
+  type ComplianceShellView,
+} from './compliance/standardsMatrixFilters'
 
 /** Surface operator-visible failures (banner + toast). Never silent. */
 const reportFailure = (
@@ -180,7 +190,10 @@ export default function ComplianceEvidence() {
   const documentGraphEnabled = useFeatureFlag('document_graph')
   const clauseFromUrl = (searchParams.get('clause') || '').trim()
   const standardFromUrl = (searchParams.get('standard') || '').trim()
+  const codeFromUrl = (searchParams.get('code') || '').trim()
   const section = parseComplianceEvidenceSection(searchParams.get('section'))
+  const shellView = parseComplianceShellView(searchParams.get('view'), codeFromUrl)
+  const [matrixSelection, setMatrixSelection] = useState<EvidenceWorkspaceSelection | null>(null)
 
   const [selectedStandard, setSelectedStandard] = useState<string | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -252,6 +265,20 @@ export default function ComplianceEvidence() {
       setQuery({ section: complianceEvidenceSectionQueryValue(nextSection) })
     },
     [setQuery],
+  )
+
+  const setShellView = useCallback(
+    (next: ComplianceShellView) => {
+      setMatrixSelection(null)
+      // evidence is the CUJ default — omit view=evidence from the URL when possible
+      setQuery({ view: next === 'evidence' ? null : next })
+    },
+    [setQuery],
+  )
+
+  const matrixFrameworkHint = useMemo(
+    () => frameworkIdFromCode(codeFromUrl) ?? frameworkIdFromCode(standardFromUrl),
+    [codeFromUrl, standardFromUrl],
   )
 
   // Debounce search query to avoid firing an API call on every keystroke
@@ -735,12 +762,46 @@ export default function ComplianceEvidence() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Target className="w-6 h-6 text-primary" aria-hidden="true" />
-            ISO Compliance Evidence Center
+            {shellView === 'matrix'
+              ? t('compliance.standards_shell.title', { defaultValue: 'Standards' })
+              : 'ISO Compliance Evidence Center'}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Live repository for compliance evidence, clause coverage, and cross-standard mappings
+            {shellView === 'matrix'
+              ? t('compliance.standards_shell.subtitle', {
+                  defaultValue:
+                    'Programme shell for multi-framework coverage. Live graph panels arrive in PR-B.',
+                })
+              : 'Live repository for compliance evidence, clause coverage, and cross-standard mappings'}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="compliance-evidence-hub-links">
+            <div
+              className="inline-flex rounded-lg border border-border bg-card p-0.5"
+              role="group"
+              aria-label={t('compliance.standards_shell.mode_aria', {
+                defaultValue: 'Standards programme view',
+              })}
+              data-testid="compliance-shell-mode-toggle"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant={shellView === 'matrix' ? 'default' : 'ghost'}
+                onClick={() => setShellView('matrix')}
+                data-testid="compliance-shell-mode-matrix"
+              >
+                {t('compliance.standards_shell.mode.matrix', { defaultValue: 'Matrix' })}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={shellView === 'evidence' ? 'default' : 'ghost'}
+                onClick={() => setShellView('evidence')}
+                data-testid="compliance-shell-mode-evidence"
+              >
+                {t('compliance.standards_shell.mode.evidence', { defaultValue: 'Evidence' })}
+              </Button>
+            </div>
             {!loading && failedSources.length === 0 && !error && (
               <Badge variant="secondary" data-testid="compliance-live-badge">
                 Live data
@@ -767,6 +828,7 @@ export default function ComplianceEvidence() {
             </Link>
           </div>
         </div>
+        {shellView === 'evidence' ? (
         <div className="flex items-center gap-3 flex-wrap" data-testid="compliance-evidence-filters">
           <select
             value={section}
@@ -803,8 +865,26 @@ export default function ComplianceEvidence() {
             Audit Pack
           </Button>
         </div>
+        ) : null}
       </div>
 
+      {shellView === 'matrix' ? (
+        <>
+          <StandardsMatrixShell
+            initialFrameworkId={matrixFrameworkHint}
+            initialClause={clauseFromUrl || null}
+            selected={matrixSelection}
+            onSelectCell={setMatrixSelection}
+          />
+          {matrixSelection ? (
+            <EvidenceWorkspaceHost
+              selection={matrixSelection}
+              onClose={() => setMatrixSelection(null)}
+            />
+          ) : null}
+        </>
+      ) : (
+      <>
       {/* Alerts */}
       {error && (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -1979,6 +2059,8 @@ export default function ComplianceEvidence() {
           )}
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   )
 }

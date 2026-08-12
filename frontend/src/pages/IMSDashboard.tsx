@@ -78,7 +78,7 @@ const complianceHubDestinations: ComplianceHubDestination[] = [
     description: 'Drill into control implementation by standard — canonical scores live here.',
     icon: BookOpen,
     colorBg: 'bg-blue-500',
-    path: '/standards',
+    path: '/compliance?view=matrix',
   },
   {
     id: 'knowledge-exceptions',
@@ -94,7 +94,7 @@ const complianceHubDestinations: ComplianceHubDestination[] = [
     description: 'Link evidence, view coverage gaps, and export compliance reports.',
     icon: Shield,
     colorBg: 'bg-emerald-500',
-    path: '/compliance',
+    path: '/compliance?view=evidence',
   },
   {
     id: 'monitoring',

@@ -328,6 +328,22 @@ describe('App', () => {
     expect(screen.getByText('Actions')).toBeInTheDocument()
   })
 
+  // Wave 1 PR-A: Standards absorbed into /compliance programme shell.
+  it('sends a bookmarked /standards URL to /compliance and preserves query params', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/standards?code=ISO9001&clause=7.2')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(window.location.pathname).toBe('/compliance')
+    expect(window.location.search).toBe('?code=ISO9001&clause=7.2&view=matrix')
+    expect(screen.getByText('ComplianceEvidence')).toBeInTheDocument()
+  })
+
   it('serves /ai-intelligence on direct navigation when the flag is on', async () => {
     isAIIntelligenceRouteEnabledMock.mockReturnValue(true)
     localStorage.setItem('access_token', createToken(3600))

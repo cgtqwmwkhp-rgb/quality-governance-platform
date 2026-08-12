@@ -39,7 +39,6 @@ const InvestigationDetail = lazy(() => import('./pages/InvestigationDetail'))
 const InvestigationTemplateBuilder = lazy(
   () => import('./pages/investigation-builder/InvestigationTemplateBuilder'),
 )
-const Standards = lazy(() => import('./pages/Standards'))
 const Actions = lazy(() => import('./pages/Actions'))
 const ActionDetail = lazy(() => import('./pages/ActionDetail'))
 const Documents = lazy(() => import('./pages/Documents'))
@@ -196,6 +195,18 @@ function RouteErrorBoundary() {
 function RedirectToRiskRegister() {
   const { search } = useLocation()
   return <Navigate to={`/risk-register${search}`} replace />
+}
+
+/**
+ * Absorb Standards into /compliance (Wave 1 PR-A programme shell).
+ * Preserves query params (e.g. code/clause) and defaults view=matrix.
+ */
+function RedirectStandardsToCompliance() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  if (!params.get('view')) params.set('view', 'matrix')
+  const qs = params.toString()
+  return <Navigate to={`/compliance${qs ? `?${qs}` : ''}`} replace />
 }
 
 /**
@@ -379,7 +390,7 @@ function App() {
                   element={<InvestigationTemplateBuilder />}
                 />
                 <Route path="investigations/:id" element={<InvestigationDetail />} />
-                <Route path="standards" element={<Standards />} />
+                <Route path="standards" element={<RedirectStandardsToCompliance />} />
                 <Route path="actions" element={<Actions />} />
                 <Route path="actions/item" element={<LegacyActionItemRedirect />} />
                 <Route path="actions/:id" element={<ActionDetail />} />
