@@ -4,6 +4,9 @@ Machine confirmation of document→clause evidence links requires **all** of:
 
 * confidence ≥ :data:`STANDARDS_AUTO_CONFIRM_THRESHOLD` (0.98)
 * an imported alignment matrix that carries an **EXACT** row verdict for the clause
+* an **EXACT pair edge touching this cell's own framework** (Wave 4): the row
+  verdict alone let CHAS / CE / SSIP cells confirm off the ISO columns' alignment
+  with no aligned peer of their own
 * the target cell is not cover-blocked (open NC **or** open action)
 
 Fail-closed: if no matrix is loaded, nothing auto-confirms. TrapGuard's own
@@ -29,7 +32,7 @@ from src.domain.models.capa import CAPAAction
 from src.domain.services.standards_cell_aggregate_service import (
     OPEN_ACTION_STATUSES,
     OPEN_FINDING_STATUSES,
-    any_token_matches,
+    any_token_matches_cell,
     clause_match_keys,
     is_nc_finding,
     status_value,
@@ -126,7 +129,7 @@ class CoverBlockIndex:
         blocked: list[dict[str, Any]] = []
 
         for tokens, _status in self._open_nc_tokens:
-            if not any_token_matches(tokens, keys, clause):
+            if not any_token_matches_cell(tokens, keys, clause, framework=fw, guard=self.guard):
                 continue
             if not survives_trap_guard(
                 guard=self.guard,
@@ -142,7 +145,7 @@ class CoverBlockIndex:
             return "cover_blocked_open_nc"
 
         for tokens, _status in self._open_action_tokens:
-            if not any_token_matches(tokens, keys, clause):
+            if not any_token_matches_cell(tokens, keys, clause, framework=fw, guard=self.guard):
                 continue
             if not survives_trap_guard(
                 guard=self.guard,
@@ -180,6 +183,19 @@ class StandardsAutoConfirmContext:
     @property
     def matrix_version(self) -> Optional[str]:
         return self.guard.version_label
+
+
+def _has_exact_peer(annotation: dict[str, Any]) -> bool:
+    """True when an EXACT pair edge touches this cell's own framework and clause.
+
+    ``annotate_cell`` only lists peers reached by an edge with this cell at one end,
+    so an EXACT peer here is an imported alignment for *this* framework rather than
+    for whichever framework happens to share the row.
+    """
+    for peer in annotation.get("peers") or []:
+        if str(peer.get("verdict") or "").strip().upper() == "EXACT":
+            return True
+    return False
 
 
 def _normalize_confidence(confidence: Optional[float]) -> float:
@@ -278,6 +294,19 @@ def evaluate(
         return AutoConfirmDecision(
             auto_confirm=False,
             reason="alignment_near_requires_addition",
+            confidence=norm,
+            framework=fw,
+            clause_number=clause_number,
+            row_verdict=row_verdict,
+        )
+    if not _has_exact_peer(annotation):
+        # The row verdict is a property of the printed row, not of this cell. A
+        # framework with no imported pair on the row has no EXACT alignment of its
+        # own, and reading the row's EXACT off the ISO columns is how chas / ce /
+        # ssip cells machine-confirmed with zero aligned peers.
+        return AutoConfirmDecision(
+            auto_confirm=False,
+            reason="alignment_not_exact_for_framework",
             confidence=norm,
             framework=fw,
             clause_number=clause_number,

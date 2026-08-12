@@ -26,6 +26,8 @@ export interface StandardsCellHoverPreviewProps {
   isTrapRow?: boolean
   /** PR-C: technical control with no attestation source — cannot be covered by a PDF. */
   techGapStub?: boolean
+  /** W4: a source hit its read cap, so the counts behind this cell are a floor. */
+  scanTruncated?: boolean
   className?: string
 }
 
@@ -54,6 +56,7 @@ export function StandardsCellHoverPreview({
   alignmentVerdict = null,
   isTrapRow = false,
   techGapStub = false,
+  scanTruncated = false,
   className,
 }: StandardsCellHoverPreviewProps) {
   const { t } = useTranslation()
@@ -149,6 +152,14 @@ export function StandardsCellHoverPreview({
           </dd>
         </div>
       </dl>
+      {scanTruncated ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="standards-cell-hover-truncated">
+          {t('compliance.standards_matrix.hover.scan_truncated', {
+            defaultValue:
+              'Partial read — this cell was painted from the most recent records only, so counts are a minimum.',
+          })}
+        </p>
+      ) : null}
     </div>
   )
 }

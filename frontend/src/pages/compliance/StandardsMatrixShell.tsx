@@ -23,6 +23,7 @@ import {
   type CellVerdictStub,
 } from './StandardsCellHoverPreview'
 import {
+  chunkClausesForRequest,
   filterClauseCatalogueRows,
   MATRIX_PRESET_IDS,
   STANDARDS_MATRIX_FRAMEWORKS,
@@ -110,6 +111,8 @@ type CellLiveState = {
   isTrapRow?: boolean
   trapPeerCount?: number
   techGapStub?: boolean
+  /** A source hit its read cap, so this cell's counts are a floor, not a total. */
+  scanTruncated?: boolean
 }
 
 /** Row verdict badge tone. DIFFERENT and UNIQUE are the rows that mislead. */
@@ -274,23 +277,29 @@ export function StandardsMatrixShell({
     let cancelled = false
     setLiveLoading(true)
     setLiveError(null)
-    standardsCellAggregateApi
-      .getMatrix(frameworks, requestedClauses)
-      .then((res) => {
+    // The All preset is 12 columns wide, so a real imported axis passes the API's
+    // per-request cell cap. Chunk it rather than let one oversized request fail the
+    // whole grid into the degraded fallback.
+    const chunks = chunkClausesForRequest(requestedClauses, frameworks.length)
+    Promise.all(chunks.map((chunk) => standardsCellAggregateApi.getMatrix(frameworks, chunk)))
+      .then((responses) => {
         if (cancelled) return
         const next: Record<string, CellLiveState> = {}
-        for (const cell of res.data.cells || []) {
-          const key = `${cell.framework}:${cell.clause_number}`
-          next[key] = {
-            verdict: asVerdict(cell.verdict as CellVerdict),
-            coverBlocked: Boolean(cell.cover_blocked),
-            recurrenceRedFlag: Boolean(cell.recurrence_red_flag),
-            topEvidenceLabel: cell.summary?.top_evidence_label,
-            freshnessLabel: cell.summary?.freshness,
-            alignmentVerdict: cell.alignment?.row_verdict ?? null,
-            isTrapRow: Boolean(cell.alignment?.is_trap_row),
-            trapPeerCount: cell.alignment?.trap_peer_count ?? 0,
-            techGapStub: Boolean(cell.tech_gap?.stub),
+        for (const res of responses) {
+          for (const cell of res.data.cells || []) {
+            const key = `${cell.framework}:${cell.clause_number}`
+            next[key] = {
+              verdict: asVerdict(cell.verdict as CellVerdict),
+              coverBlocked: Boolean(cell.cover_blocked),
+              recurrenceRedFlag: Boolean(cell.recurrence_red_flag),
+              topEvidenceLabel: cell.summary?.top_evidence_label,
+              freshnessLabel: cell.summary?.freshness,
+              alignmentVerdict: cell.alignment?.row_verdict ?? null,
+              isTrapRow: Boolean(cell.alignment?.is_trap_row),
+              trapPeerCount: cell.alignment?.trap_peer_count ?? 0,
+              techGapStub: Boolean(cell.tech_gap?.stub),
+              scanTruncated: Boolean(cell.scan_truncated),
+            }
           }
         }
         setLiveCells(next)
@@ -330,6 +339,7 @@ export function StandardsMatrixShell({
       isTrapRow: Boolean(rowVerdicts[clauseNumber]?.is_trap),
       trapPeerCount: rowVerdicts[clauseNumber]?.trap_pair_count ?? 0,
       techGapStub: false,
+      scanTruncated: false,
     }
   }
 
@@ -585,6 +595,7 @@ export function StandardsMatrixShell({
                                   alignmentVerdict={live.alignmentVerdict ?? null}
                                   isTrapRow={Boolean(live.isTrapRow)}
                                   techGapStub={Boolean(live.techGapStub)}
+                                  scanTruncated={Boolean(live.scanTruncated)}
                                 />
                               </TooltipContent>
                             </Tooltip>

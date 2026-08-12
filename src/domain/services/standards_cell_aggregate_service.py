@@ -22,6 +22,12 @@ over the matches this module makes:
 
 Both guards are additive: with no matrix imported they have no opinion, and the
 verdict computation is unchanged from PR-B.
+
+Wave 4 narrows the tolerance twice more, because six of the twelve matrix columns
+are not in the imported edition at all: a token only matches a column the matrix
+has never heard of when it names that framework explicitly
+(:func:`requires_framed_tokens`), and register certificates are matched one at a
+time by type rather than by owning the whole shelf.
 """
 
 from __future__ import annotations
@@ -47,7 +53,23 @@ from src.domain.services.iso_compliance_service import (
     counts_toward_compliance_coverage,
     iso_compliance_service,
 )
-from src.domain.services.standards_trap_guard import TrapGuard
+from src.domain.services.standards_trap_guard import TrapGuard, framework_from_clause_token
+
+#: Rows read per source per cell. A cell that hits this cap has been painted from a
+#: partial read, so it reports ``scan_truncated`` rather than presenting an
+#: under-count as fact. The ingest gate deliberately reads open findings/actions
+#: without this cap so a truncated scan can never let a cell auto-confirm.
+SOURCE_SCAN_LIMIT = 500
+
+#: Imported prior audit records read per framework. Smaller because these are shown
+#: as a list rather than counted into a verdict.
+PRIOR_SCAN_LIMIT = 50
+
+#: Cells one ``get_matrix_summary`` call may paint. The imported PEL-HSEQ-5064 axis
+#: is 32 rows over 12 framework columns (384), which the previous 200 ceiling
+#: refused — the **All** preset degraded the moment a tenant imported the matrix.
+#: The frontend still chunks wider grids rather than relying on this number.
+MATRIX_SUMMARY_MAX_CELLS = 500
 
 OPEN_FINDING_STATUSES = frozenset(
     {
@@ -90,42 +112,52 @@ NC_FINDING_TYPES = frozenset(
     }
 )
 
-# Matrix framework id → ISO catalogue / cert scheme aliases
+# Matrix framework id → ISO catalogue / cert scheme aliases.
+#
+# ``cert_schemes`` matches ``AssuranceCertShelfService`` *shelf* schemes, which name
+# the source system (``planet_mark``, ``uvdb_achilles``, ``library``, ``register``).
+# ``"register"`` deliberately appears in none of them: the compliance register is one
+# undifferentiated shelf holding PAT tests, insurance and ISO certificates alike, so
+# listing it made the whole register prove every framework at once. Register entries
+# are matched one at a time by ``Certificate.certificate_type`` instead — see
+# :func:`framework_for_certificate`.
 FRAMEWORK_ALIASES: dict[str, dict[str, Any]] = {
     "9001": {
         "iso": "iso9001",
         "prefix": "9001",
-        "cert_schemes": ("iso9001", "iso", "iso_9001", "9001", "register"),
+        "cert_schemes": ("iso9001", "iso", "iso_9001", "9001"),
         "record_schemes": ("iso", "iso9001"),
     },
     "14001": {
         "iso": "iso14001",
         "prefix": "14001",
-        "cert_schemes": ("iso14001", "iso", "iso_14001", "14001", "register"),
+        "cert_schemes": ("iso14001", "iso", "iso_14001", "14001"),
         "record_schemes": ("iso", "iso14001"),
     },
     "45001": {
         "iso": "iso45001",
         "prefix": "45001",
-        "cert_schemes": ("iso45001", "iso", "iso_45001", "45001", "register"),
+        "cert_schemes": ("iso45001", "iso", "iso_45001", "45001"),
         "record_schemes": ("iso", "iso45001"),
     },
     "27001": {
         "iso": "iso27001",
         "prefix": "27001",
-        "cert_schemes": ("iso27001", "iso", "iso_27001", "27001", "register"),
+        "cert_schemes": ("iso27001", "iso", "iso_27001", "27001"),
         "record_schemes": ("iso", "iso27001"),
     },
     "22301": {
         "iso": None,
         "prefix": "22301",
-        "cert_schemes": ("iso22301", "iso", "22301", "register"),
+        "cert_schemes": ("iso22301", "iso", "22301"),
         "record_schemes": ("iso", "iso22301"),
     },
     "uvdb": {
         "iso": None,
         "prefix": "uvdb",
-        "cert_schemes": ("uvdb", "achilles", "achilles_uvdb"),
+        # The shelf stamps Achilles UVDB audits ``uvdb_achilles``; without it here the
+        # UVDB column showed no proof for the one scheme it exists to report.
+        "cert_schemes": ("uvdb", "uvdb_achilles", "achilles", "achilles_uvdb"),
         "record_schemes": ("uvdb", "achilles_uvdb", "achilles"),
     },
     "pm": {
@@ -137,34 +169,105 @@ FRAMEWORK_ALIASES: dict[str, dict[str, Any]] = {
     "ce": {
         "iso": None,
         "prefix": "ce",
-        "cert_schemes": ("cyber_essentials", "ce", "register"),
+        "cert_schemes": ("cyber_essentials", "ce"),
         "record_schemes": ("cyber_essentials", "ce"),
     },
     "cep": {
         "iso": None,
         "prefix": "cep",
-        "cert_schemes": ("cyber_essentials_plus", "cep", "register"),
+        "cert_schemes": ("cyber_essentials_plus", "cep"),
         "record_schemes": ("cyber_essentials_plus", "cep"),
     },
     "iip": {
         "iso": None,
         "prefix": "iip",
-        "cert_schemes": ("iip", "investors_in_people", "register"),
+        "cert_schemes": ("iip", "investors_in_people"),
         "record_schemes": ("iip",),
     },
     "chas": {
         "iso": None,
         "prefix": "chas",
-        "cert_schemes": ("chas", "register"),
+        "cert_schemes": ("chas",),
         "record_schemes": ("chas",),
     },
     "ssip": {
         "iso": None,
         "prefix": "ssip",
-        "cert_schemes": ("ssip", "register"),
+        "cert_schemes": ("ssip",),
         "record_schemes": ("ssip",),
     },
 }
+
+#: Shelf scheme for the undifferentiated compliance certificate register.
+REGISTER_SHELF_SCHEME = "register"
+
+#: Distinctive tokens that tie one ``Certificate.certificate_type`` (a free-text
+#: column, not an enum) to one matrix framework. Compared against the type with all
+#: punctuation removed, longest first, so ``cyber essentials plus`` cannot be read as
+#: Cyber Essentials. Short ids that occur inside ordinary words ("ce" in
+#: "certificate", "pm" in "equipment") are matched only on exact equality.
+_CERT_TYPE_TOKENS: tuple[tuple[str, str], ...] = (
+    ("cyberessentialsplus", "cep"),
+    ("cyberessentials", "ce"),
+    ("investorsinpeople", "iip"),
+    ("planetmark", "pm"),
+    ("iso9001", "9001"),
+    ("iso14001", "14001"),
+    ("iso45001", "45001"),
+    ("iso27001", "27001"),
+    ("iso22301", "22301"),
+    ("9001", "9001"),
+    ("14001", "14001"),
+    ("45001", "45001"),
+    ("27001", "27001"),
+    ("22301", "22301"),
+    ("achilles", "uvdb"),
+    ("uvdb", "uvdb"),
+    ("chas", "chas"),
+    ("ssip", "ssip"),
+)
+
+#: Ids too short to look for inside a longer string without false positives.
+_CERT_TYPE_EXACT: dict[str, str] = {
+    "ce": "ce",
+    "cep": "cep",
+    "pm": "pm",
+    "iip": "iip",
+}
+
+
+def count_proof_certs(certificates: Iterable[dict[str, Any]]) -> int:
+    """Shelf items that prove this framework. ``unmatched`` items are never proof."""
+    return sum(1 for certificate in certificates if certificate.get("proof_scope") != "unmatched")
+
+
+def _compact(value: Any) -> str:
+    """Lowercase alphanumerics only — ``"ISO 9001:2015"`` → ``"iso90012015"``."""
+    return "".join(character for character in str(value or "").lower() if character.isalnum())
+
+
+def framework_for_certificate(certificate_type: Any, name: Any = None) -> Optional[str]:
+    """The matrix framework a register certificate proves, or None when unattributable.
+
+    ``certificate_type`` is a free-text column, so this reads it for a distinctive
+    scheme token rather than expecting an enum. The certificate name is a secondary
+    signal only — plenty of registers type everything ``"certification"`` and put the
+    standard in the title, and dropping those would under-count real ISO proof.
+
+    Returning None is the honest answer for a PAT test or an insurance policy: it
+    proves something, but not a framework, so it must not count for any column.
+    """
+    for candidate in (certificate_type, name):
+        compact = _compact(candidate)
+        if not compact:
+            continue
+        exact = _CERT_TYPE_EXACT.get(compact)
+        if exact:
+            return exact
+        for token, framework in _CERT_TYPE_TOKENS:
+            if token in compact:
+                return framework
+    return None
 
 
 def normalize_clause_token(value: Any) -> str:
@@ -227,6 +330,56 @@ def any_token_matches(tokens: Optional[Iterable[Any]], keys: set[str], clause_nu
         return False
     for token in tokens:
         if token_matches_clause(token, keys, clause_number):
+            return True
+    return False
+
+
+def requires_framed_tokens(guard: Optional[TrapGuard], framework: str) -> bool:
+    """True when only tokens that name this framework may match its cells.
+
+    The tolerant matching above is framework-blind by design, which is safe while
+    every column has an imported requirement axis to be tolerant *about*. Six of the
+    twelve matrix columns do not: CHAS, SSIP, Cyber Essentials, CE+, UVDB and Planet
+    Mark are not in the 5064 edition, so a bare ``7.2`` written against an ISO audit
+    was painting them on the strength of the digits alone. Where the matrix has never
+    heard of the framework, only an explicit ``chas-7.2`` counts.
+
+    With no matrix imported the guard has no opinion and matching stays as it was —
+    a guard with no data must not blank a working matrix.
+    """
+    if guard is None or not guard.is_loaded:
+        return False
+    return not guard.covers_framework(framework)
+
+
+def token_matches_cell(
+    token: Any,
+    keys: set[str],
+    clause_number: str,
+    *,
+    framework: str,
+    guard: Optional[TrapGuard] = None,
+) -> bool:
+    """:func:`token_matches_clause` plus the un-carried-framework rule above."""
+    if not token_matches_clause(token, keys, clause_number):
+        return False
+    if requires_framed_tokens(guard, framework):
+        return framework_from_clause_token(token) == (framework or "").strip().lower()
+    return True
+
+
+def any_token_matches_cell(
+    tokens: Optional[Iterable[Any]],
+    keys: set[str],
+    clause_number: str,
+    *,
+    framework: str,
+    guard: Optional[TrapGuard] = None,
+) -> bool:
+    if not tokens:
+        return False
+    for token in tokens:
+        if token_matches_cell(token, keys, clause_number, framework=framework, guard=guard):
             return True
     return False
 
@@ -357,6 +510,10 @@ class CellAggregateResult:
     trap_blocked: list[dict[str, Any]] = field(default_factory=list)
     #: PR-C: TechGapGuard verdict where this cell is a technical control.
     tech_gap: dict[str, Any] = field(default_factory=dict)
+    #: W4: at least one source hit :data:`SOURCE_SCAN_LIMIT`, so the counts below
+    #: are a floor rather than a total. A truncated cell is not a clean cell.
+    scan_truncated: bool = False
+    scan_truncated_sources: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -377,6 +534,8 @@ class CellAggregateResult:
             "alignment": self.alignment,
             "trap_blocked": self.trap_blocked,
             "tech_gap": self.tech_gap,
+            "scan_truncated": self.scan_truncated,
+            "scan_truncated_sources": self.scan_truncated_sources,
             "sor_note": "Audits, Actions, Risk Register, Cert Shelf, and External Audit Records remain SoR — this is a read-model join only.",
         }
 
@@ -408,7 +567,7 @@ def survives_trap_guard(
     )
     if not refused:
         return True
-    if any_token_matches(kept, keys, clause_number):
+    if any_token_matches_cell(kept, keys, clause_number, framework=framework, guard=guard):
         return True
     for entry in refused:
         blocked.append({**entry, "source": source, **record})
@@ -421,9 +580,11 @@ class StandardsCellAggregateService:
     def __init__(self, db: AsyncSession, *, trap_guard: Optional[TrapGuard] = None):
         self.db = db
         self.cert_shelf = AssuranceCertShelfService(db)
-        # Loaded once per service instance on first use: a matrix batch asks for up
-        # to 200 cells and must not re-read the alignment edition 200 times.
+        # Loaded once per service instance on first use: a matrix batch asks for
+        # hundreds of cells and must not re-read the alignment edition per cell.
         self._trap_guard = trap_guard
+        self._shelf_cache: dict[int, list[dict[str, Any]]] = {}
+        self._scan_cache: dict[tuple[int, str], list[Any]] = {}
 
     async def trap_guard(self, tenant_id: int) -> TrapGuard:
         """The tenant's alignment snapshot, loaded once per service instance."""
@@ -452,25 +613,50 @@ class StandardsCellAggregateService:
 
         guard = await self.trap_guard(tenant_id)
         trap_blocked: list[dict[str, Any]] = []
+        truncated: set[str] = set()
 
         findings = await self._findings_for_cell(
-            tenant_id=tenant_id, keys=keys, clause_number=clause, guard=guard, framework=fw, blocked=trap_blocked
+            tenant_id=tenant_id,
+            keys=keys,
+            clause_number=clause,
+            guard=guard,
+            framework=fw,
+            blocked=trap_blocked,
+            truncated=truncated,
         )
         actions = await self._actions_for_cell(
-            tenant_id=tenant_id, keys=keys, clause_number=clause, guard=guard, framework=fw, blocked=trap_blocked
+            tenant_id=tenant_id,
+            keys=keys,
+            clause_number=clause,
+            guard=guard,
+            framework=fw,
+            blocked=trap_blocked,
+            truncated=truncated,
         )
         evidence = await self._evidence_for_cell(
-            tenant_id=tenant_id, keys=keys, clause_number=clause, guard=guard, framework=fw, blocked=trap_blocked
+            tenant_id=tenant_id,
+            keys=keys,
+            clause_number=clause,
+            guard=guard,
+            framework=fw,
+            blocked=trap_blocked,
+            truncated=truncated,
         )
         risks = await self._risks_for_cell(
             tenant_id=tenant_id,
             keys=keys,
             clause_number=clause,
             finding_ids=[f["id"] for f in findings],
+            framework=fw,
+            guard=guard,
+            truncated=truncated,
         )
         certificates = await self._certs_for_framework(tenant_id=tenant_id, framework=fw, clause_number=clause)
         imported = await self._imported_priors(
-            tenant_id=tenant_id, framework=fw, finding_run_ids={f["run_id"] for f in findings}
+            tenant_id=tenant_id,
+            framework=fw,
+            finding_run_ids={f["run_id"] for f in findings},
+            truncated=truncated,
         )
 
         open_ncs = [f for f in findings if f.get("is_nc") and status_value(f.get("status")) in OPEN_FINDING_STATUSES]
@@ -557,17 +743,21 @@ class StandardsCellAggregateService:
                 "closed_nc_count": len(closed_ncs),
                 "open_action_count": len(open_actions),
                 "risk_count": len(risks),
-                "cert_count": len(certificates),
+                "cert_count": count_proof_certs(certificates),
+                "unmatched_cert_count": len(certificates) - count_proof_certs(certificates),
                 "evidence_count": len(conformance),
                 "imported_prior_count": len(imported),
                 "mock_finding_count": sum(1 for f in findings if f.get("audit_kind") == "mock"),
                 "top_evidence_label": top_evidence,
                 "freshness": freshness,
                 "trap_blocked_count": len(trap_blocked),
+                "scan_truncated": bool(truncated),
             },
             alignment=guard.annotate_cell(framework=fw, clause_number=clause),
             trap_blocked=trap_blocked,
             tech_gap=tech_gap.to_dict() if tech_gap.is_technical else {},
+            scan_truncated=bool(truncated),
+            scan_truncated_sources=sorted(truncated),
         )
 
     async def get_matrix_summary(
@@ -581,9 +771,11 @@ class StandardsCellAggregateService:
         # Load the alignment edition once for the whole batch rather than per cell.
         guard = await self.trap_guard(tenant_id)
         cells: list[dict[str, Any]] = []
+        truncated_sources: set[str] = set()
         for fw in frameworks:
             for clause in clause_numbers:
                 cell = await self.get_cell(tenant_id=tenant_id, framework=fw, clause_number=clause)
+                truncated_sources.update(cell.scan_truncated_sources)
                 cells.append(
                     {
                         "framework": cell.framework,
@@ -595,12 +787,15 @@ class StandardsCellAggregateService:
                         "summary": cell.summary,
                         "alignment": cell.alignment,
                         "tech_gap": cell.tech_gap,
+                        "scan_truncated": cell.scan_truncated,
                     }
                 )
         return {
             "cells": cells,
             "matrix_version": guard.version_label,
             "matrix_loaded": guard.is_loaded,
+            "scan_truncated": bool(truncated_sources),
+            "scan_truncated_sources": sorted(truncated_sources),
             "sor_note": "Read-model only — Audits/Actions/Risk/Cert shelf remain SoR.",
         }
 
@@ -637,6 +832,7 @@ class StandardsCellAggregateService:
         guard: TrapGuard,
         framework: str,
         blocked: list[dict[str, Any]],
+        truncated: set[str],
     ) -> list[dict[str, Any]]:
         query = (
             select(AuditFinding)
@@ -646,13 +842,13 @@ class StandardsCellAggregateService:
             )
             .where(AuditFinding.tenant_id == tenant_id)
             .order_by(AuditFinding.created_at.desc())
-            .limit(500)
+            .limit(SOURCE_SCAN_LIMIT)
         )
-        rows = (await self.db.execute(query)).scalars().all()
+        rows = await self._scan(tenant_id=tenant_id, source="findings", query=query, truncated=truncated)
         matched: list[dict[str, Any]] = []
         for finding in rows:
             tokens = list(finding.clause_ids_json_legacy or [])
-            if not any_token_matches(tokens, keys, clause_number):
+            if not any_token_matches_cell(tokens, keys, clause_number, framework=framework, guard=guard):
                 continue
             if not self._survives_trap_guard(
                 guard=guard,
@@ -710,14 +906,15 @@ class StandardsCellAggregateService:
         guard: TrapGuard,
         framework: str,
         blocked: list[dict[str, Any]],
+        truncated: set[str],
     ) -> list[dict[str, Any]]:
         query = (
             select(CAPAAction)
             .where(CAPAAction.tenant_id == tenant_id)
             .order_by(CAPAAction.created_at.desc())
-            .limit(500)
+            .limit(SOURCE_SCAN_LIMIT)
         )
-        rows = (await self.db.execute(query)).scalars().all()
+        rows = await self._scan(tenant_id=tenant_id, source="actions", query=query, truncated=truncated)
         matched: list[dict[str, Any]] = []
         for action in rows:
             ref = action.clause_reference
@@ -728,7 +925,7 @@ class StandardsCellAggregateService:
                 tokens.extend(part.strip() for part in str(ref).replace(";", ",").split(",") if part.strip())
             if iso and ref:
                 tokens.append(f"{iso}-{ref}")
-            if not any_token_matches(tokens, keys, clause_number):
+            if not any_token_matches_cell(tokens, keys, clause_number, framework=framework, guard=guard):
                 continue
             if not self._survives_trap_guard(
                 guard=guard,
@@ -769,6 +966,7 @@ class StandardsCellAggregateService:
         guard: TrapGuard,
         framework: str,
         blocked: list[dict[str, Any]],
+        truncated: set[str],
     ) -> list[dict[str, Any]]:
         query = (
             select(ComplianceEvidenceLink)
@@ -777,12 +975,12 @@ class StandardsCellAggregateService:
                 ComplianceEvidenceLink.deleted_at.is_(None),
             )
             .order_by(ComplianceEvidenceLink.created_at.desc())
-            .limit(500)
+            .limit(SOURCE_SCAN_LIMIT)
         )
-        rows = (await self.db.execute(query)).scalars().all()
+        rows = await self._scan(tenant_id=tenant_id, source="evidence_links", query=query, truncated=truncated)
         matched: list[dict[str, Any]] = []
         for link in rows:
-            if not token_matches_clause(link.clause_id, keys, clause_number):
+            if not token_matches_cell(link.clause_id, keys, clause_number, framework=framework, guard=guard):
                 continue
             if not self._survives_trap_guard(
                 guard=guard,
@@ -819,13 +1017,23 @@ class StandardsCellAggregateService:
         keys: set[str],
         clause_number: str,
         finding_ids: list[int],
+        framework: str,
+        guard: TrapGuard,
+        truncated: set[str],
     ) -> list[dict[str, Any]]:
         matched: dict[str, dict[str, Any]] = {}
 
         # Operational risks with legacy clause ids
-        risk_rows = (await self.db.execute(select(Risk).where(Risk.tenant_id == tenant_id).limit(500))).scalars().all()
+        risk_rows = await self._scan(
+            tenant_id=tenant_id,
+            source="risks",
+            query=select(Risk).where(Risk.tenant_id == tenant_id).limit(SOURCE_SCAN_LIMIT),
+            truncated=truncated,
+        )
         for risk in risk_rows:
-            if not any_token_matches(risk.clause_ids_json_legacy, keys, clause_number):
+            if not any_token_matches_cell(
+                risk.clause_ids_json_legacy, keys, clause_number, framework=framework, guard=guard
+            ):
                 continue
             key = f"op-{risk.id}"
             matched[key] = {
@@ -839,16 +1047,19 @@ class StandardsCellAggregateService:
             }
 
         # Enterprise controls with standard_clauses
-        control_rows = (
-            (
-                await self.db.execute(
-                    select(EnterpriseRiskControl).where(EnterpriseRiskControl.tenant_id == tenant_id).limit(500)
-                )
-            )
-            .scalars()
-            .all()
+        control_rows = await self._scan(
+            tenant_id=tenant_id,
+            source="enterprise_risk_controls",
+            query=select(EnterpriseRiskControl)
+            .where(EnterpriseRiskControl.tenant_id == tenant_id)
+            .limit(SOURCE_SCAN_LIMIT),
+            truncated=truncated,
         )
-        control_ids = [c.id for c in control_rows if any_token_matches(c.standard_clauses, keys, clause_number)]
+        control_ids = [
+            c.id
+            for c in control_rows
+            if any_token_matches_cell(c.standard_clauses, keys, clause_number, framework=framework, guard=guard)
+        ]
         if control_ids:
             from src.domain.models.risk_register import RiskControlMapping
 
@@ -923,20 +1134,45 @@ class StandardsCellAggregateService:
         return list(matched.values())
 
     async def _certs_for_framework(self, *, tenant_id: int, framework: str, clause_number: str) -> list[dict[str, Any]]:
+        """Shelf items that prove *this* framework, plus register items that prove none.
+
+        Two kinds of match. A scheme match is a shelf whose whole purpose is one
+        framework (Planet Mark, Achilles UVDB). A type match is one register entry
+        whose ``certificate_type`` names a framework — the register itself proves
+        nothing, so a PAT test or an ISO 9001 certificate sitting in it cannot be
+        counted for the CHAS column. Register entries that name no framework are
+        still returned, marked ``proof_scope: "unmatched"``, so the workspace can show
+        what is on the shelf without ``cert_count`` claiming it as proof.
+        """
         alias = FRAMEWORK_ALIASES.get(framework, {})
         schemes = {s.lower() for s in alias.get("cert_schemes", ())}
-        shelf = await self.cert_shelf.get_shelf(tenant_id=tenant_id)
-        items = shelf.get("items") or []
+        shelf = await self._shelf_items(tenant_id=tenant_id)
         matched: list[dict[str, Any]] = []
+        unmatched: list[dict[str, Any]] = []
         clause_norm = normalize_clause_token(clause_number)
-        for item in items:
+        for item in shelf:
             scheme = str(item.get("scheme") or "").strip().lower()
-            if schemes and scheme not in schemes:
-                continue
             metadata = item.get("metadata") or {}
-            meta_clauses = metadata.get("clause_ids") or metadata.get("clauses") or []
             name = str(item.get("name") or "")
             proof_scope = "framework"
+            if scheme == REGISTER_SHELF_SCHEME:
+                cert_framework = framework_for_certificate(metadata.get("certificate_type"), name)
+                if cert_framework is None:
+                    unmatched.append(
+                        {
+                            **item,
+                            "proof_scope": "unmatched",
+                            "framework": None,
+                            "linked_clause": None,
+                        }
+                    )
+                    continue
+                if cert_framework != framework:
+                    continue
+            elif schemes and scheme not in schemes:
+                continue
+
+            meta_clauses = metadata.get("clause_ids") or metadata.get("clauses") or []
             if any_token_matches(meta_clauses, clause_match_keys(framework, clause_number), clause_number):
                 proof_scope = "clause"
             elif clause_norm and clause_norm in normalize_clause_token(name):
@@ -949,10 +1185,56 @@ class StandardsCellAggregateService:
                     "linked_clause": clause_number if proof_scope == "clause" else None,
                 }
             )
-        return matched
+        # Real proof first: the workspace panel truncates the list for display.
+        return matched + unmatched
+
+    async def _scan(
+        self,
+        *,
+        tenant_id: int,
+        source: str,
+        query: Any,
+        truncated: set[str],
+        limit: int = SOURCE_SCAN_LIMIT,
+    ) -> list[Any]:
+        """Read one tenant-wide source once per service instance.
+
+        Every cell runs the same scan with the same filters and then matches in
+        Python, so a matrix batch was re-reading each source once per cell — the
+        cost that made the wider presets a timeout rather than a paint. Reading once
+        also means every cell in one response is painted from the same snapshot.
+
+        Records the source as truncated when the read filled its budget: the counts
+        that follow are then a floor, and :attr:`CellAggregateResult.scan_truncated`
+        says so rather than presenting them as totals.
+        """
+        cache_key = (tenant_id, source)
+        if cache_key not in self._scan_cache:
+            self._scan_cache[cache_key] = list((await self.db.execute(query)).scalars().all())
+        rows = self._scan_cache[cache_key]
+        if len(rows) >= limit:
+            truncated.add(source)
+        return rows
+
+    async def _shelf_items(self, *, tenant_id: int) -> list[dict[str, Any]]:
+        """The cert shelf, read once per service instance.
+
+        ``get_matrix_summary`` asks for hundreds of cells and every one of them wants
+        the same tenant-wide shelf; re-reading it per cell is what made the wider
+        presets time out rather than paint.
+        """
+        if tenant_id not in self._shelf_cache:
+            shelf = await self.cert_shelf.get_shelf(tenant_id=tenant_id)
+            self._shelf_cache[tenant_id] = list(shelf.get("items") or [])
+        return self._shelf_cache[tenant_id]
 
     async def _imported_priors(
-        self, *, tenant_id: int, framework: str, finding_run_ids: set[int]
+        self,
+        *,
+        tenant_id: int,
+        framework: str,
+        finding_run_ids: set[int],
+        truncated: set[str],
     ) -> list[dict[str, Any]]:
         alias = FRAMEWORK_ALIASES.get(framework, {})
         schemes = list(alias.get("record_schemes") or [])
@@ -964,8 +1246,15 @@ class StandardsCellAggregateService:
         )
         if schemes:
             query = query.where(ExternalAuditRecord.scheme.in_(schemes))
-        query = query.order_by(ExternalAuditRecord.report_date.desc().nullslast()).limit(50)
-        rows = (await self.db.execute(query)).scalars().all()
+        query = query.order_by(ExternalAuditRecord.report_date.desc().nullslast()).limit(PRIOR_SCAN_LIMIT)
+        # Scheme-filtered, so cached per framework rather than per tenant.
+        rows = await self._scan(
+            tenant_id=tenant_id,
+            source=f"imported_priors:{framework}",
+            query=query,
+            truncated=truncated,
+            limit=PRIOR_SCAN_LIMIT,
+        )
         priors: list[dict[str, Any]] = []
         for record in rows:
             linked = bool(record.audit_run_id and record.audit_run_id in finding_run_ids)

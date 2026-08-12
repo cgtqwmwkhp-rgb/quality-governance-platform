@@ -352,6 +352,73 @@ def test_annotate_cell_on_an_unknown_clause_is_empty_not_wrong(guard_5064):
     assert annotation["peers"] == []
 
 
+# ------------------------------------------- Wave 4: what the guard may not lend
+
+
+def test_the_guard_knows_which_frameworks_the_edition_actually_carries(guard_5064):
+    """5064 prints six frameworks. The matrix shows twelve. Six have no axis at all."""
+    for carried in ("9001", "14001", "45001", "27001", "22301", "iip"):
+        assert guard_5064.covers_framework(carried) is True
+    for absent in ("chas", "ssip", "ce", "cep", "uvdb", "pm"):
+        assert guard_5064.covers_framework(absent) is False
+    assert TrapGuard().covers_framework("9001") is False
+
+
+def test_frameworks_on_row_lists_only_the_frameworks_the_row_prints(guard_5064):
+    assert guard_5064.frameworks_on_row("7.2") == frozenset({"9001", "14001", "45001", "27001", "22301"})
+    assert guard_5064.frameworks_on_row("99.9") == frozenset()
+
+
+@pytest.mark.parametrize("framework", ["chas", "ssip", "ce", "cep", "uvdb", "pm"])
+def test_a_framework_absent_from_the_edition_never_borrows_the_iso_row_verdict(guard_5064, framework):
+    """The bug this wave exists for: CHAS 7.2 read ISO 7.2's EXACT and confirmed.
+
+    Competence is a real CHAS question, but nobody has aligned it to ISO 9001 7.2 in
+    an imported edition, so the honest answer for the cell is that we do not know.
+    """
+    annotation = guard_5064.annotate_cell(framework=framework, clause_number="7.2")
+    assert annotation["row_verdict"] is None
+    assert annotation["framework_covered"] is False
+    assert annotation["alignment_known"] is False
+    assert annotation["peers"] == []
+
+
+def test_the_iso_row_verdict_is_unchanged_for_frameworks_on_the_row(guard_5064):
+    """The narrowing must cost the ISO columns nothing — they are on the row."""
+    annotation = guard_5064.annotate_cell(framework="9001", clause_number="7.2")
+    assert annotation["row_verdict"] == "EXACT"
+    assert annotation["framework_covered"] is True
+    assert annotation["alignment_known"] is True
+    # Four ISO peers plus IiP indicator 7, which the source does align to 9001 7.2.
+    assert {peer["framework"] for peer in annotation["peers"]} == {"14001", "45001", "27001", "22301", "iip"}
+
+
+def test_a_cross_framework_token_needs_an_imported_verdict_not_merely_no_objection(guard_5064):
+    """IiP is in the edition, but not on the 6.1.2 row, so an ISO CEL cannot paint it.
+
+    The old rule kept any pair the matrix had no verdict for, which is how one ISO
+    risk assessment link painted columns that never asked the question.
+    """
+    kept, blocked = guard_5064.filter_cross_framework_tokens(
+        framework="iip",
+        clause_number="6.1.2",
+        tokens=["9001-6.1.2"],
+    )
+    assert kept == []
+    assert len(blocked) == 1
+    assert blocked[0]["verdict"] is None
+    assert "no imported alignment" in blocked[0]["reason"]
+
+
+def test_may_share_evidence_still_answers_no_verdict_as_no_opinion(guard_5064):
+    """Matching got stricter; the pair question did not change its meaning."""
+    decision = guard_5064.may_share_evidence(
+        src_framework="9001", src_clause="6.1.2", dst_framework="iip", dst_clause="6.1.2"
+    )
+    assert decision.allowed is True
+    assert decision.verdict is None
+
+
 def test_canonical_pair_ordering_is_stable_in_both_directions():
     """Edges are stored once per unordered pair, so both call orders must agree.
 

@@ -157,6 +157,35 @@ export const MATRIX_PRESET_IDS: MatrixPresetId[] = [
   'all',
 ]
 
+/**
+ * Cells one `/compliance/cell-aggregate/matrix` call may ask for. Mirrors
+ * `MATRIX_SUMMARY_MAX_CELLS` on the API, which rejects anything larger.
+ */
+export const MATRIX_CELL_REQUEST_LIMIT = 500
+
+/**
+ * Split the clause axis so no single request exceeds the cell cap.
+ *
+ * The All preset is 12 columns; a 32-row imported axis is 384 cells and a longer
+ * one will eventually pass 500. Chunking keeps the grid painting from live data
+ * instead of failing the whole request and falling back to a degraded grid.
+ */
+export function chunkClausesForRequest(
+  clauses: string[],
+  frameworkCount: number,
+  limit: number = MATRIX_CELL_REQUEST_LIMIT,
+): string[][] {
+  if (clauses.length === 0) return []
+  if (frameworkCount <= 0) return [clauses]
+  const perRequest = Math.max(1, Math.floor(limit / frameworkCount))
+  if (clauses.length <= perRequest) return [clauses]
+  const chunks: string[][] = []
+  for (let index = 0; index < clauses.length; index += perRequest) {
+    chunks.push(clauses.slice(index, index + perRequest))
+  }
+  return chunks
+}
+
 export interface CatalogueRowLike {
   id: string
   kind?: FrameworkKind | string

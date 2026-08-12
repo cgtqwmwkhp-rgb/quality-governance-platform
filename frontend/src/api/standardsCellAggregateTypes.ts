@@ -56,8 +56,9 @@ export type StandardsCellCertificate = {
   readiness_status?: string
   expiry_date?: string | null
   detail_path?: string | null
-  proof_scope?: 'framework' | 'clause' | string
-  framework?: string
+  /** `unmatched` = on the shelf but attributable to no framework; never counted. */
+  proof_scope?: 'framework' | 'clause' | 'unmatched' | string
+  framework?: string | null
   linked_clause?: string | null
   is_critical?: boolean
 }
@@ -110,16 +111,21 @@ export type StandardsCellAggregate = {
     open_action_count: number
     risk_count: number
     cert_count: number
+    unmatched_cert_count?: number
     evidence_count: number
     imported_prior_count: number
     mock_finding_count: number
     top_evidence_label?: string | null
     freshness?: string | null
+    scan_truncated?: boolean
   }
   alignment?: StandardsCellAlignment
   trap_blocked?: Array<Record<string, unknown>>
   tech_gap?: StandardsCellTechGap
   exact_share?: StandardsCellExactShare
+  /** A source hit its read cap: the counts above are a floor, not a total. */
+  scan_truncated?: boolean
+  scan_truncated_sources?: string[]
   sor_note?: string
 }
 
@@ -188,6 +194,11 @@ export type StandardsCellAlignment = {
   is_unique: boolean
   unique_reason?: string | null
   trap_peer_count: number
+  /** False when the imported edition says nothing about this cell at all. */
+  alignment_known?: boolean
+  /** False when the edition carries no axis for this framework (CHAS, SSIP, CE…). */
+  framework_covered?: boolean
+  frameworks_on_row?: string[]
   peers: Array<{
     framework: string
     clause_key: string
@@ -222,9 +233,12 @@ export type StandardsCellMatrixSummary = {
     summary: StandardsCellAggregate['summary']
     alignment?: StandardsCellAlignment
     tech_gap?: StandardsCellTechGap
+    scan_truncated?: boolean
   }>
   matrix_version?: string | null
   matrix_loaded?: boolean
+  scan_truncated?: boolean
+  scan_truncated_sources?: string[]
   sor_note?: string
 }
 

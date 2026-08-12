@@ -27,6 +27,17 @@ verdict computation. It answers one question — *may these two clauses share
 evidence?* — from imported alignment edges, and drops matches that would answer it
 wrongly. When no matrix edition has been imported it permits everything and says
 so, because a guard with no data must not silently blank a working matrix.
+
+Wave 4 — what the guard must not lend out
+-----------------------------------------
+The imported 5064 edition prints six frameworks. The matrix shows twelve. The
+other six (CHAS, SSIP, Cyber Essentials, CE+, UVDB, Planet Mark) have no imported
+requirement axis and no alignment verdicts, and the guard used to hand them the
+ISO row verdict anyway: a CHAS cell numbered 7.2 read the ISO 7.2 row as EXACT
+and the ingest gate auto-confirmed against it with zero aligned peers. Two rules
+close that: a row verdict is only lent to a framework that is *on* that row
+(:meth:`frameworks_on_row`), and a cross-framework token is only kept where the
+matrix carries a shareable verdict for the pair rather than merely no opinion.
 """
 
 from __future__ import annotations
@@ -166,9 +177,17 @@ class TrapGuard:
         self._pairs: dict[tuple[str, str, str, str], AlignmentEdge] = {}
         self._unique: dict[tuple[str, str], AlignmentEdge] = {}
         self._rows: dict[str, AlignmentEdge] = {}
+        self._row_frameworks: dict[str, set[str]] = {}
+        self._frameworks: set[str] = set()
 
         for edge in edges:
             verdict = _verdict_of(edge)
+            row_frameworks = self._row_frameworks.setdefault(edge.clause_ref, set())
+            for framework in (edge.src_framework, edge.dst_framework):
+                if framework:
+                    normalized = str(framework).strip().lower()
+                    row_frameworks.add(normalized)
+                    self._frameworks.add(normalized)
             if edge.dst_framework is None or edge.dst_clause_key is None:
                 self._unique[(edge.src_framework, edge.src_clause_key)] = edge
             else:
@@ -240,6 +259,20 @@ class TrapGuard:
     @property
     def edge_count(self) -> int:
         return len(self._pairs) + len(self._unique)
+
+    def covers_framework(self, framework: Any) -> bool:
+        """True when the loaded edition carries at least one edge for this framework.
+
+        The imported 5064 edition prints five management system standards plus IiP.
+        A framework it has never heard of (CHAS, SSIP, Cyber Essentials, UVDB,
+        Planet Mark) has no requirement axis and no alignment verdicts, so nothing
+        the matrix says about a clause *number* can be read onto its cells.
+        """
+        return str(framework or "").strip().lower() in self._frameworks
+
+    def frameworks_on_row(self, clause_ref: Any) -> frozenset[str]:
+        """Frameworks that appear on one printed matrix row."""
+        return frozenset(self._row_frameworks.get(str(clause_ref or "").strip(), ()))
 
     def edge_for(
         self,
@@ -370,10 +403,18 @@ class TrapGuard:
     ) -> tuple[list[Any], list[dict[str, Any]]]:
         """Split matched clause tokens into kept and blocked-by-trap.
 
-        A token that names no framework is always kept: a bare ``7.5`` commits to
-        nothing, so it cannot be a cross-framework claim. A token naming *this*
-        framework is always kept. Only a token naming a different framework is
-        tested against the matrix, and only a DIFFERENT or UNIQUE verdict blocks it.
+        A token that names no framework is always kept here: a bare ``7.5`` commits
+        to nothing, so it cannot be a cross-framework claim (the aggregate applies
+        its own rule for frameworks the matrix does not carry). A token naming
+        *this* framework is always kept.
+
+        A token naming a different framework is kept only where the matrix carries
+        an imported shareable verdict for the pair. Wave 4: absence of a verdict
+        used to mean *permit*, which let an ISO evidence link paint any column that
+        happened to print the same clause number. Absence of a verdict is absence
+        of an alignment, so for matching purposes it now means *do not cross* —
+        ``may_share_evidence`` keeps its narrower "not treated as a trap" answer
+        for callers asking about one specific pair.
         """
         kept: list[Any] = []
         blocked: list[dict[str, Any]] = []
@@ -392,15 +433,21 @@ class TrapGuard:
                 dst_framework=cell_fw,
                 dst_clause=clause_number,
             )
-            if decision.allowed:
+            if decision.allowed and decision.verdict is not None:
                 kept.append(token)
                 continue
+            reason = decision.reason
+            if decision.allowed:
+                reason = (
+                    f"no imported alignment pairs {token_fw} with {cell_fw} on this clause — "
+                    "one framework's evidence is not the other's"
+                )
             blocked.append(
                 {
                     "token": str(token),
                     "token_framework": token_fw,
                     "verdict": decision.verdict_token,
-                    "reason": decision.reason,
+                    "reason": reason,
                     "clause_ref": decision.clause_ref,
                 }
             )
@@ -438,10 +485,18 @@ class TrapGuard:
         if unique is not None:
             matched_refs.add(unique.clause_ref)
 
+        row_frameworks = self.frameworks_on_row(clause)
         row_verdict = self._row_verdict_for_refs(matched_refs)
-        if row_verdict is None:
-            # No edge touched this cell: fall back to the printed reference, which
-            # is all an un-relocated clause ever needed.
+        if row_verdict is None and cell_fw in row_frameworks:
+            # No edge touched this cell, but the printed row does carry this
+            # framework: fall back to the row reference, which is all an
+            # un-relocated clause ever needed.
+            #
+            # Wave 4: the fallback used to be unconditional, so a framework with no
+            # imported axis at all (CHAS, SSIP, CE, UVDB…) inherited whatever the
+            # ISO row said. A CHAS cell numbered 7.2 read the ISO EXACT verdict and
+            # auto-confirmed on evidence nobody had aligned. Those cells are now
+            # honestly unknown.
             row_verdict = self.row_verdict(clause)
         trap_peers = [peer for peer in peers if not peer["shareable"]]
         return {
@@ -453,6 +508,9 @@ class TrapGuard:
             "unique_reason": unique.rationale if unique is not None else None,
             "peers": peers,
             "trap_peer_count": len(trap_peers),
+            "framework_covered": self.covers_framework(cell_fw),
+            "frameworks_on_row": sorted(row_frameworks),
+            "alignment_known": bool(row_verdict is not None or peers or unique is not None),
         }
 
 

@@ -176,6 +176,38 @@ describe('Standards matrix alignment axis (PR-C)', () => {
     expect(screen.queryByText('Planet Mark scheme shell')).not.toBeInTheDocument()
   })
 
+  it('paints the All preset from live cells instead of degrading on a wide grid', async () => {
+    // Twelve columns against the imported axis is the case the API used to reject
+    // outright, which showed as a degraded badge on exactly the tenants that had
+    // done the import. Every request must stay inside the cap, and none may fail.
+    const rows = Array.from({ length: 32 }, (_, index) =>
+      row({
+        id: `annexsl-${index}`,
+        row_key: `annexsl-${index}`,
+        clauseNumber: `${index + 1}.1`,
+        title: `Clause ${index + 1}.1`,
+      }),
+    )
+    getAlignmentCatalogue.mockResolvedValue({ data: catalogue({ rows }) })
+    renderShell()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('standards-matrix-table')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId('standards-matrix-preset-all'))
+
+    await waitFor(() => {
+      const wide = getMatrix.mock.calls.filter((call) => (call[0] as string[]).length === 12)
+      expect(wide.length).toBeGreaterThan(0)
+      for (const [frameworks, clauses] of wide as Array<[string[], string[]]>) {
+        expect(frameworks.length * clauses.length).toBeLessThanOrEqual(500)
+      }
+    })
+    expect(screen.queryByTestId('standards-matrix-degraded-badge')).not.toBeInTheDocument()
+    expect(screen.getByTestId('standards-matrix-live-badge')).toBeInTheDocument()
+  })
+
   it('links the CE column header to the official NCSC Cyber Essentials page', async () => {
     getAlignmentCatalogue.mockResolvedValue({ data: catalogue() })
     renderShell()
