@@ -17,11 +17,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.audit import AuditFinding
-from src.domain.models.compliance_evidence import (
-    ComplianceEvidenceLink,
-    EvidenceLinkMethod,
-    EvidenceLinkStatus,
-)
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.models.document import Document, DocumentVersion
 from src.domain.services.assurance_cert_shelf_service import AssuranceCertShelfService
 from src.domain.services.cel_version_freshness import classify_cel_version_freshness
@@ -37,10 +33,7 @@ from src.domain.services.standards_cell_aggregate_service import (
     status_value,
 )
 from src.domain.services.standards_ingest_gate import STANDARDS_AUTO_CONFIRM_THRESHOLD
-from src.domain.services.standards_trap_guard import (
-    clause_number_from_token,
-    framework_from_clause_token,
-)
+from src.domain.services.standards_trap_guard import clause_number_from_token, framework_from_clause_token
 
 FINDING_SCAN_LIMIT = 2000
 EVIDENCE_SCAN_LIMIT = 2000
