@@ -381,6 +381,40 @@ class CellAggregateResult:
         }
 
 
+def survives_trap_guard(
+    *,
+    guard: TrapGuard,
+    framework: str,
+    clause_number: str,
+    tokens: list[Any],
+    keys: set[str],
+    blocked: list[dict[str, Any]],
+    source: str,
+    record: dict[str, Any],
+) -> bool:
+    """True when a match still holds after cross-framework traps are removed.
+
+    Only tokens naming a *different* framework can be removed, and only where
+    the matrix carries a DIFFERENT or UNIQUE verdict for the pair. If every
+    token that produced the match is removed, the match itself goes — the
+    record matched this cell on a clause number it does not share.
+    """
+    if not guard.is_loaded:
+        return True
+    kept, refused = guard.filter_cross_framework_tokens(
+        framework=framework,
+        clause_number=clause_number,
+        tokens=tokens,
+    )
+    if not refused:
+        return True
+    if any_token_matches(kept, keys, clause_number):
+        return True
+    for entry in refused:
+        blocked.append({**entry, "source": source, **record})
+    return False
+
+
 class StandardsCellAggregateService:
     """Read-model join for Standards matrix cells / Evidence Workspace panels."""
 
@@ -582,27 +616,17 @@ class StandardsCellAggregateService:
         source: str,
         record: dict[str, Any],
     ) -> bool:
-        """True when a match still holds after cross-framework traps are removed.
-
-        Only tokens naming a *different* framework can be removed, and only where
-        the matrix carries a DIFFERENT or UNIQUE verdict for the pair. If every
-        token that produced the match is removed, the match itself goes — the
-        record matched this cell on a clause number it does not share.
-        """
-        if not guard.is_loaded:
-            return True
-        kept, refused = guard.filter_cross_framework_tokens(
+        """Delegate to the module-level helper so the ingest gate can share it."""
+        return survives_trap_guard(
+            guard=guard,
             framework=framework,
             clause_number=clause_number,
             tokens=tokens,
+            keys=keys,
+            blocked=blocked,
+            source=source,
+            record=record,
         )
-        if not refused:
-            return True
-        if any_token_matches(kept, keys, clause_number):
-            return True
-        for entry in refused:
-            blocked.append({**entry, "source": source, **record})
-        return False
 
     async def _findings_for_cell(
         self,

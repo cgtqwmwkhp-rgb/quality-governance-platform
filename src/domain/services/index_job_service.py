@@ -301,6 +301,8 @@ class IndexJobService:
         documents_processed = 0
         documents_succeeded = 0
         documents_failed = 0
+        # One TrapGuard + cover-block index per tenant for the whole job.
+        gate_contexts: dict[int, Any] = {}
 
         try:
             for document_id in job.document_ids:
@@ -446,7 +448,9 @@ class IndexJobService:
                     self._pending_stale_document_ids.append(document.id)
 
                 if current_user is not None:
-                    await self._trigger_governed_kb_mapping(document, text_content, current_user)
+                    await self._trigger_governed_kb_mapping(
+                        document, text_content, current_user, gate_contexts=gate_contexts
+                    )
 
             job.status = IndexJobStatus.COMPLETED if documents_failed == 0 else IndexJobStatus.FAILED
             if documents_failed and documents_succeeded:
@@ -462,22 +466,39 @@ class IndexJobService:
 
         return job
 
-    async def _trigger_governed_kb_mapping(self, document: Document, text_content: str, current_user: User) -> None:
+    async def _trigger_governed_kb_mapping(
+        self,
+        document: Document,
+        text_content: str,
+        current_user: User,
+        *,
+        gate_contexts: dict[int, Any] | None = None,
+    ) -> None:
         try:
             from src.domain.services.governed_knowledge_service import governed_knowledge_service
+            from src.domain.services.standards_ingest_gate import StandardsAutoConfirmContext
 
             doc_type = (
                 document.document_type.value
                 if hasattr(document.document_type, "value")
                 else str(document.document_type)
             )
+            tenant_id = document.tenant_id
+            ctx = None
+            if tenant_id is not None:
+                cache = gate_contexts if gate_contexts is not None else {}
+                ctx = cache.get(tenant_id)
+                if ctx is None:
+                    ctx = await StandardsAutoConfirmContext.for_tenant(self.db, tenant_id)
+                    cache[tenant_id] = ctx
             await governed_knowledge_service.map_document_to_schemes(
                 self.db,
                 document.id,
                 text_content,
                 doc_type,
-                document.tenant_id,
+                tenant_id,
                 current_user,
+                gate_context=ctx,
             )
         except Exception:
             logger.warning(

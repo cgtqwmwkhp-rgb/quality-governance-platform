@@ -220,7 +220,13 @@ def test_match_iso_standard_row_ignores_scheme_shells() -> None:
 
 
 def test_resolve_link_status_auto_confirm_does_not_imply_human_confirmer() -> None:
+    # Without a gate decision, fail-closed (PROPOSED). Confirmation requires gate.
     status, auto_applied = resolve_link_status(0.99, "policy")
+    assert status == EvidenceLinkStatus.PROPOSED
+    assert auto_applied is False
+
+    gate = SimpleNamespace(auto_confirm=True, reason="ok")
+    status, auto_applied = resolve_link_status(0.99, "policy", gate=gate)
     assert status == EvidenceLinkStatus.CONFIRMED
     assert auto_applied is True
 
@@ -239,6 +245,10 @@ async def test_ai_persist_mapping_clears_confirmer_on_auto_apply(monkeypatch: py
         "src.domain.services.cel_version_pin.pin_evidence_link_document_version",
         _no_pin,
     )
+    monkeypatch.setattr(
+        "src.domain.services.governed_knowledge_service.evaluate_auto_confirm",
+        lambda **_kwargs: SimpleNamespace(auto_confirm=True, reason="ok"),
+    )
 
     service = GovernedKnowledgeService()
     service._log_ai_decision = AsyncMock()  # type: ignore[method-assign]
@@ -252,7 +262,7 @@ async def test_ai_persist_mapping_clears_confirmer_on_auto_apply(monkeypatch: py
     )
     user = SimpleNamespace(id=7, email="ai-caller@example.com")
 
-    link = await service._persist_mapping(
+    link, reason = await service._persist_mapping(
         db,
         tenant_id=1,
         entity_type="document",
@@ -261,6 +271,7 @@ async def test_ai_persist_mapping_clears_confirmer_on_auto_apply(monkeypatch: py
         doc_type="policy",
         user=user,
     )
+    assert reason == "ok"
     assert link.auto_applied is True
     assert link.status == EvidenceLinkStatus.CONFIRMED
     assert link.confirmed_by_id is None
