@@ -108,13 +108,15 @@ class CoverBlockIndex:
                 continue
             ref = action.clause_reference
             iso = action.iso_standard
-            tokens: list[str] = []
+            action_tokens: list[str] = []
             if ref:
-                tokens.extend(part.strip() for part in str(ref).replace(";", ",").split(",") if part.strip())
+                action_tokens.extend(
+                    part.strip() for part in str(ref).replace(";", ",").split(",") if part.strip()
+                )
             if iso and ref:
-                tokens.append(f"{iso}-{ref}")
-            if tokens:
-                index._open_action_tokens.append((tokens, status_value(action.status)))
+                action_tokens.append(f"{iso}-{ref}")
+            if action_tokens:
+                index._open_action_tokens.append((action_tokens, status_value(action.status)))
 
         return index
 
