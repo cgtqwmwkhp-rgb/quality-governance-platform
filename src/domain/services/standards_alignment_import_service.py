@@ -397,16 +397,19 @@ def build_edges(payload: dict[str, Any]) -> tuple[list[BuiltEdge], list[str]]:
         title = str(row.get("title") or clause_ref)
         row_key = str(row.get("row_key") or clause_ref)
         for pair in row.get("pairs") or []:
-            left = pair.get("a") or []
-            right = pair.get("b") or []
-            if len(left) != 2 or len(right) != 2:
+            pair_a = pair.get("a") or []
+            pair_b = pair.get("b") or []
+            if not isinstance(pair_a, list) or not isinstance(pair_b, list):
+                warnings.append(f"{clause_ref}: malformed supplementary pair {pair!r} — skipped.")
+                continue
+            if len(pair_a) != 2 or len(pair_b) != 2:
                 warnings.append(f"{clause_ref}: malformed supplementary pair {pair!r} — skipped.")
                 continue
             src_fw, src_key, dst_fw, dst_key = canonical_alignment_pair(
-                str(left[0]),
-                _clause_key(str(left[0]), str(left[1])),
-                str(right[0]),
-                _clause_key(str(right[0]), str(right[1])),
+                str(pair_a[0]),
+                _clause_key(str(pair_a[0]), str(pair_a[1])),
+                str(pair_b[0]),
+                _clause_key(str(pair_b[0]), str(pair_b[1])),
             )
             if (src_fw, src_key) == (dst_fw, dst_key):
                 warnings.append(f"{clause_ref}: supplementary pair {pair!r} refers to itself — skipped.")
@@ -486,46 +489,46 @@ class StandardsAlignmentImportService:
 
         previous: dict[EdgeKey, AlignmentEdge] = {}
         if active is not None:
-            for edge in await self._edges_for_version(tenant_id=tenant_id, version_id=active.id):
+            for stored in await self._edges_for_version(tenant_id=tenant_id, version_id=active.id):
                 previous[
                     EdgeKey(
-                        edge.src_framework,
-                        edge.src_clause_key,
-                        edge.dst_framework,
-                        edge.dst_clause_key,
+                        stored.src_framework,
+                        stored.src_clause_key,
+                        stored.dst_framework,
+                        stored.dst_clause_key,
                     )
-                ] = edge
+                ] = stored
 
         items: list[PlanItem] = []
-        for edge in edges:
-            existing = previous.get(edge.key)
+        for built in edges:
+            existing = previous.get(built.key)
             if existing is None:
                 change_type = "added"
                 previous_verdict = None
             else:
                 existing_verdict = _coerce_verdict(existing.verdict)
                 previous_verdict = existing_verdict.value
-                change_type = "unchanged" if existing_verdict is edge.verdict else "changed"
+                change_type = "unchanged" if existing_verdict is built.verdict else "changed"
             items.append(
                 PlanItem(
-                    token=edge.key.as_token(),
+                    token=built.key.as_token(),
                     change_type=change_type,
-                    src_framework=edge.key.src_framework,
-                    src_clause_key=edge.key.src_clause_key,
-                    dst_framework=edge.key.dst_framework,
-                    dst_clause_key=edge.key.dst_clause_key,
-                    clause_ref=edge.clause_ref,
-                    title=edge.title,
-                    verdict=edge.verdict.value,
+                    src_framework=built.key.src_framework,
+                    src_clause_key=built.key.src_clause_key,
+                    dst_framework=built.key.dst_framework,
+                    dst_clause_key=built.key.dst_clause_key,
+                    clause_ref=built.clause_ref,
+                    title=built.title,
+                    verdict=built.verdict.value,
                     previous_verdict=previous_verdict,
-                    is_pair_override=edge.is_pair_override,
-                    addition_text=edge.addition_text,
-                    rationale=edge.rationale,
+                    is_pair_override=built.is_pair_override,
+                    addition_text=built.addition_text,
+                    rationale=built.rationale,
                 )
             )
 
-        incoming_keys = {edge.key for edge in edges}
-        for key, edge in previous.items():
+        incoming_keys = {built.key for built in edges}
+        for key, stored in previous.items():
             if key in incoming_keys:
                 continue
             items.append(
@@ -536,10 +539,10 @@ class StandardsAlignmentImportService:
                     src_clause_key=key.src_clause_key,
                     dst_framework=key.dst_framework,
                     dst_clause_key=key.dst_clause_key,
-                    clause_ref=edge.clause_ref,
-                    title=edge.title,
+                    clause_ref=stored.clause_ref,
+                    title=stored.title,
                     verdict=None,
-                    previous_verdict=_coerce_verdict(edge.verdict).value,
+                    previous_verdict=_coerce_verdict(stored.verdict).value,
                 )
             )
 
@@ -585,15 +588,15 @@ class StandardsAlignmentImportService:
         active = await self._active_version(tenant_id=tenant_id, source_ref=source_ref)
         previous: dict[EdgeKey, AlignmentEdge] = {}
         if active is not None:
-            for edge in await self._edges_for_version(tenant_id=tenant_id, version_id=active.id):
+            for stored in await self._edges_for_version(tenant_id=tenant_id, version_id=active.id):
                 previous[
                     EdgeKey(
-                        edge.src_framework,
-                        edge.src_clause_key,
-                        edge.dst_framework,
-                        edge.dst_clause_key,
+                        stored.src_framework,
+                        stored.src_clause_key,
+                        stored.dst_framework,
+                        stored.dst_clause_key,
                     )
-                ] = edge
+                ] = stored
 
         resulting = self._resolve_accepted(
             incoming=edges,
@@ -610,7 +613,7 @@ class StandardsAlignmentImportService:
                 version_label=active.version_label,
                 source_checksum=checksum,
                 edges_written=0,
-                rows=len({edge.row_key for edge in resulting}),
+                rows=len({built.row_key for built in resulting}),
                 created=False,
             )
 
@@ -629,7 +632,7 @@ class StandardsAlignmentImportService:
                 version_label=already.version_label,
                 source_checksum=checksum,
                 edges_written=0,
-                rows=len({edge.row_key for edge in resulting}),
+                rows=len({built.row_key for built in resulting}),
                 created=False,
             )
 
@@ -642,7 +645,7 @@ class StandardsAlignmentImportService:
             source_date=payload.get("source_date"),
             source_checksum=checksum,
             status=MatrixVersionStatus.DRAFT,
-            row_count=len({edge.row_key for edge in resulting}),
+            row_count=len({built.row_key for built in resulting}),
             edge_count=len(resulting),
             excluded_frameworks=", ".join(str(x) for x in (payload.get("excluded_frameworks") or [])) or None,
             notes=payload.get("notes"),
@@ -658,28 +661,28 @@ class StandardsAlignmentImportService:
                 "dry-run against the new active edition before applying."
             ) from exc
 
-        for edge in resulting:
+        for built in resulting:
             self.db.add(
                 AlignmentEdge(
                     tenant_id=tenant_id,
                     matrix_version_id=version.id,
-                    row_key=edge.row_key,
-                    clause_ref=edge.clause_ref,
-                    title=edge.title,
-                    src_framework=edge.key.src_framework,
-                    src_clause_key=edge.key.src_clause_key,
-                    src_clause_label=edge.src_clause_label,
-                    dst_framework=edge.key.dst_framework,
-                    dst_clause_key=edge.key.dst_clause_key,
-                    dst_clause_label=edge.dst_clause_label,
-                    verdict=edge.verdict,
-                    row_verdict=edge.row_verdict,
-                    is_pair_override=edge.is_pair_override,
-                    addition_text=edge.addition_text,
-                    rationale=edge.rationale,
-                    deliverables=edge.deliverables,
-                    source_sheet=edge.source_sheet,
-                    source_row=edge.source_row,
+                    row_key=built.row_key,
+                    clause_ref=built.clause_ref,
+                    title=built.title,
+                    src_framework=built.key.src_framework,
+                    src_clause_key=built.key.src_clause_key,
+                    src_clause_label=built.src_clause_label,
+                    dst_framework=built.key.dst_framework,
+                    dst_clause_key=built.key.dst_clause_key,
+                    dst_clause_label=built.dst_clause_label,
+                    verdict=built.verdict,
+                    row_verdict=built.row_verdict,
+                    is_pair_override=built.is_pair_override,
+                    addition_text=built.addition_text,
+                    rationale=built.rationale,
+                    deliverables=built.deliverables,
+                    source_sheet=built.source_sheet,
+                    source_row=built.source_row,
                 )
             )
 

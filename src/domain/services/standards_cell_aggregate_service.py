@@ -477,7 +477,9 @@ class StandardsCellAggregateService:
         tech_gap = tech_gap_guard.assess(
             framework=fw,
             clause_number=clause,
-            entity_types=[e.get("entity_type") for e in conformance if e.get("entity_type")],
+            entity_types=[
+                str(entity_type) for entity_type in (e.get("entity_type") for e in conformance) if entity_type
+            ],
         )
         if tech_gap.is_technical and not tech_gap.covered and verdict_info["verdict"] == "covered":
             verdict_info["verdict"] = "partial"
