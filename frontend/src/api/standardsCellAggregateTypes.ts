@@ -116,7 +116,65 @@ export type StandardsCellAggregate = {
     top_evidence_label?: string | null
     freshness?: string | null
   }
+  alignment?: StandardsCellAlignment
+  trap_blocked?: Array<Record<string, unknown>>
+  tech_gap?: StandardsCellTechGap
+  exact_share?: StandardsCellExactShare
   sor_note?: string
+}
+
+/** EXACT shared-apply preflight (Wave 2 PR-D). */
+export type StandardsExactShareCandidate = {
+  framework: string
+  clause_key: string
+  clause_number: string
+  verdict: AlignmentVerdict | string
+  eligible: boolean
+  blocked_reasons: string[]
+  open_nc_count: number
+  open_action_count: number
+  tech_gap_warning?: string | null
+}
+
+export type StandardsExactShareLink = {
+  link_id: number
+  entity_type: string
+  entity_id: string
+  title?: string | null
+  cover_kind: string
+  already_shared_frameworks: string[]
+}
+
+export type StandardsCellExactShare = {
+  available: boolean
+  unavailable_reason?: string | null
+  matrix_version?: string | null
+  matrix_version_id?: number | null
+  source: {
+    framework: string
+    clause_number: string
+    clause_key: string
+    cover_blocked: boolean
+  }
+  candidates: StandardsExactShareCandidate[]
+  shareable_links: StandardsExactShareLink[]
+}
+
+export type ExactShareApplyResponse = {
+  status: string
+  applied_at: string
+  matrix_version?: string | null
+  created: Array<{ link_id: number; framework: string; clause_id: string; verdict: string }>
+  already_linked: Array<{ link_id?: number | null; framework: string; clause_id: string }>
+  warnings: Array<{ framework: string; code: string }>
+  undo: { link_ids: number[]; applied_at: string }
+  sor_note?: string
+}
+
+export type ExactShareUndoResponse = {
+  status: string
+  deleted: number[]
+  skipped: Array<{ link_id: number; reason: string }>
 }
 
 /** PEL-HSEQ-5064 alignment vocabulary (Wave 2 PR-C). */

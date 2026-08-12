@@ -5,6 +5,8 @@
 import type { AxiosInstance } from 'axios'
 import type {
   AlignmentCatalogueResponse,
+  ExactShareApplyResponse,
+  ExactShareUndoResponse,
   StandardsCellAggregate,
   StandardsCellMatrixSummary,
 } from './standardsCellAggregateTypes'
@@ -37,5 +39,16 @@ export function createStandardsCellAggregateApi(api: AxiosInstance) {
         `/api/v1/compliance/alignment/catalogue${query ? `?${query}` : ''}`,
       )
     },
+    /** Wave 2 PR-D: create-only share onto EXACT peer columns. */
+    applyExactShare: (body: {
+      source_link_id: number
+      source_framework: string
+      source_clause: string
+      target_frameworks: string[]
+      matrix_version_id: number
+    }) => api.post<ExactShareApplyResponse>('/api/v1/compliance/evidence/exact-share', body),
+    /** Wave 2 PR-D: soft-delete links created by a prior apply. */
+    undoExactShare: (body: { link_ids: number[]; applied_at: string }) =>
+      api.post<ExactShareUndoResponse>('/api/v1/compliance/evidence/exact-share/undo', body),
   }
 }

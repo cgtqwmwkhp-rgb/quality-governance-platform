@@ -8,6 +8,7 @@ import { AuditsNcPanelSlot } from './workspace/AuditsNcPanelSlot'
 import { ActionsPanelSlot } from './workspace/ActionsPanelSlot'
 import { RisksPanelSlot } from './workspace/RisksPanelSlot'
 import { CertsPanelSlot } from './workspace/CertsPanelSlot'
+import { ExactShareBanner } from './workspace/ExactShareBanner'
 import { useStandardsCellAggregate } from './workspace/useStandardsCellAggregate'
 import type { FrameworkId } from './standardsMatrixFilters'
 import { STANDARDS_MATRIX_FRAMEWORKS } from './standardsMatrixFilters'
@@ -34,7 +35,7 @@ export function EvidenceWorkspaceHost({ selection, onClose }: EvidenceWorkspaceH
   const [tab, setTab] = useState<WorkspaceTabId>('evidence')
   const framework =
     STANDARDS_MATRIX_FRAMEWORKS.find((f) => f.id === selection.frameworkId) ?? null
-  const { data, loading, error } = useStandardsCellAggregate(
+  const { data, loading, error, refetch } = useStandardsCellAggregate(
     selection.frameworkId,
     selection.clauseNumber,
   )
@@ -93,6 +94,13 @@ export function EvidenceWorkspaceHost({ selection, onClose }: EvidenceWorkspaceH
             <X className="w-4 h-4" aria-hidden="true" />
           </Button>
         </div>
+
+        <ExactShareBanner
+          frameworkId={selection.frameworkId}
+          clauseNumber={selection.clauseNumber}
+          exactShare={data?.exact_share}
+          onShared={refetch}
+        />
 
         <Tabs
           value={tab}
