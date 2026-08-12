@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Seed the PEL-HSEQ-5064 alignment matrix for one tenant.
 
-Reads the checked-in payload at ``specs/standards/pel-hseq-5064-alignment-v1.0.json``
+Reads the checked-in payload at ``specs/standards/pel-hseq-5064-alignment-v1.1.json``
 and applies it through the import service, so the seed path and the API path share
 one set of rules. Safe to run repeatedly: applying the same payload twice writes
 nothing the second time.

@@ -196,6 +196,52 @@ def test_only_framed_tokens_match_a_framework_the_edition_does_not_carry():
     assert any_token_matches_cell(["chas-7.2"], keys, "7.2", framework="chas", guard=guard) is True
 
 
+def test_scheme_columns_still_require_framed_tokens_after_ce_edges_load():
+    """CE↔CE+ NEAR must not reopen W4 paint on a bare ``7.2``."""
+    from src.domain.models.standards_alignment import AlignmentEdge, MatrixVersion, MatrixVersionStatus
+    from src.domain.services.standards_alignment_import_service import build_edges, load_payload
+    from src.domain.services.standards_trap_guard import TrapGuard
+
+    edges, warnings = build_edges(load_payload())
+    assert warnings == []
+    stored = [
+        AlignmentEdge(
+            tenant_id=1,
+            matrix_version_id=1,
+            row_key=edge.row_key,
+            clause_ref=edge.clause_ref,
+            title=edge.title,
+            src_framework=edge.key.src_framework,
+            src_clause_key=edge.key.src_clause_key,
+            dst_framework=edge.key.dst_framework,
+            dst_clause_key=edge.key.dst_clause_key,
+            verdict=edge.verdict,
+            row_verdict=edge.row_verdict,
+            is_pair_override=False,
+        )
+        for edge in edges
+    ]
+    version = MatrixVersion(
+        tenant_id=1,
+        source_ref="PEL-HSEQ-5064",
+        version_label="1.1",
+        title="t",
+        source_checksum="c",
+        status=MatrixVersionStatus.ACTIVE,
+    )
+    guard = TrapGuard(edges=stored, version=version)
+    assert guard.covers_framework("ce") is True
+    assert requires_framed_tokens(guard, "ce") is True
+    assert requires_framed_tokens(guard, "chas") is True
+    assert requires_framed_tokens(guard, "9001") is False
+    chas_keys = clause_match_keys("chas", "7.2")
+    assert any_token_matches_cell(["7.2"], chas_keys, "7.2", framework="chas", guard=guard) is False
+    assert any_token_matches_cell(["9001-7.2"], chas_keys, "7.2", framework="chas", guard=guard) is False
+    ce_keys = clause_match_keys("ce", "7.2")
+    assert any_token_matches_cell(["7.2"], ce_keys, "7.2", framework="ce", guard=guard) is False
+    assert any_token_matches_cell(["ce-7.2"], ce_keys, "7.2", framework="ce", guard=guard) is True
+
+
 def test_matching_is_unchanged_for_carried_frameworks_and_for_an_empty_guard():
     """The gate must not narrow the columns the edition does carry, or an un-imported tenant."""
     keys = clause_match_keys("9001", "7.2")

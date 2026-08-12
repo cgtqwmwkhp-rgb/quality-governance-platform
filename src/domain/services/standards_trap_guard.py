@@ -82,6 +82,14 @@ ALIGNMENT_FRAMEWORK_IDS: tuple[str, ...] = (
     "uvdb",
 )
 
+#: Annex SL / ISO family. Auto-confirm and ISO-axis matching use this set.
+ISO_NUMBERING_FAMILY: frozenset[str] = frozenset({"9001", "14001", "45001", "27001", "22301"})
+
+#: Scheme / accreditation numbering. These columns always require framed tokens,
+#: even after an imported edge names them — otherwise a CE↔CE+ NEAR pair would
+#: flip ``covers_framework`` and reopen W4 cross-column paint on ``7.2``.
+SCHEME_NUMBERING_FAMILY: frozenset[str] = frozenset({"ce", "cep", "chas", "ssip", "uvdb", "pm", "iip"})
+
 #: ``iso9001:7.5`` and ``9001-7.5`` name the same framework.
 _ISO_PREFIX = re.compile(r"^iso[\s_]?(\d{4,5})$")
 
@@ -130,8 +138,22 @@ def clause_number_from_token(token: Any) -> str:
 
 
 def clause_key(framework: str, clause_number: str) -> str:
-    """Catalogue-shaped key, matching ``clauses.catalogue_key`` ("9001-7.2")."""
+    """Catalogue-shaped key, matching ``clauses.catalogue_key`` ("9001-7.2").
+
+    Case-preserving on the clause half so W5 IiP keys stay ``iip-IIP 7``.
+    Alignment lookup uses :func:`alignment_clause_key`.
+    """
     return f"{(framework or '').strip().lower()}-{str(clause_number or '').strip()}"
+
+
+def alignment_clause_key(framework: str, clause_number: str) -> str:
+    """Pair-index key: both halves lowercased, matching stored edge keys.
+
+    ``canonical_alignment_pair`` lowercases ``src_clause_key``, so a lookup
+    built from case-preserving ``clause_key("iip", "IIP 7")`` (``iip-IIP 7``)
+    misses the stored ``iip-iip 7`` and IiP EXACT peers read as empty.
+    """
+    return f"{(framework or '').strip().lower()}-{str(clause_number or '').strip().lower()}"
 
 
 @dataclass(frozen=True)
@@ -189,15 +211,18 @@ class TrapGuard:
                     row_frameworks.add(normalized)
                     self._frameworks.add(normalized)
             if edge.dst_framework is None or edge.dst_clause_key is None:
-                self._unique[(edge.src_framework, edge.src_clause_key)] = edge
+                src_fw, src_key, _, _ = canonical_alignment_pair(edge.src_framework, edge.src_clause_key, None, None)
+                self._unique[(src_fw, src_key)] = edge
             else:
-                key = (
+                src_fw, src_key, dst_fw, dst_key = canonical_alignment_pair(
                     edge.src_framework,
                     edge.src_clause_key,
                     edge.dst_framework,
                     edge.dst_clause_key,
                 )
-                self._pairs[key] = edge
+                if dst_fw is None or dst_key is None:
+                    continue
+                self._pairs[(src_fw, src_key, dst_fw, dst_key)] = edge
             # Row verdict for display: keep the most restrictive verdict seen on
             # the row, which is what a reader needs warning about.
             current = self._rows.get(edge.clause_ref)
@@ -289,9 +314,9 @@ class TrapGuard:
         """The stored edge for one unordered clause pair, if the matrix has one."""
         src_fw, src_key, dst_fw, dst_key = canonical_alignment_pair(
             src_framework,
-            clause_key(src_framework, src_clause),
+            alignment_clause_key(src_framework, src_clause),
             dst_framework,
-            clause_key(dst_framework, dst_clause),
+            alignment_clause_key(dst_framework, dst_clause),
         )
         if dst_fw is None or dst_key is None:
             return None
@@ -299,7 +324,7 @@ class TrapGuard:
 
     def unique_edge_for(self, framework: str, clause_number: str) -> Optional[AlignmentEdge]:
         """The UNIQUE edge for a clause, if the matrix says only one framework asks."""
-        return self._unique.get(((framework or "").strip().lower(), clause_key(framework, clause_number)))
+        return self._unique.get(((framework or "").strip().lower(), alignment_clause_key(framework, clause_number)))
 
     def row_verdict(self, clause_ref: str) -> Optional[AlignmentVerdict]:
         """The most restrictive verdict on a printed matrix row, for display."""
@@ -466,7 +491,7 @@ class TrapGuard:
 
         peers: list[dict[str, Any]] = []
         matched_refs: set[str] = set()
-        target_key = clause_key(cell_fw, clause)
+        target_key = alignment_clause_key(cell_fw, clause)
         for (src_fw, src_key, dst_fw, dst_key), edge in self._pairs.items():
             if (src_fw, src_key) == (cell_fw, target_key):
                 peer_fw, peer_key = dst_fw, dst_key

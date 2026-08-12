@@ -49,7 +49,8 @@ from src.domain.models.standards_alignment import (
 logger = logging.getLogger(__name__)
 
 #: Where the checked-in payload lives, relative to the repository root.
-DEFAULT_PAYLOAD_PATH = Path("specs/standards/pel-hseq-5064-alignment-v1.0.json")
+DEFAULT_PAYLOAD_PATH = Path("specs/standards/pel-hseq-5064-alignment-v1.1.json")
+DEFAULT_SOURCE_AUTHORITY = "pel-hseq-5064"
 
 _RESTRICTIVENESS_RANK: dict[AlignmentVerdict, int] = {
     verdict: rank for rank, verdict in enumerate(VERDICT_RESTRICTIVENESS)
@@ -116,6 +117,7 @@ class BuiltEdge:
     deliverables: Optional[str] = None
     source_sheet: Optional[str] = None
     source_row: Optional[int] = None
+    source_authority: Optional[str] = None
 
     def checksum_tuple(self) -> tuple[Any, ...]:
         """The fields that make two editions of this pair the same edition.
@@ -310,6 +312,7 @@ def build_edges(payload: dict[str, Any]) -> tuple[list[BuiltEdge], list[str]]:
         deliverables = row.get("deliverables")
         source_sheet = row.get("source_sheet")
         source_row = row.get("source_row")
+        source_authority = str(row.get("source_authority") or DEFAULT_SOURCE_AUTHORITY)
 
         frameworks_raw = row.get("frameworks") or {}
         frameworks = sorted(str(key).strip().lower() for key in frameworks_raw if str(key).strip())
@@ -352,6 +355,7 @@ def build_edges(payload: dict[str, Any]) -> tuple[list[BuiltEdge], list[str]]:
                     deliverables=deliverables,
                     source_sheet=source_sheet,
                     source_row=source_row,
+                    source_authority=source_authority,
                 )
             )
             continue
@@ -390,6 +394,7 @@ def build_edges(payload: dict[str, Any]) -> tuple[list[BuiltEdge], list[str]]:
                     deliverables=deliverables,
                     source_sheet=source_sheet,
                     source_row=source_row,
+                    source_authority=source_authority,
                 )
             )
 
@@ -398,6 +403,7 @@ def build_edges(payload: dict[str, Any]) -> tuple[list[BuiltEdge], list[str]]:
         row_verdict = _verdict(row.get("verdict"))
         title = str(row.get("title") or clause_ref)
         row_key = str(row.get("row_key") or clause_ref)
+        source_authority = str(row.get("source_authority") or DEFAULT_SOURCE_AUTHORITY)
         for pair in row.get("pairs") or []:
             pair_a = pair.get("a") or []
             pair_b = pair.get("b") or []
@@ -430,6 +436,7 @@ def build_edges(payload: dict[str, Any]) -> tuple[list[BuiltEdge], list[str]]:
                     deliverables=row.get("deliverables"),
                     source_sheet=row.get("source_sheet"),
                     source_row=row.get("source_row"),
+                    source_authority=source_authority,
                 )
             )
 
@@ -711,6 +718,7 @@ class StandardsAlignmentImportService:
             row_count=len({built.row_key for built in resulting}),
             edge_count=len(resulting),
             excluded_frameworks=", ".join(str(x) for x in (payload.get("excluded_frameworks") or [])) or None,
+            coverage_declarations=payload.get("coverage_declarations") or None,
             notes=payload.get("notes"),
             imported_by_id=imported_by_id,
         )
@@ -746,6 +754,7 @@ class StandardsAlignmentImportService:
                     deliverables=built.deliverables,
                     source_sheet=built.source_sheet,
                     source_row=built.source_row,
+                    source_authority=built.source_authority,
                 )
             )
 

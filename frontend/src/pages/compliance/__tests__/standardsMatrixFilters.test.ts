@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   chunkClausesForRequest,
   filterClauseCatalogueRows,
+  schemeAxisCatalogueRows,
+  cellIsInteractive,
+  frameworkIdFromCode,
   frameworkIdFromCode,
   MATRIX_CELL_REQUEST_LIMIT,
   parseComplianceShellView,
@@ -58,6 +61,26 @@ describe('standardsMatrixFilters', () => {
       { id: '4', kind: 'accreditation', clauseNumber: 'CHAS-1' },
     ])
     expect(rows.map((r) => r.id)).toEqual(['1', '3', '4'])
+  })
+
+  it('keeps CE scheme-axis rows in a separate band and only CE/CEP clickable', () => {
+    const source = [
+      { id: 'iso', kind: 'standard', clauseNumber: '7.2' },
+      {
+        id: 'ce-fw',
+        kind: 'scheme',
+        clauseNumber: 'firewalls',
+        axisFrameworks: ['ce', 'cep'],
+      },
+      { id: 'uvdb-shell', kind: 'scheme', frameworkId: 'uvdb' as const, clauseNumber: 'UVDB' },
+    ]
+    expect(filterClauseCatalogueRows(source).map((r) => r.id)).toEqual(['iso'])
+    expect(schemeAxisCatalogueRows(source).map((r) => r.id)).toEqual(['ce-fw'])
+    const ceRow = schemeAxisCatalogueRows(source)[0]
+    expect(cellIsInteractive(ceRow, 'ce')).toBe(true)
+    expect(cellIsInteractive(ceRow, 'cep')).toBe(true)
+    expect(cellIsInteractive(ceRow, '9001')).toBe(false)
+    expect(cellIsInteractive(source[0], 'chas')).toBe(true)
   })
 
   it('resolves presets and column intersections', () => {

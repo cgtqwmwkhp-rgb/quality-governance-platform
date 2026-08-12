@@ -30,6 +30,7 @@ from src.domain.models.standards_alignment import (
     MatrixVersionStatus,
 )
 from src.domain.services.standards_requirement_axis import requirement_axes_payload
+from src.domain.services.standards_trap_guard import SCHEME_NUMBERING_FAMILY
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,7 @@ class StandardsAlignmentReadService:
                 "rows": [],
                 "frameworks": [],
                 "excluded_frameworks": [],
+                "coverage_declarations": {},
                 "requirement_axes": requirement_axes_payload(alignment_clause_keys=set()),
                 "fallback_note": (
                     "No alignment matrix edition has been imported for this tenant. "
@@ -196,6 +198,8 @@ class StandardsAlignmentReadService:
             row.pop("_verdict_rank", None)
             axis_fws = sorted(row["frameworks"].keys())
             row["axis_frameworks"] = axis_fws
+            if axis_fws and all(fw in SCHEME_NUMBERING_FAMILY for fw in axis_fws):
+                row["kind"] = "scheme"
             for fw, entry in row["frameworks"].items():
                 key = entry.get("clause_key")
                 if key:
@@ -211,6 +215,7 @@ class StandardsAlignmentReadService:
             "excluded_frameworks": [
                 part.strip() for part in (version.excluded_frameworks or "").split(",") if part.strip()
             ],
+            "coverage_declarations": version.coverage_declarations or {},
             "row_count": len(ordered),
             "edge_count": len(edges),
             "requirement_axes": requirement_axes_payload(alignment_clause_keys=alignment_keys),

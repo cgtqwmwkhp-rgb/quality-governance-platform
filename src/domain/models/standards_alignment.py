@@ -41,7 +41,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base, CaseInsensitiveEnum, DataClassification, TimestampMixin
@@ -186,6 +186,8 @@ class MatrixVersion(Base, TimestampMixin):
     #: Frameworks deliberately left out of the import, recorded so the omission
     #: is visible rather than looking like missing data.
     excluded_frameworks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #: Per-framework coverage honesty (e.g. ``{"chas": {"status": "declared_absent"}}``).
+    coverage_declarations: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     imported_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
@@ -305,6 +307,8 @@ class AlignmentEdge(Base, TimestampMixin):
 
     source_sheet: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     source_row: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    #: Who authorised this pair (``pel-hseq-5064``, ``ncsc_cyber_essentials``, …).
+    source_authority: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 

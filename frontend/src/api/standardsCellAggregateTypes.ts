@@ -258,6 +258,7 @@ export type AlignmentCatalogueRow = {
   deliverables?: string | null
   pair_count: number
   trap_pair_count: number
+  axis_frameworks?: string[]
   frameworks: Record<
     string,
     {

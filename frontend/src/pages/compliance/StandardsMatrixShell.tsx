@@ -25,6 +25,8 @@ import {
 import {
   chunkClausesForRequest,
   filterClauseCatalogueRows,
+  schemeAxisCatalogueRows,
+  cellIsInteractive,
   MATRIX_PRESET_IDS,
   STANDARDS_MATRIX_FRAMEWORKS,
   visibleFrameworks,
@@ -213,9 +215,12 @@ export function StandardsMatrixShell({
           kind: row.kind || 'standard',
           clauseNumber: row.clauseNumber,
           title: row.title,
+          axisFrameworks: row.axis_frameworks || Object.keys(row.frameworks || {}),
         }))
       : FALLBACK_CATALOGUE_ROWS
-    const rows = filterClauseCatalogueRows(source)
+    const standardRows = filterClauseCatalogueRows(source)
+    const schemeRows = schemeAxisCatalogueRows(source)
+    const rows = [...standardRows, ...schemeRows]
     if (!initialClause) return rows
     const needle = initialClause.trim().toLowerCase()
     const matched = rows.filter(
@@ -341,6 +346,135 @@ export function StandardsMatrixShell({
       techGapStub: false,
       scanTruncated: false,
     }
+  }
+
+  const renderMatrixRow = (row: CatalogueRowLike) => {
+    const clauseNumber = row.clauseNumber || row.id
+    const title = row.title || clauseNumber
+    const alignmentRow = rowVerdicts[clauseNumber]
+    return (
+      <tr key={row.id} className="border-b border-border/60">
+        <td className="sticky left-0 z-10 bg-card px-3 py-2 text-sm">
+          <div className="font-medium text-foreground">{clauseNumber}</div>
+          <div className="text-xs text-muted-foreground truncate max-w-[220px]">{title}</div>
+        </td>
+        <td className="px-2 py-2 text-left">
+          {alignmentRow ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className={cn('text-[10px]', verdictTone(alignmentRow.verdict))}
+                  data-testid={`standards-matrix-verdict-${clauseNumber}`}
+                >
+                  {alignmentRow.verdict}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-sm p-3 text-xs">
+                <p className="font-medium">
+                  {t('compliance.standards_matrix.verdict_row', {
+                    defaultValue: 'Source verdict: {{verdict}}',
+                    verdict: alignmentRow.row_verdict,
+                  })}
+                </p>
+                {alignmentRow.is_trap ? (
+                  <p className="mt-1 text-destructive">
+                    {t('compliance.standards_matrix.trap_warning', {
+                      defaultValue:
+                        'Shared clause number, different requirement — evidence cannot be crossed on {{count}} pair(s).',
+                      count: alignmentRow.trap_pair_count,
+                    })}
+                  </p>
+                ) : null}
+                {alignmentRow.addition_text ? (
+                  <p className="mt-1 text-muted-foreground">{alignmentRow.addition_text}</p>
+                ) : null}
+                {alignmentRow.deliverables ? (
+                  <p className="mt-1 text-muted-foreground">
+                    {t('compliance.standards_matrix.deliverables', {
+                      defaultValue: 'Deliverable: {{value}}',
+                      value: alignmentRow.deliverables,
+                    })}
+                  </p>
+                ) : null}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">
+              {t('compliance.standards_matrix.verdict_unknown', { defaultValue: '—' })}
+            </span>
+          )}
+        </td>
+        {columns.map((col) => {
+          const interactive = cellIsInteractive(row, col.id)
+          const live = resolveCell(col.id, clauseNumber)
+          const cellClauseNumber = cellClause(col.id, clauseNumber)
+          const isSelected =
+            selected?.frameworkId === col.id && selected?.clauseNumber === cellClauseNumber
+          if (!interactive) {
+            return (
+              <td key={col.id} className="px-1.5 py-1.5 text-center">
+                <span
+                  className="mx-auto flex h-9 w-full max-w-[4.5rem] items-center justify-center text-[10px] text-muted-foreground"
+                  data-testid={`standards-matrix-cell-${col.id}-${clauseNumber}-inert`}
+                  aria-hidden="true"
+                >
+                  —
+                </span>
+              </td>
+            )
+          }
+          return (
+            <td key={col.id} className="px-1.5 py-1.5 text-center">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'mx-auto flex h-9 w-full max-w-[4.5rem] items-center justify-center rounded-md border text-[10px] font-medium transition-colors',
+                      cellTone(live.verdict),
+                      live.recurrenceRedFlag && 'ring-1 ring-destructive',
+                      isSelected && 'ring-2 ring-primary',
+                    )}
+                    onClick={() =>
+                      onSelectCell({
+                        frameworkId: col.id,
+                        clauseNumber: cellClauseNumber,
+                        clauseTitle: title,
+                      })
+                    }
+                    data-testid={`standards-matrix-cell-${col.id}-${clauseNumber}`}
+                    aria-label={`${col.label} ${cellClauseNumber}`}
+                  >
+                    {t(`compliance.standards_matrix.verdict.${live.verdict}`, {
+                      defaultValue: live.verdict,
+                    })}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="p-3">
+                  <StandardsCellHoverPreview
+                    frameworkLabel={col.label}
+                    frameworkHomeUrl={col.homeUrl}
+                    clauseNumber={cellClauseNumber}
+                    clauseTitle={title}
+                    verdict={live.verdict}
+                    topEvidenceLabel={live.topEvidenceLabel}
+                    freshnessLabel={live.freshnessLabel}
+                    coverBlocked={live.coverBlocked}
+                    recurrenceRedFlag={live.recurrenceRedFlag}
+                    isStub={Boolean(liveError)}
+                    alignmentVerdict={live.alignmentVerdict ?? null}
+                    isTrapRow={Boolean(live.isTrapRow)}
+                    techGapStub={Boolean(live.techGapStub)}
+                    scanTruncated={Boolean(live.scanTruncated)}
+                  />
+                </TooltipContent>
+              </Tooltip>
+            </td>
+          )
+        })}
+      </tr>
+    )
   }
 
   return (
@@ -490,121 +624,24 @@ export function StandardsMatrixShell({
                 </tr>
               </thead>
               <tbody>
-                {catalogueRows.map((row) => {
-                  const clauseNumber = row.clauseNumber || row.id
-                  const title = row.title || clauseNumber
-                  const alignmentRow = rowVerdicts[clauseNumber]
-                  return (
-                    <tr key={row.id} className="border-b border-border/60">
-                      <td className="sticky left-0 z-10 bg-card px-3 py-2 text-sm">
-                        <div className="font-medium text-foreground">{clauseNumber}</div>
-                        <div className="text-xs text-muted-foreground truncate max-w-[220px]">{title}</div>
-                      </td>
-                      <td className="px-2 py-2 text-left">
-                        {alignmentRow ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge
-                                variant="outline"
-                                className={cn('text-[10px]', verdictTone(alignmentRow.verdict))}
-                                data-testid={`standards-matrix-verdict-${clauseNumber}`}
-                              >
-                                {alignmentRow.verdict}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent side="right" className="max-w-sm p-3 text-xs">
-                              <p className="font-medium">
-                                {t('compliance.standards_matrix.verdict_row', {
-                                  defaultValue: 'Source verdict: {{verdict}}',
-                                  verdict: alignmentRow.row_verdict,
-                                })}
-                              </p>
-                              {alignmentRow.is_trap ? (
-                                <p className="mt-1 text-destructive">
-                                  {t('compliance.standards_matrix.trap_warning', {
-                                    defaultValue:
-                                      'Shared clause number, different requirement — evidence cannot be crossed on {{count}} pair(s).',
-                                    count: alignmentRow.trap_pair_count,
-                                  })}
-                                </p>
-                              ) : null}
-                              {alignmentRow.addition_text ? (
-                                <p className="mt-1 text-muted-foreground">{alignmentRow.addition_text}</p>
-                              ) : null}
-                              {alignmentRow.deliverables ? (
-                                <p className="mt-1 text-muted-foreground">
-                                  {t('compliance.standards_matrix.deliverables', {
-                                    defaultValue: 'Deliverable: {{value}}',
-                                    value: alignmentRow.deliverables,
-                                  })}
-                                </p>
-                              ) : null}
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">
-                            {t('compliance.standards_matrix.verdict_unknown', { defaultValue: '—' })}
-                          </span>
-                        )}
-                      </td>
-                      {columns.map((col) => {
-                        const live = resolveCell(col.id, clauseNumber)
-                        const cellClauseNumber = cellClause(col.id, clauseNumber)
-                        const isSelected =
-                          selected?.frameworkId === col.id &&
-                          selected?.clauseNumber === cellClauseNumber
-                        return (
-                          <td key={col.id} className="px-1.5 py-1.5 text-center">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className={cn(
-                                    'mx-auto flex h-9 w-full max-w-[4.5rem] items-center justify-center rounded-md border text-[10px] font-medium transition-colors',
-                                    cellTone(live.verdict),
-                                    live.recurrenceRedFlag && 'ring-1 ring-destructive',
-                                    isSelected && 'ring-2 ring-primary',
-                                  )}
-                                  onClick={() =>
-                                    onSelectCell({
-                                      frameworkId: col.id,
-                                      clauseNumber: cellClauseNumber,
-                                      clauseTitle: title,
-                                    })
-                                  }
-                                  data-testid={`standards-matrix-cell-${col.id}-${clauseNumber}`}
-                                  aria-label={`${col.label} ${cellClauseNumber}`}
-                                >
-                                  {t(`compliance.standards_matrix.verdict.${live.verdict}`, {
-                                    defaultValue: live.verdict,
-                                  })}
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="p-3">
-                                <StandardsCellHoverPreview
-                                  frameworkLabel={col.label}
-                                  frameworkHomeUrl={col.homeUrl}
-                                  clauseNumber={cellClauseNumber}
-                                  clauseTitle={title}
-                                  verdict={live.verdict}
-                                  topEvidenceLabel={live.topEvidenceLabel}
-                                  freshnessLabel={live.freshnessLabel}
-                                  coverBlocked={live.coverBlocked}
-                                  recurrenceRedFlag={live.recurrenceRedFlag}
-                                  isStub={Boolean(liveError)}
-                                  alignmentVerdict={live.alignmentVerdict ?? null}
-                                  isTrapRow={Boolean(live.isTrapRow)}
-                                  techGapStub={Boolean(live.techGapStub)}
-                                  scanTruncated={Boolean(live.scanTruncated)}
-                                />
-                              </TooltipContent>
-                            </Tooltip>
-                          </td>
-                        )
+                {catalogueRows
+                  .filter((row) => row.kind !== 'scheme')
+                  .map((row) => renderMatrixRow(row))}
+                {catalogueRows.some((row) => row.kind === 'scheme') ? (
+                  <tr className="border-b border-border bg-muted/30" data-testid="standards-matrix-scheme-band">
+                    <td
+                      colSpan={2 + columns.length}
+                      className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      {t('compliance.standards_matrix.scheme_band', {
+                        defaultValue: 'Scheme controls (own numbering — CE / CE+)',
                       })}
-                    </tr>
-                  )
-                })}
+                    </td>
+                  </tr>
+                ) : null}
+                {catalogueRows
+                  .filter((row) => row.kind === 'scheme')
+                  .map((row) => renderMatrixRow(row))}
               </tbody>
             </table>
           </TooltipProvider>
