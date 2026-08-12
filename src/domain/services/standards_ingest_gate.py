@@ -110,9 +110,7 @@ class CoverBlockIndex:
             iso = action.iso_standard
             action_tokens: list[str] = []
             if ref:
-                action_tokens.extend(
-                    part.strip() for part in str(ref).replace(";", ",").split(",") if part.strip()
-                )
+                action_tokens.extend(part.strip() for part in str(ref).replace(";", ",").split(",") if part.strip())
             if iso and ref:
                 action_tokens.append(f"{iso}-{ref}")
             if action_tokens:
