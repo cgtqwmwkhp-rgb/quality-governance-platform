@@ -1,0 +1,542 @@
+"""EXACT shared-apply for Standards matrix cells (Wave 2 PR-D slice 1).
+
+One deliverable that already covers a source clause may be linked onto every
+EXACT peer column from the imported PEL-HSEQ-5064 matrix — create-only, with a
+scoped soft-delete undo. NEAR peers are intentionally out of scope until an
+addition is attested.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Optional, Sequence
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceCoverKind,
+    EvidenceLinkMethod,
+)
+from src.domain.services.compliance_evidence_link_writer import (
+    create_evidence_links_if_absent,
+    soft_delete_evidence_link,
+)
+from src.domain.services.iso_compliance_service import counts_toward_compliance_coverage
+from src.domain.services.standards_cell_aggregate_service import (
+    StandardsCellAggregateService,
+    clause_match_keys,
+    token_matches_clause,
+)
+from src.domain.services.standards_tech_gap_guard import assess as tech_gap_assess
+from src.domain.services.standards_trap_guard import (
+    clause_number_from_token,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ExactSharePlan:
+    """Preflight payload merged into ``GET /cell-aggregate`` as ``exact_share``."""
+
+    available: bool
+    unavailable_reason: Optional[str] = None
+    matrix_version: Optional[str] = None
+    matrix_version_id: Optional[int] = None
+    source: dict[str, Any] = field(default_factory=dict)
+    candidates: list[dict[str, Any]] = field(default_factory=list)
+    shareable_links: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "available": self.available,
+            "unavailable_reason": self.unavailable_reason,
+            "matrix_version": self.matrix_version,
+            "matrix_version_id": self.matrix_version_id,
+            "source": self.source,
+            "candidates": self.candidates,
+            "shareable_links": self.shareable_links,
+        }
+
+
+class ExactShareService:
+    """Plan / apply / undo EXACT evidence sharing across aligned matrix columns."""
+
+    def __init__(
+        self,
+        db: AsyncSession,
+        *,
+        aggregate: Optional[StandardsCellAggregateService] = None,
+    ):
+        self.db = db
+        self.aggregate = aggregate or StandardsCellAggregateService(db)
+
+    async def plan(
+        self,
+        *,
+        tenant_id: int,
+        framework: str,
+        clause_number: str,
+        source_cell: Optional[Any] = None,
+    ) -> ExactSharePlan:
+        """Build the EXACT-share preflight for one source cell.
+
+        ``source_cell`` may be a pre-fetched :class:`CellAggregateResult` so the
+        route can reuse the cell it already loaded. Candidates still call
+        ``get_cell`` once each (bounded by EXACT peer count).
+        """
+        fw = framework.strip().lower()
+        clause = clause_number.strip()
+        guard = await self.aggregate.trap_guard(tenant_id)
+
+        if source_cell is None:
+            source_cell = await self.aggregate.get_cell(
+                tenant_id=tenant_id, framework=fw, clause_number=clause
+            )
+
+        source_payload = {
+            "framework": fw,
+            "clause_number": clause,
+            "clause_key": f"{fw}-{clause}",
+            "cover_blocked": bool(source_cell.cover_blocked),
+        }
+
+        if not guard.is_loaded:
+            return ExactSharePlan(
+                available=False,
+                unavailable_reason="matrix_not_loaded",
+                source=source_payload,
+            )
+
+        annotation = guard.annotate_cell(framework=fw, clause_number=clause)
+        exact_peers = [
+            peer
+            for peer in annotation.get("peers") or []
+            if str(peer.get("verdict") or "").upper() == "EXACT"
+        ]
+        if not exact_peers:
+            return ExactSharePlan(
+                available=False,
+                unavailable_reason="no_exact_peers",
+                matrix_version=guard.version_label,
+                matrix_version_id=guard.version_id,
+                source=source_payload,
+            )
+
+        if source_cell.cover_blocked:
+            return ExactSharePlan(
+                available=False,
+                unavailable_reason="source_cover_blocked",
+                matrix_version=guard.version_label,
+                matrix_version_id=guard.version_id,
+                source=source_payload,
+                candidates=await self._candidate_rows(
+                    tenant_id=tenant_id, peers=exact_peers, entity_type=None
+                ),
+            )
+
+        conformance = [
+            e
+            for e in (source_cell.evidence or [])
+            if counts_toward_compliance_coverage(e.get("signal_type"))
+        ]
+        if not conformance:
+            return ExactSharePlan(
+                available=False,
+                unavailable_reason="no_conformance_evidence",
+                matrix_version=guard.version_label,
+                matrix_version_id=guard.version_id,
+                source=source_payload,
+                candidates=await self._candidate_rows(
+                    tenant_id=tenant_id, peers=exact_peers, entity_type=None
+                ),
+            )
+
+        # Prefer the first conformance link's entity type for tech-gap warnings.
+        entity_type = str(conformance[0].get("entity_type") or "") or None
+        candidates = await self._candidate_rows(
+            tenant_id=tenant_id, peers=exact_peers, entity_type=entity_type
+        )
+
+        shareable_links = await self._shareable_links(
+            tenant_id=tenant_id,
+            framework=fw,
+            clause_number=clause,
+            evidence_rows=conformance,
+            candidates=candidates,
+        )
+
+        eligible = any(c.get("eligible") for c in candidates)
+        return ExactSharePlan(
+            available=eligible and bool(shareable_links),
+            unavailable_reason=None,
+            matrix_version=guard.version_label,
+            matrix_version_id=guard.version_id,
+            source=source_payload,
+            candidates=candidates,
+            shareable_links=shareable_links,
+        )
+
+    async def apply(
+        self,
+        *,
+        tenant_id: int,
+        actor_id: Optional[int],
+        actor_email: Optional[str],
+        source_link_id: int,
+        source_framework: str,
+        source_clause: str,
+        target_frameworks: Sequence[str],
+        matrix_version_id: int,
+    ) -> dict[str, Any]:
+        """Create CEL rows on requested EXACT peers for one source link."""
+        fw = source_framework.strip().lower()
+        clause = source_clause.strip()
+        targets = sorted({str(t).strip().lower() for t in target_frameworks if str(t).strip()})
+        if not targets:
+            raise BadRequestError("target_frameworks must name at least one framework")
+
+        guard = await self.aggregate.trap_guard(tenant_id)
+        if not guard.is_loaded:
+            raise ConflictError(
+                "EXACT share refused: alignment matrix is not loaded",
+                code="EXACT_SHARE_MATRIX_NOT_LOADED",
+            )
+        if guard.version_id != matrix_version_id:
+            raise ConflictError(
+                "EXACT share refused: matrix edition changed since plan",
+                code="EXACT_SHARE_MATRIX_VERSION_MISMATCH",
+                details={
+                    "expected_matrix_version_id": matrix_version_id,
+                    "active_matrix_version_id": guard.version_id,
+                },
+            )
+
+        source_link = await self._load_live_link(tenant_id=tenant_id, link_id=source_link_id)
+        if source_link is None:
+            raise NotFoundError("Source evidence link not found")
+
+        keys = clause_match_keys(fw, clause)
+        if not token_matches_clause(source_link.clause_id, keys, clause):
+            raise BadRequestError("Source link does not belong to the requested cell")
+
+        if not counts_toward_compliance_coverage(source_link.signal_type):
+            raise ConflictError(
+                "EXACT share refused: source link is not conformance evidence",
+                code="EXACT_SHARE_NONCONFORMANCE_SIGNAL",
+                details={"signal_type": source_link.signal_type},
+            )
+
+        source_cell = await self.aggregate.get_cell(
+            tenant_id=tenant_id, framework=fw, clause_number=clause
+        )
+        if source_cell.cover_blocked:
+            raise ConflictError(
+                "EXACT share refused: source cell is cover-blocked",
+                code="EXACT_SHARE_SOURCE_BLOCKED",
+                details={"cover_blocked": True},
+            )
+
+        annotation = guard.annotate_cell(framework=fw, clause_number=clause)
+        exact_by_fw = {
+            str(peer["framework"]).strip().lower(): peer
+            for peer in (annotation.get("peers") or [])
+            if str(peer.get("verdict") or "").upper() == "EXACT"
+        }
+
+        blocked_targets: list[dict[str, Any]] = []
+        resolved: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
+
+        for target_fw in targets:
+            peer = exact_by_fw.get(target_fw)
+            if peer is None:
+                blocked_targets.append(
+                    {"framework": target_fw, "blocked_reasons": ["not_exact_peer"]}
+                )
+                continue
+            peer_clause = clause_number_from_token(peer["clause_key"]) or str(peer["clause_key"])
+            # Prefer the local number after the framework prefix when the token
+            # parser returns the full key (defensive for unusual keys).
+            if peer_clause.startswith(f"{target_fw}-"):
+                peer_clause = peer_clause[len(target_fw) + 1 :]
+
+            target_cell = await self.aggregate.get_cell(
+                tenant_id=tenant_id, framework=target_fw, clause_number=peer_clause
+            )
+            reasons: list[str] = []
+            open_nc = int((target_cell.summary or {}).get("open_nc_count") or 0)
+            open_action = int((target_cell.summary or {}).get("open_action_count") or 0)
+            if target_cell.cover_blocked:
+                if open_nc > 0:
+                    reasons.append("target_open_nc")
+                if open_action > 0:
+                    reasons.append("target_open_action")
+                if not reasons:
+                    reasons.append("target_cover_blocked")
+                blocked_targets.append({"framework": target_fw, "blocked_reasons": reasons})
+                continue
+
+            tech = tech_gap_assess(
+                framework=target_fw,
+                clause_number=peer_clause,
+                entity_types=[source_link.entity_type],
+            )
+            if tech.is_technical and not tech.covered:
+                warnings.append(
+                    {"framework": target_fw, "code": "tech_gap_attestation_missing"}
+                )
+
+            resolved.append(
+                {
+                    "framework": target_fw,
+                    "clause_key": peer["clause_key"],
+                    "clause_number": peer_clause,
+                    "verdict": "EXACT",
+                }
+            )
+
+        if blocked_targets:
+            raise ConflictError(
+                f"EXACT share refused: {len(blocked_targets)} target(s) ineligible",
+                code="EXACT_SHARE_TARGET_BLOCKED",
+                details={"targets": blocked_targets},
+            )
+        if not resolved:
+            raise BadRequestError("No eligible EXACT targets to share onto")
+
+        cover_kind = source_link.cover_kind
+        if not isinstance(cover_kind, EvidenceCoverKind):
+            cover_kind = EvidenceCoverKind(str(cover_kind))
+
+        write = await create_evidence_links_if_absent(
+            self.db,
+            tenant_id=tenant_id,
+            entity_type=source_link.entity_type,
+            entity_id=source_link.entity_id,
+            clause_ids=[row["clause_key"] for row in resolved],
+            cover_kind=cover_kind,
+            link_method=EvidenceLinkMethod.MANUAL,
+            actor_id=actor_id,
+            actor_email=actor_email,
+            confidence=source_link.confidence,
+            title=source_link.title,
+            notes=source_link.notes,
+            signal_type=source_link.signal_type,
+            commit=True,
+        )
+
+        created_by_clause = {link.clause_id: link for link in write.created}
+        existing_by_clause = {link.clause_id: link for link in write.existing}
+        created_rows: list[dict[str, Any]] = []
+        already_rows: list[dict[str, Any]] = []
+        for row in resolved:
+            link = created_by_clause.get(row["clause_key"])
+            if link is not None:
+                created_rows.append(
+                    {
+                        "link_id": link.id,
+                        "framework": row["framework"],
+                        "clause_id": row["clause_key"],
+                        "verdict": "EXACT",
+                    }
+                )
+                continue
+            existing = existing_by_clause.get(row["clause_key"])
+            already_rows.append(
+                {
+                    "link_id": existing.id if existing is not None else None,
+                    "framework": row["framework"],
+                    "clause_id": row["clause_key"],
+                }
+            )
+
+        applied_at = datetime.now(timezone.utc)
+        undo_ids = [row["link_id"] for row in created_rows if row.get("link_id") is not None]
+        return {
+            "status": "applied",
+            "applied_at": applied_at.isoformat(),
+            "matrix_version": guard.version_label,
+            "created": created_rows,
+            "already_linked": already_rows,
+            "warnings": warnings,
+            "undo": {"link_ids": undo_ids, "applied_at": applied_at.isoformat()},
+            "sor_note": (
+                "compliance_evidence_links is the only record — undo soft-deletes exactly these ids."
+            ),
+        }
+
+    async def undo(
+        self,
+        *,
+        tenant_id: int,
+        link_ids: Sequence[int],
+        applied_at: datetime,
+    ) -> dict[str, Any]:
+        """Soft-delete links created by a prior apply, skipping modified rows."""
+        ids = [int(i) for i in link_ids]
+        if not ids:
+            raise BadRequestError("link_ids must not be empty")
+
+        if applied_at.tzinfo is None:
+            applied_at = applied_at.replace(tzinfo=timezone.utc)
+
+        deleted: list[int] = []
+        skipped: list[dict[str, Any]] = []
+
+        for link_id in ids:
+            result = await self.db.execute(
+                select(ComplianceEvidenceLink).where(
+                    ComplianceEvidenceLink.id == link_id,
+                    ComplianceEvidenceLink.deleted_at.is_(None),
+                    ComplianceEvidenceLink.tenant_id == tenant_id,
+                )
+            )
+            link = result.scalar_one_or_none()
+            if link is None:
+                skipped.append({"link_id": link_id, "reason": "not_found_or_other_tenant"})
+                continue
+
+            updated_at = link.updated_at
+            if updated_at is not None:
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
+                # Allow a small clock skew / same-second create; refuse later edits.
+                if updated_at > applied_at:
+                    skipped.append({"link_id": link_id, "reason": "modified_since_apply"})
+                    continue
+
+            removed = await soft_delete_evidence_link(
+                self.db, tenant_id=tenant_id, link_id=link_id, commit=False
+            )
+            if removed is None:
+                skipped.append({"link_id": link_id, "reason": "not_found_or_other_tenant"})
+            else:
+                deleted.append(link_id)
+
+        await self.db.commit()
+        return {
+            "status": "undone",
+            "deleted": deleted,
+            "skipped": skipped,
+        }
+
+    # ------------------------------------------------------------------ helpers
+
+    async def _candidate_rows(
+        self,
+        *,
+        tenant_id: int,
+        peers: Sequence[dict[str, Any]],
+        entity_type: Optional[str],
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for peer in peers:
+            target_fw = str(peer["framework"]).strip().lower()
+            peer_key = str(peer["clause_key"])
+            peer_clause = clause_number_from_token(peer_key) or peer_key
+            if peer_clause.startswith(f"{target_fw}-"):
+                peer_clause = peer_clause[len(target_fw) + 1 :]
+
+            cell = await self.aggregate.get_cell(
+                tenant_id=tenant_id, framework=target_fw, clause_number=peer_clause
+            )
+            open_nc = int((cell.summary or {}).get("open_nc_count") or 0)
+            open_action = int((cell.summary or {}).get("open_action_count") or 0)
+            blocked_reasons: list[str] = []
+            if cell.cover_blocked:
+                if open_nc > 0:
+                    blocked_reasons.append("target_open_nc")
+                if open_action > 0:
+                    blocked_reasons.append("target_open_action")
+                if not blocked_reasons:
+                    blocked_reasons.append("target_cover_blocked")
+
+            tech_gap_warning = None
+            if entity_type:
+                tech = tech_gap_assess(
+                    framework=target_fw,
+                    clause_number=peer_clause,
+                    entity_types=[entity_type],
+                )
+                if tech.is_technical and not tech.covered:
+                    tech_gap_warning = "tech_gap_attestation_missing"
+
+            rows.append(
+                {
+                    "framework": target_fw,
+                    "clause_key": peer_key,
+                    "clause_number": peer_clause,
+                    "verdict": "EXACT",
+                    "eligible": not blocked_reasons,
+                    "blocked_reasons": blocked_reasons,
+                    "open_nc_count": open_nc,
+                    "open_action_count": open_action,
+                    "tech_gap_warning": tech_gap_warning,
+                }
+            )
+        rows.sort(key=lambda item: (item["framework"], item["clause_key"]))
+        return rows
+
+    async def _shareable_links(
+        self,
+        *,
+        tenant_id: int,
+        framework: str,
+        clause_number: str,
+        evidence_rows: Sequence[dict[str, Any]],
+        candidates: Sequence[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Surface conformance links on the source cell and which peers already have them."""
+        out: list[dict[str, Any]] = []
+        for row in evidence_rows:
+            link_id = row.get("id")
+            if link_id is None:
+                continue
+            link = await self._load_live_link(tenant_id=tenant_id, link_id=int(link_id))
+            if link is None:
+                continue
+            already: list[str] = []
+            for candidate in candidates:
+                existing = await self.db.execute(
+                    select(ComplianceEvidenceLink.id).where(
+                        ComplianceEvidenceLink.deleted_at.is_(None),
+                        ComplianceEvidenceLink.tenant_id == tenant_id,
+                        ComplianceEvidenceLink.entity_type == link.entity_type,
+                        ComplianceEvidenceLink.entity_id == link.entity_id,
+                        ComplianceEvidenceLink.clause_id == candidate["clause_key"],
+                        ComplianceEvidenceLink.cover_kind == link.cover_kind,
+                    )
+                )
+                if existing.scalar_one_or_none() is not None:
+                    already.append(candidate["framework"])
+            cover_kind = link.cover_kind
+            cover_value = cover_kind.value if hasattr(cover_kind, "value") else str(cover_kind)
+            out.append(
+                {
+                    "link_id": link.id,
+                    "entity_type": link.entity_type,
+                    "entity_id": link.entity_id,
+                    "title": link.title,
+                    "cover_kind": cover_value,
+                    "already_shared_frameworks": already,
+                }
+            )
+        return out
+
+    async def _load_live_link(
+        self, *, tenant_id: int, link_id: int
+    ) -> Optional[ComplianceEvidenceLink]:
+        result = await self.db.execute(
+            select(ComplianceEvidenceLink).where(
+                ComplianceEvidenceLink.id == link_id,
+                ComplianceEvidenceLink.deleted_at.is_(None),
+                ComplianceEvidenceLink.tenant_id == tenant_id,
+            )
+        )
+        return result.scalar_one_or_none()

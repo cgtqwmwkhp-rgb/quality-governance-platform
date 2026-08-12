@@ -798,8 +798,11 @@ async def get_standards_cell_aggregate(
     Cover gate: open NC / open action → verdict cannot be ``covered``.
     Recurrence red-flag when an NC reappears after close on the same clause.
     Mock audits are labelled honestly and still paint gaps. LIVE-08: read-model only.
+
+    Wave 2 PR-D: response includes ``exact_share`` preflight for EXACT peers.
     """
     from src.domain.services.standards_cell_aggregate_service import StandardsCellAggregateService
+    from src.domain.services.standards_exact_share_service import ExactShareService
 
     tenant_id = current_user.tenant_id
     if tenant_id is None:
@@ -810,7 +813,15 @@ async def get_standards_cell_aggregate(
         framework=framework,
         clause_number=clause,
     )
-    return result.to_dict()
+    payload = result.to_dict()
+    plan = await ExactShareService(db, aggregate=service).plan(
+        tenant_id=tenant_id,
+        framework=framework,
+        clause_number=clause,
+        source_cell=result,
+    )
+    payload["exact_share"] = plan.to_dict()
+    return payload
 
 
 @router.get("/cell-aggregate/matrix")
@@ -837,6 +848,70 @@ async def get_standards_cell_aggregate_matrix(
         tenant_id=tenant_id,
         frameworks=fw_list,
         clause_numbers=clause_list,
+    )
+
+
+class ExactShareApplyRequest(BaseModel):
+    """Apply one source CEL row onto named EXACT peer frameworks."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_link_id: int
+    source_framework: str
+    source_clause: str
+    target_frameworks: list[str]
+    matrix_version_id: int
+
+
+class ExactShareUndoRequest(BaseModel):
+    """Soft-delete links created by a prior EXACT share apply."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    link_ids: list[int]
+    applied_at: datetime
+
+
+@router.post("/evidence/exact-share")
+async def apply_exact_share(
+    request: ExactShareApplyRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+):
+    """Create-only share of one conformance evidence link onto EXACT peer cells."""
+    from src.domain.services.standards_exact_share_service import ExactShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    return await ExactShareService(db).apply(
+        tenant_id=tenant_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        source_link_id=request.source_link_id,
+        source_framework=request.source_framework,
+        source_clause=request.source_clause,
+        target_frameworks=request.target_frameworks,
+        matrix_version_id=request.matrix_version_id,
+    )
+
+
+@router.post("/evidence/exact-share/undo")
+async def undo_exact_share(
+    request: ExactShareUndoRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+):
+    """Undo a prior EXACT share by soft-deleting the created link ids."""
+    from src.domain.services.standards_exact_share_service import ExactShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    return await ExactShareService(db).undo(
+        tenant_id=tenant_id,
+        link_ids=request.link_ids,
+        applied_at=request.applied_at,
     )
 
 

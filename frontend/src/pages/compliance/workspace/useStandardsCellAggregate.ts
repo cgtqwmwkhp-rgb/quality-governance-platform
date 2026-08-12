@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { AxiosError, AxiosResponse } from 'axios'
 import { standardsCellAggregateApi, getApiErrorMessage } from '../../../api/client'
 import type { StandardsCellAggregate } from '../../../api/standardsCellAggregateTypes'
@@ -11,6 +11,11 @@ export function useStandardsCellAggregate(
   const [data, setData] = useState<StandardsCellAggregate | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+
+  const refetch = useCallback(() => {
+    setReloadToken((token) => token + 1)
+  }, [])
 
   useEffect(() => {
     const framework = (frameworkId || '').trim()
@@ -43,7 +48,7 @@ export function useStandardsCellAggregate(
     return () => {
       cancelled = true
     }
-  }, [frameworkId, clauseNumber])
+  }, [frameworkId, clauseNumber, reloadToken])
 
-  return { data, loading, error }
+  return { data, loading, error, refetch }
 }

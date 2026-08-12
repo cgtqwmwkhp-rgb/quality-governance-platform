@@ -231,6 +231,13 @@ class TrapGuard:
         return f"{self._version.source_ref} v{self._version.version_label}"
 
     @property
+    def version_id(self) -> Optional[int]:
+        """Active matrix edition id, or None when no edition is loaded."""
+        if self._version is None:
+            return None
+        return getattr(self._version, "id", None)
+
+    @property
     def edge_count(self) -> int:
         return len(self._pairs) + len(self._unique)
 

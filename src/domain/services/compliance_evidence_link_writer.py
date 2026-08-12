@@ -36,6 +36,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional, Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.compliance_evidence import (
@@ -178,6 +179,131 @@ async def upsert_evidence_links(
             await db.refresh(link)
 
     return LinkWriteResult(links=written, created=created, updated=updated)
+
+
+@dataclass
+class LinkCreateIfAbsentResult:
+    """Create-only write outcome — existing rows are reported, never rewritten."""
+
+    created: list[ComplianceEvidenceLink]
+    existing: list[ComplianceEvidenceLink]
+
+
+async def create_evidence_links_if_absent(
+    db: AsyncSession,
+    *,
+    tenant_id: Optional[int],
+    entity_type: str,
+    entity_id: str,
+    clause_ids: Sequence[str],
+    cover_kind: EvidenceCoverKind,
+    link_method: EvidenceLinkMethod,
+    actor_id: Optional[int] = None,
+    actor_email: Optional[str] = None,
+    confidence: Optional[float] = None,
+    title: Optional[str] = None,
+    notes: Optional[str] = None,
+    signal_type: Optional[str] = None,
+    commit: bool = True,
+) -> LinkCreateIfAbsentResult:
+    """Create CEL rows only when no live row exists for the unique key.
+
+    Unlike :func:`upsert_evidence_links`, this never rewrites ``title``,
+    ``notes``, ``confidence``, or confirmer stamps on an existing row. EXACT
+    share (Wave 2 PR-D) needs that guarantee so a share cannot put a different
+    human's name against content they never reviewed (D15).
+
+    Concurrent creates that hit ``ux_cel_tenant_entity_clause_cover_live`` are
+    classified as ``existing`` after a re-read, not surfaced as 500s.
+    """
+    requested = [str(clause_id) for clause_id in clause_ids]
+    if not requested:
+        return LinkCreateIfAbsentResult(created=[], existing=[])
+
+    existing_result = await db.execute(
+        select(ComplianceEvidenceLink).where(
+            ComplianceEvidenceLink.deleted_at.is_(None),
+            ComplianceEvidenceLink.tenant_id == tenant_id,
+            ComplianceEvidenceLink.entity_type == entity_type,
+            ComplianceEvidenceLink.entity_id == entity_id,
+            ComplianceEvidenceLink.clause_id.in_(requested),
+            ComplianceEvidenceLink.cover_kind == cover_kind,
+        )
+    )
+    existing_by_clause = {link.clause_id: link for link in existing_result.scalars().all()}
+
+    created: list[ComplianceEvidenceLink] = []
+    existing: list[ComplianceEvidenceLink] = []
+    pending_create: list[ComplianceEvidenceLink] = []
+
+    for clause_id in requested:
+        link = existing_by_clause.get(clause_id)
+        if link is not None:
+            existing.append(link)
+            continue
+
+        link = ComplianceEvidenceLink(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            clause_id=clause_id,
+            cover_kind=cover_kind,
+            created_by_id=actor_id,
+            created_by_email=actor_email,
+        )
+        link.linked_by = link_method
+        link.confidence = confidence
+        link.title = title
+        link.notes = notes
+        if signal_type is not None:
+            link.signal_type = signal_type
+
+        if link_method == EvidenceLinkMethod.MANUAL:
+            link.status = EvidenceLinkStatus.CONFIRMED
+            link.auto_applied = False
+            link.confirmed_by_id = actor_id
+            link.confirmed_at = datetime.now(timezone.utc)
+        else:
+            link.confirmed_by_id = None
+            link.confirmed_at = None
+
+        if entity_type == "document":
+            from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+            await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
+
+        db.add(link)
+        pending_create.append(link)
+
+    if not pending_create:
+        return LinkCreateIfAbsentResult(created=[], existing=existing)
+
+    try:
+        if commit:
+            await db.commit()
+        else:
+            await db.flush()
+        for link in pending_create:
+            await db.refresh(link)
+            created.append(link)
+    except IntegrityError:
+        await db.rollback()
+        # A concurrent writer won the unique index. Re-read and classify every
+        # requested clause as existing when a live row is present.
+        re_read = await db.execute(
+            select(ComplianceEvidenceLink).where(
+                ComplianceEvidenceLink.deleted_at.is_(None),
+                ComplianceEvidenceLink.tenant_id == tenant_id,
+                ComplianceEvidenceLink.entity_type == entity_type,
+                ComplianceEvidenceLink.entity_id == entity_id,
+                ComplianceEvidenceLink.clause_id.in_(requested),
+                ComplianceEvidenceLink.cover_kind == cover_kind,
+            )
+        )
+        live = list(re_read.scalars().all())
+        return LinkCreateIfAbsentResult(created=[], existing=live)
+
+    return LinkCreateIfAbsentResult(created=created, existing=existing)
 
 
 async def soft_delete_evidence_link(
