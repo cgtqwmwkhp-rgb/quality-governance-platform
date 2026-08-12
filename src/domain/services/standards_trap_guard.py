@@ -265,8 +265,13 @@ class TrapGuard:
 
         The imported 5064 edition prints five management system standards plus IiP.
         A framework it has never heard of (CHAS, SSIP, Cyber Essentials, UVDB,
-        Planet Mark) has no requirement axis and no alignment verdicts, so nothing
-        the matrix says about a clause *number* can be read onto its cells.
+        Planet Mark) has no *alignment* coverage, so nothing the matrix says about
+        a clause *number* can be read onto its cells.
+
+        Int-W5 requirement catalogues do **not** flip this flag. A scheme with its
+        own ``ce-*`` / ``chas-*`` / … rows still returns False here until an
+        imported edge names that framework — otherwise framed-token matching would
+        reopen the W4 cross-column paint.
         """
         return str(framework or "").strip().lower() in self._frameworks
 

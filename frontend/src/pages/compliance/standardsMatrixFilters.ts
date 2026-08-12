@@ -237,6 +237,7 @@ export function complianceStandardIdFromFrameworkId(id: FrameworkId): string | n
     '14001': 'iso14001',
     '45001': 'iso45001',
     '27001': 'iso27001',
+    '22301': 'iso22301',
     pm: 'planetmark',
     uvdb: 'uvdb',
   }

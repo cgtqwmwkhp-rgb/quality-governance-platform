@@ -147,7 +147,7 @@ FRAMEWORK_ALIASES: dict[str, dict[str, Any]] = {
         "record_schemes": ("iso", "iso27001"),
     },
     "22301": {
-        "iso": None,
+        "iso": "iso22301",
         "prefix": "22301",
         "cert_schemes": ("iso22301", "iso", "22301"),
         "record_schemes": ("iso", "iso22301"),
@@ -520,6 +520,8 @@ class CellAggregateResult:
     #: are a floor rather than a total. A truncated cell is not a clean cell.
     scan_truncated: bool = False
     scan_truncated_sources: list[str] = field(default_factory=list)
+    #: Int-W5 additive axis metadata — never changes verdicts.
+    axis: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -542,6 +544,7 @@ class CellAggregateResult:
             "tech_gap": self.tech_gap,
             "scan_truncated": self.scan_truncated,
             "scan_truncated_sources": self.scan_truncated_sources,
+            "axis": self.axis,
             "sor_note": "Audits, Actions, Risk Register, Cert Shelf, and External Audit Records remain SoR — this is a read-model join only.",
         }
 
@@ -730,6 +733,31 @@ class StandardsCellAggregateService:
         if timestamps:
             freshness = max(timestamps)
 
+        from src.domain.services.standards_requirement_axis import (
+            axis_rows,
+            has_requirement_axis,
+            requirement_catalogue_key,
+        )
+
+        own_keys = {row["catalogue_key"] for row in axis_rows(fw)}
+        cell_key = requirement_catalogue_key(fw, clause)
+        alignment_covered = bool(guard.is_loaded and guard.covers_framework(fw))
+        in_axis = bool(
+            alignment_covered
+            or cell_key in own_keys
+            or (fw in {"9001", "14001", "45001", "27001", "22301"} and has_requirement_axis(fw))
+        )
+        axis_block = {
+            "in_axis": in_axis,
+            "axis_source": (
+                "alignment"
+                if alignment_covered
+                else ("requirement_catalogue" if cell_key in own_keys or fw == "22301" else "none")
+            ),
+            "has_requirement_axis": has_requirement_axis(fw),
+            "catalogue_key": cell_key,
+        }
+
         return CellAggregateResult(
             framework=fw,
             clause_number=clause,
@@ -764,6 +792,7 @@ class StandardsCellAggregateService:
             tech_gap=tech_gap.to_dict() if tech_gap.is_technical else {},
             scan_truncated=bool(truncated),
             scan_truncated_sources=sorted(truncated),
+            axis=axis_block,
         )
 
     async def get_matrix_summary(
@@ -794,6 +823,7 @@ class StandardsCellAggregateService:
                         "alignment": cell.alignment,
                         "tech_gap": cell.tech_gap,
                         "scan_truncated": cell.scan_truncated,
+                        "axis": cell.axis,
                     }
                 )
         return {

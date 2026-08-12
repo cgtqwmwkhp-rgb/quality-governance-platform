@@ -29,6 +29,7 @@ from src.domain.models.standards_alignment import (
     MatrixVersion,
     MatrixVersionStatus,
 )
+from src.domain.services.standards_requirement_axis import requirement_axes_payload
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +94,11 @@ class StandardsAlignmentReadService:
                 "rows": [],
                 "frameworks": [],
                 "excluded_frameworks": [],
+                "requirement_axes": requirement_axes_payload(alignment_clause_keys=set()),
                 "fallback_note": (
                     "No alignment matrix edition has been imported for this tenant. "
                     "The clause axis shown is the shell's own static list, not "
-                    "imported data."
+                    "imported data. Requirement axes still list own-scheme catalogues."
                 ),
             }
 
@@ -189,8 +191,15 @@ class StandardsAlignmentReadService:
         ordered = sorted(rows.values(), key=lambda row: _clause_sort_key(row["clauseNumber"]))
         if verdict_filter is not None:
             ordered = [row for row in ordered if row["verdict"] == verdict_filter.api_value]
+        alignment_keys: set[str] = set()
         for row in ordered:
             row.pop("_verdict_rank", None)
+            axis_fws = sorted(row["frameworks"].keys())
+            row["axis_frameworks"] = axis_fws
+            for fw, entry in row["frameworks"].items():
+                key = entry.get("clause_key")
+                if key:
+                    alignment_keys.add(str(key))
 
         return {
             "matrix_loaded": True,
@@ -204,6 +213,7 @@ class StandardsAlignmentReadService:
             ],
             "row_count": len(ordered),
             "edge_count": len(edges),
+            "requirement_axes": requirement_axes_payload(alignment_clause_keys=alignment_keys),
             "sor_note": (
                 f"Verdicts are an imported read-model of {version.source_ref} "
                 f"v{version.version_label}. The source report remains the SoR."
