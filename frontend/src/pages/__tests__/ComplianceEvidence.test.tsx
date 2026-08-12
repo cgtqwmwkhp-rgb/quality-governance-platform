@@ -29,15 +29,18 @@ vi.mock('../../contexts/ToastContext', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, opts?: { defaultValue?: string }) => {
       const labels: Record<string, string> = {
+        'compliance.evidence.title': 'Standards Evidence Center',
+        'compliance.evidence.subtitle':
+          'Live repository for multi-framework evidence, clause coverage, and specialist programme deep-links',
         'compliance.evidence.shell.section.clauses': 'Clause View',
         'compliance.evidence.shell.section.evidence': 'Evidence List',
         'compliance.evidence.shell.section.gaps': 'Gap Analysis',
         'compliance.evidence.shell.section.imported': 'Imported Audits',
         'compliance.evidence.shell.tabs_aria': 'ISO compliance sections',
       }
-      return labels[key] ?? key
+      return labels[key] ?? opts?.defaultValue ?? key
     },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -285,7 +288,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
 
     expect(mockListStandards).toHaveBeenCalledTimes(1)
     expect(mockListClauses).toHaveBeenCalledTimes(1)
@@ -320,7 +323,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
 
     fireEvent.click(screen.getByText('AI Auto-Tagger'))
     fireEvent.change(screen.getByPlaceholderText(/Paste your content here/i), {
@@ -344,7 +347,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
     fireEvent.click(screen.getByText('AI Auto-Tagger'))
     fireEvent.change(screen.getByPlaceholderText(/Paste your content here/i), {
       target: { value: 'Our document control procedure covers retention.' },
@@ -368,7 +371,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
     const soaButton = screen.getByText('Annex A SoA')
     expect(soaButton).toBeInTheDocument()
 
@@ -399,7 +402,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
     fireEvent.click(screen.getByTitle('Download full ISO audit evidence pack'))
 
     await waitFor(() => {
@@ -425,7 +428,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
     fireEvent.click(screen.getByText('AI Auto-Tagger'))
     fireEvent.change(screen.getByPlaceholderText(/Paste your content here/i), {
       target: { value: 'Risk management and information security policy.' },
@@ -482,7 +485,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
 
     await waitFor(() => {
       expect(mockToastWarning).toHaveBeenCalled()
@@ -533,7 +536,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith(
@@ -599,6 +602,27 @@ describe('ComplianceEvidence', () => {
     expect(await screen.findByTestId('compliance-evidence-section-gaps')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Gap Analysis/i })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText(/Gap Analysis — Clauses Needing Evidence/i)).toBeInTheDocument()
+  })
+
+
+  it('shows catalogue framework cards beyond the four ISOs with specialist deep-links', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    await screen.findByText('Standards Evidence Center')
+    expect(screen.getByTestId('compliance-framework-card-9001')).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-framework-card-pm')).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-framework-card-uvdb')).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-specialist-link-pm')).toHaveAttribute('href', '/planet-mark')
+    expect(screen.getByTestId('compliance-specialist-link-uvdb')).toHaveAttribute('href', '/uvdb')
+    fireEvent.click(screen.getByTestId('compliance-evidence-preset-buyer'))
+    expect(screen.queryByTestId('compliance-framework-card-9001')).not.toBeInTheDocument()
+    expect(screen.getByTestId('compliance-framework-card-chas')).toBeInTheDocument()
   })
 
   it('routes ?section= imported to imported audits panel with honest empty state', async () => {
