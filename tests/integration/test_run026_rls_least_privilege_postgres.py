@@ -96,6 +96,20 @@ SEED_OVERRIDES: dict[str, dict[str, Any]] = {
     # Generic int filler uses the same seq for every NOT NULL int column; that
     # would set src_document_id == dst_document_id and trip ck_document_edges_no_self_loop.
     "document_edges": {"src_document_id": 910001, "dst_document_id": 910002},
+    # _check_constraint_literals can pick verdict='unique' from
+    # ck_alignment_edges_unique_has_no_pair while the generic filler still sets
+    # dst_*; force a paired EXACT row so the UNIQUE/no-pair check stays satisfied.
+    "alignment_edges": {
+        "verdict": "exact",
+        "row_verdict": "exact",
+        "src_framework": "9001",
+        "src_clause_key": "9001-6.1.2",
+        "dst_framework": "14001",
+        "dst_clause_key": "14001-6.1.2",
+        "clause_ref": "6.1.2",
+        "title": "run026-alignment",
+        "row_key": "run026-row",
+    },
 }
 
 
