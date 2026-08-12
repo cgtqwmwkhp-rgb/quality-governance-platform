@@ -261,6 +261,23 @@ class TrapGuard:
         edge = self._rows.get(str(clause_ref).strip())
         return _verdict_of(edge) if edge is not None else None
 
+    def _row_verdict_for_refs(self, clause_refs: Iterable[str]) -> Optional[AlignmentVerdict]:
+        """Most restrictive row verdict across the printed rows these refs name.
+
+        A cell is addressed by its framework-local clause number, which is not always
+        the printed ``clause_ref`` ``_rows`` is keyed by (e.g. ISO 45001 puts 6.3 at
+        8.1.3). Resolving through the edges that actually touched the cell keeps the
+        warning on the row the clause is really on.
+        """
+        best: Optional[AlignmentVerdict] = None
+        for clause_ref in clause_refs:
+            candidate = self.row_verdict(clause_ref)
+            if candidate is None:
+                continue
+            if best is None or _RESTRICTIVENESS_RANK[candidate] < _RESTRICTIVENESS_RANK[best]:
+                best = candidate
+        return best
+
     def may_share_evidence(
         self,
         *,
@@ -389,6 +406,7 @@ class TrapGuard:
         unique = self.unique_edge_for(cell_fw, clause)
 
         peers: list[dict[str, Any]] = []
+        matched_refs: set[str] = set()
         target_key = clause_key(cell_fw, clause)
         for (src_fw, src_key, dst_fw, dst_key), edge in self._pairs.items():
             if (src_fw, src_key) == (cell_fw, target_key):
@@ -398,6 +416,7 @@ class TrapGuard:
             else:
                 continue
             verdict = _verdict_of(edge)
+            matched_refs.add(edge.clause_ref)
             peers.append(
                 {
                     "framework": peer_fw,
@@ -409,7 +428,14 @@ class TrapGuard:
             )
         peers.sort(key=lambda item: (item["framework"], item["clause_key"]))
 
-        row_verdict = self.row_verdict(clause)
+        if unique is not None:
+            matched_refs.add(unique.clause_ref)
+
+        row_verdict = self._row_verdict_for_refs(matched_refs)
+        if row_verdict is None:
+            # No edge touched this cell: fall back to the printed reference, which
+            # is all an un-relocated clause ever needed.
+            row_verdict = self.row_verdict(clause)
         trap_peers = [peer for peer in peers if not peer["shareable"]]
         return {
             "matrix_version": self.version_label,

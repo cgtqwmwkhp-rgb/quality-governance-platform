@@ -73,6 +73,12 @@ async def _run(*, tenant_id: int, payload_path: Optional[Path], dry_run: bool) -
                 f"(id={result.matrix_version_id}): {result.edges_written} edges across "
                 f"{result.rows} rows; superseded={result.superseded_version_id}"
             )
+        elif result.reactivated:
+            print(
+                f"[seed_5064] reactivated edition {result.version_label} "
+                f"(id={result.matrix_version_id}): its edge set is live again; "
+                f"superseded={result.superseded_version_id}"
+            )
         else:
             print(
                 f"[seed_5064] already current: edition {result.version_label} "

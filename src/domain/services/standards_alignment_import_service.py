@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -219,6 +219,7 @@ class ApplyResult:
     rows: int
     created: bool
     superseded_version_id: Optional[int] = None
+    reactivated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -228,6 +229,7 @@ class ApplyResult:
             "edges_written": self.edges_written,
             "rows": self.rows,
             "created": self.created,
+            "reactivated": self.reactivated,
             "superseded_version_id": self.superseded_version_id,
             "note": (
                 "Alignment verdicts are an imported read-model of "
@@ -627,6 +629,65 @@ class StandardsAlignmentImportService:
         )
         already = existing.scalars().first()
         if already is not None:
+            if already.status == MatrixVersionStatus.ACTIVE:
+                # Same outcome, already live. Nothing to write and nothing to move.
+                return ApplyResult(
+                    matrix_version_id=already.id,
+                    version_label=already.version_label,
+                    source_checksum=checksum,
+                    edges_written=0,
+                    rows=len({built.row_key for built in resulting}),
+                    created=False,
+                )
+
+            # An edition with exactly this outcome exists but is not live — it was
+            # superseded by a later import. Re-applying its payload is a request to
+            # roll back to it, so it is reactivated.
+            live_edges = await self.db.scalar(
+                select(func.count())
+                .select_from(AlignmentEdge)
+                .where(
+                    AlignmentEdge.tenant_id == tenant_id,
+                    AlignmentEdge.matrix_version_id == already.id,
+                    AlignmentEdge.deleted_at.is_(None),
+                )
+            )
+            if not live_edges:
+                raise AlignmentImportError(
+                    f"Edition {already.version_label} matches this payload by checksum but has no "
+                    "live edges, so activating it would blank the matrix. Soft-delete that edition "
+                    "and re-import to write a fresh one."
+                )
+
+            now = datetime.now(timezone.utc)
+            reactivate_superseded_id: Optional[int] = None
+            if active is not None:
+                reactivate_superseded_id = active.id
+                # Release ux_matrix_versions_one_active_live before claiming it.
+                await self.db.execute(
+                    update(MatrixVersion)
+                    .where(MatrixVersion.id == active.id)
+                    .values(status=MatrixVersionStatus.SUPERSEDED, updated_at=now)
+                )
+
+            already.status = MatrixVersionStatus.ACTIVE
+            already.activated_at = now
+            try:
+                await self.db.flush()
+            except IntegrityError as exc:
+                await self.db.rollback()
+                raise AlignmentImportError(
+                    "Another import activated a matrix edition concurrently. Re-run the "
+                    "dry-run against the new active edition before applying."
+                ) from exc
+
+            logger.info(
+                "standards alignment reactivated: tenant=%s source=%s version=%s superseded=%s",
+                tenant_id,
+                source_ref,
+                already.version_label,
+                reactivate_superseded_id,
+            )
             return ApplyResult(
                 matrix_version_id=already.id,
                 version_label=already.version_label,
@@ -634,6 +695,8 @@ class StandardsAlignmentImportService:
                 edges_written=0,
                 rows=len({built.row_key for built in resulting}),
                 created=False,
+                reactivated=True,
+                superseded_version_id=reactivate_superseded_id,
             )
 
         now = datetime.now(timezone.utc)

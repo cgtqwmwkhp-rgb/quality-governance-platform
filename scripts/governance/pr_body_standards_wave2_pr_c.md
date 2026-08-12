@@ -16,6 +16,7 @@
 | SG-C-04 | Tech gaps | Unenforced in matrix | TechGapGuard flags MFA/CE-class gaps |
 | SG-C-05 | CEL writes | Multiple direct writers | Primary path via `compliance_evidence_link_writer` |
 | SG-C-06 | Framework catalogue | `ce`/`cep` labelled Carbon Evolve; Cyber Essentials had no column | `ce`/`cep` are Cyber Essentials / CE Plus with official NCSC links |
+| SG-C-07 | Relocated clauses / reapply | Per-fw clause ignored; superseded checksum no-op; trap row_verdict miss | Framework-local cell load; reactivate superseded; trap via matched clause_ref |
 
 - **Backend:** models, alembic `20261105_standards_alignment`, import/read/trap/tech-gap services, compliance routes.
 - **Frontend:** StandardsMatrixShell + hover consume alignment; i18n flat keys.
