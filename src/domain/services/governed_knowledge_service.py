@@ -241,7 +241,7 @@ class GovernedKnowledgeService:
         force_proposed: bool = False,
         signal_type: Optional[EvidenceSignalType] = None,
         gate_context: Optional[StandardsAutoConfirmContext] = None,
-    ) -> ComplianceEvidenceLink:
+    ) -> tuple[ComplianceEvidenceLink, str]:
         decision = evaluate_auto_confirm(
             confidence=mapping.confidence,
             doc_type=doc_type,
@@ -334,9 +334,7 @@ class GovernedKnowledgeService:
                 "human_confirmed_preserved": human_preserved,
             },
         )
-        # Stash gate reason for the caller tally (not persisted on the row).
-        link._gate_reason = decision.reason  # type: ignore[attr-defined]
-        return link
+        return link, decision.reason
 
     async def _map_iso_schemes(self, content: str) -> list[SchemeMapping]:
         mappings: list[SchemeMapping] = []
@@ -472,7 +470,7 @@ class GovernedKnowledgeService:
             if mapping.clause_id in seen_clauses:
                 continue
             seen_clauses.add(mapping.clause_id)
-            link = await self._persist_mapping(
+            link, reason = await self._persist_mapping(
                 db,
                 tenant_id=tenant_id,
                 entity_type="document",
@@ -484,7 +482,6 @@ class GovernedKnowledgeService:
                 gate_context=gate_context,
             )
             links.append(link)
-            reason = getattr(link, "_gate_reason", "unknown")
             counts_by_reason[reason] = counts_by_reason.get(reason, 0) + 1
             if reason == "auto_confirmed":
                 auto_confirmed += 1
@@ -560,7 +557,7 @@ class GovernedKnowledgeService:
                     rationale=f"KB reverse-scan match for: {query_text[:120]}",
                     title=query_text[:300],
                 )
-                link = await self._persist_mapping(
+                link, _reason = await self._persist_mapping(
                     db,
                     tenant_id=tenant_id,
                     entity_type="document",
@@ -648,7 +645,7 @@ class GovernedKnowledgeService:
             seen_clauses.add(mapping.clause_id)
             if assessment_statement and not mapping.rationale:
                 mapping.rationale = assessment_statement[:500]
-            link = await self._persist_mapping(
+            link, _reason = await self._persist_mapping(
                 db,
                 tenant_id=tenant_id,
                 entity_type=entity_type,
