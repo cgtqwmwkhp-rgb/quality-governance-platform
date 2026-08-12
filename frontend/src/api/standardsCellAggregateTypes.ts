@@ -119,6 +119,40 @@ export type StandardsCellAggregate = {
   sor_note?: string
 }
 
+/** PEL-HSEQ-5064 alignment vocabulary (Wave 2 PR-C). */
+export type AlignmentVerdict = 'EXACT' | 'NEAR' | 'DIFFERENT' | 'UNIQUE'
+
+export type StandardsCellAlignment = {
+  matrix_version?: string | null
+  matrix_loaded: boolean
+  row_verdict?: AlignmentVerdict | string | null
+  is_trap_row: boolean
+  is_unique: boolean
+  unique_reason?: string | null
+  trap_peer_count: number
+  peers: Array<{
+    framework: string
+    clause_key: string
+    verdict: AlignmentVerdict | string
+    shareable: boolean
+    addition_text?: string | null
+  }>
+}
+
+export type StandardsCellTechGap = {
+  covered?: boolean
+  stub?: boolean
+  is_technical?: boolean
+  reason?: string
+  requirement?: {
+    key: string
+    title: string
+    frameworks: string[]
+    attestation_needed: string
+    source_position: string
+  } | null
+}
+
 export type StandardsCellMatrixSummary = {
   cells: Array<{
     framework: string
@@ -128,6 +162,51 @@ export type StandardsCellMatrixSummary = {
     recurrence_red_flag: boolean
     reasons: string[]
     summary: StandardsCellAggregate['summary']
+    alignment?: StandardsCellAlignment
+    tech_gap?: StandardsCellTechGap
   }>
+  matrix_version?: string | null
+  matrix_loaded?: boolean
+  sor_note?: string
+}
+
+/** One clause row of the imported alignment catalogue. */
+export type AlignmentCatalogueRow = {
+  id: string
+  kind: string
+  row_key: string
+  clauseNumber: string
+  title: string
+  verdict: AlignmentVerdict | string
+  row_verdict: AlignmentVerdict | string
+  is_trap: boolean
+  has_unique: boolean
+  addition_text?: string | null
+  rationale?: string | null
+  deliverables?: string | null
+  pair_count: number
+  trap_pair_count: number
+  frameworks: Record<
+    string,
+    {
+      clause_key: string
+      clause_number: string
+      label?: string | null
+      verdicts: string[]
+    }
+  >
+}
+
+export type AlignmentCatalogueResponse = {
+  matrix_loaded: boolean
+  matrix_version?: string | null
+  matrix_version_id?: number
+  source_date?: string | null
+  rows: AlignmentCatalogueRow[]
+  frameworks: string[]
+  excluded_frameworks: string[]
+  row_count?: number
+  edge_count?: number
+  fallback_note?: string
   sor_note?: string
 }

@@ -13,7 +13,11 @@ import {
 } from '../../components/ui'
 import { cn } from '../../helpers/utils'
 import { standardsCellAggregateApi, getApiErrorMessage } from '../../api/client'
-import type { CellVerdict } from '../../api/standardsCellAggregateTypes'
+import type {
+  AlignmentCatalogueRow,
+  AlignmentVerdict,
+  CellVerdict,
+} from '../../api/standardsCellAggregateTypes'
 import {
   StandardsCellHoverPreview,
   type CellVerdictStub,
@@ -30,10 +34,13 @@ import {
 import type { EvidenceWorkspaceSelection } from './EvidenceWorkspaceHost'
 
 /**
- * Catalogue rows remain a thin clause axis until PR-C alignment_edges.
- * Cell verdicts come from the live aggregate join (PR-B).
+ * Fallback clause axis, used only when no 5064 alignment edition has been
+ * imported for the tenant (or the catalogue read fails). PR-C serves the real
+ * axis from `/compliance/alignment/catalogue`; this list stays so an un-imported
+ * tenant sees a working matrix rather than an empty grid, and the shell says
+ * which of the two it is showing.
  */
-const CATALOGUE_ROWS: CatalogueRowLike[] = [
+const FALLBACK_CATALOGUE_ROWS: CatalogueRowLike[] = [
   {
     id: 'clause-4.1',
     kind: 'standard',
@@ -99,6 +106,26 @@ type CellLiveState = {
   recurrenceRedFlag: boolean
   topEvidenceLabel?: string | null
   freshnessLabel?: string | null
+  alignmentVerdict?: AlignmentVerdict | string | null
+  isTrapRow?: boolean
+  trapPeerCount?: number
+  techGapStub?: boolean
+}
+
+/** Row verdict badge tone. DIFFERENT and UNIQUE are the rows that mislead. */
+function verdictTone(verdict: AlignmentVerdict | string | null | undefined): string {
+  switch (verdict) {
+    case 'EXACT':
+      return 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+    case 'NEAR':
+      return 'border-amber-500/40 text-amber-600 dark:text-amber-400'
+    case 'DIFFERENT':
+      return 'border-destructive/40 text-destructive'
+    case 'UNIQUE':
+      return 'border-sky-500/40 text-sky-600 dark:text-sky-400'
+    default:
+      return 'border-border text-muted-foreground'
+  }
 }
 
 function cellTone(verdict: CellVerdictStub): string {
@@ -146,11 +173,46 @@ export function StandardsMatrixShell({
   const [liveCells, setLiveCells] = useState<Record<string, CellLiveState>>({})
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveLoading, setLiveLoading] = useState(false)
+  const [alignmentRows, setAlignmentRows] = useState<AlignmentCatalogueRow[] | null>(null)
+  const [matrixVersion, setMatrixVersion] = useState<string | null>(null)
 
   const columns = useMemo(() => visibleFrameworks(preset, columnFilters), [preset, columnFilters])
 
+  // PR-C: the clause axis is imported 5064 data. A failed or un-imported read
+  // falls back to the static axis and the badge below says which is in use.
+  useEffect(() => {
+    let cancelled = false
+    standardsCellAggregateApi
+      .getAlignmentCatalogue()
+      .then((res) => {
+        if (cancelled) return
+        const rows = res.data?.rows || []
+        setAlignmentRows(res.data?.matrix_loaded && rows.length > 0 ? rows : [])
+        setMatrixVersion(res.data?.matrix_version || null)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAlignmentRows([])
+          setMatrixVersion(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const usingImportedAxis = (alignmentRows?.length ?? 0) > 0
+
   const catalogueRows = useMemo(() => {
-    const rows = filterClauseCatalogueRows(CATALOGUE_ROWS)
+    const source: CatalogueRowLike[] = usingImportedAxis
+      ? (alignmentRows as AlignmentCatalogueRow[]).map((row) => ({
+          id: row.id,
+          kind: row.kind || 'standard',
+          clauseNumber: row.clauseNumber,
+          title: row.title,
+        }))
+      : FALLBACK_CATALOGUE_ROWS
+    const rows = filterClauseCatalogueRows(source)
     if (!initialClause) return rows
     const needle = initialClause.trim().toLowerCase()
     const matched = rows.filter(
@@ -159,7 +221,15 @@ export function StandardsMatrixShell({
         (row.clauseNumber || '').toLowerCase().startsWith(needle),
     )
     return matched.length > 0 ? matched : rows
-  }, [initialClause])
+  }, [initialClause, alignmentRows, usingImportedAxis])
+
+  const rowVerdicts = useMemo(() => {
+    const map: Record<string, AlignmentCatalogueRow> = {}
+    for (const row of alignmentRows || []) {
+      map[row.clauseNumber] = row
+    }
+    return map
+  }, [alignmentRows])
 
   const clauseNumbers = useMemo(
     () => catalogueRows.map((row) => row.clauseNumber || row.id).filter(Boolean),
@@ -186,6 +256,10 @@ export function StandardsMatrixShell({
             recurrenceRedFlag: Boolean(cell.recurrence_red_flag),
             topEvidenceLabel: cell.summary?.top_evidence_label,
             freshnessLabel: cell.summary?.freshness,
+            alignmentVerdict: cell.alignment?.row_verdict ?? null,
+            isTrapRow: Boolean(cell.alignment?.is_trap_row),
+            trapPeerCount: cell.alignment?.trap_peer_count ?? 0,
+            techGapStub: Boolean(cell.tech_gap?.stub),
           }
         }
         setLiveCells(next)
@@ -221,6 +295,10 @@ export function StandardsMatrixShell({
       recurrenceRedFlag: false,
       topEvidenceLabel: null,
       freshnessLabel: null,
+      alignmentVerdict: rowVerdicts[clauseNumber]?.verdict ?? null,
+      isTrapRow: Boolean(rowVerdicts[clauseNumber]?.is_trap),
+      trapPeerCount: rowVerdicts[clauseNumber]?.trap_pair_count ?? 0,
+      techGapStub: false,
     }
   }
 
@@ -250,6 +328,22 @@ export function StandardsMatrixShell({
                     defaultValue: 'Live graph unavailable — showing unknown',
                   })
                 : t('compliance.standards_matrix.live_badge', { defaultValue: 'Live graph' })}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="mt-2 ml-2"
+            data-testid={
+              usingImportedAxis ? 'standards-matrix-axis-imported' : 'standards-matrix-axis-fallback'
+            }
+          >
+            {usingImportedAxis
+              ? t('compliance.standards_matrix.axis_imported', {
+                  defaultValue: 'Clause axis: {{version}}',
+                  version: matrixVersion || 'imported matrix',
+                })
+              : t('compliance.standards_matrix.axis_fallback', {
+                  defaultValue: 'Clause axis: built-in list (no matrix imported)',
+                })}
           </Badge>
         </div>
 
@@ -292,9 +386,10 @@ export function StandardsMatrixShell({
                   data-testid={`standards-matrix-fw-${fw.id}`}
                   title={
                     fw.kind === 'scheme'
-                      ? t('compliance.standards_matrix.scheme_column_note', {
-                          defaultValue: 'Scheme identity column — quarantined from clause catalogue rows',
-                        })
+                      ? `${fw.label} — ${t('compliance.standards_matrix.scheme_column_note', {
+                          defaultValue:
+                            'Scheme identity column — quarantined from clause catalogue rows',
+                        })}`
                       : fw.label
                   }
                 >
@@ -320,12 +415,35 @@ export function StandardsMatrixShell({
                   <th className="sticky left-0 z-10 bg-muted/40 px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
                     {t('compliance.standards_matrix.clause_col', { defaultValue: 'Clause' })}
                   </th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                    {t('compliance.standards_matrix.alignment_col', { defaultValue: 'Alignment' })}
+                  </th>
                   {columns.map((col) => (
                     <th
                       key={col.id}
                       className="px-2 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap"
                     >
-                      {col.shortLabel}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <a
+                            href={col.homeUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="underline-offset-2 hover:underline"
+                            data-testid={`standards-matrix-col-${col.id}`}
+                            aria-label={t('compliance.standards_matrix.framework_home_link', {
+                              defaultValue: 'Open the official {{name}} page (new tab)',
+                              name: col.label,
+                            })}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {col.shortLabel}
+                          </a>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {col.label}
+                        </TooltipContent>
+                      </Tooltip>
                     </th>
                   ))}
                 </tr>
@@ -334,11 +452,59 @@ export function StandardsMatrixShell({
                 {catalogueRows.map((row) => {
                   const clauseNumber = row.clauseNumber || row.id
                   const title = row.title || clauseNumber
+                  const alignmentRow = rowVerdicts[clauseNumber]
                   return (
                     <tr key={row.id} className="border-b border-border/60">
                       <td className="sticky left-0 z-10 bg-card px-3 py-2 text-sm">
                         <div className="font-medium text-foreground">{clauseNumber}</div>
                         <div className="text-xs text-muted-foreground truncate max-w-[220px]">{title}</div>
+                      </td>
+                      <td className="px-2 py-2 text-left">
+                        {alignmentRow ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant="outline"
+                                className={cn('text-[10px]', verdictTone(alignmentRow.verdict))}
+                                data-testid={`standards-matrix-verdict-${clauseNumber}`}
+                              >
+                                {alignmentRow.verdict}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-sm p-3 text-xs">
+                              <p className="font-medium">
+                                {t('compliance.standards_matrix.verdict_row', {
+                                  defaultValue: 'Source verdict: {{verdict}}',
+                                  verdict: alignmentRow.row_verdict,
+                                })}
+                              </p>
+                              {alignmentRow.is_trap ? (
+                                <p className="mt-1 text-destructive">
+                                  {t('compliance.standards_matrix.trap_warning', {
+                                    defaultValue:
+                                      'Shared clause number, different requirement — evidence cannot be crossed on {{count}} pair(s).',
+                                    count: alignmentRow.trap_pair_count,
+                                  })}
+                                </p>
+                              ) : null}
+                              {alignmentRow.addition_text ? (
+                                <p className="mt-1 text-muted-foreground">{alignmentRow.addition_text}</p>
+                              ) : null}
+                              {alignmentRow.deliverables ? (
+                                <p className="mt-1 text-muted-foreground">
+                                  {t('compliance.standards_matrix.deliverables', {
+                                    defaultValue: 'Deliverable: {{value}}',
+                                    value: alignmentRow.deliverables,
+                                  })}
+                                </p>
+                              ) : null}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">
+                            {t('compliance.standards_matrix.verdict_unknown', { defaultValue: '—' })}
+                          </span>
+                        )}
                       </td>
                       {columns.map((col) => {
                         const live = resolveCell(col.id, clauseNumber)
@@ -374,6 +540,7 @@ export function StandardsMatrixShell({
                               <TooltipContent side="top" className="p-3">
                                 <StandardsCellHoverPreview
                                   frameworkLabel={col.label}
+                                  frameworkHomeUrl={col.homeUrl}
                                   clauseNumber={clauseNumber}
                                   clauseTitle={title}
                                   verdict={live.verdict}
@@ -382,6 +549,9 @@ export function StandardsMatrixShell({
                                   coverBlocked={live.coverBlocked}
                                   recurrenceRedFlag={live.recurrenceRedFlag}
                                   isStub={Boolean(liveError)}
+                                  alignmentVerdict={live.alignmentVerdict ?? null}
+                                  isTrapRow={Boolean(live.isTrapRow)}
+                                  techGapStub={Boolean(live.techGapStub)}
                                 />
                               </TooltipContent>
                             </Tooltip>

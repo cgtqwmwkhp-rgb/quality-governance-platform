@@ -4,6 +4,24 @@ Joins existing SoR modules — audits/findings, capa_actions, risks,
 AssuranceCertShelf, external audit records, and compliance evidence links —
 into a per-cell verdict + workspace payload. Does **not** invent a second
 Standards database (LIVE-08).
+
+Wave 2 PR-C annotates this aggregate rather than replacing it. Two guards run
+over the matches this module makes:
+
+``TrapGuard``
+    The clause-token matching below is deliberately tolerant, including a
+    framework-blind suffix rule, so a link written against ``14001-9.1.2``
+    (evaluation of compliance) also matches the ISO 9001 9.1.2 cell (customer
+    satisfaction). The guard drops those matches where the imported alignment
+    matrix says the two clauses share a number and nothing else.
+
+``TechGapGuard``
+    A technical control cannot be closed by a document. Where a cell is one of the
+    technical requirements PEL-HSEQ-5064 names, a document-only cover is refused
+    the ``covered`` verdict.
+
+Both guards are additive: with no matrix imported they have no opinion, and the
+verdict computation is unchanged from PR-B.
 """
 
 from __future__ import annotations
@@ -22,12 +40,14 @@ from src.domain.models.compliance_evidence import ComplianceEvidenceLink
 from src.domain.models.external_audit_record import ExternalAuditRecord
 from src.domain.models.risk import Risk
 from src.domain.models.risk_register import EnterpriseRisk, EnterpriseRiskControl
+from src.domain.services import standards_tech_gap_guard as tech_gap_guard
 from src.domain.services.assurance_cert_shelf_service import AssuranceCertShelfService
 from src.domain.services.iso_compliance_service import (
     OPERATIONAL_SIGNAL_TYPES,
     counts_toward_compliance_coverage,
     iso_compliance_service,
 )
+from src.domain.services.standards_trap_guard import TrapGuard
 
 OPEN_FINDING_STATUSES = frozenset(
     {
@@ -117,14 +137,14 @@ FRAMEWORK_ALIASES: dict[str, dict[str, Any]] = {
     "ce": {
         "iso": None,
         "prefix": "ce",
-        "cert_schemes": ("carbon_evolve", "ce", "register"),
-        "record_schemes": ("carbon_evolve", "ce"),
+        "cert_schemes": ("cyber_essentials", "ce", "register"),
+        "record_schemes": ("cyber_essentials", "ce"),
     },
     "cep": {
         "iso": None,
         "prefix": "cep",
-        "cert_schemes": ("carbon_evolve_plus", "cep", "register"),
-        "record_schemes": ("carbon_evolve_plus", "cep"),
+        "cert_schemes": ("cyber_essentials_plus", "cep", "register"),
+        "record_schemes": ("cyber_essentials_plus", "cep"),
     },
     "iip": {
         "iso": None,
@@ -330,6 +350,13 @@ class CellAggregateResult:
     evidence: list[dict[str, Any]] = field(default_factory=list)
     imported_priors: list[dict[str, Any]] = field(default_factory=list)
     summary: dict[str, Any] = field(default_factory=dict)
+    #: PR-C: imported alignment context for this cell (row verdict, peers, traps).
+    alignment: dict[str, Any] = field(default_factory=dict)
+    #: PR-C: matches TrapGuard refused because the clause number is shared but the
+    #: requirement is not. Surfaced rather than dropped silently.
+    trap_blocked: list[dict[str, Any]] = field(default_factory=list)
+    #: PR-C: TechGapGuard verdict where this cell is a technical control.
+    tech_gap: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -347,6 +374,9 @@ class CellAggregateResult:
             "evidence": self.evidence,
             "imported_priors": self.imported_priors,
             "summary": self.summary,
+            "alignment": self.alignment,
+            "trap_blocked": self.trap_blocked,
+            "tech_gap": self.tech_gap,
             "sor_note": "Audits, Actions, Risk Register, Cert Shelf, and External Audit Records remain SoR — this is a read-model join only.",
         }
 
@@ -354,9 +384,18 @@ class CellAggregateResult:
 class StandardsCellAggregateService:
     """Read-model join for Standards matrix cells / Evidence Workspace panels."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, *, trap_guard: Optional[TrapGuard] = None):
         self.db = db
         self.cert_shelf = AssuranceCertShelfService(db)
+        # Loaded once per service instance on first use: a matrix batch asks for up
+        # to 200 cells and must not re-read the alignment edition 200 times.
+        self._trap_guard = trap_guard
+
+    async def trap_guard(self, tenant_id: int) -> TrapGuard:
+        """The tenant's alignment snapshot, loaded once per service instance."""
+        if self._trap_guard is None:
+            self._trap_guard = await TrapGuard.for_tenant(self.db, tenant_id)
+        return self._trap_guard
 
     def catalogue_keys_for(self, framework: str, clause_number: str) -> list[str]:
         keys = sorted(clause_match_keys(framework, clause_number))
@@ -377,9 +416,18 @@ class StandardsCellAggregateService:
         keys = clause_match_keys(fw, clause)
         catalogue_keys = self.catalogue_keys_for(fw, clause)
 
-        findings = await self._findings_for_cell(tenant_id=tenant_id, keys=keys, clause_number=clause)
-        actions = await self._actions_for_cell(tenant_id=tenant_id, keys=keys, clause_number=clause)
-        evidence = await self._evidence_for_cell(tenant_id=tenant_id, keys=keys, clause_number=clause)
+        guard = await self.trap_guard(tenant_id)
+        trap_blocked: list[dict[str, Any]] = []
+
+        findings = await self._findings_for_cell(
+            tenant_id=tenant_id, keys=keys, clause_number=clause, guard=guard, framework=fw, blocked=trap_blocked
+        )
+        actions = await self._actions_for_cell(
+            tenant_id=tenant_id, keys=keys, clause_number=clause, guard=guard, framework=fw, blocked=trap_blocked
+        )
+        evidence = await self._evidence_for_cell(
+            tenant_id=tenant_id, keys=keys, clause_number=clause, guard=guard, framework=fw, blocked=trap_blocked
+        )
         risks = await self._risks_for_cell(
             tenant_id=tenant_id,
             keys=keys,
@@ -423,6 +471,19 @@ class StandardsCellAggregateService:
             mock_gap_count=len(mock_gaps),
             closed_nc_count=len(closed_ncs),
         )
+
+        # PR-C TechGapGuard: a technical control cannot be closed by a document.
+        # Applied after the PR-B verdict so it can only ever tighten it.
+        tech_gap = tech_gap_guard.assess(
+            framework=fw,
+            clause_number=clause,
+            entity_types=[
+                str(entity_type) for entity_type in (e.get("entity_type") for e in conformance) if entity_type
+            ],
+        )
+        if tech_gap.is_technical and not tech_gap.covered and verdict_info["verdict"] == "covered":
+            verdict_info["verdict"] = "partial"
+            verdict_info["reasons"] = [*verdict_info["reasons"], "tech_gap_attestation_missing"]
 
         top_evidence = None
         if conformance:
@@ -468,7 +529,11 @@ class StandardsCellAggregateService:
                 "mock_finding_count": sum(1 for f in findings if f.get("audit_kind") == "mock"),
                 "top_evidence_label": top_evidence,
                 "freshness": freshness,
+                "trap_blocked_count": len(trap_blocked),
             },
+            alignment=guard.annotate_cell(framework=fw, clause_number=clause),
+            trap_blocked=trap_blocked,
+            tech_gap=tech_gap.to_dict() if tech_gap.is_technical else {},
         )
 
     async def get_matrix_summary(
@@ -479,6 +544,8 @@ class StandardsCellAggregateService:
         clause_numbers: list[str],
     ) -> dict[str, Any]:
         """Batch verdicts for matrix paint — same cover gate as get_cell."""
+        # Load the alignment edition once for the whole batch rather than per cell.
+        guard = await self.trap_guard(tenant_id)
         cells: list[dict[str, Any]] = []
         for fw in frameworks:
             for clause in clause_numbers:
@@ -492,14 +559,61 @@ class StandardsCellAggregateService:
                         "recurrence_red_flag": cell.recurrence_red_flag,
                         "reasons": cell.reasons,
                         "summary": cell.summary,
+                        "alignment": cell.alignment,
+                        "tech_gap": cell.tech_gap,
                     }
                 )
         return {
             "cells": cells,
+            "matrix_version": guard.version_label,
+            "matrix_loaded": guard.is_loaded,
             "sor_note": "Read-model only — Audits/Actions/Risk/Cert shelf remain SoR.",
         }
 
-    async def _findings_for_cell(self, *, tenant_id: int, keys: set[str], clause_number: str) -> list[dict[str, Any]]:
+    def _survives_trap_guard(
+        self,
+        *,
+        guard: TrapGuard,
+        framework: str,
+        clause_number: str,
+        tokens: list[Any],
+        keys: set[str],
+        blocked: list[dict[str, Any]],
+        source: str,
+        record: dict[str, Any],
+    ) -> bool:
+        """True when a match still holds after cross-framework traps are removed.
+
+        Only tokens naming a *different* framework can be removed, and only where
+        the matrix carries a DIFFERENT or UNIQUE verdict for the pair. If every
+        token that produced the match is removed, the match itself goes — the
+        record matched this cell on a clause number it does not share.
+        """
+        if not guard.is_loaded:
+            return True
+        kept, refused = guard.filter_cross_framework_tokens(
+            framework=framework,
+            clause_number=clause_number,
+            tokens=tokens,
+        )
+        if not refused:
+            return True
+        if any_token_matches(kept, keys, clause_number):
+            return True
+        for entry in refused:
+            blocked.append({**entry, "source": source, **record})
+        return False
+
+    async def _findings_for_cell(
+        self,
+        *,
+        tenant_id: int,
+        keys: set[str],
+        clause_number: str,
+        guard: TrapGuard,
+        framework: str,
+        blocked: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         query = (
             select(AuditFinding)
             .options(
@@ -515,6 +629,17 @@ class StandardsCellAggregateService:
         for finding in rows:
             tokens = list(finding.clause_ids_json_legacy or [])
             if not any_token_matches(tokens, keys, clause_number):
+                continue
+            if not self._survives_trap_guard(
+                guard=guard,
+                framework=framework,
+                clause_number=clause_number,
+                tokens=tokens,
+                keys=keys,
+                blocked=blocked,
+                source="finding",
+                record={"record_id": finding.id, "record_title": finding.title},
+            ):
                 continue
             run = finding.run
             template = run.template if run else None
@@ -552,7 +677,16 @@ class StandardsCellAggregateService:
             )
         return matched
 
-    async def _actions_for_cell(self, *, tenant_id: int, keys: set[str], clause_number: str) -> list[dict[str, Any]]:
+    async def _actions_for_cell(
+        self,
+        *,
+        tenant_id: int,
+        keys: set[str],
+        clause_number: str,
+        guard: TrapGuard,
+        framework: str,
+        blocked: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         query = (
             select(CAPAAction)
             .where(CAPAAction.tenant_id == tenant_id)
@@ -571,6 +705,17 @@ class StandardsCellAggregateService:
             if iso and ref:
                 tokens.append(f"{iso}-{ref}")
             if not any_token_matches(tokens, keys, clause_number):
+                continue
+            if not self._survives_trap_guard(
+                guard=guard,
+                framework=framework,
+                clause_number=clause_number,
+                tokens=tokens,
+                keys=keys,
+                blocked=blocked,
+                source="action",
+                record={"record_id": action.id, "record_title": action.title},
+            ):
                 continue
             matched.append(
                 {
@@ -591,7 +736,16 @@ class StandardsCellAggregateService:
             )
         return matched
 
-    async def _evidence_for_cell(self, *, tenant_id: int, keys: set[str], clause_number: str) -> list[dict[str, Any]]:
+    async def _evidence_for_cell(
+        self,
+        *,
+        tenant_id: int,
+        keys: set[str],
+        clause_number: str,
+        guard: TrapGuard,
+        framework: str,
+        blocked: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         query = (
             select(ComplianceEvidenceLink)
             .where(
@@ -605,6 +759,17 @@ class StandardsCellAggregateService:
         matched: list[dict[str, Any]] = []
         for link in rows:
             if not token_matches_clause(link.clause_id, keys, clause_number):
+                continue
+            if not self._survives_trap_guard(
+                guard=guard,
+                framework=framework,
+                clause_number=clause_number,
+                tokens=[link.clause_id],
+                keys=keys,
+                blocked=blocked,
+                source="evidence_link",
+                record={"record_id": link.id, "record_title": link.title},
+            ):
                 continue
             signal = link.signal_type or None
             matched.append(

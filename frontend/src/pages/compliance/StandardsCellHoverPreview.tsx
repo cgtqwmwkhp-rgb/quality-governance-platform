@@ -7,6 +7,8 @@ export type CellVerdictStub = CellVerdict
 
 export interface StandardsCellHoverPreviewProps {
   frameworkLabel: string
+  /** Official home page for the framework; renders the label as a link when set. */
+  frameworkHomeUrl?: string | null
   clauseNumber: string
   clauseTitle: string
   verdict: CellVerdictStub
@@ -18,6 +20,12 @@ export interface StandardsCellHoverPreviewProps {
   recurrenceRedFlag?: boolean
   /** When false, hide the PR-B stub chrome (live data wired). */
   isStub?: boolean
+  /** PR-C: imported 5064 row verdict (EXACT / NEAR / DIFFERENT / UNIQUE). */
+  alignmentVerdict?: string | null
+  /** PR-C: this clause number is shared with a materially different requirement. */
+  isTrapRow?: boolean
+  /** PR-C: technical control with no attestation source — cannot be covered by a PDF. */
+  techGapStub?: boolean
   className?: string
 }
 
@@ -34,6 +42,7 @@ const verdictTone: Record<CellVerdictStub, string> = {
  */
 export function StandardsCellHoverPreview({
   frameworkLabel,
+  frameworkHomeUrl = null,
   clauseNumber,
   clauseTitle,
   verdict,
@@ -42,6 +51,9 @@ export function StandardsCellHoverPreview({
   coverBlocked = false,
   recurrenceRedFlag = false,
   isStub = false,
+  alignmentVerdict = null,
+  isTrapRow = false,
+  techGapStub = false,
   className,
 }: StandardsCellHoverPreviewProps) {
   const { t } = useTranslation()
@@ -51,7 +63,21 @@ export function StandardsCellHoverPreview({
       className={cn('space-y-2 max-w-xs text-left', className)}
       data-testid="standards-cell-hover-preview"
     >
-      <div className="text-xs font-medium text-muted-foreground">{frameworkLabel}</div>
+      <div className="text-xs font-medium text-muted-foreground">
+        {frameworkHomeUrl ? (
+          <a
+            href={frameworkHomeUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline-offset-2 hover:underline"
+            data-testid="standards-cell-hover-framework-link"
+          >
+            {frameworkLabel}
+          </a>
+        ) : (
+          frameworkLabel
+        )}
+      </div>
       <div className="text-sm font-semibold text-foreground">
         {clauseNumber}
         <span className="font-normal text-muted-foreground"> · {clauseTitle}</span>
@@ -74,6 +100,23 @@ export function StandardsCellHoverPreview({
         {recurrenceRedFlag ? (
           <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-recurrence">
             {t('compliance.standards_workspace.recurrence_badge', { defaultValue: 'Recurrence' })}
+          </Badge>
+        ) : null}
+        {alignmentVerdict ? (
+          <Badge variant="outline" className="text-xs" data-testid="standards-cell-hover-alignment">
+            {alignmentVerdict}
+          </Badge>
+        ) : null}
+        {isTrapRow ? (
+          <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-trap">
+            {t('compliance.standards_matrix.trap_badge', { defaultValue: 'Trap row' })}
+          </Badge>
+        ) : null}
+        {techGapStub ? (
+          <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-tech-gap">
+            {t('compliance.standards_matrix.tech_gap_badge', {
+              defaultValue: 'Needs technical proof',
+            })}
           </Badge>
         ) : null}
         {isStub ? (

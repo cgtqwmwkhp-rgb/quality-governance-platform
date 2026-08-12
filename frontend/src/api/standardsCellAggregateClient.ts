@@ -4,6 +4,7 @@
  */
 import type { AxiosInstance } from 'axios'
 import type {
+  AlignmentCatalogueResponse,
   StandardsCellAggregate,
   StandardsCellMatrixSummary,
 } from './standardsCellAggregateTypes'
@@ -21,6 +22,20 @@ export function createStandardsCellAggregateApi(api: AxiosInstance) {
       sp.set('frameworks', frameworks.join(','))
       sp.set('clauses', clauses.join(','))
       return api.get<StandardsCellMatrixSummary>(`/api/v1/compliance/cell-aggregate/matrix?${sp}`)
+    },
+    /**
+     * Imported PEL-HSEQ-5064 clause axis (Wave 2 PR-C).
+     * Returns `matrix_loaded: false` with no rows when nothing has been imported —
+     * callers must fall back to their own axis and say so.
+     */
+    getAlignmentCatalogue: (params?: { framework?: string; verdict?: string }) => {
+      const sp = new URLSearchParams()
+      if (params?.framework) sp.set('framework', params.framework)
+      if (params?.verdict) sp.set('verdict', params.verdict)
+      const query = sp.toString()
+      return api.get<AlignmentCatalogueResponse>(
+        `/api/v1/compliance/alignment/catalogue${query ? `?${query}` : ''}`,
+      )
     },
   }
 }
