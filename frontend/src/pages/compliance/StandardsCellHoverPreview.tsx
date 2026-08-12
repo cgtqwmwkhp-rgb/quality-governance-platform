@@ -1,18 +1,23 @@
 import { useTranslation } from 'react-i18next'
 import { Badge } from '../../components/ui'
 import { cn } from '../../helpers/utils'
+import type { CellVerdict } from '../../api/standardsCellAggregateTypes'
 
-export type CellVerdictStub = 'covered' | 'partial' | 'gap' | 'unknown'
+export type CellVerdictStub = CellVerdict
 
 export interface StandardsCellHoverPreviewProps {
   frameworkLabel: string
   clauseNumber: string
   clauseTitle: string
   verdict: CellVerdictStub
-  /** Top evidence title — stub until PR-B live graph */
+  /** Top evidence title from live aggregate */
   topEvidenceLabel?: string | null
-  /** Freshness label — stub until PR-B live graph */
+  /** Freshness label from live aggregate */
   freshnessLabel?: string | null
+  coverBlocked?: boolean
+  recurrenceRedFlag?: boolean
+  /** When false, hide the PR-B stub chrome (live data wired). */
+  isStub?: boolean
   className?: string
 }
 
@@ -24,8 +29,8 @@ const verdictTone: Record<CellVerdictStub, string> = {
 }
 
 /**
- * Enhancement #2 — hover preview chrome (verdict · top evidence · freshness).
- * Values are honest stubs until PR-B wires the live graph.
+ * Enhancement #2 — hover preview (verdict · top evidence · freshness).
+ * PR-B wires live aggregate values; stub mode remains for offline/fallback.
  */
 export function StandardsCellHoverPreview({
   frameworkLabel,
@@ -34,6 +39,9 @@ export function StandardsCellHoverPreview({
   verdict,
   topEvidenceLabel,
   freshnessLabel,
+  coverBlocked = false,
+  recurrenceRedFlag = false,
+  isStub = false,
   className,
 }: StandardsCellHoverPreviewProps) {
   const { t } = useTranslation()
@@ -51,24 +59,40 @@ export function StandardsCellHoverPreview({
       <div className="flex flex-wrap items-center gap-2">
         <Badge
           variant="secondary"
-          className={cn('text-xs', verdictTone[verdict])}
+          className={cn('text-xs', verdictTone[verdict] ?? verdictTone.unknown)}
           data-testid="standards-cell-hover-verdict"
         >
           {t(`compliance.standards_matrix.verdict.${verdict}`, {
             defaultValue: verdict,
           })}
         </Badge>
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {t('compliance.standards_matrix.stub_badge', { defaultValue: 'PR-B stub' })}
-        </span>
+        {coverBlocked ? (
+          <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-cover-blocked">
+            {t('compliance.standards_workspace.cover_blocked_badge', { defaultValue: 'Cover blocked' })}
+          </Badge>
+        ) : null}
+        {recurrenceRedFlag ? (
+          <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-recurrence">
+            {t('compliance.standards_workspace.recurrence_badge', { defaultValue: 'Recurrence' })}
+          </Badge>
+        ) : null}
+        {isStub ? (
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {t('compliance.standards_matrix.stub_badge', { defaultValue: 'PR-B stub' })}
+          </span>
+        ) : (
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {t('compliance.standards_matrix.live_badge', { defaultValue: 'Live graph' })}
+          </span>
+        )}
       </div>
       <dl className="grid gap-1 text-xs text-muted-foreground">
         <div className="flex justify-between gap-3">
           <dt>{t('compliance.standards_matrix.hover.top_evidence', { defaultValue: 'Top evidence' })}</dt>
           <dd className="text-foreground text-right">
             {topEvidenceLabel ??
-              t('compliance.standards_matrix.hover.top_evidence_stub', {
-                defaultValue: 'Live graph in PR-B',
+              t('compliance.standards_matrix.hover.top_evidence_none', {
+                defaultValue: 'None linked',
               })}
           </dd>
         </div>
@@ -76,8 +100,8 @@ export function StandardsCellHoverPreview({
           <dt>{t('compliance.standards_matrix.hover.freshness', { defaultValue: 'Freshness' })}</dt>
           <dd className="text-foreground text-right">
             {freshnessLabel ??
-              t('compliance.standards_matrix.hover.freshness_stub', {
-                defaultValue: 'Not wired yet',
+              t('compliance.standards_matrix.hover.freshness_none', {
+                defaultValue: 'No activity',
               })}
           </dd>
         </div>

@@ -31,6 +31,7 @@ import { createJobLifecycleApi } from './jobLifecycleClient'
 import { createCaseClosureApi } from './caseClosureClient'
 import { createRisksApi } from './risksClient'
 import { createStandardsApi } from './standardsClient'
+import { createStandardsCellAggregateApi } from './standardsCellAggregateClient'
 import { createAuditsApi } from './auditsClient'
 import { createWorkforceApi } from './workforceClient'
 import { createEngineersApi } from './engineersClient'
@@ -1576,6 +1577,8 @@ export interface CrossStandardMappingRecord {
   mapping_notes?: string | null
   annex_sl_element?: string | null
 }
+
+export const standardsCellAggregateApi = createStandardsCellAggregateApi(api)
 
 export const complianceApi = {
   listClauses: (standard?: string, search?: string) => {

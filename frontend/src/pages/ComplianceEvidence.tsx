@@ -770,7 +770,7 @@ export default function ComplianceEvidence() {
             {shellView === 'matrix'
               ? t('compliance.standards_shell.subtitle', {
                   defaultValue:
-                    'Programme shell for multi-framework coverage. Live graph panels arrive in PR-B.',
+                    'Programme shell for multi-framework coverage. Matrix cells and workspace join live audits, NC, actions, risks, and certs.',
                 })
               : 'Live repository for compliance evidence, clause coverage, and cross-standard mappings'}
           </p>

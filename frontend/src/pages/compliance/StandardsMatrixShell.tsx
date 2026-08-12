@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Grid3X3, Filter } from 'lucide-react'
 import {
@@ -12,6 +12,8 @@ import {
   TooltipTrigger,
 } from '../../components/ui'
 import { cn } from '../../helpers/utils'
+import { standardsCellAggregateApi, getApiErrorMessage } from '../../api/client'
+import type { CellVerdict } from '../../api/standardsCellAggregateTypes'
 import {
   StandardsCellHoverPreview,
   type CellVerdictStub,
@@ -27,66 +29,76 @@ import {
 } from './standardsMatrixFilters'
 import type { EvidenceWorkspaceSelection } from './EvidenceWorkspaceHost'
 
-/** Placeholder catalogue rows — clearly stubbed for PR-B live clause joins. */
-const STUB_CATALOGUE_ROWS: CatalogueRowLike[] = [
+/**
+ * Catalogue rows remain a thin clause axis until PR-C alignment_edges.
+ * Cell verdicts come from the live aggregate join (PR-B).
+ */
+const CATALOGUE_ROWS: CatalogueRowLike[] = [
   {
-    id: 'stub-4.1',
+    id: 'clause-4.1',
     kind: 'standard',
     clauseNumber: '4.1',
     title: 'Understanding the organization and its context',
   },
   {
-    id: 'stub-4.2',
+    id: 'clause-4.2',
     kind: 'standard',
     clauseNumber: '4.2',
     title: 'Understanding the needs and expectations of interested parties',
   },
   {
-    id: 'stub-5.1',
+    id: 'clause-5.1',
     kind: 'standard',
     clauseNumber: '5.1',
     title: 'Leadership and commitment',
   },
   {
-    id: 'stub-6.1',
+    id: 'clause-6.1',
     kind: 'standard',
     clauseNumber: '6.1',
     title: 'Actions to address risks and opportunities',
   },
   {
-    id: 'stub-7.2',
+    id: 'clause-6.1.2',
+    kind: 'standard',
+    clauseNumber: '6.1.2',
+    title: 'Risk assessment (trap respect — links only)',
+  },
+  {
+    id: 'clause-7.2',
     kind: 'standard',
     clauseNumber: '7.2',
     title: 'Competence',
   },
   {
-    id: 'stub-8.1',
+    id: 'clause-8.1',
     kind: 'standard',
     clauseNumber: '8.1',
     title: 'Operational planning and control',
   },
   {
-    id: 'stub-9.1',
+    id: 'clause-9.1',
     kind: 'standard',
     clauseNumber: '9.1',
     title: 'Monitoring, measurement, analysis and evaluation',
   },
   {
-    id: 'stub-10.2',
+    id: 'clause-10.2',
     kind: 'standard',
     clauseNumber: '10.2',
     title: 'Nonconformity and corrective action',
   },
   // Scheme identity shells — quarantined from clause catalogue display when kind is present
-  { id: 'stub-uvdb-shell', kind: 'scheme', frameworkId: 'uvdb', clauseNumber: 'UVDB', title: 'UVDB scheme shell' },
-  { id: 'stub-pm-shell', kind: 'scheme', frameworkId: 'pm', clauseNumber: 'PM', title: 'Planet Mark scheme shell' },
+  { id: 'uvdb-shell', kind: 'scheme', frameworkId: 'uvdb', clauseNumber: 'UVDB', title: 'UVDB scheme shell' },
+  { id: 'pm-shell', kind: 'scheme', frameworkId: 'pm', clauseNumber: 'PM', title: 'Planet Mark scheme shell' },
 ]
 
-const STUB_VERDICTS: CellVerdictStub[] = ['covered', 'partial', 'gap', 'unknown']
-
-function stubVerdictFor(clauseNumber: string, frameworkId: FrameworkId): CellVerdictStub {
-  const hash = [...`${clauseNumber}:${frameworkId}`].reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
-  return STUB_VERDICTS[hash % STUB_VERDICTS.length]
+type CellLiveState = {
+  verdict: CellVerdictStub
+  coverBlocked: boolean
+  recurrenceRedFlag: boolean
+  topEvidenceLabel?: string | null
+  freshnessLabel?: string | null
 }
 
 function cellTone(verdict: CellVerdictStub): string {
@@ -102,6 +114,13 @@ function cellTone(verdict: CellVerdictStub): string {
   }
 }
 
+function asVerdict(value: string | undefined): CellVerdictStub {
+  if (value === 'covered' || value === 'partial' || value === 'gap' || value === 'unknown') {
+    return value
+  }
+  return 'unknown'
+}
+
 export interface StandardsMatrixShellProps {
   initialFrameworkId?: FrameworkId | null
   initialClause?: string | null
@@ -110,8 +129,8 @@ export interface StandardsMatrixShellProps {
 }
 
 /**
- * Filterable Standards matrix chrome (Wave 1 PR-A).
- * Cell values are honest placeholders until PR-B live graph joins.
+ * Filterable Standards matrix chrome.
+ * Cell verdicts from `/compliance/cell-aggregate/matrix` (PR-B live graph).
  */
 export function StandardsMatrixShell({
   initialFrameworkId = null,
@@ -124,11 +143,14 @@ export function StandardsMatrixShell({
   const [columnFilters, setColumnFilters] = useState<FrameworkId[]>(() =>
     initialFrameworkId ? [initialFrameworkId] : [],
   )
+  const [liveCells, setLiveCells] = useState<Record<string, CellLiveState>>({})
+  const [liveError, setLiveError] = useState<string | null>(null)
+  const [liveLoading, setLiveLoading] = useState(false)
 
   const columns = useMemo(() => visibleFrameworks(preset, columnFilters), [preset, columnFilters])
 
   const catalogueRows = useMemo(() => {
-    const rows = filterClauseCatalogueRows(STUB_CATALOGUE_ROWS)
+    const rows = filterClauseCatalogueRows(CATALOGUE_ROWS)
     if (!initialClause) return rows
     const needle = initialClause.trim().toLowerCase()
     const matched = rows.filter(
@@ -139,11 +161,67 @@ export function StandardsMatrixShell({
     return matched.length > 0 ? matched : rows
   }, [initialClause])
 
+  const clauseNumbers = useMemo(
+    () => catalogueRows.map((row) => row.clauseNumber || row.id).filter(Boolean),
+    [catalogueRows],
+  )
+
+  useEffect(() => {
+    const frameworks = columns.map((c) => c.id)
+    if (frameworks.length === 0 || clauseNumbers.length === 0) return
+
+    let cancelled = false
+    setLiveLoading(true)
+    setLiveError(null)
+    standardsCellAggregateApi
+      .getMatrix(frameworks, clauseNumbers)
+      .then((res) => {
+        if (cancelled) return
+        const next: Record<string, CellLiveState> = {}
+        for (const cell of res.data.cells || []) {
+          const key = `${cell.framework}:${cell.clause_number}`
+          next[key] = {
+            verdict: asVerdict(cell.verdict as CellVerdict),
+            coverBlocked: Boolean(cell.cover_blocked),
+            recurrenceRedFlag: Boolean(cell.recurrence_red_flag),
+            topEvidenceLabel: cell.summary?.top_evidence_label,
+            freshnessLabel: cell.summary?.freshness,
+          }
+        }
+        setLiveCells(next)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLiveError(getApiErrorMessage(err))
+          setLiveCells({})
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLiveLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [columns, clauseNumbers])
+
   const toggleFramework = (id: FrameworkId) => {
     setColumnFilters((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
       return [...prev, id]
     })
+  }
+
+  const resolveCell = (frameworkId: FrameworkId, clauseNumber: string): CellLiveState => {
+    const hit = liveCells[`${frameworkId}:${clauseNumber}`]
+    if (hit) return hit
+    return {
+      verdict: 'unknown',
+      coverBlocked: false,
+      recurrenceRedFlag: false,
+      topEvidenceLabel: null,
+      freshnessLabel: null,
+    }
   }
 
   return (
@@ -156,11 +234,22 @@ export function StandardsMatrixShell({
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
             {t('compliance.standards_matrix.subtitle', {
-              defaultValue: 'Filter frameworks and open a clause workspace. Live coverage joins arrive in PR-B.',
+              defaultValue:
+                'Filter frameworks and open a clause workspace. Cells reflect live audits, NC, actions, risks, and certs.',
             })}
           </p>
-          <Badge variant="outline" className="mt-2" data-testid="standards-matrix-stub-badge">
-            {t('compliance.standards_matrix.stub_badge', { defaultValue: 'PR-B stub cells' })}
+          <Badge
+            variant="outline"
+            className="mt-2"
+            data-testid={liveError ? 'standards-matrix-degraded-badge' : 'standards-matrix-live-badge'}
+          >
+            {liveLoading
+              ? t('compliance.standards_matrix.loading', { defaultValue: 'Loading live cells…' })
+              : liveError
+                ? t('compliance.standards_matrix.degraded', {
+                    defaultValue: 'Live graph unavailable — showing unknown',
+                  })
+                : t('compliance.standards_matrix.live_badge', { defaultValue: 'Live graph' })}
           </Badge>
         </div>
 
@@ -252,7 +341,7 @@ export function StandardsMatrixShell({
                         <div className="text-xs text-muted-foreground truncate max-w-[220px]">{title}</div>
                       </td>
                       {columns.map((col) => {
-                        const verdict = stubVerdictFor(clauseNumber, col.id)
+                        const live = resolveCell(col.id, clauseNumber)
                         const isSelected =
                           selected?.frameworkId === col.id && selected?.clauseNumber === clauseNumber
                         return (
@@ -263,7 +352,8 @@ export function StandardsMatrixShell({
                                   type="button"
                                   className={cn(
                                     'mx-auto flex h-9 w-full max-w-[4.5rem] items-center justify-center rounded-md border text-[10px] font-medium transition-colors',
-                                    cellTone(verdict),
+                                    cellTone(live.verdict),
+                                    live.recurrenceRedFlag && 'ring-1 ring-destructive',
                                     isSelected && 'ring-2 ring-primary',
                                   )}
                                   onClick={() =>
@@ -276,8 +366,8 @@ export function StandardsMatrixShell({
                                   data-testid={`standards-matrix-cell-${col.id}-${clauseNumber}`}
                                   aria-label={`${col.label} ${clauseNumber}`}
                                 >
-                                  {t(`compliance.standards_matrix.verdict.${verdict}`, {
-                                    defaultValue: verdict,
+                                  {t(`compliance.standards_matrix.verdict.${live.verdict}`, {
+                                    defaultValue: live.verdict,
                                   })}
                                 </button>
                               </TooltipTrigger>
@@ -286,7 +376,12 @@ export function StandardsMatrixShell({
                                   frameworkLabel={col.label}
                                   clauseNumber={clauseNumber}
                                   clauseTitle={title}
-                                  verdict={verdict}
+                                  verdict={live.verdict}
+                                  topEvidenceLabel={live.topEvidenceLabel}
+                                  freshnessLabel={live.freshnessLabel}
+                                  coverBlocked={live.coverBlocked}
+                                  recurrenceRedFlag={live.recurrenceRedFlag}
+                                  isStub={Boolean(liveError)}
                                 />
                               </TooltipContent>
                             </Tooltip>

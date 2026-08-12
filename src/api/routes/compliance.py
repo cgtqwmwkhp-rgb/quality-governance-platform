@@ -829,6 +829,65 @@ async def get_statement_of_applicability(
     return soa
 
 
+# =============================================================================
+# Standards cell aggregate (Wave 1 PR-B) — live graph read-model
+# =============================================================================
+
+
+@router.get("/cell-aggregate")
+async def get_standards_cell_aggregate(
+    db: DbSession,
+    current_user: CurrentUser,
+    framework: str = Query(..., min_length=1, description="Matrix framework id (e.g. 9001, uvdb)"),
+    clause: str = Query(..., min_length=1, description="Clause number (e.g. 4.1, 7.5)"),
+):
+    """Join findings, actions, risks, certs, evidence, and imported priors for one cell.
+
+    Cover gate: open NC / open action → verdict cannot be ``covered``.
+    Recurrence red-flag when an NC reappears after close on the same clause.
+    Mock audits are labelled honestly and still paint gaps. LIVE-08: read-model only.
+    """
+    from src.domain.services.standards_cell_aggregate_service import StandardsCellAggregateService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    service = StandardsCellAggregateService(db)
+    result = await service.get_cell(
+        tenant_id=tenant_id,
+        framework=framework,
+        clause_number=clause,
+    )
+    return result.to_dict()
+
+
+@router.get("/cell-aggregate/matrix")
+async def get_standards_cell_aggregate_matrix(
+    db: DbSession,
+    current_user: CurrentUser,
+    frameworks: str = Query(..., description="Comma-separated matrix framework ids"),
+    clauses: str = Query(..., description="Comma-separated clause numbers"),
+):
+    """Batch verdicts for Standards matrix paint (same cover gate as cell-aggregate)."""
+    from src.domain.services.standards_cell_aggregate_service import StandardsCellAggregateService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    fw_list = [part.strip() for part in frameworks.split(",") if part.strip()]
+    clause_list = [part.strip() for part in clauses.split(",") if part.strip()]
+    if not fw_list or not clause_list:
+        raise BadRequestError("frameworks and clauses are required")
+    if len(fw_list) * len(clause_list) > 200:
+        raise BadRequestError("Too many cells requested (max 200)")
+    service = StandardsCellAggregateService(db)
+    return await service.get_matrix_summary(
+        tenant_id=tenant_id,
+        frameworks=fw_list,
+        clause_numbers=clause_list,
+    )
+
+
 @router.get("/standards", response_model=list[ComplianceStandardResponse])
 async def list_standards(db: DbSession, current_user: CurrentUser):
     """List supported standards and bridge them to canonical DB-backed records."""
