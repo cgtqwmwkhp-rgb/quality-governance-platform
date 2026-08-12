@@ -63,7 +63,7 @@ export const STANDARDS_MATRIX_FRAMEWORKS: FrameworkDef[] = [
     label: 'ISO 27001',
     shortLabel: '27001',
     kind: 'standard',
-    homeUrl: 'https://www.iso.org/standard/27001',
+    homeUrl: 'https://www.iso.org/standard/82875.html',
   },
   {
     id: '22301',

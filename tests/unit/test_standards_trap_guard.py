@@ -331,6 +331,20 @@ def test_annotate_cell_reports_the_row_verdict_and_trap_peers(guard_5064):
     assert exact["peers"], "7.5 aligns with the other four standards"
 
 
+def test_annotate_cell_resolves_relocated_clause_row_verdicts(guard_5064):
+    """Framework-local numbers that differ from the printed row still show the row verdict."""
+    relocated_trap = guard_5064.annotate_cell(framework="45001", clause_number="8.1.3")
+    assert relocated_trap["row_verdict"] == "DIFFERENT"
+    assert relocated_trap["is_trap_row"] is True
+
+    near_relocated = guard_5064.annotate_cell(framework="27001", clause_number="6.1")
+    assert near_relocated["row_verdict"] == "NEAR"
+    assert near_relocated["is_trap_row"] is False
+
+    dual_row = guard_5064.annotate_cell(framework="14001", clause_number="8.1")
+    assert dual_row["row_verdict"] == "DIFFERENT"
+
+
 def test_annotate_cell_on_an_unknown_clause_is_empty_not_wrong(guard_5064):
     annotation = guard_5064.annotate_cell(framework="9001", clause_number="99.9")
     assert annotation["row_verdict"] is None

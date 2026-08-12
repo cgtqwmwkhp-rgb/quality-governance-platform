@@ -41,6 +41,9 @@ describe('standardsMatrixFilters', () => {
     }
     expect(ce?.homeUrl).toBe('https://www.ncsc.gov.uk/cyberessentials/resources')
     expect(cep?.homeUrl).toBe('https://www.ncsc.gov.uk/cyberessentials/resources')
+    const iso27001 = STANDARDS_MATRIX_FRAMEWORKS.find((f) => f.id === '27001')
+    // Pinned to the ISO/IEC 27001:2022 catalogue record, not the bare-number alias.
+    expect(iso27001?.homeUrl).toBe('https://www.iso.org/standard/82875.html')
   })
 
   it('quarantines scheme-kind rows from the clause catalogue', () => {
