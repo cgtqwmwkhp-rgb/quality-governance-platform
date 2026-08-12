@@ -212,8 +212,7 @@ export default function Layout({
       icon: Shield,
       items: [
         { path: '/ims', icon: GitMerge, label: t('nav.overview') },
-        { path: '/standards', icon: BookOpen, label: t('nav.standards') },
-        { path: '/compliance', icon: Shield, label: t('nav.iso_compliance') },
+        { path: '/compliance', icon: BookOpen, label: t('nav.standards') },
         {
           path: '/knowledge-exceptions',
           icon: Sparkles,

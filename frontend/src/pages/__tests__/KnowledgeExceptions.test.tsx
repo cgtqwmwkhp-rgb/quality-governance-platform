@@ -282,7 +282,10 @@ describe('KnowledgeExceptions honesty (KE-W1)', () => {
     )
 
     expect(await screen.findByText('Inbox clear')).toBeInTheDocument()
-    expect(screen.getByTestId('exceptions-empty-open-standards')).toHaveAttribute('href', '/standards')
+    expect(screen.getByTestId('exceptions-empty-open-standards')).toHaveAttribute(
+      'href',
+      '/compliance?view=matrix',
+    )
   })
 })
 

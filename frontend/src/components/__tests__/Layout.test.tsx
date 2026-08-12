@@ -160,7 +160,6 @@ describe('Layout', () => {
         'nav.compliance_sustainability',
         [
           '/ims',
-          '/standards',
           '/compliance',
           '/knowledge-exceptions',
           '/document-control',
@@ -508,8 +507,8 @@ describe('Layout', () => {
     await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
 
     expect(navLink('/ims')).toBeInTheDocument()
-    expect(navLink('/standards')).toBeInTheDocument()
     expect(navLink('/compliance')).toBeInTheDocument()
+    expect(navLink('/standards')).not.toBeInTheDocument()
     expect(navLink('/compliance-automation')).not.toBeInTheDocument()
   })
 

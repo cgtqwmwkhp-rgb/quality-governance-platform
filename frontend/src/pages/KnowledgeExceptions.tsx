@@ -961,7 +961,7 @@ export default function KnowledgeExceptions() {
               </Button>
             ) : (
               <Button variant="outline" asChild data-testid="exceptions-empty-open-standards">
-                <Link to="/standards">Open standards map</Link>
+                <Link to="/compliance?view=matrix">Open standards map</Link>
               </Button>
             )
           }

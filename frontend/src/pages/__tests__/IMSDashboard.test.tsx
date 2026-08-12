@@ -137,10 +137,10 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     })
 
     await user.click(screen.getByTestId('compliance-hub-standards'))
-    expect(mockNavigate).toHaveBeenCalledWith('/standards')
+    expect(mockNavigate).toHaveBeenCalledWith('/compliance?view=matrix')
 
     await user.click(screen.getByTestId('compliance-hub-evidence'))
-    expect(mockNavigate).toHaveBeenCalledWith('/compliance')
+    expect(mockNavigate).toHaveBeenCalledWith('/compliance?view=evidence')
 
     await user.click(screen.getByTestId('compliance-hub-monitoring'))
     expect(mockNavigate).toHaveBeenCalledWith('/compliance-automation')
