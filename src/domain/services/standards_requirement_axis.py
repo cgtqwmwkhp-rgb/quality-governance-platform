@@ -24,9 +24,7 @@ from src.domain.uvdb.protocol_b2_v118 import UVDB_B2_SECTIONS
 
 logger = logging.getLogger(__name__)
 
-_SPEC_PATH = (
-    Path(__file__).resolve().parents[3] / "specs" / "standards" / "requirement-axes-v1.json"
-)
+_SPEC_PATH = Path(__file__).resolve().parents[3] / "specs" / "standards" / "requirement-axes-v1.json"
 
 # Framework ids that ship an own-axis catalogue in this wave (excl. ISO 22301 —
 # that lives in ALL_CLAUSES / ISOStandard).
@@ -198,10 +196,7 @@ def build_scheme_requirement_clause_plans(
                     "catalogue_key": row["catalogue_key"],
                     "clause_number": str(row["clause_number"])[:20],
                     "title": str(row["title"])[:300],
-                    "description": (
-                        f"source={axis.get('source_ref')}; "
-                        f"status={row.get('content_status')}"
-                    ),
+                    "description": (f"source={axis.get('source_ref')}; " f"status={row.get('content_status')}"),
                     "level": int(row.get("level") or 1),
                     "sort_order": sort_base + index,
                     "is_active": True,

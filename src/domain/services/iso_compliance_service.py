@@ -2629,7 +2629,7 @@ ISO_22301_CLAUSES = [
         "Determine external and internal issues relevant to purpose that affect the intended outcomes of the BCMS.",
         ["business continuity", "BCMS", "4.1"],
         "22301-4",
-        2
+        2,
     ),
     ISOClause(
         "22301-4.2",
@@ -2639,7 +2639,7 @@ ISO_22301_CLAUSES = [
         "Determine interested parties and their requirements, including legal, regulatory and CONTRACTUAL continuity requirements.",
         ["business continuity", "BCMS", "4.2"],
         "22301-4",
-        2
+        2,
     ),
     ISOClause(
         "22301-4.3",
@@ -2649,7 +2649,7 @@ ISO_22301_CLAUSES = [
         "Determine boundaries, considering the parts of the organization included, and document which products and services are in scope.",
         ["business continuity", "BCMS", "4.3"],
         "22301-4",
-        2
+        2,
     ),
     ISOClause(
         "22301-5.1",
@@ -2659,7 +2659,7 @@ ISO_22301_CLAUSES = [
         "Top management demonstrates leadership: policy, objectives, integration, resources, communication, outcomes.",
         ["business continuity", "BCMS", "5.1"],
         "22301-5",
-        2
+        2,
     ),
     ISOClause(
         "22301-5.2",
@@ -2669,7 +2669,7 @@ ISO_22301_CLAUSES = [
         "Establish a BC policy appropriate to purpose, providing a framework for objectives, with commitments to satisfy requirements and continual improvement. Available as documented information.",
         ["business continuity", "BCMS", "5.2"],
         "22301-5",
-        2
+        2,
     ),
     ISOClause(
         "22301-5.3",
@@ -2679,7 +2679,7 @@ ISO_22301_CLAUSES = [
         "Assign and communicate responsibilities for the BCMS and for reporting its performance.",
         ["business continuity", "BCMS", "5.3"],
         "22301-5",
-        2
+        2,
     ),
     ISOClause(
         "22301-6.1",
@@ -2689,7 +2689,7 @@ ISO_22301_CLAUSES = [
         "Determine risks and opportunities to the BCMS itself and plan actions.",
         ["business continuity", "BCMS", "6.1"],
         "22301-6",
-        2
+        2,
     ),
     ISOClause(
         "22301-6.2",
@@ -2699,7 +2699,7 @@ ISO_22301_CLAUSES = [
         "Establish measurable continuity objectives at relevant functions, monitored, communicated, updated.",
         ["business continuity", "BCMS", "6.2"],
         "22301-6",
-        2
+        2,
     ),
     ISOClause(
         "22301-7.1",
@@ -2709,7 +2709,7 @@ ISO_22301_CLAUSES = [
         "Determine and provide resources for the BCMS.",
         ["business continuity", "BCMS", "7.1"],
         "22301-7",
-        2
+        2,
     ),
     ISOClause(
         "22301-7.2",
@@ -2719,7 +2719,7 @@ ISO_22301_CLAUSES = [
         "Ensure persons are competent; retain evidence.",
         ["business continuity", "BCMS", "7.2"],
         "22301-7",
-        2
+        2,
     ),
     ISOClause(
         "22301-7.3",
@@ -2729,7 +2729,7 @@ ISO_22301_CLAUSES = [
         "Persons aware of the policy, their role in incidents, and the implications of not conforming.",
         ["business continuity", "BCMS", "7.3"],
         "22301-7",
-        2
+        2,
     ),
     ISOClause(
         "22301-7.4",
@@ -2739,7 +2739,7 @@ ISO_22301_CLAUSES = [
         "Determine internal and external communications for the BCMS, including with interested parties, and alerting and warning.",
         ["business continuity", "BCMS", "7.4"],
         "22301-7",
-        2
+        2,
     ),
     ISOClause(
         "22301-7.5",
@@ -2749,7 +2749,7 @@ ISO_22301_CLAUSES = [
         "BCMS documentation created, updated and controlled.",
         ["business continuity", "BCMS", "7.5"],
         "22301-7",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.1",
@@ -2759,7 +2759,7 @@ ISO_22301_CLAUSES = [
         "Plan, implement and control the processes needed to meet BCMS requirements, including outsourced processes.",
         ["business continuity", "BCMS", "8.1"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.2.1",
@@ -2769,7 +2769,7 @@ ISO_22301_CLAUSES = [
         "Implement and maintain systematic processes for business impact analysis and continuity risk assessment.",
         ["business continuity", "BCMS", "8.2.1"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.2.2",
@@ -2779,7 +2779,7 @@ ISO_22301_CLAUSES = [
         "Identify activities supporting products and services; assess impacts over time of not performing them; set prioritized timeframes (RTO/MTPD) and dependencies.",
         ["business continuity", "BCMS", "8.2.2"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.2.3",
@@ -2789,7 +2789,7 @@ ISO_22301_CLAUSES = [
         "Identify and analyse risks of disruption to prioritized activities and their dependencies.",
         ["business continuity", "BCMS", "8.2.3"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.3",
@@ -2799,7 +2799,7 @@ ISO_22301_CLAUSES = [
         "Identify and select strategies based on the BIA and risk assessment, considering timeframes and resource requirements.",
         ["business continuity", "BCMS", "8.3"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.4.1",
@@ -2809,7 +2809,7 @@ ISO_22301_CLAUSES = [
         "Implement a response structure with teams, competence and authority to manage an incident through its lifecycle.",
         ["business continuity", "BCMS", "8.4.1"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.4.2",
@@ -2819,7 +2819,7 @@ ISO_22301_CLAUSES = [
         "Document procedures for detecting, monitoring, alerting and communicating during disruption, internally and externally.",
         ["business continuity", "BCMS", "8.4.2"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.4.3",
@@ -2829,7 +2829,7 @@ ISO_22301_CLAUSES = [
         "Documented plans and procedures for each prioritized activity: purpose and scope, objectives, activation, roles, actions, information flow, internal and external interdependencies, resource requirements, reporting, stand down.",
         ["business continuity", "BCMS", "8.4.3"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.4.4",
@@ -2839,7 +2839,7 @@ ISO_22301_CLAUSES = [
         "Documented processes to restore and return business activities from temporary measures.",
         ["business continuity", "BCMS", "8.4.4"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.5",
@@ -2849,7 +2849,7 @@ ISO_22301_CLAUSES = [
         "Exercise and test continuity procedures at planned intervals; exercises consistent with scope, based on scenarios, minimizing risk of disruption; post exercise reports; review and improvement.",
         ["business continuity", "BCMS", "8.5"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-8.6",
@@ -2859,7 +2859,7 @@ ISO_22301_CLAUSES = [
         "Evaluate the continuing suitability, adequacy and effectiveness of the BCMS at planned intervals and after incidents.",
         ["business continuity", "BCMS", "8.6"],
         "22301-8",
-        2
+        2,
     ),
     ISOClause(
         "22301-9.1",
@@ -2869,7 +2869,7 @@ ISO_22301_CLAUSES = [
         "Determine what to monitor, methods, when; evaluate BCMS performance and effectiveness.",
         ["business continuity", "BCMS", "9.1"],
         "22301-9",
-        2
+        2,
     ),
     ISOClause(
         "22301-9.2",
@@ -2879,7 +2879,7 @@ ISO_22301_CLAUSES = [
         "Audit the BCMS at planned intervals.",
         ["business continuity", "BCMS", "9.2"],
         "22301-9",
-        2
+        2,
     ),
     ISOClause(
         "22301-9.3",
@@ -2889,7 +2889,7 @@ ISO_22301_CLAUSES = [
         "Top management reviews the BCMS, with specific inputs including exercise results and post incident reviews, and outputs including changes and resource needs.",
         ["business continuity", "BCMS", "9.3"],
         "22301-9",
-        2
+        2,
     ),
     ISOClause(
         "22301-10.1",
@@ -2899,7 +2899,7 @@ ISO_22301_CLAUSES = [
         "React, correct, evaluate cause, act, review effectiveness.",
         ["business continuity", "BCMS", "10.1"],
         "22301-10",
-        2
+        2,
     ),
     ISOClause(
         "22301-10.2",
@@ -2909,17 +2909,11 @@ ISO_22301_CLAUSES = [
         "Continually improve suitability, adequacy and effectiveness of the BCMS.",
         ["business continuity", "BCMS", "10.2"],
         "22301-10",
-        2
+        2,
     ),
 ]
 
-ALL_CLAUSES = (
-    ISO_9001_CLAUSES
-    + ISO_14001_CLAUSES
-    + ISO_45001_CLAUSES
-    + ISO_27001_CLAUSES
-    + ISO_22301_CLAUSES
-)
+ALL_CLAUSES = ISO_9001_CLAUSES + ISO_14001_CLAUSES + ISO_45001_CLAUSES + ISO_27001_CLAUSES + ISO_22301_CLAUSES
 
 
 class ISOComplianceService:
