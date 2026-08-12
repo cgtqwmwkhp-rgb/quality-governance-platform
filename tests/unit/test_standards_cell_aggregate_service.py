@@ -227,6 +227,8 @@ def test_the_uvdb_column_recognises_the_shelf_stamp_for_achilles():
         ("cyber_essentials_plus", "Annual assessment", "cep"),
         ("cyber_essentials", "Annual assessment", "ce"),
         ("ce", "Annual assessment", "ce"),
+        ("CE+", "Annual assessment", "cep"),
+        ("Cyber Essentials+", "Shelf stamp", "cep"),
         ("achilles", "UVDB B2 verification", "uvdb"),
         # The ones that must stay unattributed: real certificates that prove
         # something real, and no framework column at all.

@@ -231,6 +231,7 @@ _CERT_TYPE_TOKENS: tuple[tuple[str, str], ...] = (
 _CERT_TYPE_EXACT: dict[str, str] = {
     "ce": "ce",
     "cep": "cep",
+    "ceplus": "cep",
     "pm": "pm",
     "iip": "iip",
 }
@@ -242,8 +243,13 @@ def count_proof_certs(certificates: Iterable[dict[str, Any]]) -> int:
 
 
 def _compact(value: Any) -> str:
-    """Lowercase alphanumerics only — ``"ISO 9001:2015"`` → ``"iso90012015"``."""
-    return "".join(character for character in str(value or "").lower() if character.isalnum())
+    """Lowercase alphanumerics only — ``"ISO 9001:2015"`` → ``"iso90012015"``.
+
+    ``+`` is rewritten to ``plus`` first so ``CE+`` / ``Cyber Essentials+`` keep
+    the Plus signal instead of collapsing to Cyber Essentials (``ce``).
+    """
+    text = str(value or "").lower().replace("+", "plus")
+    return "".join(character for character in text if character.isalnum())
 
 
 def framework_for_certificate(certificate_type: Any, name: Any = None) -> Optional[str]:
