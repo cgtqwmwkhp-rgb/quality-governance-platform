@@ -19,5 +19,12 @@ def test_dockerfile_copies_governance_library_seed_specs() -> None:
     assert "specs/governance-library/functions.json" in text
 
 
+def test_dockerfile_copies_standards_requirement_axes_spec() -> None:
+    """Int-W5 staging failed: alembic loads this JSON, CI checkout hid the gap."""
+    text = DOCKERFILE.read_text(encoding="utf-8")
+    assert "specs/standards/requirement-axes-v1.json" in text
+    assert Path("specs/standards/requirement-axes-v1.json").is_file()
+
+
 def test_functions_json_exists_in_repo() -> None:
     assert Path("specs/governance-library/functions.json").is_file()
