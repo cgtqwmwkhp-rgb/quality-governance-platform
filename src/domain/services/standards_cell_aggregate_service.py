@@ -564,7 +564,7 @@ class StandardsCellAggregateService:
         for action in rows:
             ref = action.clause_reference
             iso = action.iso_standard
-            tokens = []
+            tokens: list[str] = []
             if ref:
                 # clause_reference may be "7.5" or "7.5, 8.1"
                 tokens.extend(part.strip() for part in str(ref).replace(";", ",").split(",") if part.strip())
@@ -606,7 +606,7 @@ class StandardsCellAggregateService:
         for link in rows:
             if not token_matches_clause(link.clause_id, keys, clause_number):
                 continue
-            signal = (link.signal_type.value if hasattr(link.signal_type, "value") else link.signal_type) or None
+            signal = link.signal_type or None
             matched.append(
                 {
                     "id": link.id,
@@ -689,15 +689,15 @@ class StandardsCellAggregateService:
                     .scalars()
                     .all()
                 )
-                for risk in er_rows:
-                    key = f"er-{risk.id}"
+                for er_risk in er_rows:
+                    key = f"er-{er_risk.id}"
                     matched[key] = {
-                        "id": risk.id,
+                        "id": er_risk.id,
                         "register": "enterprise",
-                        "reference": risk.reference,
-                        "title": risk.title,
-                        "status": status_value(getattr(risk, "status", None)),
-                        "detail_path": f"/risk-register/{risk.id}",
+                        "reference": er_risk.reference,
+                        "title": er_risk.title,
+                        "status": status_value(getattr(er_risk, "status", None)),
+                        "detail_path": f"/risk-register/{er_risk.id}",
                         "source": "control_standard_clauses",
                     }
 
@@ -718,15 +718,15 @@ class StandardsCellAggregateService:
                 .all()
             )
             for finding in finding_rows:
-                for risk in finding.risks or []:
-                    key = f"er-{risk.id}"
+                for linked_risk in finding.risks or []:
+                    key = f"er-{linked_risk.id}"
                     matched[key] = {
-                        "id": risk.id,
+                        "id": linked_risk.id,
                         "register": "enterprise",
-                        "reference": risk.reference,
-                        "title": risk.title,
-                        "status": status_value(getattr(risk, "status", None)),
-                        "detail_path": f"/risk-register/{risk.id}",
+                        "reference": linked_risk.reference,
+                        "title": linked_risk.title,
+                        "status": status_value(getattr(linked_risk, "status", None)),
+                        "detail_path": f"/risk-register/{linked_risk.id}",
                         "source": "finding_link",
                         "from_finding_id": finding.id,
                     }

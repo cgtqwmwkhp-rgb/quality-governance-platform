@@ -54,6 +54,7 @@
 ## 5) Testing Evidence (link to runs)
 - [x] Unit (local): `tests/unit/test_standards_cell_aggregate_service.py`
 - [x] Vitest (local): `standardsWorkspaceLivePanels` (+ existing matrix filter suite)
+- [x] size-limit index 200→201 kB ledgered for PR-B shell i18n (CI measured +835 B over 200).
 - [ ] Hosted CI — pending PR checks
 
 ## 6) Critical Journeys Verified (CUJ)
