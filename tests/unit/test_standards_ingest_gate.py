@@ -168,6 +168,52 @@ def test_strict_doc_type_refuses(guard_5064):
     assert decision.reason == "strict_doc_type"
 
 
+@pytest.mark.parametrize("clause_id", ["chas-7.2", "ssip-7.2", "ce-7.2", "cep-7.2", "uvdb-7.2", "pm-7.2"])
+def test_a_framework_with_no_imported_alignment_cannot_machine_confirm(guard_5064, clause_id):
+    """0.99 confidence on a framework nobody has aligned is still not an alignment.
+
+    ISO 7.2 is EXACT across the five standards, and the row verdict used to be read
+    onto every column that printed the same number. CHAS, SSIP and Cyber Essentials
+    then auto-confirmed with zero EXACT peers of their own — a machine confirmation
+    written into the audit trail on the strength of a shared digit.
+    """
+    decision = evaluate(
+        confidence=0.99,
+        doc_type="procedure",
+        clause_id=clause_id,
+        context=_ctx(guard_5064),
+    )
+    assert decision.auto_confirm is False
+    assert decision.reason == "alignment_not_exact_for_framework"
+
+
+def test_a_framework_in_the_edition_but_absent_from_the_row_also_refuses(guard_5064):
+    """IiP has imported edges, but none on 7.2 — coverage of the framework is not enough."""
+    assert guard_5064.covers_framework("iip") is True
+    decision = evaluate(
+        confidence=0.99,
+        doc_type="procedure",
+        clause_id="iip-7.2",
+        context=_ctx(guard_5064),
+    )
+    assert decision.auto_confirm is False
+    assert decision.reason == "alignment_not_exact_for_framework"
+
+
+def test_iso_exact_peers_still_confirm(guard_5064):
+    """The ≥98% + EXACT path is unchanged where an EXACT peer really touches the cell."""
+    for clause_id in ("9001-7.2", "14001-7.5", "45001-7.5"):
+        decision = evaluate(
+            confidence=0.99,
+            doc_type="procedure",
+            clause_id=clause_id,
+            context=_ctx(guard_5064),
+        )
+        assert decision.auto_confirm is True, clause_id
+        assert decision.reason == "auto_confirmed"
+        assert decision.row_verdict == "EXACT"
+
+
 def test_resolve_link_status_fail_closed_without_gate():
     from src.domain.models.compliance_evidence import EvidenceLinkStatus
     from src.domain.services.governed_knowledge_service import resolve_link_status

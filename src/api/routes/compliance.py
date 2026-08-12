@@ -831,8 +831,17 @@ async def get_standards_cell_aggregate_matrix(
     frameworks: str = Query(..., description="Comma-separated matrix framework ids"),
     clauses: str = Query(..., description="Comma-separated clause numbers"),
 ):
-    """Batch verdicts for Standards matrix paint (same cover gate as cell-aggregate)."""
-    from src.domain.services.standards_cell_aggregate_service import StandardsCellAggregateService
+    """Batch verdicts for Standards matrix paint (same cover gate as cell-aggregate).
+
+    The cap exists to stop one request scanning the whole tenant, not to size the
+    matrix: the imported 5064 axis is 32 rows across 12 columns, and the old 200
+    ceiling rejected the **All** preset outright, so the shell fell back to a
+    degraded grid on exactly the tenants that had done the import.
+    """
+    from src.domain.services.standards_cell_aggregate_service import (
+        MATRIX_SUMMARY_MAX_CELLS,
+        StandardsCellAggregateService,
+    )
 
     tenant_id = current_user.tenant_id
     if tenant_id is None:
@@ -841,8 +850,8 @@ async def get_standards_cell_aggregate_matrix(
     clause_list = [part.strip() for part in clauses.split(",") if part.strip()]
     if not fw_list or not clause_list:
         raise BadRequestError("frameworks and clauses are required")
-    if len(fw_list) * len(clause_list) > 200:
-        raise BadRequestError("Too many cells requested (max 200)")
+    if len(fw_list) * len(clause_list) > MATRIX_SUMMARY_MAX_CELLS:
+        raise BadRequestError(f"Too many cells requested (max {MATRIX_SUMMARY_MAX_CELLS})")
     service = StandardsCellAggregateService(db)
     return await service.get_matrix_summary(
         tenant_id=tenant_id,

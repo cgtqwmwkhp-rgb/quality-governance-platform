@@ -52,12 +52,16 @@ export function CertsPanelSlot({
                   {cert.name}
                 </Link>
                 {cert.readiness_status ? <Badge variant="secondary">{cert.readiness_status}</Badge> : null}
-                <Badge variant="outline">
+                <Badge variant={cert.proof_scope === 'unmatched' ? 'secondary' : 'outline'}>
                   {cert.proof_scope === 'clause'
                     ? t('compliance.standards_workspace.proof.clause', { defaultValue: 'Clause proof' })
-                    : t('compliance.standards_workspace.proof.framework', {
-                        defaultValue: 'Framework proof',
-                      })}
+                    : cert.proof_scope === 'unmatched'
+                      ? t('compliance.standards_workspace.proof.unmatched', {
+                          defaultValue: 'On the shelf — proves no framework',
+                        })
+                      : t('compliance.standards_workspace.proof.framework', {
+                          defaultValue: 'Framework proof',
+                        })}
                 </Badge>
               </div>
               {cert.expiry_date ? (

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chunkClausesForRequest,
   filterClauseCatalogueRows,
   frameworkIdFromCode,
+  MATRIX_CELL_REQUEST_LIMIT,
   parseComplianceShellView,
   resolvePresetFrameworks,
   STANDARDS_MATRIX_FRAMEWORKS,
@@ -83,6 +85,28 @@ describe('standardsMatrixFilters', () => {
     expect(complianceStandardIdFromFrameworkId('ce')).toBeNull()
     expect(SPECIALIST_FRAMEWORK_ROUTES.pm).toBe('/planet-mark')
     expect(SPECIALIST_FRAMEWORK_ROUTES.uvdb).toBe('/uvdb')
+  })
+
+  it('keeps every matrix request inside the API cell cap', () => {
+    // The All preset: 12 columns against the imported 32-row axis is 384 cells,
+    // which fits — the old 200 ceiling is what turned an imported matrix degraded.
+    const columns = STANDARDS_MATRIX_FRAMEWORKS.length
+    const axis = Array.from({ length: 32 }, (_, index) => `clause-${index}`)
+    expect(chunkClausesForRequest(axis, columns)).toEqual([axis])
+
+    const longAxis = Array.from({ length: 120 }, (_, index) => `clause-${index}`)
+    const chunks = chunkClausesForRequest(longAxis, columns)
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.flat()).toEqual(longAxis)
+    for (const chunk of chunks) {
+      expect(chunk.length * columns).toBeLessThanOrEqual(MATRIX_CELL_REQUEST_LIMIT)
+    }
+  })
+
+  it('never returns an empty request, even for absurd column counts', () => {
+    expect(chunkClausesForRequest([], 12)).toEqual([])
+    expect(chunkClausesForRequest(['7.2'], 0)).toEqual([['7.2']])
+    expect(chunkClausesForRequest(['7.2', '7.3'], 10_000)).toEqual([['7.2'], ['7.3']])
   })
 
   it('maps Assist codes onto framework ids', () => {
