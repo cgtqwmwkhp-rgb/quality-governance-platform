@@ -169,10 +169,12 @@ def roll_up_nonconformities(findings: list[dict[str, Any]], *, row_limit: int) -
         clauses_with_open += 1
         if framework is None:
             unattributed_open += open_count
-        latest = max(
-            (e.get("created_at") for e in events if e.get("created_at") is not None),
-            default=None,
-        )
+        created_ats: list[Any] = []
+        for event in events:
+            created_at = event.get("created_at")
+            if created_at is not None:
+                created_ats.append(created_at)
+        latest = max(created_ats) if created_ats else None
         clause_key = f"{framework}-{clause_number}" if framework else clause_number
         rows.append(
             {
@@ -538,15 +540,19 @@ class StandardsDigestService:
         truncated = len(rows) >= PENDING_SCAN_LIMIT
         payload = []
         for link in rows:
-            linked_by = link.linked_by
-            if hasattr(linked_by, "value"):
-                linked_by = linked_by.value
+            raw_linked_by = link.linked_by
+            if isinstance(raw_linked_by, EvidenceLinkMethod):
+                linked_by = raw_linked_by.value
+            elif raw_linked_by:
+                linked_by = str(raw_linked_by)
+            else:
+                linked_by = EvidenceLinkMethod.AI.value
             payload.append(
                 {
                     "id": link.id,
                     "clause_id": link.clause_id,
                     "effective_status": link.effective_status.value,
-                    "linked_by": linked_by or EvidenceLinkMethod.AI.value,
+                    "linked_by": linked_by,
                     "signal_type": link.signal_type,
                     "created_at": link.created_at,
                 }
