@@ -38,7 +38,12 @@ from src.domain.services.standards_cell_aggregate_service import (
     status_value,
     survives_trap_guard,
 )
-from src.domain.services.standards_trap_guard import TrapGuard, clause_number_from_token, framework_from_clause_token
+from src.domain.services.standards_trap_guard import (
+    ISO_NUMBERING_FAMILY,
+    TrapGuard,
+    clause_number_from_token,
+    framework_from_clause_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -185,15 +190,25 @@ class StandardsAutoConfirmContext:
         return self.guard.version_label
 
 
-def _has_exact_peer(annotation: dict[str, Any]) -> bool:
-    """True when an EXACT pair edge touches this cell's own framework and clause.
+def _has_exact_peer(annotation: dict[str, Any], *, cell_framework: Optional[str] = None) -> bool:
+    """True when an intra-ISO-family EXACT pair edge touches this cell.
 
     ``annotate_cell`` only lists peers reached by an edge with this cell at one end,
     so an EXACT peer here is an imported alignment for *this* framework rather than
     for whichever framework happens to share the row.
+
+    Int-W6: the peer must also be in the ISO numbering family. Fixing IiP key
+    lookup would otherwise newly auto-confirm ``iip-IIP 7`` (and keep auto-confirming
+    ``45001-5.4``, whose only EXACT peer is IiP). Scheme EXACT is out of scope.
     """
+    cell_fw = (cell_framework or "").strip().lower()
+    if cell_fw and cell_fw not in ISO_NUMBERING_FAMILY:
+        return False
     for peer in annotation.get("peers") or []:
-        if str(peer.get("verdict") or "").strip().upper() == "EXACT":
+        if str(peer.get("verdict") or "").strip().upper() != "EXACT":
+            continue
+        peer_fw = str(peer.get("framework") or "").strip().lower()
+        if peer_fw in ISO_NUMBERING_FAMILY:
             return True
     return False
 
@@ -299,7 +314,7 @@ def evaluate(
             clause_number=clause_number,
             row_verdict=row_verdict,
         )
-    if not _has_exact_peer(annotation):
+    if not _has_exact_peer(annotation, cell_framework=fw):
         # The row verdict is a property of the printed row, not of this cell. A
         # framework with no imported pair on the row has no EXACT alignment of its
         # own, and reading the row's EXACT off the ISO columns is how chas / ce /

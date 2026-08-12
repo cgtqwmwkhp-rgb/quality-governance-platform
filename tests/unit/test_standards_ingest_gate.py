@@ -214,6 +214,46 @@ def test_iso_exact_peers_still_confirm(guard_5064):
         assert decision.row_verdict == "EXACT"
 
 
+def test_45001_5_4_still_refuses_auto_confirm(guard_5064):
+    """45001 5.4 is UNIQUE on the ISO row; its only EXACT peer is IiP, not ISO-family.
+
+    Either reason is a refuse. The cell must not newly auto-confirm because IiP
+    lookup now finds the EXACT pair.
+    """
+    annotation = guard_5064.annotate_cell(framework="45001", clause_number="5.4")
+    assert any(p["framework"] == "iip" and p["verdict"] == "EXACT" for p in annotation["peers"])
+    decision = evaluate(
+        confidence=0.99,
+        doc_type="procedure",
+        clause_id="45001-5.4",
+        context=_ctx(guard_5064),
+    )
+    assert decision.auto_confirm is False
+    assert decision.reason in {"alignment_unique", "alignment_not_exact_for_framework"}
+
+
+def test_iip_exact_peers_do_not_machine_confirm_the_scheme_cell(guard_5064):
+    decision = evaluate(
+        confidence=0.99,
+        doc_type="procedure",
+        clause_id="iip-IIP 7",
+        context=_ctx(guard_5064),
+    )
+    assert decision.auto_confirm is False
+    assert decision.reason == "alignment_not_exact_for_framework"
+
+
+def test_ce_firewalls_near_refuses_auto_confirm(guard_5064):
+    decision = evaluate(
+        confidence=0.99,
+        doc_type="procedure",
+        clause_id="ce-firewalls",
+        context=_ctx(guard_5064),
+    )
+    assert decision.auto_confirm is False
+    assert decision.reason == "alignment_near_requires_addition"
+
+
 def test_resolve_link_status_fail_closed_without_gate():
     from src.domain.models.compliance_evidence import EvidenceLinkStatus
     from src.domain.services.governed_knowledge_service import resolve_link_status

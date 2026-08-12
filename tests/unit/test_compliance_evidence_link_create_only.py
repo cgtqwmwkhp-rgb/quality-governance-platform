@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from src.domain.models.compliance_evidence import EvidenceCoverKind, EvidenceLinkMethod
+from src.domain.models.compliance_evidence import EvidenceCoverKind, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.services.compliance_evidence_link_writer import create_evidence_links_if_absent
 
 
@@ -91,3 +91,40 @@ async def test_create_if_absent_classifies_integrity_error_as_existing(monkeypat
     assert result.created == []
     assert result.existing == [winner]
     db.rollback.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_if_absent_can_land_proposed_auto_applied(monkeypatch):
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_Result([]))
+    added = []
+    db.add = MagicMock(side_effect=lambda link: added.append(link))
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    async def fake_pin(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "src.domain.services.cel_version_pin.pin_evidence_link_document_version",
+        fake_pin,
+    )
+
+    await create_evidence_links_if_absent(
+        db,
+        tenant_id=1,
+        entity_type="document",
+        entity_id="9",
+        clause_ids=["14001-7.5"],
+        cover_kind=EvidenceCoverKind.COVERS,
+        link_method=EvidenceLinkMethod.MANUAL,
+        actor_id=1,
+        status=EvidenceLinkStatus.PROPOSED,
+        auto_applied=True,
+        commit=True,
+    )
+    assert len(added) == 1
+    assert added[0].status == EvidenceLinkStatus.PROPOSED
+    assert added[0].auto_applied is True
+    assert added[0].confirmed_by_id is None
+    assert added[0].confirmed_at is None

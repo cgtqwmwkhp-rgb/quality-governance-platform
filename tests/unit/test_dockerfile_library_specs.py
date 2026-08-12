@@ -26,5 +26,12 @@ def test_dockerfile_copies_standards_requirement_axes_spec() -> None:
     assert Path("specs/standards/requirement-axes-v1.json").is_file()
 
 
+def test_dockerfile_copies_standards_alignment_v11_payload() -> None:
+    """Int-W6: import/seed reads this JSON at apply time — same class of W5 miss."""
+    text = DOCKERFILE.read_text(encoding="utf-8")
+    assert "specs/standards/pel-hseq-5064-alignment-v1.1.json" in text
+    assert Path("specs/standards/pel-hseq-5064-alignment-v1.1.json").is_file()
+
+
 def test_functions_json_exists_in_repo() -> None:
     assert Path("specs/governance-library/functions.json").is_file()

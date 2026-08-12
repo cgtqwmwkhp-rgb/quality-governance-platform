@@ -240,3 +240,14 @@ async def test_source_cover_blocked_refuses_the_whole_share(guard_5064):
     plan = await service.plan(tenant_id=1, framework="9001", clause_number="7.5", source_cell=source)
     assert plan.available is False
     assert plan.unavailable_reason == "source_cover_blocked"
+
+
+def test_apply_source_writes_proposed_auto_applied_links():
+    """ExactShare must not confirm coverage; Exceptions queue is the landing zone."""
+    import inspect
+
+    from src.domain.services.standards_exact_share_service import ExactShareService
+
+    source = inspect.getsource(ExactShareService.apply)
+    assert "EvidenceLinkStatus.PROPOSED" in source
+    assert "auto_applied=True" in source

@@ -70,6 +70,7 @@ COPY --chown=appuser:appgroup specs/governance-library/northern-star-rules-v6.js
 COPY --chown=appuser:appgroup specs/governance-library/northern-star-v6.json ./specs/governance-library/northern-star-v6.json
 COPY --chown=appuser:appgroup specs/compliance-schedule/catalogue.json ./specs/compliance-schedule/catalogue.json
 COPY --chown=appuser:appgroup specs/standards/requirement-axes-v1.json ./specs/standards/requirement-axes-v1.json
+COPY --chown=appuser:appgroup specs/standards/pel-hseq-5064-alignment-v1.1.json ./specs/standards/pel-hseq-5064-alignment-v1.1.json
 COPY --chown=appuser:appgroup certs/ ./certs/
 COPY --chown=appuser:appgroup scripts/celery/ ./scripts/celery/
 

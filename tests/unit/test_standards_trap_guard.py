@@ -36,6 +36,8 @@ from src.domain.services.standards_tech_gap_guard import requirement_for as tech
 from src.domain.services.standards_trap_guard import (
     ALIGNMENT_FRAMEWORK_IDS,
     TrapGuard,
+    alignment_clause_key,
+    clause_key,
     clause_number_from_token,
     framework_from_clause_token,
 )
@@ -357,9 +359,9 @@ def test_annotate_cell_on_an_unknown_clause_is_empty_not_wrong(guard_5064):
 
 def test_the_guard_knows_which_frameworks_the_edition_actually_carries(guard_5064):
     """5064 prints six frameworks. The matrix shows twelve. Six have no axis at all."""
-    for carried in ("9001", "14001", "45001", "27001", "22301", "iip"):
+    for carried in ("9001", "14001", "45001", "27001", "22301", "iip", "ce", "cep"):
         assert guard_5064.covers_framework(carried) is True
-    for absent in ("chas", "ssip", "ce", "cep", "uvdb", "pm"):
+    for absent in ("chas", "ssip", "uvdb", "pm"):
         assert guard_5064.covers_framework(absent) is False
     assert TrapGuard().covers_framework("9001") is False
 
@@ -369,7 +371,7 @@ def test_frameworks_on_row_lists_only_the_frameworks_the_row_prints(guard_5064):
     assert guard_5064.frameworks_on_row("99.9") == frozenset()
 
 
-@pytest.mark.parametrize("framework", ["chas", "ssip", "ce", "cep", "uvdb", "pm"])
+@pytest.mark.parametrize("framework", ["chas", "ssip", "uvdb", "pm"])
 def test_a_framework_absent_from_the_edition_never_borrows_the_iso_row_verdict(guard_5064, framework):
     """The bug this wave exists for: CHAS 7.2 read ISO 7.2's EXACT and confirmed.
 
@@ -465,3 +467,35 @@ def test_row_verdict_prefers_the_most_restrictive_verdict_on_the_row():
         ),
     )
     assert guard.row_verdict("6.1.3") is AlignmentVerdict.DIFFERENT
+
+
+def test_clause_key_stays_case_preserving_for_catalogue_join():
+    """W5 IiP catalogue keys are ``iip-IIP 7``; alignment lookup lowercases separately."""
+    assert clause_key("iip", "IIP 7") == "iip-IIP 7"
+    assert alignment_clause_key("iip", "IIP 7") == "iip-iip 7"
+
+
+def test_iip_exact_peers_are_visible_when_the_clause_is_printed_uppercase(guard_5064):
+    """The stored key is lowercased; the matrix asks for ``IIP 7``."""
+    annotation = guard_5064.annotate_cell(framework="iip", clause_number="IIP 7")
+    assert annotation["row_verdict"] == "EXACT"
+    peers = {peer["framework"] for peer in annotation["peers"]}
+    assert peers == {"9001", "14001", "45001", "27001", "22301"}
+    assert annotation["alignment_known"] is True
+
+
+def test_ce_plus_near_peers_do_not_invent_exact(guard_5064):
+    annotation = guard_5064.annotate_cell(framework="ce", clause_number="firewalls")
+    assert annotation["row_verdict"] == "NEAR"
+    assert annotation["framework_covered"] is True
+    assert len(annotation["peers"]) == 1
+    assert annotation["peers"][0]["framework"] == "cep"
+    assert annotation["peers"][0]["verdict"] == "NEAR"
+    assert annotation["peers"][0]["shareable"] is True
+    assert "independent" in (annotation["peers"][0]["addition_text"] or "").lower()
+
+
+def test_ce_iso_numbered_cells_still_do_not_borrow_the_iso_row(guard_5064):
+    annotation = guard_5064.annotate_cell(framework="ce", clause_number="7.2")
+    assert annotation["row_verdict"] is None
+    assert annotation["peers"] == []

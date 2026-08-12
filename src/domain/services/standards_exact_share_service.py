@@ -17,7 +17,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceCoverKind, EvidenceLinkMethod
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceCoverKind,
+    EvidenceLinkMethod,
+    EvidenceLinkStatus,
+)
 from src.domain.services.compliance_evidence_link_writer import (
     create_evidence_links_if_absent,
     soft_delete_evidence_link,
@@ -232,6 +237,8 @@ class ExactShareService:
             title=source_link.title,
             notes=source_link.notes,
             signal_type=source_link.signal_type,
+            status=EvidenceLinkStatus.PROPOSED,
+            auto_applied=True,
             commit=True,
         )
         return self._apply_response(

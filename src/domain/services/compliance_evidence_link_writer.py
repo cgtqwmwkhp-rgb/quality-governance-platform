@@ -204,6 +204,8 @@ async def create_evidence_links_if_absent(
     title: Optional[str] = None,
     notes: Optional[str] = None,
     signal_type: Optional[str] = None,
+    status: Optional[EvidenceLinkStatus] = None,
+    auto_applied: Optional[bool] = None,
     commit: bool = True,
 ) -> LinkCreateIfAbsentResult:
     """Create CEL rows only when no live row exists for the unique key.
@@ -258,7 +260,16 @@ async def create_evidence_links_if_absent(
         if signal_type is not None:
             link.signal_type = signal_type
 
-        if link_method == EvidenceLinkMethod.MANUAL:
+        if status is not None:
+            link.status = status
+            link.auto_applied = bool(auto_applied) if auto_applied is not None else False
+            if status == EvidenceLinkStatus.CONFIRMED:
+                link.confirmed_by_id = actor_id
+                link.confirmed_at = datetime.now(timezone.utc)
+            else:
+                link.confirmed_by_id = None
+                link.confirmed_at = None
+        elif link_method == EvidenceLinkMethod.MANUAL:
             link.status = EvidenceLinkStatus.CONFIRMED
             link.auto_applied = False
             link.confirmed_by_id = actor_id
@@ -266,6 +277,8 @@ async def create_evidence_links_if_absent(
         else:
             link.confirmed_by_id = None
             link.confirmed_at = None
+            if auto_applied is not None:
+                link.auto_applied = bool(auto_applied)
 
         if entity_type == "document":
             from src.domain.services.cel_version_pin import pin_evidence_link_document_version

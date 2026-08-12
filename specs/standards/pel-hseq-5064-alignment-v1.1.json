@@ -1,0 +1,1276 @@
+{
+  "source_ref": "PEL-HSEQ-5064",
+  "version_label": "1.1",
+  "title": "Standards Alignment Matrix",
+  "source_date": "2026-08-11",
+  "excluded_frameworks": [
+    "constructionline"
+  ],
+  "notes": "Annex SL clauses 4 to 10 across the five management system standards, plus the sheet 06 EXACT alignments for Investors in People and Annex A 5.31 / 5.33. Sheet 03 (all 93 Annex A controls) and sheets 04/05 are not imported by this edition. v1.1 adds Cyber Essentials ↔ Cyber Essentials Plus NEAR pairs for the five NCSC technical controls (Plus = independent verification, not EXACT). CHAS, SSIP, Planet Mark and UVDB remain declared-absent — no invented EXACT. Same source_ref.",
+  "rows": [
+    {
+      "row_key": "annexsl-4.1",
+      "clause_ref": "4.1",
+      "title": "Understanding the organisation and its context",
+      "verdict": "NEAR",
+      "rationale": "The core sentence is identical in all five: determine external and internal issues relevant to purpose and strategic direction that affect the ability to achieve intended outcomes. ISO 14001 ADDS environmental conditions being affected by, or capable of affecting, the organisation. ISO 45001 ADDS that context must consider workers and other interested parties. One context statement serves all five only if it carries both additions.",
+      "deliverables": "PEL-HSEQ-1002 Integrated Manual section on context",
+      "frameworks": {
+        "9001": {
+          "clause_number": "4.1",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "4.1",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "4.1",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "4.1",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "4.1",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 5
+    },
+    {
+      "row_key": "annexsl-4.2",
+      "clause_ref": "4.2",
+      "title": "Needs and expectations of interested parties",
+      "verdict": "NEAR",
+      "rationale": "Identical requirement to determine the interested parties and their relevant requirements. ISO 14001 ADDS the step of deciding which of those requirements become COMPLIANCE OBLIGATIONS. ISO 45001 names WORKERS explicitly and requires their needs to be determined. A single register works if it carries a compliance obligation column and lists workers.",
+      "deliverables": "PEL-HSEQ-5057 Interested Parties and Their Requirements Register",
+      "frameworks": {
+        "9001": {
+          "clause_number": "4.2",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "4.2",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "4.2",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "4.2",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "4.2",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 6
+    },
+    {
+      "row_key": "annexsl-4.3",
+      "clause_ref": "4.3",
+      "title": "Determining the scope of the management system",
+      "verdict": "NEAR",
+      "rationale": "Same requirement, and the scope must be available as documented information in all five. ISO 9001 uniquely permits a justified determination that a requirement is NOT APPLICABLE. ISO 27001 requires the scope to consider interfaces and dependencies with other parties, which is why the ISMS scope is usually narrower than the quality scope.",
+      "deliverables": "PEL-HSEQ-1002 for QEH&S. PEL-IT-2001 section 1 for the ISMS. PEL-IT-2011 for Cyber Essentials",
+      "frameworks": {
+        "9001": {
+          "clause_number": "4.3",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "4.3",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "4.3",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "4.3",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "4.3",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 7
+    },
+    {
+      "row_key": "annexsl-4.4",
+      "clause_ref": "4.4",
+      "title": "The management system and its processes",
+      "verdict": "NEAR",
+      "rationale": "ISO 9001 is by far the most prescriptive here: 4.4.1 lists ten things that must be determined for each process, and 4.4.2 requires documented information to support their operation. The other four state the requirement in one or two sentences. Meeting 9001 4.4 meets all five.",
+      "deliverables": "PEL-HSEQ-1002 and the cascade recorded in PEL-HSEQ-5014",
+      "frameworks": {
+        "9001": {
+          "clause_number": "4.4",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "4.4",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "4.4",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "4.4",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "4.4",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 8
+    },
+    {
+      "row_key": "annexsl-5.1",
+      "clause_ref": "5.1",
+      "title": "Leadership and commitment",
+      "verdict": "NEAR",
+      "rationale": "The harmonised list of ten commitments is common to all five. ISO 45001 is materially longer: it adds protecting workers from reprisal when reporting, developing and promoting a culture that supports the OH&S management system, and supporting worker consultation and participation. ISO 9001 adds a customer focus sub clause at 5.1.2 that no other standard has.",
+      "deliverables": "PEL-HSEQ-2031, PEL-HSEQ-2032, and the leadership sections of PEL-HSEQ-1002",
+      "frameworks": {
+        "9001": {
+          "clause_number": "5.1",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "5.1",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "5.1",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "5.1",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "5.1",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 9
+    },
+    {
+      "row_key": "annexsl-5.2",
+      "clause_ref": "5.2",
+      "title": "Policy",
+      "verdict": "DIFFERENT",
+      "rationale": "The STRUCTURE is identical: appropriate to purpose, framework for objectives, commitment to satisfy requirements and to continual improvement, documented, communicated, available to interested parties. The CONTENT commitments are different in every one. 14001 requires protection of the environment including prevention of pollution. 45001 requires provision of safe and healthy working conditions, elimination of hazards, and consultation of workers. One policy document cannot satisfy all five and should not try.",
+      "deliverables": "PEL-HSEQ-2031 H&S, PEL-HSEQ-2003 Environmental, PEL-HSEQ-2032 IMS and Quality, PEL-IT-2001 Information Security",
+      "frameworks": {
+        "9001": {
+          "clause_number": "5.2",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "5.2",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "5.2",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "5.2",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "5.2",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 10
+    },
+    {
+      "row_key": "annexsl-5.3",
+      "clause_ref": "5.3",
+      "title": "Organisational roles, responsibilities and authorities",
+      "verdict": "EXACT",
+      "rationale": "Materially identical in all five: top management shall ensure that responsibilities and authorities for relevant roles are assigned, communicated and understood. ISO 9001 adds five specific assignments at 5.3(a) to (e) but they are a subset of the same duty. ONE post holder register satisfies every one of them.",
+      "deliverables": "PEL-HSEQ-5046 Post Holders and Function Ownership Register",
+      "frameworks": {
+        "9001": {
+          "clause_number": "5.3",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "5.3",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "5.3",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "5.3",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "5.3",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 11
+    },
+    {
+      "row_key": "annexsl-5.4",
+      "clause_ref": "5.4",
+      "title": "Consultation and participation of workers",
+      "verdict": "UNIQUE",
+      "rationale": "ISO 45001 ONLY, and it is the clause that most distinguishes 45001 from every other management system standard. It requires mechanisms for consultation with non managerial workers on fifteen listed matters, removal of obstacles to participation, and provision of time and resources. There is no equivalent anywhere in 9001, 14001, 27001 or 22301. An integrated system that treats 45001 as 9001 with hazards will fail here.",
+      "deliverables": "PEL-PPL-3006 Employee Engagement, Voice and Wellbeing Framework, PEL-HSEQ-5026 Worker Consultation Record, PEL-PPL-2007",
+      "frameworks": {
+        "45001": {
+          "clause_number": "5.4",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 12
+    },
+    {
+      "row_key": "annexsl-6.1.1",
+      "clause_ref": "6.1.1",
+      "title": "Actions to address risks and opportunities, general",
+      "verdict": "NEAR",
+      "rationale": "All five require risks and opportunities to be determined by reference to clauses 4.1 and 4.2. ISO 27001 and 22301 combine what the others split. The common core is genuinely common; the sub clauses beneath it are not.",
+      "deliverables": "PEL-HSEQ-5021 Risk Register, and the ISMS risk assessment under PEL-IT-3005",
+      "frameworks": {
+        "9001": {
+          "clause_number": "6.1.1",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "6.1.1",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "6.1.1",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "6.1",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "6.1",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 13
+    },
+    {
+      "row_key": "annexsl-6.1.2",
+      "clause_ref": "6.1.2",
+      "title": "Risk identification, the subject specific clause",
+      "verdict": "DIFFERENT",
+      "rationale": "THE MOST DANGEROUS ROW IN THIS MATRIX. Five standards, one clause number, five entirely different requirements. An aspects and impacts register does not identify hazards. A hazard identification does not perform a business impact analysis. An information security risk assessment shares no methodology with any of them. Each needs its own evidence and its own methodology statement.",
+      "deliverables": "9001 PEL-HSEQ-5021 · 14001 PEL-HSEQ-5008 Aspects and Impacts · 45001 the 171 assessments under PEL-HSEQ-3138 · 27001 PEL-IT-3005 · 22301 PEL-CTR-1002",
+      "frameworks": {
+        "9001": {
+          "clause_number": "6.1.2",
+          "label": "risks and opportunities"
+        },
+        "14001": {
+          "clause_number": "6.1.2",
+          "label": "environmental aspects"
+        },
+        "45001": {
+          "clause_number": "6.1.2",
+          "label": "hazard identification and assessment of risks"
+        },
+        "27001": {
+          "clause_number": "6.1.2",
+          "label": "information security risk assessment"
+        },
+        "22301": {
+          "clause_number": "6.1.2",
+          "label": "business impact analysis and risk assessment"
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 14
+    },
+    {
+      "row_key": "annexsl-6.1.3",
+      "clause_ref": "6.1.3",
+      "title": "Compliance obligations and legal requirements",
+      "verdict": "NEAR",
+      "rationale": "ISO 14001 6.1.3 and ISO 45001 6.1.3 are near identical and ONE register satisfies both. ISO 27001 uses the same clause number for something completely unrelated, risk treatment and the Statement of Applicability. ISO 9001 has no equivalent clause at all, which surprises people. The 14001 and 45001 pairing here is one of the largest single evidence savings available.",
+      "deliverables": "PEL-HSEQ-5056 Legal and Other Requirements Register for 14001 and 45001. PEL-IT-2005 Statement of Applicability for 27001",
+      "frameworks": {
+        "14001": {
+          "clause_number": "6.1.3",
+          "label": "compliance obligations"
+        },
+        "45001": {
+          "clause_number": "6.1.3",
+          "label": "determination of legal and other requirements"
+        },
+        "27001": {
+          "clause_number": "6.1.3",
+          "label": "information security risk treatment"
+        },
+        "22301": {
+          "clause_number": "6.1.3",
+          "label": "not present as legal"
+        }
+      },
+      "pair_overrides": [
+        {
+          "a": "14001",
+          "b": "45001",
+          "verdict": "NEAR",
+          "note": "ISO 14001 6.1.3 and ISO 45001 6.1.3 are near identical and ONE register satisfies both."
+        },
+        {
+          "a": "14001",
+          "b": "27001",
+          "verdict": "DIFFERENT",
+          "note": "ISO 27001 uses the same clause number for something completely unrelated, risk treatment and the Statement of Applicability."
+        },
+        {
+          "a": "45001",
+          "b": "27001",
+          "verdict": "DIFFERENT",
+          "note": "ISO 27001 uses the same clause number for something completely unrelated, risk treatment and the Statement of Applicability."
+        },
+        {
+          "a": "14001",
+          "b": "22301",
+          "verdict": "DIFFERENT",
+          "note": "ISO 22301 6.1.3 is not present as a legal requirements clause."
+        },
+        {
+          "a": "45001",
+          "b": "22301",
+          "verdict": "DIFFERENT",
+          "note": "ISO 22301 6.1.3 is not present as a legal requirements clause."
+        },
+        {
+          "a": "27001",
+          "b": "22301",
+          "verdict": "DIFFERENT",
+          "note": "ISO 27001 6.1.3 is risk treatment and the Statement of Applicability; ISO 22301 6.1.3 is not present as a legal clause. Sharing the number is all they share."
+        }
+      ],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 15
+    },
+    {
+      "row_key": "annexsl-6.2",
+      "clause_ref": "6.2",
+      "title": "Objectives and planning to achieve them",
+      "verdict": "NEAR",
+      "rationale": "The eight characteristics of an objective and the five planning questions, what, resources, who, when, how evaluated, are common to all five and are quoted almost word for word. ISO 45001 ADDS that objectives must take account of worker consultation and of the results of the evaluation of effectiveness. One register satisfies all five if it carries the resource and evaluation columns, which is where most objective registers fail.",
+      "deliverables": "PEL-HSEQ-5058 Objectives, Targets and Improvement Programme Register",
+      "frameworks": {
+        "9001": {
+          "clause_number": "6.2",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "6.2",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "6.2",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "6.2",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "6.2",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 16
+    },
+    {
+      "row_key": "annexsl-6.3",
+      "clause_ref": "6.3",
+      "title": "Planning of changes",
+      "verdict": "DIFFERENT",
+      "rationale": "ISO 9001 and ISO 27001:2022 have a standalone clause 6.3 requiring changes to be carried out in a planned manner. ISO 45001 puts management of change at 8.1.3 and makes it far more demanding, requiring temporary and permanent changes to be assessed for hazards BEFORE they are introduced. ISO 14001 has no standalone clause. Same idea, four different homes.",
+      "deliverables": "PEL-HSEQ-3008 Planning of Changes, and PEL-PPL-5039 for organisational change",
+      "frameworks": {
+        "9001": {
+          "clause_number": "6.3",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "6.1",
+          "label": "within 6.1"
+        },
+        "45001": {
+          "clause_number": "8.1.3",
+          "label": "within 8.1.3 management of change"
+        },
+        "27001": {
+          "clause_number": "6.3",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "8.1",
+          "label": "within 8.1"
+        }
+      },
+      "pair_overrides": [
+        {
+          "a": "9001",
+          "b": "27001",
+          "verdict": "NEAR",
+          "note": "ISO 9001 and ISO 27001:2022 have a standalone clause 6.3 requiring changes to be carried out in a planned manner."
+        }
+      ],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 17
+    },
+    {
+      "row_key": "annexsl-7.1",
+      "clause_ref": "7.1",
+      "title": "Resources",
+      "verdict": "DIFFERENT",
+      "rationale": "ISO 9001 is uniquely detailed: people, infrastructure, environment for the operation of processes, monitoring and measuring resources including measurement traceability, and organisational knowledge. The other four state a single sentence. Meeting 9001 meets the rest, but the reverse is emphatically not true, and 7.1.5.2 measurement traceability is the one most often missed.",
+      "deliverables": "PEL-HSEQ-5031 Calibration Register for 7.1.5. PEL-HSEQ-5029 for people",
+      "frameworks": {
+        "9001": {
+          "clause_number": "7.1",
+          "label": "7.1.1 to 7.1.6"
+        },
+        "14001": {
+          "clause_number": "7.1",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "7.1",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "7.1",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "7.1",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 18
+    },
+    {
+      "row_key": "annexsl-7.2",
+      "clause_ref": "7.2",
+      "title": "Competence",
+      "verdict": "EXACT",
+      "rationale": "Word for word identical in all five: determine the necessary competence, ensure persons are competent on the basis of education, training or experience, take actions to acquire it, and retain documented information as evidence. ISO 45001 adds that competence must include the ability to identify hazards, which the same record can carry as a column. ONE competence matrix satisfies every standard Plantexpand holds.",
+      "deliverables": "PEL-HSEQ-5029 Competence Matrix and Training Record, PEL-PPL-4006, PEL-PPL-3005",
+      "frameworks": {
+        "9001": {
+          "clause_number": "7.2",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "7.2",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "7.2",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "7.2",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "7.2",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 19
+    },
+    {
+      "row_key": "annexsl-7.3",
+      "clause_ref": "7.3",
+      "title": "Awareness",
+      "verdict": "NEAR",
+      "rationale": "Common core: persons must be aware of the policy, their contribution, and the implications of not conforming. ISO 45001 ADDS three of its own, and they are substantial: awareness of incidents and their outcomes, of hazards and risks relevant to them, and OF THE ABILITY TO REMOVE THEMSELVES FROM SITUATIONS THEY BELIEVE PRESENT IMMINENT AND SERIOUS DANGER, and of protection from reprisal for doing so. That last one has no equivalent anywhere else.",
+      "deliverables": "PEL-PPL-4006 induction, PEL-HSEQ-3123, PEL-IT-5021 Awareness Register",
+      "frameworks": {
+        "9001": {
+          "clause_number": "7.3",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "7.3",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "7.3",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "7.3",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "7.3",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 20
+    },
+    {
+      "row_key": "annexsl-7.4",
+      "clause_ref": "7.4",
+      "title": "Communication",
+      "verdict": "NEAR",
+      "rationale": "ISO 14001 and ISO 45001 both split communication into general, internal and external and both require the organisation to decide what, when, with whom and how. ISO 14001 uniquely requires communicated environmental information to be reliable and consistent with information generated within the system. ISO 9001, 27001 and 22301 state the general requirement only.",
+      "deliverables": "PEL-PPL-2007 Communication and Representation Policy, PEL-IT-5004",
+      "frameworks": {
+        "9001": {
+          "clause_number": "7.4",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "7.4",
+          "label": "7.4.1 to 7.4.3"
+        },
+        "45001": {
+          "clause_number": "7.4",
+          "label": "7.4.1 to 7.4.3"
+        },
+        "27001": {
+          "clause_number": "7.4",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "7.4",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 21
+    },
+    {
+      "row_key": "annexsl-7.5",
+      "clause_ref": "7.5",
+      "title": "Documented information",
+      "verdict": "EXACT",
+      "rationale": "IDENTICAL IN ALL FIVE, sub clause by sub clause and in most sentences word for word. Creating and updating requires identification and description, format, and review and approval. Control requires availability where needed, adequate protection, and addresses distribution, access, retrieval, storage, version control, retention and disposition. THIS IS THE SINGLE LARGEST ALIGNMENT IN THE WHOLE MATRIX: one document control system, audited five times, and it is the system this entire programme has been building.",
+      "deliverables": "PEL-HSEQ-3012 Document Naming, Referencing and Version Control Standard, PEL-HSEQ-5014 Master Register, PEL-HSEQ-3027 Register Standard",
+      "frameworks": {
+        "9001": {
+          "clause_number": "7.5",
+          "label": "7.5.1 to 7.5.3"
+        },
+        "14001": {
+          "clause_number": "7.5",
+          "label": "7.5.1 to 7.5.3"
+        },
+        "45001": {
+          "clause_number": "7.5",
+          "label": "7.5.1 to 7.5.3"
+        },
+        "27001": {
+          "clause_number": "7.5",
+          "label": "7.5.1 to 7.5.3"
+        },
+        "22301": {
+          "clause_number": "7.5",
+          "label": "7.5.1 to 7.5.3"
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 22
+    },
+    {
+      "row_key": "annexsl-8.1",
+      "clause_ref": "8.1",
+      "title": "Operational planning and control",
+      "verdict": "DIFFERENT",
+      "rationale": "The clause number is shared and almost nothing else is. ISO 45001 8.1.2 requires the HIERARCHY OF CONTROLS to be applied and specifies its order, which no other standard contains. ISO 22301 expands 8 into six sub clauses covering business impact analysis, business continuity strategies, plans and exercising. ISO 14001 8.1 focuses on a life cycle perspective.",
+      "deliverables": "45001 the arrangements suite PEL-HSEQ-3101 to 3154 · 14001 PEL-HSEQ-3009 Life Cycle Perspective · 22301 PEL-CTR-1002 and PEL-CTR-2001",
+      "frameworks": {
+        "9001": {
+          "clause_number": "8.1",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "8.1",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "8.1",
+          "label": "8.1 including 8.1.2 and 8.1.3"
+        },
+        "27001": {
+          "clause_number": "8.1",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "8.1",
+          "label": "8.1 to 8.6"
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 23
+    },
+    {
+      "row_key": "annexsl-8.1.4",
+      "clause_ref": "8.1.4",
+      "title": "Procurement, contractors and outsourcing",
+      "verdict": "NEAR",
+      "rationale": "ISO 45001 8.1.4 is explicit and three part: procurement, contractors, and outsourcing, and it requires coordination of the OH&S management system with contractors. ISO 9001 8.4 covers externally provided processes, products and services with a criteria and evaluation requirement. ISO 27001 handles it entirely through Annex A supplier controls. One approved supplier register with a health and safety and an information security column serves all of them.",
+      "deliverables": "PEL-PROC-5008 Approved Suppliers Register, PEL-HSEQ-3023, PEL-HSEQ-5037, PEL-IT-3021",
+      "frameworks": {
+        "9001": {
+          "clause_number": "8.4",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "8.1",
+          "label": "outsourcing"
+        },
+        "45001": {
+          "clause_number": "8.1.4",
+          "label": "8.1.4.1 to 8.1.4.3"
+        },
+        "27001": {
+          "clause_number": "A.5.19",
+          "label": "A.5.19 to A.5.23"
+        },
+        "22301": {
+          "clause_number": "8",
+          "label": "8.x"
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 24
+    },
+    {
+      "row_key": "annexsl-8.2",
+      "clause_ref": "8.2",
+      "title": "Emergency preparedness, and customer requirements",
+      "verdict": "DIFFERENT",
+      "rationale": "ISO 14001 8.2 and ISO 45001 8.2 are NEAR IDENTICAL to each other and one set of emergency arrangements with a drill record satisfies both. ISO 9001 uses 8.2 for something entirely different, customer requirements and their review. Reading across the number rather than the title is how an integrated manual ends up with a customer enquiry procedure filed under emergency response.",
+      "deliverables": "14001 and 45001 PEL-HSEQ-3116 Emergency Planning, PEL-HSEQ-5027 Emergency Drill and Test Record · 9001 PEL-HSEQ-3021 and the contract review process",
+      "frameworks": {
+        "9001": {
+          "clause_number": "8.2",
+          "label": "requirements for products and services"
+        },
+        "14001": {
+          "clause_number": "8.2",
+          "label": "emergency preparedness and response"
+        },
+        "45001": {
+          "clause_number": "8.2",
+          "label": "emergency preparedness and response"
+        },
+        "22301": {
+          "clause_number": "8.4",
+          "label": "business continuity plans and procedures"
+        }
+      },
+      "pair_overrides": [
+        {
+          "a": "14001",
+          "b": "45001",
+          "verdict": "NEAR",
+          "note": "ISO 14001 8.2 and ISO 45001 8.2 are NEAR IDENTICAL to each other and one set of emergency arrangements with a drill record satisfies both."
+        }
+      ],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 25
+    },
+    {
+      "row_key": "annexsl-9.1.1",
+      "clause_ref": "9.1.1",
+      "title": "Monitoring, measurement, analysis and evaluation",
+      "verdict": "NEAR",
+      "rationale": "Common requirement to determine what needs monitoring, the methods, when it is performed and when results are evaluated, and to retain documented information as evidence. ISO 9001 adds 9.1.3 analysis and evaluation with seven specified outputs. ISO 45001 requires evaluation of the effectiveness of controls, not merely their existence.",
+      "deliverables": "PEL-HSEQ-5058 for the measures, PEL-HSEQ-3131 Monitoring, Inspection and Review",
+      "frameworks": {
+        "9001": {
+          "clause_number": "9.1.1",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "9.1.1",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "9.1.1",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "9.1",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "9.1.1",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 26
+    },
+    {
+      "row_key": "annexsl-9.1.2",
+      "clause_ref": "9.1.2",
+      "title": "Evaluation of compliance, and customer satisfaction",
+      "verdict": "DIFFERENT",
+      "rationale": "ISO 14001 9.1.2 and ISO 45001 9.1.2 are NEAR IDENTICAL: establish, implement and maintain processes for evaluating fulfilment of legal and other requirements, and RETAIN DOCUMENTED INFORMATION of the results. ISO 9001 9.1.2 is customer satisfaction and shares nothing with them beyond the number. This is the second most common place an integrated system fails: the compliance evaluation is genuinely absent because 9001 never asked for it.",
+      "deliverables": "14001 and 45001 PEL-HSEQ-5056 Legal and Other Requirements Register, evaluation columns · 9001 PEL-HSEQ-5060 Customer Complaints and Feedback Register",
+      "frameworks": {
+        "9001": {
+          "clause_number": "9.1.2",
+          "label": "customer satisfaction"
+        },
+        "14001": {
+          "clause_number": "9.1.2",
+          "label": "evaluation of compliance"
+        },
+        "45001": {
+          "clause_number": "9.1.2",
+          "label": "evaluation of compliance"
+        }
+      },
+      "pair_overrides": [
+        {
+          "a": "14001",
+          "b": "45001",
+          "verdict": "NEAR",
+          "note": "ISO 14001 9.1.2 and ISO 45001 9.1.2 are NEAR IDENTICAL: establish, implement and maintain processes for evaluating fulfilment of legal and other requirements, and RETAIN DOCUMENTED INFORMATION of the results."
+        }
+      ],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 27
+    },
+    {
+      "row_key": "annexsl-9.2",
+      "clause_ref": "9.2",
+      "title": "Internal audit",
+      "verdict": "EXACT",
+      "rationale": "IDENTICAL IN ALL FIVE. Plan, establish, implement and maintain an audit programme including frequency, methods, responsibilities, planning requirements and reporting, taking into account the importance of the processes and the results of previous audits. Define criteria and scope for each audit. SELECT AUDITORS AND CONDUCT AUDITS TO ENSURE OBJECTIVITY AND THE IMPARTIALITY OF THE AUDIT PROCESS. Report to relevant management. Retain documented information as evidence of the implementation of the programme AND the audit results. ONE audit programme covering all five standards is not merely permitted, it is the normal practice, and the impartiality sentence is identical in each.",
+      "deliverables": "PEL-HSEQ-3014 Internal Audit Procedure and Programme, PEL-HSEQ-5013, PEL-HSEQ-5024. PROGRAMME NOT BOOKED AS AT 11 AUG 2026. See PEL-HSEQ-5048",
+      "frameworks": {
+        "9001": {
+          "clause_number": "9.2",
+          "label": "9.2.1 and 9.2.2"
+        },
+        "14001": {
+          "clause_number": "9.2",
+          "label": "9.2.1 and 9.2.2"
+        },
+        "45001": {
+          "clause_number": "9.2",
+          "label": "9.2.1 and 9.2.2"
+        },
+        "27001": {
+          "clause_number": "9.2",
+          "label": "9.2.1 and 9.2.2"
+        },
+        "22301": {
+          "clause_number": "9.2",
+          "label": "9.2.1 and 9.2.2"
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 28
+    },
+    {
+      "row_key": "annexsl-9.3",
+      "clause_ref": "9.3",
+      "title": "Management review",
+      "verdict": "NEAR",
+      "rationale": "The structure and most of the inputs are common: status of previous actions, changes in external and internal issues, performance information, adequacy of resources, effectiveness of actions to address risks and opportunities, and opportunities for improvement. Each standard adds its own inputs. 14001 adds fulfilment of compliance obligations. 45001 adds the results of consultation and participation of workers, and incidents. 9001 adds customer satisfaction and process performance. ONE meeting, ONE minute, with the discipline specific inputs listed as agenda items.",
+      "deliverables": "PEL-HSEQ-3015 Management Review Procedure and Input Pack, PEL-HSEQ-5025 Minutes. NONE HELD THIS CYCLE",
+      "frameworks": {
+        "9001": {
+          "clause_number": "9.3",
+          "label": "9.3.1 to 9.3.3"
+        },
+        "14001": {
+          "clause_number": "9.3",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "9.3",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "9.3",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "9.3",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 29
+    },
+    {
+      "row_key": "annexsl-10.1",
+      "clause_ref": "10.1",
+      "title": "Improvement, general",
+      "verdict": "NEAR",
+      "rationale": "All five require determination of opportunities for improvement. ISO 9001 lists three categories including improving products and services to meet requirements. ISO 45001 requires improvement of OH&S PERFORMANCE, not merely of the system.",
+      "deliverables": "PEL-HSEQ-5059 Nonconformity, Corrective Action and Improvement Register",
+      "frameworks": {
+        "9001": {
+          "clause_number": "10.1",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "10.1",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "10.1",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "10.1",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "10.1",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 30
+    },
+    {
+      "row_key": "annexsl-10.2",
+      "clause_ref": "10.2",
+      "title": "Nonconformity and corrective action",
+      "verdict": "NEAR",
+      "rationale": "The process is identical in all five: react, evaluate the need to eliminate the cause, evaluate whether similar nonconformities exist or could occur, implement action, review effectiveness, and retain documented information on the NATURE of the nonconformity and the RESULTS. ISO 45001 ADDS INCIDENTS to the same clause and requires worker participation in the investigation. One register satisfies all five if it carries an incident source and a worker involvement column.",
+      "deliverables": "PEL-HSEQ-5059, and PEL-HSEQ-3101 Incident Reporting and Investigation for the 45001 addition",
+      "frameworks": {
+        "9001": {
+          "clause_number": "10.2",
+          "label": "10.2.1 and 10.2.2"
+        },
+        "14001": {
+          "clause_number": "10.2",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "10.2",
+          "label": "incident, nonconformity and corrective action"
+        },
+        "27001": {
+          "clause_number": "10.2",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "10.2",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 31
+    },
+    {
+      "row_key": "annexsl-10.3",
+      "clause_ref": "10.3",
+      "title": "Continual improvement",
+      "verdict": "EXACT",
+      "rationale": "Materially identical one sentence requirement in all five: continually improve the suitability, adequacy and effectiveness of the management system. It is evidenced by the operation of the other clauses rather than by a document of its own, which is why an auditor tests it by asking what has changed since last year.",
+      "deliverables": "Evidenced by PEL-HSEQ-5059 and the management review minutes",
+      "frameworks": {
+        "9001": {
+          "clause_number": "10.3",
+          "label": null
+        },
+        "14001": {
+          "clause_number": "10.3",
+          "label": null
+        },
+        "45001": {
+          "clause_number": "10.3",
+          "label": null
+        },
+        "27001": {
+          "clause_number": "10.3",
+          "label": null
+        },
+        "22301": {
+          "clause_number": "10.3",
+          "label": null
+        }
+      },
+      "pair_overrides": [],
+      "source_sheet": "02 Clause alignment 4 to 10",
+      "source_row": 32
+    }
+  ],
+  "supplementary_rows": [
+    {
+      "row_key": "iip-3",
+      "clause_ref": "IIP 3",
+      "title": "Empowering and involving people",
+      "verdict": "EXACT",
+      "rationale": "The IIP indicator and the 45001 clause ask for the same thing in different words: people are involved in decisions that affect them. One consultation mechanism and one record satisfies both.",
+      "deliverables": "PEL-PPL-3006, PEL-HSEQ-5026, PEL-PPL-5032",
+      "source_sheet": "06 EXACT alignments",
+      "pairs": [
+        {
+          "a": [
+            "iip",
+            "IIP 3"
+          ],
+          "b": [
+            "45001",
+            "5.4"
+          ]
+        }
+      ]
+    },
+    {
+      "row_key": "iip-7",
+      "clause_ref": "IIP 7",
+      "title": "Building capability",
+      "verdict": "EXACT",
+      "rationale": "The same competence system. IIP asks whether capability is planned and developed; clause 7.2 asks whether it is determined, achieved and evidenced. One matrix.",
+      "deliverables": "PEL-HSEQ-5029, PEL-PPL-3005, PEL-PPL-4006",
+      "source_sheet": "06 EXACT alignments",
+      "pairs": [
+        {
+          "a": [
+            "iip",
+            "IIP 7"
+          ],
+          "b": [
+            "9001",
+            "7.2"
+          ]
+        },
+        {
+          "a": [
+            "iip",
+            "IIP 7"
+          ],
+          "b": [
+            "14001",
+            "7.2"
+          ]
+        },
+        {
+          "a": [
+            "iip",
+            "IIP 7"
+          ],
+          "b": [
+            "45001",
+            "7.2"
+          ]
+        },
+        {
+          "a": [
+            "iip",
+            "IIP 7"
+          ],
+          "b": [
+            "27001",
+            "7.2"
+          ]
+        },
+        {
+          "a": [
+            "iip",
+            "IIP 7"
+          ],
+          "b": [
+            "22301",
+            "7.2"
+          ]
+        }
+      ]
+    },
+    {
+      "row_key": "annexa-5.31",
+      "clause_ref": "A.5.31",
+      "title": "Legal, statutory, regulatory and contractual requirements",
+      "verdict": "EXACT",
+      "rationale": "One legal register serves the Annex A control and both management system clauses. It needs an information security row set, which is why PEL-IT-5005 should be merged into it rather than kept alongside.",
+      "deliverables": "PEL-HSEQ-5056",
+      "source_sheet": "06 EXACT alignments",
+      "pairs": [
+        {
+          "a": [
+            "27001",
+            "A.5.31"
+          ],
+          "b": [
+            "14001",
+            "6.1.3"
+          ]
+        },
+        {
+          "a": [
+            "27001",
+            "A.5.31"
+          ],
+          "b": [
+            "45001",
+            "6.1.3"
+          ]
+        }
+      ]
+    },
+    {
+      "row_key": "annexa-5.33",
+      "clause_ref": "A.5.33",
+      "title": "Protection of records",
+      "verdict": "EXACT",
+      "rationale": "The retention and disposition requirement of clause 7.5.3 IS this control. The register's retention column is the evidence for both.",
+      "deliverables": "PEL-HSEQ-3012, PEL-HSEQ-5014, PEL-HSEQ-3027",
+      "source_sheet": "06 EXACT alignments",
+      "pairs": [
+        {
+          "a": [
+            "27001",
+            "A.5.33"
+          ],
+          "b": [
+            "9001",
+            "7.5"
+          ]
+        },
+        {
+          "a": [
+            "27001",
+            "A.5.33"
+          ],
+          "b": [
+            "14001",
+            "7.5"
+          ]
+        },
+        {
+          "a": [
+            "27001",
+            "A.5.33"
+          ],
+          "b": [
+            "45001",
+            "7.5"
+          ]
+        },
+        {
+          "a": [
+            "27001",
+            "A.5.33"
+          ],
+          "b": [
+            "27001",
+            "7.5"
+          ]
+        },
+        {
+          "a": [
+            "27001",
+            "A.5.33"
+          ],
+          "b": [
+            "22301",
+            "7.5"
+          ]
+        }
+      ]
+    },
+    {
+      "row_key": "ce-firewalls",
+      "clause_ref": "firewalls",
+      "title": "Firewalls",
+      "verdict": "NEAR",
+      "kind": "scheme",
+      "source_authority": "ncsc_cyber_essentials",
+      "addition_text": "Cyber Essentials Plus requires independent technical verification of the same control. A CE self-assessment does not satisfy Plus.",
+      "rationale": "The five NCSC technical controls are the same questions in CE and CE+. Plus is not a different requirement set — it is independent verification of the same controls. Evidence may be shared only when that verification is carried; a CE certificate alone is not Plus.",
+      "deliverables": "CE/CE+ technical control evidence + independent Plus verification",
+      "source_sheet": "Int-W6 CE/CE+ NEAR",
+      "pairs": [
+        {
+          "a": [
+            "ce",
+            "firewalls"
+          ],
+          "b": [
+            "cep",
+            "firewalls"
+          ]
+        }
+      ]
+    },
+    {
+      "row_key": "ce-secure_configuration",
+      "clause_ref": "secure_configuration",
+      "title": "Secure configuration",
+      "verdict": "NEAR",
+      "kind": "scheme",
+      "source_authority": "ncsc_cyber_essentials",
+      "addition_text": "Cyber Essentials Plus requires independent technical verification of the same control. A CE self-assessment does not satisfy Plus.",
+      "rationale": "The five NCSC technical controls are the same questions in CE and CE+. Plus is not a different requirement set — it is independent verification of the same controls. Evidence may be shared only when that verification is carried; a CE certificate alone is not Plus.",
+      "deliverables": "CE/CE+ technical control evidence + independent Plus verification",
+      "source_sheet": "Int-W6 CE/CE+ NEAR",
+      "pairs": [
+        {
+          "a": [
+            "ce",
+            "secure_configuration"
+          ],
+          "b": [
+            "cep",
+            "secure_configuration"
+          ]
+        }
+      ]
+    },
+    {
+      "row_key": "ce-user_access_control",
+      "clause_ref": "user_access_control",
+      "title": "User access control",
+      "verdict": "NEAR",
+      "kind": "scheme",
+      "source_authority": "ncsc_cyber_essentials",
+      "addition_text": "Cyber Essentials Plus requires independent technical verification of the same control. A CE self-assessment does not satisfy Plus.",
+      "rationale": "The five NCSC technical controls are the same questions in CE and CE+. Plus is not a different requirement set — it is independent verification of the same controls. Evidence may be shared only when that verification is carried; a CE certificate alone is not Plus.",
+      "deliverables": "CE/CE+ technical control evidence + independent Plus verification",
+      "source_sheet": "Int-W6 CE/CE+ NEAR",
+      "pairs": [
+        {
+          "a": [
+            "ce",
+            "user_access_control"
+          ],
+          "b": [
+            "cep",
+            "user_access_control"
+          ]
+        }
+      ]
+    },
+    {
+      "row_key": "ce-malware_protection",
+      "clause_ref": "malware_protection",
+      "title": "Malware protection",
+      "verdict": "NEAR",
+      "kind": "scheme",
+      "source_authority": "ncsc_cyber_essentials",
+      "addition_text": "Cyber Essentials Plus requires independent technical verification of the same control. A CE self-assessment does not satisfy Plus.",
+      "rationale": "The five NCSC technical controls are the same questions in CE and CE+. Plus is not a different requirement set — it is independent verification of the same controls. Evidence may be shared only when that verification is carried; a CE certificate alone is not Plus.",
+      "deliverables": "CE/CE+ technical control evidence + independent Plus verification",
+      "source_sheet": "Int-W6 CE/CE+ NEAR",
+      "pairs": [
+        {
+          "a": [
+            "ce",
+            "malware_protection"
+          ],
+          "b": [
+            "cep",
+            "malware_protection"
+          ]
+        }
+      ]
+    },
+    {
+      "row_key": "ce-patch_management",
+      "clause_ref": "patch_management",
+      "title": "Patch management",
+      "verdict": "NEAR",
+      "kind": "scheme",
+      "source_authority": "ncsc_cyber_essentials",
+      "addition_text": "Cyber Essentials Plus requires independent technical verification of the same control. A CE self-assessment does not satisfy Plus.",
+      "rationale": "The five NCSC technical controls are the same questions in CE and CE+. Plus is not a different requirement set — it is independent verification of the same controls. Evidence may be shared only when that verification is carried; a CE certificate alone is not Plus.",
+      "deliverables": "CE/CE+ technical control evidence + independent Plus verification",
+      "source_sheet": "Int-W6 CE/CE+ NEAR",
+      "pairs": [
+        {
+          "a": [
+            "ce",
+            "patch_management"
+          ],
+          "b": [
+            "cep",
+            "patch_management"
+          ]
+        }
+      ]
+    }
+  ],
+  "coverage_declarations": {
+    "chas": {
+      "status": "declared_absent",
+      "reason": "No imported alignment pairs. CHAS numbering is platform-authored pending awarding-body mapping."
+    },
+    "ssip": {
+      "status": "declared_absent",
+      "reason": "No imported alignment pairs. SSIP numbering is platform-authored pending awarding-body mapping."
+    },
+    "pm": {
+      "status": "declared_absent",
+      "reason": "No imported alignment pairs. Planet Mark remains a specialist SoR (/planet-mark)."
+    },
+    "uvdb": {
+      "status": "declared_absent",
+      "reason": "No imported alignment pairs. UVDB remains Protocol B2 / specialist SoR (/uvdb)."
+    }
+  }
+}

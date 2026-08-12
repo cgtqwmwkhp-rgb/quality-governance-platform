@@ -192,17 +192,43 @@ export interface CatalogueRowLike {
   frameworkId?: FrameworkId | string
   clauseNumber?: string
   title?: string
+  /** Frameworks that own this row (scheme-axis rows: only these columns are clickable). */
+  axisFrameworks?: string[]
 }
 
 /**
- * Quarantine scheme-identity shells (UVDB / Planet Mark) from the clause catalogue.
+ * UVDB / Planet Mark identity shells — not requirement-axis rows.
+ */
+export function isSchemeIdentityShell(row: CatalogueRowLike): boolean {
+  const n = (row.clauseNumber || '').trim().toUpperCase()
+  if (row.frameworkId === 'uvdb' || row.frameworkId === 'pm') return true
+  return n === 'UVDB' || n === 'PM'
+}
+
+/**
+ * Quarantine scheme-identity shells (UVDB / Planet Mark) from the ISO clause axis.
  * Rows without `kind` stay visible (honest fallback when API omits kind).
+ * Scheme-axis rows (`kind === 'scheme'` with a real clause number) are dropped
+ * here and reattached via {@link schemeAxisCatalogueRows}.
  */
 export function filterClauseCatalogueRows<T extends CatalogueRowLike>(rows: T[]): T[] {
   return rows.filter((row) => {
     if (row.kind == null || row.kind === '') return true
     return row.kind !== 'scheme'
   })
+}
+
+/** CE/CE+ (and future) scheme-axis rows — not UVDB/PM identity shells. */
+export function schemeAxisCatalogueRows<T extends CatalogueRowLike>(rows: T[]): T[] {
+  return rows.filter((row) => row.kind === 'scheme' && !isSchemeIdentityShell(row))
+}
+
+/** Scheme-axis cells are only interactive on owning columns / edge peers. */
+export function cellIsInteractive(row: CatalogueRowLike, frameworkId: FrameworkId): boolean {
+  if (row.kind !== 'scheme') return true
+  const axis = row.axisFrameworks
+  if (!axis || axis.length === 0) return false
+  return axis.includes(frameworkId)
 }
 
 export function resolvePresetFrameworks(preset: MatrixPresetId): FrameworkId[] {

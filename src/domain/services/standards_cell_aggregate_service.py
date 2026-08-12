@@ -53,7 +53,7 @@ from src.domain.services.iso_compliance_service import (
     counts_toward_compliance_coverage,
     iso_compliance_service,
 )
-from src.domain.services.standards_trap_guard import TrapGuard, framework_from_clause_token
+from src.domain.services.standards_trap_guard import SCHEME_NUMBERING_FAMILY, TrapGuard, framework_from_clause_token
 
 #: Rows read per source per cell. A cell that hits this cap has been painted from a
 #: partial read, so it reports ``scan_truncated`` rather than presenting an
@@ -344,17 +344,23 @@ def requires_framed_tokens(guard: Optional[TrapGuard], framework: str) -> bool:
     """True when only tokens that name this framework may match its cells.
 
     The tolerant matching above is framework-blind by design, which is safe while
-    every column has an imported requirement axis to be tolerant *about*. Six of the
-    twelve matrix columns do not: CHAS, SSIP, Cyber Essentials, CE+, UVDB and Planet
-    Mark are not in the 5064 edition, so a bare ``7.2`` written against an ISO audit
-    was painting them on the strength of the digits alone. Where the matrix has never
-    heard of the framework, only an explicit ``chas-7.2`` counts.
+    every column has an imported requirement axis to be tolerant *about*. Scheme
+    numbering families (CE, CHAS, SSIP, UVDB, Planet Mark, IiP) always require
+    framed tokens, even after an imported edge names them. Int-W6 CE↔CE+ NEAR
+    pairs make ``covers_framework("ce")`` true; gating framed tokens on that flag
+    would let a bare ``7.2`` paint the CE column again (the W4 failure).
+
+    ISO-family columns still use ``covers_framework``: a carried ISO may match
+    unframed tokens; an ISO the edition has never heard of may not.
 
     With no matrix imported the guard has no opinion and matching stays as it was —
     a guard with no data must not blank a working matrix.
     """
     if guard is None or not guard.is_loaded:
         return False
+    fw = (framework or "").strip().lower()
+    if fw in SCHEME_NUMBERING_FAMILY:
+        return True
     return not guard.covers_framework(framework)
 
 
@@ -680,7 +686,12 @@ class StandardsCellAggregateService:
             and f.get("is_nc")
             and status_value(f.get("status")) in OPEN_FINDING_STATUSES
         ]
-        conformance = [e for e in evidence if counts_toward_compliance_coverage(e.get("signal_type"))]
+        conformance = [
+            e
+            for e in evidence
+            if counts_toward_compliance_coverage(e.get("signal_type"))
+            and not (e.get("auto_applied") and status_value(e.get("status")) != "confirmed")
+        ]
 
         nc_events = [
             {
@@ -1040,6 +1051,7 @@ class StandardsCellAggregateService:
                     "signal_type": signal,
                     "is_operational_signal": (signal or "").lower() in OPERATIONAL_SIGNAL_TYPES,
                     "status": status_value(link.status) if link.status else None,
+                    "auto_applied": bool(getattr(link, "auto_applied", False)),
                     "created_at": link.created_at.isoformat() if link.created_at else None,
                     "updated_at": link.updated_at.isoformat() if link.updated_at else None,
                 }
