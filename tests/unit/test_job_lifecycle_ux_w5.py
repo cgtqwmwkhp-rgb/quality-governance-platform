@@ -118,8 +118,8 @@ def test_migration_chains_serially_from_the_w4_head():
 def test_the_w5_revision_is_the_only_head(tmp_path):
     heads = _alembic_revision_map(tmp_path)["heads"]
     assert heads == [
-        "20261105_standards_alignment"
-    ], f"expected the standards alignment revision as the single head, found {heads}"
+        "20261112_standards_w5_axes"
+    ], f"expected the Int-W5 requirement-axes revision as the single head, found {heads}"
 
 
 def test_only_the_w5_revision_sits_on_the_w4_head(tmp_path):
