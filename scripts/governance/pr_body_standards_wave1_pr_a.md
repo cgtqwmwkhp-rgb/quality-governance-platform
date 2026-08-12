@@ -47,7 +47,8 @@
 ## 5) Testing Evidence (link to runs)
 - [x] Unit/Vitest (local): standardsMatrixFilters, App redirect, Layout, builderMapAssistApi, IMSDashboard, KnowledgeExceptions, ComplianceEvidence — 86 passed.
 - [x] Typecheck: `tsc --noEmit` clean on worktree.
-- [ ] Hosted CI — pending PR checks.
+- [x] size-limit index 199→200 kB ledgered for shell i18n (CI measured 199.7 kB / +702 B).
+- [ ] Hosted CI — pending PR checks after size-limit fix.
 
 ## 6) Critical Journeys Verified (CUJ)
 - [x] CUJ-01: User opens Standards from nav → `/compliance` matrix shell loads with framework filters/presets.
