@@ -535,9 +535,10 @@ class StandardsDigestService:
             .order_by(ComplianceEvidenceLink.created_at.desc())
             .limit(PENDING_SCAN_LIMIT)
         )
-        rows = [link for link in result.scalars().all() if link.effective_status in statuses]
-        # Truncation is approximate when SQL returns the cap then Python filters.
-        truncated = len(rows) >= PENDING_SCAN_LIMIT
+        raw_rows = list(result.scalars().all())
+        # Cap hit on the SQL window — even if Python then drops NULL/confirmed rows.
+        truncated = len(raw_rows) >= PENDING_SCAN_LIMIT
+        rows = [link for link in raw_rows if link.effective_status in statuses]
         payload = []
         for link in rows:
             raw_linked_by = link.linked_by
