@@ -27,6 +27,7 @@ from src.domain.services.assurance_cert_shelf_service import AssuranceCertShelfS
 from src.domain.services.cel_version_freshness import classify_cel_version_freshness
 from src.domain.services.cel_version_pin import parse_document_entity_id
 from src.domain.services.document_version_service import document_version_service
+from src.domain.services.href_registry import document_href
 from src.domain.services.iso_compliance_service import OPERATIONAL_SIGNAL_TYPES
 from src.domain.services.standards_cell_aggregate_service import (
     CLOSED_FINDING_STATUSES,
@@ -211,12 +212,9 @@ def roll_up_nonconformities(findings: list[dict[str, Any]], *, row_limit: int) -
         "recurring_clauses": recurring_clauses,
         "clauses_with_nc_history": clauses_with_history,
         "recurrence_rate": safe_rate(recurring_clauses, clauses_with_history),
-        "recurrence_rate_definition": (
-            "clauses where an NC reopened after a close ÷ clauses with any NC history"
-        ),
+        "recurrence_rate_definition": ("clauses where an NC reopened after a close ÷ clauses with any NC history"),
         "count_note": (
-            "Per-clause counts may exceed the total: one finding can name clauses "
-            "in more than one framework."
+            "Per-clause counts may exceed the total: one finding can name clauses " "in more than one framework."
         ),
         "by_clause": rows[:row_limit],
     }
@@ -250,9 +248,7 @@ def roll_up_freshness(
         elif bucket == "stale":
             stale += 1
             framework = framework_from_clause_token(link.get("clause_id"))
-            clause_number = clause_number_from_token(link.get("clause_id")) or str(
-                link.get("clause_id") or ""
-            )
+            clause_number = clause_number_from_token(link.get("clause_id")) or str(link.get("clause_id") or "")
             stale_items.append(
                 {
                     "evidence_link_id": link.get("id"),
@@ -265,7 +261,7 @@ def roll_up_freshness(
                     "tip_document_version_id": tip_id,
                     "tip_version_number": tip_version,
                     "clause_path": _clause_path(framework, clause_number),
-                    "document_path": f"/documents/{doc_id}" if isinstance(doc_id, int) else None,
+                    "document_path": (document_href(doc_id) if isinstance(doc_id, int) else None),
                 }
             )
         elif bucket == "unpinned":
@@ -363,9 +359,7 @@ def roll_up_cert_expiry(
     """Board view over the unified assurance certificate shelf."""
     summary = dict(shelf.get("summary") or {})
     items = list(shelf.get("items") or [])
-    by_scheme_map: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"tracked": 0, "due_soon": 0, "expired": 0}
-    )
+    by_scheme_map: dict[str, dict[str, int]] = defaultdict(lambda: {"tracked": 0, "due_soon": 0, "expired": 0})
     soonest: list[dict[str, Any]] = []
 
     today = now.date() if isinstance(now, datetime) else date.today()
@@ -455,9 +449,7 @@ class StandardsDigestService:
         )
         titles = await self._load_document_titles(doc_ids, tenant_id=tenant_id)
 
-        shelf = await self.cert_shelf.get_shelf(
-            tenant_id=tenant_id, due_soon_days=due_soon_days, now=reference
-        )
+        shelf = await self.cert_shelf.get_shelf(tenant_id=tenant_id, due_soon_days=due_soon_days, now=reference)
 
         nc = roll_up_nonconformities(findings, row_limit=DIGEST_ROW_LIMIT)
         nc["scan_truncated"] = findings_truncated
@@ -548,11 +540,7 @@ class StandardsDigestService:
             .order_by(ComplianceEvidenceLink.created_at.desc())
             .limit(PENDING_SCAN_LIMIT)
         )
-        rows = [
-            link
-            for link in result.scalars().all()
-            if link.effective_status in statuses
-        ]
+        rows = [link for link in result.scalars().all() if link.effective_status in statuses]
         # Truncation is approximate when SQL returns the cap then Python filters.
         truncated = len(rows) >= PENDING_SCAN_LIMIT
         payload = []
@@ -572,9 +560,7 @@ class StandardsDigestService:
             )
         return payload, truncated
 
-    async def _load_document_titles(
-        self, document_ids: list[int], *, tenant_id: int
-    ) -> dict[int, str]:
+    async def _load_document_titles(self, document_ids: list[int], *, tenant_id: int) -> dict[int, str]:
         if not document_ids:
             return {}
         result = await self.db.execute(

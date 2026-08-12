@@ -44,6 +44,7 @@
 - [x] Unit: `tests/unit/test_standards_digest_service.py`
 - [x] Vitest: helpers + `ComplianceAutomation.standardsDigest.test.tsx`
 - [ ] Hosted CI — pending PR checks
+- [x] Performance Budget: index ceiling 202→204 kB for en+cy `compliance.automation.standards_digest.*` shell i18n (CI measured 203.33 kB gzip; ComplianceAutomation stays lazy)
 
 ## 6) Critical Journeys Verified (CUJ)
 - [x] CUJ-01: `/compliance-automation` → Standards health → see digests / tiles.
