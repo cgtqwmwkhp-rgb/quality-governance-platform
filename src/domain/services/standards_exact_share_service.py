@@ -184,35 +184,14 @@ class ExactShareService:
             raise BadRequestError("target_frameworks must name at least one framework")
 
         guard = await self.aggregate.trap_guard(tenant_id)
-        if not guard.is_loaded:
-            raise ConflictError(
-                "EXACT share refused: alignment matrix is not loaded",
-                code="EXACT_SHARE_MATRIX_NOT_LOADED",
-            )
-        if guard.version_id != matrix_version_id:
-            raise ConflictError(
-                "EXACT share refused: matrix edition changed since plan",
-                code="EXACT_SHARE_MATRIX_VERSION_MISMATCH",
-                details={
-                    "expected_matrix_version_id": matrix_version_id,
-                    "active_matrix_version_id": guard.version_id,
-                },
-            )
+        self._assert_matrix_version(guard, matrix_version_id=matrix_version_id)
 
-        source_link = await self._load_live_link(tenant_id=tenant_id, link_id=source_link_id)
-        if source_link is None:
-            raise NotFoundError("Source evidence link not found")
-
-        keys = clause_match_keys(fw, clause)
-        if not token_matches_clause(source_link.clause_id, keys, clause):
-            raise BadRequestError("Source link does not belong to the requested cell")
-
-        if not counts_toward_compliance_coverage(source_link.signal_type):
-            raise ConflictError(
-                "EXACT share refused: source link is not conformance evidence",
-                code="EXACT_SHARE_NONCONFORMANCE_SIGNAL",
-                details={"signal_type": source_link.signal_type},
-            )
+        source_link = await self._require_shareable_source_link(
+            tenant_id=tenant_id,
+            source_link_id=source_link_id,
+            framework=fw,
+            clause_number=clause,
+        )
 
         source_cell = await self.aggregate.get_cell(tenant_id=tenant_id, framework=fw, clause_number=clause)
         if source_cell.cover_blocked:
@@ -228,63 +207,12 @@ class ExactShareService:
             for peer in (annotation.get("peers") or [])
             if str(peer.get("verdict") or "").upper() == "EXACT"
         }
-
-        blocked_targets: list[dict[str, Any]] = []
-        resolved: list[dict[str, Any]] = []
-        warnings: list[dict[str, Any]] = []
-
-        for target_fw in targets:
-            peer = exact_by_fw.get(target_fw)
-            if peer is None:
-                blocked_targets.append({"framework": target_fw, "blocked_reasons": ["not_exact_peer"]})
-                continue
-            peer_clause = clause_number_from_token(peer["clause_key"]) or str(peer["clause_key"])
-            # Prefer the local number after the framework prefix when the token
-            # parser returns the full key (defensive for unusual keys).
-            if peer_clause.startswith(f"{target_fw}-"):
-                peer_clause = peer_clause[len(target_fw) + 1 :]
-
-            target_cell = await self.aggregate.get_cell(
-                tenant_id=tenant_id, framework=target_fw, clause_number=peer_clause
-            )
-            reasons: list[str] = []
-            open_nc = int((target_cell.summary or {}).get("open_nc_count") or 0)
-            open_action = int((target_cell.summary or {}).get("open_action_count") or 0)
-            if target_cell.cover_blocked:
-                if open_nc > 0:
-                    reasons.append("target_open_nc")
-                if open_action > 0:
-                    reasons.append("target_open_action")
-                if not reasons:
-                    reasons.append("target_cover_blocked")
-                blocked_targets.append({"framework": target_fw, "blocked_reasons": reasons})
-                continue
-
-            tech = tech_gap_assess(
-                framework=target_fw,
-                clause_number=peer_clause,
-                entity_types=[source_link.entity_type],
-            )
-            if tech.is_technical and not tech.covered:
-                warnings.append({"framework": target_fw, "code": "tech_gap_attestation_missing"})
-
-            resolved.append(
-                {
-                    "framework": target_fw,
-                    "clause_key": peer["clause_key"],
-                    "clause_number": peer_clause,
-                    "verdict": "EXACT",
-                }
-            )
-
-        if blocked_targets:
-            raise ConflictError(
-                f"EXACT share refused: {len(blocked_targets)} target(s) ineligible",
-                code="EXACT_SHARE_TARGET_BLOCKED",
-                details={"targets": blocked_targets},
-            )
-        if not resolved:
-            raise BadRequestError("No eligible EXACT targets to share onto")
+        resolved, warnings = await self._resolve_apply_targets(
+            tenant_id=tenant_id,
+            targets=targets,
+            exact_by_fw=exact_by_fw,
+            source_entity_type=source_link.entity_type,
+        )
 
         cover_kind = source_link.cover_kind
         if not isinstance(cover_kind, EvidenceCoverKind):
@@ -306,7 +234,136 @@ class ExactShareService:
             signal_type=source_link.signal_type,
             commit=True,
         )
+        return self._apply_response(
+            guard_version_label=guard.version_label,
+            resolved=resolved,
+            write=write,
+            warnings=warnings,
+        )
 
+    def _assert_matrix_version(self, guard: Any, *, matrix_version_id: int) -> None:
+        if not guard.is_loaded:
+            raise ConflictError(
+                "EXACT share refused: alignment matrix is not loaded",
+                code="EXACT_SHARE_MATRIX_NOT_LOADED",
+            )
+        if guard.version_id != matrix_version_id:
+            raise ConflictError(
+                "EXACT share refused: matrix edition changed since plan",
+                code="EXACT_SHARE_MATRIX_VERSION_MISMATCH",
+                details={
+                    "expected_matrix_version_id": matrix_version_id,
+                    "active_matrix_version_id": guard.version_id,
+                },
+            )
+
+    async def _require_shareable_source_link(
+        self,
+        *,
+        tenant_id: int,
+        source_link_id: int,
+        framework: str,
+        clause_number: str,
+    ) -> ComplianceEvidenceLink:
+        source_link = await self._load_live_link(tenant_id=tenant_id, link_id=source_link_id)
+        if source_link is None:
+            raise NotFoundError("Source evidence link not found")
+
+        keys = clause_match_keys(framework, clause_number)
+        if not token_matches_clause(source_link.clause_id, keys, clause_number):
+            raise BadRequestError("Source link does not belong to the requested cell")
+
+        if not counts_toward_compliance_coverage(source_link.signal_type):
+            raise ConflictError(
+                "EXACT share refused: source link is not conformance evidence",
+                code="EXACT_SHARE_NONCONFORMANCE_SIGNAL",
+                details={"signal_type": source_link.signal_type},
+            )
+        return source_link
+
+    async def _resolve_apply_targets(
+        self,
+        *,
+        tenant_id: int,
+        targets: Sequence[str],
+        exact_by_fw: dict[str, dict[str, Any]],
+        source_entity_type: str,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        blocked_targets: list[dict[str, Any]] = []
+        resolved: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
+
+        for target_fw in targets:
+            peer = exact_by_fw.get(target_fw)
+            if peer is None:
+                blocked_targets.append({"framework": target_fw, "blocked_reasons": ["not_exact_peer"]})
+                continue
+            peer_clause = self._peer_clause_number(target_fw, peer["clause_key"])
+            target_cell = await self.aggregate.get_cell(
+                tenant_id=tenant_id, framework=target_fw, clause_number=peer_clause
+            )
+            reasons = self._cover_block_reasons(target_cell)
+            if reasons:
+                blocked_targets.append({"framework": target_fw, "blocked_reasons": reasons})
+                continue
+
+            tech = tech_gap_assess(
+                framework=target_fw,
+                clause_number=peer_clause,
+                entity_types=[source_entity_type],
+            )
+            if tech.is_technical and not tech.covered:
+                warnings.append({"framework": target_fw, "code": "tech_gap_attestation_missing"})
+
+            resolved.append(
+                {
+                    "framework": target_fw,
+                    "clause_key": peer["clause_key"],
+                    "clause_number": peer_clause,
+                    "verdict": "EXACT",
+                }
+            )
+
+        if blocked_targets:
+            raise ConflictError(
+                f"EXACT share refused: {len(blocked_targets)} target(s) ineligible",
+                code="EXACT_SHARE_TARGET_BLOCKED",
+                details={"targets": blocked_targets},
+            )
+        if not resolved:
+            raise BadRequestError("No eligible EXACT targets to share onto")
+        return resolved, warnings
+
+    @staticmethod
+    def _peer_clause_number(target_fw: str, clause_key: str) -> str:
+        peer_clause = clause_number_from_token(clause_key) or str(clause_key)
+        if peer_clause.startswith(f"{target_fw}-"):
+            return peer_clause[len(target_fw) + 1 :]
+        return peer_clause
+
+    @staticmethod
+    def _cover_block_reasons(target_cell: Any) -> list[str]:
+        if not target_cell.cover_blocked:
+            return []
+        open_nc = int((target_cell.summary or {}).get("open_nc_count") or 0)
+        open_action = int((target_cell.summary or {}).get("open_action_count") or 0)
+        reasons: list[str] = []
+        if open_nc > 0:
+            reasons.append("target_open_nc")
+        if open_action > 0:
+            reasons.append("target_open_action")
+        if not reasons:
+            reasons.append("target_cover_blocked")
+        return reasons
+
+    @staticmethod
+    def _apply_response(
+        *,
+        guard_version_label: Optional[str],
+        resolved: Sequence[dict[str, Any]],
+        write: Any,
+        warnings: Sequence[dict[str, Any]],
+    ) -> dict[str, Any]:
         created_by_clause = {link.clause_id: link for link in write.created}
         existing_by_clause = {link.clause_id: link for link in write.existing}
         created_rows: list[dict[str, Any]] = []
@@ -337,10 +394,10 @@ class ExactShareService:
         return {
             "status": "applied",
             "applied_at": applied_at.isoformat(),
-            "matrix_version": guard.version_label,
+            "matrix_version": guard_version_label,
             "created": created_rows,
             "already_linked": already_rows,
-            "warnings": warnings,
+            "warnings": list(warnings),
             "undo": {"link_ids": undo_ids, "applied_at": applied_at.isoformat()},
             "sor_note": ("compliance_evidence_links is the only record — undo soft-deletes exactly these ids."),
         }
