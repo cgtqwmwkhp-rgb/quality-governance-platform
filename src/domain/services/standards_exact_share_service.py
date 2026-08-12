@@ -17,11 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
-from src.domain.models.compliance_evidence import (
-    ComplianceEvidenceLink,
-    EvidenceCoverKind,
-    EvidenceLinkMethod,
-)
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceCoverKind, EvidenceLinkMethod
 from src.domain.services.compliance_evidence_link_writer import (
     create_evidence_links_if_absent,
     soft_delete_evidence_link,
@@ -33,9 +29,7 @@ from src.domain.services.standards_cell_aggregate_service import (
     token_matches_clause,
 )
 from src.domain.services.standards_tech_gap_guard import assess as tech_gap_assess
-from src.domain.services.standards_trap_guard import (
-    clause_number_from_token,
-)
+from src.domain.services.standards_trap_guard import clause_number_from_token
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +89,7 @@ class ExactShareService:
         guard = await self.aggregate.trap_guard(tenant_id)
 
         if source_cell is None:
-            source_cell = await self.aggregate.get_cell(
-                tenant_id=tenant_id, framework=fw, clause_number=clause
-            )
+            source_cell = await self.aggregate.get_cell(tenant_id=tenant_id, framework=fw, clause_number=clause)
 
         source_payload = {
             "framework": fw,
@@ -115,9 +107,7 @@ class ExactShareService:
 
         annotation = guard.annotate_cell(framework=fw, clause_number=clause)
         exact_peers = [
-            peer
-            for peer in annotation.get("peers") or []
-            if str(peer.get("verdict") or "").upper() == "EXACT"
+            peer for peer in annotation.get("peers") or [] if str(peer.get("verdict") or "").upper() == "EXACT"
         ]
         if not exact_peers:
             return ExactSharePlan(
@@ -135,15 +125,11 @@ class ExactShareService:
                 matrix_version=guard.version_label,
                 matrix_version_id=guard.version_id,
                 source=source_payload,
-                candidates=await self._candidate_rows(
-                    tenant_id=tenant_id, peers=exact_peers, entity_type=None
-                ),
+                candidates=await self._candidate_rows(tenant_id=tenant_id, peers=exact_peers, entity_type=None),
             )
 
         conformance = [
-            e
-            for e in (source_cell.evidence or [])
-            if counts_toward_compliance_coverage(e.get("signal_type"))
+            e for e in (source_cell.evidence or []) if counts_toward_compliance_coverage(e.get("signal_type"))
         ]
         if not conformance:
             return ExactSharePlan(
@@ -152,16 +138,12 @@ class ExactShareService:
                 matrix_version=guard.version_label,
                 matrix_version_id=guard.version_id,
                 source=source_payload,
-                candidates=await self._candidate_rows(
-                    tenant_id=tenant_id, peers=exact_peers, entity_type=None
-                ),
+                candidates=await self._candidate_rows(tenant_id=tenant_id, peers=exact_peers, entity_type=None),
             )
 
         # Prefer the first conformance link's entity type for tech-gap warnings.
         entity_type = str(conformance[0].get("entity_type") or "") or None
-        candidates = await self._candidate_rows(
-            tenant_id=tenant_id, peers=exact_peers, entity_type=entity_type
-        )
+        candidates = await self._candidate_rows(tenant_id=tenant_id, peers=exact_peers, entity_type=entity_type)
 
         shareable_links = await self._shareable_links(
             tenant_id=tenant_id,
@@ -232,9 +214,7 @@ class ExactShareService:
                 details={"signal_type": source_link.signal_type},
             )
 
-        source_cell = await self.aggregate.get_cell(
-            tenant_id=tenant_id, framework=fw, clause_number=clause
-        )
+        source_cell = await self.aggregate.get_cell(tenant_id=tenant_id, framework=fw, clause_number=clause)
         if source_cell.cover_blocked:
             raise ConflictError(
                 "EXACT share refused: source cell is cover-blocked",
@@ -256,9 +236,7 @@ class ExactShareService:
         for target_fw in targets:
             peer = exact_by_fw.get(target_fw)
             if peer is None:
-                blocked_targets.append(
-                    {"framework": target_fw, "blocked_reasons": ["not_exact_peer"]}
-                )
+                blocked_targets.append({"framework": target_fw, "blocked_reasons": ["not_exact_peer"]})
                 continue
             peer_clause = clause_number_from_token(peer["clause_key"]) or str(peer["clause_key"])
             # Prefer the local number after the framework prefix when the token
@@ -288,9 +266,7 @@ class ExactShareService:
                 entity_types=[source_link.entity_type],
             )
             if tech.is_technical and not tech.covered:
-                warnings.append(
-                    {"framework": target_fw, "code": "tech_gap_attestation_missing"}
-                )
+                warnings.append({"framework": target_fw, "code": "tech_gap_attestation_missing"})
 
             resolved.append(
                 {
@@ -366,9 +342,7 @@ class ExactShareService:
             "already_linked": already_rows,
             "warnings": warnings,
             "undo": {"link_ids": undo_ids, "applied_at": applied_at.isoformat()},
-            "sor_note": (
-                "compliance_evidence_links is the only record — undo soft-deletes exactly these ids."
-            ),
+            "sor_note": ("compliance_evidence_links is the only record — undo soft-deletes exactly these ids."),
         }
 
     async def undo(
@@ -411,9 +385,7 @@ class ExactShareService:
                     skipped.append({"link_id": link_id, "reason": "modified_since_apply"})
                     continue
 
-            removed = await soft_delete_evidence_link(
-                self.db, tenant_id=tenant_id, link_id=link_id, commit=False
-            )
+            removed = await soft_delete_evidence_link(self.db, tenant_id=tenant_id, link_id=link_id, commit=False)
             if removed is None:
                 skipped.append({"link_id": link_id, "reason": "not_found_or_other_tenant"})
             else:
@@ -443,9 +415,7 @@ class ExactShareService:
             if peer_clause.startswith(f"{target_fw}-"):
                 peer_clause = peer_clause[len(target_fw) + 1 :]
 
-            cell = await self.aggregate.get_cell(
-                tenant_id=tenant_id, framework=target_fw, clause_number=peer_clause
-            )
+            cell = await self.aggregate.get_cell(tenant_id=tenant_id, framework=target_fw, clause_number=peer_clause)
             open_nc = int((cell.summary or {}).get("open_nc_count") or 0)
             open_action = int((cell.summary or {}).get("open_action_count") or 0)
             blocked_reasons: list[str] = []
@@ -529,9 +499,7 @@ class ExactShareService:
             )
         return out
 
-    async def _load_live_link(
-        self, *, tenant_id: int, link_id: int
-    ) -> Optional[ComplianceEvidenceLink]:
+    async def _load_live_link(self, *, tenant_id: int, link_id: int) -> Optional[ComplianceEvidenceLink]:
         result = await self.db.execute(
             select(ComplianceEvidenceLink).where(
                 ComplianceEvidenceLink.id == link_id,
