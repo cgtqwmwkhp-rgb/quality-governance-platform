@@ -67,6 +67,7 @@ class MapEvidenceResponse(BaseModel):
     document_id: int
     links_created: int
     links: list[EvidenceLinkDetailResponse]
+    auto_confirm_gate: Optional[dict[str, Any]] = None
 
 
 class RejectEvidenceRequest(BaseModel):
@@ -391,7 +392,7 @@ async def map_document_evidence(
     content = await _document_text(db, document)
     doc_type = document.document_type.value if hasattr(document.document_type, "value") else str(document.document_type)
 
-    links = await governed_knowledge_service.map_document_to_schemes(
+    mapped = await governed_knowledge_service.map_document_to_schemes(
         db,
         document_id,
         content,
@@ -399,6 +400,7 @@ async def map_document_evidence(
         tenant_id,
         current_user,
     )
+    links = mapped.links
     await db.commit()
     for link in links:
         await db.refresh(link)
@@ -407,6 +409,7 @@ async def map_document_evidence(
         document_id=document_id,
         links_created=len(links),
         links=[_serialize_evidence_link(link) for link in links],
+        auto_confirm_gate=mapped.gate_summary,
     )
 
 

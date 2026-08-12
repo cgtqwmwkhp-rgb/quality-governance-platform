@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -28,25 +29,26 @@ class TestNormalizeConfidence:
 
 
 class TestResolveLinkStatus:
-    def test_high_confidence_auto_confirms(self) -> None:
+    def test_high_confidence_without_gate_stays_proposed(self) -> None:
+        """Legacy 0.85 auto-confirm is gone — gate required."""
         status, auto_applied = resolve_link_status(90.0, "procedure")
-        assert status == EvidenceLinkStatus.CONFIRMED
-        assert auto_applied is True
+        assert status == EvidenceLinkStatus.PROPOSED
+        assert auto_applied is False
 
-    def test_threshold_boundary_confirms(self) -> None:
+    def test_threshold_boundary_without_gate_stays_proposed(self) -> None:
         status, auto_applied = resolve_link_status(85.0, "policy")
-        assert status == EvidenceLinkStatus.CONFIRMED
-        assert auto_applied is True
+        assert status == EvidenceLinkStatus.PROPOSED
+        assert auto_applied is False
 
     def test_below_threshold_stays_proposed(self) -> None:
         status, auto_applied = resolve_link_status(84.9, "policy")
         assert status == EvidenceLinkStatus.PROPOSED
         assert auto_applied is False
 
-    def test_decimal_confidence_above_threshold(self) -> None:
+    def test_decimal_confidence_without_gate_stays_proposed(self) -> None:
         status, auto_applied = resolve_link_status(0.86, "manual")
-        assert status == EvidenceLinkStatus.CONFIRMED
-        assert auto_applied is True
+        assert status == EvidenceLinkStatus.PROPOSED
+        assert auto_applied is False
 
     @pytest.mark.parametrize("doc_type", sorted(STRICT_DOC_TYPES))
     def test_strict_doc_types_never_auto_confirm(self, doc_type: str) -> None:
@@ -62,6 +64,12 @@ class TestResolveLinkStatus:
         status, auto_applied = resolve_link_status(99.0, "procedure", force_proposed=True)
         assert status == EvidenceLinkStatus.PROPOSED
         assert auto_applied is False
+
+    def test_gate_allow_confirms(self) -> None:
+        gate = SimpleNamespace(auto_confirm=True, reason="auto_confirmed")
+        status, auto_applied = resolve_link_status(0.99, "procedure", gate=gate)
+        assert status == EvidenceLinkStatus.CONFIRMED
+        assert auto_applied is True
 
 
 class TestClassifyOperationalSignal:
@@ -245,22 +253,32 @@ class TestMapDocumentToSchemes:
                     rationale="audit programme",
                 )
             ]
-            links = await svc.map_document_to_schemes(
+            from src.domain.services.standards_ingest_gate import CoverBlockIndex, StandardsAutoConfirmContext
+            from src.domain.services.standards_trap_guard import TrapGuard
+
+            empty_ctx = StandardsAutoConfirmContext(guard=TrapGuard(), cover=CoverBlockIndex(guard=TrapGuard()))
+            mapped = await svc.map_document_to_schemes(
                 db,
                 document_id=101,
                 content="Internal audit programme for QMS.",
                 doc_type="procedure",
                 tenant_id=7,
                 user=user,
+                gate_context=empty_ctx,
             )
+            links = mapped.links
 
         assert len(links) == 1
         assert links[0].clause_id == "9001-9.2"
-        assert links[0].status == EvidenceLinkStatus.CONFIRMED
-        assert links[0].auto_applied is True
+        # No matrix → fail-closed PROPOSED (was CONFIRMED at 0.85 before PR-E).
+        assert links[0].status == EvidenceLinkStatus.PROPOSED
+        assert links[0].auto_applied is False
         assert links[0].linked_by == EvidenceLinkMethod.AI
         assert any(isinstance(obj, ComplianceEvidenceLink) for obj in added)
         assert any(getattr(obj, "action", None) == "evidence_map" for obj in added)
+        # 90% is below the 98% Standards threshold (checked before matrix).
+        assert mapped.gate_summary["counts_by_reason"].get("below_threshold") == 1
+        assert mapped.gate_summary["auto_confirmed"] == 0
 
     @pytest.mark.asyncio
     async def test_strict_doc_type_forces_proposed(self) -> None:
@@ -297,17 +315,24 @@ class TestMapDocumentToSchemes:
                     rationale="hazard control",
                 )
             ]
-            links = await svc.map_document_to_schemes(
+            from src.domain.services.standards_ingest_gate import CoverBlockIndex, StandardsAutoConfirmContext
+            from src.domain.services.standards_trap_guard import TrapGuard
+
+            empty_ctx = StandardsAutoConfirmContext(guard=TrapGuard(), cover=CoverBlockIndex(guard=TrapGuard()))
+            mapped = await svc.map_document_to_schemes(
                 db,
                 document_id=102,
                 content="Risk assessment for site works.",
                 doc_type="rams",
                 tenant_id=7,
                 user=user,
+                gate_context=empty_ctx,
             )
+            links = mapped.links
 
         assert links[0].status == EvidenceLinkStatus.PROPOSED
         assert links[0].auto_applied is False
+        assert mapped.gate_summary["counts_by_reason"].get("strict_doc_type") == 1
 
 
 class TestAutoConfirmThresholdConstant:

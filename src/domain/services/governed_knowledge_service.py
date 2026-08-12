@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from sqlalchemy import or_, select
@@ -28,10 +28,12 @@ from src.domain.models.standard import Clause, Standard
 from src.domain.models.uvdb_achilles import UVDBQuestion, UVDBSection
 from src.domain.services.document_ai_service import DocumentAIService, VectorSearchService
 from src.domain.services.iso_compliance_service import iso_compliance_service
+from src.domain.services.standards_ingest_gate import AutoConfirmDecision, StandardsAutoConfirmContext
+from src.domain.services.standards_ingest_gate import evaluate as evaluate_auto_confirm
 
 logger = logging.getLogger(__name__)
 
-AUTO_CONFIRM_THRESHOLD = 0.85
+AUTO_CONFIRM_THRESHOLD = 0.85  # regulatory_watch CAPA threshold — do NOT raise for Standards ingest
 STRICT_DOC_TYPES = frozenset({"rams", "coshh", "msds", "sds", "ram", "method_statement"})
 
 # Operational cases must never auto-confirm as conformance evidence.
@@ -133,15 +135,30 @@ def resolve_link_status(
     doc_type: Optional[str],
     *,
     force_proposed: bool = False,
+    gate: Optional[Any] = None,
 ) -> tuple[EvidenceLinkStatus, bool]:
-    """Return (status, auto_applied) using AI-first threshold rules."""
+    """Return (status, auto_applied) for Standards ingest.
+
+    When ``gate`` is provided (an :class:`AutoConfirmDecision`), it is the sole
+    authority for machine confirmation. When ``gate`` is omitted the result is
+    always PROPOSED — fail-closed so the legacy 0.85 path cannot silently return.
+    ``AUTO_CONFIRM_THRESHOLD`` remains 0.85 for ``regulatory_watch_service`` only.
+    """
     if force_proposed:
         return EvidenceLinkStatus.PROPOSED, False
-    norm = _normalize_confidence(confidence)
-    doc_normalized = (doc_type or "").lower().replace("-", "_").replace(" ", "_")
-    if doc_normalized in STRICT_DOC_TYPES or norm < AUTO_CONFIRM_THRESHOLD:
+    if gate is None:
         return EvidenceLinkStatus.PROPOSED, False
-    return EvidenceLinkStatus.CONFIRMED, True
+    if getattr(gate, "auto_confirm", False):
+        return EvidenceLinkStatus.CONFIRMED, True
+    return EvidenceLinkStatus.PROPOSED, False
+
+
+@dataclass
+class MapDocumentResult:
+    """Document mapping outcome including auto-confirm gate tallies."""
+
+    links: list[ComplianceEvidenceLink]
+    gate_summary: dict[str, Any] = field(default_factory=dict)
 
 
 def classify_operational_signal(
@@ -223,11 +240,21 @@ class GovernedKnowledgeService:
         user: Any,
         force_proposed: bool = False,
         signal_type: Optional[EvidenceSignalType] = None,
+        gate_context: Optional[StandardsAutoConfirmContext] = None,
     ) -> ComplianceEvidenceLink:
+        decision = evaluate_auto_confirm(
+            confidence=mapping.confidence,
+            doc_type=doc_type,
+            clause_id=mapping.clause_id,
+            entity_type=entity_type,
+            force_proposed=force_proposed or entity_type in OPERATIONAL_ENTITY_TYPES,
+            context=gate_context,
+        )
         status, auto_applied = resolve_link_status(
             mapping.confidence,
             doc_type,
             force_proposed=force_proposed or entity_type in OPERATIONAL_ENTITY_TYPES,
+            gate=decision,
         )
 
         existing_result = await db.execute(
@@ -253,19 +280,30 @@ class GovernedKnowledgeService:
             )
             db.add(link)
 
-        link.scheme = mapping.scheme
-        link.confidence = mapping.confidence
-        link.rationale = mapping.rationale
-        link.title = mapping.title
-        link.status = status
-        link.auto_applied = auto_applied
-        link.linked_by = EvidenceLinkMethod.AI
-        # D15: AI / auto-confirm must never stamp a human confirmer. Clear when
-        # this write is machine-confirmed, and also when it demotes the link out
-        # of confirmed, so a rematch cannot leave a false actor behind.
-        if auto_applied or status != EvidenceLinkStatus.CONFIRMED:
-            link.confirmed_by_id = None
-            link.confirmed_at = None
+        human_preserved = False
+        # Preserve human-confirmed / manual links: refresh confidence/rationale only.
+        if link.confirmed_by_id is not None or link.linked_by == EvidenceLinkMethod.MANUAL:
+            human_preserved = True
+            link.scheme = mapping.scheme
+            link.confidence = mapping.confidence
+            link.rationale = mapping.rationale
+            if mapping.title and not link.title:
+                link.title = mapping.title
+            status = link.status or EvidenceLinkStatus.CONFIRMED
+            auto_applied = False
+        else:
+            link.scheme = mapping.scheme
+            link.confidence = mapping.confidence
+            link.rationale = mapping.rationale
+            link.title = mapping.title
+            link.status = status
+            link.auto_applied = auto_applied
+            link.linked_by = EvidenceLinkMethod.AI
+            # D15: AI must never stamp a human confirmer. Clear only on machine paths.
+            if auto_applied or status != EvidenceLinkStatus.CONFIRMED:
+                link.confirmed_by_id = None
+                link.confirmed_at = None
+
         if signal_type is not None:
             link.signal_type = signal_type.value
         elif entity_type == "document" and not link.signal_type:
@@ -286,13 +324,18 @@ class GovernedKnowledgeService:
             auto_applied=auto_applied,
             payload={
                 "scheme": mapping.scheme,
-                "status": status.value,
+                "status": status.value if hasattr(status, "value") else str(status),
                 "rationale": mapping.rationale,
                 "doc_type": doc_type,
                 "signal_type": link.signal_type,
                 "source_entity_type": entity_type,
+                "gate_reason": decision.reason,
+                "gate_auto_confirm": decision.auto_confirm,
+                "human_confirmed_preserved": human_preserved,
             },
         )
+        # Stash gate reason for the caller tally (not persisted on the row).
+        link._gate_reason = decision.reason  # type: ignore[attr-defined]
         return link
 
     async def _map_iso_schemes(self, content: str) -> list[SchemeMapping]:
@@ -406,10 +449,15 @@ class GovernedKnowledgeService:
         doc_type: Optional[str],
         tenant_id: int,
         user: Any,
-    ) -> list[ComplianceEvidenceLink]:
+        *,
+        gate_context: Optional[StandardsAutoConfirmContext] = None,
+    ) -> MapDocumentResult:
         """Run ISO + UVDB + Planet Mark mapping and persist evidence links."""
         if not content or not content.strip():
-            return []
+            return MapDocumentResult(links=[], gate_summary={"threshold": 0.98, "matrix_loaded": False})
+
+        if gate_context is None:
+            gate_context = await StandardsAutoConfirmContext.for_tenant(db, tenant_id)
 
         all_mappings: list[SchemeMapping] = []
         all_mappings.extend(await self._map_iso_schemes(content))
@@ -417,6 +465,8 @@ class GovernedKnowledgeService:
         all_mappings.extend(self._map_planet_mark_schemes(content))
 
         links: list[ComplianceEvidenceLink] = []
+        counts_by_reason: dict[str, int] = {}
+        auto_confirmed = 0
         seen_clauses: set[str] = set()
         for mapping in all_mappings:
             if mapping.clause_id in seen_clauses:
@@ -431,16 +481,31 @@ class GovernedKnowledgeService:
                 doc_type=doc_type,
                 user=user,
                 signal_type=EvidenceSignalType.EVIDENCE,
+                gate_context=gate_context,
             )
             links.append(link)
+            reason = getattr(link, "_gate_reason", "unknown")
+            counts_by_reason[reason] = counts_by_reason.get(reason, 0) + 1
+            if reason == "auto_confirmed":
+                auto_confirmed += 1
 
         logger.info(
-            "governed_kb.map_document document_id=%s tenant=%s links=%s",
+            "governed_kb.map_document document_id=%s tenant=%s links=%s auto_confirmed=%s",
             document_id,
             tenant_id,
             len(links),
+            auto_confirmed,
         )
-        return links
+        return MapDocumentResult(
+            links=links,
+            gate_summary={
+                "threshold": 0.98,
+                "matrix_loaded": gate_context.matrix_loaded,
+                "matrix_version": gate_context.matrix_version,
+                "auto_confirmed": auto_confirmed,
+                "counts_by_reason": counts_by_reason,
+            },
+        )
 
     async def scan_standard_against_kb(
         self,
@@ -779,7 +844,8 @@ class GovernedKnowledgeService:
         )
         existing_links = list(existing_result.scalars().all())
 
-        fresh_mappings = await self.map_document_to_schemes(db, document_id, content, doc_type, tenant_id, user)
+        mapped = await self.map_document_to_schemes(db, document_id, content, doc_type, tenant_id, user)
+        fresh_mappings = mapped.links
         fresh_by_clause = {link.clause_id: link for link in fresh_mappings}
 
         for old_link in existing_links:
