@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { standardsCellAggregateApi, getApiErrorMessage } from '../../api/client'
-import type { StandardsCellAggregate } from '../../api/standardsCellAggregateTypes'
+import type { AxiosError, AxiosResponse } from 'axios'
+import { standardsCellAggregateApi, getApiErrorMessage } from '../../../api/client'
+import type { StandardsCellAggregate } from '../../../api/standardsCellAggregateTypes'
 import type { FrameworkId } from '../standardsMatrixFilters'
 
 export function useStandardsCellAggregate(
@@ -26,10 +27,10 @@ export function useStandardsCellAggregate(
     setError(null)
     standardsCellAggregateApi
       .getCell(framework, clause)
-      .then((res) => {
+      .then((res: AxiosResponse<StandardsCellAggregate>) => {
         if (!cancelled) setData(res.data)
       })
-      .catch((err) => {
+      .catch((err: AxiosError | Error) => {
         if (!cancelled) {
           setData(null)
           setError(getApiErrorMessage(err))

@@ -9,7 +9,6 @@ export function CertsPanelSlot({
   data,
   loading,
   error,
-  clauseNumber,
 }: CellAggregateViewProps) {
   const { t } = useTranslation()
 
