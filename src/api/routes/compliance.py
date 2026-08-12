@@ -33,6 +33,10 @@ from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
 from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
+from src.domain.services.compliance_evidence_link_writer import (
+    soft_delete_evidence_link,
+    upsert_evidence_links,
+)
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 from src.infrastructure.monitoring.azure_monitor import get_tracer
 
@@ -521,66 +525,27 @@ async def link_evidence(
 
     cover_kind = _parse_cover_kind(request.cover_kind)
 
-    existing_result = await db.execute(
-        select(ComplianceEvidenceLink).where(
-            ComplianceEvidenceLink.deleted_at.is_(None),
-            ComplianceEvidenceLink.tenant_id == current_user.tenant_id,
-            ComplianceEvidenceLink.entity_type == request.entity_type,
-            ComplianceEvidenceLink.entity_id == request.entity_id,
-            ComplianceEvidenceLink.clause_id.in_(request.clause_ids),
-            ComplianceEvidenceLink.cover_kind == cover_kind,
-        )
+    # PR-C: this route no longer writes CEL rows itself. The sole writer owns D15
+    # confirmer hygiene and ADR-0021 version pinning for every caller.
+    result = await upsert_evidence_links(
+        db,
+        tenant_id=current_user.tenant_id,
+        entity_type=request.entity_type,
+        entity_id=request.entity_id,
+        clause_ids=request.clause_ids,
+        cover_kind=cover_kind,
+        link_method=link_method,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        confidence=request.confidence,
+        title=request.title,
+        notes=request.notes,
     )
-    existing_by_clause = {link.clause_id: link for link in existing_result.scalars().all()}
-
-    links_created: list[ComplianceEvidenceLink] = []
-    for clause_id in request.clause_ids:
-        link = existing_by_clause.get(clause_id)
-        if link is None:
-            link = ComplianceEvidenceLink(
-                tenant_id=current_user.tenant_id,
-                entity_type=request.entity_type,
-                entity_id=request.entity_id,
-                clause_id=clause_id,
-                cover_kind=cover_kind,
-                created_by_id=current_user.id,
-                created_by_email=current_user.email,
-            )
-            db.add(link)
-
-        link.linked_by = link_method
-        link.confidence = request.confidence
-        link.title = request.title
-        link.notes = request.notes
-        link.cover_kind = cover_kind
-        # Manual create lands as confirmed (effective_status) — stamp confirmer.
-        if link_method == EvidenceLinkMethod.MANUAL:
-            link.status = EvidenceLinkStatus.CONFIRMED
-            link.auto_applied = False
-            _stamp_manual_confirmed(link, current_user)
-        else:
-            # D15: a non-manual rewrite of an existing link must not keep the
-            # earlier human confirmer — that stamp attested to different content.
-            link.confirmed_by_id = None
-            link.confirmed_at = None
-        if request.entity_type == "document":
-            from src.domain.services.cel_version_pin import pin_evidence_link_document_version
-
-            await pin_evidence_link_document_version(
-                db,
-                link,
-                tenant_id=current_user.tenant_id,
-            )
-        links_created.append(link)
-
-    await db.commit()
-    for link in links_created:
-        await db.refresh(link)
 
     return {
         "status": "success",
-        "message": f"Upserted {len(links_created)} evidence link(s)",
-        "links": [item.model_dump() for item in [_serialize_link(link) for link in links_created]],
+        "message": f"Upserted {result.total} evidence link(s)",
+        "links": [item.model_dump() for item in [_serialize_link(link) for link in result.links]],
     }
 
 
@@ -611,19 +576,9 @@ async def delete_evidence_link(
     link_id: int, db: DbSession, current_user: Annotated[User, Depends(require_permission("audit:update"))]
 ):
     """Soft-delete an evidence link for the current tenant."""
-    result = await db.execute(
-        select(ComplianceEvidenceLink).where(
-            ComplianceEvidenceLink.id == link_id,
-            ComplianceEvidenceLink.deleted_at.is_(None),
-            ComplianceEvidenceLink.tenant_id == current_user.tenant_id,
-        )
-    )
-    link = result.scalar_one_or_none()
+    link = await soft_delete_evidence_link(db, tenant_id=current_user.tenant_id, link_id=link_id)
     if link is None:
         raise NotFoundError("Evidence link not found")
-
-    link.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
     return {"status": "deleted"}
 
 
@@ -886,6 +841,114 @@ async def get_standards_cell_aggregate_matrix(
         frameworks=fw_list,
         clause_numbers=clause_list,
     )
+
+
+# =============================================================================
+# Standards alignment matrix (Wave 2 PR-C) — imported PEL-HSEQ-5064 verdicts
+# =============================================================================
+
+
+class AlignmentImportRequest(BaseModel):
+    """Import request. Omitting ``payload`` uses the checked-in 5064 edition."""
+
+    payload: Optional[dict[str, Any]] = None
+    accepted_tokens: Optional[list[str]] = None
+
+
+@router.get("/alignment/catalogue")
+async def get_alignment_catalogue(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:read"))],
+    framework: Optional[str] = Query(None, description="Filter rows to one framework id"),
+    verdict: Optional[str] = Query(None, description="Filter to EXACT|NEAR|DIFFERENT|UNIQUE"),
+):
+    """Alignment-aware clause rows for the Standards matrix axis.
+
+    Replaces the hardcoded catalogue the matrix shell shipped with in PR-A. When no
+    matrix edition has been imported this returns an empty ``rows`` list with
+    ``matrix_loaded: false``, and the shell falls back to its static axis rather
+    than rendering an empty grid.
+    """
+    from src.domain.services.standards_alignment_read_service import StandardsAlignmentReadService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+
+    service = StandardsAlignmentReadService(db)
+    return await service.catalogue(
+        tenant_id=tenant_id,
+        framework=framework,
+        verdict=verdict,
+    )
+
+
+@router.post("/alignment/import/plan")
+async def plan_alignment_import(
+    request: AlignmentImportRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("standard:update"))],
+):
+    """Dry-run an alignment import: what would change, per clause pair.
+
+    Writes nothing. Each item carries a ``token`` which is handed back to
+    ``/alignment/import/apply`` to accept that specific change.
+    """
+    from src.domain.services.standards_alignment_import_service import (
+        AlignmentImportError,
+        StandardsAlignmentImportService,
+        load_payload,
+    )
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+
+    try:
+        payload = request.payload or load_payload()
+        service = StandardsAlignmentImportService(db)
+        plan = await service.plan(tenant_id=tenant_id, payload=payload)
+    except AlignmentImportError as exc:
+        raise BadRequestError(str(exc)) from exc
+    return plan.to_dict()
+
+
+@router.post("/alignment/import/apply")
+async def apply_alignment_import(
+    request: AlignmentImportRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("standard:create"))],
+):
+    """Apply the accepted subset of an alignment import as a new active edition.
+
+    ``accepted_tokens`` is the accept-each gate: a declined change keeps the
+    verdict the active edition already holds, and a declined removal keeps the
+    pair, so declining can never loosen a verdict. Applying the same payload with
+    the same acceptances twice writes nothing the second time.
+    """
+    from src.domain.services.standards_alignment_import_service import (
+        AlignmentImportError,
+        StandardsAlignmentImportService,
+        load_payload,
+    )
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+
+    try:
+        payload = request.payload or load_payload()
+        service = StandardsAlignmentImportService(db)
+        result = await service.apply(
+            tenant_id=tenant_id,
+            payload=payload,
+            accepted_tokens=request.accepted_tokens,
+            imported_by_id=current_user.id,
+        )
+        await db.commit()
+    except AlignmentImportError as exc:
+        raise BadRequestError(str(exc)) from exc
+    return result.to_dict()
 
 
 @router.get("/standards", response_model=list[ComplianceStandardResponse])

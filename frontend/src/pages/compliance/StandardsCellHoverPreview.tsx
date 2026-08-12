@@ -18,6 +18,12 @@ export interface StandardsCellHoverPreviewProps {
   recurrenceRedFlag?: boolean
   /** When false, hide the PR-B stub chrome (live data wired). */
   isStub?: boolean
+  /** PR-C: imported 5064 row verdict (EXACT / NEAR / DIFFERENT / UNIQUE). */
+  alignmentVerdict?: string | null
+  /** PR-C: this clause number is shared with a materially different requirement. */
+  isTrapRow?: boolean
+  /** PR-C: technical control with no attestation source — cannot be covered by a PDF. */
+  techGapStub?: boolean
   className?: string
 }
 
@@ -42,6 +48,9 @@ export function StandardsCellHoverPreview({
   coverBlocked = false,
   recurrenceRedFlag = false,
   isStub = false,
+  alignmentVerdict = null,
+  isTrapRow = false,
+  techGapStub = false,
   className,
 }: StandardsCellHoverPreviewProps) {
   const { t } = useTranslation()
@@ -74,6 +83,23 @@ export function StandardsCellHoverPreview({
         {recurrenceRedFlag ? (
           <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-recurrence">
             {t('compliance.standards_workspace.recurrence_badge', { defaultValue: 'Recurrence' })}
+          </Badge>
+        ) : null}
+        {alignmentVerdict ? (
+          <Badge variant="outline" className="text-xs" data-testid="standards-cell-hover-alignment">
+            {alignmentVerdict}
+          </Badge>
+        ) : null}
+        {isTrapRow ? (
+          <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-trap">
+            {t('compliance.standards_matrix.trap_badge', { defaultValue: 'Trap row' })}
+          </Badge>
+        ) : null}
+        {techGapStub ? (
+          <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-tech-gap">
+            {t('compliance.standards_matrix.tech_gap_badge', {
+              defaultValue: 'Needs technical proof',
+            })}
           </Badge>
         ) : null}
         {isStub ? (

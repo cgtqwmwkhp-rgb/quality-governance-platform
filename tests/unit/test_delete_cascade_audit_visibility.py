@@ -13,7 +13,7 @@ issues the per-row DELETE, which requires a mapped relationship whose cascade
 includes ``delete`` and which does not set ``passive_deletes=True``. Every pair
 below fails that test, so the removal happens with no Python event:
 
-* 84 pairs have no relationship mapped from the parent at all.
+* 85 pairs have no relationship mapped from the parent at all.
 * 5 have a relationship without ``delete`` in its cascade — SQLAlchemy will try
   to de-associate the children instead of deleting them, so still no per-child
   delete event (and on a NOT NULL foreign key that attempt errors).
@@ -126,6 +126,14 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         # with no per-row audit event. Soft-delete is the normal path.
         ("job_types", "job_type_baselines"),
         ("management_reviews", "management_review_inputs"),
+        # WA-2 PR-C. Alignment edges are the derived output of a 5064 matrix
+        # import, not authored records, so no relationship is mapped from the
+        # version and PostgreSQL removes them on its own. Superseding is the
+        # normal path — the import service marks the prior version superseded
+        # and never deletes it — so this fires only on a physical delete such as
+        # a tenant purge. Mapping a delete-cascading relationship would load
+        # every edge of a version into memory to delete it a row at a time.
+        ("matrix_versions", "alignment_edges"),
         ("near_misses", "near_miss_running_sheet_entries"),
         ("policies", "policy_acknowledgment_requirements"),
         ("policies", "policy_acknowledgments"),

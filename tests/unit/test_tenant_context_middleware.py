@@ -31,14 +31,15 @@ def test_tenant_context_middleware_is_registered_on_app():
 
 def test_rls_tables_match_policy_migration():
     # Original 12 + WC-EXP (3) + action expand (3) + docs expand (3) + golden
-    # thread expand (2) + Compliance Schedule Wave 0 (2).
+    # thread expand (2) + Compliance Schedule Wave 0 (2) + the two standards
+    # alignment tables (20261105_standards_alignment).
     #
     # The count alone proves nothing about the migrations; what makes this registry
     # honest is test_run026_rls_least_privilege.py, which requires every name here
     # to be hardened by a registered migration, and the PostgreSQL suite, which
     # reads the policies out of pg_policy. This is the cheap guard against a name
     # being dropped.
-    assert len(RLS_TABLES) == 35
+    assert len(RLS_TABLES) == 37
     assert "incidents" in RLS_TABLES
     assert "users" in RLS_TABLES
     assert "audit_log_entries" in RLS_TABLES
@@ -65,6 +66,8 @@ def test_rls_tables_match_policy_migration():
     assert "job_cell_documents" in RLS_TABLES
     assert "job_cell_links" in RLS_TABLES
     assert "job_type_baselines" in RLS_TABLES
+    assert "matrix_versions" in RLS_TABLES
+    assert "alignment_edges" in RLS_TABLES
     # Deliberately absent: its tenant_id is always NULL, so tenant_isolation would
     # hide the global catalogue from every tenant instead of isolating anything.
     assert "compliance_requirement_templates" not in RLS_TABLES

@@ -57,7 +57,8 @@ SKIP_PATHS = frozenset(
 # and 20261015_document_edges (document_edges),
 # and 20261019_job_lifecycle_axes (job_types, job_lanes, job_steps, job_cells,
 # job_cell_documents), and 20261020_job_cell_links (job_cell_links),
-# and 20261023_job_type_baselines (job_type_baselines).
+# and 20261023_job_type_baselines (job_type_baselines),
+# and 20261105_standards_alignment (matrix_versions, alignment_edges).
 #
 # Every name here must be hardened by a migration registered in
 # HARDENING_MIGRATIONS (tests/unit/test_run026_rls_least_privilege.py), and must
@@ -101,6 +102,8 @@ RLS_TABLES = (
     "job_cell_documents",
     "job_cell_links",
     "job_type_baselines",
+    "matrix_versions",
+    "alignment_edges",
 )
 
 # Name of the PostgreSQL GUC every tenant_isolation policy reads.
