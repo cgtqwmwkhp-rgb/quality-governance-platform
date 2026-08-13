@@ -304,11 +304,18 @@ export interface StandardsDigestCertExpiry {
   expired: number
   unknown: number
   shelfPath: string
-  byScheme: Array<{ scheme: string; tracked: number; dueSoon: number; expired: number }>
+  byScheme: Array<{
+    scheme: string
+    kind: string
+    tracked: number
+    dueSoon: number
+    expired: number
+  }>
   soonest: Array<{
     shelfKey: string | null
     name: string
     scheme: string
+    kind: string
     expiryDate: string | null
     readinessStatus: string
     daysRemaining: number | null
@@ -456,6 +463,7 @@ export function mapStandardsDigest(raw: unknown): StandardsDigest | null {
         return [
           {
             scheme: asString(row.scheme, 'unknown'),
+            kind: asString(row.kind, 'scheme_shelf'),
             tracked: asNumber(row.tracked),
             dueSoon: asNumber(row.due_soon),
             expired: asNumber(row.expired),
@@ -473,6 +481,7 @@ export function mapStandardsDigest(raw: unknown): StandardsDigest | null {
             shelfKey: typeof row.shelf_key === 'string' ? row.shelf_key : null,
             name: asString(row.name, 'Certificate'),
             scheme: asString(row.scheme, 'unknown'),
+            kind: asString(row.kind, 'scheme_shelf'),
             expiryDate: typeof row.expiry_date === 'string' ? row.expiry_date : null,
             readinessStatus: asString(row.readiness_status, 'unknown'),
             daysRemaining: asNullableNumber(row.days_remaining),

@@ -268,8 +268,58 @@ def test_cert_expiry_board_orders_soonest():
     assert result["expired"] == 1
     assert result["soonest"][0]["name"] == "Expired cert"
     assert result["soonest"][0]["days_remaining"] < 0
+    assert result["soonest"][0]["scheme"] == "operational"
     assert result["soonest"][1]["name"] == "ISO 9001"
+    assert result["soonest"][1]["scheme"] == "9001"
     assert any(row["scheme"] == "uvdb" and row["tracked"] == 1 for row in result["by_scheme"])
+    assert any(row["scheme"] == "9001" and row["tracked"] == 1 for row in result["by_scheme"])
+    assert all(row["scheme"] != "register" for row in result["by_scheme"])
+
+
+def test_cert_digest_does_not_feed_pat_into_iso_or_chas():
+    """Int-W7: typed feeds. PAT/insurance stay operational; ISO 9001 is its own scheme."""
+    now = datetime(2026, 8, 12, tzinfo=timezone.utc)
+    shelf = {
+        "summary": {"valid": 2, "due_soon": 1, "expired": 0, "unknown": 0},
+        "items": [
+            {
+                "shelf_key": "register:pat",
+                "name": "Portable Appliance Test",
+                "scheme": "register",
+                "expiry_date": "2026-09-01",
+                "readiness_status": "due_soon",
+                "metadata": {"certificate_type": "PAT"},
+            },
+            {
+                "shelf_key": "register:ins",
+                "name": "Employers Liability",
+                "scheme": "register",
+                "expiry_date": "2027-01-01",
+                "readiness_status": "valid",
+                "metadata": {"certificate_type": "insurance"},
+            },
+            {
+                "shelf_key": "register:iso",
+                "name": "Quality management",
+                "scheme": "register",
+                "expiry_date": "2027-06-01",
+                "readiness_status": "valid",
+                "metadata": {"certificate_type": "ISO 9001:2015"},
+            },
+        ],
+    }
+    result = roll_up_cert_expiry(shelf, now=now, row_limit=10)
+    by_scheme = {row["scheme"]: row for row in result["by_scheme"]}
+    assert "9001" in by_scheme
+    assert by_scheme["9001"]["tracked"] == 1
+    assert by_scheme["9001"]["kind"] == "framework_certificate"
+    assert "operational" in by_scheme
+    assert by_scheme["operational"]["tracked"] == 2
+    assert by_scheme["operational"]["kind"] == "operational"
+    assert "chas" not in by_scheme
+    assert "register" not in by_scheme
+    assert result["soonest"][0]["scheme"] == "operational"
+    assert result["soonest"][0]["name"] == "Portable Appliance Test"
 
 
 def test_row_cap_preserves_total_clause_count():
