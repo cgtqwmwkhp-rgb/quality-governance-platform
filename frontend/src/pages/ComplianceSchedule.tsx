@@ -20,6 +20,7 @@ import { useOwnershipLabel } from './compliance/useOwnershipLabel'
 import { RequirementFormDialog } from './compliance/RequirementFormDialog'
 import { coverageCopy } from './complianceScheduleCoverageI18n'
 import { importCopy } from './complianceScheduleImportI18n'
+import { obligationMentionsClause } from './compliance/scheduleProgrammeContext'
 import { toast } from '../contexts/ToastContext'
 import type {
   ComplianceImportValidationReport,
@@ -39,6 +40,9 @@ export default function ComplianceSchedule() {
   // URL is the only place the choice lives — a deep link or a reload lands on
   // the same view, and back leaves it.
   const view = parseScheduleView(searchParams.get('view'))
+  const programmeClause = (searchParams.get('clause') || '').trim()
+  const programmeFramework = (searchParams.get('framework') || '').trim()
+  const hasProgrammeContext = Boolean(programmeClause || programmeFramework)
   const cov = coverageCopy(i18n.language)
   const imp = importCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
@@ -97,6 +101,22 @@ export default function ComplianceSchedule() {
       setLoading(false)
     }
   }, [statusFilter, showInactive])
+
+  const clauseMatches = useMemo(() => {
+    if (!programmeClause) return null
+    return items.filter((item) => obligationMentionsClause(item, programmeClause))
+  }, [items, programmeClause])
+
+  const listItems =
+    clauseMatches && clauseMatches.length > 0 ? clauseMatches : items
+  const showingClauseFilter = Boolean(clauseMatches && clauseMatches.length > 0)
+
+  const clearProgrammeContext = () => {
+    const params = new URLSearchParams(searchParams)
+    params.delete('clause')
+    params.delete('framework')
+    setSearchParams(params, { replace: true })
+  }
 
   useEffect(() => {
     // The certificates view reads a different endpoint; loading the obligation
@@ -274,6 +294,35 @@ export default function ComplianceSchedule() {
         ))}
       </div>
 
+      {view === 'obligations' && hasProgrammeContext ? (
+        <div
+          className="rounded-lg border border-border bg-card px-4 py-3 text-sm"
+          data-testid="compliance-schedule-programme-context"
+        >
+          <p>
+            {showingClauseFilter
+              ? t('compliance.schedule.programme_context', {
+                  defaultValue:
+                    'From {{framework}} · {{clause}} — Schedule remains the obligation register.',
+                  framework: programmeFramework || '—',
+                  clause: programmeClause || '—',
+                })
+              : t('compliance.schedule.programme_context_none', {
+                  defaultValue: 'No obligation cites {{clause}}. Full register shown.',
+                  clause: programmeClause || '—',
+                })}
+          </p>
+          <button
+            type="button"
+            className="mt-2 text-sm underline"
+            onClick={clearProgrammeContext}
+            data-testid="compliance-schedule-clear-programme-context"
+          >
+            {t('compliance.schedule.clear_programme_context', 'Show all')}
+          </button>
+        </div>
+      ) : null}
+
       {view === 'certificates' ? (
         <AssuranceCertShelfPanel />
       ) : loadError ? (
@@ -338,7 +387,7 @@ export default function ComplianceSchedule() {
               </div>
             ) : (
               <ul className="divide-y divide-border" data-testid="compliance-schedule-list">
-                {items.map((item) => (
+                {listItems.map((item) => (
                   <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
                     <div className="min-w-0">
                       <Link
