@@ -126,17 +126,18 @@ const standardIcons: Record<string, React.ElementType> = {
   iso14001: Leaf,
   iso45001: HardHat,
   iso27001: Shield,
+  iso22301: Clock,
   planetmark: Leaf,
   uvdb: Award,
 }
 
-const standardColors: Record<string, string> = {
-  iso9001: 'blue',
-  iso14001: 'green',
-  iso45001: 'orange',
-  iso27001: 'purple',
-  planetmark: 'teal',
-  uvdb: 'yellow',
+/** Always a component. Catalogue ids missing from the map (e.g. iso22301 before this
+ *  map row existed) must not reach React.createElement — that is minified error #130. */
+function iconForStandard(standardId: string | undefined): React.ElementType {
+  if (standardId && standardIcons[standardId]) {
+    return standardIcons[standardId]
+  }
+  return Award
 }
 
 // Explicit Tailwind class maps — dynamic interpolation (`text-${color}-400`) is not
@@ -146,6 +147,7 @@ const standardIconClass: Record<string, string> = {
   iso14001: 'w-5 h-5 text-green-400',
   iso45001: 'w-5 h-5 text-orange-400',
   iso27001: 'w-5 h-5 text-purple-400',
+  iso22301: 'w-5 h-5 text-cyan-400',
   planetmark: 'w-5 h-5 text-teal-400',
   uvdb: 'w-5 h-5 text-yellow-400',
 }
@@ -154,6 +156,7 @@ const standardBgClass: Record<string, string> = {
   iso14001: 'p-2 rounded-lg bg-green-500/20',
   iso45001: 'p-2 rounded-lg bg-orange-500/20',
   iso27001: 'p-2 rounded-lg bg-purple-500/20',
+  iso22301: 'p-2 rounded-lg bg-cyan-500/20',
   planetmark: 'p-2 rounded-lg bg-teal-500/20',
   uvdb: 'p-2 rounded-lg bg-yellow-500/20',
 }
@@ -162,6 +165,7 @@ const standardTreeIconClass: Record<string, string> = {
   iso14001: 'w-4 h-4 text-green-400 flex-shrink-0',
   iso45001: 'w-4 h-4 text-orange-400 flex-shrink-0',
   iso27001: 'w-4 h-4 text-purple-400 flex-shrink-0',
+  iso22301: 'w-4 h-4 text-cyan-400 flex-shrink-0',
   planetmark: 'w-4 h-4 text-teal-400 flex-shrink-0',
   uvdb: 'w-4 h-4 text-yellow-400 flex-shrink-0',
 }
@@ -170,6 +174,7 @@ const standardResultIconClass: Record<string, string> = {
   iso14001: 'w-5 h-5 text-green-400 flex-shrink-0 mt-0.5',
   iso45001: 'w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5',
   iso27001: 'w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5',
+  iso22301: 'w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5',
   planetmark: 'w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5',
   uvdb: 'w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5',
 }
@@ -178,6 +183,7 @@ const standardPercentageClass: Record<string, string> = {
   iso14001: 'text-2xl font-bold text-green-400',
   iso45001: 'text-2xl font-bold text-orange-400',
   iso27001: 'text-2xl font-bold text-purple-400',
+  iso22301: 'text-2xl font-bold text-cyan-400',
   planetmark: 'text-2xl font-bold text-teal-400',
   uvdb: 'text-2xl font-bold text-yellow-400',
 }
@@ -186,6 +192,7 @@ const standardProgressClass: Record<string, string> = {
   iso14001: 'h-2 rounded-full bg-gradient-to-r from-green-600 to-green-400',
   iso45001: 'h-2 rounded-full bg-gradient-to-r from-orange-600 to-orange-400',
   iso27001: 'h-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-400',
+  iso22301: 'h-2 rounded-full bg-gradient-to-r from-cyan-600 to-cyan-400',
   planetmark: 'h-2 rounded-full bg-gradient-to-r from-teal-600 to-teal-400',
   uvdb: 'h-2 rounded-full bg-gradient-to-r from-yellow-600 to-yellow-400',
 }
@@ -690,7 +697,7 @@ export default function ComplianceEvidence() {
           const evidence = getEvidenceForClause(clause.id)
           const isExpanded = expandedClauses.has(clause.id)
           const hasChildren = filteredClauses.some((c) => c.parent_clause === clause.id)
-          const StandardIcon = standardIcons[clause.standard] || Award
+          const StandardIcon = iconForStandard(clause.standard)
 
           return (
             <div key={clause.id} className="mb-2">
@@ -1216,8 +1223,8 @@ export default function ComplianceEvidence() {
                   ? standards.map((standard) => (
                       <div key={standard.id} className="mb-6">
                         <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                          {React.createElement(standardIcons[standard.id], {
-                            className: `w-4 h-4 text-${standardColors[standard.id]}-400`,
+                          {React.createElement(iconForStandard(standard.id), {
+                            className: standardTreeIconClass[standard.id] ?? 'w-4 h-4 text-primary flex-shrink-0',
                             'aria-hidden': 'true',
                           })}
                           {standard.code}
@@ -1445,7 +1452,7 @@ export default function ComplianceEvidence() {
                     {(coverage.gap_clauses ?? [])
                       .filter((c) => selectedStandard === 'all' || c.standard === selectedStandard)
                       .map((clause) => {
-                        const Icon = standardIcons[clause.standard]
+                        const Icon = iconForStandard(clause.standard)
 
                         return (
                           <div
@@ -1514,8 +1521,8 @@ export default function ComplianceEvidence() {
                   {/* Clause Info */}
                   <div className="p-4 bg-surface rounded-lg border border-border">
                     <div className="flex items-center gap-2 mb-2">
-                      {React.createElement(standardIcons[selectedClause.standard], {
-                        className: `w-5 h-5 text-${standardColors[selectedClause.standard]}-400`,
+                      {React.createElement(iconForStandard(selectedClause.standard), {
+                        className: standardIconClass[selectedClause.standard] ?? 'w-5 h-5 text-primary',
                         'aria-hidden': 'true',
                       })}
                       <span className="font-bold text-foreground">{selectedClause.clause_number}</span>
@@ -1915,7 +1922,7 @@ export default function ComplianceEvidence() {
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {autoTagResults.map((clause) => {
                   const deepResult = deepAnalysisResult?.primary_results.find(r => r.clause_id === clause.id)
-                  const Icon = standardIcons[clause.standard]
+                  const Icon = iconForStandard(clause.standard)
                   return (
                     <div
                       key={clause.id}
