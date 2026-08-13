@@ -17,7 +17,8 @@
 | SG-W9-02 | Overview hero | Control implementation % | Covered / partial / gap **cell counts** — not a score |
 | SG-W9-03 | Per-FW strip | Absent | covered/partial/gap/unknown + cert_count + open_nc_cells; includes UVDB/PM |
 | SG-W9-04 | Control-table `%` | Drove Overview | Still computed as `overall_compliance` for API compat; Overview FE ignores it |
-| SG-W9-05 | Isolation | TrapGuard/ingest must not import requirement axes | Unchanged |
+| SG-W9-06 | Isolation | TrapGuard/ingest must not import requirement axes | Unchanged |
+| SG-W9-07 | index gzip | 204 kB ceiling | 205 kB — `ims.overview.*` en+cy keys; IMSDashboard stays lazy |
 
 ## 3) Compatibility & Data Safety
 - No schema / migration. No `ComplianceEvidenceLink` writes.
@@ -44,6 +45,7 @@
 - [x] AC-06: ISO columns use printed alignment clause refs only when `covers_framework`; scheme columns use W5 `axis_rows` (CHAS is not painted with ISO `7.2`).
 - [x] AC-07: i18n keys in `en.json` and `cy.json`.
 - [x] AC-08: No Alembic revision. Entra flag untouched.
+- [x] AC-08b: index gzip ceiling 204→205 kB ledgered (IMSDashboard lazy; shell i18n only).
 - [ ] AC-09: Hosted CI green; STG+PROD SUCCESS; STG health SHA = PROD health SHA = tip → LIVE / DONE.
 
 ## 5) Testing Evidence (link to runs)
