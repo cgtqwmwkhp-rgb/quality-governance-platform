@@ -77,20 +77,33 @@ describe('StandardsAssessmentPanel', () => {
     })
   })
 
-  it('shows clear Map to ISO / UVDB / Planet Mark CTA', async () => {
+  it('shows Map to ISO clauses CTA and does not oversell UVDB or Planet Mark', async () => {
     const { StandardsAssessmentPanel } = await import('../StandardsAssessmentPanel')
     render(
       <MemoryRouter>
-        <StandardsAssessmentPanel entityType="incident" entityId={7} />
+        <StandardsAssessmentPanel entityType="near_miss" entityId={7} />
       </MemoryRouter>,
     )
-    expect(await screen.findByTestId('standards-map-cta')).toHaveTextContent(
-      /Map to ISO \/ UVDB \/ Planet Mark/i,
-    )
-    fireEvent.click(screen.getByTestId('standards-map-cta'))
+    const cta = await screen.findByTestId('standards-map-cta')
+    expect(cta).toHaveTextContent(/Map to ISO clauses/i)
+    expect(cta).not.toHaveTextContent(/UVDB/i)
+    expect(cta).not.toHaveTextContent(/Planet Mark/i)
+    fireEvent.click(cta)
     await waitFor(() => {
-      expect(mockAssess).toHaveBeenCalledWith('incident', 7)
+      expect(mockAssess).toHaveBeenCalledWith('near_miss', 7)
     })
+  })
+
+  it('complaints may still name UVDB on the CTA, never Planet Mark', async () => {
+    const { StandardsAssessmentPanel } = await import('../StandardsAssessmentPanel')
+    render(
+      <MemoryRouter>
+        <StandardsAssessmentPanel entityType="complaint" entityId={3} />
+      </MemoryRouter>,
+    )
+    const cta = await screen.findByTestId('standards-map-cta')
+    expect(cta).toHaveTextContent(/Map to ISO \/ UVDB/i)
+    expect(cta).not.toHaveTextContent(/Planet Mark/i)
   })
 
   it('requires reject rationale before calling API', async () => {

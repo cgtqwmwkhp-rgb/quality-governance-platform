@@ -104,6 +104,52 @@ class SchemeMapping:
     title: Optional[str] = None
 
 
+def expand_iso_exact_peers(mappings: list[SchemeMapping], guard: Any) -> list[SchemeMapping]:
+    """Propose ISO-family EXACT peers for already-matched ISO clauses (Int-W10).
+
+    Cases stay ``force_proposed``. Empty/unloaded guard → no expansion.
+    Never invents EXACT for CHAS/SSIP/CE/CEP/PM/UVDB/IiP.
+    """
+    from src.domain.services.standards_trap_guard import (
+        ISO_NUMBERING_FAMILY,
+        clause_number_from_token,
+        framework_from_clause_token,
+    )
+
+    if guard is None or not getattr(guard, "is_loaded", False):
+        return []
+    extra: list[SchemeMapping] = []
+    seen = {mapping.clause_id for mapping in mappings}
+    for mapping in mappings:
+        fw = framework_from_clause_token(mapping.clause_id)
+        if fw not in ISO_NUMBERING_FAMILY:
+            continue
+        clause = clause_number_from_token(mapping.clause_id)
+        if not clause:
+            continue
+        annotation = guard.annotate_cell(framework=fw, clause_number=clause)
+        for peer in annotation.get("peers") or []:
+            if str(peer.get("verdict") or "").strip().upper() != "EXACT":
+                continue
+            peer_fw = str(peer.get("framework") or "").strip().lower()
+            if peer_fw not in ISO_NUMBERING_FAMILY:
+                continue
+            peer_clause_id = str(peer.get("clause_key") or "").strip()
+            if not peer_clause_id or peer_clause_id in seen:
+                continue
+            seen.add(peer_clause_id)
+            extra.append(
+                SchemeMapping(
+                    clause_id=peer_clause_id,
+                    scheme=f"iso{peer_fw}",
+                    confidence=mapping.confidence,
+                    rationale=f"EXACT alignment peer of {mapping.clause_id}",
+                    title=mapping.title,
+                )
+            )
+    return extra
+
+
 @dataclass
 class RelatedDocumentHit:
     document_id: int
@@ -632,8 +678,20 @@ class GovernedKnowledgeService:
             )
 
         all_mappings: list[SchemeMapping] = []
-        all_mappings.extend(await self._map_iso_schemes(content))
-        # UVDB / Planet Mark are scheme-specific; keep ISO primary for ops cases.
+        iso_mappings = await self._map_iso_schemes(content)
+        all_mappings.extend(iso_mappings)
+        try:
+            from src.domain.services.standards_trap_guard import TrapGuard
+
+            guard = await TrapGuard.for_tenant(db, tenant_id)
+            all_mappings.extend(expand_iso_exact_peers(iso_mappings, guard))
+        except Exception:
+            logger.exception(
+                "ISO EXACT peer expansion skipped for %s:%s",
+                entity_type,
+                entity_id,
+            )
+        # UVDB keyword match is complaint-only. Planet Mark is not mapped from ops cases.
         if entity_type == "complaint":
             all_mappings.extend(await self._map_uvdb_schemes(db, content, tenant_id))
 

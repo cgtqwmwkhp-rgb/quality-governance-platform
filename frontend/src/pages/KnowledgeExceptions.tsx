@@ -830,8 +830,9 @@ export default function KnowledgeExceptions() {
         <p className="text-sm font-medium text-foreground">Map inputs → standards</p>
         <p className="text-xs text-muted-foreground mt-1">
           Open a document&apos;s Standards &amp; Evidence tab or a case detail Standards Assessment
-          panel, then run <strong>Map to ISO / UVDB / Planet Mark</strong>. Proposed links land here
-          for confirm/reject (reject requires a rationale).
+          panel, then run <strong>Map to ISO clauses</strong> (complaints: ISO / UVDB). Proposed
+          links land here for confirm/reject (reject requires a rationale). Planet Mark is not
+          mapped from cases.
         </p>
       </Card>
 
