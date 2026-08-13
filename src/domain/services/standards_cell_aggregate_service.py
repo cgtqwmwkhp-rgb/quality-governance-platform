@@ -33,7 +33,7 @@ time by type rather than by owning the whole shelf.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Iterable, Optional
 
 from sqlalchemy import or_, select
@@ -75,6 +75,10 @@ PRIOR_SCAN_LIMIT = 50
 #: refused — the **All** preset degraded the moment a tenant imported the matrix.
 #: The frontend still chunks wider grids rather than relying on this number.
 MATRIX_SUMMARY_MAX_CELLS = 500
+
+#: Days-to-expiry window that paints ``due_soon`` on the matrix countdown strip.
+#: Matches Monitoring ``CERT_EXPIRY_WINDOW_DAYS`` so the two boards do not disagree.
+COUNTDOWN_DUE_SOON_DAYS = 30
 
 OPEN_FINDING_STATUSES = frozenset(
     {
@@ -321,6 +325,94 @@ _CERT_TYPE_EXACT: dict[str, str] = {
 def count_proof_certs(certificates: Iterable[dict[str, Any]]) -> int:
     """Shelf items that prove this framework. ``unmatched`` items are never proof."""
     return sum(1 for certificate in certificates if certificate.get("proof_scope") != "unmatched")
+
+
+def attributed_framework_for_shelf_item(item: dict[str, Any]) -> Optional[str]:
+    """Matrix column a shelf item may count down for, or None when unattributable.
+
+    Register PAT / insurance / training prove something real and no framework, so
+    they must not drive an ISO or CHAS countdown (D3 attribution-first).
+    Scheme shelves (Planet Mark, Achilles UVDB) map through ``cert_schemes``.
+    """
+    scheme = str(item.get("scheme") or "").strip().lower()
+    if scheme == REGISTER_SHELF_SCHEME:
+        metadata = item.get("metadata") or {}
+        return framework_for_certificate(metadata.get("certificate_type"), item.get("name"))
+    for framework, alias in FRAMEWORK_ALIASES.items():
+        schemes = {str(s).lower() for s in alias.get("cert_schemes", ())}
+        if scheme in schemes:
+            return framework
+    return None
+
+
+def _expiry_date(item: dict[str, Any]) -> Optional[date]:
+    raw = item.get("expiry_date")
+    if isinstance(raw, datetime):
+        return raw.date()
+    if isinstance(raw, date):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            return date.fromisoformat(raw.strip()[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def roll_framework_countdown(
+    items: Iterable[dict[str, Any]],
+    *,
+    frameworks: list[str],
+    today: date,
+    due_soon_days: int = COUNTDOWN_DUE_SOON_DAYS,
+) -> dict[str, Any]:
+    """Soonest attributed expiry per matrix column. Operational items never paint ISO."""
+    wanted = [str(fw).strip() for fw in frameworks if str(fw).strip()]
+    buckets: dict[str, list[tuple[date, dict[str, Any]]]] = {fw: [] for fw in wanted}
+    unmatched_on_shelf = False
+    for item in items:
+        framework = attributed_framework_for_shelf_item(item)
+        if framework is None:
+            unmatched_on_shelf = True
+            continue
+        if framework not in buckets:
+            continue
+        expiry = _expiry_date(item)
+        if expiry is None:
+            continue
+        buckets[framework].append((expiry, item))
+
+    per_framework: dict[str, dict[str, Any]] = {}
+    for framework in wanted:
+        rows = buckets[framework]
+        if not rows:
+            per_framework[framework] = {
+                "status": "none",
+                "next_expiry": None,
+                "days_remaining": None,
+                "name": None,
+            }
+            continue
+        rows.sort(key=lambda row: row[0])
+        expiry, chosen = rows[0]
+        days = (expiry - today).days
+        if days < 0:
+            status = "expired"
+        elif days <= due_soon_days:
+            status = "due_soon"
+        else:
+            status = "current"
+        per_framework[framework] = {
+            "status": status,
+            "next_expiry": expiry.isoformat(),
+            "days_remaining": days,
+            "name": chosen.get("name"),
+        }
+    return {
+        "due_soon_days": due_soon_days,
+        "unmatched_on_shelf": unmatched_on_shelf,
+        "frameworks": per_framework,
+    }
 
 
 def _compact(value: Any) -> str:
@@ -946,6 +1038,8 @@ class StandardsCellAggregateService:
                 if cell.attestation:
                     cell_payload["attestation"] = cell.attestation
                 cells.append(cell_payload)
+        # Shelf is already cached from get_cell — do not re-read per column.
+        shelf_items = await self._shelf_items(tenant_id=tenant_id)
         return {
             "cells": cells,
             "matrix_version": guard.version_label,
@@ -953,6 +1047,11 @@ class StandardsCellAggregateService:
             "scan_truncated": bool(truncated_sources),
             "scan_truncated_sources": sorted(truncated_sources),
             "sor_note": "Read-model only — Audits/Actions/Risk/Cert shelf remain SoR.",
+            "framework_countdown": roll_framework_countdown(
+                shelf_items,
+                frameworks=frameworks,
+                today=date.today(),
+            ),
         }
 
     async def get_ims_framework_meters(self, tenant_id: int) -> dict[str, Any]:

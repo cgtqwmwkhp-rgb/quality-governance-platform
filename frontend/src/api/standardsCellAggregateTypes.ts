@@ -234,6 +234,22 @@ export type StandardsCellAttestation = {
   observed_at?: string | null
 }
 
+export type FrameworkCountdownStatus = 'none' | 'current' | 'due_soon' | 'expired'
+
+export type FrameworkCountdownEntry = {
+  status: FrameworkCountdownStatus | string
+  next_expiry: string | null
+  days_remaining: number | null
+  name: string | null
+}
+
+/** Per-column cert expiry for the matrix countdown strip (SG-D-03). */
+export type FrameworkCountdown = {
+  due_soon_days: number
+  unmatched_on_shelf: boolean
+  frameworks: Record<string, FrameworkCountdownEntry>
+}
+
 export type StandardsCellMatrixSummary = {
   cells: Array<{
     framework: string
@@ -253,6 +269,7 @@ export type StandardsCellMatrixSummary = {
   scan_truncated?: boolean
   scan_truncated_sources?: string[]
   sor_note?: string
+  framework_countdown?: FrameworkCountdown
 }
 
 /** One clause row of the imported alignment catalogue. */

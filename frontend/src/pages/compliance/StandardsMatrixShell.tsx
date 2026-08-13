@@ -17,6 +17,7 @@ import type {
   AlignmentCatalogueRow,
   AlignmentVerdict,
   CellVerdict,
+  FrameworkCountdown,
 } from '../../api/standardsCellAggregateTypes'
 import {
   StandardsCellHoverPreview,
@@ -35,6 +36,7 @@ import {
   type MatrixPresetId,
 } from './standardsMatrixFilters'
 import type { EvidenceWorkspaceSelection } from './EvidenceWorkspaceHost'
+import { FrameworkCountdownStrip } from './FrameworkCountdownStrip'
 
 /**
  * Fallback clause axis, used only when no 5064 alignment edition has been
@@ -181,6 +183,7 @@ export function StandardsMatrixShell({
   const [liveCells, setLiveCells] = useState<Record<string, CellLiveState>>({})
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveLoading, setLiveLoading] = useState(false)
+  const [countdown, setCountdown] = useState<FrameworkCountdown | null>(null)
   const [alignmentRows, setAlignmentRows] = useState<AlignmentCatalogueRow[] | null>(null)
   const [matrixVersion, setMatrixVersion] = useState<string | null>(null)
 
@@ -313,11 +316,14 @@ export function StandardsMatrixShell({
           }
         }
         setLiveCells(next)
+        const payload = responses.find((res) => res.data.framework_countdown)?.data.framework_countdown
+        setCountdown(payload ?? null)
       })
       .catch((err) => {
         if (!cancelled) {
           setLiveError(getApiErrorMessage(err))
           setLiveCells({})
+          setCountdown(null)
         }
       })
       .finally(() => {
@@ -589,6 +595,8 @@ export function StandardsMatrixShell({
           </div>
         </div>
       </div>
+
+      {countdown ? <FrameworkCountdownStrip columns={columns} countdown={countdown} /> : null}
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
