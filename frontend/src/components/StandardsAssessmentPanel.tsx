@@ -165,8 +165,11 @@ export function StandardsAssessmentPanel({
             {title}
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Map this case to ISO / UVDB / Planet Mark clauses. Operational signals stay proposed for
-            human review — never silent auto-confirm as conformance evidence.
+            Propose ISO clause links (aligned ISO peers may be added). Operational signals stay
+            proposed for human review — never silent auto-confirm as conformance evidence.
+            {entityType === 'complaint'
+              ? ' Complaints may also match UVDB keywords. Planet Mark is not mapped from cases.'
+              : ' UVDB and Planet Mark are not mapped from this case type.'}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
@@ -201,7 +204,7 @@ export function StandardsAssessmentPanel({
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            Map to ISO / UVDB / Planet Mark
+            Map to {entityType === 'complaint' ? 'ISO / UVDB' : 'ISO clauses'}
           </Button>
         </div>
       </CardHeader>
@@ -269,7 +272,11 @@ export function StandardsAssessmentPanel({
         ) : links.length === 0 ? (
           <EmptyState
             title="No standards mapping yet"
-            description="Use Map to ISO / UVDB / Planet Mark to propose attributable clause links for review in Knowledge Exceptions."
+            description={
+              entityType === 'complaint'
+                ? 'Use Map to ISO / UVDB to propose attributable clause links for review in Knowledge Exceptions.'
+                : 'Use Map to ISO clauses to propose attributable clause links for review in Knowledge Exceptions.'
+            }
           />
         ) : (
           <ul className="space-y-3">
