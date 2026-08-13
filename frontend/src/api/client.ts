@@ -1838,9 +1838,41 @@ export const complianceAutomationApi = {
 
 // ============ IMS Dashboard API ============
 
+export interface IMSCellFrameworkMeter {
+  framework: string
+  axis_source: 'alignment' | 'requirement_catalogue' | string
+  cells: number
+  covered: number
+  partial: number
+  gap: number
+  unknown: number
+  cert_count: number
+  open_nc_cells: number
+}
+
+export interface IMSCellOverview {
+  tracked_count: number
+  matrix_loaded: boolean
+  matrix_version: string | null
+  totals: {
+    covered: number
+    partial: number
+    gap: number
+    unknown: number
+    cells: number
+  }
+  frameworks: IMSCellFrameworkMeter[]
+  scan_truncated: boolean
+  scan_truncated_sources: string[]
+  honesty: string
+  error?: string
+}
+
 export interface IMSDashboardResponse {
   generated_at: string
   overall_compliance: number
+  cell_overview?: IMSCellOverview | null
+  cell_overview_error?: string
   standards: {
     standard_id: number
     standard_code: string

@@ -75,6 +75,28 @@ class IMSDashboardService:
 
         return scores
 
+    async def get_cell_overview(self, tenant_id: int | None = None) -> dict[str, Any]:
+        """Per-framework matrix cell counts for IMS Overview (Int-W9).
+
+        Does not use Control-table implementation %. Tenant is required so
+        TrapGuard / cert shelf cannot bleed across customers.
+        """
+        from src.domain.services.standards_cell_aggregate_service import StandardsCellAggregateService
+
+        if tenant_id is None:
+            return {
+                "tracked_count": 0,
+                "matrix_loaded": False,
+                "matrix_version": None,
+                "totals": {"covered": 0, "partial": 0, "gap": 0, "unknown": 0, "cells": 0},
+                "frameworks": [],
+                "scan_truncated": False,
+                "scan_truncated_sources": [],
+                "honesty": "Counts of matrix cells — not a compliance percentage.",
+                "error": "tenant_required",
+            }
+        return await StandardsCellAggregateService(self._db).get_ims_framework_meters(tenant_id)
+
     # ------------------------------------------------------------------
     # ISO 27001 ISMS
     # ------------------------------------------------------------------
@@ -405,6 +427,14 @@ class IMSDashboardService:
             )
         else:
             response["overall_compliance"] = 0
+
+        # Int-W9: IMS Overview meters from the cell aggregate (not Control %).
+        try:
+            response["cell_overview"] = await self.get_cell_overview(tenant_id=tenant_id)
+        except SQLAlchemyError:
+            logger.warning("IMS dashboard: cell overview query failed", exc_info=True)
+            response["cell_overview"] = None
+            response["cell_overview_error"] = "Unable to load cell overview"
 
         # ISO 27001 ISMS
         try:
