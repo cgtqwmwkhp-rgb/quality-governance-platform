@@ -28,7 +28,9 @@ from src.domain.services.iso_compliance_service import OPERATIONAL_SIGNAL_TYPES
 from src.domain.services.standards_cell_aggregate_service import (
     CLOSED_FINDING_STATUSES,
     OPEN_FINDING_STATUSES,
+    REGISTER_SHELF_SCHEME,
     detect_recurrence,
+    framework_for_certificate,
     is_nc_finding,
     status_value,
 )
@@ -345,6 +347,26 @@ def roll_up_ingest_backlog(
     }
 
 
+def digest_cert_feed(item: dict[str, Any]) -> tuple[str, str]:
+    """Typed digest feed for one shelf item.
+
+    The register is one undifferentiated shelf (PAT, insurance, ISO). F3 grouped
+    every register row as ``scheme=register``, so the Monitoring cert digest could
+    not feed by framework. Int-W7 re-buckets register items with the same
+    ``framework_for_certificate`` classifier the matrix already uses: a named
+    ISO/CE/CHAS certificate lands on that framework feed; a PAT test is
+    ``operational`` and never appears as 9001/CHAS proof.
+    """
+    scheme = str(item.get("scheme") or "unknown").strip() or "unknown"
+    if scheme != REGISTER_SHELF_SCHEME:
+        return scheme, "scheme_shelf"
+    metadata = item.get("metadata") or {}
+    framework = framework_for_certificate(metadata.get("certificate_type"), item.get("name"))
+    if framework:
+        return framework, "framework_certificate"
+    return "operational", "operational"
+
+
 def roll_up_cert_expiry(
     shelf: dict[str, Any],
     *,
@@ -354,18 +376,22 @@ def roll_up_cert_expiry(
     """Board view over the unified assurance certificate shelf."""
     summary = dict(shelf.get("summary") or {})
     items = list(shelf.get("items") or [])
-    by_scheme_map: dict[str, dict[str, int]] = defaultdict(lambda: {"tracked": 0, "due_soon": 0, "expired": 0})
+    by_scheme_map: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"tracked": 0, "due_soon": 0, "expired": 0, "kind": "scheme_shelf"}
+    )
     soonest: list[dict[str, Any]] = []
 
     today = now.date() if isinstance(now, datetime) else date.today()
     for item in items:
-        scheme = str(item.get("scheme") or "unknown")
+        scheme, kind = digest_cert_feed(item)
         readiness = str(item.get("readiness_status") or "unknown")
-        by_scheme_map[scheme]["tracked"] += 1
+        bucket = by_scheme_map[scheme]
+        bucket["tracked"] += 1
+        bucket["kind"] = kind
         if readiness == "due_soon":
-            by_scheme_map[scheme]["due_soon"] += 1
+            bucket["due_soon"] += 1
         elif readiness == "expired":
-            by_scheme_map[scheme]["expired"] += 1
+            bucket["expired"] += 1
 
         if readiness not in {"due_soon", "expired"}:
             continue
@@ -386,6 +412,7 @@ def roll_up_cert_expiry(
                 "shelf_key": item.get("shelf_key"),
                 "name": item.get("name"),
                 "scheme": scheme,
+                "kind": kind,
                 "expiry_date": expiry_date.isoformat() if expiry_date else expiry_raw,
                 "readiness_status": readiness,
                 "days_remaining": days_remaining,

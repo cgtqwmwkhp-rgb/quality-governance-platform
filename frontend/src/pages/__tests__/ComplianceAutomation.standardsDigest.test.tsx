@@ -130,12 +130,13 @@ describe('ComplianceAutomation standards digests', () => {
           due_soon: 1,
           expired: 0,
           unknown: 0,
-          by_scheme: [{ scheme: 'register', tracked: 1, due_soon: 1, expired: 0 }],
+          by_scheme: [{ scheme: '9001', tracked: 1, due_soon: 1, expired: 0, kind: 'framework_certificate' }],
           soonest: [
             {
               shelf_key: 'register:1',
               name: 'ISO 9001 certificate',
-              scheme: 'register',
+              scheme: '9001',
+              kind: 'framework_certificate',
               expiry_date: '2026-09-01',
               readiness_status: 'due_soon',
               days_remaining: 20,
