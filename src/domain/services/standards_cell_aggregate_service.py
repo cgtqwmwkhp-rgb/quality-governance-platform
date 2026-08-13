@@ -48,15 +48,15 @@ from src.domain.models.risk import Risk
 from src.domain.models.risk_register import EnterpriseRisk, EnterpriseRiskControl
 from src.domain.services import standards_tech_gap_guard as tech_gap_guard
 from src.domain.services.assurance_cert_shelf_service import AssuranceCertShelfService
-from src.domain.services.standards_entra_attestation import (
-    AttestationPosture,
-    EntraAttestationConfig,
-    resolve_attestation,
-)
 from src.domain.services.iso_compliance_service import (
     OPERATIONAL_SIGNAL_TYPES,
     counts_toward_compliance_coverage,
     iso_compliance_service,
+)
+from src.domain.services.standards_entra_attestation import (
+    AttestationPosture,
+    EntraAttestationConfig,
+    resolve_attestation,
 )
 from src.domain.services.standards_trap_guard import SCHEME_NUMBERING_FAMILY, TrapGuard, framework_from_clause_token
 

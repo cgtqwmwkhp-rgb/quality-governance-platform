@@ -11,10 +11,7 @@ import pytest
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink
 from src.domain.services.standards_cell_aggregate_service import StandardsCellAggregateService
 from src.domain.services.standards_entra_attestation import AttestationPosture
-from src.domain.services.standards_tech_gap_guard import (
-    TECHNICAL_ATTESTATION_ENTITY_TYPES,
-    assess,
-)
+from src.domain.services.standards_tech_gap_guard import TECHNICAL_ATTESTATION_ENTITY_TYPES, assess
 from src.domain.services.standards_trap_guard import TrapGuard
 
 ROOT = Path(__file__).resolve().parents[2]
