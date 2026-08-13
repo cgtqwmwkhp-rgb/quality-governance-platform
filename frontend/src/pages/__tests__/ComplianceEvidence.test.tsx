@@ -625,6 +625,90 @@ describe('ComplianceEvidence', () => {
     expect(screen.getByTestId('compliance-framework-card-chas')).toBeInTheDocument()
   })
 
+  it('renders clause view when the live catalogue includes ISO 22301 and an unmapped id', async () => {
+    mockListStandards.mockResolvedValue({
+      data: [
+        ...standardsResponse.data,
+        {
+          id: 'iso22301',
+          code: 'ISO 22301:2019',
+          name: 'Business Continuity Management',
+          description: 'BCMS',
+          clause_count: 1,
+          db_standard_id: 5,
+          db_standard_code: 'ISO22301',
+          db_standard_name: 'ISO 22301:2019',
+          db_clause_count: 1,
+          ims_requirement_count: 0,
+          covered_clauses: 0,
+          coverage_percentage: 0,
+          has_canonical_standard: true,
+          canonical_data_degraded: false,
+          canonical_data_message: null,
+        },
+        {
+          id: 'unmapped-scheme-x',
+          code: 'UNMAPPED-X',
+          name: 'Catalogue id with no icon map row',
+          description: 'Must not throw React #130',
+          clause_count: 0,
+          db_standard_id: null,
+          db_standard_code: null,
+          db_standard_name: null,
+          db_clause_count: 0,
+          ims_requirement_count: 0,
+          covered_clauses: 0,
+          coverage_percentage: 0,
+          has_canonical_standard: false,
+          canonical_data_degraded: false,
+          canonical_data_message: null,
+        },
+      ],
+    })
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <MemoryRouter initialEntries={['/compliance']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('Standards Evidence Center')
+    expect(screen.getByTestId('compliance-evidence-section-clauses')).toBeInTheDocument()
+    expect(screen.getAllByText('ISO 22301:2019').length).toBeGreaterThan(0)
+    expect(screen.getByText('UNMAPPED-X')).toBeInTheDocument()
+  })
+
+  it('renders gap analysis rows for ISO 22301 without throwing on a missing icon', async () => {
+    mockGetCoverage.mockResolvedValue({
+      data: {
+        ...coverageResponse.data,
+        gaps: 1,
+        gap_clauses: [
+          {
+            clause_id: '22301-8.2',
+            clause_number: '8.2',
+            title: 'Business continuity strategy',
+            standard: 'iso22301',
+          },
+        ],
+      },
+    })
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <MemoryRouter initialEntries={['/compliance?section=gaps']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('compliance-evidence-section-gaps')).toBeInTheDocument()
+    expect(screen.getByText('8.2')).toBeInTheDocument()
+    expect(screen.getByText('Business continuity strategy')).toBeInTheDocument()
+  })
+
   it('routes ?section= imported to imported audits panel with honest empty state', async () => {
     const ComplianceEvidence = (await import('../ComplianceEvidence')).default
 
