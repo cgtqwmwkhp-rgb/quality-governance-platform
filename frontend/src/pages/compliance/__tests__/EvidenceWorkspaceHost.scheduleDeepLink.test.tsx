@@ -12,8 +12,8 @@ vi.mock('../workspace/useStandardsCellAggregate', () => ({
   }),
 }))
 
-vi.mock('../workspace/ExactShareBanner', () => ({
-  ExactShareBanner: () => null,
+vi.mock('../ScheduleOpsStrip', () => ({
+  ScheduleOpsStrip: () => null,
 }))
 
 describe('EvidenceWorkspaceHost schedule deep-link (SG-D-02)', () => {

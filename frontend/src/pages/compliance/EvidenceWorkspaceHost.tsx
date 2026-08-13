@@ -14,6 +14,7 @@ import { useStandardsCellAggregate } from './workspace/useStandardsCellAggregate
 import type { FrameworkId } from './standardsMatrixFilters'
 import { STANDARDS_MATRIX_FRAMEWORKS } from './standardsMatrixFilters'
 import { scheduleProgrammeHref } from './scheduleProgrammeContext'
+import { ScheduleOpsStrip } from './ScheduleOpsStrip'
 
 export type WorkspaceTabId = 'evidence' | 'audits' | 'actions' | 'risks' | 'certs'
 
@@ -84,7 +85,8 @@ export function EvidenceWorkspaceHost({ selection, onClose }: EvidenceWorkspaceH
                 ) : null}
               </div>
             ) : null}
-            <div className="mt-3">
+            <div className="mt-3 space-y-2">
+              <ScheduleOpsStrip clauseNumber={selection.clauseNumber} />
               <Button variant="outline" size="sm" asChild>
                 <Link
                   to={scheduleProgrammeHref(selection.frameworkId, selection.clauseNumber)}
