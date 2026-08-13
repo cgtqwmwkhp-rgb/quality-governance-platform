@@ -123,6 +123,8 @@ export type StandardsCellAggregate = {
   trap_blocked?: Array<Record<string, unknown>>
   tech_gap?: StandardsCellTechGap
   exact_share?: StandardsCellExactShare
+  /** Int-W8 Entra MFA posture — present on technical cells only. */
+  attestation?: StandardsCellAttestation
   /** A source hit its read cap: the counts above are a floor, not a total. */
   scan_truncated?: boolean
   scan_truncated_sources?: string[]
@@ -213,6 +215,9 @@ export type StandardsCellTechGap = {
   stub?: boolean
   is_technical?: boolean
   reason?: string
+  attestation_status?: string | null
+  attested_kind?: string | null
+  unattested_elements?: string[]
   requirement?: {
     key: string
     title: string
@@ -220,6 +225,13 @@ export type StandardsCellTechGap = {
     attestation_needed: string
     source_position: string
   } | null
+}
+
+export type StandardsCellAttestation = {
+  status: 'pass' | 'fail' | 'unavailable' | 'disabled' | 'not_applicable' | string
+  source?: string | null
+  reason?: string | null
+  observed_at?: string | null
 }
 
 export type StandardsCellMatrixSummary = {
@@ -233,6 +245,7 @@ export type StandardsCellMatrixSummary = {
     summary: StandardsCellAggregate['summary']
     alignment?: StandardsCellAlignment
     tech_gap?: StandardsCellTechGap
+    attestation?: StandardsCellAttestation
     scan_truncated?: boolean
   }>
   matrix_version?: string | null

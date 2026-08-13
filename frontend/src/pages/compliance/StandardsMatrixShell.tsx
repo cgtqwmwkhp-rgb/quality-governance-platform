@@ -113,6 +113,9 @@ type CellLiveState = {
   isTrapRow?: boolean
   trapPeerCount?: number
   techGapStub?: boolean
+  /** Int-W8 Entra MFA reader status for technical cells. */
+  attestationStatus?: string | null
+  attestationObservedAt?: string | null
   /** A source hit its read cap, so this cell's counts are a floor, not a total. */
   scanTruncated?: boolean
 }
@@ -303,6 +306,8 @@ export function StandardsMatrixShell({
               isTrapRow: Boolean(cell.alignment?.is_trap_row),
               trapPeerCount: cell.alignment?.trap_peer_count ?? 0,
               techGapStub: Boolean(cell.tech_gap?.stub),
+              attestationStatus: cell.attestation?.status ?? null,
+              attestationObservedAt: cell.attestation?.observed_at ?? null,
               scanTruncated: Boolean(cell.scan_truncated),
             }
           }
@@ -344,6 +349,8 @@ export function StandardsMatrixShell({
       isTrapRow: Boolean(rowVerdicts[clauseNumber]?.is_trap),
       trapPeerCount: rowVerdicts[clauseNumber]?.trap_pair_count ?? 0,
       techGapStub: false,
+      attestationStatus: null,
+      attestationObservedAt: null,
       scanTruncated: false,
     }
   }
@@ -466,6 +473,8 @@ export function StandardsMatrixShell({
                     alignmentVerdict={live.alignmentVerdict ?? null}
                     isTrapRow={Boolean(live.isTrapRow)}
                     techGapStub={Boolean(live.techGapStub)}
+                    attestationStatus={live.attestationStatus ?? null}
+                    attestationObservedAt={live.attestationObservedAt ?? null}
                     scanTruncated={Boolean(live.scanTruncated)}
                   />
                 </TooltipContent>
