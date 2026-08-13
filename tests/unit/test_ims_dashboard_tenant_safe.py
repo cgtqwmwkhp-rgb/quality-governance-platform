@@ -82,6 +82,7 @@ async def test_get_dashboard_passes_tenant_id_to_tenant_scoped_aggregations():
     service.get_planet_mark_data = AsyncMock(return_value={})
     service.get_compliance_coverage = AsyncMock(return_value={"coverage_percentage": 0})
     service.get_audit_schedule = AsyncMock(return_value=[])
+    service.get_cell_overview = AsyncMock(return_value={"tracked_count": 0, "frameworks": []})
 
     await service.get_dashboard(tenant_id=12)
 
@@ -89,3 +90,4 @@ async def test_get_dashboard_passes_tenant_id_to_tenant_scoped_aggregations():
     service.get_compliance_coverage.assert_awaited_once_with(tenant_id=12)
     service.get_audit_schedule.assert_awaited_once_with(tenant_id=12)
     service.get_isms_data.assert_awaited_once_with(tenant_id=12)
+    service.get_cell_overview.assert_awaited_once_with(tenant_id=12)

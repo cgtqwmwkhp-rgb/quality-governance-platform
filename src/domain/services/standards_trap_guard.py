@@ -285,6 +285,16 @@ class TrapGuard:
     def edge_count(self) -> int:
         return len(self._pairs) + len(self._unique)
 
+    @property
+    def printed_clause_refs(self) -> tuple[str, ...]:
+        """Clause numbers printed on the imported alignment axis.
+
+        Empty when no edition is loaded. Catalogues must not invent rows here —
+        Int-W9 IMS Overview uses this for ISO columns only, and scheme axes
+        from ``standards_requirement_axis`` for CE/CHAS/UVDB/PM/….
+        """
+        return tuple(self._rows.keys())
+
     def covers_framework(self, framework: Any) -> bool:
         """True when the loaded edition carries at least one edge for this framework.
 

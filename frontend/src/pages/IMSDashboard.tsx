@@ -6,6 +6,7 @@ import {
   crossStandardMappingsApi,
   getApiErrorMessage,
   type IMSDashboardResponse,
+  type IMSCellOverview,
   type CrossStandardMappingRecord,
 } from '../api/client'
 import {
@@ -114,6 +115,29 @@ const complianceHubDestinations: ComplianceHubDestination[] = [
   },
 ]
 
+const OVERVIEW_FRAMEWORK_LABEL_KEYS: Record<string, string> = {
+  '9001': 'ims.overview.fw.9001',
+  '14001': 'ims.overview.fw.14001',
+  '45001': 'ims.overview.fw.45001',
+  '27001': 'ims.overview.fw.27001',
+  '22301': 'ims.overview.fw.22301',
+  ce: 'ims.overview.fw.ce',
+  cep: 'ims.overview.fw.cep',
+  chas: 'ims.overview.fw.chas',
+  ssip: 'ims.overview.fw.ssip',
+  iip: 'ims.overview.fw.iip',
+  uvdb: 'ims.overview.fw.uvdb',
+  pm: 'ims.overview.fw.pm',
+}
+
+const emptyCellTotals = {
+  covered: 0,
+  partial: 0,
+  gap: 0,
+  unknown: 0,
+  cells: 0,
+}
+
 export default function IMSDashboard() {
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -196,12 +220,11 @@ export default function IMSDashboard() {
   }, [section, fetchMappings, mappings.length, mappingsLoading])
 
   // ISMS domain metadata
-  const liveStandards = dashData?.standards ?? []
-  const overallCompliance = dashData?.overall_compliance ?? 0
+  const cellOverview: IMSCellOverview | null = dashData?.cell_overview ?? null
+  const cellTotals = cellOverview?.totals ?? emptyCellTotals
   const evidenceCoveragePct = dashData?.compliance_coverage?.coverage_percentage
-  const showDualMetrics = evidenceCoveragePct != null && !dashData?.compliance_coverage_error
   const ismsData = dashData?.isms ?? null
-  const trackedStandardCount = liveStandards.filter((standard) => !standard.setup_required).length
+  const trackedStandardCount = cellOverview?.tracked_count ?? 0
 
   const openComplianceHubDestination = (destination: ComplianceHubDestination) => {
     if (destination.path) {
@@ -248,8 +271,6 @@ export default function IMSDashboard() {
   const inProgressAudits = auditSchedule.filter((a) => a.status === 'in_progress').length
 
   const overviewKpis = useMemo(() => {
-    const controlStatus =
-      overallCompliance >= 80 ? 'good' : overallCompliance >= 50 ? 'warning' : 'critical'
     const metrics: {
       label: string
       value: number
@@ -258,10 +279,22 @@ export default function IMSDashboard() {
       status: 'good' | 'warning' | 'critical'
     }[] = [
       {
-        label: 'Standards tracked',
+        label: t('ims.overview.kpi.frameworks'),
         value: trackedStandardCount,
         unit: '',
         status: trackedStandardCount > 0 ? 'good' : 'warning',
+      },
+      {
+        label: t('ims.overview.kpi.covered_cells'),
+        value: cellTotals.covered,
+        unit: '',
+        status: cellTotals.covered > 0 ? 'good' : 'warning',
+      },
+      {
+        label: t('ims.overview.kpi.gap_cells'),
+        value: cellTotals.gap,
+        unit: '',
+        status: cellTotals.gap > 0 ? 'critical' : 'good',
       },
       {
         label: 'Open scheduled audits',
@@ -275,30 +308,24 @@ export default function IMSDashboard() {
         unit: '',
         status: inProgressAudits > 0 ? 'warning' : 'good',
       },
-      {
-        label: 'Control implementation',
-        value: Math.round(overallCompliance),
-        target: 100,
-        unit: '%',
-        status: controlStatus,
-      },
     ]
     if (evidenceCoveragePct != null && !dashData?.compliance_coverage_error) {
       metrics.push({
-        label: 'Evidence coverage',
+        label: t('ims.overview.kpi.iso_evidence_links'),
         value: Math.round(evidenceCoveragePct),
-        target: 100,
         unit: '%',
         status: evidenceCoveragePct >= 80 ? 'good' : evidenceCoveragePct >= 50 ? 'warning' : 'critical',
       })
     }
     return metrics
   }, [
+    cellTotals.covered,
+    cellTotals.gap,
     dashData?.compliance_coverage_error,
     evidenceCoveragePct,
     inProgressAudits,
     openScheduledAudits,
-    overallCompliance,
+    t,
     trackedStandardCount,
   ])
 
@@ -390,55 +417,65 @@ export default function IMSDashboard() {
         </div>
       )}
 
-      {/* Overall Compliance Banner — control % vs evidence % honesty when both are live */}
+      {/* Overall banner — cell counts, not a Control-table score */}
       <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-primary-foreground mb-1">
-              {t('ims.overall_compliance')}
+              {t('ims.overview.title')}
             </h2>
-            <p className="text-primary-foreground/80">{t('ims.across_standards')}</p>
+            <p className="text-primary-foreground/80">{t('ims.overview.subtitle')}</p>
           </div>
           {dashLoading ? (
-            <div className="text-5xl font-bold text-primary-foreground/50 animate-pulse">—%</div>
-          ) : showDualMetrics ? (
-            <div className="flex flex-col gap-4 sm:flex-row sm:gap-8">
-              <div className="text-right" data-testid="ims-metric-control-implementation">
-                <div
-                  className="text-4xl font-bold text-primary-foreground"
-                  aria-label={`${overallCompliance}% control implementation`}
-                >
-                  {Math.round(overallCompliance)}%
-                </div>
-                <div className="flex items-center justify-end gap-1 text-primary-foreground/80 mt-1 text-sm">
-                  <TrendingUp className="w-4 h-4" aria-hidden="true" />
-                  <span>Control implementation</span>
-                </div>
-              </div>
-              <div className="text-right" data-testid="ims-metric-evidence-coverage">
-                <div
-                  className="text-4xl font-bold text-primary-foreground"
-                  aria-label={`${evidenceCoveragePct}% evidence coverage`}
-                >
-                  {Math.round(evidenceCoveragePct)}%
-                </div>
-                <div className="flex items-center justify-end gap-1 text-primary-foreground/80 mt-1 text-sm">
-                  <Shield className="w-4 h-4" aria-hidden="true" />
-                  <span>Evidence coverage</span>
-                </div>
-              </div>
-            </div>
+            <div className="text-5xl font-bold text-primary-foreground/50 animate-pulse">—</div>
           ) : (
-            <div className="text-right">
-              <div
-                className="text-5xl font-bold text-primary-foreground"
-                aria-label={`${overallCompliance}% control implementation`}
-              >
-                {Math.round(overallCompliance)}%
+            <div
+              className="flex flex-wrap gap-6 justify-end"
+              data-testid="ims-metric-cell-overview"
+            >
+              <div className="text-right" data-testid="ims-metric-frameworks-tracked">
+                <div
+                  className="text-4xl font-bold text-primary-foreground"
+                  aria-label={`${trackedStandardCount} frameworks on the matrix`}
+                >
+                  {trackedStandardCount}
+                </div>
+                <div className="text-primary-foreground/80 mt-1 text-sm">
+                  {t('ims.overview.kpi.frameworks')}
+                </div>
               </div>
-              <div className="flex items-center justify-end gap-1 text-primary-foreground/80 mt-1">
-                <TrendingUp className="w-4 h-4" aria-hidden="true" />
-                <span>Control implementation — live from management system controls</span>
+              <div className="text-right" data-testid="ims-metric-cells-covered">
+                <div
+                  className="text-4xl font-bold text-primary-foreground"
+                  aria-label={`${cellTotals.covered} covered cells`}
+                >
+                  {cellTotals.covered}
+                </div>
+                <div className="text-primary-foreground/80 mt-1 text-sm">
+                  {t('ims.overview.covered')}
+                </div>
+              </div>
+              <div className="text-right" data-testid="ims-metric-cells-partial">
+                <div
+                  className="text-4xl font-bold text-primary-foreground"
+                  aria-label={`${cellTotals.partial} partial cells`}
+                >
+                  {cellTotals.partial}
+                </div>
+                <div className="text-primary-foreground/80 mt-1 text-sm">
+                  {t('ims.overview.partial')}
+                </div>
+              </div>
+              <div className="text-right" data-testid="ims-metric-cells-gap">
+                <div
+                  className="text-4xl font-bold text-primary-foreground"
+                  aria-label={`${cellTotals.gap} gap cells`}
+                >
+                  {cellTotals.gap}
+                </div>
+                <div className="text-primary-foreground/80 mt-1 text-sm">
+                  {t('ims.overview.gap')}
+                </div>
               </div>
             </div>
           )}
@@ -449,9 +486,13 @@ export default function IMSDashboard() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-foreground">Compliance hub</h2>
-          {!dashLoading && trackedStandardCount > 0 && (
-            <Badge variant="secondary" aria-label={`${trackedStandardCount} standards tracked`}>
-              {trackedStandardCount} standards tracked
+          {!dashLoading && (
+            <Badge
+              variant="secondary"
+              aria-label={`${trackedStandardCount} frameworks on the matrix`}
+              data-testid="ims-frameworks-tracked-badge"
+            >
+              {t('ims.overview.frameworks_tracked', { count: trackedStandardCount })}
             </Badge>
           )}
         </div>
@@ -632,6 +673,50 @@ export default function IMSDashboard() {
             </CardContent>
           </Card>
         </div>
+        {!dashLoading && cellOverview && (
+          <Card className="mt-6" data-testid="ims-overview-framework-meters">
+            <CardHeader>
+              <CardTitle>{t('ims.overview.per_framework')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{cellOverview.honesty}</p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-muted-foreground border-b border-border">
+                      <th className="py-2 pr-3 font-medium">{t('ims.overview.col.framework')}</th>
+                      <th className="py-2 pr-3 font-medium">{t('ims.overview.covered')}</th>
+                      <th className="py-2 pr-3 font-medium">{t('ims.overview.partial')}</th>
+                      <th className="py-2 pr-3 font-medium">{t('ims.overview.gap')}</th>
+                      <th className="py-2 pr-3 font-medium">{t('ims.overview.unknown')}</th>
+                      <th className="py-2 pr-3 font-medium">{t('ims.overview.certs')}</th>
+                      <th className="py-2 font-medium">{t('ims.overview.open_nc')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cellOverview.frameworks.map((row) => (
+                      <tr
+                        key={row.framework}
+                        className="border-b border-border last:border-0"
+                        data-testid={`ims-overview-fw-${row.framework}`}
+                      >
+                        <td className="py-2 pr-3 text-foreground">
+                          {t(OVERVIEW_FRAMEWORK_LABEL_KEYS[row.framework] ?? row.framework)}
+                        </td>
+                        <td className="py-2 pr-3">{row.covered}</td>
+                        <td className="py-2 pr-3">{row.partial}</td>
+                        <td className="py-2 pr-3">{row.gap}</td>
+                        <td className="py-2 pr-3">{row.unknown}</td>
+                        <td className="py-2 pr-3">{row.cert_count}</td>
+                        <td className="py-2">{row.open_nc_cells}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         </div>
       )}
 

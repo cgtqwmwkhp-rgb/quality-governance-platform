@@ -206,6 +206,82 @@ FRAMEWORK_ALIASES: dict[str, dict[str, Any]] = {
 #: Shelf scheme for the undifferentiated compliance certificate register.
 REGISTER_SHELF_SCHEME = "register"
 
+#: ISO columns IMS Overview meters from the imported alignment axis (not Control rows).
+ISO_OVERVIEW_FRAMEWORKS: tuple[str, ...] = ("9001", "14001", "45001", "27001", "22301")
+
+
+def ims_overview_axes(guard: TrapGuard) -> list[dict[str, Any]]:
+    """Which frameworks/clauses IMS Overview may paint.
+
+    ISO columns require an imported alignment edition that ``covers_framework``.
+    Scheme columns always use W5 catalogues (CE/CEP/CHAS/SSIP/IiP/UVDB/PM).
+    Never uses Control-table rows. Never paints ISO clause numbers onto CHAS.
+    """
+    from src.domain.services.standards_requirement_axis import SCHEME_AXIS_FRAMEWORKS, axis_rows
+
+    axes: list[dict[str, Any]] = []
+    alignment_clauses = [ref for ref in guard.printed_clause_refs if str(ref).strip()]
+    if guard.is_loaded and alignment_clauses:
+        for fw in ISO_OVERVIEW_FRAMEWORKS:
+            if guard.covers_framework(fw):
+                axes.append(
+                    {
+                        "framework": fw,
+                        "axis_source": "alignment",
+                        "clause_numbers": list(alignment_clauses),
+                    }
+                )
+    for fw in sorted(SCHEME_AXIS_FRAMEWORKS):
+        clauses = [str(row.get("clause_number") or "").strip() for row in axis_rows(fw)]
+        clauses = [c for c in clauses if c]
+        if clauses:
+            axes.append(
+                {
+                    "framework": fw,
+                    "axis_source": "requirement_catalogue",
+                    "clause_numbers": clauses,
+                }
+            )
+    return axes
+
+
+def roll_ims_framework_meter(
+    *,
+    framework: str,
+    axis_source: str,
+    cells: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Roll per-cell verdicts into counts. Never emits a fake percentage."""
+    covered = partial = gap = unknown = 0
+    cert_count = 0
+    open_nc_cells = 0
+    for cell in cells:
+        verdict = str(cell.get("verdict") or "unknown")
+        if verdict == "covered":
+            covered += 1
+        elif verdict == "partial":
+            partial += 1
+        elif verdict == "gap":
+            gap += 1
+        else:
+            unknown += 1
+        summary = cell.get("summary") or {}
+        cert_count = max(cert_count, int(summary.get("cert_count") or 0))
+        if int(summary.get("open_nc_count") or 0) > 0:
+            open_nc_cells += 1
+    return {
+        "framework": framework,
+        "axis_source": axis_source,
+        "cells": covered + partial + gap + unknown,
+        "covered": covered,
+        "partial": partial,
+        "gap": gap,
+        "unknown": unknown,
+        "cert_count": cert_count,
+        "open_nc_cells": open_nc_cells,
+    }
+
+
 #: Distinctive tokens that tie one ``Certificate.certificate_type`` (a free-text
 #: column, not an enum) to one matrix framework. Compared against the type with all
 #: punctuation removed, longest first, so ``cyber essentials plus`` cannot be read as
@@ -877,6 +953,51 @@ class StandardsCellAggregateService:
             "scan_truncated": bool(truncated_sources),
             "scan_truncated_sources": sorted(truncated_sources),
             "sor_note": "Read-model only — Audits/Actions/Risk/Cert shelf remain SoR.",
+        }
+
+    async def get_ims_framework_meters(self, tenant_id: int) -> dict[str, Any]:
+        """IMS Overview meters: per-framework cell counts, not Control-table %.
+
+        One TrapGuard load + the same ``_scan_cache`` as ``get_matrix_summary``.
+        ISO columns use printed alignment rows when the edition covers that
+        framework; scheme columns use W5 catalogues (including UVDB/PM).
+        Does not invent EXACT, flip ``covers_framework``, or persist CEL rows.
+        """
+        guard = await self.trap_guard(tenant_id)
+        axes = ims_overview_axes(guard)
+        frameworks_out: list[dict[str, Any]] = []
+        totals = {"covered": 0, "partial": 0, "gap": 0, "unknown": 0, "cells": 0}
+        truncated_sources: set[str] = set()
+        for axis in axes:
+            fw = axis["framework"]
+            cells: list[dict[str, Any]] = []
+            for clause in axis["clause_numbers"]:
+                cell = await self.get_cell(tenant_id=tenant_id, framework=fw, clause_number=clause)
+                truncated_sources.update(cell.scan_truncated_sources)
+                cells.append(
+                    {
+                        "verdict": cell.verdict,
+                        "summary": cell.summary,
+                        "scan_truncated": cell.scan_truncated,
+                    }
+                )
+            meter = roll_ims_framework_meter(
+                framework=fw,
+                axis_source=axis["axis_source"],
+                cells=cells,
+            )
+            frameworks_out.append(meter)
+            for key in ("covered", "partial", "gap", "unknown", "cells"):
+                totals[key] += int(meter[key])
+        return {
+            "tracked_count": len(frameworks_out),
+            "matrix_loaded": guard.is_loaded,
+            "matrix_version": guard.version_label,
+            "totals": totals,
+            "frameworks": frameworks_out,
+            "scan_truncated": bool(truncated_sources),
+            "scan_truncated_sources": sorted(truncated_sources),
+            "honesty": "Counts of matrix cells — not a compliance percentage.",
         }
 
     def _survives_trap_guard(
