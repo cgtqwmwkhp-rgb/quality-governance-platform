@@ -350,9 +350,7 @@ async def test_disabled_flag_and_missing_credentials_make_zero_http_calls() -> N
     transport, calls = _transport()
     client = EntraGraphClient(tenant_id=TENANT, client_id=CLIENT, client_secret=SECRET, transport=transport)
     try:
-        disabled = await resolve_attestation(
-            qgp_tenant_id=1, config=_cfg(enabled=False), graph_client=client
-        )
+        disabled = await resolve_attestation(qgp_tenant_id=1, config=_cfg(enabled=False), graph_client=client)
         assert disabled.status == "disabled"
         missing = await resolve_attestation(
             qgp_tenant_id=1,
@@ -386,9 +384,7 @@ async def test_no_secret_token_or_object_id_in_caplog_or_payload(caplog: pytest.
     policy = _users(qualifying_ca_policy(), excludeUsers=[BREAKGLASS])
     transport, _ = _transport(policies=[policy], defaults={"isEnabled": False})
     with caplog.at_level(logging.DEBUG):
-        posture = await _resolve_with_transport(
-            transport, breakglass_excluded_user_ids=frozenset({BREAKGLASS})
-        )
+        posture = await _resolve_with_transport(transport, breakglass_excluded_user_ids=frozenset({BREAKGLASS}))
     assert posture.status == "pass"
     serialised = str(posture.to_dict()) + caplog.text
     assert SECRET not in serialised

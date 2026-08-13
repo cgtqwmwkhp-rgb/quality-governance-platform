@@ -23,9 +23,7 @@ GRAPH_SCOPE = "https://graph.microsoft.com/.default"
 SECURITY_DEFAULTS_PATH = "/v1.0/policies/identitySecurityDefaultsEnforcementPolicy"
 CA_POLICIES_PATH = "/v1.0/identity/conditionalAccess/policies"
 MAX_POLICY_PAGES = 5
-_GUID_RE = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
+_GUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 _TOKEN_CACHE: dict[str, tuple[float, str]] = {}
 

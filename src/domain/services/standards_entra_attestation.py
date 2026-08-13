@@ -46,7 +46,9 @@ class EntraAttestationConfig:
                 getattr(settings, "entra_attestation_breakglass_excluded_user_ids", "")
             ),
             timeout_seconds=float(getattr(settings, "entra_attestation_timeout_seconds", 5.0) or 5.0),
-            cache_ttl_seconds=_clamp(int(getattr(settings, "entra_attestation_cache_ttl_seconds", 300) or 300), 60, 900),
+            cache_ttl_seconds=_clamp(
+                int(getattr(settings, "entra_attestation_cache_ttl_seconds", 300) or 300), 60, 900
+            ),
             error_cache_ttl_seconds=_clamp(
                 int(getattr(settings, "entra_attestation_error_cache_ttl_seconds", 60) or 60), 30, 900
             ),
@@ -222,8 +224,7 @@ def evaluate_posture(
 ) -> AttestationPosture:
     observed = datetime.now(timezone.utc).isoformat()
     qualifying = any(
-        policy_enforces_mfa_for_all(policy, breakglass_user_ids=breakglass_user_ids)
-        for policy in snapshot.policies
+        policy_enforces_mfa_for_all(policy, breakglass_user_ids=breakglass_user_ids) for policy in snapshot.policies
     )
     if qualifying:
         return AttestationPosture(

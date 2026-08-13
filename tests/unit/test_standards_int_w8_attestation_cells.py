@@ -166,9 +166,7 @@ async def test_cell_stays_partial_on_fail() -> None:
 @pytest.mark.asyncio
 async def test_cell_stays_partial_on_unavailable() -> None:
     rows = {"ComplianceEvidenceLink": [_cel("27001-a.8.5")]}
-    cell = await _service(rows, posture=UNAVAILABLE).get_cell(
-        tenant_id=1, framework="27001", clause_number="a.8.5"
-    )
+    cell = await _service(rows, posture=UNAVAILABLE).get_cell(tenant_id=1, framework="27001", clause_number="a.8.5")
     assert cell.verdict == "partial"
     assert "tech_gap_attestation_missing" in cell.reasons
     assert cell.attestation["status"] == "unavailable"
