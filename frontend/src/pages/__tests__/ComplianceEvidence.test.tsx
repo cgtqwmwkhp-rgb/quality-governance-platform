@@ -403,12 +403,15 @@ describe('ComplianceEvidence', () => {
     )
 
     await screen.findByText('Standards Evidence Center')
-    fireEvent.click(screen.getByTitle('Download full ISO audit evidence pack'))
+    fireEvent.click(
+      screen.getByTitle('Download audit pack with evidence, findings, actions, and certs appendix'),
+    )
 
     await waitFor(() => {
       expect(mockDownloadAuditPack).toHaveBeenCalledWith({
         includeNonconformity: false,
         includeSoa: true,
+        frameworks: expect.arrayContaining(['9001', '14001', '22301', 'chas', 'uvdb']),
       })
     })
     await waitFor(() => {

@@ -615,6 +615,7 @@ export default function ComplianceEvidence() {
       const response = await complianceApi.downloadAuditPack({
         includeNonconformity: false,
         includeSoa: true,
+        frameworks: scoreCardFrameworks.map((fw) => fw.id),
       })
       const pack = response.data
       const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' })
@@ -884,7 +885,11 @@ export default function ComplianceEvidence() {
             )}
             Annex A SoA
           </Button>
-          <Button variant="outline" onClick={handleDownloadAuditPack} title="Download full ISO audit evidence pack">
+          <Button
+            variant="outline"
+            onClick={handleDownloadAuditPack}
+            title="Download audit pack with evidence, findings, actions, and certs appendix"
+          >
             <Download className="w-4 h-4 mr-2" aria-hidden="true" />
             Audit Pack
           </Button>
