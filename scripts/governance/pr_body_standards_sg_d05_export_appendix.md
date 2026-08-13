@@ -71,7 +71,7 @@
 
 ## Gate checklist
 - [x] **Gate 0:** Scope lock + AC + Change Ledger (this doc); #1748 LIVE confirmed
-- [ ] **Gate 1:** Focused tests green locally
+- [x] **Gate 1:** Focused tests green locally
 - [ ] **Gate 2:** CI green on tip
 - [ ] **Gate 3:** STG tip verify
 - [ ] **Gate 4:** PROD tip verify
