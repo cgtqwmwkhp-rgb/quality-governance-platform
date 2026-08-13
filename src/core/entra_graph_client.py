@@ -86,7 +86,10 @@ class EntraGraphClient:
         self._client_secret = client_secret
         self._timeout = httpx.Timeout(timeout_seconds)
         self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(timeout=self._timeout, transport=transport)
+        client_kwargs: dict[str, Any] = {"timeout": self._timeout}
+        if transport is not None:
+            client_kwargs["transport"] = transport
+        self._client = client or httpx.AsyncClient(**client_kwargs)
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -131,10 +134,12 @@ class EntraGraphClient:
         expires_in = body.get("expires_in") if isinstance(body, dict) else None
         if not isinstance(token, str) or not token:
             raise EntraGraphUnavailable("token_error")
-        try:
-            ttl = int(expires_in) - 300
-        except (TypeError, ValueError):
-            ttl = 300
+        ttl = 300
+        if isinstance(expires_in, (int, float, str)):
+            try:
+                ttl = int(expires_in) - 300
+            except (TypeError, ValueError):
+                ttl = 300
         if ttl > 0:
             _TOKEN_CACHE[self.client_id] = (now + ttl, token)
         return token
