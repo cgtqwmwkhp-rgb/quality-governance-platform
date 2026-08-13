@@ -16,6 +16,7 @@
 | SG-D-04-01 | Evidence workspace | Schedule deep-link only | + owner, days-to-due, notify band from Schedule SoR |
 | SG-D-04-02 | No matching obligation | Operator had to open Schedule to learn that | Honest empty copy; still a Schedule link |
 | SG-D-04-03 | Notify-before-surveillance | Reminder job already exists on Schedule | Display the same 60/30/7/overdue band; no second mailer |
+| SG-D-04-04 | Index gzip budget | 205 kB | 206 kB — shell i18n keys only; strip stays on lazy ComplianceEvidence chunk |
 
 ## 3) Compatibility & Data Safety
 - Frontend read of an existing GET. No schema, no writer.
@@ -35,6 +36,7 @@
 - [x] AC-03: Blank `owner_name` displays Unassigned; load failure does not crash the workspace.
 - [x] AC-04: D2 deep-link still opens `/compliance-schedule?clause=&framework=`.
 - [x] AC-05: No Alembic; no cell-aggregate fork; TrapGuard/ingest/`covers_framework`/Entra/D5 untouched.
+- [x] AC-05b: Index gzip ceiling 205→206 kB ledgered; UI not on the App shell.
 - [ ] AC-06: Hosted CI green; STG+PROD SUCCESS; STG health SHA = PROD health SHA = tip → LIVE / DONE.
 
 ## 5) Testing Evidence (link to runs)
