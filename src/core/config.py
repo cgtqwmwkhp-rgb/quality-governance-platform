@@ -198,6 +198,7 @@ class Settings(BaseSettings):
         logger.info("Configuration summary: genspark_configured=%s", genspark_configured)
         logger.info("Configuration summary: ai_provider=%s", ai_provider_effective)
         logger.info("Configuration summary: external_audit_import_enabled=%s", self.external_audit_import_enabled)
+        logger.info("Configuration summary: entra_attestation_enabled=%s", self.entra_attestation_enabled)
         logger.info("Configuration summary: cors_origin_count=%s", len(self.cors_origins))
 
     # Application
@@ -227,6 +228,18 @@ class Settings(BaseSettings):
     azure_client_id: str = ""
     azure_tenant_id: str = ""
     azure_ad_jwks_cache_ttl_seconds: int = 3600
+
+    # Int-W8: dedicated Entra MFA attestation reader. Fail-closed defaults.
+    # Do not reuse the login app registration — no fallback to azure_client_*.
+    entra_attestation_enabled: bool = False
+    entra_attestation_tenant_id: str = ""
+    entra_attestation_client_id: str = ""
+    entra_attestation_client_secret: str = ""
+    entra_attestation_qgp_tenant_ids: str = ""
+    entra_attestation_breakglass_excluded_user_ids: str = ""
+    entra_attestation_timeout_seconds: float = 5.0
+    entra_attestation_cache_ttl_seconds: int = 300
+    entra_attestation_error_cache_ttl_seconds: int = 60
 
     # Azure Blob Storage
     azure_storage_connection_string: str = ""

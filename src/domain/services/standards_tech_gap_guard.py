@@ -17,13 +17,16 @@ can cover them.
 
 The honest part
 --------------
-This platform has no source of technical attestation today. There is no Conditional
-Access reader, no MFA enrolment report and no vulnerability scan import, so
-:data:`TECHNICAL_ATTESTATION_ENTITY_TYPES` is empty and every assessment here
-returns ``covered=False`` with ``stub=True``. That is the accurate answer, and it
-is recorded as a stub rather than as a passing check so it cannot be mistaken for
-one. When an attestation source lands, it is added to that set and these
-requirements become answerable rather than merely blocked.
+A document still cannot cover these cells. Attestation kinds travel on a separate
+typed channel (``attestations=``) supplied at read time by the Entra MFA reader —
+never from ``ComplianceEvidenceLink.entity_type``, which is operator-writable.
+:data:`TECHNICAL_ATTESTATION_ENTITY_TYPES` therefore stays empty: putting a kind
+name in that set would let anyone type it onto a CEL row and turn A.8.5 green.
+
+Cyber Essentials Plus is a witnessed hands-on test. Graph is not a Plus
+assessment, so ``cep`` is short-circuited before any kind mapping. Cyber
+Essentials ``user_access_control`` needs three things; MFA is only one of them,
+so Entra MFA can partially attest that cell and never cover it.
 
 Matrix ids
 ----------
@@ -58,10 +61,41 @@ DOCUMENT_ONLY_ENTITY_TYPES: frozenset[str] = frozenset(
     }
 )
 
-#: Entity types that read configuration from the system under test. Empty today —
-#: see the module docstring. Adding a type here is what makes a technical
-#: requirement answerable, and should come with the reader that populates it.
+#: Entity types that would read configuration from the system under test.
+#: Stays empty on purpose — see the module docstring. Covering attestations
+#: are passed as ``assess(..., attestations=)``, not as CEL entity types.
 TECHNICAL_ATTESTATION_ENTITY_TYPES: frozenset[str] = frozenset()
+
+#: Framework ids that a Graph/IdP read can never cover. Cyber Essentials Plus
+#: tests MFA by hand; adding a kind that lists ``cep`` must still fail closed.
+HANDS_ON_TEST_FRAMEWORKS: frozenset[str] = frozenset({CYBER_ESSENTIALS_PLUS_ID})
+
+CEP_WITNESSED_TEST_REASON = "cyber_essentials_plus_requires_witnessed_test"
+
+
+@dataclass(frozen=True)
+class TechnicalAttestationKind:
+    """What one live attestation kind is allowed to say about a requirement."""
+
+    kind: str
+    covers_requirement_keys: tuple[str, ...]
+    covers_frameworks: tuple[str, ...]
+    partially_covers_requirement_keys: tuple[str, ...]
+    unattested_elements: tuple[str, ...] = ()
+
+
+TECHNICAL_ATTESTATION_KINDS: dict[str, TechnicalAttestationKind] = {
+    "entra_mfa": TechnicalAttestationKind(
+        kind="entra_mfa",
+        covers_requirement_keys=("27001-a.8.5",),
+        covers_frameworks=("27001",),
+        partially_covers_requirement_keys=(f"{CYBER_ESSENTIALS_ID}-user_access_control",),
+        unattested_elements=(
+            "individually assigned accounts",
+            "separated administrative accounts",
+        ),
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -124,13 +158,17 @@ TECHNICAL_REQUIREMENTS: dict[str, TechnicalRequirement] = {
 class TechGapDecision:
     """Whether the offered evidence can cover a technical requirement."""
 
-    #: True only when a technical attestation was offered. Never true today.
+    #: True only when a typed attestation kind covers this cell's requirement.
     covered: bool
-    #: True when the requirement is technical but no attestation source exists.
+    #: True when the requirement is technical but is not fully attested.
     stub: bool
     requirement: Optional[TechnicalRequirement]
     reason: str
     document_only_entity_types: tuple[str, ...] = ()
+    #: ``pass`` / ``partial`` when a live kind was considered; otherwise None.
+    attestation_status: Optional[str] = None
+    attested_kind: Optional[str] = None
+    unattested_elements: tuple[str, ...] = ()
 
     @property
     def is_technical(self) -> bool:
@@ -144,6 +182,9 @@ class TechGapDecision:
             "reason": self.reason,
             "requirement": self.requirement.to_dict() if self.requirement else None,
             "document_only_entity_types": list(self.document_only_entity_types),
+            "attestation_status": self.attestation_status,
+            "attested_kind": self.attested_kind,
+            "unattested_elements": list(self.unattested_elements),
         }
 
 
@@ -170,14 +211,20 @@ def assess(
     framework: str,
     clause_number: str,
     entity_types: Iterable[str] = (),
+    attestations: Iterable[str] = (),
 ) -> TechGapDecision:
     """Can the offered evidence types cover this cell?
 
     Non-technical cells are returned untouched (``is_technical`` False) so callers
     can apply this to every cell without it having an opinion about most of them.
+
+    ``entity_types`` is the CEL-derived, document-only channel. ``attestations``
+    is a tuple of kind names from the live reader — never from the database.
     """
     requirement = requirement_for(framework, clause_number)
     offered = tuple(sorted({str(t).strip().lower() for t in entity_types if str(t).strip()}))
+    documents = tuple(t for t in offered if t in DOCUMENT_ONLY_ENTITY_TYPES)
+    cell_fw = (framework or "").strip().lower()
 
     if requirement is None:
         return TechGapDecision(
@@ -187,16 +234,48 @@ def assess(
             reason="not a technical requirement — TechGapGuard has no opinion",
         )
 
-    attestations = tuple(t for t in offered if t in TECHNICAL_ATTESTATION_ENTITY_TYPES)
-    documents = tuple(t for t in offered if t in DOCUMENT_ONLY_ENTITY_TYPES)
-
-    if attestations:
+    if cell_fw in HANDS_ON_TEST_FRAMEWORKS:
         return TechGapDecision(
-            covered=True,
-            stub=False,
+            covered=False,
+            stub=True,
             requirement=requirement,
-            reason=f"technical attestation offered ({', '.join(attestations)})",
+            reason=CEP_WITNESSED_TEST_REASON,
             document_only_entity_types=documents,
+        )
+
+    offered_kinds = tuple(str(kind).strip().lower() for kind in attestations if str(kind).strip())
+    partial: Optional[TechnicalAttestationKind] = None
+    for kind_name in offered_kinds:
+        spec = TECHNICAL_ATTESTATION_KINDS.get(kind_name)
+        if spec is None:
+            continue
+        if requirement.key in spec.covers_requirement_keys and cell_fw in spec.covers_frameworks:
+            return TechGapDecision(
+                covered=True,
+                stub=False,
+                requirement=requirement,
+                reason=f"technical attestation offered ({spec.kind})",
+                document_only_entity_types=documents,
+                attestation_status="pass",
+                attested_kind=spec.kind,
+            )
+        if requirement.key in spec.partially_covers_requirement_keys:
+            partial = spec
+
+    if partial is not None:
+        unattested = partial.unattested_elements
+        return TechGapDecision(
+            covered=False,
+            stub=True,
+            requirement=requirement,
+            reason=(
+                f"{requirement.title} is partially attested ({partial.kind}): MFA enforced. "
+                f"Not attested: {', '.join(unattested)}."
+            ),
+            document_only_entity_types=documents,
+            attestation_status="partial",
+            attested_kind=partial.kind,
+            unattested_elements=unattested,
         )
 
     if documents:

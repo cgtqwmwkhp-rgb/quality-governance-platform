@@ -48,6 +48,11 @@ from src.domain.models.risk import Risk
 from src.domain.models.risk_register import EnterpriseRisk, EnterpriseRiskControl
 from src.domain.services import standards_tech_gap_guard as tech_gap_guard
 from src.domain.services.assurance_cert_shelf_service import AssuranceCertShelfService
+from src.domain.services.standards_entra_attestation import (
+    AttestationPosture,
+    EntraAttestationConfig,
+    resolve_attestation,
+)
 from src.domain.services.iso_compliance_service import (
     OPERATIONAL_SIGNAL_TYPES,
     counts_toward_compliance_coverage,
@@ -528,9 +533,12 @@ class CellAggregateResult:
     scan_truncated_sources: list[str] = field(default_factory=list)
     #: Int-W5 additive axis metadata — never changes verdicts.
     axis: dict[str, Any] = field(default_factory=dict)
+    #: Int-W8: Entra MFA posture. Empty on non-technical cells so those payloads
+    #: stay byte-identical to the previous tip.
+    attestation: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "framework": self.framework,
             "clause_number": self.clause_number,
             "catalogue_keys": self.catalogue_keys,
@@ -553,6 +561,9 @@ class CellAggregateResult:
             "axis": self.axis,
             "sor_note": "Audits, Actions, Risk Register, Cert Shelf, and External Audit Records remain SoR — this is a read-model join only.",
         }
+        if self.attestation:
+            payload["attestation"] = self.attestation
+        return payload
 
 
 def survives_trap_guard(
@@ -600,12 +611,27 @@ class StandardsCellAggregateService:
         self._trap_guard = trap_guard
         self._shelf_cache: dict[int, list[dict[str, Any]]] = {}
         self._scan_cache: dict[tuple[int, str], list[Any]] = {}
+        self._attestation_cache: dict[int, AttestationPosture] = {}
 
     async def trap_guard(self, tenant_id: int) -> TrapGuard:
         """The tenant's alignment snapshot, loaded once per service instance."""
         if self._trap_guard is None:
             self._trap_guard = await TrapGuard.for_tenant(self.db, tenant_id)
         return self._trap_guard
+
+    async def _attestation(self, tenant_id: int) -> AttestationPosture:
+        """Resolve Entra MFA posture once per service instance (matrix batch)."""
+        cached = self._attestation_cache.get(tenant_id)
+        if cached is not None:
+            return cached
+        from src.core.config import settings
+
+        posture = await resolve_attestation(
+            qgp_tenant_id=tenant_id,
+            config=EntraAttestationConfig.from_settings(settings),
+        )
+        self._attestation_cache[tenant_id] = posture
+        return posture
 
     def catalogue_keys_for(self, framework: str, clause_number: str) -> list[str]:
         keys = sorted(clause_match_keys(framework, clause_number))
@@ -714,12 +740,17 @@ class StandardsCellAggregateService:
 
         # PR-C TechGapGuard: a technical control cannot be closed by a document.
         # Applied after the PR-B verdict so it can only ever tighten it.
+        # Int-W8: live Entra kinds arrive on ``attestations=``, never from CEL.
+        requirement = tech_gap_guard.requirement_for(fw, clause)
+        posture = await self._attestation(tenant_id) if requirement else None
+        offered_kinds = posture.kinds if posture is not None and posture.status == "pass" else ()
         tech_gap = tech_gap_guard.assess(
             framework=fw,
             clause_number=clause,
             entity_types=[
                 str(entity_type) for entity_type in (e.get("entity_type") for e in conformance) if entity_type
             ],
+            attestations=offered_kinds,
         )
         if tech_gap.is_technical and not tech_gap.covered and verdict_info["verdict"] == "covered":
             verdict_info["verdict"] = "partial"
@@ -804,6 +835,7 @@ class StandardsCellAggregateService:
             scan_truncated=bool(truncated),
             scan_truncated_sources=sorted(truncated),
             axis=axis_block,
+            attestation=posture.to_dict() if posture is not None else {},
         )
 
     async def get_matrix_summary(
@@ -822,21 +854,22 @@ class StandardsCellAggregateService:
             for clause in clause_numbers:
                 cell = await self.get_cell(tenant_id=tenant_id, framework=fw, clause_number=clause)
                 truncated_sources.update(cell.scan_truncated_sources)
-                cells.append(
-                    {
-                        "framework": cell.framework,
-                        "clause_number": cell.clause_number,
-                        "verdict": cell.verdict,
-                        "cover_blocked": cell.cover_blocked,
-                        "recurrence_red_flag": cell.recurrence_red_flag,
-                        "reasons": cell.reasons,
-                        "summary": cell.summary,
-                        "alignment": cell.alignment,
-                        "tech_gap": cell.tech_gap,
-                        "scan_truncated": cell.scan_truncated,
-                        "axis": cell.axis,
-                    }
-                )
+                cell_payload: dict[str, Any] = {
+                    "framework": cell.framework,
+                    "clause_number": cell.clause_number,
+                    "verdict": cell.verdict,
+                    "cover_blocked": cell.cover_blocked,
+                    "recurrence_red_flag": cell.recurrence_red_flag,
+                    "reasons": cell.reasons,
+                    "summary": cell.summary,
+                    "alignment": cell.alignment,
+                    "tech_gap": cell.tech_gap,
+                    "scan_truncated": cell.scan_truncated,
+                    "axis": cell.axis,
+                }
+                if cell.attestation:
+                    cell_payload["attestation"] = cell.attestation
+                cells.append(cell_payload)
         return {
             "cells": cells,
             "matrix_version": guard.version_label,

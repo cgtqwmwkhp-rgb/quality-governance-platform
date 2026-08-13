@@ -26,6 +26,9 @@ export interface StandardsCellHoverPreviewProps {
   isTrapRow?: boolean
   /** PR-C: technical control with no attestation source — cannot be covered by a PDF. */
   techGapStub?: boolean
+  /** Int-W8: Entra MFA reader status (`pass` / `fail` only render a badge). */
+  attestationStatus?: string | null
+  attestationObservedAt?: string | null
   /** W4: a source hit its read cap, so the counts behind this cell are a floor. */
   scanTruncated?: boolean
   className?: string
@@ -56,6 +59,8 @@ export function StandardsCellHoverPreview({
   alignmentVerdict = null,
   isTrapRow = false,
   techGapStub = false,
+  attestationStatus = null,
+  attestationObservedAt = null,
   scanTruncated = false,
   className,
 }: StandardsCellHoverPreviewProps) {
@@ -122,6 +127,20 @@ export function StandardsCellHoverPreview({
             })}
           </Badge>
         ) : null}
+        {attestationStatus === 'pass' ? (
+          <Badge variant="outline" className="text-xs" data-testid="standards-cell-hover-attestation-pass">
+            {t('compliance.standards_matrix.attestation_pass_badge', {
+              defaultValue: 'MFA attested (Entra)',
+            })}
+          </Badge>
+        ) : null}
+        {attestationStatus === 'fail' ? (
+          <Badge variant="destructive" className="text-xs" data-testid="standards-cell-hover-attestation-fail">
+            {t('compliance.standards_matrix.attestation_fail_badge', {
+              defaultValue: 'MFA not enforced',
+            })}
+          </Badge>
+        ) : null}
         {isStub ? (
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
             {t('compliance.standards_matrix.stub_badge', { defaultValue: 'PR-B stub' })}
@@ -132,6 +151,14 @@ export function StandardsCellHoverPreview({
           </span>
         )}
       </div>
+      {attestationObservedAt && (attestationStatus === 'pass' || attestationStatus === 'fail') ? (
+        <p className="text-[10px] text-muted-foreground" data-testid="standards-cell-hover-attestation-as-of">
+          {t('compliance.standards_matrix.attestation_as_of', {
+            defaultValue: 'Read {{timestamp}}',
+            timestamp: attestationObservedAt,
+          })}
+        </p>
+      ) : null}
       <dl className="grid gap-1 text-xs text-muted-foreground">
         <div className="flex justify-between gap-3">
           <dt>{t('compliance.standards_matrix.hover.top_evidence', { defaultValue: 'Top evidence' })}</dt>
