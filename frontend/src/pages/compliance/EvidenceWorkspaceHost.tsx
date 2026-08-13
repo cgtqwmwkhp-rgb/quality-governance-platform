@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { X } from 'lucide-react'
+import { ArrowUpRight, X } from 'lucide-react'
 import { Badge, Button, Card, CardContent } from '../../components/ui'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/Tabs'
 import { EvidencePanelSlot } from './workspace/EvidencePanelSlot'
@@ -12,6 +13,7 @@ import { ExactShareBanner } from './workspace/ExactShareBanner'
 import { useStandardsCellAggregate } from './workspace/useStandardsCellAggregate'
 import type { FrameworkId } from './standardsMatrixFilters'
 import { STANDARDS_MATRIX_FRAMEWORKS } from './standardsMatrixFilters'
+import { scheduleProgrammeHref } from './scheduleProgrammeContext'
 
 export type WorkspaceTabId = 'evidence' | 'audits' | 'actions' | 'risks' | 'certs'
 
@@ -82,6 +84,19 @@ export function EvidenceWorkspaceHost({ selection, onClose }: EvidenceWorkspaceH
                 ) : null}
               </div>
             ) : null}
+            <div className="mt-3">
+              <Button variant="outline" size="sm" asChild>
+                <Link
+                  to={scheduleProgrammeHref(selection.frameworkId, selection.clauseNumber)}
+                  data-testid="workspace-deep-link-schedule"
+                >
+                  {t('compliance.standards_workspace.open_schedule', {
+                    defaultValue: 'Open Compliance Schedule',
+                  })}
+                  <ArrowUpRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" />
+                </Link>
+              </Button>
+            </div>
           </div>
           <Button
             type="button"
