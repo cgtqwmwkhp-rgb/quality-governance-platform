@@ -119,26 +119,7 @@ def _lower_set(values: Iterable[Any]) -> set[str]:
     return {str(item).strip().lower() for item in values if str(item).strip()}
 
 
-def policy_enforces_mfa_for_all(
-    policy: dict[str, Any],
-    *,
-    breakglass_user_ids: frozenset[str] = frozenset(),
-) -> bool:
-    """True only when every required field is present and conservative.
-
-    Missing, null, or unrecognised fields disqualify the policy. Ambiguous
-    means not enforced.
-    """
-    if not isinstance(policy, dict):
-        return False
-    if str(policy.get("state") or "").strip().lower() != "enabled":
-        return False
-
-    conditions = policy.get("conditions")
-    if not isinstance(conditions, dict):
-        return False
-
-    users = conditions.get("users")
+def _users_qualify(users: Any, *, breakglass_user_ids: frozenset[str]) -> bool:
     if not isinstance(users, dict):
         return False
     include_users = _as_list(users.get("includeUsers"))
@@ -155,10 +136,10 @@ def policy_enforces_mfa_for_all(
     for excluded in exclude_users:
         if str(excluded).strip().lower() not in allowed:
             return False
-    if users.get("excludeGuestsOrExternalUsers") is not None:
-        return False
+    return users.get("excludeGuestsOrExternalUsers") is None
 
-    applications = conditions.get("applications")
+
+def _applications_qualify(applications: Any) -> bool:
     if not isinstance(applications, dict):
         return False
     include_apps = _as_list(applications.get("includeApplications"))
@@ -169,34 +150,41 @@ def policy_enforces_mfa_for_all(
         return False
     if exclude_apps is None or include_actions is None or include_auth_ctx is None:
         return False
-    if exclude_apps or include_actions or include_auth_ctx:
-        return False
+    return not (exclude_apps or include_actions or include_auth_ctx)
 
+
+def _locations_qualify(locations: Any) -> bool:
+    if locations is None:
+        return True
+    if not isinstance(locations, dict):
+        return False
+    include_locations = _as_list(locations.get("includeLocations"))
+    exclude_locations = _as_list(locations.get("excludeLocations"))
+    if include_locations is None or exclude_locations is None:
+        return False
+    return include_locations == ["All"] and not exclude_locations
+
+
+def _conditions_qualify(conditions: dict[str, Any], *, breakglass_user_ids: frozenset[str]) -> bool:
+    if not _users_qualify(conditions.get("users"), breakglass_user_ids=breakglass_user_ids):
+        return False
+    if not _applications_qualify(conditions.get("applications")):
+        return False
     client_apps = _as_list(conditions.get("clientAppTypes"))
     if client_apps is None or _lower_set(client_apps) != {"all"}:
         return False
     if conditions.get("platforms") is not None:
         return False
-
-    locations = conditions.get("locations")
-    if locations is not None:
-        if not isinstance(locations, dict):
-            return False
-        include_locations = _as_list(locations.get("includeLocations"))
-        exclude_locations = _as_list(locations.get("excludeLocations"))
-        if include_locations is None or exclude_locations is None:
-            return False
-        if include_locations != ["All"] or exclude_locations:
-            return False
-
+    if not _locations_qualify(conditions.get("locations")):
+        return False
     sign_in_risk = _as_list(conditions.get("signInRiskLevels"))
     user_risk = _as_list(conditions.get("userRiskLevels"))
     if sign_in_risk is None or user_risk is None:
         return False
-    if sign_in_risk or user_risk:
-        return False
+    return not (sign_in_risk or user_risk)
 
-    grants = policy.get("grantControls")
+
+def _grant_controls_qualify(grants: Any) -> bool:
     if not isinstance(grants, dict):
         return False
     if grants.get("authenticationStrength") is not None:
@@ -215,6 +203,28 @@ def policy_enforces_mfa_for_all(
     if operator == "OR":
         return set(controls) == {"mfa"} and not custom_factors and not terms
     return False
+
+
+def policy_enforces_mfa_for_all(
+    policy: dict[str, Any],
+    *,
+    breakglass_user_ids: frozenset[str] = frozenset(),
+) -> bool:
+    """True only when every required field is present and conservative.
+
+    Missing, null, or unrecognised fields disqualify the policy. Ambiguous
+    means not enforced.
+    """
+    if not isinstance(policy, dict):
+        return False
+    if str(policy.get("state") or "").strip().lower() != "enabled":
+        return False
+    conditions = policy.get("conditions")
+    if not isinstance(conditions, dict):
+        return False
+    if not _conditions_qualify(conditions, breakglass_user_ids=breakglass_user_ids):
+        return False
+    return _grant_controls_qualify(policy.get("grantControls"))
 
 
 def evaluate_posture(
