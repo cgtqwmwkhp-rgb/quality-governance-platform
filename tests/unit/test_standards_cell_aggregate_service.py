@@ -5,7 +5,7 @@ number is not a claim about a framework the imported matrix has never carried, a
 an undifferentiated certificate register is not proof of anything in particular.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import pytest
@@ -36,6 +36,7 @@ from src.domain.services.standards_cell_aggregate_service import (
     framework_for_certificate,
     normalize_clause_token,
     requires_framed_tokens,
+    roll_framework_countdown,
     token_matches_clause,
 )
 from src.domain.services.standards_trap_guard import TrapGuard
@@ -296,6 +297,98 @@ def test_unmatched_shelf_items_are_never_counted_as_proof():
     assert count_proof_certs(certificates) == 2
 
 
+def test_pat_does_not_drive_iso_or_chas_countdown():
+    """SG-D-03: operational register items must not set matrix column days."""
+    today = date(2026, 8, 13)
+    rolled = roll_framework_countdown(
+        [
+            {
+                "scheme": "register",
+                "name": "PAT test 2026",
+                "metadata": {"certificate_type": "pat_testing"},
+                "expiry_date": date(2026, 8, 20),
+            }
+        ],
+        frameworks=["9001", "chas"],
+        today=today,
+    )
+    assert rolled["unmatched_on_shelf"] is True
+    assert rolled["frameworks"]["9001"] == {
+        "status": "none",
+        "next_expiry": None,
+        "days_remaining": None,
+        "name": None,
+    }
+    assert rolled["frameworks"]["chas"]["status"] == "none"
+    assert rolled["frameworks"]["chas"]["next_expiry"] is None
+
+
+def test_iso_9001_register_cert_sets_countdown_and_not_chas():
+    today = date(2026, 8, 13)
+    rolled = roll_framework_countdown(
+        [
+            {
+                "scheme": "register",
+                "name": "ISO 9001:2015 Certificate",
+                "metadata": {"certificate_type": "iso9001"},
+                "expiry_date": date(2026, 9, 1),
+            }
+        ],
+        frameworks=["9001", "chas"],
+        today=today,
+    )
+    assert rolled["unmatched_on_shelf"] is False
+    assert rolled["frameworks"]["9001"]["status"] == "due_soon"
+    assert rolled["frameworks"]["9001"]["days_remaining"] == 19
+    assert rolled["frameworks"]["9001"]["next_expiry"] == "2026-09-01"
+    assert rolled["frameworks"]["9001"]["name"] == "ISO 9001:2015 Certificate"
+    assert rolled["frameworks"]["chas"]["status"] == "none"
+    assert rolled["frameworks"]["chas"]["next_expiry"] is None
+
+
+def test_unmatched_register_item_does_not_set_next_expiry_on_any_column():
+    today = date(2026, 8, 13)
+    rolled = roll_framework_countdown(
+        [
+            {
+                "scheme": "register",
+                "name": "Employers liability",
+                "metadata": {"certificate_type": "insurance"},
+                "expiry_date": "2026-08-01",
+            },
+            {
+                "scheme": "planet_mark",
+                "name": "Planet Mark 2026",
+                "expiry_date": date(2026, 12, 1),
+            },
+        ],
+        frameworks=["9001", "pm"],
+        today=today,
+    )
+    assert rolled["unmatched_on_shelf"] is True
+    assert rolled["frameworks"]["9001"]["next_expiry"] is None
+    assert rolled["frameworks"]["pm"]["status"] == "current"
+    assert rolled["frameworks"]["pm"]["next_expiry"] == "2026-12-01"
+
+
+def test_expired_attributed_cert_paints_expired_not_due_soon():
+    today = date(2026, 8, 13)
+    rolled = roll_framework_countdown(
+        [
+            {
+                "scheme": "chas",
+                "name": "CHAS Premium",
+                "expiry_date": date(2026, 7, 1),
+            }
+        ],
+        frameworks=["chas", "9001"],
+        today=today,
+    )
+    assert rolled["frameworks"]["chas"]["status"] == "expired"
+    assert rolled["frameworks"]["chas"]["days_remaining"] == -43
+    assert rolled["frameworks"]["9001"]["status"] == "none"
+
+
 # ------------------------------------------------- get_cell over a stubbed session
 
 
@@ -472,3 +565,30 @@ async def test_matrix_summary_reports_truncation_for_the_whole_grid():
     assert summary["scan_truncated"] is True
     assert summary["scan_truncated_sources"] == ["evidence_links"]
     assert [cell["scan_truncated"] for cell in summary["cells"]] == [True, True]
+
+
+@pytest.mark.asyncio
+async def test_matrix_summary_attaches_framework_countdown_without_painting_pat_onto_iso():
+    shelf = [
+        {
+            "scheme": "register",
+            "name": "PAT test 2026",
+            "metadata": {"certificate_type": "pat_testing"},
+            "expiry_date": date(2026, 8, 20),
+        },
+        {
+            "scheme": "register",
+            "name": "ISO 9001 Certificate",
+            "metadata": {"certificate_type": "iso9001"},
+            "expiry_date": date(2026, 12, 1),
+        },
+    ]
+    summary = await _service(shelf=shelf).get_matrix_summary(
+        tenant_id=1, frameworks=["9001", "chas"], clause_numbers=["7.2"]
+    )
+    countdown = summary["framework_countdown"]
+    assert countdown["unmatched_on_shelf"] is True
+    assert countdown["frameworks"]["9001"]["name"] == "ISO 9001 Certificate"
+    assert countdown["frameworks"]["9001"]["next_expiry"] == "2026-12-01"
+    assert countdown["frameworks"]["chas"]["status"] == "none"
+    assert countdown["frameworks"]["chas"]["next_expiry"] is None
