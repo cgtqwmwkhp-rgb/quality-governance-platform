@@ -23,7 +23,8 @@ Scope of this step
 ------------------
 This module is behaviour-preserving: it is the logic that was inline in
 ``POST /compliance/evidence/link`` and ``DELETE /compliance/evidence/link/{id}``,
-moved without change. The remaining writers are listed in
+moved without change. Governed-knowledge ingest (PR-E4) now also writes through
+:func:`apply_ingest_mapping`. The remaining writers are listed in
 :data:`REMAINING_CEL_WRITERS` and are follow-up work — each one needs its own
 reading, and doing them all here would make this change unreviewable.
 """
@@ -61,10 +62,6 @@ REMAINING_CEL_WRITERS: dict[str, str] = {
         "Writes a link as part of audit-builder standard linking; constructs the "
         "row then hands it to the caller rather than adding it, so the signature "
         "here does not fit without changing that contract."
-    ),
-    "src/domain/services/governed_knowledge_service.py": (
-        "AI-proposed links from governed knowledge ingest. Must keep landing as "
-        "proposed, never confirmed — route once PR-E settles Library ingest AI."
     ),
     "src/domain/services/audit_service.py": (
         "Adds a link during audit completion. Needs the audit-completion "
@@ -317,6 +314,103 @@ async def create_evidence_links_if_absent(
         return LinkCreateIfAbsentResult(created=[], existing=live)
 
     return LinkCreateIfAbsentResult(created=created, existing=existing)
+
+
+def _is_human_confirmed(link: ComplianceEvidenceLink) -> bool:
+    if getattr(link, "confirmed_by_id", None) is not None:
+        return True
+    linked_by = getattr(link, "linked_by", None)
+    value = str(getattr(linked_by, "value", linked_by) or "").strip().lower()
+    return value == EvidenceLinkMethod.MANUAL.value
+
+
+async def apply_ingest_mapping(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    entity_type: str,
+    entity_id: str,
+    clause_id: str,
+    status: EvidenceLinkStatus,
+    auto_applied: bool,
+    actor_id: Optional[int] = None,
+    actor_email: Optional[str] = None,
+    scheme: Optional[str] = None,
+    confidence: Optional[float] = None,
+    rationale: Optional[str] = None,
+    title: Optional[str] = None,
+    signal_type: Optional[str] = None,
+    cover_kind: EvidenceCoverKind = EvidenceCoverKind.EVIDENCES,
+    commit: bool = False,
+) -> tuple[ComplianceEvidenceLink, bool]:
+    """Write one governed-knowledge mapping through the sole CEL writer.
+
+    PR-E gate already decided ``status`` / ``auto_applied``. This function does
+    not call ``evaluate()``. Human confirmer stamps on an *existing* MANUAL /
+    confirmed row are preserved (refresh confidence/rationale only). A newly
+    created row is never treated as human-confirmed.
+
+    ``commit`` defaults False so ingest stays inside the caller's transaction.
+    """
+    existing_result = await db.execute(
+        select(ComplianceEvidenceLink).where(
+            ComplianceEvidenceLink.deleted_at.is_(None),
+            ComplianceEvidenceLink.tenant_id == tenant_id,
+            ComplianceEvidenceLink.entity_type == entity_type,
+            ComplianceEvidenceLink.entity_id == entity_id,
+            ComplianceEvidenceLink.clause_id == clause_id,
+            ComplianceEvidenceLink.cover_kind == cover_kind,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+    is_new = existing is None
+    if existing is None:
+        link = ComplianceEvidenceLink(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            clause_id=clause_id,
+            cover_kind=cover_kind,
+            created_by_id=actor_id,
+            created_by_email=actor_email,
+        )
+        db.add(link)
+    else:
+        link = existing
+
+    human_preserved = (not is_new) and _is_human_confirmed(link)
+    if human_preserved:
+        link.scheme = scheme
+        link.confidence = confidence
+        link.rationale = rationale
+        if title and not link.title:
+            link.title = title
+    else:
+        link.scheme = scheme
+        link.confidence = confidence
+        link.rationale = rationale
+        link.title = title
+        link.status = status
+        link.auto_applied = auto_applied
+        link.linked_by = EvidenceLinkMethod.AI
+        if auto_applied or status != EvidenceLinkStatus.CONFIRMED:
+            link.confirmed_by_id = None
+            link.confirmed_at = None
+
+    if signal_type is not None:
+        link.signal_type = signal_type
+    elif entity_type == "document" and not link.signal_type:
+        link.signal_type = "evidence"
+
+    if entity_type == "document":
+        from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+        await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
+
+    if commit:
+        await db.commit()
+        await db.refresh(link)
+    return link, human_preserved
 
 
 async def soft_delete_evidence_link(
