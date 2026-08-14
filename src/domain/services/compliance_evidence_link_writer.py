@@ -362,9 +362,9 @@ async def apply_ingest_mapping(
             ComplianceEvidenceLink.cover_kind == cover_kind,
         )
     )
-    link = existing_result.scalar_one_or_none()
-    is_new = link is None
-    if is_new:
+    existing = existing_result.scalar_one_or_none()
+    is_new = existing is None
+    if existing is None:
         link = ComplianceEvidenceLink(
             tenant_id=tenant_id,
             entity_type=entity_type,
@@ -375,6 +375,8 @@ async def apply_ingest_mapping(
             created_by_email=actor_email,
         )
         db.add(link)
+    else:
+        link = existing
 
     human_preserved = (not is_new) and _is_human_confirmed(link)
     if human_preserved:
