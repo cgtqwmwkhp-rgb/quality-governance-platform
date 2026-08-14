@@ -714,9 +714,12 @@ async def export_audit_pack(
         organization_name=resolved_org,
     )
     pack["persisted_evidence_links"] = len(links)
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
     pack["standards_appendix"] = await build_standards_export_appendix(
         db,
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         frameworks=frameworks,
     )
 
