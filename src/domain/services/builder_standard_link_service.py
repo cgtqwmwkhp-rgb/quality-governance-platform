@@ -347,9 +347,7 @@ class BuilderStandardLinkService:
         confidence = float(link.get("confidence") or 0)
         if confidence <= 1.0:
             confidence = confidence * 100.0
-        status = (
-            EvidenceLinkStatus.REJECTED if decision == "reject" else EvidenceLinkStatus.CONFIRMED
-        )
+        status = EvidenceLinkStatus.REJECTED if decision == "reject" else EvidenceLinkStatus.CONFIRMED
         evidence_link, human_preserved = await apply_ingest_mapping(
             db,
             tenant_id=tenant_id,
@@ -369,9 +367,7 @@ class BuilderStandardLinkService:
         )
         if decision == "reject" and rationale and not human_preserved:
             note = f"Rejected: {rationale}"
-            evidence_link.notes = (
-                f"{evidence_link.notes}\n{note}".strip() if evidence_link.notes else note
-            )
+            evidence_link.notes = f"{evidence_link.notes}\n{note}".strip() if evidence_link.notes else note
         return evidence_link
 
 
