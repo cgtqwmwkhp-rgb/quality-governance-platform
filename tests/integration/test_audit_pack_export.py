@@ -13,7 +13,6 @@ from src.api.routes import compliance as compliance_routes
 from src.api.routes.compliance import export_audit_pack
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 
-
 STUB_APPENDIX = {
     "version": "sg-d05-1.0",
     "frameworks": ["9001"],
