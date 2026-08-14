@@ -303,62 +303,29 @@ class GovernedKnowledgeService:
             gate=decision,
         )
 
-        existing_result = await db.execute(
-            select(ComplianceEvidenceLink).where(
-                ComplianceEvidenceLink.deleted_at.is_(None),
-                ComplianceEvidenceLink.tenant_id == tenant_id,
-                ComplianceEvidenceLink.entity_type == entity_type,
-                ComplianceEvidenceLink.entity_id == entity_id,
-                ComplianceEvidenceLink.clause_id == mapping.clause_id,
-                ComplianceEvidenceLink.cover_kind == EvidenceCoverKind.EVIDENCES,
-            )
-        )
-        link = existing_result.scalar_one_or_none()
-        if link is None:
-            link = ComplianceEvidenceLink(
-                tenant_id=tenant_id,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                clause_id=mapping.clause_id,
-                cover_kind=EvidenceCoverKind.EVIDENCES,
-                created_by_id=getattr(user, "id", None),
-                created_by_email=getattr(user, "email", None),
-            )
-            db.add(link)
+        from src.domain.services.compliance_evidence_link_writer import apply_ingest_mapping
 
-        human_preserved = False
-        # Preserve human-confirmed / manual links: refresh confidence/rationale only.
-        if link.confirmed_by_id is not None or link.linked_by == EvidenceLinkMethod.MANUAL:
-            human_preserved = True
-            link.scheme = mapping.scheme
-            link.confidence = mapping.confidence
-            link.rationale = mapping.rationale
-            if mapping.title and not link.title:
-                link.title = mapping.title
+        resolved_signal = signal_type.value if signal_type is not None else None
+
+        link, human_preserved = await apply_ingest_mapping(
+            db,
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            clause_id=mapping.clause_id,
+            status=status,
+            auto_applied=auto_applied,
+            actor_id=getattr(user, "id", None),
+            actor_email=getattr(user, "email", None),
+            scheme=mapping.scheme,
+            confidence=mapping.confidence,
+            rationale=mapping.rationale,
+            title=mapping.title,
+            signal_type=resolved_signal,
+        )
+        if human_preserved:
             status = link.status or EvidenceLinkStatus.CONFIRMED
             auto_applied = False
-        else:
-            link.scheme = mapping.scheme
-            link.confidence = mapping.confidence
-            link.rationale = mapping.rationale
-            link.title = mapping.title
-            link.status = status
-            link.auto_applied = auto_applied
-            link.linked_by = EvidenceLinkMethod.AI
-            # D15: AI must never stamp a human confirmer. Clear only on machine paths.
-            if auto_applied or status != EvidenceLinkStatus.CONFIRMED:
-                link.confirmed_by_id = None
-                link.confirmed_at = None
-
-        if signal_type is not None:
-            link.signal_type = signal_type.value
-        elif entity_type == "document" and not link.signal_type:
-            link.signal_type = EvidenceSignalType.EVIDENCE.value
-
-        if entity_type == "document":
-            from src.domain.services.cel_version_pin import pin_evidence_link_document_version
-
-            await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
 
         await self._log_ai_decision(
             db,
