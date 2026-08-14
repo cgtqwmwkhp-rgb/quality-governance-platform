@@ -140,3 +140,10 @@ async def test_existing_registry_record_still_backfills_uvdb() -> None:
     assert result["status"] == "already_synced"
     assert result["uvdb_audit_id"] == 22
     assert db.execute.await_count == 2
+
+
+def test_promotion_service_has_no_inline_cel_constructor() -> None:
+    from pathlib import Path
+
+    source = Path("src/domain/services/external_audit_promotion_service.py").read_text()
+    assert "ComplianceEvidenceLink(" not in source

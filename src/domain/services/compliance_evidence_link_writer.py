@@ -23,11 +23,11 @@ Scope of this step
 ------------------
 This module is behaviour-preserving: it is the logic that was inline in
 ``POST /compliance/evidence/link`` and ``DELETE /compliance/evidence/link/{id}``,
-moved without change. Governed-knowledge ingest (PR-E4) and Audit Builder Map
-mirrors (PR-E5) now also write through :func:`apply_ingest_mapping`. The remaining
-writers are listed in :data:`REMAINING_CEL_WRITERS` and are follow-up work — each
-one needs its own reading, and doing them all here would make this change
-unreviewable.
+moved without change. Governed-knowledge ingest (PR-E4), Audit Builder Map
+mirrors (PR-E5), and external-audit promotion (PR-E6) now also write through this
+module. The remaining writers are listed in :data:`REMAINING_CEL_WRITERS` and are
+follow-up work — each one needs its own reading, and doing them all here would
+make this change unreviewable.
 """
 
 from __future__ import annotations
@@ -54,11 +54,6 @@ logger = logging.getLogger(__name__)
 #: be routed through here. Recorded rather than silently left, so the remaining
 #: consolidation is a visible list and not folklore.
 REMAINING_CEL_WRITERS: dict[str, str] = {
-    "src/domain/services/external_audit_promotion_service.py": (
-        "Two write sites (promotion of external audit findings and of their "
-        "clause coverage). Needs the promotion transaction boundary checked "
-        "before it can share this function's flush behaviour."
-    ),
     "src/domain/services/audit_service.py": (
         "Listed as a leftover constructor site. Confirm there is still a live "
         "ComplianceEvidenceLink construct in audit completion before routing; "
@@ -408,6 +403,62 @@ async def apply_ingest_mapping(
         await db.commit()
         await db.refresh(link)
     return link, human_preserved
+
+
+async def apply_promotion_mapping(
+    db: AsyncSession,
+    *,
+    tenant_id: Optional[int],
+    entity_type: str,
+    entity_id: str,
+    clause_id: str,
+    actor_id: Optional[int] = None,
+    title: Optional[str] = None,
+    notes: Optional[str] = None,
+    confidence: Optional[float] = None,
+    cover_kind: EvidenceCoverKind = EvidenceCoverKind.EVIDENCES,
+) -> ComplianceEvidenceLink:
+    """Write one external-audit promotion CEL row. Does not commit or flush.
+
+    Promotion looks up rows including soft-deleted ones so a re-promote can
+    revive the same PK (existing import tests). ``linked_by`` is AUTO. The
+    caller owns the transaction and flushes after the clause loop.
+    """
+    existing_result = await db.execute(
+        select(ComplianceEvidenceLink).where(
+            ComplianceEvidenceLink.tenant_id == tenant_id,
+            ComplianceEvidenceLink.entity_type == entity_type,
+            ComplianceEvidenceLink.entity_id == entity_id,
+            ComplianceEvidenceLink.clause_id == clause_id,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+    if existing is None:
+        link = ComplianceEvidenceLink(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            clause_id=clause_id,
+            cover_kind=cover_kind,
+            created_by_id=actor_id,
+        )
+        db.add(link)
+    else:
+        link = existing
+        link.deleted_at = None
+
+    link.linked_by = EvidenceLinkMethod.AUTO
+    link.confidence = confidence
+    link.title = title
+    if notes is not None:
+        link.notes = notes
+
+    if entity_type == "document":
+        from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+        await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
+
+    return link
 
 
 async def soft_delete_evidence_link(
