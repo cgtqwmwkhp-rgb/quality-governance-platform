@@ -15,13 +15,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.audit import AuditQuestion, AuditTemplate
-from src.domain.models.compliance_evidence import (
-    ComplianceEvidenceLink,
-    EvidenceLinkStatus,
-    EvidenceSignalType,
-)
-from src.domain.services.compliance_evidence_link_writer import apply_ingest_mapping
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkStatus, EvidenceSignalType
 from src.domain.models.governed_knowledge import AiDecisionLog
+from src.domain.services.compliance_evidence_link_writer import apply_ingest_mapping
 from src.domain.services.governed_knowledge_service import GovernedKnowledgeService, SchemeMapping
 
 logger = logging.getLogger(__name__)
