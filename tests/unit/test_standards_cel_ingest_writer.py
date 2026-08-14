@@ -9,7 +9,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.domain.models.compliance_evidence import EvidenceCoverKind, EvidenceLinkMethod, EvidenceLinkStatus
-from src.domain.services.compliance_evidence_link_writer import apply_ingest_mapping, remaining_writer_report
+from src.domain.services.compliance_evidence_link_writer import (
+    apply_ingest_mapping,
+    apply_promotion_mapping,
+    remaining_writer_report,
+)
 
 
 class _ScalarResult:
@@ -104,5 +108,37 @@ def test_gks_is_no_longer_on_the_remaining_writer_list():
     paths = {row["path"] for row in remaining_writer_report()}
     assert "src/domain/services/governed_knowledge_service.py" not in paths
     assert "src/domain/services/builder_standard_link_service.py" not in paths
+    assert "src/domain/services/external_audit_promotion_service.py" not in paths
     assert "src/domain/services/audit_service.py" in paths
-    assert "src/domain/services/external_audit_promotion_service.py" in paths
+
+
+@pytest.mark.asyncio
+async def test_promotion_mapping_revives_soft_deleted_row():
+    deleted = SimpleNamespace(
+        deleted_at=datetime.now(timezone.utc),
+        linked_by=EvidenceLinkMethod.MANUAL,
+        confidence=None,
+        title="Old title",
+        notes=None,
+    )
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_ScalarResult(deleted))
+    db.add = MagicMock()
+
+    link = await apply_promotion_mapping(
+        db,
+        tenant_id=1,
+        entity_type="audit_finding",
+        entity_id="321",
+        clause_id="iso-9001-8.1",
+        actor_id=1,
+        title="Imported audit evidence for finding 321",
+        notes="Recovered evidence",
+        confidence=0.88,
+    )
+    assert link is deleted
+    assert deleted.deleted_at is None
+    assert deleted.linked_by == EvidenceLinkMethod.AUTO
+    assert deleted.confidence == 0.88
+    assert deleted.notes == "Recovered evidence"
+    db.add.assert_not_called()
