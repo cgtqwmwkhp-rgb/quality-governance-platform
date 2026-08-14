@@ -23,10 +23,11 @@ Scope of this step
 ------------------
 This module is behaviour-preserving: it is the logic that was inline in
 ``POST /compliance/evidence/link`` and ``DELETE /compliance/evidence/link/{id}``,
-moved without change. Governed-knowledge ingest (PR-E4) now also writes through
-:func:`apply_ingest_mapping`. The remaining writers are listed in
-:data:`REMAINING_CEL_WRITERS` and are follow-up work — each one needs its own
-reading, and doing them all here would make this change unreviewable.
+moved without change. Governed-knowledge ingest (PR-E4) and Audit Builder Map
+mirrors (PR-E5) now also write through :func:`apply_ingest_mapping`. The remaining
+writers are listed in :data:`REMAINING_CEL_WRITERS` and are follow-up work — each
+one needs its own reading, and doing them all here would make this change
+unreviewable.
 """
 
 from __future__ import annotations
@@ -58,14 +59,10 @@ REMAINING_CEL_WRITERS: dict[str, str] = {
         "clause coverage). Needs the promotion transaction boundary checked "
         "before it can share this function's flush behaviour."
     ),
-    "src/domain/services/builder_standard_link_service.py": (
-        "Writes a link as part of audit-builder standard linking; constructs the "
-        "row then hands it to the caller rather than adding it, so the signature "
-        "here does not fit without changing that contract."
-    ),
     "src/domain/services/audit_service.py": (
-        "Adds a link during audit completion. Needs the audit-completion "
-        "transaction reviewed alongside the finding writes it sits between."
+        "Listed as a leftover constructor site. Confirm there is still a live "
+        "ComplianceEvidenceLink construct in audit completion before routing; "
+        "do not drop this entry without a proof test."
     ),
 }
 

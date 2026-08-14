@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.domain.models.compliance_evidence import EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.services.builder_standard_link_service import (
     BuilderStandardLinkService,
     compute_coverage_from_questions,
@@ -124,7 +126,8 @@ async def test_decide_link_accept_persists_and_mirrors_evidence() -> None:
     )
     template = SimpleNamespace(id=7, tenant_id=1)
     db = AsyncMock()
-    db.scalar = AsyncMock(side_effect=[question, template, None])
+    db.scalar = AsyncMock(side_effect=[question, template])
+    db.execute = AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: None))
     db.add = MagicMock()
     db.flush = AsyncMock()
 
@@ -148,3 +151,69 @@ async def test_decide_link_accept_persists_and_mirrors_evidence() -> None:
     assert len(result["links"]) == 1
     assert question.regulatory_reference == "45001-8.2"
     assert db.add.call_count >= 2  # evidence + decision log
+    evidence = db.add.call_args_list[0].args[0]
+    assert evidence.linked_by == EvidenceLinkMethod.AI
+    assert evidence.status == EvidenceLinkStatus.CONFIRMED
+    assert evidence.auto_applied is False
+    assert evidence.confirmed_by_id is None
+    assert evidence.entity_type == "audit_question"
+
+
+@pytest.mark.asyncio
+async def test_decide_link_reject_does_not_wipe_human_confirmer() -> None:
+    question = SimpleNamespace(
+        id=42,
+        template_id=7,
+        assessor_guidance_json=None,
+        regulatory_reference=None,
+        guidance_notes=None,
+    )
+    template = SimpleNamespace(id=7, tenant_id=1)
+    human = SimpleNamespace(
+        confirmed_by_id=42,
+        confirmed_at=datetime.now(timezone.utc),
+        linked_by=EvidenceLinkMethod.MANUAL,
+        status=EvidenceLinkStatus.CONFIRMED,
+        auto_applied=False,
+        title="Human title",
+        scheme="iso",
+        confidence=100.0,
+        rationale="operator",
+        signal_type="evidence",
+        notes=None,
+        clause_id="45001-8.2",
+    )
+    db = AsyncMock()
+    db.scalar = AsyncMock(side_effect=[question, template])
+    db.execute = AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: human))
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+
+    svc = BuilderStandardLinkService()
+    await svc.decide_link(
+        db,
+        question_id=42,
+        tenant_id=1,
+        user=SimpleNamespace(id=9, email="a@example.com"),
+        decision="reject",
+        rationale="not this clause",
+        link={
+            "id": "sug_1",
+            "scheme": "ISO",
+            "refId": "45001-8.2",
+            "label": "Emergency",
+            "confidence": 0.4,
+        },
+    )
+    assert human.confirmed_by_id == 42
+    assert human.status == EvidenceLinkStatus.CONFIRMED
+    assert human.linked_by == EvidenceLinkMethod.MANUAL
+    assert human.notes is None
+    db.add.assert_called_once()  # decision log only
+
+
+def test_builder_service_has_no_inline_cel_constructor() -> None:
+    from pathlib import Path
+
+    source = Path("src/domain/services/builder_standard_link_service.py").read_text()
+    assert "ComplianceEvidenceLink(" not in source
