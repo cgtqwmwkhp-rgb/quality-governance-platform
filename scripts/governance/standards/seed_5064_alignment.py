@@ -66,6 +66,16 @@ async def _run(*, tenant_id: int, payload_path: Optional[Path], dry_run: bool) -
             return
 
         result = await service.apply(tenant_id=tenant_id, payload=payload)
+        from src.domain.services.standards_matrix_rescore_service import maybe_rescore_after_apply
+
+        rescore = await maybe_rescore_after_apply(
+            db,
+            tenant_id=tenant_id,
+            created=result.created,
+            reactivated=result.reactivated,
+            matrix_version_id=result.matrix_version_id,
+            matrix_version_label=result.version_label,
+        )
         await db.commit()
         if result.created:
             print(
@@ -84,6 +94,12 @@ async def _run(*, tenant_id: int, payload_path: Optional[Path], dry_run: bool) -
                 f"[seed_5064] already current: edition {result.version_label} "
                 f"(id={result.matrix_version_id}) already holds this exact edge set — "
                 "nothing written"
+            )
+        if rescore is not None:
+            print(
+                f"[seed_5064] rescore: scanned={rescore.scanned} demoted={rescore.demoted} "
+                f"kept={rescore.kept} preserved_human={rescore.preserved_human} "
+                f"skipped={rescore.skipped} truncated={rescore.truncated}"
             )
 
 

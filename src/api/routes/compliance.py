@@ -1058,10 +1058,22 @@ async def apply_alignment_import(
             accepted_tokens=request.accepted_tokens,
             imported_by_id=current_user.id,
         )
+        from src.domain.services.standards_matrix_rescore_service import maybe_rescore_after_apply
+
+        rescore = await maybe_rescore_after_apply(
+            db,
+            tenant_id=tenant_id,
+            created=result.created,
+            reactivated=result.reactivated,
+            matrix_version_id=result.matrix_version_id,
+            matrix_version_label=result.version_label,
+        )
         await db.commit()
     except AlignmentImportError as exc:
         raise BadRequestError(str(exc)) from exc
-    return result.to_dict()
+    body = result.to_dict()
+    body["rescore"] = rescore.to_dict() if rescore is not None else None
+    return body
 
 
 @router.get("/standards", response_model=list[ComplianceStandardResponse])
