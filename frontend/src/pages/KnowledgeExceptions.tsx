@@ -54,16 +54,20 @@ import {
 } from './knowledgeExceptionsGraphQueue'
 import {
   EXCEPTIONS_ENTITY_TYPE_OPTIONS,
+  EXCEPTIONS_GATE_REASON_OPTIONS,
   EXCEPTIONS_SIGNAL_TYPE_OPTIONS,
   EXCEPTIONS_STATUS_OPTIONS,
   buildExceptionsInboxSearch,
   exceptionEntityHref,
   exceptionsStatusQueryParam,
+  formatGateReasonLabel,
   isSafeReturnTo,
   parseExceptionsEntityTypeFilter,
+  parseExceptionsGateReasonFilter,
   parseExceptionsSignalTypeFilter,
   parseExceptionsStatusFilter,
   type ExceptionsEntityTypeFilter,
+  type ExceptionsGateReasonFilter,
   type ExceptionsSignalTypeFilter,
   type ExceptionsStatusFilter,
 } from './exceptionsInboxFilters'
@@ -168,6 +172,14 @@ function ExceptionRow({
           <div className="flex items-center gap-2 flex-wrap">
             {statusBadge(item.status)}
             {signalBadge(item.signal_type)}
+            {item.gate_reason ? (
+              <Badge
+                variant="outline"
+                data-testid={`exception-gate-reason-${item.id}`}
+              >
+                {formatGateReasonLabel(item.gate_reason)}
+              </Badge>
+            ) : null}
             {allocationBadge(row.allocationKind, row.duplicates.length)}
           </div>
 
@@ -578,6 +590,9 @@ export default function KnowledgeExceptions() {
   const [signalTypeFilter, setSignalTypeFilter] = useState<ExceptionsSignalTypeFilter>(() =>
     parseExceptionsSignalTypeFilter(searchParams.get('signal_type')),
   )
+  const [gateReasonFilter, setGateReasonFilter] = useState<ExceptionsGateReasonFilter>(() =>
+    parseExceptionsGateReasonFilter(searchParams.get('gate_reason')),
+  )
 
   const returnTo = useMemo(() => {
     const raw = searchParams.get('returnTo')
@@ -589,9 +604,11 @@ export default function KnowledgeExceptions() {
     const nextStatus = parseExceptionsStatusFilter(searchParams.get('status'))
     const nextEntity = parseExceptionsEntityTypeFilter(searchParams.get('entity_type'))
     const nextSignal = parseExceptionsSignalTypeFilter(searchParams.get('signal_type'))
+    const nextGate = parseExceptionsGateReasonFilter(searchParams.get('gate_reason'))
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
     setEntityTypeFilter((prev) => (prev === nextEntity ? prev : nextEntity))
     setSignalTypeFilter((prev) => (prev === nextSignal ? prev : nextSignal))
+    setGateReasonFilter((prev) => (prev === nextGate ? prev : nextGate))
   }, [searchParams])
 
   // Keep status + entity_type + signal_type in the URL (omit defaults); preserve returnTo.
@@ -600,15 +617,16 @@ export default function KnowledgeExceptions() {
       status: statusFilter,
       entityType: entityTypeFilter,
       signalType: signalTypeFilter,
+      gateReason: gateReasonFilter,
     })
     const next = new URLSearchParams(searchParams)
-    ;['status', 'entity_type', 'signal_type'].forEach((key) => next.delete(key))
+    ;['status', 'entity_type', 'signal_type', 'gate_reason'].forEach((key) => next.delete(key))
     const desiredParams = new URLSearchParams(desired)
     desiredParams.forEach((value, key) => next.set(key, value))
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
     }
-  }, [statusFilter, entityTypeFilter, signalTypeFilter, searchParams, setSearchParams])
+  }, [statusFilter, entityTypeFilter, signalTypeFilter, gateReasonFilter, searchParams, setSearchParams])
 
   const loadExceptions = useCallback(async () => {
     setLoading(true)
@@ -618,6 +636,7 @@ export default function KnowledgeExceptions() {
         status: exceptionsStatusQueryParam(statusFilter),
         entityType: entityTypeFilter === 'all' ? undefined : entityTypeFilter,
         signalType: signalTypeFilter === 'all' ? undefined : signalTypeFilter,
+        gateReason: gateReasonFilter === 'all' ? undefined : gateReasonFilter,
         clauseId: clauseFilter || undefined,
         scheme: standardFilter || undefined,
         operationalOnly: operationalFromUrl || undefined,
@@ -630,13 +649,13 @@ export default function KnowledgeExceptions() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, entityTypeFilter, signalTypeFilter, clauseFilter, standardFilter, operationalFromUrl])
+  }, [statusFilter, entityTypeFilter, signalTypeFilter, gateReasonFilter, clauseFilter, standardFilter, operationalFromUrl])
 
   useEffect(() => {
     void loadExceptions()
   }, [loadExceptions])
 
-  /** Server filters status/entity/signal; stable client de-dupe by entity×scheme×clause. */
+  /** Server filters status/entity/signal/gate_reason; stable client de-dupe by entity×scheme×clause. */
   const dedupedRows = useMemo(() => dedupeKnowledgeExceptions(items), [items])
   const visibleRows = dedupedRows
   const collapsedDuplicateCount = useMemo(
@@ -671,6 +690,7 @@ export default function KnowledgeExceptions() {
     statusFilter !== 'inbox' ||
     entityTypeFilter !== 'all' ||
     signalTypeFilter !== 'all' ||
+    gateReasonFilter !== 'all' ||
     !!clauseFilter ||
     !!standardFilter ||
     operationalFromUrl
@@ -679,6 +699,7 @@ export default function KnowledgeExceptions() {
     setStatusFilter('inbox')
     setEntityTypeFilter('all')
     setSignalTypeFilter('all')
+    setGateReasonFilter('all')
     setSelectedIds([])
     const next = new URLSearchParams()
     if (returnTo) next.set('returnTo', returnTo)
@@ -922,6 +943,29 @@ export default function KnowledgeExceptions() {
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-1.5 min-w-[14rem]">
+          <label htmlFor="exceptions-gate-reason" className="text-xs font-medium text-muted-foreground">
+            Ingest gate reason
+          </label>
+          <Select
+            value={gateReasonFilter}
+            onValueChange={(value) => {
+              setGateReasonFilter(value as ExceptionsGateReasonFilter)
+              setSelectedIds([])
+            }}
+          >
+            <SelectTrigger id="exceptions-gate-reason" aria-label="Filter by ingest gate reason">
+              <SelectValue placeholder="All ingest gate reasons" />
+            </SelectTrigger>
+            <SelectContent>
+              {EXCEPTIONS_GATE_REASON_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <p className="text-xs text-muted-foreground sm:pb-2" data-testid="exceptions-filter-honesty">
           Showing {visibleRows.length} allocation
           {visibleRows.length === 1 ? '' : 's'}
@@ -931,6 +975,7 @@ export default function KnowledgeExceptions() {
           {statusFilter !== 'inbox' ? ` · status=${statusFilter}` : ''}
           {entityTypeFilter !== 'all' ? ` · entity=${entityTypeFilter}` : ''}
           {signalTypeFilter !== 'all' ? ` · signal=${signalTypeFilter}` : ''}
+          {gateReasonFilter !== 'all' ? ` · gate=${gateReasonFilter}` : ''}
           {' '}(server filters sync to URL; inbox page ≤200 — not a global facet total)
         </p>
       </div>

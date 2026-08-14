@@ -30,6 +30,12 @@ from src.domain.models.governed_knowledge import (
 )
 from src.domain.models.user import User
 from src.domain.services.governed_knowledge_service import governed_knowledge_service
+from src.domain.services.standards_exceptions_gate_reason import (
+    filter_links_by_gate_reason,
+    gate_reasons_for_links,
+    is_known_ingest_gate_reason,
+    sort_inbox_page_for_triage,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -61,6 +67,7 @@ class EvidenceLinkDetailResponse(BaseModel):
     confirmed_at: Optional[str] = None
     created_at: str
     created_by_email: Optional[str]
+    gate_reason: Optional[str] = None
 
 
 class MapEvidenceResponse(BaseModel):
@@ -222,7 +229,11 @@ def _tenant_id_for(user: CurrentUser) -> int:
     return require_tenant_id(getattr(user, "tenant_id", None))
 
 
-def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetailResponse:
+def _serialize_evidence_link(
+    link: ComplianceEvidenceLink,
+    *,
+    gate_reason: Optional[str] = None,
+) -> EvidenceLinkDetailResponse:
     cover = getattr(link, "cover_kind", None)
     cover_value = cover.value if isinstance(cover, EvidenceCoverKind) else (cover or EvidenceCoverKind.EVIDENCES.value)
     confirmed_at = getattr(link, "confirmed_at", None)
@@ -247,6 +258,7 @@ def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetail
         confirmed_at=confirmed_at.isoformat() if confirmed_at is not None else None,
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
+        gate_reason=gate_reason,
     )
 
 
@@ -609,6 +621,10 @@ async def list_exception_inbox(
         False,
         description="When true, only operational signals (nonconformity|gap|opportunity)",
     ),
+    gate_reason: Optional[str] = Query(
+        None,
+        description="Filter by PR-E ingest gate_reason token (e.g. below_threshold)",
+    ),
 ):
     """Proposed + needs_review evidence inbox."""
     tenant_id = _tenant_id_for(current_user)
@@ -618,6 +634,10 @@ async def list_exception_inbox(
             statuses = [EvidenceLinkStatus(status_filter.lower())]
         except ValueError as exc:
             raise BadRequestError(f"Invalid status: {status_filter}") from exc
+
+    wanted_reason = gate_reason.strip() if gate_reason else None
+    if wanted_reason and not is_known_ingest_gate_reason(wanted_reason):
+        raise BadRequestError(f"Invalid gate_reason: {gate_reason}")
 
     filters = [
         ComplianceEvidenceLink.tenant_id == tenant_id,
@@ -651,7 +671,11 @@ async def list_exception_inbox(
         links = [
             link for link in links if (getattr(link, "signal_type", None) or "").lower() in OPERATIONAL_SIGNAL_TYPES
         ]
-    return [_serialize_evidence_link(link) for link in links]
+    reasons = await gate_reasons_for_links(db, tenant_id=tenant_id, links=links)
+    if wanted_reason:
+        links = filter_links_by_gate_reason(links, reasons, wanted_reason)
+    links = sort_inbox_page_for_triage(links)
+    return [_serialize_evidence_link(link, gate_reason=reasons.get(link.id)) for link in links]
 
 
 @router.get("/exceptions/operational-counts")

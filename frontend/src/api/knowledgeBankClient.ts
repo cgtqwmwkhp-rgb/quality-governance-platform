@@ -19,6 +19,7 @@ export interface KnowledgeEvidenceLink {
   evidence_snippet?: string | null
   source_page?: number | null
   signal_type?: string | null
+  gate_reason?: string | null
   created_at: string
   created_by_email: string | null
 }
@@ -184,6 +185,7 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
       scheme?: string
       signalType?: string
       operationalOnly?: boolean
+      gateReason?: string
     }) => {
       const sp = new URLSearchParams()
       if (params?.status) sp.set('status', params.status)
@@ -192,6 +194,7 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
       if (params?.scheme) sp.set('scheme', params.scheme)
       if (params?.signalType) sp.set('signal_type', params.signalType)
       if (params?.operationalOnly) sp.set('operational_only', 'true')
+      if (params?.gateReason) sp.set('gate_reason', params.gateReason)
       const qs = sp.toString()
       return api.get<KnowledgeEvidenceLink[]>(`${base}/exceptions${qs ? `?${qs}` : ''}`)
     },

@@ -16,6 +16,7 @@ export interface ExceptionLinkLike {
   title: string | null
   notes: string | null
   signal_type?: string | null
+  gate_reason?: string | null
   confidence: number | null
   linked_by?: string | null
 }
@@ -304,6 +305,9 @@ export function buildWhyDetail(link: ExceptionLinkLike): WhyDetail {
   if (signal) lines.push(`Signal: ${signal.replace(/_/g, ' ')}`)
   if (link.confidence != null) {
     lines.push(`AI confidence: ${Math.round(link.confidence * 100)}%`)
+  }
+  if (link.gate_reason) {
+    lines.push(`Ingest gate: ${link.gate_reason.replace(/_/g, ' ')}`)
   }
   if (link.linked_by) lines.push(`Linked by: ${link.linked_by}`)
 
