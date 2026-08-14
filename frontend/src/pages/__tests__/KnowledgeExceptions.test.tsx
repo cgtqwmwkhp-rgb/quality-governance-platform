@@ -102,6 +102,7 @@ describe('KnowledgeExceptions closed loop', () => {
           title: 'Gap',
           notes: null,
           signal_type: 'gap',
+          gate_reason: 'below_threshold',
           created_at: '2026-07-13T00:00:00Z',
           created_by_email: null,
         },
@@ -126,7 +127,12 @@ describe('KnowledgeExceptions closed loop', () => {
     )
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith({ status: undefined, entityType: 'incident', signalType: undefined })
+      expect(mockList).toHaveBeenCalledWith({
+        status: undefined,
+        entityType: 'incident',
+        signalType: undefined,
+        gateReason: undefined,
+      })
     })
     expect(screen.getByTestId('exceptions-return-to-case')).toBeInTheDocument()
     expect(screen.getByTestId('exceptions-return-to-case-link')).toHaveAttribute(
@@ -134,6 +140,7 @@ describe('KnowledgeExceptions closed loop', () => {
       '/incidents/7?tab=standards',
     )
     expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent('entity=incident')
+    expect(screen.getByTestId('exception-gate-reason-9')).toHaveTextContent('Below 98% confidence')
   })
 
   it('confirm returns to case when returnTo is present', async () => {
@@ -290,14 +297,17 @@ describe('KnowledgeExceptions honesty (KE-W1)', () => {
 })
 
 describe('exceptions inbox URL sync', () => {
-  it('encodes status + entity_type + signal_type', async () => {
+  it('encodes status + entity_type + signal_type + gate_reason', async () => {
     const { buildExceptionsInboxSearch } = await import('../exceptionsInboxFilters')
     expect(
       buildExceptionsInboxSearch({
         status: 'needs_review',
         entityType: 'near_miss',
         signalType: 'nonconformity',
+        gateReason: 'below_threshold',
       }),
-    ).toBe('status=needs_review&entity_type=near_miss&signal_type=nonconformity')
+    ).toBe(
+      'status=needs_review&entity_type=near_miss&signal_type=nonconformity&gate_reason=below_threshold',
+    )
   })
 })

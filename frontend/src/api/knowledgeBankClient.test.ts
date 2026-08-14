@@ -37,6 +37,17 @@ describe('createKnowledgeBankApi listExceptions', () => {
     )
   })
 
+  it('passes gate_reason when provided (PR-E2 triage filter)', () => {
+    const api = mockApi()
+    createKnowledgeBankApi(api as never).listExceptions({
+      entityType: 'document',
+      gateReason: 'below_threshold',
+    })
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/knowledge-bank/exceptions?entity_type=document&gate_reason=below_threshold',
+    )
+  })
+
   it('posts reject rationale body', () => {
     const api = mockApi()
     createKnowledgeBankApi(api as never).rejectLink(9, 'Not applicable to this clause')

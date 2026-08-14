@@ -3,7 +3,9 @@ import {
   buildExceptionsInboxSearch,
   exceptionEntityHref,
   exceptionsStatusQueryParam,
+  formatGateReasonLabel,
   parseExceptionsEntityTypeFilter,
+  parseExceptionsGateReasonFilter,
   parseExceptionsSignalTypeFilter,
   parseExceptionsStatusFilter,
 } from '../exceptionsInboxFilters'
@@ -22,6 +24,13 @@ describe('exceptions inbox filter parsers', () => {
     expect(parseExceptionsSignalTypeFilter('gap')).toBe('gap')
     expect(parseExceptionsSignalTypeFilter(undefined)).toBe('all')
   })
+
+  it('parses gate_reason with all default', () => {
+    expect(parseExceptionsGateReasonFilter('below_threshold')).toBe('below_threshold')
+    expect(parseExceptionsGateReasonFilter('invented')).toBe('all')
+    expect(formatGateReasonLabel('below_threshold')).toBe('Below 98% confidence')
+    expect(formatGateReasonLabel(null)).toBe('Gate reason not logged')
+  })
 })
 
 describe('exceptionsStatusQueryParam', () => {
@@ -38,6 +47,7 @@ describe('buildExceptionsInboxSearch', () => {
         status: 'proposed',
         entityType: 'incident',
         signalType: 'gap',
+        gateReason: 'all',
       }),
     ).toBe('status=proposed&entity_type=incident&signal_type=gap')
   })
@@ -48,8 +58,20 @@ describe('buildExceptionsInboxSearch', () => {
         status: 'inbox',
         entityType: 'all',
         signalType: 'all',
+        gateReason: 'all',
       }),
     ).toBe('')
+  })
+
+  it('syncs gate_reason into URL when set', () => {
+    expect(
+      buildExceptionsInboxSearch({
+        status: 'inbox',
+        entityType: 'document',
+        signalType: 'all',
+        gateReason: 'below_threshold',
+      }),
+    ).toBe('entity_type=document&gate_reason=below_threshold')
   })
 })
 

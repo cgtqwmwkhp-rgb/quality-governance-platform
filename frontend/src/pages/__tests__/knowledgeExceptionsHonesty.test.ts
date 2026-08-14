@@ -80,6 +80,11 @@ describe('knowledgeExceptionsHonesty — why detail', () => {
     expect(detail.isGeneric).toBe(true)
     expect(detail.lines.some((l) => l.includes('generic label'))).toBe(true)
   })
+
+  it('includes ingest gate_reason in why lines when logged', () => {
+    const detail = buildWhyDetail(baseLink({ gate_reason: 'below_threshold' }))
+    expect(detail.lines.some((l) => l === 'Ingest gate: below threshold')).toBe(true)
+  })
 })
 
 describe('knowledgeExceptionsHonesty — stable de-dupe', () => {
