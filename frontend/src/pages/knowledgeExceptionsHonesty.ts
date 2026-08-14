@@ -248,7 +248,7 @@ function allocationKindForGroup(
 
 /**
  * Collapse twin proposals / show existing allocation honestly (KE-05).
- * Preserves server order within groups; newest/highest-confidence proposal wins ties.
+ * Preserves server order between allocations; newest/highest-confidence proposal wins within a group.
  */
 export function dedupeKnowledgeExceptions(items: ExceptionLinkLike[]): DedupedExceptionRow[] {
   const groups = new Map<string, ExceptionLinkLike[]>()
@@ -271,7 +271,7 @@ export function dedupeKnowledgeExceptions(items: ExceptionLinkLike[]): DedupedEx
     })
   }
 
-  return rows.sort((a, b) => b.primary.id - a.primary.id)
+  return rows
 }
 
 export function isGenericRationale(text: string | null | undefined): boolean {
