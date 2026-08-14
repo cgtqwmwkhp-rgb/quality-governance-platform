@@ -35,6 +35,7 @@ from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
 from src.domain.services.compliance_evidence_link_writer import soft_delete_evidence_link, upsert_evidence_links
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
+from src.domain.services.standards_export_appendix import APPENDIX_VERSION, build_standards_export_appendix
 from src.infrastructure.monitoring.azure_monitor import get_tracer
 
 router = APIRouter()
@@ -662,6 +663,13 @@ async def export_audit_pack(
         default=None,
         description="Organisation name for SoA (defaults to tenant name when omitted)",
     ),
+    frameworks: Optional[list[str]] = Query(
+        default=None,
+        description=(
+            "Matrix framework ids for the SoR appendix (repeatable). "
+            "Empty = full programme set (Constructionline out)."
+        ),
+    ),
 ):
     """
     Server-side ISO audit evidence pack with full CEL provenance.
@@ -670,6 +678,9 @@ async def export_audit_pack(
     signal_type, scheme/standard, clause_id, entity_type/id, status,
     confirmed_at/by when available). Operational nonconformity signals are
     excluded from conformance evidence by default and labelled honestly.
+
+    SG-D-05 adds ``standards_appendix`` — pointers into Findings, Actions,
+    evidence links, and the certificate shelf for the requested frameworks.
     """
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
@@ -703,6 +714,14 @@ async def export_audit_pack(
         organization_name=resolved_org,
     )
     pack["persisted_evidence_links"] = len(links)
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    pack["standards_appendix"] = await build_standards_export_appendix(
+        db,
+        tenant_id=tenant_id,
+        frameworks=frameworks,
+    )
 
     date_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     filename = f"iso-audit-pack-{date_stamp}.json"
@@ -714,6 +733,7 @@ async def export_audit_pack(
             "Content-Disposition": f'attachment; filename="{filename}"',
             "X-Audit-Pack-Version": str(pack.get("pack_version", "gkb-wl1-1.0")),
             "X-Audit-Pack-Nonconformity-Mode": pack["provenance_policy"]["nonconformity_mode"],
+            "X-Standards-Appendix-Version": APPENDIX_VERSION,
         },
     )
 

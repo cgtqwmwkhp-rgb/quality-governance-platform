@@ -1643,12 +1643,16 @@ export const complianceApi = {
     includeNonconformity?: boolean
     includeSoa?: boolean
     organizationName?: string
+    frameworks?: string[]
   }) => {
     const sp = new URLSearchParams()
     if (params?.standard) sp.set('standard', params.standard)
     if (params?.includeNonconformity) sp.set('include_nonconformity', 'true')
     if (params?.includeSoa === false) sp.set('include_soa', 'false')
     if (params?.organizationName) sp.set('organization_name', params.organizationName)
+    for (const id of params?.frameworks ?? []) {
+      if (id) sp.append('frameworks', id)
+    }
     const qs = sp.toString()
     return api.get<Record<string, unknown>>(`/api/v1/compliance/audit-pack${qs ? `?${qs}` : ''}`)
   },

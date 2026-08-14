@@ -395,6 +395,7 @@ describe('client inline API surfaces', () => {
     complianceApi.getReport()
     complianceApi.downloadAuditPack({ includeNonconformity: true })
     complianceApi.downloadAuditPack()
+    complianceApi.downloadAuditPack({ frameworks: ['9001', '14001'] })
     complianceApi.listStandards()
     complianceApi.analyzeEvidence('text')
     complianceApi.getSoA('Acme')
@@ -403,6 +404,9 @@ describe('client inline API surfaces', () => {
       '/api/v1/compliance/audit-pack?include_nonconformity=true',
     )
     expect(api.get).toHaveBeenCalledWith('/api/v1/compliance/audit-pack')
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/compliance/audit-pack?frameworks=9001&frameworks=14001',
+    )
     crossStandardMappingsApi.list({
       source_standard: 'iso9001',
       target_standard: 'iso14001',

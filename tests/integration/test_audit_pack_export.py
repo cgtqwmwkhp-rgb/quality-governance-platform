@@ -9,8 +9,37 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.api.routes import compliance as compliance_routes
 from src.api.routes.compliance import export_audit_pack
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
+
+STUB_APPENDIX = {
+    "version": "sg-d05-1.0",
+    "frameworks": ["9001"],
+    "sor_note": "stub",
+    "evidence": {"items": [], "truncated": False, "unattributed": 0, "other_framework": 0},
+    "findings": {"items": [], "truncated": False, "unattributed": 0, "other_framework": 0},
+    "actions": {"items": [], "truncated": False, "unattributed": 0, "other_framework": 0},
+    "certs": {
+        "items": [],
+        "unmatched": [],
+        "truncated": False,
+        "unmatched_included": False,
+        "other_framework": 0,
+    },
+}
+
+
+@pytest.fixture
+def stub_standards_appendix(monkeypatch):
+    async def _build(_db, *, tenant_id, frameworks=None):
+        return {
+            **STUB_APPENDIX,
+            "frameworks": list(frameworks or ["9001"]),
+            "tenant_id": tenant_id,
+        }
+
+    monkeypatch.setattr(compliance_routes, "build_standards_export_appendix", _build)
 
 
 class _FakeScalarResult:
@@ -63,7 +92,7 @@ def _cel(
 
 
 @pytest.mark.asyncio
-async def test_audit_pack_excludes_nonconformity_by_default():
+async def test_audit_pack_excludes_nonconformity_by_default(stub_standards_appendix):
     links = [
         _cel(link_id=1, signal_type="evidence"),
         _cel(
@@ -83,6 +112,7 @@ async def test_audit_pack_excludes_nonconformity_by_default():
         include_nonconformity=False,
         include_soa=False,
         organization_name="Plantexpand",
+        frameworks=None,
     )
 
     assert response.media_type == "application/json"
@@ -106,10 +136,12 @@ async def test_audit_pack_excludes_nonconformity_by_default():
     assert pack["operational_signals"][0]["signal_type"] == "nonconformity"
     assert pack["operational_signals"][0]["signal_label"] == "operational_nonconformity"
     assert pack["operational_signals"][0]["conformance_eligible"] is False
+    assert pack["standards_appendix"]["version"] == "sg-d05-1.0"
+    assert response.headers["x-standards-appendix-version"] == "sg-d05-1.0"
 
 
 @pytest.mark.asyncio
-async def test_audit_pack_labels_nonconformity_when_included():
+async def test_audit_pack_labels_nonconformity_when_included(stub_standards_appendix):
     links = [
         _cel(link_id=1, signal_type="evidence"),
         _cel(
@@ -129,6 +161,7 @@ async def test_audit_pack_labels_nonconformity_when_included():
         include_nonconformity=True,
         include_soa=False,
         organization_name="Plantexpand",
+        frameworks=None,
     )
 
     pack = json.loads(response.body.decode("utf-8"))
@@ -138,3 +171,4 @@ async def test_audit_pack_labels_nonconformity_when_included():
     assert nc["conformance_eligible"] is False
     assert nc["signal_label"] == "operational_nonconformity"
     assert response.headers["x-audit-pack-nonconformity-mode"] == "labelled_in_pack"
+    assert pack["standards_appendix"]["version"] == "sg-d05-1.0"
