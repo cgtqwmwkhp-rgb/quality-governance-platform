@@ -17,10 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.models.audit import AuditQuestion, AuditTemplate
 from src.domain.models.compliance_evidence import (
     ComplianceEvidenceLink,
-    EvidenceLinkMethod,
     EvidenceLinkStatus,
     EvidenceSignalType,
 )
+from src.domain.services.compliance_evidence_link_writer import apply_ingest_mapping
 from src.domain.models.governed_knowledge import AiDecisionLog
 from src.domain.services.governed_knowledge_service import GovernedKnowledgeService, SchemeMapping
 
@@ -340,47 +340,39 @@ class BuilderStandardLinkService:
         decision: LinkDecision,
         rationale: str | None,
     ) -> Optional[ComplianceEvidenceLink]:
-        """Mirror builder decisions onto ComplianceEvidenceLink for shared confirm spine."""
+        """Mirror builder decisions onto CEL through the sole writer."""
         clause_id = str(link.get("refId") or "")[:50]
         if not clause_id:
             return None
-        existing = await db.scalar(
-            select(ComplianceEvidenceLink).where(
-                ComplianceEvidenceLink.deleted_at.is_(None),
-                ComplianceEvidenceLink.tenant_id == tenant_id,
-                ComplianceEvidenceLink.entity_type == "audit_question",
-                ComplianceEvidenceLink.entity_id == str(question.id),
-                ComplianceEvidenceLink.clause_id == clause_id,
-            )
+        confidence = float(link.get("confidence") or 0)
+        if confidence <= 1.0:
+            confidence = confidence * 100.0
+        status = (
+            EvidenceLinkStatus.REJECTED if decision == "reject" else EvidenceLinkStatus.CONFIRMED
         )
-        if existing is None:
-            existing = ComplianceEvidenceLink(
-                tenant_id=tenant_id,
-                entity_type="audit_question",
-                entity_id=str(question.id),
-                clause_id=clause_id,
-                created_by_id=getattr(user, "id", None),
-                created_by_email=getattr(user, "email", None),
+        evidence_link, human_preserved = await apply_ingest_mapping(
+            db,
+            tenant_id=tenant_id,
+            entity_type="audit_question",
+            entity_id=str(question.id),
+            clause_id=clause_id,
+            status=status,
+            auto_applied=False,
+            actor_id=getattr(user, "id", None),
+            actor_email=getattr(user, "email", None),
+            scheme=normalize_scheme(str(link.get("scheme"))).lower().replace(" ", "_"),
+            confidence=confidence,
+            rationale=str(link.get("rationale") or rationale or "")[:2000] or None,
+            title=str(link.get("label") or "")[:300] or None,
+            signal_type=EvidenceSignalType.EVIDENCE.value,
+            commit=False,
+        )
+        if decision == "reject" and rationale and not human_preserved:
+            note = f"Rejected: {rationale}"
+            evidence_link.notes = (
+                f"{evidence_link.notes}\n{note}".strip() if evidence_link.notes else note
             )
-            db.add(existing)
-
-        existing.scheme = normalize_scheme(str(link.get("scheme"))).lower().replace(" ", "_")
-        existing.confidence = float(link.get("confidence") or 0)
-        if existing.confidence <= 1.0:
-            existing.confidence = existing.confidence * 100.0
-        existing.title = str(link.get("label") or "")[:300] or None
-        existing.rationale = str(link.get("rationale") or rationale or "")[:2000] or None
-        existing.linked_by = EvidenceLinkMethod.AI
-        existing.signal_type = EvidenceSignalType.EVIDENCE.value
-        existing.auto_applied = False
-        if decision == "reject":
-            existing.status = EvidenceLinkStatus.REJECTED
-            if rationale:
-                note = f"Rejected: {rationale}"
-                existing.notes = f"{existing.notes}\n{note}".strip() if existing.notes else note
-        else:
-            existing.status = EvidenceLinkStatus.CONFIRMED
-        return existing
+        return evidence_link
 
 
 builder_standard_link_service = BuilderStandardLinkService()

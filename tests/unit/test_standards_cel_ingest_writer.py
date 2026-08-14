@@ -103,6 +103,6 @@ async def test_existing_human_stamp_is_preserved(monkeypatch):
 def test_gks_is_no_longer_on_the_remaining_writer_list():
     paths = {row["path"] for row in remaining_writer_report()}
     assert "src/domain/services/governed_knowledge_service.py" not in paths
+    assert "src/domain/services/builder_standard_link_service.py" not in paths
     assert "src/domain/services/audit_service.py" in paths
-    assert "src/domain/services/builder_standard_link_service.py" in paths
     assert "src/domain/services/external_audit_promotion_service.py" in paths
