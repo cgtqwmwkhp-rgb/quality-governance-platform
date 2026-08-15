@@ -676,17 +676,7 @@ jobs:
             VER_FILE="$(mktemp)"
             VER_HTTP=$(curl -sS -L -o "$VER_FILE" -w "%{http_code}" --max-time 25 "$STAGING_URL/api/v1/meta/version" || true)
             if [ -z "$VER_HTTP" ]; then VER_HTTP="000"; fi
-            STAGING_SHA=$(python3 -c '
-import json, sys
-path = sys.argv[1]
-try:
-    with open(path, encoding="utf-8") as fh:
-        raw = fh.read().strip() or "{}"
-    data = json.loads(raw)
-    print(data.get("build_sha") or "unknown")
-except Exception:
-    print("unknown")
-' "$VER_FILE")
+            STAGING_SHA=$(python3 -c 'import json,sys; d=json.loads(open(sys.argv[1],encoding="utf-8").read().strip() or "{}"); print(d.get("build_sha") or "unknown")' "$VER_FILE" 2>/dev/null || echo unknown)
             VER_SIZE=$(wc -c < "$VER_FILE" | tr -d " ")
             rm -f "$VER_FILE"
             CODE=$(curl -sS -L -o /dev/null -w "%{http_code}" --max-time 25 "$STAGING_URL/healthz" || true)
