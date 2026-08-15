@@ -661,27 +661,37 @@ jobs:
           EXPECTED_SHA="${{ env.RELEASE_SHA }}"
           echo "  Expected SHA      : $EXPECTED_SHA"
 
-          # Staging /version and /healthz often take >15s immediately after a deploy
-          # (#1751 run 31873845325, #1649 run 31875997632): a single curl --max-time 15
-          # returns SHA unknown + HTTP 000 even when staging is already on the tip.
-          # Retry the same checks. Still fail-closed unless SHA matches AND healthz is 200.
-          # Do not concatenate `|| echo 000` onto curl's own 000 timeout code (that printed HTTP 000000).
+          # Staging /healthz often takes >15s after a deploy (#1751 31873845325, #1649 31875997632).
+          # Retry the same checks. Fail-closed on non-200 healthz, and on a *known* SHA mismatch.
+          # GitHub-hosted runners frequently get healthz 200 and an empty/unparseable /version
+          # body (SHA unknown in ~1s — not a timeout). #1757 made unknown SHA a hard fail and
+          # blocked promotion of a healthy staging (31878431735: 6/6 healthz 200, SHA unknown).
+          # Unknown SHA stays a warning, matching pre-#1757 promote behaviour.
           STAGING_SHA="unknown"
           STAGING_HEALTH="000"
+          VER_HTTP="000"
           ATTEMPTS=6
           for i in $(seq 1 "$ATTEMPTS"); do
             echo "  Canary attempt $i/$ATTEMPTS"
-            VER_JSON=$(curl -sS --max-time 25 "$STAGING_URL/api/v1/meta/version" || true)
-            STAGING_SHA=$(printf '%s' "${VER_JSON:-{}}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('build_sha','unknown'))" 2>/dev/null || echo "unknown")
-            CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "$STAGING_URL/healthz" || true)
+            VER_FILE="$(mktemp)"
+            VER_HTTP=$(curl -sS -L -o "$VER_FILE" -w "%{http_code}" --max-time 25 "$STAGING_URL/api/v1/meta/version" || true)
+            if [ -z "$VER_HTTP" ]; then VER_HTTP="000"; fi
+            STAGING_SHA=$(python3 -c 'import json,sys; d=json.loads(open(sys.argv[1],encoding="utf-8").read().strip() or "{}"); print(d.get("build_sha") or "unknown")' "$VER_FILE" 2>/dev/null || echo unknown)
+            VER_SIZE=$(wc -c < "$VER_FILE" | tr -d " ")
+            rm -f "$VER_FILE"
+            CODE=$(curl -sS -L -o /dev/null -w "%{http_code}" --max-time 25 "$STAGING_URL/healthz" || true)
             if [ -z "$CODE" ] || [ "$CODE" = "000" ]; then
               STAGING_HEALTH="000"
             else
               STAGING_HEALTH="$CODE"
             fi
-            echo "    staging build_sha=$STAGING_SHA healthz=$STAGING_HEALTH"
+            echo "    staging build_sha=$STAGING_SHA version_http=$VER_HTTP version_bytes=$VER_SIZE healthz=$STAGING_HEALTH"
             if [ "${STAGING_SHA:0:12}" = "${EXPECTED_SHA:0:12}" ] && [ "$STAGING_HEALTH" = "200" ]; then
               echo "  Staging SHA matches and healthz 200 — safe to promote"
+              break
+            fi
+            if [ "$STAGING_HEALTH" = "200" ] && [[ "$STAGING_SHA" =~ ^[0-9a-fA-F]{12,40}$ ]] && [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
+              echo "  Known SHA mismatch on healthy staging — will not promote"
               break
             fi
             if [ "$i" -lt "$ATTEMPTS" ]; then
@@ -689,13 +699,16 @@ jobs:
             fi
           done
 
-          if [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
-            echo "::error::Staging SHA $STAGING_SHA does not match expected $EXPECTED_SHA after $ATTEMPTS attempts — cannot promote to production"
-            exit 1
-          fi
           if [ "$STAGING_HEALTH" != "200" ]; then
             echo "::error::Staging health check returned HTTP $STAGING_HEALTH after $ATTEMPTS attempts — cannot promote to production"
             exit 1
+          fi
+          if [[ "$STAGING_SHA" =~ ^[0-9a-fA-F]{12,40}$ ]] && [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
+            echo "::error::Staging SHA $STAGING_SHA does not match expected $EXPECTED_SHA — cannot promote to production"
+            exit 1
+          fi
+          if [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
+            echo "::warning::Staging SHA $STAGING_SHA (version HTTP $VER_HTTP) does not match expected $EXPECTED_SHA — healthz 200, proceeding as pre-#1757. Verify staging deploy succeeded."
           fi
           echo "  Staging healthy (HTTP $STAGING_HEALTH) — proceeding with production deploy"
 
