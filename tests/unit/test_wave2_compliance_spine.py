@@ -134,6 +134,17 @@ async def test_list_standards_bridges_db_standard_and_ims_counts():
     assert iso9001.has_canonical_standard is True
     assert iso9001.canonical_data_degraded is False
     assert iso9001.canonical_data_message is None
+    ids = {item.id for item in standards}
+    assert "ce" in ids
+    assert "cep" in ids
+    assert "iip" in ids
+    assert "chas" not in ids
+    assert "ssip" not in ids
+    assert "pm" not in ids
+    assert "uvdb" not in ids
+    ce = next(item for item in standards if item.id == "ce")
+    assert ce.clause_count == 5
+    assert ce.code == "Cyber Essentials"
 
 
 @pytest.mark.asyncio

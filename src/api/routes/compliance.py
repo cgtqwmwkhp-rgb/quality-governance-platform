@@ -35,6 +35,16 @@ from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
 from src.domain.services.compliance_evidence_link_writer import soft_delete_evidence_link, upsert_evidence_links
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
+from src.domain.services.scheme_evidence_service import (
+    loaded_scheme_id,
+    merge_scheme_into_iso_coverage,
+    scheme_audit_report,
+    scheme_clause_by_id,
+    scheme_clause_records,
+    scheme_coverage_payload,
+    scheme_labels,
+    scheme_standard_coverage,
+)
 from src.domain.services.standards_export_appendix import APPENDIX_VERSION, build_standards_export_appendix
 from src.infrastructure.monitoring.azure_monitor import get_tracer
 
@@ -437,7 +447,23 @@ async def list_clauses(
     level: Optional[int] = Query(None, description="Filter by clause level (1=main, 2=sub)"),
     search: Optional[str] = Query(None, description="Search by keyword or clause number"),
 ):
-    """List all ISO clauses with optional filtering."""
+    """List ISO clauses and loaded scheme-axis rows (CE / CE+ / IiP)."""
+
+    scheme = loaded_scheme_id(standard)
+    if scheme:
+        rows = scheme_clause_records(scheme)
+        if search:
+            needle = search.strip().lower()
+            rows = [
+                c
+                for c in rows
+                if needle in c["title"].lower()
+                or needle in c["clause_number"].lower()
+                or needle in c["id"].lower()
+            ]
+        if level:
+            rows = [c for c in rows if c["level"] == level]
+        return [ClauseResponse(**c) for c in rows]
 
     std_enum = _parse_standard_filter(standard)
 
@@ -449,7 +475,7 @@ async def list_clauses(
     if level:
         clauses = [c for c in clauses if c.level == level]
 
-    return [
+    payload = [
         ClauseResponse(
             id=c.id,
             standard=c.standard.value,
@@ -462,11 +488,26 @@ async def list_clauses(
         )
         for c in clauses
     ]
+    if standard is None and not search:
+        payload.extend(ClauseResponse(**c) for c in scheme_clause_records())
+    elif search:
+        needle = search.strip().lower()
+        payload.extend(
+            ClauseResponse(**c)
+            for c in scheme_clause_records()
+            if needle in c["title"].lower()
+            or needle in c["clause_number"].lower()
+            or needle in c["id"].lower()
+        )
+    return payload
 
 
 @router.get("/clauses/{clause_id}", response_model=ClauseResponse)
 async def get_clause(clause_id: str, current_user: CurrentUser):
-    """Get a specific ISO clause by ID."""
+    """Get a specific ISO or loaded-scheme clause by ID."""
+    scheme_row = scheme_clause_by_id(clause_id)
+    if scheme_row:
+        return ClauseResponse(**scheme_row)
     clause = iso_compliance_service.get_clause(clause_id)
     if not clause:
         raise NotFoundError(f"Clause not found: {clause_id}")
@@ -596,10 +637,18 @@ async def get_compliance_coverage(
     Get compliance coverage statistics showing how many clauses
     have evidence linked to them.
     """
+    scheme = loaded_scheme_id(standard)
+    if scheme:
+        links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=None)
+        evidence_links = [_build_evidence_link_model(link) for link in links]
+        return scheme_coverage_payload(evidence_links, scheme)
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
     evidence_links = [_build_evidence_link_model(link) for link in links]
-    return iso_compliance_service.calculate_compliance_coverage(evidence_links, std_enum)
+    payload = iso_compliance_service.calculate_compliance_coverage(evidence_links, std_enum)
+    if std_enum is None:
+        payload = merge_scheme_into_iso_coverage(payload, evidence_links)
+    return payload
 
 
 @router.get("/gaps")
@@ -612,6 +661,11 @@ async def get_compliance_gaps(
     Get list of ISO clauses that have no evidence linked to them.
     These represent compliance gaps that need attention.
     """
+    scheme = loaded_scheme_id(standard)
+    if scheme:
+        links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=None)
+        coverage = scheme_coverage_payload([_build_evidence_link_model(link) for link in links], scheme)
+        return {"total_gaps": coverage["gaps"], "gap_clauses": coverage["gap_clauses"]}
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
     coverage = iso_compliance_service.calculate_compliance_coverage(
@@ -634,6 +688,13 @@ async def generate_compliance_report(
 
     Shows all clauses with their linked evidence and coverage status.
     """
+    scheme = loaded_scheme_id(standard)
+    if scheme:
+        links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=None)
+        models = [_build_evidence_link_model(link) for link in links]
+        report = scheme_audit_report(models, scheme, include_evidence_details=include_evidence)
+        report["persisted_evidence_links"] = len(links)
+        return report
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
     report = iso_compliance_service.generate_audit_report(
@@ -1122,6 +1183,32 @@ async def list_standards(db: DbSession, current_user: CurrentUser):
                 canonical_data_degraded=canonical_data_message is not None,
                 canonical_data_message=canonical_data_message,
                 clause_count_breakdown=breakdown,
+            )
+        )
+
+    evidence_models = [_build_evidence_link_model(link) for link in links]
+    for fw in ("ce", "cep", "iip"):
+        labels = scheme_labels(fw)
+        rows = scheme_clause_records(fw)
+        cov = scheme_standard_coverage(evidence_models, fw)
+        response.append(
+            ComplianceStandardResponse(
+                id=fw,
+                code=labels["code"],
+                name=labels["name"],
+                description=labels["description"],
+                clause_count=len(rows),
+                db_standard_id=None,
+                db_standard_code=None,
+                db_standard_name=None,
+                db_clause_count=len(rows),
+                ims_requirement_count=0,
+                covered_clauses=cov.get("covered", 0) + cov.get("partial_coverage", 0),
+                coverage_percentage=cov.get("percentage", 0),
+                has_canonical_standard=True,
+                canonical_data_degraded=False,
+                canonical_data_message=None,
+                clause_count_breakdown={},
             )
         )
     return response

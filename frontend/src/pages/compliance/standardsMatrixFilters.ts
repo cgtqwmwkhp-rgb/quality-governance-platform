@@ -264,8 +264,11 @@ export function complianceStandardIdFromFrameworkId(id: FrameworkId): string | n
     '45001': 'iso45001',
     '27001': 'iso27001',
     '22301': 'iso22301',
-    pm: 'planetmark',
-    uvdb: 'uvdb',
+    ce: 'ce',
+    cep: 'cep',
+    iip: 'iip',
+    // Planet Mark / UVDB stay specialist SoR — do not twin into Evidence %.
+    // CHAS / SSIP stay null until publisher pin (no fake coverage).
   }
   return map[id] ?? null
 }
