@@ -457,9 +457,7 @@ async def list_clauses(
             rows = [
                 c
                 for c in rows
-                if needle in c["title"].lower()
-                or needle in c["clause_number"].lower()
-                or needle in c["id"].lower()
+                if needle in c["title"].lower() or needle in c["clause_number"].lower() or needle in c["id"].lower()
             ]
         if level:
             rows = [c for c in rows if c["level"] == level]
@@ -495,9 +493,7 @@ async def list_clauses(
         payload.extend(
             ClauseResponse(**c)
             for c in scheme_clause_records()
-            if needle in c["title"].lower()
-            or needle in c["clause_number"].lower()
-            or needle in c["id"].lower()
+            if needle in c["title"].lower() or needle in c["clause_number"].lower() or needle in c["id"].lower()
         )
     return payload
 
