@@ -658,22 +658,46 @@ jobs:
           echo "=== Pre-Deploy Staging Canary Gate ==="
           STAGING_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           echo "Verifying staging is healthy before promoting to production..."
-          STAGING_VERSION=$(curl -sf --max-time 15 "$STAGING_URL/api/v1/meta/version" 2>/dev/null || echo '{}')
-          STAGING_SHA=$(echo "$STAGING_VERSION" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('build_sha','unknown'))" 2>/dev/null || echo "unknown")
           EXPECTED_SHA="${{ env.RELEASE_SHA }}"
-          echo "  Staging build_sha : $STAGING_SHA"
           echo "  Expected SHA      : $EXPECTED_SHA"
+
+          # Staging /version and /healthz often take >15s immediately after a deploy
+          # (#1751 run 31873845325, #1649 run 31875997632): a single curl --max-time 15
+          # returns SHA unknown + HTTP 000 even when staging is already on the tip.
+          # Retry the same checks. Still fail-closed unless SHA matches AND healthz is 200.
+          # Do not concatenate `|| echo 000` onto curl's own 000 timeout code (that printed HTTP 000000).
+          STAGING_SHA="unknown"
+          STAGING_HEALTH="000"
+          ATTEMPTS=6
+          for i in $(seq 1 "$ATTEMPTS"); do
+            echo "  Canary attempt $i/$ATTEMPTS"
+            VER_JSON=$(curl -sS --max-time 25 "$STAGING_URL/api/v1/meta/version" || true)
+            STAGING_SHA=$(printf '%s' "${VER_JSON:-{}}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('build_sha','unknown'))" 2>/dev/null || echo "unknown")
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "$STAGING_URL/healthz" || true)
+            if [ -z "$CODE" ] || [ "$CODE" = "000" ]; then
+              STAGING_HEALTH="000"
+            else
+              STAGING_HEALTH="$CODE"
+            fi
+            echo "    staging build_sha=$STAGING_SHA healthz=$STAGING_HEALTH"
+            if [ "${STAGING_SHA:0:12}" = "${EXPECTED_SHA:0:12}" ] && [ "$STAGING_HEALTH" = "200" ]; then
+              echo "  Staging SHA matches and healthz 200 — safe to promote"
+              break
+            fi
+            if [ "$i" -lt "$ATTEMPTS" ]; then
+              sleep 10
+            fi
+          done
+
           if [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
-            echo "::warning::Staging SHA $STAGING_SHA does not match expected $EXPECTED_SHA — verify staging deploy succeeded before proceeding"
-          else
-            echo "  ✅ Staging SHA matches — safe to promote to production"
-          fi
-          STAGING_HEALTH=$(curl -sf --max-time 15 -o /dev/null -w "%{http_code}" "$STAGING_URL/healthz" 2>/dev/null || echo "000")
-          if [ "$STAGING_HEALTH" != "200" ]; then
-            echo "::error::Staging health check returned HTTP $STAGING_HEALTH — cannot promote to production"
+            echo "::error::Staging SHA $STAGING_SHA does not match expected $EXPECTED_SHA after $ATTEMPTS attempts — cannot promote to production"
             exit 1
           fi
-          echo "  ✅ Staging healthy (HTTP $STAGING_HEALTH) — proceeding with production deploy"
+          if [ "$STAGING_HEALTH" != "200" ]; then
+            echo "::error::Staging health check returned HTTP $STAGING_HEALTH after $ATTEMPTS attempts — cannot promote to production"
+            exit 1
+          fi
+          echo "  Staging healthy (HTTP $STAGING_HEALTH) — proceeding with production deploy"
 
       # Capture the live production image BEFORE overwriting it. Auto-rollback has no
       # deployment slots on Basic tier (IT handover item 1), so PREVIOUS_IMAGE is the only
