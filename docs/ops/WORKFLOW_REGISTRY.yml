@@ -35,19 +35,10 @@ p0_workflows:
       # correct against everything the repository defines: the incident template's
       # first step declares a field named `contract`
       # (frontend/src/pages/PortalDynamicForm.tsx, FALLBACK_TEMPLATES.incident) and
-      # DynamicFormRenderer emits `data-testid="field-${field.name}"`. There is no
-      # form-template seed in the repo — the live template is authored through the
-      # admin form builder and stored in the database — so a rename made there
-      # cannot be detected from source.
-      #
-      # The 2026-07-25 gate failure was NOT a rename. The workflow artifact shows
-      # the page requested the template and `lookup/customers` and then stopped,
-      # never requesting `workforce_roles` or `medical_assistance` — the
-      # early-return branch PortalDynamicForm takes when the customers lookup
-      # rejects, in which case no template renders and no field of any name exists.
-      # The page-audit artifact from the same run shows the API host returning 503
-      # to the frontend throughout. Fix the environment first; only then is a
-      # remaining failure here evidence about the field itself.
+      # DynamicFormRenderer emits `data-testid="field-contract"` for contract /
+      # customer / client pickers. Wait for `[data-testid=portal-form-ready]`
+      # before this step — the 5s field wait used to expire while the page was
+      # still on the loading spinner (LIVE SHA e4771f9, run 31880826656).
       - stepId: 4
         action: "Fill first form step (contract)"
         form_fields:
