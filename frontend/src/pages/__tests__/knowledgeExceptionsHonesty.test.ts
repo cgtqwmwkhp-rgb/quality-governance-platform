@@ -127,4 +127,14 @@ describe('knowledgeExceptionsHonesty — stable de-dupe', () => {
     expect(rows[0].primary.status).toBe('confirmed')
     expect(rows[0].allocationKind).toBe('already_confirmed')
   })
+
+  it('preserves server order while choosing the best primary within each group', () => {
+    const rows = dedupeKnowledgeExceptions([
+      baseLink({ id: 10, entity_id: 'first', confidence: 0.5 }),
+      baseLink({ id: 99, entity_id: 'second', confidence: 0.8 }),
+      baseLink({ id: 11, entity_id: 'first', confidence: 0.9 }),
+    ])
+
+    expect(rows.map((row) => row.primary.id)).toEqual([11, 99])
+  })
 })
