@@ -372,18 +372,12 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             }
             
             // Fill form fields if specified.
-            // Portal incident/near-miss P0s were racing the form-config round
-            // trip: after clicking the type card the page is still
-            // `portal-form-loading`, and a 5s wait for `field-contract` expired
-            // on LIVE staging (UX coverage 31880826656). Wait for the ready
-            // marker up to the workflow budget first; the field wait stays
-            // fail-closed if the picker never appears.
+            // Portal incident/near-miss P0s can spend several seconds loading
+            // their dynamic form config. Wait for each requested field itself
+            // for the workflow budget: this covers those slow dynamic fields
+            // without waiting for the portal-only `portal-form-ready` marker on
+            // unrelated forms such as RTA and admin login.
             if (step.form_fields) {
-              const formReady = page.locator('[data-testid="portal-form-ready"]').first();
-              await waitForVisible(
-                formReady,
-                Math.max(5000, (workflow.max_duration_seconds || 30) * 1000),
-              );
               for (const field of step.form_fields) {
                 const value = replaceTestData(field.value);
                 const wrapper = page.locator(field.selector).first();
