@@ -103,4 +103,12 @@ describe('FormBuilder API wiring', () => {
     )
     expect(screen.queryByRole('button', { name: 'Step 1' })).not.toBeInTheDocument()
   })
+
+  it('does not paint Delete form with text-destructive (P1 color-contrast)', () => {
+    render(<FormBuilder />)
+
+    const del = screen.getByRole('button', { name: 'admin.forms.delete_form' })
+    expect(del.className.split(/\s+/)).not.toContain('text-destructive')
+    expect(del).toHaveClass('text-foreground')
+  })
 })

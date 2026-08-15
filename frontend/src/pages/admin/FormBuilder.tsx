@@ -528,6 +528,7 @@ export default function FormBuilder() {
                     value={template.name}
                     onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="e.g. Incident Report Form"
+                    className="placeholder:text-foreground-secondary"
                   />
                 </div>
                 <div>
@@ -567,6 +568,7 @@ export default function FormBuilder() {
                       setTemplate((prev) => ({ ...prev, description: e.target.value }))
                     }
                     placeholder="Describe what this form is used for..."
+                    className="placeholder:text-foreground-secondary"
                     rows={2}
                   />
                 </div>
@@ -774,7 +776,7 @@ export default function FormBuilder() {
                             className="mt-2 bg-card border border-border rounded-xl shadow-lg p-4 max-h-64 overflow-y-auto"
                             data-testid="formbuilder-field-palette"
                           >
-                            <p className="text-xs text-muted-foreground mb-2 font-medium">
+                            <p className="text-xs text-foreground-secondary mb-2 font-medium">
                               Select Field Type
                             </p>
                             <div className="grid grid-cols-3 gap-2">
@@ -824,9 +826,10 @@ export default function FormBuilder() {
                       }))
                     }
                     placeholder="e.g. INC"
+                    className="placeholder:text-foreground-secondary"
                     maxLength={10}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-foreground-secondary mt-1">
                     References will be: {template.reference_prefix || 'REF'}-2026-0001
                   </p>
                 </div>
@@ -930,8 +933,9 @@ export default function FormBuilder() {
                         }))
                       }
                       placeholder="email@example.com, another@example.com"
+                      className="placeholder:text-foreground-secondary"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-foreground-secondary mt-1">
                       {t('admin.forms.notification_emails_hint')}
                     </p>
                   </div>
@@ -945,14 +949,14 @@ export default function FormBuilder() {
               </h3>
               <div className="space-y-2">
                 <Button variant="outline" className="w-full justify-start">
-                  <Copy className="w-4 h-4 mr-2" />
+                  <Copy className="w-4 h-4 mr-2" aria-hidden="true" />
                   {t('admin.forms.duplicate_form')}
                 </Button>
                 <Button
                   variant="outline"
-                  className="w-full justify-start text-destructive hover:bg-destructive/10"
+                  className="w-full justify-start border-destructive/40 text-foreground hover:bg-destructive/10"
                 >
-                  <Trash2 className="w-4 h-4 mr-2" />
+                  <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
                   {t('admin.forms.delete_form')}
                 </Button>
               </div>
