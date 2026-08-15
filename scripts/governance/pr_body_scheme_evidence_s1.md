@@ -46,9 +46,9 @@
 - [ ] Hosted CI — pending PR checks
 
 ## 6) Critical Journeys Verified (CUJ)
-- [ ] CUJ-S1-01: Prod `/compliance` CE card opens 5-control tree (after LIVE).
-- [ ] CUJ-S1-03: CHAS/SSIP still have no coverage %.
-- [x] CUJ-S1-05: ISO path unchanged (existing list_standards ISO assertions).
+- [ ] CUJ-01: Prod `/compliance` CE card opens 5-control tree (after LIVE).
+- [ ] CUJ-02: CHAS/SSIP still have no coverage %.
+- [x] CUJ-03: ISO path unchanged (existing list_standards ISO assertions).
 
 ## 7) Observability & Ops
 - No new flags. Scheme report includes `honesty_note`.
