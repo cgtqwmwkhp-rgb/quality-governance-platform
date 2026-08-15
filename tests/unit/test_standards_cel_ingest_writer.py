@@ -104,12 +104,29 @@ async def test_existing_human_stamp_is_preserved(monkeypatch):
     db.add.assert_not_called()
 
 
-def test_gks_is_no_longer_on_the_remaining_writer_list():
+def test_remaining_cel_writer_list_is_empty():
+    from pathlib import Path
+
     paths = {row["path"] for row in remaining_writer_report()}
     assert "src/domain/services/governed_knowledge_service.py" not in paths
     assert "src/domain/services/builder_standard_link_service.py" not in paths
     assert "src/domain/services/external_audit_promotion_service.py" not in paths
-    assert "src/domain/services/audit_service.py" in paths
+    assert "src/domain/services/audit_service.py" not in paths
+    assert remaining_writer_report() == []
+
+    audit_source = Path("src/domain/services/audit_service.py").read_text()
+    assert "ComplianceEvidenceLink(" not in audit_source
+
+    allowed = {
+        Path("src/domain/models/compliance_evidence.py").resolve(),
+        Path("src/domain/services/compliance_evidence_link_writer.py").resolve(),
+    }
+    offenders = [
+        str(path)
+        for path in Path("src").rglob("*.py")
+        if path.resolve() not in allowed and "ComplianceEvidenceLink(" in path.read_text()
+    ]
+    assert offenders == []
 
 
 @pytest.mark.asyncio

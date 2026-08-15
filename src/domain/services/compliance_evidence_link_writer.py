@@ -24,10 +24,9 @@ Scope of this step
 This module is behaviour-preserving: it is the logic that was inline in
 ``POST /compliance/evidence/link`` and ``DELETE /compliance/evidence/link/{id}``,
 moved without change. Governed-knowledge ingest (PR-E4), Audit Builder Map
-mirrors (PR-E5), and external-audit promotion (PR-E6) now also write through this
-module. The remaining writers are listed in :data:`REMAINING_CEL_WRITERS` and are
-follow-up work — each one needs its own reading, and doing them all here would
-make this change unreviewable.
+mirrors (PR-E5), and external-audit promotion (PR-E6) also write through this
+module. PR-E7 proved ``audit_service.py`` has no live ``ComplianceEvidenceLink``
+construct, so :data:`REMAINING_CEL_WRITERS` is empty and kept as a ratchet.
 """
 
 from __future__ import annotations
@@ -50,16 +49,10 @@ from src.domain.models.compliance_evidence import (
 
 logger = logging.getLogger(__name__)
 
-#: CEL writers still outside this module, with what each one needs before it can
-#: be routed through here. Recorded rather than silently left, so the remaining
-#: consolidation is a visible list and not folklore.
-REMAINING_CEL_WRITERS: dict[str, str] = {
-    "src/domain/services/audit_service.py": (
-        "Listed as a leftover constructor site. Confirm there is still a live "
-        "ComplianceEvidenceLink construct in audit completion before routing; "
-        "do not drop this entry without a proof test."
-    ),
-}
+#: CEL writers still outside this module. Empty after PR-E7: ``audit_service.py``
+#: has no live ``ComplianceEvidenceLink(`` construct (proof-tested, not assumed).
+#: Keep the dict so a new side writer is a visible list, not folklore.
+REMAINING_CEL_WRITERS: dict[str, str] = {}
 
 
 @dataclass
