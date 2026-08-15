@@ -222,12 +222,13 @@ export default function PartnerWebhooks() {
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-16" aria-label={t('common.loading', 'Loading')}>
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex justify-center py-16" role="status">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
+              <span className="sr-only">{t('common.loading', 'Loading')}</span>
             </div>
           ) : subscriptions.length === 0 ? (
             <div className="py-16 text-center">
-              <Webhook className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+              <Webhook className="mx-auto mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
               <p className="font-medium">{t('admin.webhooks.empty_title', 'No webhook subscriptions')}</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {t('admin.webhooks.empty_subtitle', 'Add a webhook to deliver supported partner events.')}

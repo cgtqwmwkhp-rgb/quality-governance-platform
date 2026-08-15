@@ -465,16 +465,18 @@ export default function FormBuilder() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
+              type="button"
               onClick={() => navigate('/admin/forms')}
+              aria-label={t('admin.forms.back_to_forms', 'Back to forms')}
               className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
             >
-              <ArrowLeft className="w-5 h-5 text-foreground" />
+              <ArrowLeft className="w-5 h-5 text-foreground" aria-hidden="true" />
             </button>
             <div>
               <h1 className="text-lg font-bold text-foreground">
                 {isEditing ? t('admin.forms.edit_form') : t('admin.forms.create_new_form')}
               </h1>
-              <p className="text-sm text-muted-foreground">{t('admin.forms.design_subtitle')}</p>
+              <p className="text-sm text-foreground">{t('admin.forms.design_subtitle')}</p>
             </div>
           </div>
 
@@ -588,59 +590,69 @@ export default function FormBuilder() {
                   {/* Step Header */}
                   <div
                     className={cn(
-                      'flex items-center justify-between p-4 cursor-pointer',
-                      selectedStepId === step.id ? 'bg-primary/5' : 'bg-surface',
+                      'flex items-center justify-between p-4',
+                      selectedStepId === step.id ? 'bg-primary/5' : 'bg-card',
                     )}
-                    onClick={() => {
-                      setSelectedStepId(step.id)
-                      toggleStepExpanded(step.id)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setSelectedStepId(step.id)
-                        toggleStepExpanded(step.id)
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
                   >
-                    <div className="flex items-center gap-3">
-                      <GripVertical className="w-5 h-5 text-muted-foreground cursor-grab" />
-                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <GripVertical
+                        className="w-5 h-5 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <div
+                        className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold"
+                        aria-hidden="true"
+                      >
                         {stepIndex + 1}
                       </div>
-                      <div>
+                      <div className="min-w-0">
+                        <label htmlFor={`formbuilder-step-name-${step.id}`} className="sr-only">
+                          {t('admin.forms.step_name', 'Step name')}
+                        </label>
                         <input
+                          id={`formbuilder-step-name-${step.id}`}
                           type="text"
                           value={step.name}
-                          onChange={(e) => {
-                            e.stopPropagation()
-                            updateStep(step.id, { name: e.target.value })
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="font-medium text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+                          onChange={(e) => updateStep(step.id, { name: e.target.value })}
+                          onFocus={() => setSelectedStepId(step.id)}
+                          className="font-medium text-foreground bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-sm"
                         />
-                        <p className="text-sm text-muted-foreground">{step.fields.length} fields</p>
+                        <p className="text-sm text-foreground">
+                          {step.fields.length} {t('admin.forms.fields', 'fields')}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {template.steps.length > 1 && (
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removeStep(step.id)
-                          }}
+                          type="button"
+                          onClick={() => removeStep(step.id)}
+                          aria-label={t('admin.forms.remove_step', 'Remove step')}
                           className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
                         >
-                          <Trash2 className="w-4 h-4 text-destructive" />
+                          <Trash2 className="w-4 h-4 text-destructive" aria-hidden="true" />
                         </button>
                       )}
-                      {step.isExpanded ? (
-                        <ChevronUp className="w-5 h-5 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                      )}
+                      <button
+                        type="button"
+                        aria-expanded={step.isExpanded}
+                        aria-label={
+                          step.isExpanded
+                            ? t('admin.forms.collapse_step', 'Collapse step')
+                            : t('admin.forms.expand_step', 'Expand step')
+                        }
+                        onClick={() => {
+                          setSelectedStepId(step.id)
+                          toggleStepExpanded(step.id)
+                        }}
+                        className="p-2 rounded-lg hover:bg-muted transition-colors"
+                      >
+                        {step.isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-foreground" aria-hidden="true" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-foreground" aria-hidden="true" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -648,47 +660,71 @@ export default function FormBuilder() {
                   {step.isExpanded && (
                     <div className="p-4 border-t border-border space-y-3">
                       {step.fields.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <HelpCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                          <p>{t('admin.forms.no_fields')}</p>
-                          <p className="text-sm">{t('admin.forms.no_fields_hint')}</p>
+                        <div className="text-center py-8">
+                          <HelpCircle
+                            className="w-12 h-12 mx-auto mb-2 text-foreground"
+                            aria-hidden="true"
+                          />
+                          <p className="text-foreground">{t('admin.forms.no_fields')}</p>
+                          <p className="text-sm text-foreground">{t('admin.forms.no_fields_hint')}</p>
                         </div>
                       ) : (
                         step.fields.map((field) => (
                           <div
                             key={field.id}
-                            className="flex items-center gap-3 p-3 bg-surface rounded-lg border border-border group"
+                            className="flex items-center gap-3 p-3 bg-card rounded-lg border border-border group"
                           >
-                            <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
+                            <GripVertical
+                              className="w-4 h-4 text-muted-foreground"
+                              aria-hidden="true"
+                            />
                             <div className="flex-1 grid grid-cols-3 gap-3">
-                              <Input
-                                value={field.label}
-                                onChange={(e) =>
-                                  updateField(step.id, field.id, { label: e.target.value })
-                                }
-                                placeholder="Field Label"
-                                className="text-sm"
-                              />
-                              <select
-                                value={field.field_type}
-                                onChange={(e) =>
-                                  updateField(step.id, field.id, { field_type: e.target.value })
-                                }
-                                className="px-3 py-2 bg-card border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                              >
-                                {FIELD_TYPES.map((ft) => (
-                                  <option key={ft.value} value={ft.value}>
-                                    {ft.icon} {ft.label}
-                                  </option>
-                                ))}
-                              </select>
+                              <div>
+                                <label
+                                  htmlFor={`formbuilder-field-label-${field.id}`}
+                                  className="sr-only"
+                                >
+                                  {t('admin.forms.field_label', 'Field label')}
+                                </label>
+                                <Input
+                                  id={`formbuilder-field-label-${field.id}`}
+                                  value={field.label}
+                                  onChange={(e) =>
+                                    updateField(step.id, field.id, { label: e.target.value })
+                                  }
+                                  placeholder="Field Label"
+                                  className="text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label
+                                  htmlFor={`formbuilder-field-type-${field.id}`}
+                                  className="sr-only"
+                                >
+                                  {t('admin.forms.field_type', 'Field type')}
+                                </label>
+                                <select
+                                  id={`formbuilder-field-type-${field.id}`}
+                                  value={field.field_type}
+                                  onChange={(e) =>
+                                    updateField(step.id, field.id, { field_type: e.target.value })
+                                  }
+                                  className="w-full px-3 py-2 bg-card border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                >
+                                  {FIELD_TYPES.map((ft) => (
+                                    <option key={ft.value} value={ft.value}>
+                                      {ft.icon} {ft.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                               <div className="flex items-center gap-2">
                                 <label
-                                  htmlFor="formbuilder-field-3"
-                                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                                  htmlFor={`formbuilder-field-required-${field.id}`}
+                                  className="flex items-center gap-2 text-sm text-foreground"
                                 >
                                   <input
-                                    id="formbuilder-field-3"
+                                    id={`formbuilder-field-required-${field.id}`}
                                     type="checkbox"
                                     checked={field.is_required}
                                     onChange={(e) =>
@@ -703,10 +739,12 @@ export default function FormBuilder() {
                               </div>
                             </div>
                             <button
+                              type="button"
                               onClick={() => removeField(step.id, field.id)}
-                              className="p-2 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 rounded-lg transition-all"
+                              aria-label={t('admin.forms.remove_field', 'Remove field')}
+                              className="p-2 hover:bg-destructive/10 rounded-lg transition-all"
                             >
-                              <Trash2 className="w-4 h-4 text-destructive" />
+                              <Trash2 className="w-4 h-4 text-destructive" aria-hidden="true" />
                             </button>
                           </div>
                         ))

@@ -88,5 +88,19 @@ describe('FormBuilder API wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: /Text Input/i }))
 
     expect(screen.getByDisplayValue('Text Input')).toBeInTheDocument()
+    expect(screen.getByLabelText('Field label')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove field' })).toBeInTheDocument()
+  })
+
+  it('names the back control, step name, and expand control without nesting interactives', () => {
+    render(<FormBuilder />)
+
+    expect(screen.getByRole('button', { name: 'Back to forms' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Step name')).toHaveValue('Step 1')
+    expect(screen.getByRole('button', { name: 'Collapse step' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.queryByRole('button', { name: 'Step 1' })).not.toBeInTheDocument()
   })
 })
