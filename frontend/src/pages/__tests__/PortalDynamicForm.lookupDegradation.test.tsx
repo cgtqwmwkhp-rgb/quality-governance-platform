@@ -84,6 +84,8 @@ describe('PortalDynamicForm form-config loading', () => {
   it('renders the contract field when every catalog loads', async () => {
     renderForm()
     expect(await screen.findByTestId('field-contract')).toBeInTheDocument()
+    expect(screen.getByTestId('portal-form-ready')).toBeInTheDocument()
+    expect(screen.queryByTestId('portal-form-loading')).not.toBeInTheDocument()
   })
 
   it('still renders the form when the customers lookup fails', async () => {

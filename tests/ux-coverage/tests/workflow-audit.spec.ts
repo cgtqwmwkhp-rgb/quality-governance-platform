@@ -371,12 +371,26 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
               await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
             }
             
-            // Fill form fields if specified
+            // Fill form fields if specified.
+            // Portal incident/near-miss P0s were racing the form-config round
+            // trip: after clicking the type card the page is still
+            // `portal-form-loading`, and a 5s wait for `field-contract` expired
+            // on LIVE staging (UX coverage 31880826656). Wait for the ready
+            // marker up to the workflow budget first; the field wait stays
+            // fail-closed if the picker never appears.
             if (step.form_fields) {
+              const formReady = page.locator('[data-testid="portal-form-ready"]').first();
+              await waitForVisible(
+                formReady,
+                Math.max(5000, (workflow.max_duration_seconds || 30) * 1000),
+              );
               for (const field of step.form_fields) {
                 const value = replaceTestData(field.value);
                 const wrapper = page.locator(field.selector).first();
-                await wrapper.waitFor({ state: 'visible', timeout: 5000 });
+                await wrapper.waitFor({
+                  state: 'visible',
+                  timeout: Math.max(5000, (workflow.max_duration_seconds || 30) * 1000),
+                });
 
                 const input = wrapper.locator('input, textarea').first();
                 if (await input.count() > 0) {

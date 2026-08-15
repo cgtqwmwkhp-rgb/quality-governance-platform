@@ -1271,7 +1271,10 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div
+        className="min-h-screen bg-surface flex items-center justify-center"
+        data-testid="portal-form-loading"
+      >
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
           <p className="text-muted-foreground">{t('portal.loading_form')}</p>
@@ -1320,7 +1323,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       : FALLBACK_MEDICAL_OPTIONS
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface" data-testid="portal-form-ready">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">

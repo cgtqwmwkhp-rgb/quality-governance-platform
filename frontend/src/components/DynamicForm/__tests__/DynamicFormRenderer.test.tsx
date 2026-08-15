@@ -662,6 +662,36 @@ describe('PX-301 portal field accessibility', () => {
     expect(trigger).toHaveAttribute('aria-haspopup', 'listbox')
     expect(trigger).toHaveAttribute('aria-required', 'true')
   })
+
+  it('aliases customer and client select wrappers to field-contract for P0 CUJs', () => {
+    const selectTemplate: FormTemplate = {
+      ...threeStepTemplate(),
+      steps: [
+        {
+          id: 1,
+          name: 'Customer',
+          order: 0,
+          fields: [
+            field({
+              id: 1,
+              name: 'customer',
+              label: 'Select customer',
+              field_type: 'select',
+              is_required: true,
+            }),
+          ],
+        },
+      ],
+    }
+
+    renderForm({
+      template: selectTemplate,
+      contractOptions: [{ value: 'ukpn', label: 'UKPN' }],
+    })
+
+    expect(screen.getByTestId('field-contract')).toBeInTheDocument()
+    expect(screen.queryByTestId('field-customer')).not.toBeInTheDocument()
+  })
 })
 
 describe('validateAllSteps on submit', () => {
