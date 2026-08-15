@@ -136,7 +136,12 @@ export function DocumentRelationshipsPanel({
   const counterpartLabels = useMemo(() => {
     const labels: Record<number, string | null | undefined> = {}
     for (const [id, doc] of Object.entries(counterparts)) {
-      labels[Number(id)] = doc?.title ?? null
+      const counterpartId = Number(id)
+      if (doc === null) {
+        labels[counterpartId] = null
+      } else if (doc?.title) {
+        labels[counterpartId] = doc.title
+      }
     }
     return labels
   }, [counterparts])
