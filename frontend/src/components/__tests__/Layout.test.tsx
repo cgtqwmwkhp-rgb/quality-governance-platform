@@ -154,13 +154,16 @@ describe('Layout', () => {
       ],
       [
         'nav.assurance',
-        ['/audits', '/audit-templates', '/uvdb', '/planet-mark', '/customer-audits'],
+        ['/audits', '/audit-templates'],
       ],
       [
         'nav.compliance_sustainability',
         [
           '/ims',
           '/compliance',
+          '/uvdb',
+          '/planet-mark',
+          '/customer-audits',
           '/knowledge-exceptions',
           '/document-control',
           '/compliance-schedule',
@@ -196,6 +199,71 @@ describe('Layout', () => {
         expect(navLink(path)).toBeInTheDocument()
       }
     }
+  })
+
+  it('places specialist SoR homes under Compliance and keeps Audits work in Assurance (A1)', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.assurance' }))
+    const assurancePanel = screen.getByTestId('nav-hub-assurance')
+    expect(within(assurancePanel).getByRole('link', { name: 'nav.audits' })).toHaveAttribute(
+      'href',
+      '/audits',
+    )
+    expect(within(assurancePanel).getByRole('link', { name: 'nav.audit_builder' })).toHaveAttribute(
+      'href',
+      '/audit-templates',
+    )
+    expect(within(assurancePanel).queryByRole('link', { name: 'nav.uvdb_achilles' })).not.toBeInTheDocument()
+    expect(within(assurancePanel).queryByRole('link', { name: 'nav.planet_mark' })).not.toBeInTheDocument()
+    expect(
+      within(assurancePanel).queryByRole('link', { name: /nav\.customer_audits|nav\.customer_programme/ }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
+    const compliancePanel = screen.getByTestId('nav-hub-compliance-sustainability')
+    expect(within(compliancePanel).getByRole('link', { name: 'nav.uvdb_achilles' })).toHaveAttribute(
+      'href',
+      '/uvdb',
+    )
+    expect(within(compliancePanel).getByRole('link', { name: 'nav.planet_mark' })).toHaveAttribute(
+      'href',
+      '/planet-mark',
+    )
+    expect(
+      within(compliancePanel).getByRole('link', { name: 'nav.customer_programme' }),
+    ).toHaveAttribute('href', '/customer-audits')
+    expect(
+      within(compliancePanel).queryByRole('link', { name: 'nav.customer_audits' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('auto-expands Compliance when a specialist SoR home is the active route (A1)', async () => {
+    window.history.pushState({}, '', '/uvdb')
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByRole('button', { name: 'nav.compliance_sustainability' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'nav.assurance' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(navLink('/uvdb')).toBeInTheDocument()
   })
 
   it('exposes Fleet & Assets as a first-level hub (not a Safety subsection)', async () => {

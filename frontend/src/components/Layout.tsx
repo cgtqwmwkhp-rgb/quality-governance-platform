@@ -198,12 +198,11 @@ export default function Layout({
       id: 'assurance',
       title: t('nav.assurance'),
       icon: ClipboardCheck,
+      // A1: Assurance is the engagement work queue. Specialist SoR homes
+      // (UVDB, Planet Mark, Customer programme) belong under Compliance.
       items: [
         { path: '/audits', icon: ClipboardCheck, label: t('nav.audits') },
         { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
-        { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
-        { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
-        { path: CUSTOMER_AUDITS_PROGRAMME_PATH, icon: Users, label: t('nav.customer_audits') },
       ],
     },
     {
@@ -213,6 +212,13 @@ export default function Layout({
       items: [
         { path: '/ims', icon: GitMerge, label: t('nav.overview') },
         { path: '/compliance', icon: BookOpen, label: t('nav.standards') },
+        { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
+        { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
+        {
+          path: CUSTOMER_AUDITS_PROGRAMME_PATH,
+          icon: Users,
+          label: t('nav.customer_programme', { defaultValue: 'Customer programme' }),
+        },
         {
           path: '/knowledge-exceptions',
           icon: Sparkles,
