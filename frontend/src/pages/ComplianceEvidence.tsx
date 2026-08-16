@@ -346,7 +346,9 @@ export default function ComplianceEvidence() {
         const settled = await Promise.allSettled([
           complianceApi.listStandards(),
           complianceApi.listClauses(standardFilter, debouncedSearchQuery || undefined),
-          complianceApi.getCoverage(standardFilter),
+          // Score cards must keep every loaded axis. Filtering coverage to the
+          // selected tree used to omit by_standard rows and mash Full/Partial.
+          complianceApi.getCoverage(),
           complianceApi.getReport(standardFilter),
           complianceApi.listEvidenceLinks(),
         ])
@@ -495,16 +497,29 @@ export default function ComplianceEvidence() {
       (acc, standard) => {
         const byStandard = coverage?.by_standard?.[standard.id]
         const total = standard.clause_count
-        // Source truth from backend by_standard when available; fall back to standard fields.
-        // by_standard uses the same full/partial semantics as the main coverage formula.
-        const covered = byStandard?.covered ?? standard.covered_clauses
-        const partial = byStandard?.partial_coverage ?? 0
-        const gaps = total - covered - partial
+        // by_standard is the Full/Partial split. If the map exists but this id
+        // is missing, do not treat mashed covered_clauses as Full with Partial=0.
+        if (byStandard) {
+          const covered = byStandard.covered
+          const partial = byStandard.partial_coverage
+          acc[standard.id] = {
+            total,
+            covered,
+            partial,
+            gaps: Math.max(total - covered - partial, 0),
+          }
+          return acc
+        }
+        if (coverage?.by_standard) {
+          acc[standard.id] = { total, covered: 0, partial: 0, gaps: total }
+          return acc
+        }
+        const covered = standard.covered_clauses
         acc[standard.id] = {
           total,
           covered,
-          partial,
-          gaps: Math.max(gaps, 0),
+          partial: 0,
+          gaps: Math.max(total - covered, 0),
         }
         return acc
       },
@@ -989,7 +1004,9 @@ export default function ComplianceEvidence() {
                 gaps: standard.clause_count,
               }
               const coverageState = standardCoverageState({
-                coverageUnavailable,
+                coverageUnavailable:
+                  coverageUnavailable ||
+                  Boolean(coverage?.by_standard && coverage.by_standard[standard.id] === undefined),
                 canonicalDataDegraded: Boolean(standard.canonical_data_degraded),
                 canonicalDataMessage: standard.canonical_data_message ?? null,
                 hasCanonicalStandard: Boolean(standard.has_canonical_standard),

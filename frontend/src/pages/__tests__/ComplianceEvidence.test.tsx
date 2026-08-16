@@ -724,4 +724,96 @@ describe('ComplianceEvidence', () => {
     expect(await screen.findByTestId('compliance-evidence-section-imported')).toBeInTheDocument()
     expect(screen.getByText(/No imported ISO audits/i)).toBeInTheDocument()
   })
+
+  it('keeps CE score-card Full/Partial/% when the ISO tree is selected', async () => {
+    mockListStandards.mockResolvedValue({
+      data: [
+        ...standardsResponse.data,
+        {
+          id: 'ce',
+          code: 'CE',
+          name: 'Cyber Essentials',
+          description: 'NCSC Cyber Essentials',
+          clause_count: 5,
+          db_standard_id: null,
+          db_standard_code: null,
+          db_standard_name: null,
+          db_clause_count: 5,
+          ims_requirement_count: 0,
+          covered_clauses: 5,
+          coverage_percentage: 100,
+          has_canonical_standard: true,
+          canonical_data_degraded: false,
+          canonical_data_message: null,
+        },
+      ],
+    })
+    const isoRow = {
+      total: 1,
+      covered: 1,
+      partial_coverage: 0,
+      gaps: 0,
+      percentage: 100,
+    }
+    const ceRow = {
+      total: 5,
+      covered: 2,
+      partial_coverage: 1,
+      gaps: 2,
+      percentage: 50,
+    }
+    mockGetCoverage.mockImplementation((standard?: string) => {
+      if (standard) {
+        return Promise.resolve({
+          data: {
+            ...coverageResponse.data,
+            by_standard: { [standard]: isoRow },
+          },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          ...coverageResponse.data,
+          by_standard: { iso9001: isoRow, ce: ceRow },
+        },
+      })
+    })
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+    render(
+      <MemoryRouter initialEntries={['/compliance']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('compliance-score-ce')).toHaveTextContent('50%')
+    expect(screen.getByTestId('compliance-score-iso9001')).toHaveTextContent('100%')
+
+    fireEvent.click(screen.getByTestId('compliance-framework-card-9001'))
+
+    await waitFor(() => {
+      const last = mockGetCoverage.mock.calls.at(-1) ?? []
+      expect(last).toEqual([])
+    })
+    expect(mockListClauses.mock.calls.at(-1)?.[0]).toBe('iso9001')
+    expect(screen.getByTestId('compliance-score-ce')).toHaveTextContent('50%')
+    expect(screen.getByTestId('compliance-score-iso9001')).toHaveTextContent('100%')
+    const ceCard = screen.getByTestId('compliance-framework-card-ce')
+    expect(ceCard).toHaveTextContent(/2 Full/)
+    expect(ceCard).toHaveTextContent(/1 Partial/)
+  })
+
+  it('does not invent a CHAS coverage percentage', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+    render(
+      <MemoryRouter initialEntries={['/compliance']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    const chas = await screen.findByTestId('compliance-framework-card-chas')
+    expect(chas).toHaveTextContent('—')
+    expect(screen.getByTestId('compliance-score-note-chas')).toHaveTextContent(/no fake coverage/i)
+    expect(screen.queryByTestId('compliance-score-chas')).not.toBeInTheDocument()
+  })
 })
