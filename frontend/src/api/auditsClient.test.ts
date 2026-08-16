@@ -123,6 +123,8 @@ describe('createAuditsApi', () => {
     audits.startRun(4)
     audits.completeRun(4)
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs?page=1&page_size=10')
+    audits.listRuns(1, 10, { q: 'Wickford' })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs?page=1&page_size=10&q=Wickford')
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs', { template_id: 1 })
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs/4')
     expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/runs/4', { notes: 'n' })

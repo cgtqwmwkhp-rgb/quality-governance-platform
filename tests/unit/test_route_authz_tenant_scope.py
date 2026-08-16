@@ -90,6 +90,25 @@ async def test_audit_service_list_runs_sql_exact_tenant_only():
 
 
 @pytest.mark.asyncio
+async def test_audit_service_list_runs_q_sql_exact_tenant_and_ilike():
+    captured: list = []
+
+    async def _execute(stmt):
+        captured.append(stmt)
+        return _FakeResult(0)
+
+    service = AuditService(db=SimpleNamespace(execute=_execute))
+    await service.list_runs(42, page=1, page_size=20, q="Wickford")
+
+    assert captured, "expected count + page queries"
+    for stmt in captured:
+        sql = _sql(stmt)
+        _assert_exact_tenant_sql(sql, 42)
+        assert "LIKE" in sql
+        assert "WICKFORD" in sql
+
+
+@pytest.mark.asyncio
 async def test_audit_service_list_findings_sql_exact_tenant_only():
     captured: list = []
 

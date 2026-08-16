@@ -323,6 +323,7 @@ export default function Audits() {
   )
   const highlightedFindingRef = useRef<HTMLDivElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [runSearchQ, setRunSearchQ] = useState('')
   /** Hero band as dynamic filter — mirrors Risk Register KPI cards. */
   type HeroFilter = 'all' | 'in_progress' | 'completed' | 'scored' | 'open_findings'
   const [heroFilter, setHeroFilter] = useState<HeroFilter>('all')
@@ -377,7 +378,7 @@ export default function Audits() {
     setLoadError(null)
     try {
       const [auditsRes, findingsRes, openFindingsRes, templatesRes] = await Promise.allSettled([
-        auditsApi.listRuns(1, 100),
+        auditsApi.listRuns(1, 100, runSearchQ ? { q: runSearchQ } : undefined),
         auditsApi.listFindings(1, FINDINGS_PAGE_SIZE),
         auditsApi.listFindings(1, 1, undefined, 'open'),
         auditsApi.listTemplates(1, 100, { is_published: true }),
@@ -418,7 +419,12 @@ export default function Audits() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [runSearchQ])
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setRunSearchQ(searchTerm.trim()), 300)
+    return () => window.clearTimeout(handle)
+  }, [searchTerm])
 
   useEffect(() => {
     void loadData()
@@ -1329,6 +1335,7 @@ export default function Audits() {
           type="text"
           placeholder={t('audits.search_placeholder')}
           value={searchTerm}
+          data-testid="audits-search"
           onChange={(e) => {
             const next = e.target.value
             setSearchTerm(next)
@@ -1344,8 +1351,7 @@ export default function Audits() {
           role="status"
           data-testid="audits-runs-truncated-banner"
         >
-          Showing {audits.length} of {auditsTotal} runs loaded. Search uses this page. Open List
-          for the loaded set.
+          Showing {audits.length} of {auditsTotal} {runSearchQ ? 'matching runs.' : 'runs loaded. Search uses the server when you type. Open List for the loaded set.'}
         </div>
       ) : null}
 

@@ -592,6 +592,58 @@ class TestAuditsAPI:
         assert len(data["items"]) >= 3
 
     @pytest.mark.asyncio
+    async def test_list_audit_runs_q_matches_title(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """A5b: q= locates a run by title without relying on the default page window."""
+        template = AuditTemplate(
+            name="A5b Search Template",
+            category="Testing",
+            audit_type="inspection",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        decoy = AuditRun(
+            template_id=template.id,
+            title="Unrelated decoy run",
+            status=AuditStatus.DRAFT,
+            assigned_to_id=test_user.id,
+            tenant_id=test_user.tenant_id or 1,
+            reference_number=generate_test_reference("AUD"),
+        )
+        needle = AuditRun(
+            template_id=template.id,
+            title="A5b-locate-needle-Wickford",
+            location="Wickford",
+            status=AuditStatus.DRAFT,
+            assigned_to_id=test_user.id,
+            tenant_id=test_user.tenant_id or 1,
+            reference_number=generate_test_reference("AUD"),
+        )
+        test_session.add(decoy)
+        test_session.add(needle)
+        await test_session.commit()
+
+        response = await client.get(
+            "/api/v1/audits/runs",
+            params={"q": "A5b-locate-needle-Wickford", "page_size": 1},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        titles = [item["title"] for item in data["items"]]
+        assert titles == ["A5b-locate-needle-Wickford"]
+        assert data["total"] >= 1
+
+    @pytest.mark.asyncio
     async def test_clone_audit_template(
         self,
         client: AsyncClient,

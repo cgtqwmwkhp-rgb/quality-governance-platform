@@ -1565,3 +1565,70 @@ describe('A3 programme-scoped findings + clause', () => {
     expect(screen.getByTestId('audits-kpi-open-findings')).toHaveTextContent('1')
   })
 })
+
+describe('A5b server search q=', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('refetches listRuns with q so search is not stuck on the loaded page', async () => {
+    mockListRuns.mockImplementation((_page?: number, _pageSize?: number, options?: { q?: string }) => {
+      if (options?.q === 'Wickford-needle') {
+        return Promise.resolve({
+          data: {
+            items: [
+              {
+                id: 240,
+                reference_number: 'AUD-2026-0240',
+                template_id: 21,
+                template_version: 1,
+                title: 'Wickford-needle close',
+                status: 'completed',
+                source_origin: 'internal',
+                created_at: new Date().toISOString(),
+              },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 100,
+            pages: 1,
+          },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          items: [
+            {
+              id: 1,
+              reference_number: 'AUD-2026-0001',
+              template_id: 21,
+              template_version: 1,
+              title: 'Loaded page run',
+              status: 'scheduled',
+              source_origin: 'internal',
+              created_at: new Date().toISOString(),
+            },
+          ],
+          total: 240,
+          page: 1,
+          page_size: 100,
+          pages: 3,
+        },
+      })
+    })
+
+    render(<Audits />)
+    expect(await screen.findByText('Loaded page run')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('audits-search'), {
+      target: { value: 'Wickford-needle' },
+    })
+    expect(await screen.findByText('Wickford-needle close')).toBeInTheDocument()
+    expect(screen.queryByText('Loaded page run')).not.toBeInTheDocument()
+    expect(mockListRuns).toHaveBeenCalledWith(1, 100, { q: 'Wickford-needle' })
+  })
+})
