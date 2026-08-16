@@ -1254,7 +1254,7 @@ export default function ComplianceEvidence() {
                   <EmptyState
                     icon={<FileText className="w-8 h-8 text-muted-foreground" />}
                     title="No evidence items"
-                    description="Evidence items will appear here when linked to ISO clauses."
+                    description="Evidence items will appear here when linked to ISO or loaded-scheme clauses."
                   />
                 ) : (
                   <div className="space-y-3">

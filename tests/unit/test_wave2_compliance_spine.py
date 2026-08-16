@@ -71,6 +71,66 @@ async def test_link_evidence_persists_tenant_scoped_links():
 
 
 @pytest.mark.asyncio
+async def test_link_evidence_accepts_loaded_scheme_catalogue_keys():
+    added = []
+
+    async def refresh(link):
+        link.id = len(added)
+        link.created_at = datetime(2026, 3, 22, tzinfo=timezone.utc)
+
+    db = types.SimpleNamespace(
+        execute=AsyncMock(return_value=_FakeExecuteResult([])),
+        add=lambda obj: added.append(obj),
+        commit=AsyncMock(),
+        refresh=AsyncMock(side_effect=refresh),
+    )
+    current_user = types.SimpleNamespace(id=17, email="qa@example.com", tenant_id=91)
+
+    response = await link_evidence(
+        types.SimpleNamespace(
+            entity_type="document",
+            entity_id="DOC-CE-1",
+            clause_ids=["ce-firewalls"],
+            linked_by="manual",
+            confidence=90.0,
+            title="Firewall standard",
+            notes="CE control evidence",
+            cover_kind=EvidenceCoverKind.EVIDENCES.value,
+        ),
+        db,
+        current_user,
+    )
+
+    assert len(added) == 1
+    assert added[0].clause_id == "ce-firewalls"
+    assert response["message"] == "Upserted 1 evidence link(s)"
+
+
+@pytest.mark.asyncio
+async def test_link_evidence_refuses_provisional_scheme_keys():
+    from src.domain.exceptions import BadRequestError
+
+    db = types.SimpleNamespace(execute=AsyncMock())
+    current_user = types.SimpleNamespace(id=17, email="qa@example.com", tenant_id=91)
+
+    with pytest.raises(BadRequestError, match="Invalid clause ID"):
+        await link_evidence(
+            types.SimpleNamespace(
+                entity_type="document",
+                entity_id="DOC-CHAS",
+                clause_ids=["chas-CHAS 1"],
+                linked_by="manual",
+                confidence=90.0,
+                title="CHAS theme",
+                notes="must not write",
+                cover_kind=EvidenceCoverKind.EVIDENCES.value,
+            ),
+            db,
+            current_user,
+        )
+
+
+@pytest.mark.asyncio
 async def test_get_compliance_coverage_uses_persisted_evidence_links():
     persisted_link = ComplianceEvidenceLink(
         tenant_id=12,
