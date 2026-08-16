@@ -106,4 +106,26 @@ describe('AssessmentCreate employee picker', () => {
     expect(screen.getByTestId('map-w2-competency-scheme-planet-mark')).toBeInTheDocument()
     expect(screen.getByTestId('map-w2-competency-scheme-uvdb')).toBeInTheDocument()
   })
+
+  it('seeds the template select from ?templateId=', async () => {
+    listEngineers.mockResolvedValue({ data: { items: [] } })
+    listTemplates.mockResolvedValue({
+      data: {
+        items: [
+          { id: 1, name: 'Template A', audit_type: 'competency' },
+          { id: 42, name: 'Seeded skills template', audit_type: 'inspection' },
+        ],
+      },
+    })
+
+    const AssessmentCreate = (await import('../AssessmentCreate')).default
+    render(
+      <MemoryRouter initialEntries={['/workforce/assessments/new?templateId=42']}>
+        <AssessmentCreate />
+      </MemoryRouter>,
+    )
+
+    const select = await screen.findByLabelText(/workforce\.common\.template/i)
+    await waitFor(() => expect(select).toHaveValue('42'))
+  })
 })

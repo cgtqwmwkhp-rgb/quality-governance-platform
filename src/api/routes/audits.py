@@ -641,13 +641,16 @@ async def update_template(
         template.is_published = False
 
     # Protect workflow/system-controlled fields from mass assignment.
+    # `tags` is the API field; the ORM column is `tags_json` (same remap as create_template).
     update_data = template_data.model_dump(
         exclude_unset=True,
-        exclude={"standard_ids", "is_active", "is_published", "template_status"},
+        exclude={"standard_ids", "is_active", "is_published", "template_status", "tags"},
     )
     for field in ("name", "description", "category"):
         if field in update_data and isinstance(update_data[field], str):
             update_data[field] = html.unescape(update_data[field])
+    if "tags" in template_data.model_fields_set:
+        update_data["tags_json"] = template_data.tags
     for field, value in update_data.items():
         setattr(template, field, value)
 

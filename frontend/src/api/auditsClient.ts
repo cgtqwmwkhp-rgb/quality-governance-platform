@@ -143,6 +143,7 @@ export interface AuditTemplateCreate {
   audit_type?: string
   scoring_method?: string
   passing_score?: number
+  tags?: string[]
 }
 
 export interface AuditTemplateUpdate {
@@ -152,6 +153,7 @@ export interface AuditTemplateUpdate {
   audit_type?: string
   scoring_method?: string
   passing_score?: number
+  tags?: string[]
   expected_updated_at?: string
 }
 

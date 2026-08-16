@@ -1335,6 +1335,63 @@ describe('Audits import modal deep-link (PX-260)', () => {
   })
 })
 
+describe('Audits schedule modal templateId seed (N-BUILD-1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams('templateId=21')
+    mockListRuns.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 21,
+            reference_number: 'TPL-0021',
+            name: 'Annual Safety Audit',
+            description: 'Published schedule template',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: ['instrument:audit'],
+            version: 3,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
+            id: 22,
+            reference_number: 'TPL-0022',
+            name: 'Other published template',
+            description: 'd',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: ['instrument:audit'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+  })
+
+  it('opens the schedule modal with the published template preselected', async () => {
+    render(<Audits />)
+
+    const dialog = await screen.findByRole('dialog')
+    const select = within(dialog).getByRole('combobox')
+    await waitFor(() => expect(select).toHaveValue('21'))
+  })
+})
+
 describe('A2 honest KPIs', () => {
   beforeEach(() => {
     vi.clearAllMocks()
