@@ -1589,6 +1589,7 @@ class AuditService:
         status_filter: str | None = None,
         template_id: int | None = None,
         assigned_to_id: int | None = None,
+        q: str | None = None,
     ) -> PaginatedResult:
         query = select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == tenant_id)
         if status_filter:
@@ -1597,6 +1598,16 @@ class AuditService:
             query = query.where(AuditRun.template_id == template_id)
         if assigned_to_id:
             query = query.where(AuditRun.assigned_to_id == assigned_to_id)
+        needle = (q or "").strip()
+        if needle:
+            pattern = f"%{needle}%"
+            query = query.where(
+                (AuditRun.title.ilike(pattern))
+                | (AuditRun.reference_number.ilike(pattern))
+                | (AuditRun.location.ilike(pattern))
+                | (AuditRun.assurance_scheme.ilike(pattern))
+                | (AuditRun.external_body_name.ilike(pattern))
+            )
         query = query.order_by(AuditRun.created_at.desc())
         return await self._paginate(query, page, page_size)
 

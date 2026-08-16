@@ -1010,6 +1010,10 @@ async def list_runs(
     status_filter: Optional[str] = Query(None, alias="status"),
     template_id: Optional[int] = None,
     assigned_to_id: Optional[int] = None,
+    q: Optional[str] = Query(
+        None,
+        description="Match title, reference, location, scheme, or body (ilike)",
+    ),
 ) -> Any:
     """List all audit runs with pagination and filtering."""
     try:
@@ -1022,6 +1026,7 @@ async def list_runs(
             status_filter=status_filter,
             template_id=template_id,
             assigned_to_id=assigned_to_id,
+            q=q,
         )
 
         validated_items = []

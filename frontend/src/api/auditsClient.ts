@@ -598,8 +598,15 @@ export function createAuditsApi(api: AxiosInstance) {
     api.delete(`/api/v1/audits/questions/${questionId}`, config),
 
   // Runs
-  listRuns: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?page=${page}&page_size=${pageSize}`),
+  listRuns: (page = 1, pageSize = 10, options?: { q?: string }) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    })
+    const q = options?.q?.trim()
+    if (q) params.set('q', q)
+    return api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?${params}`)
+  },
   createRun: (data: AuditRunCreate) => api.post<AuditRun>('/api/v1/audits/runs', data),
   getRun: (id: number) => api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
   getRunDetail: (id: number) => api.get<AuditRunDetail>(`/api/v1/audits/runs/${id}`),
