@@ -600,11 +600,13 @@ class TestAuditsAPI:
         auth_headers: dict,
     ):
         """A5b: q= locates a run by title without relying on the default page window."""
+        # auth_headers JWT is tenant_id=1; test_user is a different tenant fixture.
         template = AuditTemplate(
             name="A5b Search Template",
             category="Testing",
             audit_type="inspection",
-            created_by_id=test_user.id,
+            created_by_id=1,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)
@@ -615,8 +617,8 @@ class TestAuditsAPI:
             template_id=template.id,
             title="Unrelated decoy run",
             status=AuditStatus.DRAFT,
-            assigned_to_id=test_user.id,
-            tenant_id=test_user.tenant_id or 1,
+            assigned_to_id=1,
+            tenant_id=1,
             reference_number=generate_test_reference("AUD"),
         )
         needle = AuditRun(
@@ -624,8 +626,8 @@ class TestAuditsAPI:
             title="A5b-locate-needle-Wickford",
             location="Wickford",
             status=AuditStatus.DRAFT,
-            assigned_to_id=test_user.id,
-            tenant_id=test_user.tenant_id or 1,
+            assigned_to_id=1,
+            tenant_id=1,
             reference_number=generate_test_reference("AUD"),
         )
         test_session.add(decoy)
