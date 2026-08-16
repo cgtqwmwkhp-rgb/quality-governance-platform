@@ -9,6 +9,8 @@ import {
   partitionClosedForBoard,
   auditRunIsScored,
   formatAuditsAverageScore,
+  parseAuditsListDensity,
+  auditsListCellClass,
 } from '../auditsBoardModel'
 
 function run(partial: Partial<AuditRun> & Pick<AuditRun, 'id' | 'status'>): AuditRun {
@@ -175,5 +177,13 @@ describe('A2 score honesty', () => {
     ])
     expect(mixed.value).toBe('90%')
     expect(mixed.caption).toBeNull()
+  })
+
+  it('parses list density with Comfort as default', () => {
+    expect(parseAuditsListDensity(null)).toBe('comfort')
+    expect(parseAuditsListDensity('compact')).toBe('compact')
+    expect(parseAuditsListDensity('unknown')).toBe('comfort')
+    expect(auditsListCellClass('comfort')).toBe('px-6 py-4')
+    expect(auditsListCellClass('compact')).toBe('px-3 py-2')
   })
 })

@@ -172,6 +172,10 @@ describe('PlanetMark shell', () => {
     renderPlanetMark('/planet-mark?year=1')
 
     expect(await screen.findByText('planet_mark.title')).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-open-assurance-audits')).toHaveAttribute(
+      'href',
+      '/audits?source=planet_mark',
+    )
     expect(screen.getByRole('tab', { name: /planet_mark.shell.section.years/i })).toHaveAttribute(
       'aria-selected',
       'true',

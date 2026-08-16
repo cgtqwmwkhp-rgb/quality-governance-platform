@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Leaf,
   RefreshCw,
@@ -32,6 +32,7 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { ActionCard, type ActionItem } from '../components/planet-mark/ActionCard'
 import { ActionSummaryKPIs } from '../components/planet-mark/ActionSummaryKPIs'
 import { cn } from '../helpers/utils'
+import { PLANET_MARK_AUDITS_PATH } from '../components/assuranceHubHelpers'
 import {
   PLANET_MARK_SECTIONS,
   buildHotspotInitiatives,
@@ -74,6 +75,18 @@ function toActionItem(action: PlanetMarkActionRecord): ActionItem {
     is_overdue: action.is_overdue,
     notes: null,
   }
+}
+
+function PlanetMarkAuditsBoardStrip() {
+  return (
+    <Link
+      to={PLANET_MARK_AUDITS_PATH}
+      data-testid="planet-mark-open-assurance-audits"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+    >
+      Planet Mark on Audits
+    </Link>
+  )
 }
 
 export default function PlanetMark() {
@@ -444,6 +457,7 @@ export default function PlanetMark() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2" data-testid="planet-mark-filters">
+            <PlanetMarkAuditsBoardStrip />
             <select
               aria-label={t('planet_mark.shell.year_switcher_label')}
               data-testid="planet-mark-year-filter"
@@ -515,6 +529,7 @@ export default function PlanetMark() {
           className="flex flex-col sm:flex-row sm:items-center gap-2"
           data-testid="planet-mark-filters"
         >
+          <PlanetMarkAuditsBoardStrip />
           <label htmlFor="planet-mark-year" className="text-sm font-medium text-muted-foreground">
             {t('planet_mark.shell.year_switcher_label')}
           </label>

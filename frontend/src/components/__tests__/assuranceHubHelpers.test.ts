@@ -3,9 +3,11 @@ import {
   ACHILLES_UVDB_AUDITS_PATH,
   ASSURANCE_SOURCE_ACHILLES,
   ASSURANCE_SOURCE_CUSTOMER,
+  ASSURANCE_SOURCE_PLANET_MARK,
   ASSURANCE_SOURCE_UVDB,
   CUSTOMER_AUDITS_AUDITS_PATH,
   CUSTOMER_AUDITS_PROGRAMME_PATH,
+  PLANET_MARK_AUDITS_PATH,
   UVDB_AUDITS_AUDITS_PATH,
   filterAuditsByAssuranceSource,
   getCustomerCapaActionsPath,
@@ -14,6 +16,7 @@ import {
   getUvdbRiskRegisterPath,
   isAchillesUvdbAssuranceAudit,
   isCustomerAssuranceAudit,
+  isPlanetMarkAssuranceAudit,
   isStandardsSchemePath,
   navItemIsActive,
 } from '../assuranceHubHelpers'
@@ -33,6 +36,11 @@ describe('assuranceHubHelpers', () => {
     expect(CUSTOMER_AUDITS_AUDITS_PATH).toBe('/audits?source=customer')
     expect(CUSTOMER_AUDITS_PROGRAMME_PATH).toBe('/customer-audits')
     expect(ASSURANCE_SOURCE_CUSTOMER).toBe('customer')
+  })
+
+  it('exposes Planet Mark assurance filter path', () => {
+    expect(PLANET_MARK_AUDITS_PATH).toBe('/audits?source=planet_mark')
+    expect(ASSURANCE_SOURCE_PLANET_MARK).toBe('planet_mark')
   })
 
   it('exposes Achilles / UVDB assurance filter paths with parity aliases', () => {
@@ -84,6 +92,18 @@ describe('assuranceHubHelpers', () => {
     expect(filterAuditsByAssuranceSource(audits, ASSURANCE_SOURCE_UVDB)).toHaveLength(2)
   })
 
+  it('filterAuditsByAssuranceSource returns Planet Mark slice', () => {
+    const audits = [
+      { ...baseAudit, id: 1, assurance_scheme: 'Planet Mark' },
+      { ...baseAudit, id: 2, source_origin: 'internal' },
+      { ...baseAudit, id: 3, external_audit_type: 'planet_mark' },
+    ] satisfies AuditRun[]
+
+    expect(filterAuditsByAssuranceSource(audits, ASSURANCE_SOURCE_PLANET_MARK)).toHaveLength(2)
+    expect(isPlanetMarkAssuranceAudit({ ...baseAudit, source_origin: 'planet_mark' })).toBe(true)
+    expect(isPlanetMarkAssuranceAudit({ ...baseAudit, source_origin: 'internal' })).toBe(false)
+  })
+
   it('builds scoped CAPA and Risk deep-link paths', () => {
     expect(getCustomerCapaActionsPath(88)).toBe('/actions?sourceType=audit_finding&sourceId=88')
     expect(getCustomerRiskRegisterPath('AUD-C-001')).toBe(
@@ -130,6 +150,12 @@ describe('assuranceHubHelpers', () => {
     expect(navItemIsActive(UVDB_AUDITS_AUDITS_PATH, '/audits', '?source=achilles')).toBe(true)
     expect(navItemIsActive(ACHILLES_UVDB_AUDITS_PATH, '/uvdb', '')).toBe(true)
     expect(navItemIsActive('/audits', '/audits', '?source=achilles')).toBe(false)
+  })
+
+  it('navItemIsActive treats Planet Mark source as its own slice', () => {
+    expect(navItemIsActive(PLANET_MARK_AUDITS_PATH, '/audits', '?source=planet_mark')).toBe(true)
+    expect(navItemIsActive(PLANET_MARK_AUDITS_PATH, '/planet-mark', '')).toBe(true)
+    expect(navItemIsActive('/audits', '/audits', '?source=planet_mark')).toBe(false)
   })
 
   it('navItemIsActive keeps Admin Console exact-only vs admin children', () => {
