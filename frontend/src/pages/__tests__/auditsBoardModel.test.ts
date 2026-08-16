@@ -6,6 +6,7 @@ import {
   PROGRAM_FILTER_CHIPS,
   classifyAuditProgram,
   getAuditsForLaneStatuses,
+  partitionClosedForBoard,
 } from '../auditsBoardModel'
 
 function run(partial: Partial<AuditRun> & Pick<AuditRun, 'id' | 'status'>): AuditRun {
@@ -102,5 +103,45 @@ describe('AUD-W-01 audits board model (Round 3)', () => {
         }),
       ),
     ).toBe('customer')
+  })
+})
+
+describe('A5 closed board window', () => {
+  const nowMs = Date.parse('2026-08-16T07:00:00Z')
+
+  it('keeps completed runs from the last 30 days on the board', () => {
+    const audits = [
+      run({
+        id: 1,
+        status: 'completed',
+        title: 'Recent',
+        completed_at: '2026-08-10T10:00:00Z',
+      }),
+      run({
+        id: 2,
+        status: 'completed',
+        title: 'Aged',
+        completed_at: '2026-07-01T10:00:00Z',
+      }),
+      run({ id: 3, status: 'in_progress', title: 'Open' }),
+    ]
+    const part = partitionClosedForBoard(audits, nowMs)
+    expect(part.visible.map((a) => a.title)).toEqual(['Recent'])
+    expect(part.moreCount).toBe(1)
+  })
+
+  it('caps Closed cards at 8 and counts the rest as more', () => {
+    const audits = Array.from({ length: 9 }, (_, i) =>
+      run({
+        id: i + 1,
+        status: 'completed',
+        title: `Closed ${i + 1}`,
+        completed_at: `2026-08-${String(16 - i).padStart(2, '0')}T10:00:00Z`,
+      }),
+    )
+    const part = partitionClosedForBoard(audits, nowMs)
+    expect(part.visible).toHaveLength(8)
+    expect(part.visible[0]?.title).toBe('Closed 1')
+    expect(part.moreCount).toBe(1)
   })
 })
