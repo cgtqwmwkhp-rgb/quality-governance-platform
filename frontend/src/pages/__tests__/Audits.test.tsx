@@ -1426,3 +1426,142 @@ describe('A2 honest KPIs', () => {
     expect(screen.queryByTestId('audits-kpi-avg-score-caption')).not.toBeInTheDocument()
   })
 })
+
+function a3Run(
+  partial: Record<string, unknown> & { id: number; title: string },
+): Record<string, unknown> {
+  return {
+    template_id: 21,
+    template_version: 1,
+    status: 'in_progress',
+    source_origin: 'internal',
+    created_at: '2026-07-12T10:00:00Z',
+    ...partial,
+  }
+}
+
+function a3Finding(
+  partial: Record<string, unknown> & { id: number; run_id: number; title: string },
+): Record<string, unknown> {
+  return {
+    reference_number: `AF-${String(partial.id).padStart(5, '0')}`,
+    description: 'd',
+    severity: 'medium',
+    finding_type: 'nonconformity',
+    status: 'open',
+    corrective_action_required: true,
+    created_at: '2026-07-12T10:00:00Z',
+    ...partial,
+  }
+}
+
+describe('A3 programme-scoped findings + clause', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('scopes Open Findings KPI to the Internal chip, not the tenant server total', async () => {
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          a3Run({ id: 1, reference_number: 'AUD-2026-0001', title: 'Internal one' }),
+          a3Run({ id: 2, reference_number: 'AUD-2026-0002', title: 'Internal two' }),
+          a3Run({ id: 3, reference_number: 'AUD-2026-0003', title: 'Internal three' }),
+          a3Run({ id: 4, reference_number: 'AUD-2026-0004', title: 'Internal four' }),
+          a3Run({ id: 5, reference_number: 'AUD-2026-0005', title: 'Internal five' }),
+          a3Run({ id: 6, reference_number: 'AUD-2026-0006', title: 'Internal six' }),
+          a3Run({
+            id: 99,
+            reference_number: 'AUD-2026-0099',
+            title: 'Customer visit',
+            source_origin: 'customer',
+          }),
+        ],
+        total: 7,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+    stubFindingsApi({
+      items: [
+        a3Finding({ id: 11, run_id: 1, title: 'Internal open A' }),
+        a3Finding({ id: 12, run_id: 1, title: 'Internal open B' }),
+        a3Finding({ id: 91, run_id: 99, title: 'Customer open' }),
+      ],
+      total: 101,
+    })
+    mockListFindings.mockImplementation((_page, pageSize, _runId, status?: string) => {
+      if (status === 'open') {
+        return Promise.resolve({
+          data: { items: [], total: 100, page: 1, page_size: 1, pages: 1 },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          items: [
+            a3Finding({ id: 11, run_id: 1, title: 'Internal open A' }),
+            a3Finding({ id: 12, run_id: 1, title: 'Internal open B' }),
+            a3Finding({ id: 91, run_id: 99, title: 'Customer open' }),
+          ],
+          total: 101,
+          page: 1,
+          page_size: pageSize,
+          pages: 1,
+        },
+      })
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-kpi-open-findings')).toHaveTextContent('100')
+    fireEvent.click(screen.getByTestId('audits-program-chip-internal'))
+    expect(screen.getByTestId('audits-kpi-open-findings')).toHaveTextContent('2')
+    expect(screen.getByTestId('audits-kpi-open-findings')).not.toHaveTextContent('100')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Findings' }))
+    expect(screen.getByTestId('finding-card-11')).toBeInTheDocument()
+    expect(screen.getByTestId('finding-card-12')).toBeInTheDocument()
+    expect(screen.queryByTestId('finding-card-91')).not.toBeInTheDocument()
+  })
+
+  it('honours ?view=findings&clause= and does not invent unmatched findings', async () => {
+    mockSearchParams = new URLSearchParams('view=findings&clause=7.2')
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [a3Run({ id: 1, reference_number: 'AUD-2026-0001', title: 'Internal one' })],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+    stubFindingsApi({
+      items: [
+        a3Finding({
+          id: 21,
+          run_id: 1,
+          title: 'Competence gap',
+          clause_ids: ['7.2'],
+        }),
+        a3Finding({
+          id: 22,
+          run_id: 1,
+          title: 'Documented information',
+          clause_ids: ['8.1'],
+        }),
+      ],
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-findings-clause-filter')).toHaveTextContent('7.2')
+    expect(screen.getByTestId('finding-card-21')).toBeInTheDocument()
+    expect(screen.queryByTestId('finding-card-22')).not.toBeInTheDocument()
+    expect(screen.getByTestId('audits-kpi-open-findings')).toHaveTextContent('1')
+  })
+})

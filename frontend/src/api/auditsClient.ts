@@ -66,6 +66,8 @@ export interface AuditFinding {
   severity: string
   finding_type: string
   status: 'open' | 'in_progress' | 'pending_verification' | 'closed' | 'deferred'
+  /** Heterogeneous: integer catalog ids or import strings such as "7.2". */
+  clause_ids?: Array<number | string> | null
   corrective_action_required: boolean
   corrective_action_due_date?: string
   /** Linked enterprise risk ids (risks_v2) when escalated from this finding. */
