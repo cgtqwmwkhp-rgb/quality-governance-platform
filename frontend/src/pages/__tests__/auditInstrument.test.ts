@@ -6,6 +6,7 @@ import {
   parseInstrument,
   parseInstrumentQuery,
   parseInstrumentTag,
+  templatesMatchingInstrument,
   upsertInstrumentTag,
 } from '../auditInstrument'
 
@@ -16,6 +17,18 @@ describe('auditInstrument', () => {
     expect(parseInstrument([])).toBe('audit')
     expect(parseInstrument(['builder_brief:abc'])).toBe('audit')
     expect(parseInstrumentTag([])).toBeNull()
+  })
+
+  it('filters picker lists by purpose and treats untagged as audit', () => {
+    const items = [
+      { id: 1, tags: ['instrument:audit'] },
+      { id: 2, tags: ['instrument:skills'] },
+      { id: 3, tags: ['instrument:induction'] },
+      { id: 4, tags: [] },
+    ]
+    expect(templatesMatchingInstrument(items, 'audit').map((item) => item.id)).toEqual([1, 4])
+    expect(templatesMatchingInstrument(items, 'skills').map((item) => item.id)).toEqual([2])
+    expect(templatesMatchingInstrument(items, 'induction').map((item) => item.id)).toEqual([3])
   })
 
   it('parses instrument tags without overloading audit_type', () => {

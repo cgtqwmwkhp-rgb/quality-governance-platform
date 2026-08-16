@@ -16,6 +16,7 @@ import {
   Play,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { parseInstrument } from './auditInstrument'
 import { buildActionDetailPath } from './actionLinks'
 import {
   auditsApi,
@@ -617,7 +618,9 @@ export default function Audits() {
 
   const scheduleTemplates = useMemo(() => {
     const nonIntake = templates.filter((template) => !isSystemIntakeTemplate(template))
-    return partitionAutomationTemplates(nonIntake).operational
+    return partitionAutomationTemplates(nonIntake).operational.filter(
+      (template) => parseInstrument(template.tags) === 'audit',
+    )
   }, [templates])
 
   const hiddenAutomationTemplateCount = useMemo(() => {
@@ -739,7 +742,7 @@ export default function Audits() {
     if (!Number.isFinite(id) || id <= 0) return
     const match =
       latestPublishedTemplates.find((template) => template.id === id) ??
-      templates.find((template) => template.id === id && template.is_published)
+      scheduleTemplates.find((template) => template.id === id)
     if (!match) return
     scheduleFromQueryOpenedRef.current = true
     handleOpenModal('schedule')
@@ -755,7 +758,14 @@ export default function Audits() {
     setSearchParams(next, { replace: true })
     // One-shot deep-link; exclude handleOpenModal to avoid re-open loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, urlTemplateId, latestPublishedTemplates, templates, searchParams, setSearchParams])
+  }, [
+    loading,
+    urlTemplateId,
+    latestPublishedTemplates,
+    scheduleTemplates,
+    searchParams,
+    setSearchParams,
+  ])
 
   const selectedExternalAuditType = useMemo(
     () =>
