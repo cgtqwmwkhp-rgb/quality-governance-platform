@@ -62,8 +62,10 @@ import {
 } from '../components/ui/form'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
 import {
+  findingMatchesClause,
   isOpenAuditFinding,
   resolveOpenFindingsKpi,
+  scopeFindingsToRunIds,
 } from './auditsFindingsModel'
 import { partitionAutomationTemplates } from './auditTemplateHonesty'
 import {
@@ -309,10 +311,15 @@ export default function Audits() {
   const urlView = searchParams.get('view') as ViewMode | null
   const urlFindingId = searchParams.get('findingId')
   const urlAssuranceSource = searchParams.get('source')
+  const urlClause = (searchParams.get('clause') || '').trim()
   const urlModal = searchParams.get('modal')
   const customerAssuranceView = urlAssuranceSource === ASSURANCE_SOURCE_CUSTOMER
   const [viewMode, setViewMode] = useState<ViewMode>(
-    urlView === 'findings' || urlView === 'list' || urlView === 'kanban' ? urlView : 'kanban',
+    urlClause || urlView === 'findings'
+      ? 'findings'
+      : urlView === 'list' || urlView === 'kanban'
+        ? urlView
+        : 'kanban',
   )
   const highlightedFindingRef = useRef<HTMLDivElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -344,11 +351,27 @@ export default function Audits() {
     [audits, urlAssuranceSource],
   )
 
+  const programmeRunIds = useMemo(() => {
+    const source =
+      programFilter === 'all'
+        ? scopedAudits
+        : scopedAudits.filter((audit) => classifyAuditProgram(audit) === programFilter)
+    return new Set(source.map((audit) => audit.id))
+  }, [scopedAudits, programFilter])
+
+  const findingsScopedToSubset =
+    programFilter !== 'all' || customerAssuranceView || Boolean(urlClause)
+
   const scopedFindings = useMemo(() => {
-    if (!customerAssuranceView) return findings
-    const scopedIds = new Set(scopedAudits.map((audit) => audit.id))
-    return findings.filter((finding) => scopedIds.has(finding.run_id))
-  }, [findings, scopedAudits, customerAssuranceView])
+    let next = findings
+    if (programFilter !== 'all' || customerAssuranceView) {
+      next = scopeFindingsToRunIds(next, programmeRunIds)
+    }
+    if (urlClause) {
+      next = next.filter((finding) => findingMatchesClause(finding, urlClause))
+    }
+    return next
+  }, [findings, programmeRunIds, programFilter, customerAssuranceView, urlClause])
 
   const loadData = useCallback(async () => {
     setLoadError(null)
@@ -432,6 +455,11 @@ export default function Audits() {
     })
     return () => cancelAnimationFrame(handle)
   }, [urlFindingId, loading, scopedFindings])
+
+  useEffect(() => {
+    if (!urlClause) return
+    setViewMode('findings')
+  }, [urlClause])
 
   // Load linked CAPA rows for the findings loop ribbon (graceful if Actions API unavailable).
   useEffect(() => {
@@ -1077,7 +1105,9 @@ export default function Audits() {
     completed: programFilteredAudits.filter((a) => a.status === 'completed').length,
     avgScore: averageScore.value,
     avgScoreCaption: averageScore.caption,
-    openFindings: resolveOpenFindingsKpi(scopedFindings, openFindingsTotal, findingsTotal),
+    openFindings: resolveOpenFindingsKpi(scopedFindings, openFindingsTotal, findingsTotal, {
+      useServerTotalWhenTruncated: !findingsScopedToSubset,
+    }),
   }
   const openFindingsInScope = useMemo(
     () => scopedFindings.filter((finding) => isOpenAuditFinding(finding.status)),
@@ -1087,8 +1117,10 @@ export default function Audits() {
     heroFilter === 'open_findings'
       ? openFindingsInScope
       : scopedFindings
-  const findingsListTruncated =
-    findingsTotal != null && findingsTotal > scopedFindings.length
+  const findingsPageTruncated = findingsTotal != null && findingsTotal > findings.length
+  const findingsListTruncated = findingsScopedToSubset
+    ? findingsPageTruncated
+    : findingsTotal != null && findingsTotal > scopedFindings.length
   const linkedFindingExists =
     !urlFindingId || scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
   const executableAudit = scopedAudits.find(
@@ -1243,7 +1275,13 @@ export default function Audits() {
             <button
               key={stat.key}
               type="button"
-              data-testid={stat.key === 'scored' ? 'audits-kpi-avg-score' : undefined}
+              data-testid={
+                stat.key === 'scored'
+                  ? 'audits-kpi-avg-score'
+                  : stat.key === 'open_findings'
+                    ? 'audits-kpi-open-findings'
+                    : undefined
+              }
               onClick={() => applyHeroFilter(stat.key)}
               aria-pressed={active}
               title={stat.hint}
@@ -1742,15 +1780,40 @@ export default function Audits() {
       {/* Findings View */}
       {viewMode === 'findings' && (
         <div className="space-y-4">
+          {urlClause ? (
+            <div
+              className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex flex-wrap items-center justify-between gap-2"
+              role="status"
+              data-testid="audits-findings-clause-filter"
+            >
+              <span>
+                Filtering findings for clause {urlClause}. Open Findings KPI counts this
+                filter.
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="audits-findings-clause-clear"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams)
+                  next.delete('clause')
+                  setSearchParams(next, { replace: true })
+                }}
+              >
+                Clear clause
+              </Button>
+            </div>
+          ) : null}
           {findingsListTruncated ? (
             <div
               className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
               role="status"
               data-testid="audits-findings-truncated-banner"
             >
-              Showing {scopedFindings.length} of {findingsTotal} findings loaded — Open Findings KPI
-              uses the server total ({stats.openFindings}) so counts stay honest after new findings
-              are created.
+              {findingsScopedToSubset
+                ? `Showing ${scopedFindings.length} findings in this filter from the loaded page. Open Findings KPI counts those (${stats.openFindings}), not the tenant total.`
+                : `Showing ${scopedFindings.length} of ${findingsTotal} findings loaded — Open Findings KPI uses the server total (${stats.openFindings}) so counts stay honest after new findings are created.`}
             </div>
           ) : null}
           {urlFindingId && !linkedFindingExists && (
