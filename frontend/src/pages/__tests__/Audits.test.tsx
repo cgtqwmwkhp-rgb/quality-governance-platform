@@ -568,6 +568,7 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
             score_percentage: 92,
             source_origin: 'internal',
             created_at: '2026-07-12T10:10:00Z',
+            completed_at: new Date().toISOString(),
           },
         ],
         total: 3,
@@ -752,6 +753,7 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
             assurance_scheme: 'Planet Mark',
             external_audit_type: 'planet_mark',
             created_at: '2026-07-12T12:00:00Z',
+            completed_at: new Date().toISOString(),
           },
           {
             id: 23,
@@ -790,6 +792,115 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
     expect(screen.getByText('UVDB intake')).toBeInTheDocument()
     expect(screen.getByText('Planet Mark intake')).toBeInTheDocument()
     expect(screen.getByText('Customer site')).toBeInTheDocument()
+  })
+
+  it('keeps aged-out Closed runs off the board and opens List from the more control', async () => {
+    const aged = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString()
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 31,
+            reference_number: 'AUD-2026-0056',
+            template_id: 21,
+            template_version: 2,
+            title: 'Aged Wickford close',
+            status: 'completed',
+            source_origin: 'internal',
+            created_at: aged,
+            completed_at: aged,
+          },
+          {
+            id: 32,
+            reference_number: 'AUD-2026-0057',
+            template_id: 21,
+            template_version: 3,
+            title: 'Field Engineer Internal Audit',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    const closedLane = await screen.findByTestId('audits-board-lane-closed')
+    expect(within(closedLane).queryByText('Aged Wickford close')).not.toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-closed-more')).toHaveTextContent(
+      '1 more closed — open List',
+    )
+
+    fireEvent.click(screen.getByTestId('audits-board-closed-more'))
+    expect(await screen.findByText('Aged Wickford close')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('switches to List when search is used so a specific run can be located', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 41,
+            reference_number: 'AUD-2026-0057',
+            template_id: 21,
+            template_version: 3,
+            title: 'Field Engineer Internal Audit',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+    expect(await screen.findByTestId('audits-board-lane-do_now')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('audits.search_placeholder'), {
+      target: { value: 'AUD-2026-0057' },
+    })
+
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('AUD-2026-0057')).toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-do_now')).not.toBeInTheDocument()
+  })
+
+  it('shows a truncation banner when more runs exist than the loaded page', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 51,
+            reference_number: 'AUD-00051',
+            template_id: 21,
+            template_version: 1,
+            title: 'Loaded run',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 240,
+        page: 1,
+        page_size: 100,
+        pages: 3,
+      },
+    })
+
+    render(<Audits />)
+    expect(await screen.findByTestId('audits-runs-truncated-banner')).toHaveTextContent(
+      'Showing 1 of 240 runs loaded',
+    )
   })
 })
 
@@ -858,6 +969,7 @@ describe('Audits board empty-state honesty', () => {
             title: 'Completed audit',
             status: 'completed',
             created_at: '2026-07-12T10:00:00Z',
+            completed_at: new Date().toISOString(),
           },
         ],
         total: 1,

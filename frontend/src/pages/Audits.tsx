@@ -75,6 +75,7 @@ import {
   BOARD_WORK_LANES as BOARD_WORK_LANE_DEFS,
   PROGRAM_FILTER_CHIPS,
   classifyAuditProgram,
+  partitionClosedForBoard,
   type AuditProgram,
 } from './auditsBoardModel'
 
@@ -296,6 +297,7 @@ export default function Audits() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [audits, setAudits] = useState<AuditRun[]>([])
+  const [auditsTotal, setAuditsTotal] = useState<number | null>(null)
   const [findings, setFindings] = useState<AuditFinding[]>([])
   const [findingsTotal, setFindingsTotal] = useState<number | null>(null)
   const [openFindingsTotal, setOpenFindingsTotal] = useState<number | null>(null)
@@ -355,7 +357,13 @@ export default function Audits() {
         auditsApi.listFindings(1, 1, undefined, 'open'),
         auditsApi.listTemplates(1, 100, { is_published: true }),
       ])
-      setAudits(auditsRes.status === 'fulfilled' ? auditsRes.value.data.items || [] : [])
+      if (auditsRes.status === 'fulfilled') {
+        setAudits(auditsRes.value.data.items || [])
+        setAuditsTotal(auditsRes.value.data.total ?? null)
+      } else {
+        setAudits([])
+        setAuditsTotal(null)
+      }
       if (findingsRes.status === 'fulfilled') {
         setFindings(findingsRes.value.data.items || [])
         setFindingsTotal(findingsRes.value.data.total ?? null)
@@ -377,6 +385,7 @@ export default function Audits() {
       if (import.meta.env.DEV) console.error('Failed to load audits:', err)
       setLoadError('Failed to load audit data. Please try again.')
       setAudits([])
+      setAuditsTotal(null)
       setFindings([])
       setFindingsTotal(null)
       setOpenFindingsTotal(null)
@@ -967,7 +976,13 @@ export default function Audits() {
     }
   }, [programFilteredAudits, heroFilter])
 
-  const getAuditsInLane = (statuses: readonly string[]) => {
+  const closedBoard = useMemo(
+    () => partitionClosedForBoard(filteredAudits),
+    [filteredAudits],
+  )
+
+  const getAuditsInLane = (laneId: string, statuses: readonly string[]) => {
+    if (laneId === 'closed') return closedBoard.visible
     return filteredAudits.filter((audit) => statuses.includes(audit.status))
   }
 
@@ -1262,10 +1277,25 @@ export default function Audits() {
           type="text"
           placeholder={t('audits.search_placeholder')}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value
+            setSearchTerm(next)
+            if (next.trim()) setViewMode('list')
+          }}
           className="pl-10"
         />
       </div>
+
+      {auditsTotal != null && auditsTotal > audits.length ? (
+        <div
+          className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+          role="status"
+          data-testid="audits-runs-truncated-banner"
+        >
+          Showing {audits.length} of {auditsTotal} runs loaded. Search uses this page. Open List
+          for the loaded set.
+        </div>
+      ) : null}
 
       {!customerAssuranceView && visibleProgramChips.length > 0 && (
         <div
@@ -1342,7 +1372,7 @@ export default function Audits() {
         viewMode === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {BOARD_WORK_LANES.map((lane) => {
-            const laneAudits = getAuditsInLane(lane.statuses)
+            const laneAudits = getAuditsInLane(lane.id, lane.statuses)
             return (
               <div key={lane.id} data-testid={`audits-board-lane-${lane.id}`}>
                 <div className="flex items-center gap-3 mb-4">
@@ -1363,7 +1393,8 @@ export default function Audits() {
                 </div>
 
                 <div className="space-y-3 min-h-[200px] bg-surface rounded-2xl p-3 border border-border">
-                  {laneAudits.length === 0 ? (
+                  {laneAudits.length === 0 &&
+                  !(lane.id === 'closed' && closedBoard.moreCount > 0) ? (
                     <div className="flex items-center justify-center h-32 text-muted-foreground">
                       <p className="text-sm text-center px-2">
                         {t('audits.board.lane_empty_column', `No ${lane.label.toLowerCase()} audits`, {
@@ -1488,6 +1519,16 @@ export default function Audits() {
                       </Card>
                     ))
                   )}
+                  {lane.id === 'closed' && closedBoard.moreCount > 0 ? (
+                    <button
+                      type="button"
+                      data-testid="audits-board-closed-more"
+                      className="w-full text-sm font-medium text-primary hover:underline py-2"
+                      onClick={() => setViewMode('list')}
+                    >
+                      {closedBoard.moreCount} more closed — open List
+                    </button>
+                  ) : null}
                 </div>
               </div>
             )

@@ -69,3 +69,42 @@ export function getAuditsForLaneStatuses(
 ): AuditRun[] {
   return audits.filter((audit) => statuses.includes(audit.status))
 }
+
+/** A5: Closed on the board is recent work, not the archive. List keeps history. */
+export const CLOSED_BOARD_WINDOW_DAYS = 30
+export const CLOSED_BOARD_MAX_CARDS = 8
+const CLOSED_BOARD_WINDOW_MS = CLOSED_BOARD_WINDOW_DAYS * 24 * 60 * 60 * 1000
+
+export function closedBoardTimestampMs(audit: AuditRun): number {
+  const raw = audit.completed_at || audit.scheduled_date || audit.created_at
+  const parsed = Date.parse(raw)
+  return Number.isFinite(parsed) ? parsed : Number.NaN
+}
+
+export type ClosedBoardPartition = {
+  visible: AuditRun[]
+  moreCount: number
+}
+
+/**
+ * Closed lane cards: completed within the window, newest first, capped.
+ * `moreCount` is closed runs in this loaded set that are not on the board.
+ * It is not a tenant-wide total.
+ */
+export function partitionClosedForBoard(
+  audits: readonly AuditRun[],
+  nowMs: number = Date.now(),
+): ClosedBoardPartition {
+  const closed = audits.filter((audit) => audit.status === 'completed')
+  const inWindow = closed
+    .filter((audit) => {
+      const ts = closedBoardTimestampMs(audit)
+      return Number.isFinite(ts) && nowMs - ts <= CLOSED_BOARD_WINDOW_MS
+    })
+    .sort((a, b) => closedBoardTimestampMs(b) - closedBoardTimestampMs(a))
+  const visible = inWindow.slice(0, CLOSED_BOARD_MAX_CARDS)
+  return {
+    visible,
+    moreCount: closed.length - visible.length,
+  }
+}
