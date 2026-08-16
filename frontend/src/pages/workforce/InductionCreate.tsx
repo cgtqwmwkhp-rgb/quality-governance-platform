@@ -17,7 +17,7 @@ import {
   employeePickerOptionLabel,
   sortEmployeesForPicker,
 } from './employeePickerUtils'
-import { templatesMatchingInstrument } from '../auditInstrument'
+import { TRAINING_CALENDAR_HREF, templatesMatchingInstrument } from '../auditInstrument'
 
 export default function InductionCreate() {
   const { t } = useTranslation()
@@ -44,6 +44,7 @@ export default function InductionCreate() {
     [templates],
   )
   const templatesEmpty = !templateLoadFailed && purposeTemplates.length === 0
+  const selectedTemplate = purposeTemplates.find((item) => String(item.id) === templateId)
   const seededTemplateId = searchParams.get('templateId')
   const seededWrongPurpose =
     Boolean(seededTemplateId) &&
@@ -212,6 +213,26 @@ export default function InductionCreate() {
                   {t('workforce.induction.template_wrong_purpose')}
                 </p>
               )}
+              {selectedTemplate ? (
+                <p
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="induction-create-cadence"
+                >
+                  {selectedTemplate.frequency
+                    ? t('workforce.induction.cadence_frequency', {
+                        frequency: selectedTemplate.frequency,
+                      })
+                    : t('workforce.induction.cadence_unset')}{' '}
+                  {t('workforce.induction.cadence_hint')}{' '}
+                  <Link
+                    to={TRAINING_CALENDAR_HREF}
+                    className="text-primary underline underline-offset-2"
+                    data-testid="induction-create-cadence-calendar"
+                  >
+                    {t('workforce.induction.cadence_calendar_link')}
+                  </Link>
+                </p>
+              ) : null}
             </div>
 
             <div>

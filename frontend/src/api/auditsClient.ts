@@ -112,6 +112,8 @@ export interface AuditTemplate {
   description?: string
   category?: string
   audit_type: string
+  /** Already on AuditTemplateResponse; list payload includes it. Not a new field. */
+  frequency?: string | null
   tags?: string[]
   version: number
   is_active: boolean

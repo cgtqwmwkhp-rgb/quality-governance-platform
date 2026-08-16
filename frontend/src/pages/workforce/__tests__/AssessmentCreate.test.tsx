@@ -218,4 +218,36 @@ describe('AssessmentCreate employee picker', () => {
     expect(screen.getByTestId('assessment-create-template-wrong-purpose')).toBeInTheDocument()
     expect(select).not.toHaveValue('42')
   })
+
+  it('shows template frequency and the existing training calendar link', async () => {
+    listEngineers.mockResolvedValue({ data: { items: [] } })
+    listTemplates.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 42,
+            name: 'Quarterly skills',
+            audit_type: 'competency',
+            tags: ['instrument:skills'],
+            frequency: 'quarterly',
+          },
+        ],
+      },
+    })
+
+    const AssessmentCreate = (await import('../AssessmentCreate')).default
+    render(
+      <MemoryRouter initialEntries={['/workforce/assessments/new?templateId=42']}>
+        <AssessmentCreate />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('assessment-create-cadence')).toHaveTextContent(
+      'workforce.assessments.cadence_frequency',
+    )
+    expect(screen.getByTestId('assessment-create-cadence-calendar')).toHaveAttribute(
+      'href',
+      '/calendar?types=training',
+    )
+  })
 })

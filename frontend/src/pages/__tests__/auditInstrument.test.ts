@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   instrumentCtaKey,
+  instrumentCalendarHref,
   instrumentRunHref,
   instrumentTag,
   parseInstrument,
   parseInstrumentQuery,
   parseInstrumentTag,
   templatesMatchingInstrument,
+  TRAINING_CALENDAR_HREF,
   upsertInstrumentTag,
 } from '../auditInstrument'
 
@@ -61,6 +63,13 @@ describe('auditInstrument', () => {
       'instrument:induction',
     ])
     expect(upsertInstrumentTag([], 'audit')).toEqual([instrumentTag('audit')])
+  })
+
+  it('routes skills and induction cadence to the existing training calendar', () => {
+    expect(instrumentCalendarHref('skills')).toBe('/calendar?types=training')
+    expect(instrumentCalendarHref('induction')).toBe('/calendar?types=training')
+    expect(instrumentCalendarHref('audit')).toBeNull()
+    expect(TRAINING_CALENDAR_HREF).toBe('/calendar?types=training')
   })
 
   it('routes the post-publish CTA by purpose', () => {

@@ -70,6 +70,7 @@ import { decideStandardLink, suggestStandardLinks } from './builderMapAssistApi'
 import type { MapW3StandardLink } from './mapW3StaleRescoreHonesty'
 import {
   instrumentCtaKey,
+  instrumentCalendarHref,
   instrumentRunHref,
   parseInstrument,
   parseInstrumentQuery,
@@ -758,6 +759,7 @@ export default function AuditTemplateBuilder() {
   const evidenceQuestions = allQuestions.filter((q) => q.evidenceRequired).length
   const mapCoverage = computeIsoClauseCoverage(allQuestions)
   const purposeKind = urlInstrument ?? parseInstrument(template.tags)
+  const cadenceCalendarHref = instrumentCalendarHref(purposeKind)
   const needsPurpose = !backendId && !urlInstrument && !parseInstrumentTag(template.tags)
 
   return (
@@ -814,6 +816,16 @@ export default function AuditTemplateBuilder() {
                 >
                   {t(instrumentCtaKey(purposeKind))}
                 </button>
+                {cadenceCalendarHref ? (
+                  <button
+                    type="button"
+                    data-testid="audit-builder-cadence-calendar"
+                    className="flex items-center gap-2 px-4 py-2 border border-border bg-card text-foreground font-medium rounded-lg hover:border-primary/40"
+                    onClick={() => navigate(cadenceCalendarHref)}
+                  >
+                    {t('audit_builder.cta.open_training_calendar', 'Open training calendar')}
+                  </button>
+                ) : null}
               </div>
             ) : null}
             {validation.publishErrors.length > 0 && (
@@ -1321,6 +1333,12 @@ export default function AuditTemplateBuilder() {
         error={saveError}
         runHref={backendId ? instrumentRunHref(purposeKind, backendId) : undefined}
         runCtaLabel={t(instrumentCtaKey(purposeKind))}
+        calendarHref={cadenceCalendarHref ?? undefined}
+        calendarCtaLabel={
+          cadenceCalendarHref
+            ? t('audit_builder.cta.open_training_calendar', 'Open training calendar')
+            : undefined
+        }
       />
 
       {showAIAssist && (

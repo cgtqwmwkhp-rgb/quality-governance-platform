@@ -69,6 +69,15 @@ export function instrumentRunHref(kind: InstrumentKind, templateId: number): str
   }
 }
 
+/** Existing workforce calendar — not a builder-owned scheduler (N-BUILD-3). */
+export const TRAINING_CALENDAR_HREF = '/calendar?types=training'
+
+/** Skills and induction cadence lives on /calendar?types=training. Audits stay on Schedule. */
+export function instrumentCalendarHref(kind: InstrumentKind): string | null {
+  if (kind === 'skills' || kind === 'induction') return TRAINING_CALENDAR_HREF
+  return null
+}
+
 export function instrumentCtaKey(kind: InstrumentKind): string {
   switch (kind) {
     case 'skills':

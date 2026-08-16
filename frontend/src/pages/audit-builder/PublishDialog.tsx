@@ -17,6 +17,8 @@ export interface PublishDialogProps {
   error?: string | null
   runHref?: string
   runCtaLabel?: string
+  calendarHref?: string
+  calendarCtaLabel?: string
 }
 
 export default function PublishDialog({
@@ -28,6 +30,8 @@ export default function PublishDialog({
   error,
   runHref,
   runCtaLabel,
+  calendarHref,
+  calendarCtaLabel,
 }: PublishDialogProps) {
   const { t } = useTranslation()
 
@@ -98,6 +102,18 @@ export default function PublishDialog({
             <a href={runHref} className="text-primary underline-offset-2 hover:underline">
               {runCtaLabel}
             </a>
+            {calendarHref && calendarCtaLabel ? (
+              <>
+                {' · '}
+                <a
+                  href={calendarHref}
+                  className="text-primary underline-offset-2 hover:underline"
+                  data-testid="audit-builder-publish-cadence-calendar"
+                >
+                  {calendarCtaLabel}
+                </a>
+              </>
+            ) : null}
           </p>
         ) : null}
       </DialogContent>
