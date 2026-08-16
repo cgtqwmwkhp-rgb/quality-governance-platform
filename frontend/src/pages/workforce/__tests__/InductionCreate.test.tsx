@@ -215,4 +215,36 @@ describe('InductionCreate employee picker (EMP-07)', () => {
     expect(screen.getByTestId('induction-create-template-wrong-purpose')).toBeInTheDocument()
     expect(select).not.toHaveValue('42')
   })
+
+  it('shows template frequency and the existing training calendar link', async () => {
+    listEngineers.mockResolvedValue({ data: { items: [] } })
+    listTemplates.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 7,
+            name: 'Annual induction',
+            audit_type: 'inspection',
+            tags: ['instrument:induction'],
+            frequency: 'annually',
+          },
+        ],
+      },
+    })
+
+    const InductionCreate = (await import('../InductionCreate')).default
+    render(
+      <MemoryRouter initialEntries={['/workforce/training/new?templateId=7']}>
+        <InductionCreate />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('induction-create-cadence')).toHaveTextContent(
+      'workforce.induction.cadence_frequency',
+    )
+    expect(screen.getByTestId('induction-create-cadence-calendar')).toHaveAttribute(
+      'href',
+      '/calendar?types=training',
+    )
+  })
 })
