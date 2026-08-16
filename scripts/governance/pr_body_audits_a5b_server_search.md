@@ -8,7 +8,7 @@
 ## 1) Summary
 - **Feature / Change name:** Server `q=` on GET `/api/v1/audits/runs`
 - **User goal:** Audits search must locate runs beyond the loaded 100-row client page.
-- **In scope:** `list_runs` ilike on title / reference / location / scheme / body; FE passes trimmed `q` after 300ms; tests.
+- **In scope:** `list_runs` ilike on title / reference / location / scheme / body; FE passes trimmed `q` via `useDeferredValue`; tests.
 - **Out of scope:** Findings search API. Four-column lanes (A4). Entra / EXACT / Dependabot / CHAS trees.
 - **Feature flag / kill switch:** None. Revert this PR.
 

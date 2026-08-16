@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Plus,
@@ -323,7 +323,7 @@ export default function Audits() {
   )
   const highlightedFindingRef = useRef<HTMLDivElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [runSearchQ, setRunSearchQ] = useState('')
+  const runSearchQ = useDeferredValue(searchTerm.trim())
   /** Hero band as dynamic filter — mirrors Risk Register KPI cards. */
   type HeroFilter = 'all' | 'in_progress' | 'completed' | 'scored' | 'open_findings'
   const [heroFilter, setHeroFilter] = useState<HeroFilter>('all')
@@ -420,11 +420,6 @@ export default function Audits() {
       setLoading(false)
     }
   }, [runSearchQ])
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => setRunSearchQ(searchTerm.trim()), 300)
-    return () => window.clearTimeout(handle)
-  }, [searchTerm])
 
   useEffect(() => {
     void loadData()
