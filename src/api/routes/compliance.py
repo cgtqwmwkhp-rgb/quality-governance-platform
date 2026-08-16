@@ -227,6 +227,13 @@ def _parse_standard_filter(standard: Optional[str]) -> Optional[ISOStandard]:
         raise BadRequestError(f"Invalid standard: {standard}")
 
 
+def _known_evidence_clause_id(clause_id: str) -> bool:
+    """ISO ALL_CLAUSES or a loaded scheme axis key (ce/cep/iip). Not CHAS/SSIP/PM/UVDB."""
+    if iso_compliance_service.get_clause(clause_id):
+        return True
+    return scheme_clause_by_id(clause_id) is not None
+
+
 def _match_standard_record(record: Standard) -> Optional[ISOStandard]:
     normalized = _normalize_standard_record(record.code, record.name, record.full_name)
     for iso_standard, matchers in _STANDARD_DB_MATCHERS.items():
@@ -549,14 +556,14 @@ async def link_evidence(
     current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """
-    Link an entity (document, audit, incident, etc.) to ISO clauses.
+    Link an entity (document, audit, incident, etc.) to a catalogue clause.
 
-    This creates the evidence mapping that shows which items satisfy
-    which ISO requirements.
+    Accepts ISO clause ids and loaded scheme keys (ce/cep/iip). Does not invent
+    CHAS/SSIP/PM/UVDB EXACT or accept provisional scheme keys.
     """
     # Validate clause IDs exist
     for clause_id in request.clause_ids:
-        if not iso_compliance_service.get_clause(clause_id):
+        if not _known_evidence_clause_id(clause_id):
             raise BadRequestError(f"Invalid clause ID: {clause_id}")
 
     try:
