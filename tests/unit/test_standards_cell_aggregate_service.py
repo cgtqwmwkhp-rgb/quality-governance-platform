@@ -243,6 +243,23 @@ def test_scheme_columns_still_require_framed_tokens_after_ce_edges_load():
     assert any_token_matches_cell(["ce-7.2"], ce_keys, "7.2", framework="ce", guard=guard) is True
 
 
+def test_ce_firewalls_cel_does_not_paint_iso_9001_72():
+    """S1/S2 catalogue keys must not cover an ISO cell that shares no requirement."""
+    guard = _guard()
+    iso_keys = clause_match_keys("9001", "7.2")
+    assert any_token_matches_cell(["ce-firewalls"], iso_keys, "7.2", framework="9001", guard=guard) is False
+    assert any_token_matches_cell(["9001-7.2"], iso_keys, "7.2", framework="9001", guard=guard) is True
+
+
+def test_iso_9001_72_cel_does_not_paint_ce_firewalls():
+    """A competence CEL must not cover the NCSC firewalls control."""
+    guard = _guard()
+    ce_keys = clause_match_keys("ce", "firewalls")
+    assert any_token_matches_cell(["9001-7.2"], ce_keys, "firewalls", framework="ce", guard=guard) is False
+    assert any_token_matches_cell(["7.2"], ce_keys, "firewalls", framework="ce", guard=guard) is False
+    assert any_token_matches_cell(["ce-firewalls"], ce_keys, "firewalls", framework="ce", guard=guard) is True
+
+
 def test_matching_is_unchanged_for_carried_frameworks_and_for_an_empty_guard():
     """The gate must not narrow the columns the edition does carry, or an un-imported tenant."""
     keys = clause_match_keys("9001", "7.2")
