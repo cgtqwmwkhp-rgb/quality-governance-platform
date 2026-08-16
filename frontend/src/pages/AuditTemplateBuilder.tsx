@@ -68,6 +68,14 @@ import {
 } from './builderMapAssistHonesty'
 import { decideStandardLink, suggestStandardLinks } from './builderMapAssistApi'
 import type { MapW3StandardLink } from './mapW3StaleRescoreHonesty'
+import {
+  instrumentCtaKey,
+  instrumentRunHref,
+  parseInstrument,
+  parseInstrumentQuery,
+  parseInstrumentTag,
+  upsertInstrumentTag,
+} from './auditInstrument'
 
 const CATEGORIES = [
   { id: 'quality', label: 'Quality Management', icon: Award, color: 'blue' },
@@ -210,6 +218,7 @@ export default function AuditTemplateBuilder() {
   const caseIdParam = Number(searchParams.get('caseId') || searchParams.get('case_id') || '')
   const themeIdParam = Number(searchParams.get('themeId') || searchParams.get('theme_id') || '')
   const openAiParam = searchParams.get('ai') === '1' || searchParams.get('ai') === 'true'
+  const urlInstrument = parseInstrumentQuery(searchParams.get('instrument'))
   const seedCaseRefs: AuditBuilderCasePrefill[] | undefined =
     caseTypeParam && Number.isFinite(caseIdParam) && caseIdParam > 0
       ? [{ type: caseTypeParam, id: caseIdParam }]
@@ -263,7 +272,7 @@ export default function AuditTemplateBuilder() {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     createdBy: 'Current User',
-    tags: [],
+    tags: urlInstrument ? upsertInstrumentTag([], urlInstrument) : [],
     estimatedDuration: 60,
     isLocked: false,
   })
@@ -382,7 +391,12 @@ export default function AuditTemplateBuilder() {
         questionIdMap.current = {}
         deletedSectionIds.current = []
         deletedQuestionIds.current = []
-        setTemplate(mapApiToTemplate(data, sectionIdMap.current, questionIdMap.current))
+        const mapped = mapApiToTemplate(data, sectionIdMap.current, questionIdMap.current)
+        const rawTags = Array.isArray(data.tags)
+          ? data.tags.filter((tag: unknown): tag is string => typeof tag === 'string')
+          : []
+        const kind = urlInstrument ?? parseInstrument(rawTags)
+        setTemplate({ ...mapped, tags: upsertInstrumentTag(rawTags, kind) })
         setBackendId(data.id)
       } catch (error) {
         applySaveFailure(buildSaveIssueModel(error))
@@ -390,7 +404,7 @@ export default function AuditTemplateBuilder() {
         setIsLoading(false)
       }
     })()
-  }, [templateId, applySaveFailure])
+  }, [templateId, applySaveFailure, urlInstrument])
 
   const updateSections = (fn: (ss: Section[]) => Section[]) =>
     setTemplate((prev) => ({ ...prev, sections: fn(prev.sections) }))
@@ -531,6 +545,23 @@ export default function AuditTemplateBuilder() {
       applySaveFailure(model)
       return
     }
+    const purpose =
+      urlInstrument ??
+      (backendId ? parseInstrument(template.tags) : parseInstrumentTag(template.tags))
+    if (!purpose) {
+      const model = fromPublishValidationErrors([
+        t(
+          'audit_templates.purpose_required',
+          'Choose a purpose before saving. Go back to the library and select Audit, Skills assessment, or Induction.',
+        ),
+      ])
+      applySaveFailure(model)
+      return
+    }
+    const stampedTags = upsertInstrumentTag(template.tags, purpose)
+    if (stampedTags.join('\0') !== (template.tags || []).join('\0')) {
+      setTemplate((prev) => ({ ...prev, tags: stampedTags }))
+    }
     setIsSaving(true)
     clearSaveIssues()
     // Where the save had got to, for both the progress line and — if a request
@@ -553,6 +584,7 @@ export default function AuditTemplateBuilder() {
         passing_score: template.passThreshold,
         pass_threshold: template.passThreshold,
         estimated_duration: template.estimatedDuration,
+        tags: stampedTags,
       }
       let tid = backendId
       if (tid) await auditsApi.updateTemplate(tid, payload, BUILDER_SAVE_REQUEST_CONFIG)
@@ -725,6 +757,8 @@ export default function AuditTemplateBuilder() {
   const requiredQuestions = allQuestions.filter((q) => q.required).length
   const evidenceQuestions = allQuestions.filter((q) => q.evidenceRequired).length
   const mapCoverage = computeIsoClauseCoverage(allQuestions)
+  const purposeKind = urlInstrument ?? parseInstrument(template.tags)
+  const needsPurpose = !backendId && !urlInstrument && !parseInstrumentTag(template.tags)
 
   return (
     <div className="min-h-screen bg-background">
@@ -755,6 +789,33 @@ export default function AuditTemplateBuilder() {
           </div>
         ) : (
           <>
+            {needsPurpose && (
+              <div
+                className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+                role="alert"
+                data-testid="audit-builder-purpose-required"
+              >
+                <p className="font-semibold">{t('audit_templates.purpose_required')}</p>
+                <button
+                  type="button"
+                  className="mt-3 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg"
+                  onClick={() => navigate('/audit-templates')}
+                >
+                  {t('audit_templates.title')}
+                </button>
+              </div>
+            )}
+            {template.status === 'published' && backendId ? (
+              <div className="mb-6 flex flex-wrap items-center gap-3" data-testid="audit-builder-run-cta">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90"
+                  onClick={() => navigate(instrumentRunHref(purposeKind, backendId))}
+                >
+                  {t(instrumentCtaKey(purposeKind))}
+                </button>
+              </div>
+            ) : null}
             {validation.publishErrors.length > 0 && (
               <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p className="font-semibold">Template validation</p>
@@ -1258,6 +1319,8 @@ export default function AuditTemplateBuilder() {
         isPublishing={isPublishing}
         templateName={template.name}
         error={saveError}
+        runHref={backendId ? instrumentRunHref(purposeKind, backendId) : undefined}
+        runCtaLabel={t(instrumentCtaKey(purposeKind))}
       />
 
       {showAIAssist && (

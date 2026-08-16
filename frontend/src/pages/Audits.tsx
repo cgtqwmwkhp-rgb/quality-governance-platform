@@ -313,6 +313,7 @@ export default function Audits() {
   const urlAssuranceSource = searchParams.get('source')
   const urlClause = (searchParams.get('clause') || '').trim()
   const urlModal = searchParams.get('modal')
+  const urlTemplateId = searchParams.get('templateId')
   const customerAssuranceView = urlAssuranceSource === ASSURANCE_SOURCE_CUSTOMER
   const [viewMode, setViewMode] = useState<ViewMode>(
     urlClause || urlView === 'findings'
@@ -346,6 +347,7 @@ export default function Audits() {
   const [loopBusyFindingId, setLoopBusyFindingId] = useState<number | null>(null)
   const [loopAssigningFindingId, setLoopAssigningFindingId] = useState<number | null>(null)
   const importModalOpenedRef = useRef(false)
+  const scheduleFromQueryOpenedRef = useRef(false)
 
   const scopedAudits = useMemo(
     () => filterAuditsByAssuranceSource(audits, urlAssuranceSource),
@@ -730,6 +732,30 @@ export default function Audits() {
     // PX-260: one-shot deep-link open; exclude handleOpenModal to avoid re-open loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, urlModal, searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (loading || scheduleFromQueryOpenedRef.current || !urlTemplateId) return
+    const id = Number(urlTemplateId)
+    if (!Number.isFinite(id) || id <= 0) return
+    const match =
+      latestPublishedTemplates.find((template) => template.id === id) ??
+      templates.find((template) => template.id === id && template.is_published)
+    if (!match) return
+    scheduleFromQueryOpenedRef.current = true
+    handleOpenModal('schedule')
+    const seeded = {
+      ...buildDefaultForm('schedule'),
+      template_id: match.id,
+      title: decodeHtmlEntities(match.name),
+    }
+    pristineFormRef.current = JSON.stringify(seeded)
+    setFormData(seeded)
+    const next = new URLSearchParams(searchParams)
+    next.delete('templateId')
+    setSearchParams(next, { replace: true })
+    // One-shot deep-link; exclude handleOpenModal to avoid re-open loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, urlTemplateId, latestPublishedTemplates, templates, searchParams, setSearchParams])
 
   const selectedExternalAuditType = useMemo(
     () =>

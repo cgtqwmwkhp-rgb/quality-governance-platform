@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft } from 'lucide-react'
 import {
@@ -21,6 +21,7 @@ import {
 export default function InductionCreate() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
   const [engineers, setEngineers] = useState<EngineerProfile[]>([])
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
@@ -71,6 +72,14 @@ export default function InductionCreate() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    const seeded = searchParams.get('templateId')
+    if (!seeded) return
+    if (templates.some((item) => String(item.id) === seeded)) {
+      setTemplateId(seeded)
+    }
+  }, [templates, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

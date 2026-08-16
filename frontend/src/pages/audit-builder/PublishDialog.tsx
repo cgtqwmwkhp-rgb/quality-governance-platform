@@ -15,6 +15,8 @@ export interface PublishDialogProps {
   isPublishing: boolean
   templateName: string
   error?: string | null
+  runHref?: string
+  runCtaLabel?: string
 }
 
 export default function PublishDialog({
@@ -24,6 +26,8 @@ export default function PublishDialog({
   isPublishing,
   templateName,
   error,
+  runHref,
+  runCtaLabel,
 }: PublishDialogProps) {
   const { t } = useTranslation()
 
@@ -47,8 +51,11 @@ export default function PublishDialog({
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             Are you sure you want to publish{' '}
-            <strong>&quot;{templateName || 'Untitled'}&quot;</strong>? Once published, this template
-            will be available for audit scheduling.
+            <strong>&quot;{templateName || 'Untitled'}&quot;</strong>?{' '}
+            {t(
+              'audit_builder.publish_available',
+              'Once published, this template will be available for the matching run type.',
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -85,6 +92,14 @@ export default function PublishDialog({
             Publish
           </button>
         </div>
+        {runHref && runCtaLabel ? (
+          <p className="text-xs text-muted-foreground text-center">
+            After publish:{' '}
+            <a href={runHref} className="text-primary underline-offset-2 hover:underline">
+              {runCtaLabel}
+            </a>
+          </p>
+        ) : null}
       </DialogContent>
     </Dialog>
   )

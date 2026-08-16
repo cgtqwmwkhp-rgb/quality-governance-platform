@@ -100,4 +100,26 @@ describe('InductionCreate employee picker (EMP-07)', () => {
     expect(screen.getByLabelText(/workforce\.common\.engineer/i)).toBeDisabled()
     expect(screen.getByRole('button', { name: /workforce\.induction\.create_start/i })).toBeDisabled()
   })
+
+  it('seeds the template select from ?templateId=', async () => {
+    listEngineers.mockResolvedValue({ data: { items: [] } })
+    listTemplates.mockResolvedValue({
+      data: {
+        items: [
+          { id: 1, name: 'Induction A', audit_type: 'induction' },
+          { id: 42, name: 'Seeded induction template', audit_type: 'inspection' },
+        ],
+      },
+    })
+
+    const InductionCreate = (await import('../InductionCreate')).default
+    render(
+      <MemoryRouter initialEntries={['/workforce/training/new?templateId=42']}>
+        <InductionCreate />
+      </MemoryRouter>,
+    )
+
+    const select = await screen.findByLabelText(/workforce\.common\.template/i)
+    await waitFor(() => expect(select).toHaveValue('42'))
+  })
 })

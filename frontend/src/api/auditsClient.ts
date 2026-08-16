@@ -143,6 +143,7 @@ export interface AuditTemplateCreate {
   audit_type?: string
   scoring_method?: string
   passing_score?: number
+  tags?: string[]
 }
 
 export interface AuditTemplateUpdate {
@@ -152,6 +153,7 @@ export interface AuditTemplateUpdate {
   audit_type?: string
   scoring_method?: string
   passing_score?: number
+  tags?: string[]
   expected_updated_at?: string
 }
 
@@ -231,6 +233,7 @@ export interface AuditTemplateDetail {
   is_published: boolean
   is_active: boolean
   created_by_id?: number
+  tags?: string[]
   sections: AuditSection[]
   section_count: number
   question_count: number
