@@ -233,6 +233,7 @@ export interface AuditTemplateDetail {
   is_published: boolean
   is_active: boolean
   created_by_id?: number
+  tags?: string[]
   sections: AuditSection[]
   section_count: number
   question_count: number

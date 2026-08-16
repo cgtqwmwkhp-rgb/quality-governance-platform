@@ -59,12 +59,15 @@ async def test_audits_patch_remaps_tags_to_tags_json_not_unknown_attr() -> None:
     user = SimpleNamespace(id=42, tenant_id=7, is_superuser=False)
     decoded = SimpleNamespace(name="Depot", description=None, category=None)
 
-    with patch(
-        "src.api.routes.audits.AuditTemplateResponse.model_validate",
-        return_value=decoded,
-    ), patch(
-        "src.api.routes.audits._decode_template_response_entities",
-        side_effect=lambda response: response,
+    with (
+        patch(
+            "src.api.routes.audits.AuditTemplateResponse.model_validate",
+            return_value=decoded,
+        ),
+        patch(
+            "src.api.routes.audits._decode_template_response_entities",
+            side_effect=lambda response: response,
+        ),
     ):
         await audits_update_template(
             template_id=1,
@@ -81,4 +84,3 @@ async def test_audits_patch_remaps_tags_to_tags_json_not_unknown_attr() -> None:
         "instrument:skills",
     ]
     assert not hasattr(template, "tags")
-
