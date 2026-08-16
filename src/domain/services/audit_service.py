@@ -2200,7 +2200,9 @@ class AuditService:
         run.max_score = score.max_score
         run.score_percentage = score.score_percentage
 
-        if template and template.passing_score is not None:
+        if run.score_percentage is None:
+            run.passed = None
+        elif template and template.passing_score is not None:
             run.passed = run.score_percentage >= template.passing_score
 
         # Essential questions are mandatory-pass gates: a failed/finding-triggering
