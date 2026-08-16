@@ -14,6 +14,7 @@ import {
   getUvdbRiskRegisterPath,
   isAchillesUvdbAssuranceAudit,
   isCustomerAssuranceAudit,
+  isStandardsSchemePath,
   navItemIsActive,
 } from '../assuranceHubHelpers'
 import type { AuditRun } from '../../api/client'
@@ -105,6 +106,22 @@ describe('assuranceHubHelpers', () => {
     expect(navItemIsActive(CUSTOMER_AUDITS_PROGRAMME_PATH, '/customer-audits', '')).toBe(true)
     expect(navItemIsActive(CUSTOMER_AUDITS_AUDITS_PATH, '/customer-audits', '')).toBe(true)
     expect(navItemIsActive('/audits', '/audits/41/execute', '')).toBe(true)
+  })
+
+  it('isStandardsSchemePath matches UVDB and Planet Mark homes only', () => {
+    expect(isStandardsSchemePath('/uvdb')).toBe(true)
+    expect(isStandardsSchemePath('/uvdb/mapping')).toBe(true)
+    expect(isStandardsSchemePath('/planet-mark')).toBe(true)
+    expect(isStandardsSchemePath('/planet-mark/2026')).toBe(true)
+    expect(isStandardsSchemePath('/audits')).toBe(false)
+    expect(isStandardsSchemePath('/compliance')).toBe(false)
+    expect(isStandardsSchemePath('/customer-audits')).toBe(false)
+  })
+
+  it('navItemIsActive treats Standards as current on scheme homes', () => {
+    expect(navItemIsActive('/compliance', '/uvdb', '')).toBe(true)
+    expect(navItemIsActive('/compliance', '/planet-mark', '')).toBe(true)
+    expect(navItemIsActive('/compliance', '/audits', '')).toBe(false)
   })
 
   it('navItemIsActive treats Achilles and UVDB source aliases as the same slice', () => {

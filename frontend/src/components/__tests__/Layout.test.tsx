@@ -110,7 +110,7 @@ describe('Layout', () => {
       'nav.my_work',
       'nav.safety_cases',
       'nav.workforce',
-      'nav.assurance',
+      'nav.audits_hub',
       'nav.compliance_sustainability',
       'nav.risk_improvement',
       'nav.insights',
@@ -153,17 +153,14 @@ describe('Layout', () => {
         ],
       ],
       [
-        'nav.assurance',
-        ['/audits', '/audit-templates'],
+        'nav.audits_hub',
+        ['/audits', '/audit-templates', '/customer-audits'],
       ],
       [
         'nav.compliance_sustainability',
         [
           '/ims',
           '/compliance',
-          '/uvdb',
-          '/planet-mark',
-          '/customer-audits',
           '/knowledge-exceptions',
           '/document-control',
           '/compliance-schedule',
@@ -201,7 +198,7 @@ describe('Layout', () => {
     }
   })
 
-  it('places specialist SoR homes under Compliance and keeps Audits work in Assurance (A1)', async () => {
+  it('places Customer & external under Audits and keeps UVDB/Planet Mark off the sidebar (N-NAV)', async () => {
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
 
@@ -211,7 +208,7 @@ describe('Layout', () => {
       </BrowserRouter>,
     )
 
-    await user.click(screen.getByRole('button', { name: 'nav.assurance' }))
+    await user.click(screen.getByRole('button', { name: 'nav.audits_hub' }))
     const assurancePanel = screen.getByTestId('nav-hub-assurance')
     expect(within(assurancePanel).getByRole('link', { name: 'nav.audits' })).toHaveAttribute(
       'href',
@@ -221,6 +218,9 @@ describe('Layout', () => {
       'href',
       '/audit-templates',
     )
+    expect(
+      within(assurancePanel).getByRole('link', { name: 'nav.customer_external' }),
+    ).toHaveAttribute('href', '/customer-audits')
     expect(within(assurancePanel).queryByRole('link', { name: 'nav.uvdb_achilles' })).not.toBeInTheDocument()
     expect(within(assurancePanel).queryByRole('link', { name: 'nav.planet_mark' })).not.toBeInTheDocument()
     expect(
@@ -229,23 +229,21 @@ describe('Layout', () => {
 
     await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
     const compliancePanel = screen.getByTestId('nav-hub-compliance-sustainability')
-    expect(within(compliancePanel).getByRole('link', { name: 'nav.uvdb_achilles' })).toHaveAttribute(
+    expect(within(compliancePanel).getByRole('link', { name: 'nav.standards' })).toHaveAttribute(
       'href',
-      '/uvdb',
+      '/compliance',
     )
-    expect(within(compliancePanel).getByRole('link', { name: 'nav.planet_mark' })).toHaveAttribute(
-      'href',
-      '/planet-mark',
-    )
+    expect(within(compliancePanel).queryByRole('link', { name: 'nav.uvdb_achilles' })).not.toBeInTheDocument()
+    expect(within(compliancePanel).queryByRole('link', { name: 'nav.planet_mark' })).not.toBeInTheDocument()
     expect(
-      within(compliancePanel).getByRole('link', { name: 'nav.customer_programme' }),
-    ).toHaveAttribute('href', '/customer-audits')
+      within(compliancePanel).queryByRole('link', { name: 'nav.customer_programme' }),
+    ).not.toBeInTheDocument()
     expect(
-      within(compliancePanel).queryByRole('link', { name: 'nav.customer_audits' }),
+      within(compliancePanel).queryByRole('link', { name: 'nav.customer_external' }),
     ).not.toBeInTheDocument()
   })
 
-  it('auto-expands Compliance when a specialist SoR home is the active route (A1)', async () => {
+  it('auto-expands Compliance and marks Standards when a scheme home is the active route (N-NAV)', async () => {
     window.history.pushState({}, '', '/uvdb')
     const Layout = (await import('../Layout')).default
 
@@ -259,11 +257,33 @@ describe('Layout', () => {
       'aria-expanded',
       'true',
     )
-    expect(screen.getByRole('button', { name: 'nav.assurance' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'nav.audits_hub' })).toHaveAttribute(
       'aria-expanded',
       'false',
     )
-    expect(navLink('/uvdb')).toBeInTheDocument()
+    expect(navLink('/uvdb')).not.toBeInTheDocument()
+    expect(navLink('/compliance').className).toContain('bg-primary/10')
+  })
+
+  it('auto-expands Audits when Customer & external is the active route (N-NAV)', async () => {
+    window.history.pushState({}, '', '/customer-audits')
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByRole('button', { name: 'nav.audits_hub' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'nav.compliance_sustainability' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(navLink('/customer-audits')).toBeInTheDocument()
   })
 
   it('exposes Fleet & Assets as a first-level hub (not a Safety subsection)', async () => {
@@ -308,7 +328,7 @@ describe('Layout', () => {
     ).not.toBeInTheDocument()
     expect(within(compliancePanel).getByRole('link', { name: /compliance_schedule/i })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'nav.assurance' }))
+    await user.click(screen.getByRole('button', { name: 'nav.audits_hub' }))
     const assurancePanel = screen.getByTestId('nav-hub-assurance')
     expect(
       within(assurancePanel).queryByRole('link', { name: /assurance_cert_shelf/i }),
@@ -531,7 +551,7 @@ describe('Layout', () => {
       'true',
     )
     expect(navLink('/my-reading')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'nav.assurance' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'nav.audits_hub' })).toHaveAttribute(
       'aria-expanded',
       'false',
     )

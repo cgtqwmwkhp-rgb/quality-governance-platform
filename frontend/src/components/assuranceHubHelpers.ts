@@ -107,6 +107,17 @@ export function getUvdbRiskRegisterPath(auditRef?: string | null): string {
   return '/risk-register?triage=import'
 }
 
+/** Specialist scheme homes that enter from Standards, not as Compliance peer tabs. */
+export function isStandardsSchemePath(pathname: string): boolean {
+  const path = pathname.split('?')[0]
+  return (
+    path === '/uvdb' ||
+    path.startsWith('/uvdb/') ||
+    path === '/planet-mark' ||
+    path.startsWith('/planet-mark/')
+  )
+}
+
 /** Sidebar active-state helper — disambiguates `/audits` vs assurance filter queries. */
 export function navItemIsActive(itemPath: string, pathname: string, search = ''): boolean {
   const [targetPath, targetQuery = ''] = itemPath.split('?')
@@ -117,6 +128,9 @@ export function navItemIsActive(itemPath: string, pathname: string, search = '')
         itemPath === CUSTOMER_AUDITS_AUDITS_PATH) &&
       pathname === '/customer-audits'
     ) {
+      return true
+    }
+    if (targetPath === '/compliance' && isStandardsSchemePath(pathname)) {
       return true
     }
     if (
