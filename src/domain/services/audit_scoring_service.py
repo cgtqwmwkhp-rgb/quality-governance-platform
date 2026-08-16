@@ -11,7 +11,7 @@ from typing import Any, Optional
 class ScoreResult:
     total_score: float
     max_score: float
-    score_percentage: float
+    score_percentage: float | None
 
 
 class AuditScoringService:
@@ -22,7 +22,8 @@ class AuditScoringService:
         scored_responses = [r for r in responses if not r.is_na and r.score is not None and r.max_score is not None]
         total_score = sum(float(r.score) for r in scored_responses)
         max_score = sum(float(r.max_score) for r in scored_responses)
-        score_percentage = (total_score / max_score * 100) if max_score > 0 else 0.0
+        # Missing ≠ 0: an empty / all-NA denominator is unscored, not a 0% result.
+        score_percentage = (total_score / max_score * 100) if max_score > 0 else None
         return ScoreResult(
             total_score=total_score,
             max_score=max_score,

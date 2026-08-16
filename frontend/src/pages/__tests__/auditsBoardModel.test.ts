@@ -7,6 +7,8 @@ import {
   classifyAuditProgram,
   getAuditsForLaneStatuses,
   partitionClosedForBoard,
+  auditRunIsScored,
+  formatAuditsAverageScore,
 } from '../auditsBoardModel'
 
 function run(partial: Partial<AuditRun> & Pick<AuditRun, 'id' | 'status'>): AuditRun {
@@ -143,5 +145,35 @@ describe('A5 closed board window', () => {
     expect(part.visible).toHaveLength(8)
     expect(part.visible[0]?.title).toBe('Closed 1')
     expect(part.moreCount).toBe(1)
+  })
+})
+
+describe('A2 score honesty', () => {
+  it('treats 0% with no denominator as missing', () => {
+    expect(auditRunIsScored({ score_percentage: 0, max_score: 0 })).toBe(false)
+    expect(auditRunIsScored({ score_percentage: 0, max_score: null })).toBe(false)
+    expect(auditRunIsScored({ score_percentage: null, max_score: 10 })).toBe(false)
+  })
+
+  it('keeps a real 0% when max_score is positive', () => {
+    expect(auditRunIsScored({ score_percentage: 0, max_score: 10 })).toBe(true)
+    expect(auditRunIsScored({ score_percentage: 92, max_score: 100 })).toBe(true)
+  })
+
+  it('shows em dash until a scored run exists, not 0%', () => {
+    const empty = formatAuditsAverageScore([
+      run({ id: 1, status: 'completed', score_percentage: 0, max_score: 0 }),
+      run({ id: 2, status: 'completed', score_percentage: 0 }),
+    ])
+    expect(empty.value).toBe('—')
+    expect(empty.caption).toBe('Not scored in this view')
+
+    const mixed = formatAuditsAverageScore([
+      run({ id: 1, status: 'completed', score_percentage: 0, max_score: 0 }),
+      run({ id: 2, status: 'completed', score_percentage: 80, max_score: 10 }),
+      run({ id: 3, status: 'completed', score_percentage: 100, max_score: 10 }),
+    ])
+    expect(mixed.value).toBe('90%')
+    expect(mixed.caption).toBeNull()
   })
 })

@@ -108,3 +108,26 @@ export function partitionClosedForBoard(
     moreCount: closed.length - visible.length,
   }
 }
+
+/** A2: a stored 0% with no denominator is missing, not a scored result. */
+export function auditRunIsScored(
+  audit: Pick<AuditRun, 'score_percentage' | 'max_score'>,
+): boolean {
+  if (audit.score_percentage == null) return false
+  if (audit.max_score != null && audit.max_score <= 0) return false
+  if (audit.max_score == null && audit.score_percentage === 0) return false
+  return true
+}
+
+export function formatAuditsAverageScore(audits: readonly AuditRun[]): {
+  value: string
+  caption: string | null
+} {
+  const scored = audits.filter(auditRunIsScored)
+  if (scored.length === 0) {
+    return { value: '—', caption: 'Not scored in this view' }
+  }
+  const avg =
+    scored.reduce((acc, audit) => acc + (audit.score_percentage ?? 0), 0) / scored.length
+  return { value: `${avg.toFixed(0)}%`, caption: null }
+}

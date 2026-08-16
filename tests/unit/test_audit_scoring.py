@@ -382,13 +382,13 @@ class TestCalculateRunScore:
 
         assert result.total_score == 0
         assert result.max_score == 0
-        assert result.score_percentage == 0.0
+        assert result.score_percentage is None
 
     def test_empty_responses(self):
         result = AuditScoringService.calculate_run_score([])
         assert result.total_score == 0
         assert result.max_score == 0
-        assert result.score_percentage == 0.0
+        assert result.score_percentage is None
 
     def test_unscored_responses_excluded_from_totals(self):
         responses = [

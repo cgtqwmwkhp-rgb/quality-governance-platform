@@ -74,7 +74,9 @@ import {
   BOARD_STATUS_IDS,
   BOARD_WORK_LANES as BOARD_WORK_LANE_DEFS,
   PROGRAM_FILTER_CHIPS,
+  auditRunIsScored,
   classifyAuditProgram,
+  formatAuditsAverageScore,
   partitionClosedForBoard,
   type AuditProgram,
 } from './auditsBoardModel'
@@ -967,7 +969,7 @@ export default function Audits() {
         return programFilteredAudits.filter((a) => a.status === 'completed')
       case 'scored':
         return [...programFilteredAudits]
-          .filter((a) => a.score_percentage != null)
+          .filter(auditRunIsScored)
           .sort((a, b) => (a.score_percentage ?? 0) - (b.score_percentage ?? 0))
       case 'open_findings':
         return programFilteredAudits
@@ -1068,15 +1070,13 @@ export default function Audits() {
   }
 
   // Hero counts stay search-aware but not hero-filter-aware (so tiles don't collapse when active).
+  const averageScore = formatAuditsAverageScore(programFilteredAudits)
   const stats = {
     total: programFilteredAudits.length,
     inProgress: programFilteredAudits.filter((a) => a.status === 'in_progress').length,
     completed: programFilteredAudits.filter((a) => a.status === 'completed').length,
-    avgScore:
-      programFilteredAudits
-        .filter((a) => a.score_percentage != null)
-        .reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) /
-      (programFilteredAudits.filter((a) => a.score_percentage != null).length || 1),
+    avgScore: averageScore.value,
+    avgScoreCaption: averageScore.caption,
     openFindings: resolveOpenFindingsKpi(scopedFindings, openFindingsTotal, findingsTotal),
   }
   const openFindingsInScope = useMemo(
@@ -1195,6 +1195,7 @@ export default function Audits() {
               key: 'all' as const,
               label: t('audits.stats.total'),
               value: stats.total,
+              caption: null as string | null,
               icon: ClipboardCheck,
               variant: 'info' as const,
               hint: 'Show all audits',
@@ -1203,6 +1204,7 @@ export default function Audits() {
               key: 'in_progress' as const,
               label: t('status.in_progress'),
               value: stats.inProgress,
+              caption: null as string | null,
               icon: Clock,
               variant: 'warning' as const,
               hint: 'Filter in-progress audits',
@@ -1211,6 +1213,7 @@ export default function Audits() {
               key: 'completed' as const,
               label: t('audits.stats.completed'),
               value: stats.completed,
+              caption: null as string | null,
               icon: CheckCircle2,
               variant: 'success' as const,
               hint: 'Filter completed audits',
@@ -1218,7 +1221,8 @@ export default function Audits() {
             {
               key: 'scored' as const,
               label: t('audits.stats.avg_score'),
-              value: `${(stats.avgScore ?? 0).toFixed(0)}%`,
+              value: stats.avgScore,
+              caption: stats.avgScoreCaption,
               icon: BarChart3,
               variant: 'primary' as const,
               hint: 'Show scored audits, worst first',
@@ -1227,6 +1231,7 @@ export default function Audits() {
               key: 'open_findings' as const,
               label: t('audits.stats.open_findings'),
               value: stats.openFindings,
+              caption: null as string | null,
               icon: AlertCircle,
               variant: 'destructive' as const,
               hint: 'Open findings view',
@@ -1238,6 +1243,7 @@ export default function Audits() {
             <button
               key={stat.key}
               type="button"
+              data-testid={stat.key === 'scored' ? 'audits-kpi-avg-score' : undefined}
               onClick={() => applyHeroFilter(stat.key)}
               aria-pressed={active}
               title={stat.hint}
@@ -1262,6 +1268,14 @@ export default function Audits() {
               </div>
               <p className="text-2xl font-bold text-foreground tabular-nums">{stat.value}</p>
               <p className="text-sm text-muted-foreground">{stat.label}</p>
+              {stat.caption ? (
+                <p
+                  className="text-[11px] text-muted-foreground mt-1"
+                  data-testid={stat.key === 'scored' ? 'audits-kpi-avg-score-caption' : undefined}
+                >
+                  {stat.caption}
+                </p>
+              ) : null}
               {active && (
                 <p className="text-[11px] text-primary mt-1 font-medium">Filter on · click to clear</p>
               )}
@@ -1430,14 +1444,15 @@ export default function Audits() {
                               v{audit.template_version}
                             </Badge>
                           </div>
-                          {audit.score_percentage != null && (
+                          {auditRunIsScored(audit) && (
                             <span
+                              data-testid={`audits-board-score-${audit.id}`}
                               className={cn(
                                 'text-sm font-bold',
-                                getScoreColor(audit.score_percentage),
+                                getScoreColor(audit.score_percentage ?? 0),
                               )}
                             >
-                              {audit.score_percentage.toFixed(0)}%
+                              {(audit.score_percentage ?? 0).toFixed(0)}%
                             </span>
                           )}
                         </div>
@@ -1665,11 +1680,11 @@ export default function Audits() {
                           </Badge>
                         </td>
                         <td className="px-6 py-4">
-                          {audit.score_percentage != null ? (
+                          {auditRunIsScored(audit) ? (
                             <span
-                              className={cn('font-bold', getScoreColor(audit.score_percentage))}
+                              className={cn('font-bold', getScoreColor(audit.score_percentage ?? 0))}
                             >
-                              {audit.score_percentage.toFixed(0)}%
+                              {(audit.score_percentage ?? 0).toFixed(0)}%
                             </span>
                           ) : (
                             <span className="text-muted-foreground">-</span>

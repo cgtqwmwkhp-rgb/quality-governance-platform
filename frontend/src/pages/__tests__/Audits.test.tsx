@@ -1334,3 +1334,95 @@ describe('Audits import modal deep-link (PX-260)', () => {
     expect(screen.getByText('Create External Audit Intake')).toBeInTheDocument()
   })
 })
+
+describe('A2 honest KPIs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('shows em dash for Average Score when closed runs only have a fake 0%', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 56,
+            reference_number: 'AUD-2026-0056',
+            template_id: 21,
+            template_version: 2,
+            title: 'Wickford close',
+            status: 'completed',
+            source_origin: 'internal',
+            score_percentage: 0,
+            max_score: 0,
+            created_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+          },
+          {
+            id: 54,
+            reference_number: 'AUD-2026-0054',
+            template_id: 21,
+            template_version: 1,
+            title: 'Unscored close',
+            status: 'completed',
+            source_origin: 'internal',
+            score_percentage: 0,
+            created_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    const kpi = await screen.findByTestId('audits-kpi-avg-score')
+    expect(kpi).toHaveTextContent('—')
+    expect(screen.getByTestId('audits-kpi-avg-score-caption')).toHaveTextContent(
+      'Not scored in this view',
+    )
+    const closed = screen.getByTestId('audits-board-lane-closed')
+    expect(within(closed).queryByText('0%')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-score-56')).not.toBeInTheDocument()
+  })
+
+  it('keeps a real 0% when the run has a positive max_score', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 90,
+            reference_number: 'AUD-2026-0090',
+            template_id: 21,
+            template_version: 1,
+            title: 'Failed scored close',
+            status: 'completed',
+            source_origin: 'internal',
+            score_percentage: 0,
+            max_score: 10,
+            created_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-board-score-90')).toHaveTextContent('0%')
+    expect(screen.getByTestId('audits-kpi-avg-score')).toHaveTextContent('0%')
+    expect(screen.queryByTestId('audits-kpi-avg-score-caption')).not.toBeInTheDocument()
+  })
+})
