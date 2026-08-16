@@ -899,7 +899,7 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
 
     render(<Audits />)
     expect(await screen.findByTestId('audits-runs-truncated-banner')).toHaveTextContent(
-      'Showing 1 of 240 runs loaded',
+      'Showing 1 of 240 runs',
     )
   })
 })
@@ -1789,5 +1789,88 @@ describe('A5b server search q=', () => {
     expect(await screen.findByText('Wickford-needle close')).toBeInTheDocument()
     expect(screen.queryByText('Loaded page run')).not.toBeInTheDocument()
     expect(mockListRuns).toHaveBeenCalledWith(1, 100, { q: 'Wickford-needle' })
+  })
+})
+
+describe('N1 locate complete', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    mockSearchParams = new URLSearchParams()
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('keeps zero-count programme chips mounted', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 21,
+            reference_number: 'AUD-00021',
+            template_id: 21,
+            template_version: 1,
+            title: 'Internal only',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-program-chip-internal')).toHaveTextContent('1')
+    expect(screen.getByTestId('audits-program-chip-uvdb')).toHaveTextContent('0')
+    expect(screen.getByTestId('audits-program-chip-planet_mark')).toHaveTextContent('0')
+    expect(screen.getByTestId('audits-program-chip-customer')).toHaveTextContent('0')
+  })
+
+  it('defaults List density to Comfort and Compact keeps keyboard-openable rows', async () => {
+    mockSearchParams = new URLSearchParams('view=list')
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 31,
+            reference_number: 'AUD-00031',
+            template_id: 21,
+            template_version: 1,
+            title: 'List density run',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    const comfort = await screen.findByTestId('audits-list-density-comfort')
+    expect(comfort).toHaveAttribute('aria-checked', 'true')
+    const row = screen.getByTestId('audits-list-row')
+    expect(row).toHaveAttribute('data-density', 'comfort')
+    expect(row).toHaveAttribute('tabindex', '0')
+
+    fireEvent.click(screen.getByTestId('audits-list-density-compact'))
+    expect(screen.getByTestId('audits-list-density-compact')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByTestId('audits-list-row')).toHaveAttribute('data-density', 'compact')
+    expect(screen.getByTestId('audits-list-row')).toHaveAttribute('tabindex', '0')
+    expect(localStorage.getItem('qgp.audits.listDensity')).toBe('compact')
+
+    fireEvent.keyDown(screen.getByTestId('audits-list-row'), { key: 'Enter' })
+    expect(mockNavigate).toHaveBeenCalled()
   })
 })

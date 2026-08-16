@@ -7,6 +7,7 @@ import type { AuditRun } from '../api/client'
 import {
   isAchillesUvdbAssuranceAudit,
   isCustomerAssuranceAudit,
+  isPlanetMarkAssuranceAudit,
 } from '../components/assuranceHubHelpers'
 
 export type AuditProgram = 'internal' | 'uvdb' | 'planet_mark' | 'customer'
@@ -55,12 +56,21 @@ export const PROGRAM_FILTER_CHIPS: Array<{
 export function classifyAuditProgram(audit: AuditRun): AuditProgram {
   if (isCustomerAssuranceAudit(audit)) return 'customer'
   if (isAchillesUvdbAssuranceAudit(audit)) return 'uvdb'
-  const extType = (
-    (audit as AuditRun & { external_audit_type?: string }).external_audit_type || ''
-  ).toLowerCase()
-  const scheme = (audit.assurance_scheme || '').trim().toLowerCase()
-  if (extType === 'planet_mark' || scheme.includes('planet mark')) return 'planet_mark'
+  if (isPlanetMarkAssuranceAudit(audit)) return 'planet_mark'
   return 'internal'
+}
+
+export type AuditsListDensity = 'comfort' | 'compact'
+
+export const AUDITS_LIST_DENSITY_STORAGE_KEY = 'qgp.audits.listDensity'
+export const AUDITS_LIST_DENSITY_DEFAULT: AuditsListDensity = 'comfort'
+
+export function parseAuditsListDensity(raw: string | null | undefined): AuditsListDensity {
+  return raw === 'compact' ? 'compact' : AUDITS_LIST_DENSITY_DEFAULT
+}
+
+export function auditsListCellClass(density: AuditsListDensity): string {
+  return density === 'compact' ? 'px-3 py-2' : 'px-6 py-4'
 }
 
 export function getAuditsForLaneStatuses(

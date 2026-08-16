@@ -77,7 +77,12 @@ import {
   BOARD_STATUS_IDS,
   BOARD_WORK_LANES as BOARD_WORK_LANE_DEFS,
   PROGRAM_FILTER_CHIPS,
+  AUDITS_LIST_DENSITY_DEFAULT,
+  AUDITS_LIST_DENSITY_STORAGE_KEY,
   auditRunIsScored,
+  auditsListCellClass,
+  parseAuditsListDensity,
+  type AuditsListDensity,
   classifyAuditProgram,
   formatAuditsAverageScore,
   partitionClosedForBoard,
@@ -330,6 +335,13 @@ export default function Audits() {
   type HeroFilter = 'all' | 'in_progress' | 'completed' | 'scored' | 'open_findings'
   const [heroFilter, setHeroFilter] = useState<HeroFilter>('all')
   const [programFilter, setProgramFilter] = useState<AuditProgram | 'all'>('all')
+  const [listDensity, setListDensity] = useState<AuditsListDensity>(() => {
+    try {
+      return parseAuditsListDensity(localStorage.getItem(AUDITS_LIST_DENSITY_STORAGE_KEY))
+    } catch {
+      return AUDITS_LIST_DENSITY_DEFAULT
+    }
+  })
   const [modalMode, setModalMode] = useState<AuditModalMode>('schedule')
   const [showModal, setShowModal] = useState(false)
 
@@ -1021,10 +1033,17 @@ export default function Audits() {
     return counts
   }, [searchFilteredAudits])
 
-  const visibleProgramChips = useMemo(
-    () => PROGRAM_FILTER_CHIPS.filter((chip) => programCounts[chip.id] > 0),
-    [programCounts],
-  )
+  const visibleProgramChips = PROGRAM_FILTER_CHIPS
+  const listCellClass = auditsListCellClass(listDensity)
+
+  const persistListDensity = (next: AuditsListDensity) => {
+    setListDensity(next)
+    try {
+      localStorage.setItem(AUDITS_LIST_DENSITY_STORAGE_KEY, next)
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }
 
   const filteredAudits = useMemo(() => {
     switch (heroFilter) {
@@ -1382,11 +1401,12 @@ export default function Audits() {
           role="status"
           data-testid="audits-runs-truncated-banner"
         >
-          Showing {audits.length} of {auditsTotal} {runSearchQ ? 'matching runs.' : 'runs loaded. Search uses the server when you type. Open List for the loaded set.'}
+          Showing {audits.length} of {auditsTotal} runs
+          {runSearchQ ? ' matching this search.' : '. Open List to locate the loaded set.'}
         </div>
       ) : null}
 
-      {!customerAssuranceView && visibleProgramChips.length > 0 && (
+      {!customerAssuranceView && (
         <div
           className="flex flex-wrap gap-2"
           role="toolbar"
@@ -1631,32 +1651,61 @@ export default function Audits() {
       {viewMode === 'list' && (
         <Card>
           <CardContent className="p-0">
+            <div className="flex items-center justify-end gap-2 border-b border-border px-3 py-2">
+              <div
+                className="flex rounded-lg border border-border p-0.5"
+                role="radiogroup"
+                aria-label={t('audits.list.density', 'List density')}
+                data-testid="audits-list-density"
+              >
+                {(['comfort', 'compact'] as const).map((density) => (
+                  <button
+                    key={density}
+                    type="button"
+                    role="radio"
+                    aria-checked={listDensity === density}
+                    data-testid={`audits-list-density-${density}`}
+                    onClick={() => persistListDensity(density)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      listDensity === density
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {density === 'comfort'
+                      ? t('audits.list.density_comfort', 'Comfort')
+                      : t('audits.list.density_compact', 'Compact')}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.reference')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.title')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.location')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.template')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.status')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.score')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.date')}
                     </th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>
@@ -1689,6 +1738,8 @@ export default function Audits() {
                         className="hover:bg-surface transition-colors cursor-pointer"
                         role="button"
                         tabIndex={0}
+                        data-testid="audits-list-row"
+                        data-density={listDensity}
                         onClick={() => navigate(getAuditWorkspacePath(audit))}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
@@ -1697,12 +1748,12 @@ export default function Audits() {
                           }
                         }}
                       >
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           <span className="font-mono text-sm text-primary">
                             {audit.reference_number}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           <p className="text-sm font-medium text-foreground truncate max-w-xs">
                             {audit.title || 'Untitled'}
                           </p>
@@ -1731,15 +1782,15 @@ export default function Audits() {
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-foreground">
+                        <td className={cn(listCellClass, 'text-sm text-foreground')}>
                           {audit.location || '-'}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           <Badge variant="secondary" className="text-xs">
                             v{audit.template_version}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           <Badge
                             variant={
                               audit.status === 'completed'
@@ -1754,7 +1805,7 @@ export default function Audits() {
                             {(audit.status as string).replace(/_/g, ' ')}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           {auditRunIsScored(audit) ? (
                             <span
                               className={cn('font-bold', getScoreColor(audit.score_percentage ?? 0))}
@@ -1765,12 +1816,12 @@ export default function Audits() {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">
+                        <td className={cn(listCellClass, 'text-sm text-muted-foreground')}>
                           {audit.scheduled_date
                             ? new Date(audit.scheduled_date).toLocaleDateString()
                             : '-'}
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className={cn(listCellClass, 'text-right')}>
                           {isExternalAuditImportRun(audit) ||
                           audit.status === 'scheduled' ||
                           audit.status === 'in_progress' ? (
