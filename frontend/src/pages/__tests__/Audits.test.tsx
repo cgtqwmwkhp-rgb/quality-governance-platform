@@ -1392,6 +1392,108 @@ describe('Audits schedule modal templateId seed (N-BUILD-1)', () => {
   })
 })
 
+describe('Audits schedule modal purpose filter (N-BUILD-2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListRuns.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 21,
+            reference_number: 'TPL-0021',
+            name: 'Annual Safety Audit',
+            description: 'Untagged published audit',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: [],
+            version: 3,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
+            id: 22,
+            reference_number: 'TPL-0022',
+            name: 'Tagged audit template',
+            description: 'd',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: ['instrument:audit'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
+            id: 31,
+            reference_number: 'TPL-0031',
+            name: 'Skills competency template',
+            description: 'skills',
+            category: 'Workforce',
+            audit_type: 'inspection',
+            tags: ['instrument:skills'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
+            id: 32,
+            reference_number: 'TPL-0032',
+            name: 'Induction onboarding template',
+            description: 'induction',
+            category: 'Workforce',
+            audit_type: 'inspection',
+            tags: ['instrument:induction'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+        ],
+        total: 4,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+  })
+
+  it('excludes skills and induction templates and includes untagged as audit', async () => {
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schedule Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    const templateSelect = within(dialog).getAllByRole('combobox')[0]!
+    const options = within(templateSelect)
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+
+    expect(options.join(' ')).toContain('Annual Safety Audit')
+    expect(options.join(' ')).toContain('Tagged audit template')
+    expect(options.join(' ')).not.toContain('Skills competency template')
+    expect(options.join(' ')).not.toContain('Induction onboarding template')
+  })
+
+  it('does not seed a skills templateId into the schedule modal', async () => {
+    mockSearchParams = new URLSearchParams('templateId=31')
+    render(<Audits />)
+
+    expect(await screen.findByRole('button', { name: 'Schedule Audit' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
 describe('A2 honest KPIs', () => {
   beforeEach(() => {
     vi.clearAllMocks()

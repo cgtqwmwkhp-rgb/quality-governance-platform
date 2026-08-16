@@ -38,6 +38,14 @@ export function parseInstrument(tags: string[] | null | undefined): InstrumentKi
   return parseInstrumentTag(tags) ?? 'audit'
 }
 
+/** Client-side purpose filter for create/schedule pickers (N-BUILD-2). */
+export function templatesMatchingInstrument<T extends { tags?: string[] | null }>(
+  items: T[],
+  kind: InstrumentKind,
+): T[] {
+  return items.filter((item) => parseInstrument(item.tags) === kind)
+}
+
 /** Replace any `instrument:*` tag; keep builder_brief / source_case / other tags. */
 export function upsertInstrumentTag(
   tags: string[] | null | undefined,
