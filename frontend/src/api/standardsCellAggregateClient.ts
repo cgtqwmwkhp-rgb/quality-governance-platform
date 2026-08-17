@@ -7,6 +7,8 @@ import type {
   AlignmentCatalogueResponse,
   ExactShareApplyResponse,
   ExactShareUndoResponse,
+  NearShareApplyResponse,
+  NearShareUndoResponse,
   StandardsCellAggregate,
   StandardsCellMatrixSummary,
 } from './standardsCellAggregateTypes'
@@ -50,5 +52,16 @@ export function createStandardsCellAggregateApi(api: AxiosInstance) {
     /** Wave 2 PR-D: soft-delete links created by a prior apply. */
     undoExactShare: (body: { link_ids: number[]; applied_at: string }) =>
       api.post<ExactShareUndoResponse>('/api/v1/compliance/evidence/exact-share/undo', body),
+    /** AP-07: create-only proposed share onto ISO NEAR peer columns. */
+    applyNearShare: (body: {
+      source_link_id: number
+      source_framework: string
+      source_clause: string
+      target_frameworks: string[]
+      matrix_version_id: number
+    }) => api.post<NearShareApplyResponse>('/api/v1/compliance/evidence/near-share', body),
+    /** AP-07: soft-delete links created by a prior NEAR apply. */
+    undoNearShare: (body: { link_ids: number[]; applied_at: string }) =>
+      api.post<NearShareUndoResponse>('/api/v1/compliance/evidence/near-share/undo', body),
   }
 }

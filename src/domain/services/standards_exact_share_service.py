@@ -2,8 +2,10 @@
 
 One deliverable that already covers a source clause may be linked onto every
 EXACT peer column from the imported PEL-HSEQ-5064 matrix — create-only, with a
-scoped soft-delete undo. NEAR peers are intentionally out of scope until an
-addition is attested.
+scoped soft-delete undo.
+
+NEAR peers are not EXACT. ISO NEAR proposed-share lives in
+:class:`NearShareService` (AP-07): same cover gates, never auto-confirm.
 """
 
 from __future__ import annotations
@@ -66,6 +68,12 @@ class ExactSharePlan:
 class ExactShareService:
     """Plan / apply / undo EXACT evidence sharing across aligned matrix columns."""
 
+    share_verdict = "EXACT"
+    share_label = "EXACT"
+    unavailable_no_peers = "no_exact_peers"
+    not_peer_reason = "not_exact_peer"
+    conflict_prefix = "EXACT_SHARE"
+
     def __init__(
         self,
         db: AsyncSession,
@@ -74,6 +82,25 @@ class ExactShareService:
     ):
         self.db = db
         self.aggregate = aggregate or StandardsCellAggregateService(db)
+
+    def _select_peers(self, annotation: dict[str, Any], *, source_framework: str) -> list[dict[str, Any]]:
+        """EXACT peers only. ``source_framework`` is reserved for NEAR ISO-family filtering."""
+        if not source_framework:
+            return []
+        return [
+            peer
+            for peer in annotation.get("peers") or []
+            if str(peer.get("verdict") or "").upper() == self.share_verdict
+        ]
+
+    def _share_notes(
+        self,
+        source_link: ComplianceEvidenceLink,
+        resolved: Sequence[dict[str, Any]],
+    ) -> Optional[str]:
+        """Notes copied onto created peer rows. NEAR overrides this to name the addition."""
+        del resolved
+        return source_link.notes
 
     async def plan(
         self,
@@ -111,13 +138,11 @@ class ExactShareService:
             )
 
         annotation = guard.annotate_cell(framework=fw, clause_number=clause)
-        exact_peers = [
-            peer for peer in annotation.get("peers") or [] if str(peer.get("verdict") or "").upper() == "EXACT"
-        ]
-        if not exact_peers:
+        peers = self._select_peers(annotation, source_framework=fw)
+        if not peers:
             return ExactSharePlan(
                 available=False,
-                unavailable_reason="no_exact_peers",
+                unavailable_reason=self.unavailable_no_peers,
                 matrix_version=guard.version_label,
                 matrix_version_id=guard.version_id,
                 source=source_payload,
@@ -130,7 +155,7 @@ class ExactShareService:
                 matrix_version=guard.version_label,
                 matrix_version_id=guard.version_id,
                 source=source_payload,
-                candidates=await self._candidate_rows(tenant_id=tenant_id, peers=exact_peers, entity_type=None),
+                candidates=await self._candidate_rows(tenant_id=tenant_id, peers=peers, entity_type=None),
             )
 
         conformance = [
@@ -143,12 +168,12 @@ class ExactShareService:
                 matrix_version=guard.version_label,
                 matrix_version_id=guard.version_id,
                 source=source_payload,
-                candidates=await self._candidate_rows(tenant_id=tenant_id, peers=exact_peers, entity_type=None),
+                candidates=await self._candidate_rows(tenant_id=tenant_id, peers=peers, entity_type=None),
             )
 
         # Prefer the first conformance link's entity type for tech-gap warnings.
         entity_type = str(conformance[0].get("entity_type") or "") or None
-        candidates = await self._candidate_rows(tenant_id=tenant_id, peers=exact_peers, entity_type=entity_type)
+        candidates = await self._candidate_rows(tenant_id=tenant_id, peers=peers, entity_type=entity_type)
 
         shareable_links = await self._shareable_links(
             tenant_id=tenant_id,
@@ -181,7 +206,11 @@ class ExactShareService:
         target_frameworks: Sequence[str],
         matrix_version_id: int,
     ) -> dict[str, Any]:
-        """Create CEL rows on requested EXACT peers for one source link."""
+        """Create CEL rows on requested peers for one source link.
+
+        Status is always PROPOSED with auto_applied=True so coverage stays
+        honest until an operator confirms (Exceptions inbox). Never CONFIRMED.
+        """
         fw = source_framework.strip().lower()
         clause = source_clause.strip()
         targets = sorted({str(t).strip().lower() for t in target_frameworks if str(t).strip()})
@@ -201,21 +230,20 @@ class ExactShareService:
         source_cell = await self.aggregate.get_cell(tenant_id=tenant_id, framework=fw, clause_number=clause)
         if source_cell.cover_blocked:
             raise ConflictError(
-                "EXACT share refused: source cell is cover-blocked",
-                code="EXACT_SHARE_SOURCE_BLOCKED",
+                f"{self.share_label} share refused: source cell is cover-blocked",
+                code=f"{self.conflict_prefix}_SOURCE_BLOCKED",
                 details={"cover_blocked": True},
             )
 
         annotation = guard.annotate_cell(framework=fw, clause_number=clause)
-        exact_by_fw = {
+        peers_by_fw = {
             str(peer["framework"]).strip().lower(): peer
-            for peer in (annotation.get("peers") or [])
-            if str(peer.get("verdict") or "").upper() == "EXACT"
+            for peer in self._select_peers(annotation, source_framework=fw)
         }
         resolved, warnings = await self._resolve_apply_targets(
             tenant_id=tenant_id,
             targets=targets,
-            exact_by_fw=exact_by_fw,
+            peers_by_fw=peers_by_fw,
             source_entity_type=source_link.entity_type,
         )
 
@@ -235,7 +263,7 @@ class ExactShareService:
             actor_email=actor_email,
             confidence=source_link.confidence,
             title=source_link.title,
-            notes=source_link.notes,
+            notes=self._share_notes(source_link, resolved),
             signal_type=source_link.signal_type,
             status=EvidenceLinkStatus.PROPOSED,
             auto_applied=True,
@@ -251,13 +279,13 @@ class ExactShareService:
     def _assert_matrix_version(self, guard: Any, *, matrix_version_id: int) -> None:
         if not guard.is_loaded:
             raise ConflictError(
-                "EXACT share refused: alignment matrix is not loaded",
-                code="EXACT_SHARE_MATRIX_NOT_LOADED",
+                f"{self.share_label} share refused: alignment matrix is not loaded",
+                code=f"{self.conflict_prefix}_MATRIX_NOT_LOADED",
             )
         if guard.version_id != matrix_version_id:
             raise ConflictError(
-                "EXACT share refused: matrix edition changed since plan",
-                code="EXACT_SHARE_MATRIX_VERSION_MISMATCH",
+                f"{self.share_label} share refused: matrix edition changed since plan",
+                code=f"{self.conflict_prefix}_MATRIX_VERSION_MISMATCH",
                 details={
                     "expected_matrix_version_id": matrix_version_id,
                     "active_matrix_version_id": guard.version_id,
@@ -282,8 +310,8 @@ class ExactShareService:
 
         if not counts_toward_compliance_coverage(source_link.signal_type):
             raise ConflictError(
-                "EXACT share refused: source link is not conformance evidence",
-                code="EXACT_SHARE_NONCONFORMANCE_SIGNAL",
+                f"{self.share_label} share refused: source link is not conformance evidence",
+                code=f"{self.conflict_prefix}_NONCONFORMANCE_SIGNAL",
                 details={"signal_type": source_link.signal_type},
             )
         return source_link
@@ -293,7 +321,7 @@ class ExactShareService:
         *,
         tenant_id: int,
         targets: Sequence[str],
-        exact_by_fw: dict[str, dict[str, Any]],
+        peers_by_fw: dict[str, dict[str, Any]],
         source_entity_type: str,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         blocked_targets: list[dict[str, Any]] = []
@@ -301,9 +329,9 @@ class ExactShareService:
         warnings: list[dict[str, Any]] = []
 
         for target_fw in targets:
-            peer = exact_by_fw.get(target_fw)
+            peer = peers_by_fw.get(target_fw)
             if peer is None:
-                blocked_targets.append({"framework": target_fw, "blocked_reasons": ["not_exact_peer"]})
+                blocked_targets.append({"framework": target_fw, "blocked_reasons": [self.not_peer_reason]})
                 continue
             peer_clause = self._peer_clause_number(target_fw, peer["clause_key"])
             target_cell = await self.aggregate.get_cell(
@@ -327,18 +355,19 @@ class ExactShareService:
                     "framework": target_fw,
                     "clause_key": peer["clause_key"],
                     "clause_number": peer_clause,
-                    "verdict": "EXACT",
+                    "verdict": str(peer.get("verdict") or self.share_verdict).upper(),
+                    "addition_text": peer.get("addition_text"),
                 }
             )
 
         if blocked_targets:
             raise ConflictError(
-                f"EXACT share refused: {len(blocked_targets)} target(s) ineligible",
-                code="EXACT_SHARE_TARGET_BLOCKED",
+                f"{self.share_label} share refused: {len(blocked_targets)} target(s) ineligible",
+                code=f"{self.conflict_prefix}_TARGET_BLOCKED",
                 details={"targets": blocked_targets},
             )
         if not resolved:
-            raise BadRequestError("No eligible EXACT targets to share onto")
+            raise BadRequestError(f"No eligible {self.share_label} targets to share onto")
         return resolved, warnings
 
     @staticmethod
@@ -363,8 +392,8 @@ class ExactShareService:
             reasons.append("target_cover_blocked")
         return reasons
 
-    @staticmethod
     def _apply_response(
+        self,
         *,
         guard_version_label: Optional[str],
         resolved: Sequence[dict[str, Any]],
@@ -383,7 +412,7 @@ class ExactShareService:
                         "link_id": link.id,
                         "framework": row["framework"],
                         "clause_id": row["clause_key"],
-                        "verdict": "EXACT",
+                        "verdict": row.get("verdict") or self.share_verdict,
                     }
                 )
                 continue
@@ -506,7 +535,8 @@ class ExactShareService:
                     "framework": target_fw,
                     "clause_key": peer_key,
                     "clause_number": peer_clause,
-                    "verdict": "EXACT",
+                    "verdict": str(peer.get("verdict") or self.share_verdict).upper(),
+                    "addition_text": peer.get("addition_text"),
                     "eligible": not blocked_reasons,
                     "blocked_reasons": blocked_reasons,
                     "open_nc_count": open_nc,

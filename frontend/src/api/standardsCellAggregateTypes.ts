@@ -123,6 +123,8 @@ export type StandardsCellAggregate = {
   trap_blocked?: Array<Record<string, unknown>>
   tech_gap?: StandardsCellTechGap
   exact_share?: StandardsCellExactShare
+  /** AP-07: ISO-family NEAR proposed-share preflight (never auto-confirm). */
+  near_share?: StandardsCellNearShare
   /** Int-W8 Entra MFA posture — present on technical cells only. */
   attestation?: StandardsCellAttestation
   /** A source hit its read cap: the counts above are a floor, not a total. */
@@ -142,6 +144,7 @@ export type StandardsExactShareCandidate = {
   open_nc_count: number
   open_action_count: number
   tech_gap_warning?: string | null
+  addition_text?: string | null
 }
 
 export type StandardsExactShareLink = {
@@ -184,6 +187,11 @@ export type ExactShareUndoResponse = {
   deleted: number[]
   skipped: Array<{ link_id: number; reason: string }>
 }
+
+/** AP-07: ISO NEAR proposed-share uses the same plan/apply envelope as EXACT. */
+export type StandardsCellNearShare = StandardsCellExactShare
+export type NearShareApplyResponse = ExactShareApplyResponse
+export type NearShareUndoResponse = ExactShareUndoResponse
 
 /** PEL-HSEQ-5064 alignment vocabulary (Wave 2 PR-C). */
 export type AlignmentVerdict = 'EXACT' | 'NEAR' | 'DIFFERENT' | 'UNIQUE'
