@@ -80,6 +80,18 @@ export function getAuditsForLaneStatuses(
   return audits.filter((audit) => statuses.includes(audit.status))
 }
 
+const DO_NOW_STATUSES: readonly string[] = BOARD_WORK_LANES.find((lane) => lane.id === 'do_now')!
+  .statuses
+
+/** Hero KPI must count the same set as the Do now lane (scheduled + in_progress). */
+export function isDoNowAuditStatus(status: string): boolean {
+  return DO_NOW_STATUSES.includes(status)
+}
+
+export function countDoNowAudits(audits: readonly Pick<AuditRun, 'status'>[]): number {
+  return audits.filter((audit) => isDoNowAuditStatus(audit.status)).length
+}
+
 /** A5: Closed on the board is recent work, not the archive. List keeps history. */
 export const CLOSED_BOARD_WINDOW_DAYS = 30
 export const CLOSED_BOARD_MAX_CARDS = 8

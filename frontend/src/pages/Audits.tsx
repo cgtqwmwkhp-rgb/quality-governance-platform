@@ -86,7 +86,9 @@ import {
   parseAuditsListDensity,
   type AuditsListDensity,
   classifyAuditProgram,
+  countDoNowAudits,
   formatAuditsAverageScore,
+  isDoNowAuditStatus,
   partitionClosedForBoard,
   type AuditProgram,
 } from './auditsBoardModel'
@@ -1050,7 +1052,7 @@ export default function Audits() {
   const filteredAudits = useMemo(() => {
     switch (heroFilter) {
       case 'in_progress':
-        return programFilteredAudits.filter((a) => a.status === 'in_progress')
+        return programFilteredAudits.filter((a) => isDoNowAuditStatus(a.status))
       case 'completed':
         return programFilteredAudits.filter((a) => a.status === 'completed')
       case 'scored':
@@ -1159,7 +1161,7 @@ export default function Audits() {
   const averageScore = formatAuditsAverageScore(programFilteredAudits)
   const stats = {
     total: programFilteredAudits.length,
-    inProgress: programFilteredAudits.filter((a) => a.status === 'in_progress').length,
+    doNow: countDoNowAudits(programFilteredAudits),
     completed: programFilteredAudits.filter((a) => a.status === 'completed').length,
     avgScore: averageScore.value,
     avgScoreCaption: averageScore.caption,
@@ -1294,12 +1296,15 @@ export default function Audits() {
             },
             {
               key: 'in_progress' as const,
-              label: t('status.in_progress'),
-              value: stats.inProgress,
+              label: t('audits.stats.do_now', 'Do now'),
+              value: stats.doNow,
               caption: null as string | null,
               icon: Clock,
               variant: 'warning' as const,
-              hint: 'Filter in-progress audits',
+              hint: t(
+                'audits.stats.do_now_hint',
+                'Filter scheduled and in-progress audits (same as the Do now lane)',
+              ),
             },
             {
               key: 'completed' as const,
@@ -1340,7 +1345,9 @@ export default function Audits() {
                   ? 'audits-kpi-avg-score'
                   : stat.key === 'open_findings'
                     ? 'audits-kpi-open-findings'
-                    : undefined
+                    : stat.key === 'in_progress'
+                      ? 'audits-kpi-do-now'
+                      : undefined
               }
               onClick={() => applyHeroFilter(stat.key)}
               aria-pressed={active}
