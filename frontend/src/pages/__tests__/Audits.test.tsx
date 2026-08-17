@@ -722,6 +722,65 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
     expect(within(doNow).getByText('Do now')).toBeInTheDocument()
   })
 
+  it('aligns the hero KPI count and filter with the Do now lane', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 1,
+            reference_number: 'AUD-00001',
+            template_id: 21,
+            template_version: 1,
+            title: 'Scheduled lane item',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+          {
+            id: 2,
+            reference_number: 'AUD-00002',
+            template_id: 21,
+            template_version: 1,
+            title: 'In-progress lane item',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:05:00Z',
+          },
+          {
+            id: 3,
+            reference_number: 'AUD-00003',
+            template_id: 21,
+            template_version: 1,
+            title: 'Closed lane item',
+            status: 'completed',
+            source_origin: 'internal',
+            score_percentage: 88,
+            max_score: 10,
+            created_at: '2026-07-12T10:10:00Z',
+            completed_at: new Date().toISOString(),
+          },
+        ],
+        total: 3,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    const kpi = await screen.findByTestId('audits-kpi-do-now')
+    expect(kpi).toHaveTextContent('2')
+    expect(kpi).toHaveTextContent('Do now')
+    expect(kpi).not.toHaveTextContent('In Progress')
+
+    fireEvent.click(kpi)
+    expect(await screen.findByText('Scheduled lane item')).toBeInTheDocument()
+    expect(screen.getByText('In-progress lane item')).toBeInTheDocument()
+    expect(screen.queryByText('Closed lane item')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-planned')).not.toBeInTheDocument()
+  })
+
   it('shows all program chips when mixed programs load and clear restores the board', async () => {
     mockListRuns.mockResolvedValueOnce({
       data: {
@@ -957,7 +1016,7 @@ describe('Audits board empty-state honesty', () => {
     expect(await screen.findByText('Scheduled safety audit')).toBeInTheDocument()
     const filterToolbar = screen.getByRole('toolbar', { name: 'Audit filters' })
     expect(within(filterToolbar).getByText('Total Audits')).toBeInTheDocument()
-    expect(within(filterToolbar).getByText('1')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-kpi-do-now')).toHaveTextContent('1')
     expect(screen.queryByText('No audits found')).not.toBeInTheDocument()
     expect(screen.queryByTestId('audits-board-empty')).not.toBeInTheDocument()
   })
@@ -988,7 +1047,7 @@ describe('Audits board empty-state honesty', () => {
     await screen.findByText('Completed audit')
 
     const filterToolbar = screen.getByRole('toolbar', { name: 'Audit filters' })
-    fireEvent.click(within(filterToolbar).getByRole('button', { name: /In Progress/i }))
+    fireEvent.click(within(filterToolbar).getByRole('button', { name: /Do now/i }))
 
     expect(await screen.findByTestId('audits-list-filter-empty')).toBeInTheDocument()
     expect(screen.getByText('No audits match filters')).toBeInTheDocument()

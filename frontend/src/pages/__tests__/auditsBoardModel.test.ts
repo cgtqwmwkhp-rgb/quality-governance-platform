@@ -11,6 +11,8 @@ import {
   formatAuditsAverageScore,
   parseAuditsListDensity,
   auditsListCellClass,
+  countDoNowAudits,
+  isDoNowAuditStatus,
 } from '../auditsBoardModel'
 
 function run(partial: Partial<AuditRun> & Pick<AuditRun, 'id' | 'status'>): AuditRun {
@@ -185,5 +187,19 @@ describe('A2 score honesty', () => {
     expect(parseAuditsListDensity('unknown')).toBe('comfort')
     expect(auditsListCellClass('comfort')).toBe('px-6 py-4')
     expect(auditsListCellClass('compact')).toBe('px-3 py-2')
+  })
+
+  it('counts Do now as scheduled + in_progress, matching the lane', () => {
+    const audits = [
+      run({ id: 1, status: 'scheduled' }),
+      run({ id: 2, status: 'in_progress' }),
+      run({ id: 3, status: 'pending_review' }),
+      run({ id: 4, status: 'completed' }),
+    ]
+    expect(countDoNowAudits(audits)).toBe(2)
+    expect(isDoNowAuditStatus('scheduled')).toBe(true)
+    expect(isDoNowAuditStatus('in_progress')).toBe(true)
+    expect(isDoNowAuditStatus('pending_review')).toBe(false)
+    expect(isDoNowAuditStatus('completed')).toBe(false)
   })
 })

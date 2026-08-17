@@ -626,6 +626,8 @@
   "audits.search_placeholder": "Search audits…",
   "audits.stats.avg_score": "Average Score",
   "audits.stats.completed": "Completed",
+  "audits.stats.do_now": "Do now",
+  "audits.stats.do_now_hint": "Filter scheduled and in-progress audits (same as the Do now lane)",
   "audits.stats.open_findings": "Open Findings",
   "audits.stats.total": "Total Audits",
   "audits.status.cancelled": "Cancelled",
