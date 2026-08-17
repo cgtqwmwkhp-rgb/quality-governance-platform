@@ -83,6 +83,38 @@ env:
   IMAGE_NAME: quality-governance-platform
 
 jobs:
+  # GitHub fires workflow_run on every Staging *completed* run, including cancelled
+  # twins. Those must not occupy the notify fail-close path (run 32036679572 /
+  # 32036825492): B&D is skipped, Notify always() then fails, and the Actions list
+  # looks like a production deploy failure. A cancelled Staging twin is not a
+  # promote. Name it and succeed so chase does not dispatch a second Production.
+  ignore-non-success-staging:
+    name: Ignore non-success staging twin
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success'
+    steps:
+      - name: Record that production was not attempted
+        env:
+          STAGING_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          STAGING_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          STAGING_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Ignored non-success staging twin"
+            echo ""
+            echo "Staging concluded \`$STAGING_CONCLUSION\`. Production was **not** deployed and this is **not** a deploy failure."
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Staging | [$STAGING_RUN_URL]($STAGING_RUN_URL) |"
+            echo "| Candidate SHA | \`${STAGING_SHA}\` |"
+            echo ""
+            echo "Usual cause: a duplicate Staging run was cancelled before Azure write."
+            echo "The successful Staging twin still promotes via its own \`workflow_run\`."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Gate: Verify staging succeeded (for auto-trigger) or manual approval
   pre-deployment-checks:
     name: Pre-Deployment Checks
@@ -2222,7 +2254,13 @@ jobs:
     # pre-deployment-checks is needed only so the release gate below can name *why*
     # nothing was deployed. always() means its result never blocks this job.
     needs: [build-and-deploy, pre-deployment-checks]
-    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.rollback == true)
+    # always() so a skipped B&D after a *successful* Staging run still fail-closes
+    # (honest "did not deploy"). Do not run at all when Staging itself was
+    # cancelled/failed — that is ignore-non-success-staging, not a promote.
+    if: |
+      always() &&
+      !(github.event_name == 'workflow_dispatch' && inputs.rollback == true) &&
+      !(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success')
     
     steps:
       - name: Notify success

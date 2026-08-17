@@ -890,9 +890,11 @@ async def get_standards_cell_aggregate(
     Mock audits are labelled honestly and still paint gaps. LIVE-08: read-model only.
 
     Wave 2 PR-D: response includes ``exact_share`` preflight for EXACT peers.
+    AP-07: response also includes ``near_share`` preflight for ISO-family NEAR peers.
     """
     from src.domain.services.standards_cell_aggregate_service import StandardsCellAggregateService
     from src.domain.services.standards_exact_share_service import ExactShareService
+    from src.domain.services.standards_near_share_service import NearShareService
 
     tenant_id = current_user.tenant_id
     if tenant_id is None:
@@ -911,6 +913,13 @@ async def get_standards_cell_aggregate(
         source_cell=result,
     )
     payload["exact_share"] = plan.to_dict()
+    near_plan = await NearShareService(db, aggregate=service).plan(
+        tenant_id=tenant_id,
+        framework=framework,
+        clause_number=clause,
+        source_cell=result,
+    )
+    payload["near_share"] = near_plan.to_dict()
     return payload
 
 
@@ -1008,6 +1017,70 @@ async def undo_exact_share(
     if tenant_id is None:
         raise BadRequestError("Tenant context required")
     return await ExactShareService(db).undo(
+        tenant_id=tenant_id,
+        link_ids=request.link_ids,
+        applied_at=request.applied_at,
+    )
+
+
+class NearShareApplyRequest(BaseModel):
+    """Apply one source CEL row onto named ISO NEAR peer frameworks."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_link_id: int
+    source_framework: str
+    source_clause: str
+    target_frameworks: list[str]
+    matrix_version_id: int
+
+
+class NearShareUndoRequest(BaseModel):
+    """Soft-delete links created by a prior NEAR share apply."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    link_ids: list[int]
+    applied_at: datetime
+
+
+@router.post("/evidence/near-share")
+async def apply_near_share(
+    request: NearShareApplyRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+):
+    """Create-only proposed share of one conformance link onto ISO NEAR peer cells."""
+    from src.domain.services.standards_near_share_service import NearShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    return await NearShareService(db).apply(
+        tenant_id=tenant_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        source_link_id=request.source_link_id,
+        source_framework=request.source_framework,
+        source_clause=request.source_clause,
+        target_frameworks=request.target_frameworks,
+        matrix_version_id=request.matrix_version_id,
+    )
+
+
+@router.post("/evidence/near-share/undo")
+async def undo_near_share(
+    request: NearShareUndoRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+):
+    """Undo a prior NEAR share by soft-deleting the created link ids."""
+    from src.domain.services.standards_near_share_service import NearShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    return await NearShareService(db).undo(
         tenant_id=tenant_id,
         link_ids=request.link_ids,
         applied_at=request.applied_at,

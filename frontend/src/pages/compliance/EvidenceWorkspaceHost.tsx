@@ -10,6 +10,7 @@ import { ActionsPanelSlot } from './workspace/ActionsPanelSlot'
 import { RisksPanelSlot } from './workspace/RisksPanelSlot'
 import { CertsPanelSlot } from './workspace/CertsPanelSlot'
 import { ExactShareBanner } from './workspace/ExactShareBanner'
+import { NearShareBanner } from './workspace/NearShareBanner'
 import { useStandardsCellAggregate } from './workspace/useStandardsCellAggregate'
 import type { FrameworkId } from './standardsMatrixFilters'
 import { STANDARDS_MATRIX_FRAMEWORKS } from './standardsMatrixFilters'
@@ -116,6 +117,12 @@ export function EvidenceWorkspaceHost({ selection, onClose }: EvidenceWorkspaceH
           frameworkId={selection.frameworkId}
           clauseNumber={selection.clauseNumber}
           exactShare={data?.exact_share}
+          onShared={refetch}
+        />
+        <NearShareBanner
+          frameworkId={selection.frameworkId}
+          clauseNumber={selection.clauseNumber}
+          nearShare={data?.near_share}
           onShared={refetch}
         />
 
