@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   countOpenAuditFindings,
   findingMatchesClause,
+  findingsEmptyNamesProgram,
+  formatFindingsTruncation,
   isOpenAuditFinding,
   resolveOpenFindingsKpi,
   scopeFindingsToRunIds,
@@ -69,5 +71,17 @@ describe('A3 findings scope + clause', () => {
     expect(findingMatchesClause({ title: 'Competence 7.2 training' }, '7.2')).toBe(true)
     expect(findingMatchesClause({ title: 'Clause 17.2 leftover' }, '7.2')).toBe(false)
     expect(findingMatchesClause({ clause_ids: ['7.2'] }, '')).toBe(true)
+  })
+})
+
+describe('N2 findings follow-up honesty', () => {
+  it('names empty copy only when a programme chip is active', () => {
+    expect(findingsEmptyNamesProgram('all')).toBe(false)
+    expect(findingsEmptyNamesProgram('planet_mark')).toBe(true)
+    expect(findingsEmptyNamesProgram('internal')).toBe(true)
+  })
+
+  it('formats tenant-wide truncation like N1 runs', () => {
+    expect(formatFindingsTruncation(1, 101)).toBe('Showing 1 of 101 findings')
   })
 })

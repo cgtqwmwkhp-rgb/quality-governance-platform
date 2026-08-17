@@ -87,3 +87,13 @@ export function resolveOpenFindingsKpi(
   }
   return inScopeOpen
 }
+
+/** N2: Findings tab empty copy names the active programme chip, not the tenant. */
+export function findingsEmptyNamesProgram(programFilter: string | 'all'): boolean {
+  return programFilter !== 'all'
+}
+
+/** N2: tenant-wide truncation matches N1 runs — Showing loaded of total. */
+export function formatFindingsTruncation(loaded: number, total: number): string {
+  return `Showing ${loaded} of ${total} findings`
+}

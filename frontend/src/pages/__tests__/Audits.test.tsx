@@ -57,6 +57,10 @@ vi.mock('react-i18next', () => ({
         'audits.findings.empty.title': 'No findings recorded yet',
         'audits.findings.empty.description':
           'Complete an audit or inspection to record findings and positive practices.',
+        'audits.findings.empty.program_title': 'No {{program}} findings',
+        'audits.findings.empty.program_description':
+          'No findings in {{program}} on the loaded page. Other programmes may still have follow-up.',
+        'audits.findings.empty.program_open': 'No open findings in {{program}}.',
         'audits.findings.actions.view_audits': 'View audits',
         'audits.findings.actions.open_audit': 'Open audit workspace',
         'audits.findings.deep_link_miss.title': 'Finding not found',
@@ -74,7 +78,8 @@ vi.mock('react-i18next', () => ({
         return translations[key] ?? options
       }
       const value = translations[key] ?? key
-      return options?.id ? value.replace('{{id}}', options.id) : value
+      if (!options) return value
+      return value.replace(/\{\{(\w+)\}\}/g, (_, name: string) => options[name] ?? `{{${name}}}`)
     },
     i18n: { language: 'en' },
   }),
@@ -1872,5 +1877,103 @@ describe('N1 locate complete', () => {
 
     fireEvent.keyDown(screen.getByTestId('audits-list-row'), { key: 'Enter' })
     expect(mockNavigate).toHaveBeenCalled()
+  })
+})
+
+describe('N2 follow-up honesty', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('names the empty Findings register for the active programme chip', async () => {
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          a3Run({ id: 1, reference_number: 'AUD-2026-0001', title: 'Internal one' }),
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+    stubFindingsApi({
+      items: [a3Finding({ id: 11, run_id: 1, title: 'Internal finding' })],
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-program-chip-planet_mark')).toHaveTextContent('0')
+    fireEvent.click(screen.getByTestId('audits-program-chip-planet_mark'))
+    fireEvent.click(screen.getByRole('button', { name: 'Findings' }))
+
+    expect(await screen.findByTestId('audits-findings-empty')).toHaveTextContent('No Planet Mark findings')
+    expect(screen.getByTestId('audits-findings-empty')).toHaveTextContent(
+      'No findings in Planet Mark on the loaded page',
+    )
+    expect(screen.queryByTestId('finding-card-11')).not.toBeInTheDocument()
+  })
+
+  it('uses N1-style Showing loaded of total on the Findings register', async () => {
+    stubFindingsApi({
+      items: [
+        {
+          id: 1,
+          reference_number: 'AF-00001',
+          run_id: 1,
+          title: 'Loaded open finding',
+          description: 'd',
+          severity: 'medium',
+          finding_type: 'nonconformity',
+          status: 'open',
+          corrective_action_required: true,
+          created_at: '2026-07-12T10:00:00Z',
+        },
+        {
+          id: 2,
+          reference_number: 'AF-00002',
+          run_id: 1,
+          title: 'In progress finding',
+          description: 'd',
+          severity: 'medium',
+          finding_type: 'nonconformity',
+          status: 'in_progress',
+          corrective_action_required: true,
+          created_at: '2026-07-12T10:01:00Z',
+        },
+      ],
+      total: 101,
+    })
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 1,
+            reference_number: 'AUD-00001',
+            template_id: 21,
+            template_version: 1,
+            title: 'Internal run',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Findings' }))
+    expect(await screen.findByTestId('audits-findings-truncated-banner')).toHaveTextContent(
+      'Showing 2 of 101 findings',
+    )
   })
 })
