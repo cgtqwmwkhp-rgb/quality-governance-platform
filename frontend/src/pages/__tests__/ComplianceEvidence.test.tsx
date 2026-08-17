@@ -816,4 +816,33 @@ describe('ComplianceEvidence', () => {
     expect(screen.getByTestId('compliance-score-note-chas')).toHaveTextContent(/no fake coverage/i)
     expect(screen.queryByTestId('compliance-score-chas')).not.toBeInTheDocument()
   })
+
+  it('keeps the four Evidence tabs when CHAS is selected and does not invent a tree', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+    render(
+      <MemoryRouter initialEntries={['/compliance?view=evidence']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    const chas = await screen.findByTestId('compliance-framework-card-chas')
+    fireEvent.click(chas)
+
+    expect(await screen.findByTestId('compliance-chrome-honesty-main-clauses')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Clause View/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Evidence List/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Gap Analysis/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Imported Audits/i })).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-chrome-honesty-main-clauses')).toHaveTextContent(
+      /not in the clause evidence catalogue yet/i,
+    )
+    expect(screen.queryByText('Documented information')).not.toBeInTheDocument()
+    expect(mockListClauses.mock.calls.every((call) => call[0] !== 'chas')).toBe(true)
+
+    fireEvent.click(screen.getByRole('tab', { name: /Gap Analysis/i }))
+    expect(await screen.findByTestId('compliance-chrome-honesty-main-gaps')).toHaveTextContent(
+      /not zero gaps/i,
+    )
+    expect(screen.queryByText(/No gaps found/i)).not.toBeInTheDocument()
+  })
 })
