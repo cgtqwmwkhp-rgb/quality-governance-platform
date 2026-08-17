@@ -64,6 +64,8 @@ import {
 import { cn, decodeHtmlEntities } from '../helpers/utils'
 import {
   findingMatchesClause,
+  findingsEmptyNamesProgram,
+  formatFindingsTruncation,
   isOpenAuditFinding,
   resolveOpenFindingsKpi,
   scopeFindingsToRunIds,
@@ -1177,6 +1179,8 @@ export default function Audits() {
   const findingsListTruncated = findingsScopedToSubset
     ? findingsPageTruncated
     : findingsTotal != null && findingsTotal > scopedFindings.length
+  const activeProgramChip = PROGRAM_FILTER_CHIPS.find((chip) => chip.id === programFilter)
+  const findingsEmptyProgram = findingsEmptyNamesProgram(programFilter)
   const linkedFindingExists =
     !urlFindingId || scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
   const executableAudit = scopedAudits.find(
@@ -1901,7 +1905,7 @@ export default function Audits() {
             >
               {findingsScopedToSubset
                 ? `Showing ${scopedFindings.length} findings in this filter from the loaded page. Open Findings KPI counts those (${stats.openFindings}), not the tenant total.`
-                : `Showing ${scopedFindings.length} of ${findingsTotal} findings loaded — Open Findings KPI uses the server total (${stats.openFindings}) so counts stay honest after new findings are created.`}
+                : formatFindingsTruncation(scopedFindings.length, findingsTotal ?? scopedFindings.length)}
             </div>
           ) : null}
           {urlFindingId && !linkedFindingExists && (
@@ -1931,14 +1935,24 @@ export default function Audits() {
             </div>
           )}
           {findingsForView.length === 0 ? (
-            <Card>
+            <Card data-testid="audits-findings-empty">
               <EmptyState
                 icon={<ClipboardCheck className="h-8 w-8 text-primary" />}
-                title={t('audits.findings.empty.title')}
+                title={
+                  findingsEmptyProgram && activeProgramChip
+                    ? t('audits.findings.empty.program_title', { program: activeProgramChip.label })
+                    : t('audits.findings.empty.title')
+                }
                 description={
                   heroFilter === 'open_findings'
-                    ? 'No open findings match this filter.'
-                    : t('audits.findings.empty.description')
+                    ? findingsEmptyProgram && activeProgramChip
+                      ? t('audits.findings.empty.program_open', { program: activeProgramChip.label })
+                      : 'No open findings match this filter.'
+                    : findingsEmptyProgram && activeProgramChip
+                      ? t('audits.findings.empty.program_description', {
+                          program: activeProgramChip.label,
+                        })
+                      : t('audits.findings.empty.description')
                 }
                 action={
                   <div className="flex flex-wrap justify-center gap-2">
