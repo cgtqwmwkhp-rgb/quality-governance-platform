@@ -1,7 +1,7 @@
 """Unit tests for ISO NEAR proposed-share (AP-07).
 
 NEAR is not EXACT: ExactShare stays EXACT-only. This service offers ISO-family
-NEAR peers only, surfaces addition_text, and never auto-confirms.
+NEAR peers and CE↔CE+ NEAR, surfaces addition_text, and never auto-confirms.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from src.domain.models.compliance_evidence import EvidenceCoverKind, EvidenceLin
 from src.domain.models.standards_alignment import AlignmentEdge, MatrixVersion, MatrixVersionStatus
 from src.domain.services.standards_alignment_import_service import build_edges, load_payload
 from src.domain.services.standards_exact_share_service import ExactShareService
-from src.domain.services.standards_near_share_service import NearShareService
+from src.domain.services.standards_near_share_service import CE_NEAR_FAMILY, NearShareService
 from src.domain.services.standards_trap_guard import ISO_NUMBERING_FAMILY, TrapGuard
 
 
@@ -150,17 +150,20 @@ async def test_exact_share_on_4_1_still_refuses_because_peers_are_near(guard_506
 
 
 @pytest.mark.asyncio
-async def test_ce_plus_near_is_not_offered_this_slice(guard_5064):
+async def test_ce_plus_near_is_offered_as_proposed_share(guard_5064):
     source = _cell(
         framework="ce",
         clause_number="firewalls",
         evidence=[{"id": 3, "entity_type": "document", "entity_id": "11", "signal_type": "evidence"}],
     )
     service = _service_with_guard(guard_5064, {("ce", "firewalls"): source})
+    service._shareable_links = AsyncMock(return_value=_shareable(link_id=3, title="Firewall config"))  # type: ignore[method-assign]
     plan = await service.plan(tenant_id=1, framework="ce", clause_number="firewalls", source_cell=source)
-    assert plan.available is False
-    assert plan.unavailable_reason == "no_iso_near_peers"
-    assert plan.candidates == []
+    assert plan.available is True
+    assert plan.unavailable_reason is None
+    assert any(c["framework"] == "cep" and c["verdict"] == "NEAR" for c in plan.candidates)
+    assert all(c["framework"] in {"ce", "cep"} for c in plan.candidates)
+    assert all(c.get("addition_text") for c in plan.candidates)
 
 
 @pytest.mark.asyncio
@@ -225,7 +228,9 @@ def test_apply_never_auto_confirms():
     assert "EvidenceLinkStatus.CONFIRMED" not in source
     assert NearShareService.conflict_prefix == "NEAR_SHARE"
     select_src = inspect.getsource(NearShareService._select_peers)
-    assert "ISO_NUMBERING_FAMILY" in select_src
+    assert "_near_share_family" in select_src
+    assert CE_NEAR_FAMILY == frozenset({"ce", "cep"})
+    assert "chas" not in CE_NEAR_FAMILY
 
 
 @pytest.mark.asyncio

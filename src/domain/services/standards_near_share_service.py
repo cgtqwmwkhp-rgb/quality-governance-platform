@@ -1,8 +1,9 @@
-"""ISO NEAR proposed-share for Standards matrix cells (AP-07).
+"""NEAR proposed-share for Standards matrix cells (AP-07 / AP-07b).
 
 NEAR is not EXACT. Apply writes PROPOSED + auto_applied links so coverage
-does not count until an operator confirms the required addition. CE↔CE+
-NEAR and scheme columns (CHAS / SSIP / PM / UVDB) are out of this slice.
+does not count until an operator confirms the required addition. Families
+are ISO numbering and CE↔CE+ only. Scheme columns (CHAS / SSIP / PM / UVDB)
+stay out.
 """
 
 from __future__ import annotations
@@ -15,9 +16,22 @@ from src.domain.services.standards_trap_guard import ISO_NUMBERING_FAMILY
 
 NearSharePlan = ExactSharePlan
 
+#: Cyber Essentials ↔ CE+ is a documented NEAR pair in 5064. Not scheme EXACT.
+CE_NEAR_FAMILY: frozenset[str] = frozenset({"ce", "cep"})
+
+NEAR_SHARE_FAMILIES: tuple[frozenset[str], ...] = (ISO_NUMBERING_FAMILY, CE_NEAR_FAMILY)
+
+
+def _near_share_family(framework: str) -> Optional[frozenset[str]]:
+    fw = (framework or "").strip().lower()
+    for family in NEAR_SHARE_FAMILIES:
+        if fw in family:
+            return family
+    return None
+
 
 class NearShareService(ExactShareService):
-    """Plan / apply / undo ISO-family NEAR evidence proposals."""
+    """Plan / apply / undo ISO-family and CE↔CE+ NEAR evidence proposals."""
 
     share_verdict = "NEAR"
     share_label = "NEAR"
@@ -26,15 +40,15 @@ class NearShareService(ExactShareService):
     conflict_prefix = "NEAR_SHARE"
 
     def _select_peers(self, annotation: dict[str, Any], *, source_framework: str) -> list[dict[str, Any]]:
-        source_fw = (source_framework or "").strip().lower()
-        if source_fw not in ISO_NUMBERING_FAMILY:
+        family = _near_share_family(source_framework)
+        if family is None:
             return []
         peers: list[dict[str, Any]] = []
         for peer in annotation.get("peers") or []:
             if str(peer.get("verdict") or "").upper() != "NEAR":
                 continue
             peer_fw = str(peer.get("framework") or "").strip().lower()
-            if peer_fw not in ISO_NUMBERING_FAMILY:
+            if peer_fw not in family:
                 continue
             peers.append(peer)
         return peers
