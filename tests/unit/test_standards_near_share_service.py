@@ -115,11 +115,7 @@ def _shareable(link_id: int = 1, title: str = "Context statement") -> list[dict[
 @pytest.mark.asyncio
 async def test_iso_near_4_1_offers_iso_peers_and_names_the_addition(guard_5064):
     annotation = guard_5064.annotate_cell(framework="9001", clause_number="4.1")
-    near_iso = [
-        p
-        for p in annotation["peers"]
-        if p["verdict"] == "NEAR" and p["framework"] in ISO_NUMBERING_FAMILY
-    ]
+    near_iso = [p for p in annotation["peers"] if p["verdict"] == "NEAR" and p["framework"] in ISO_NUMBERING_FAMILY]
     assert near_iso, "5064 4.1 is the ISO NEAR row"
 
     source = _cell(

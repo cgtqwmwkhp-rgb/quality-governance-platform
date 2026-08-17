@@ -237,8 +237,7 @@ class ExactShareService:
 
         annotation = guard.annotate_cell(framework=fw, clause_number=clause)
         peers_by_fw = {
-            str(peer["framework"]).strip().lower(): peer
-            for peer in self._select_peers(annotation, source_framework=fw)
+            str(peer["framework"]).strip().lower(): peer for peer in self._select_peers(annotation, source_framework=fw)
         }
         resolved, warnings = await self._resolve_apply_targets(
             tenant_id=tenant_id,
