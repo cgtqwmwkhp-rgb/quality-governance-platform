@@ -95,6 +95,16 @@ import {
   type ComplianceShellView,
   type MatrixPresetId,
 } from './compliance/standardsMatrixFilters'
+import {
+  CHROME_WITHOUT_CLAUSE_CATALOGUE,
+  chromeEvidenceHonesty,
+  chromeProgramLabel,
+  chromeSpecialistRoute,
+  clauseCatalogueApiFilter,
+  importedRecordMatchesChrome,
+  isChromeWithoutClauseCatalogue,
+  type ChromeWithoutClauseCatalogue,
+} from './compliance/chromeCatalogueHonesty'
 
 /** Surface operator-visible failures (banner + toast). Never silent. */
 const reportFailure = (
@@ -341,7 +351,7 @@ export default function ComplianceEvidence() {
       setPartialLoadWarning(null)
       setFailedSources([])
       try {
-        const standardFilter = selectedStandard === 'all' ? undefined : selectedStandard
+        const standardFilter = clauseCatalogueApiFilter(selectedStandard)
         const labels = ['standards', 'clauses', 'coverage', 'report', 'evidence links'] as const
         const settled = await Promise.allSettled([
           complianceApi.listStandards(),
@@ -688,6 +698,53 @@ export default function ComplianceEvidence() {
 
   const coverageUnavailable = failedSources.includes('coverage')
   const reportUnavailable = failedSources.includes('report')
+  const selectedChrome: ChromeWithoutClauseCatalogue | null =
+    isChromeWithoutClauseCatalogue(selectedStandard) ? selectedStandard : null
+  const chromeImportedRecords = selectedChrome
+    ? importedRecords.filter((record) =>
+        importedRecordMatchesChrome(record.scheme, selectedChrome),
+      )
+    : importedRecords
+
+  const renderChromeHonesty = (
+    sectionId: ComplianceEvidenceSectionId,
+    panel: 'main' | 'detail' = 'main',
+  ) => {
+    if (!selectedChrome) return null
+    const copy = chromeEvidenceHonesty(selectedChrome, sectionId)
+    const specialistHref = chromeSpecialistRoute(selectedChrome)
+    const program = chromeProgramLabel(selectedChrome)
+    return (
+      <div data-testid={`compliance-chrome-honesty-${panel}-${sectionId}`}>
+        <EmptyState
+          icon={
+            sectionId === 'gaps' ? (
+              <AlertTriangle className="w-8 h-8 text-warning" />
+            ) : sectionId === 'imported' ? (
+              <ClipboardCheck className="w-8 h-8 text-muted-foreground" />
+            ) : sectionId === 'evidence' ? (
+              <FileText className="w-8 h-8 text-muted-foreground" />
+            ) : (
+              <BookOpen className="w-8 h-8 text-muted-foreground" />
+            )
+          }
+          title={t(copy.titleKey, { defaultValue: copy.title, program })}
+          description={t(copy.descriptionKey, { defaultValue: copy.description, program })}
+        />
+        {specialistHref ? (
+          <div className="mt-3">
+            <Link
+              to={specialistHref}
+              className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+              data-testid={`compliance-chrome-honesty-specialist-${sectionId}`}
+            >
+              Open {program} <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
 
   const getCoverageStatus = (clauseId: string): 'full' | 'partial' | 'none' | 'unavailable' => {
     if (reportUnavailable || !report) return 'unavailable'
@@ -1114,10 +1171,28 @@ export default function ComplianceEvidence() {
             }
 
             // Non-ISO / scheme / accreditation without clause-coverage API row — honest empty.
+            const chromeSelected = selectedStandard === fw.id
             return (
               <div
                 key={fw.id}
-                className="p-4 rounded-xl bg-card border-2 border-border"
+                role="button"
+                tabIndex={0}
+                aria-pressed={chromeSelected}
+                onClick={() =>
+                  setSelectedStandard((current) => (current === fw.id ? 'all' : fw.id))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedStandard((current) => (current === fw.id ? 'all' : fw.id))
+                  }
+                }}
+                className={cn(
+                  'p-4 rounded-xl bg-card border-2 cursor-pointer transition-all duration-200',
+                  chromeSelected
+                    ? 'border-primary shadow-lg shadow-primary/20'
+                    : 'border-border hover:border-border-strong',
+                )}
                 data-testid={`compliance-framework-card-${fw.id}`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -1143,6 +1218,7 @@ export default function ComplianceEvidence() {
                   {specialistRoute ? (
                     <Link
                       to={specialistRoute}
+                      onClick={(e) => e.stopPropagation()}
                       className="text-primary hover:underline inline-flex items-center gap-1"
                       data-testid={`compliance-specialist-link-${fw.id}`}
                     >
@@ -1153,6 +1229,7 @@ export default function ComplianceEvidence() {
                       href={fw.homeUrl}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="text-primary hover:underline inline-flex items-center gap-1"
                       data-testid={`compliance-home-link-${fw.id}`}
                     >
@@ -1217,6 +1294,11 @@ export default function ComplianceEvidence() {
                   {s.code}
                 </SelectItem>
               ))}
+              {CHROME_WITHOUT_CLAUSE_CATALOGUE.map((id) => (
+                <SelectItem key={id} value={id}>
+                  {chromeProgramLabel(id)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -1233,7 +1315,9 @@ export default function ComplianceEvidence() {
                   <BookOpen className="w-5 h-5 text-primary" aria-hidden="true" />
                   Clause Structure
                 </h2>
-                {loading ? (
+                {selectedChrome ? (
+                  renderChromeHonesty('clauses')
+                ) : loading ? (
                   <TableSkeleton rows={8} columns={1} />
                 ) : clauses.length === 0 ? (
                   <EmptyState
@@ -1263,9 +1347,13 @@ export default function ComplianceEvidence() {
                 <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <FileText className="w-5 h-5 text-primary" aria-hidden="true" />
                   All Evidence
-                  <Badge variant="secondary">{evidenceLinks.length} items</Badge>
+                  {selectedChrome ? null : (
+                    <Badge variant="secondary">{evidenceLinks.length} items</Badge>
+                  )}
                 </h2>
-                {loading ? (
+                {selectedChrome ? (
+                  renderChromeHonesty('evidence')
+                ) : loading ? (
                   <TableSkeleton rows={5} columns={1} />
                 ) : evidenceLinks.length === 0 ? (
                   <EmptyState
@@ -1363,12 +1451,16 @@ export default function ComplianceEvidence() {
               <div data-testid="compliance-evidence-section-imported">
                 <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <ClipboardCheck className="w-5 h-5 text-primary" aria-hidden="true" />
-                  Imported ISO Audits
-                  <Badge variant="secondary">{importedTotal}</Badge>
+                  {selectedChrome ? 'Imported Audits' : 'Imported ISO Audits'}
+                  <Badge variant="secondary">
+                    {selectedChrome ? chromeImportedRecords.length : importedTotal}
+                  </Badge>
                 </h2>
-                {loadingImported ? (
+                {selectedChrome && chromeImportedRecords.length === 0 ? (
+                  renderChromeHonesty('imported')
+                ) : loadingImported ? (
                   <TableSkeleton rows={4} columns={1} />
-                ) : importedRecords.length === 0 ? (
+                ) : (selectedChrome ? chromeImportedRecords : importedRecords).length === 0 ? (
                   <EmptyState
                     icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
                     title="No imported ISO audits"
@@ -1376,7 +1468,7 @@ export default function ComplianceEvidence() {
                   />
                 ) : (
                   <div className="space-y-3">
-                    {importedRecords.map((record) => (
+                    {(selectedChrome ? chromeImportedRecords : importedRecords).map((record) => (
                       <div
                         key={record.id}
                         className="p-4 bg-surface rounded-lg border border-border hover:border-primary/40 transition-all"
@@ -1453,7 +1545,9 @@ export default function ComplianceEvidence() {
                   <AlertTriangle className="w-5 h-5 text-destructive" aria-hidden="true" />
                   Gap Analysis — Clauses Needing Evidence
                 </h2>
-                {loading ? (
+                {selectedChrome ? (
+                  renderChromeHonesty('gaps')
+                ) : loading ? (
                   <TableSkeleton rows={6} columns={1} />
                 ) : coverageUnavailable || coverage == null ? (
                   <EmptyState
@@ -1525,7 +1619,9 @@ export default function ComplianceEvidence() {
         {/* Right Panel — Clause Details */}
         <Card className="max-h-[70vh] overflow-y-auto">
           <CardContent className="p-6">
-            {selectedClause ? (
+            {selectedChrome ? (
+              renderChromeHonesty(section, 'detail')
+            ) : selectedClause ? (
               <>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-bold text-foreground">Clause Details</h2>
