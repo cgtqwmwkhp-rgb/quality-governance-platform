@@ -1,7 +1,8 @@
 /**
- * AUD-W-01 / Round 3 Audits board contract.
- * Preferred model: 3 work lanes + program filter chips (not equal 4-col status board).
- * Shipped on main via AUD-W-W1 (#1059); this module locks the grouping for tests.
+ * AUD-W-01 / A4 Audits board contract.
+ * Four named work lanes: Planned / Fieldwork / Review / Closed.
+ * Not four equal status columns named scheduled / in_progress / pending_review / completed.
+ * Program filter chips stay. Do now KPI remains the executable set (Planned + Fieldwork).
  */
 import type { AuditRun } from '../api/client'
 import {
@@ -14,10 +15,17 @@ export type AuditProgram = 'internal' | 'uvdb' | 'planet_mark' | 'customer'
 
 export const BOARD_WORK_LANES = [
   {
-    id: 'do_now',
-    label: 'Do now',
-    labelKey: 'audits.board.lane.do_now',
-    statuses: ['scheduled', 'in_progress'] as const,
+    id: 'planned',
+    label: 'Planned',
+    labelKey: 'audits.board.lane.planned',
+    statuses: ['scheduled'] as const,
+    variant: 'default' as const,
+  },
+  {
+    id: 'fieldwork',
+    label: 'Fieldwork',
+    labelKey: 'audits.board.lane.fieldwork',
+    statuses: ['in_progress'] as const,
     variant: 'warning' as const,
   },
   {
@@ -80,10 +88,11 @@ export function getAuditsForLaneStatuses(
   return audits.filter((audit) => statuses.includes(audit.status))
 }
 
-const DO_NOW_STATUSES: readonly string[] = BOARD_WORK_LANES.find((lane) => lane.id === 'do_now')!
-  .statuses
+/** Executable work = Planned + Fieldwork. Hero Do now KPI still uses this set (N3). */
+const DO_NOW_STATUSES: readonly string[] = BOARD_WORK_LANES.filter(
+  (lane) => lane.id === 'planned' || lane.id === 'fieldwork',
+).flatMap((lane) => [...lane.statuses])
 
-/** Hero KPI must count the same set as the Do now lane (scheduled + in_progress). */
 export function isDoNowAuditStatus(status: string): boolean {
   return DO_NOW_STATUSES.includes(status)
 }

@@ -127,7 +127,8 @@ interface CreateAuditForm {
 }
 
 const BOARD_LANE_ICONS = {
-  do_now: Play,
+  planned: Calendar,
+  fieldwork: Play,
   review: Target,
   closed: CheckCircle2,
 } as const
@@ -1303,7 +1304,7 @@ export default function Audits() {
               variant: 'warning' as const,
               hint: t(
                 'audits.stats.do_now_hint',
-                'Filter scheduled and in-progress audits (same as the Do now lane)',
+                'Filter scheduled and in-progress audits (Planned + Fieldwork)',
               ),
             },
             {
@@ -1490,7 +1491,7 @@ export default function Audits() {
         </div>
       ) : (
         viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {BOARD_WORK_LANES.map((lane) => {
             const laneAudits = getAuditsInLane(lane.id, lane.statuses)
             return (
@@ -1595,7 +1596,7 @@ export default function Audits() {
                               <span>{new Date(audit.scheduled_date).toLocaleDateString()}</span>
                             </div>
                           )}
-                          {lane.id === 'do_now' &&
+                          {(lane.id === 'planned' || lane.id === 'fieldwork') &&
                           (audit.status === 'scheduled' || audit.status === 'in_progress') ? (
                             <Button
                               size="sm"

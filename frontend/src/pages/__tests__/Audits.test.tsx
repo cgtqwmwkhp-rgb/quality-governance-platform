@@ -537,7 +537,7 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
     })
   })
 
-  it('groups audits into Do now, Needs review, and Closed lanes', async () => {
+  it('groups audits into Planned, Fieldwork, Needs review, and Closed lanes', async () => {
     mockListRuns.mockResolvedValueOnce({
       data: {
         items: [
@@ -585,12 +585,13 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
 
     render(<Audits />)
 
-    expect(await screen.findByTestId('audits-board-lane-do_now')).toBeInTheDocument()
+    expect(await screen.findByTestId('audits-board-lane-planned')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-lane-fieldwork')).toBeInTheDocument()
     expect(screen.getByTestId('audits-board-lane-review')).toBeInTheDocument()
     expect(screen.getByTestId('audits-board-lane-closed')).toBeInTheDocument()
 
     expect(
-      within(screen.getByTestId('audits-board-lane-do_now')).getByText('Scheduled internal audit'),
+      within(screen.getByTestId('audits-board-lane-planned')).getByText('Scheduled internal audit'),
     ).toBeInTheDocument()
     expect(
       within(screen.getByTestId('audits-board-lane-review')).getByText('Imported UVDB intake'),
@@ -600,7 +601,7 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
     ).toBeInTheDocument()
 
     expect(
-      within(screen.getByTestId('audits-board-lane-do_now')).getByRole('button', { name: /^Start$/i }),
+      within(screen.getByTestId('audits-board-lane-planned')).getByRole('button', { name: /^Start$/i }),
     ).toBeInTheDocument()
 
     const reviewLane = screen.getByTestId('audits-board-lane-review')
@@ -676,7 +677,7 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
     })
   })
 
-  it('renders exactly three work lanes and never four equal status columns', async () => {
+  it('renders four named work lanes and never raw status column ids', async () => {
     mockListRuns.mockResolvedValueOnce({
       data: {
         items: [
@@ -710,19 +711,25 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
 
     render(<Audits />)
 
-    expect(await screen.findByTestId('audits-board-lane-do_now')).toBeInTheDocument()
+    expect(await screen.findByTestId('audits-board-lane-planned')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-lane-fieldwork')).toBeInTheDocument()
     expect(screen.getByTestId('audits-board-lane-review')).toBeInTheDocument()
     expect(screen.getByTestId('audits-board-lane-closed')).toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-do_now')).not.toBeInTheDocument()
     expect(screen.queryByTestId('audits-board-lane-scheduled')).not.toBeInTheDocument()
     expect(screen.queryByTestId('audits-board-lane-in_progress')).not.toBeInTheDocument()
 
-    const doNow = screen.getByTestId('audits-board-lane-do_now')
-    expect(within(doNow).getByText('Scheduled lane item')).toBeInTheDocument()
-    expect(within(doNow).getByText('In-progress lane item')).toBeInTheDocument()
-    expect(within(doNow).getByText('Do now')).toBeInTheDocument()
+    const planned = screen.getByTestId('audits-board-lane-planned')
+    const fieldwork = screen.getByTestId('audits-board-lane-fieldwork')
+    expect(within(planned).getByText('Scheduled lane item')).toBeInTheDocument()
+    expect(within(fieldwork).getByText('In-progress lane item')).toBeInTheDocument()
+    expect(within(planned).getByText('Planned')).toBeInTheDocument()
+    expect(within(fieldwork).getByText('Fieldwork')).toBeInTheDocument()
+    expect(within(planned).getByRole('button', { name: /^Start$/i })).toBeInTheDocument()
+    expect(within(fieldwork).getByRole('button', { name: /^Continue$/i })).toBeInTheDocument()
   })
 
-  it('aligns the hero KPI count and filter with the Do now lane', async () => {
+  it('aligns the hero KPI count and filter with Planned + Fieldwork', async () => {
     mockListRuns.mockResolvedValueOnce({
       data: {
         items: [
@@ -928,7 +935,7 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
     })
 
     render(<Audits />)
-    expect(await screen.findByTestId('audits-board-lane-do_now')).toBeInTheDocument()
+    expect(await screen.findByTestId('audits-board-lane-fieldwork')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('audits.search_placeholder'), {
       target: { value: 'AUD-2026-0057' },
@@ -936,7 +943,7 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
 
     expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByText('AUD-2026-0057')).toBeInTheDocument()
-    expect(screen.queryByTestId('audits-board-lane-do_now')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-fieldwork')).not.toBeInTheDocument()
   })
 
   it('shows a truncation banner when more runs exist than the loaded page', async () => {

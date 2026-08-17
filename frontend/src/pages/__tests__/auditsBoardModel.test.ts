@@ -27,27 +27,35 @@ function run(partial: Partial<AuditRun> & Pick<AuditRun, 'id' | 'status'>): Audi
   } as AuditRun
 }
 
-describe('AUD-W-01 audits board model (Round 3)', () => {
-  it('locks exactly three work lanes (not equal 4-col status board)', () => {
-    expect(BOARD_WORK_LANES).toHaveLength(3)
-    expect(BOARD_WORK_LANES.map((lane) => lane.id)).toEqual(['do_now', 'review', 'closed'])
+describe('AUD-W-01 / A4 audits board model', () => {
+  it('locks four named work lanes (Planned / Fieldwork / Review / Closed)', () => {
+    expect(BOARD_WORK_LANES).toHaveLength(4)
+    expect(BOARD_WORK_LANES.map((lane) => lane.id)).toEqual([
+      'planned',
+      'fieldwork',
+      'review',
+      'closed',
+    ])
     expect(BOARD_WORK_LANES.map((lane) => lane.label)).toEqual([
-      'Do now',
+      'Planned',
+      'Fieldwork',
       'Needs review',
       'Closed',
     ])
   })
 
-  it('aggregates scheduled + in_progress into Do now', () => {
-    const doNow = BOARD_WORK_LANES.find((lane) => lane.id === 'do_now')
-    expect(doNow?.statuses).toEqual(['scheduled', 'in_progress'])
+  it('splits scheduled into Planned and in_progress into Fieldwork', () => {
+    const planned = BOARD_WORK_LANES.find((lane) => lane.id === 'planned')
+    const fieldwork = BOARD_WORK_LANES.find((lane) => lane.id === 'fieldwork')
+    expect(planned?.statuses).toEqual(['scheduled'])
+    expect(fieldwork?.statuses).toEqual(['in_progress'])
     expect(BOARD_STATUS_IDS.has('scheduled')).toBe(true)
     expect(BOARD_STATUS_IDS.has('in_progress')).toBe(true)
     expect(BOARD_STATUS_IDS.has('draft')).toBe(false)
     expect(BOARD_STATUS_IDS.has('cancelled')).toBe(false)
   })
 
-  it('groups mixed statuses into the Round 3 lanes', () => {
+  it('groups mixed statuses into the four named lanes', () => {
     const audits = [
       run({ id: 1, status: 'scheduled', title: 'Scheduled' }),
       run({ id: 2, status: 'in_progress', title: 'In progress' }),
@@ -56,11 +64,13 @@ describe('AUD-W-01 audits board model (Round 3)', () => {
       run({ id: 5, status: 'draft', title: 'Draft' }),
     ]
 
-    const doNow = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[0].statuses)
-    const review = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[1].statuses)
-    const closed = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[2].statuses)
+    const planned = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[0].statuses)
+    const fieldwork = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[1].statuses)
+    const review = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[2].statuses)
+    const closed = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[3].statuses)
 
-    expect(doNow.map((a) => a.title)).toEqual(['Scheduled', 'In progress'])
+    expect(planned.map((a) => a.title)).toEqual(['Scheduled'])
+    expect(fieldwork.map((a) => a.title)).toEqual(['In progress'])
     expect(review.map((a) => a.title)).toEqual(['Review'])
     expect(closed.map((a) => a.title)).toEqual(['Done'])
   })
@@ -189,7 +199,7 @@ describe('A2 score honesty', () => {
     expect(auditsListCellClass('compact')).toBe('px-3 py-2')
   })
 
-  it('counts Do now as scheduled + in_progress, matching the lane', () => {
+  it('counts Do now KPI as Planned + Fieldwork (scheduled + in_progress)', () => {
     const audits = [
       run({ id: 1, status: 'scheduled' }),
       run({ id: 2, status: 'in_progress' }),
