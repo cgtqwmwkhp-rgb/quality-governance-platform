@@ -46,6 +46,12 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
+def split_inbox_page(rows: list, page_size: int) -> tuple[list, bool]:
+    """Caller fetched page_size+1 rows. Return this page and whether another exists."""
+    has_next = len(rows) > page_size
+    return rows[:page_size], has_next
+
+
 class EvidenceLinkDetailResponse(BaseModel):
     id: int
     entity_type: str
@@ -68,6 +74,15 @@ class EvidenceLinkDetailResponse(BaseModel):
     created_at: str
     created_by_email: Optional[str]
     gate_reason: Optional[str] = None
+
+
+class ExceptionInboxPageResponse(BaseModel):
+    items: list[EvidenceLinkDetailResponse]
+    page: int
+    page_size: int
+    truncated: bool
+    has_next: bool
+    has_prev: bool
 
 
 class MapEvidenceResponse(BaseModel):
@@ -608,7 +623,7 @@ async def bulk_confirm_evidence(
     }
 
 
-@router.get("/exceptions", response_model=list[EvidenceLinkDetailResponse])
+@router.get("/exceptions", response_model=ExceptionInboxPageResponse)
 async def list_exception_inbox(
     db: DbSession,
     current_user: CurrentUser,
@@ -625,8 +640,10 @@ async def list_exception_inbox(
         None,
         description="Filter by PR-E ingest gate_reason token (e.g. below_threshold)",
     ),
+    page: int = Query(1, ge=1, description="1-based inbox page"),
+    page_size: int = Query(200, ge=1, le=200, description="Rows per page; cap stays 200"),
 ):
-    """Proposed + needs_review evidence inbox."""
+    """Proposed + needs_review evidence inbox. One page of up to 200 — not a global dump."""
     tenant_id = _tenant_id_for(current_user)
     statuses = [EvidenceLinkStatus.PROPOSED, EvidenceLinkStatus.NEEDS_REVIEW]
     if status_filter:
@@ -662,9 +679,15 @@ async def list_exception_inbox(
         filters.append(ComplianceEvidenceLink.signal_type == normalized)
 
     result = await db.execute(
-        select(ComplianceEvidenceLink).where(*filters).order_by(ComplianceEvidenceLink.created_at.desc()).limit(200)
+        select(ComplianceEvidenceLink)
+        .where(*filters)
+        .order_by(ComplianceEvidenceLink.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size + 1)
     )
-    links = [link for link in result.scalars().all() if link.effective_status in statuses]
+    fetched = list(result.scalars().all())
+    window, has_next = split_inbox_page(fetched, page_size)
+    links = [link for link in window if link.effective_status in statuses]
     if operational_only:
         from src.domain.services.iso_compliance_service import OPERATIONAL_SIGNAL_TYPES
 
@@ -675,7 +698,14 @@ async def list_exception_inbox(
     if wanted_reason:
         links = filter_links_by_gate_reason(links, reasons, wanted_reason)
     links = sort_inbox_page_for_triage(links)
-    return [_serialize_evidence_link(link, gate_reason=reasons.get(link.id)) for link in links]
+    return ExceptionInboxPageResponse(
+        items=[_serialize_evidence_link(link, gate_reason=reasons.get(link.id)) for link in links],
+        page=page,
+        page_size=page_size,
+        truncated=has_next,
+        has_next=has_next,
+        has_prev=page > 1,
+    )
 
 
 @router.get("/exceptions/operational-counts")
