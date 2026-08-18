@@ -52,6 +52,30 @@ def test_normalize_and_match_keys():
     assert not token_matches_clause("8.1", keys, "7.5")
 
 
+def test_framed_subclause_rolls_up_to_parent_not_child():
+    """PX-425c: framed child tokens cover the parent cell; parent does not paint the child."""
+    keys_8 = clause_match_keys("9001", "8")
+    keys_85 = clause_match_keys("9001", "8.5")
+    keys_7 = clause_match_keys("9001", "7")
+    assert token_matches_clause("9001-8.5.1", keys_8, "8")
+    assert token_matches_clause("iso9001:8.5.1", keys_8, "8")
+    assert token_matches_clause("9001-8.5.1", keys_85, "8.5")
+    assert not token_matches_clause("9001-8", keys_85, "8.5")
+    assert not token_matches_clause("9001-8.5.1", keys_7, "7")
+    # Child→parent must not invent a new cross-family paint.
+    assert not token_matches_clause("14001-8.5.1", keys_8, "8")
+    # Exact-suffix framework-blind match is unchanged (TrapGuard still owns it).
+    assert token_matches_clause("14001-8", keys_8, "8")
+
+
+def test_px425c_9001_top_level_snapshot_framed_operation_token():
+    """One framed 8.5.1 token covers cell 8 only among top-level 9001 cells."""
+    token = "9001-8.5.1"
+    top = ["4", "5", "6", "7", "8", "9", "10"]
+    hits = [c for c in top if token_matches_clause(token, clause_match_keys("9001", c), c)]
+    assert hits == ["8"]
+
+
 def test_classify_audit_kind_mock_imported_internal():
     assert classify_audit_kind(assessment_mode="mock", source_origin=None, template_tags=None) == "mock"
     assert classify_audit_kind(assessment_mode=None, source_origin=None, template_tags=["mock"]) == "mock"
