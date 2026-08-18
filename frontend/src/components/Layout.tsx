@@ -1,4 +1,4 @@
-import { Outlet, NavLink, Link, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -221,11 +221,6 @@ export default function Layout({
           icon: Sparkles,
           label: t('nav.knowledge_exceptions', { defaultValue: 'AI Exceptions' }),
         },
-        {
-          path: '/document-control',
-          icon: FileText,
-          label: t('nav.document_control', { defaultValue: 'Document Control' }),
-        },
         ...(canAccessComplianceSchedule
           ? [
               {
@@ -261,6 +256,23 @@ export default function Layout({
               },
             ]
           : []),
+      ],
+    },
+    {
+      id: 'library',
+      title: t('nav.library'),
+      icon: FolderOpen,
+      items: [
+        {
+          path: '/documents',
+          icon: FolderOpen,
+          label: t('nav.documents', { defaultValue: 'Documents' }),
+        },
+        {
+          path: '/document-control',
+          icon: FileText,
+          label: t('nav.document_control', { defaultValue: 'Document Control' }),
+        },
       ],
     },
     {
@@ -336,14 +348,15 @@ export default function Layout({
   const location = useLocation()
   const pathIsActive = (path: string) =>
     navItemIsActive(path, location.pathname, location.search)
-  // Library shell owns Documents / Policies / Document campaigns tabs —
-  // keep the sidebar Library item active on all of those routes.
-  const libraryNavActive = pathIsActive('/documents') || pathIsActive('/policies')
-  const activeHubId = hubs.find((hub) => hub.items.some((item) => pathIsActive(item.path)))?.id
+  // Library shell owns Documents / Policies / Document campaigns tabs.
+  // Those are not extra sidebar items, but they still belong to the Library hub.
+  const libraryShellActive = pathIsActive('/documents') || pathIsActive('/policies')
+  const hubIsActive = (hub: (typeof hubs)[number]) =>
+    hub.items.some((item) => pathIsActive(item.path)) ||
+    (hub.id === 'library' && libraryShellActive)
+  const activeHubId = hubs.find((hub) => hubIsActive(hub))?.id
   const [expandedHubs, setExpandedHubs] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      hubs.map((hub) => [hub.id, hub.items.some((item) => pathIsActive(item.path))]),
-    ),
+    Object.fromEntries(hubs.map((hub) => [hub.id, hubIsActive(hub)])),
   )
 
   useEffect(() => {
@@ -675,7 +688,7 @@ export default function Layout({
 
               {hubs.map((hub) => {
                 const expanded = expandedHubs[hub.id] ?? false
-                const active = hub.items.some((item) => pathIsActive(item.path))
+                const active = hubIsActive(hub)
 
                 return (
                   <Fragment key={hub.id}>
@@ -742,11 +755,13 @@ export default function Layout({
                           className={cn('mt-1 space-y-1 pl-4', sidebarCollapsed && 'lg:hidden')}
                         >
                           {hub.items.map((item, itemIndex) => {
-                            const itemActive = navItemIsActive(
-                              item.path,
-                              location.pathname,
-                              location.search,
-                            )
+                            const itemActive =
+                              navItemIsActive(
+                                item.path,
+                                location.pathname,
+                                location.search,
+                              ) ||
+                              (item.path === '/documents' && pathIsActive('/policies'))
                             const previous = hub.items[itemIndex - 1]
                             const showGroupLabel =
                               Boolean(item.group) && item.group !== previous?.group
@@ -809,45 +824,6 @@ export default function Layout({
                         </div>
                       )}
                     </div>
-                    {hub.id === 'risk-improvement' && (
-                      <>
-                        <Link
-                          to="/documents"
-                          onClick={() => setSidebarOpen(false)}
-                          aria-current={libraryNavActive ? 'page' : undefined}
-                          title={sidebarCollapsed ? t('nav.library') : undefined}
-                          className={cn(
-                            'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
-                            'transition-all duration-200 group',
-                            sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
-                            libraryNavActive
-                              ? 'bg-primary/10 text-primary border border-primary/20'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                          )}
-                        >
-                          <FolderOpen
-                            className={cn(
-                              'w-5 h-5 shrink-0 transition-colors',
-                              libraryNavActive
-                                ? 'text-primary'
-                                : 'text-muted-foreground group-hover:text-foreground',
-                            )}
-                            aria-hidden="true"
-                          />
-                          <span className={cn('min-w-0 flex-1 leading-snug', sidebarCollapsed && 'lg:sr-only')}>
-                            {t('nav.library')}
-                          </span>
-                          {libraryNavActive && (
-                            <div
-                              className={cn(
-                                'ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary',
-                                sidebarCollapsed && 'lg:hidden',
-                              )}
-                            />
-                          )}
-                        </Link>
-                      </>
-                    )}
                   </Fragment>
                 )
               })}
