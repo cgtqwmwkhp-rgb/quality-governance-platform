@@ -113,14 +113,15 @@ describe('Layout', () => {
       'nav.audits_hub',
       'nav.compliance_sustainability',
       'nav.risk_improvement',
+      'nav.library',
       'nav.insights',
       'nav.admin',
     ]) {
       expect(screen.getByRole('button', { name: hub })).toHaveAttribute('aria-expanded', 'false')
     }
 
-    expect(navLink('/documents')).toHaveTextContent('nav.library')
-    expect(screen.queryByRole('button', { name: 'nav.library' })).not.toBeInTheDocument()
+    expect(navLink('/documents')).not.toBeInTheDocument()
+    expect(navLink('/document-control')).not.toBeInTheDocument()
     expect(navLink('/policies')).not.toBeInTheDocument()
 
     expect(screen.queryByRole('button', { name: /nav\.more|More/i })).not.toBeInTheDocument()
@@ -162,12 +163,12 @@ describe('Layout', () => {
           '/ims',
           '/compliance',
           '/knowledge-exceptions',
-          '/document-control',
           '/compliance-schedule',
           '/compliance-automation',
         ],
       ],
       ['nav.risk_improvement', ['/risk-register', '/job-lifecycle']],
+      ['nav.library', ['/documents', '/document-control']],
       [
         'nav.insights',
         ['/analytics', '/calendar', '/exports'],
@@ -337,7 +338,8 @@ describe('Layout', () => {
     expect(navLink('/assurance/certificates')).not.toBeInTheDocument()
   })
 
-  it('exposes Library sidebar entry without a duplicate Document campaigns item', async () => {
+  it('exposes Library as a hub with Documents and Document Control, not campaigns or policies', async () => {
+    const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
 
     render(
@@ -346,16 +348,39 @@ describe('Layout', () => {
       </BrowserRouter>,
     )
 
-    const libraryLink = navLink('/documents')
-    expect(libraryLink).toBeInTheDocument()
-    expect(libraryLink).toHaveTextContent('nav.library')
-    expect(libraryLink).toHaveAttribute('href', '/documents')
-    // Document campaigns lives under LibraryShell tabs, not the vertical menu.
+    const libraryHub = screen.getByRole('button', { name: 'nav.library' })
+    await user.click(libraryHub)
+
+    const libraryPanel = screen.getByTestId('nav-hub-library')
+    expect(within(libraryPanel).getByRole('link', { name: 'nav.documents' })).toHaveAttribute(
+      'href',
+      '/documents',
+    )
+    expect(
+      within(libraryPanel).getByRole('link', { name: 'nav.document_control' }),
+    ).toHaveAttribute('href', '/document-control')
+    // Document campaigns and Policies live under LibraryShell tabs, not the vertical menu.
     expect(navLink('/documents/campaigns')).not.toBeInTheDocument()
     expect(screen.queryByTestId('nav-document-campaigns')).not.toBeInTheDocument()
     expect(navLink('/policies')).not.toBeInTheDocument()
-    expect(screen.queryByText('nav.documents')).not.toBeInTheDocument()
     expect(screen.queryByText('nav.policies')).not.toBeInTheDocument()
+  })
+
+  it('keeps Document Control out of Compliance after the Library move', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
+    const compliancePanel = screen.getByTestId('nav-hub-compliance-sustainability')
+    expect(
+      within(compliancePanel).queryByRole('link', { name: 'nav.document_control' }),
+    ).not.toBeInTheDocument()
   })
 
   it('marks Library active on Library shell routes including campaigns', async () => {
@@ -376,12 +401,34 @@ describe('Layout', () => {
         </MemoryRouter>,
       )
 
-      expect(screen.getByRole('link', { name: 'nav.library' })).toHaveAttribute(
-        'aria-current',
-        'page',
+      expect(screen.getByRole('button', { name: 'nav.library' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
       )
+      expect(navLink('/documents')).toHaveClass('bg-primary/10')
       expect(navLink('/documents/campaigns')).not.toBeInTheDocument()
     }
+  })
+
+  it('auto-expands Library and marks Document Control when that route is active', async () => {
+    window.history.pushState({}, '', '/document-control')
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByRole('button', { name: 'nav.library' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(navLink('/document-control')).toHaveClass('bg-primary/10')
+    expect(screen.getByRole('button', { name: 'nav.compliance_sustainability' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
   })
 
   // docs/ops/BUTTON_REGISTRY.yml targets these hooks by name for the UX coverage
