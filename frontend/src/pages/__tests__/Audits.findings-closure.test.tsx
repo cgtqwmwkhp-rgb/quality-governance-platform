@@ -223,6 +223,33 @@ describe('Audits findings closure console', () => {
     expect(mockShowToast).toHaveBeenCalledWith('Finding closed.', 'success')
   })
 
+  it('resolves an off-page CAPA by source_id so the ribbon is not Create', async () => {
+    mockListActions.mockImplementation(
+      (page?: number, pageSize?: number, _status?: string, sourceType?: string, sourceId?: number) => {
+        if (sourceId === 501) {
+          return Promise.resolve({
+            data: { items: [openCapa], total: 1, page: 1, page_size: 5, pages: 1 },
+          })
+        }
+        return Promise.resolve({
+          data: { items: [], total: 120, page: page ?? 1, page_size: pageSize ?? 100, pages: 2 },
+        })
+      },
+    )
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('finding-loop-ribbon-501')).toBeInTheDocument()
+    expect(screen.getByTestId('finding-loop-capa-status-501')).toHaveTextContent('open')
+    expect(screen.getByTestId('finding-loop-capa-assignee-501')).toHaveTextContent(
+      'capa.owner@example.com',
+    )
+    expect(screen.getByTestId('finding-loop-assign-501')).toHaveTextContent('Assign CAPA')
+    expect(screen.queryByText('Create & assign CAPA')).not.toBeInTheDocument()
+    expect(mockListActions).toHaveBeenCalledWith(1, 100, undefined, 'audit_finding')
+    expect(mockListActions).toHaveBeenCalledWith(1, 5, undefined, 'audit_finding', 501)
+  })
+
   it('requires honest override while CAPA remains open', async () => {
     render(<Audits />)
 

@@ -500,6 +500,26 @@ export default function Audits() {
             }
           }
         }
+        // PX-426: page 1 of 100 can miss an older CAPA. Do not raise page_size
+        // (cap 500). Resolve each loaded finding by source_id when absent.
+        const missingIds = findings
+          .map((finding) => finding.id)
+          .filter((id) => next[id] === undefined)
+        if (missingIds.length > 0) {
+          const extras = await Promise.all(
+            missingIds.map((id) => actionsApi.list(1, 5, undefined, 'audit_finding', id)),
+          )
+          if (cancelled) return
+          extras.forEach((extra, index) => {
+            const findingId = missingIds[index]
+            for (const action of extra.data.items || []) {
+              if (action.source_id === findingId && !next[findingId]) {
+                next[findingId] = action
+                break
+              }
+            }
+          })
+        }
         setCapaByFindingId(next)
         setCapaLoopLoadState('ready')
       } catch (err) {
@@ -578,7 +598,15 @@ export default function Audits() {
         assigned_to_email: email,
         priority: finding.severity === 'critical' || finding.severity === 'high' ? 'high' : 'medium',
       })
-      setCapaByFindingId((prev) => ({ ...prev, [finding.id]: created.data }))
+      let row = created.data
+      // Get-or-create returns the existing row as-is. Apply the typed assignee.
+      if (email && row.assigned_to_email !== email) {
+        const updated = await actionsApi.update(row.id, row.source_type, {
+          assigned_to_email: email,
+        })
+        row = updated.data
+      }
+      setCapaByFindingId((prev) => ({ ...prev, [finding.id]: row }))
       setCapaLoopLoadState('ready')
       showToast(t('audits.findings.loop.assign_success'), 'success')
     } catch (err) {
