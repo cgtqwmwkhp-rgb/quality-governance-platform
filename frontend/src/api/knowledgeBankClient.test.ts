@@ -48,6 +48,17 @@ describe('createKnowledgeBankApi listExceptions', () => {
     )
   })
 
+  it('passes page when greater than 1', () => {
+    const api = mockApi()
+    createKnowledgeBankApi(api as never).listExceptions({
+      entityType: 'incident',
+      page: 2,
+    })
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/knowledge-bank/exceptions?entity_type=incident&page=2',
+    )
+  })
+
   it('posts reject rationale body', () => {
     const api = mockApi()
     createKnowledgeBankApi(api as never).rejectLink(9, 'Not applicable to this clause')

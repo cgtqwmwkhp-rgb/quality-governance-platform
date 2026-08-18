@@ -64,8 +64,10 @@ import {
   isSafeReturnTo,
   parseExceptionsEntityTypeFilter,
   parseExceptionsGateReasonFilter,
+  parseExceptionsPage,
   parseExceptionsSignalTypeFilter,
   parseExceptionsStatusFilter,
+  unwrapExceptionsInbox,
   type ExceptionsEntityTypeFilter,
   type ExceptionsGateReasonFilter,
   type ExceptionsSignalTypeFilter,
@@ -576,6 +578,14 @@ export default function KnowledgeExceptions() {
   const standardFilter = searchParams.get('standard')?.trim() || null
   const operationalFromUrl = searchParams.get('operational') === '1'
   const [items, setItems] = useState<KnowledgeEvidenceLink[]>([])
+  const [inboxPage, setInboxPage] = useState(() => parseExceptionsPage(searchParams.get('page')))
+  const [inboxMeta, setInboxMeta] = useState({
+    page: 1,
+    page_size: 200,
+    truncated: false,
+    has_next: false,
+    has_prev: false,
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
@@ -605,10 +615,12 @@ export default function KnowledgeExceptions() {
     const nextEntity = parseExceptionsEntityTypeFilter(searchParams.get('entity_type'))
     const nextSignal = parseExceptionsSignalTypeFilter(searchParams.get('signal_type'))
     const nextGate = parseExceptionsGateReasonFilter(searchParams.get('gate_reason'))
+    const nextPage = parseExceptionsPage(searchParams.get('page'))
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
     setEntityTypeFilter((prev) => (prev === nextEntity ? prev : nextEntity))
     setSignalTypeFilter((prev) => (prev === nextSignal ? prev : nextSignal))
     setGateReasonFilter((prev) => (prev === nextGate ? prev : nextGate))
+    setInboxPage((prev) => (prev === nextPage ? prev : nextPage))
   }, [searchParams])
 
   // Keep status + entity_type + signal_type in the URL (omit defaults); preserve returnTo.
@@ -618,15 +630,16 @@ export default function KnowledgeExceptions() {
       entityType: entityTypeFilter,
       signalType: signalTypeFilter,
       gateReason: gateReasonFilter,
+      page: inboxPage,
     })
     const next = new URLSearchParams(searchParams)
-    ;['status', 'entity_type', 'signal_type', 'gate_reason'].forEach((key) => next.delete(key))
+    ;['status', 'entity_type', 'signal_type', 'gate_reason', 'page'].forEach((key) => next.delete(key))
     const desiredParams = new URLSearchParams(desired)
     desiredParams.forEach((value, key) => next.set(key, value))
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
     }
-  }, [statusFilter, entityTypeFilter, signalTypeFilter, gateReasonFilter, searchParams, setSearchParams])
+  }, [statusFilter, entityTypeFilter, signalTypeFilter, gateReasonFilter, inboxPage, searchParams, setSearchParams])
 
   const loadExceptions = useCallback(async () => {
     setLoading(true)
@@ -640,16 +653,26 @@ export default function KnowledgeExceptions() {
         clauseId: clauseFilter || undefined,
         scheme: standardFilter || undefined,
         operationalOnly: operationalFromUrl || undefined,
+        page: inboxPage,
       })
-      setItems(response.data)
+      const page = unwrapExceptionsInbox(response.data)
+      setItems(page.items as KnowledgeEvidenceLink[])
+      setInboxMeta({
+        page: page.page,
+        page_size: page.page_size,
+        truncated: page.truncated,
+        has_next: page.has_next,
+        has_prev: page.has_prev,
+      })
       setSelectedIds([])
     } catch (err) {
       setError(reportFailure(err))
       setItems([])
+      setInboxMeta({ page: inboxPage, page_size: 200, truncated: false, has_next: false, has_prev: inboxPage > 1 })
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, entityTypeFilter, signalTypeFilter, gateReasonFilter, clauseFilter, standardFilter, operationalFromUrl])
+  }, [statusFilter, entityTypeFilter, signalTypeFilter, gateReasonFilter, clauseFilter, standardFilter, operationalFromUrl, inboxPage])
 
   useEffect(() => {
     void loadExceptions()
@@ -700,6 +723,7 @@ export default function KnowledgeExceptions() {
     setEntityTypeFilter('all')
     setSignalTypeFilter('all')
     setGateReasonFilter('all')
+    setInboxPage(1)
     setSelectedIds([])
     const next = new URLSearchParams()
     if (returnTo) next.set('returnTo', returnTo)
@@ -886,7 +910,10 @@ export default function KnowledgeExceptions() {
           </label>
           <Select
             value={statusFilter}
-            onValueChange={(value) => setStatusFilter(value as ExceptionsStatusFilter)}
+            onValueChange={(value) => {
+              setStatusFilter(value as ExceptionsStatusFilter)
+              setInboxPage(1)
+            }}
           >
             <SelectTrigger id="exceptions-status" aria-label="Filter by status">
               <SelectValue placeholder="Inbox" />
@@ -906,7 +933,10 @@ export default function KnowledgeExceptions() {
           </label>
           <Select
             value={entityTypeFilter}
-            onValueChange={(value) => setEntityTypeFilter(value as ExceptionsEntityTypeFilter)}
+            onValueChange={(value) => {
+              setEntityTypeFilter(value as ExceptionsEntityTypeFilter)
+              setInboxPage(1)
+            }}
           >
             <SelectTrigger id="exceptions-entity-type" aria-label="Filter by entity type">
               <SelectValue placeholder="All entity types" />
@@ -928,6 +958,7 @@ export default function KnowledgeExceptions() {
             value={signalTypeFilter}
             onValueChange={(value) => {
               setSignalTypeFilter(value as ExceptionsSignalTypeFilter)
+              setInboxPage(1)
               setSelectedIds([])
             }}
           >
@@ -951,6 +982,7 @@ export default function KnowledgeExceptions() {
             value={gateReasonFilter}
             onValueChange={(value) => {
               setGateReasonFilter(value as ExceptionsGateReasonFilter)
+              setInboxPage(1)
               setSelectedIds([])
             }}
           >
@@ -976,8 +1008,31 @@ export default function KnowledgeExceptions() {
           {entityTypeFilter !== 'all' ? ` · entity=${entityTypeFilter}` : ''}
           {signalTypeFilter !== 'all' ? ` · signal=${signalTypeFilter}` : ''}
           {gateReasonFilter !== 'all' ? ` · gate=${gateReasonFilter}` : ''}
-          {' '}(server filters sync to URL; inbox page ≤200 — not a global facet total)
+          {` · page ${inboxMeta.page} of up to ${inboxMeta.page_size} — not a global total`}
+          {inboxMeta.truncated ? ' · more pages follow' : ''}
+          {' '}(server filters sync to URL)
         </p>
+      </div>
+
+      <div className="flex items-center gap-2" data-testid="exceptions-pager">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!inboxMeta.has_prev || acting}
+          onClick={() => setInboxPage((p) => Math.max(1, p - 1))}
+          data-testid="exceptions-page-prev"
+        >
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!inboxMeta.has_next || acting}
+          onClick={() => setInboxPage((p) => p + 1)}
+          data-testid="exceptions-page-next"
+        >
+          Next
+        </Button>
       </div>
 
       {error && (
