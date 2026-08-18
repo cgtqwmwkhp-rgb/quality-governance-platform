@@ -1387,6 +1387,26 @@ async def list_actions(
     )
 
 
+async def get_audit_finding_capa_for_tenant(
+    db: "DbSession",
+    tenant_id: int,
+    source_id: int,
+) -> Optional[CAPAAction]:
+    """Return the unique audit-finding CAPA for this tenant, if one exists.
+
+    Backed by ``uq_capa_actions_tenant_audit_finding_source``. PX-426 get-or-create
+    uses this instead of mapping that unique hit to a reference-number 409.
+    """
+    result = await db.execute(
+        select(CAPAAction).where(
+            CAPAAction.tenant_id == tenant_id,
+            CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+            CAPAAction.source_id == source_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 @router.post("", response_model=ActionResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=ActionResponse, status_code=status.HTTP_201_CREATED)
 async def create_action(  # noqa: C901 - complexity justified by multi-entity support
@@ -1689,6 +1709,20 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         if "foreign key" in error_msg.lower() or "violates foreign key constraint" in error_msg.lower():
             raise NotFoundError("Source entity not found or was deleted")
         elif "unique" in error_msg.lower() or "duplicate" in error_msg.lower():
+            if src_type == "audit_finding" and src_id:
+                existing = await get_audit_finding_capa_for_tenant(db, current_user.tenant_id, src_id)
+                if existing is not None:
+                    logger.info(
+                        "PX-426 get-or-create: returning existing CAPA id=%s for finding %s",
+                        existing.id,
+                        src_id,
+                    )
+                    out = await _capa_to_response(db, existing)
+                    if existing.assigned_to_id and not out.assigned_to_email:
+                        email = await _resolve_owner_email(db, existing.assigned_to_id)
+                        if email:
+                            out = out.model_copy(update={"owner_email": email, "assigned_to_email": email})
+                    return out
             raise ConflictError("An action with this reference number already exists")
         else:
             logger.error("Database error creating action: %s", error_msg[:500])
