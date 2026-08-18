@@ -122,18 +122,70 @@ export function exceptionsStatusQueryParam(
 }
 
 /**
- * Build shareable inbox query string. Omits defaults (inbox / all / all).
+ * Build shareable inbox query string. Omits defaults (inbox / all / all / page 1).
  */
+export function parseExceptionsPage(raw: string | null | undefined): number {
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n < 1) return 1
+  return n
+}
+
+import type { KnowledgeEvidenceLink } from '../api/knowledgeBankClient'
+
+export function unwrapExceptionsInbox(data: unknown): {
+  items: KnowledgeEvidenceLink[]
+  page: number
+  page_size: number
+  truncated: boolean
+  has_next: boolean
+  has_prev: boolean
+} {
+  if (Array.isArray(data)) {
+    const items = data as KnowledgeEvidenceLink[]
+    const truncated = items.length >= 200
+    return {
+      items,
+      page: 1,
+      page_size: 200,
+      truncated,
+      has_next: truncated,
+      has_prev: false,
+    }
+  }
+  const envelope = data as {
+    items?: KnowledgeEvidenceLink[]
+    page?: number
+    page_size?: number
+    truncated?: boolean
+    has_next?: boolean
+    has_prev?: boolean
+  }
+  const items = Array.isArray(envelope.items) ? envelope.items : []
+  const page = parseExceptionsPage(String(envelope.page ?? 1))
+  const page_size = envelope.page_size === 200 ? 200 : Math.min(200, Math.max(1, Number(envelope.page_size) || 200))
+  const has_next = Boolean(envelope.has_next ?? envelope.truncated)
+  return {
+    items,
+    page,
+    page_size,
+    truncated: Boolean(envelope.truncated ?? has_next),
+    has_next,
+    has_prev: Boolean(envelope.has_prev ?? page > 1),
+  }
+}
+
 export function buildExceptionsInboxSearch(params: {
   status: ExceptionsStatusFilter
   entityType: ExceptionsEntityTypeFilter
   signalType: ExceptionsSignalTypeFilter
   gateReason: ExceptionsGateReasonFilter
+  page?: number
 }): string {
   const sp = new URLSearchParams()
   if (params.status !== 'inbox') sp.set('status', params.status)
   if (params.entityType !== 'all') sp.set('entity_type', params.entityType)
   if (params.signalType !== 'all') sp.set('signal_type', params.signalType)
   if (params.gateReason !== 'all') sp.set('gate_reason', params.gateReason)
+  if (params.page && params.page > 1) sp.set('page', String(params.page))
   return sp.toString()
 }

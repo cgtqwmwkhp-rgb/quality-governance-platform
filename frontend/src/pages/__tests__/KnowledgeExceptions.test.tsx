@@ -132,6 +132,10 @@ describe('KnowledgeExceptions closed loop', () => {
         entityType: 'incident',
         signalType: undefined,
         gateReason: undefined,
+        clauseId: undefined,
+        scheme: undefined,
+        operationalOnly: undefined,
+        page: 1,
       })
     })
     expect(screen.getByTestId('exceptions-return-to-case')).toBeInTheDocument()
@@ -309,5 +313,44 @@ describe('exceptions inbox URL sync', () => {
     ).toBe(
       'status=needs_review&entity_type=near_miss&signal_type=nonconformity&gate_reason=below_threshold',
     )
+    expect(
+      buildExceptionsInboxSearch({
+        status: 'inbox',
+        entityType: 'all',
+        signalType: 'all',
+        gateReason: 'all',
+        page: 2,
+      }),
+    ).toBe('page=2')
+  })
+})
+
+describe('exceptions inbox paging honesty', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+  it('enables Next when the envelope says has_next', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [],
+        page: 1,
+        page_size: 200,
+        truncated: true,
+        has_next: true,
+        has_prev: false,
+      },
+    })
+    const KnowledgeExceptions = (await import('../KnowledgeExceptions')).default
+    render(
+      <MemoryRouter>
+        <KnowledgeExceptions />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByTestId('exceptions-page-next')).not.toBeDisabled()
+    expect(screen.getByTestId('exceptions-page-prev')).toBeDisabled()
+    expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent(
+      /page 1 of up to 200/,
+    )
+    expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent(/more pages follow/)
   })
 })
