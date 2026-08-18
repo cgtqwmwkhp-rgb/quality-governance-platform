@@ -61,10 +61,7 @@ def _completed_at_assigns_aware_now(tree: ast.AST) -> list[int]:
         for child in ast.walk(ast.Module(body=node.body, type_ignores=[])):
             if not isinstance(child, ast.Assign):
                 continue
-            if not any(
-                isinstance(target, ast.Attribute) and target.attr == "completed_at"
-                for target in child.targets
-            ):
+            if not any(isinstance(target, ast.Attribute) and target.attr == "completed_at" for target in child.targets):
                 continue
             if _is_aware_now_call(child.value):
                 lines.append(child.lineno)
