@@ -61,6 +61,25 @@ router = APIRouter()
 _read_savepoint = read_savepoint
 
 
+def _naive_utc_now() -> datetime:
+    """UTC now with tzinfo stripped — CAPA DateTime columns are naive.
+
+    asyncpg refuses an aware datetime on ``timestamp without time zone``
+    (PX-424). Incident/RTA/complaint actions use timezone-aware columns and
+    must keep ``datetime.now(timezone.utc)``.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _as_capa_naive(value: Optional[datetime]) -> Optional[datetime]:
+    """Strip tzinfo for writes onto CAPAAction naive DateTime columns."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)
+
+
 async def _resolve_assignee_id_or_raise(
     db: Any,
     assigned_to_email: str,
@@ -1507,6 +1526,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                 except ValueError:
                     continue
 
+    capa_due_date = _as_capa_naive(parsed_due_date)
+
     # Declare action variable
     action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction, CAPAAction]
 
@@ -1532,7 +1553,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
         )
     elif src_type == "induction":
         action = CAPAAction(
@@ -1548,7 +1569,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
         )
     elif src_type == "audit_finding":
         action = CAPAAction(
@@ -1564,7 +1585,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
         )
     elif src_type == "incident":
         action = IncidentAction(
@@ -1632,7 +1653,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
         )
     elif src_type == "risk":
         action = CAPAAction(
@@ -1648,7 +1669,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
         )
     else:
         raise BadRequestError("Invalid source_type")
@@ -2316,7 +2337,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             if capa_status is not None:
                 action.status = capa_status
                 if status_value in ("completed", "closed") and not action.completed_at:
-                    action.completed_at = datetime.now(timezone.utc)
+                    action.completed_at = _naive_utc_now()
                 elif status_value not in ("completed", "closed"):
                     action.completed_at = None
         if action_data.owner_id is not None or action_data.assigned_to_email is not None:
@@ -2371,6 +2392,8 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                     break
                 except ValueError:
                     continue
+        if isinstance(action, CAPAAction):
+            action.due_date = _as_capa_naive(action.due_date)
 
     bridge_result = None
     if isinstance(action, CAPAAction) and action_data.status is not None:
