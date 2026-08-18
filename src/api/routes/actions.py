@@ -1721,9 +1721,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                     if existing.assigned_to_id and not out.assigned_to_email:
                         email = await _resolve_owner_email(db, existing.assigned_to_id)
                         if email:
-                            out = out.model_copy(
-                                update={"owner_email": email, "assigned_to_email": email}
-                            )
+                            out = out.model_copy(update={"owner_email": email, "assigned_to_email": email})
                     return out
             raise ConflictError("An action with this reference number already exists")
         else:

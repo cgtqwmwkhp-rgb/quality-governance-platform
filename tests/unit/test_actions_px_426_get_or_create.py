@@ -15,9 +15,7 @@ def _unique_source_error() -> IntegrityError:
     return IntegrityError(
         "INSERT INTO capa_actions",
         {},
-        Exception(
-            'duplicate key value violates unique constraint "uq_capa_actions_tenant_audit_finding_source"'
-        ),
+        Exception('duplicate key value violates unique constraint "uq_capa_actions_tenant_audit_finding_source"'),
     )
 
 
