@@ -506,19 +506,23 @@ export default function Audits() {
           .map((finding) => finding.id)
           .filter((id) => next[id] === undefined)
         if (missingIds.length > 0) {
-          const extras = await Promise.all(
-            missingIds.map((id) => actionsApi.list(1, 5, undefined, 'audit_finding', id)),
-          )
-          if (cancelled) return
-          extras.forEach((extra, index) => {
-            const findingId = missingIds[index]
-            for (const action of extra.data.items || []) {
-              if (action.source_id === findingId && !next[findingId]) {
-                next[findingId] = action
-                break
+          try {
+            const extras = await Promise.all(
+              missingIds.map((id) => actionsApi.list(1, 5, undefined, 'audit_finding', id)),
+            )
+            if (cancelled) return
+            extras.forEach((extra, index) => {
+              const findingId = missingIds[index]
+              for (const action of extra.data.items || []) {
+                if (action.source_id === findingId && !next[findingId]) {
+                  next[findingId] = action
+                  break
+                }
               }
-            }
-          })
+            })
+          } catch (err) {
+            if (import.meta.env.DEV) console.error('Failed to load missing CAPAs', err)
+          }
         }
         setCapaByFindingId(next)
         setCapaLoopLoadState('ready')
@@ -604,7 +608,7 @@ export default function Audits() {
         const updated = await actionsApi.update(row.id, row.source_type, {
           assigned_to_email: email,
         })
-        row = updated.data
+        row = { ...updated.data, assigned_to_email: email }
       }
       setCapaByFindingId((prev) => ({ ...prev, [finding.id]: row }))
       setCapaLoopLoadState('ready')
