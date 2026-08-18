@@ -58,7 +58,12 @@ from src.domain.services.standards_entra_attestation import (
     EntraAttestationConfig,
     resolve_attestation,
 )
-from src.domain.services.standards_trap_guard import SCHEME_NUMBERING_FAMILY, TrapGuard, framework_from_clause_token
+from src.domain.services.standards_trap_guard import (
+    SCHEME_NUMBERING_FAMILY,
+    TrapGuard,
+    clause_number_from_token,
+    framework_from_clause_token,
+)
 
 #: Rows read per source per cell. A cell that hits this cap has been painted from a
 #: partial read, so it reports ``scan_truncated`` rather than presenting an
@@ -485,6 +490,26 @@ def clause_match_keys(framework: str, clause_number: str) -> set[str]:
     return {k for k in keys if k}
 
 
+def _clause_rolls_up_to(stripped: str, clause_norm: str) -> bool:
+    """Child→parent only. ``8.5.1`` covers cell ``8``; ``8`` does not cover cell ``8.5``."""
+    return stripped == clause_norm or stripped.startswith(f"{clause_norm}.")
+
+
+def _token_names_cell_family(token_norm: str, keys: set[str]) -> bool:
+    """True when an unframed token, or a framed token whose family is in ``keys``.
+
+    Stops ``14001-8.5.1`` rolling up onto a 9001 cell ``8``. Exact-suffix
+    cross-family matches (``14001-8`` vs cell ``8``) stay on the suffix branch
+    so TrapGuard can still drop shared-number traps.
+    """
+    declared = framework_from_clause_token(token_norm)
+    if declared is None:
+        return True
+    prefix = f"{declared}-"
+    colon = f"{declared}:"
+    return any(k.startswith(prefix) or k.startswith(colon) for k in keys)
+
+
 def token_matches_clause(token: Any, keys: set[str], clause_number: str) -> bool:
     """True when a stored clause token refers to this cell."""
     norm = normalize_clause_token(token)
@@ -499,7 +524,11 @@ def token_matches_clause(token: Any, keys: set[str], clause_number: str) -> bool
     if norm.endswith(f"-{clause_norm}") or norm.endswith(f":{clause_norm}"):
         return True
     # Bare clause number equality already covered via keys; also allow startswith for sub-clauses
-    if norm == clause_norm or norm.startswith(f"{clause_norm}."):
+    if _clause_rolls_up_to(norm, clause_norm):
+        return True
+    # PX-425c: compose framework-strip with child→parent so "9001-8.5.1" hits cell 8.
+    stripped = normalize_clause_token(clause_number_from_token(norm))
+    if stripped and _clause_rolls_up_to(stripped, clause_norm) and _token_names_cell_family(norm, keys):
         return True
     return False
 
