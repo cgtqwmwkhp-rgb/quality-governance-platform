@@ -656,7 +656,7 @@ export default function KnowledgeExceptions() {
         page: inboxPage,
       })
       const page = unwrapExceptionsInbox(response.data)
-      setItems(page.items as KnowledgeEvidenceLink[])
+      setItems(page.items)
       setInboxMeta({
         page: page.page,
         page_size: page.page_size,

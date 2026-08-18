@@ -130,8 +130,10 @@ export function parseExceptionsPage(raw: string | null | undefined): number {
   return n
 }
 
+import type { KnowledgeEvidenceLink } from '../api/knowledgeBankClient'
+
 export function unwrapExceptionsInbox(data: unknown): {
-  items: Array<{ id: number } & Record<string, unknown>>
+  items: KnowledgeEvidenceLink[]
   page: number
   page_size: number
   truncated: boolean
@@ -139,9 +141,10 @@ export function unwrapExceptionsInbox(data: unknown): {
   has_prev: boolean
 } {
   if (Array.isArray(data)) {
-    const truncated = data.length >= 200
+    const items = data as KnowledgeEvidenceLink[]
+    const truncated = items.length >= 200
     return {
-      items: data,
+      items,
       page: 1,
       page_size: 200,
       truncated,
@@ -150,7 +153,7 @@ export function unwrapExceptionsInbox(data: unknown): {
     }
   }
   const envelope = data as {
-    items?: Array<{ id: number } & Record<string, unknown>>
+    items?: KnowledgeEvidenceLink[]
     page?: number
     page_size?: number
     truncated?: boolean
