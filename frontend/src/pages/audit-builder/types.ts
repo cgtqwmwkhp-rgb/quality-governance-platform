@@ -88,6 +88,12 @@ export interface Question {
   evidenceRequired: boolean
   evidenceType?: 'photo' | 'document' | 'signature' | 'any'
   isoClause?: string
+  /**
+   * Integer catalogue ids already stored in the question's `clause_ids`. The ISO
+   * Clause box only owns the token strings, so these ride through a save
+   * untouched rather than being wiped by it.
+   */
+  clauseCatalogIds?: number[]
   /** Multi-scheme Assist Map links (MAP-01..04) beyond free-text isoClause. */
   standardLinks?: QuestionStandardLink[]
   riskLevel?: 'critical' | 'high' | 'medium' | 'low'

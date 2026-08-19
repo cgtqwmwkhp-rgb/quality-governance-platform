@@ -4360,7 +4360,14 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -4644,7 +4651,14 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -5148,7 +5162,14 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -5465,7 +5486,14 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -5806,7 +5834,14 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -6029,7 +6064,8 @@
           "regulatory_reference": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 200
               },
               {
                 "type": "null"

@@ -313,6 +313,14 @@ export interface AuditQuestionCreate {
   positive_answer?: 'yes' | 'no'
   criticality?: QuestionCriticality
   conditional_logic?: ConditionalLogicRule[] | null
+  /**
+   * Clause tokens ("7.2", "9001-8.5.1") copied onto every finding this question
+   * generates, which is what joins the finding to a matrix cell. Integer
+   * catalogue ids from older rows ride through unchanged.
+   */
+  clause_ids?: Array<number | string> | null
+  /** Human-readable clause reference shown in the builder (max 200 chars). */
+  regulatory_reference?: string | null
 }
 
 export interface AuditQuestionUpdate {
@@ -339,6 +347,9 @@ export interface AuditQuestionUpdate {
   is_active?: boolean
   criticality?: QuestionCriticality
   conditional_logic?: ConditionalLogicRule[] | null
+  /** See `AuditQuestionCreate.clause_ids`. Null clears the mapping. */
+  clause_ids?: Array<number | string> | null
+  regulatory_reference?: string | null
 }
 
 export interface AuditSection {
@@ -384,6 +395,9 @@ export interface AuditQuestion {
   positive_answer?: 'yes' | 'no'
   criticality?: string
   conditional_logic?: ConditionalLogicRule[] | null
+  /** Heterogeneous: clause token strings or integer catalogue ids. */
+  clause_ids?: Array<number | string> | null
+  regulatory_reference?: string | null
   created_at: string
   updated_at: string
 }
