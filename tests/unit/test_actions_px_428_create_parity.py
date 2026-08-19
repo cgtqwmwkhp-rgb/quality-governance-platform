@@ -7,12 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from src.api.routes.actions import (
-    ActionCreate,
-    _accepted_clause_reference,
-    _resolve_requested_owner,
-    create_action,
-)
+from src.api.routes.actions import ActionCreate, _accepted_clause_reference, _resolve_requested_owner, create_action
 from src.domain.exceptions import BadRequestError
 from src.domain.models.capa import CAPAAction, CAPASource
 
