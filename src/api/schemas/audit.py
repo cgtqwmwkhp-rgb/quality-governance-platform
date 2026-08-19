@@ -1,9 +1,16 @@
 """Pydantic schemas for Audit & Inspection API."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# A clause reference is either an integer catalogue id or a clause token string
+# ("7.2", "9001-8.5.1"). Imports, the template builder and the standards matcher
+# all speak tokens; only older rows hold catalogue ids. Write schemas must accept
+# both, because coercing a token to an int is impossible and dropping it leaves
+# the finding unjoinable to a matrix cell (PX-425a/b).
+ClauseRef = Union[int, str]
 
 # ============== Question Types & Options ==============
 
@@ -88,7 +95,7 @@ class AuditQuestionBase(BaseModel):
     conditional_logic: Optional[List[ConditionalLogicRule]] = Field(None, validation_alias="conditional_logic_json")
 
     # Standard mapping
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
 
     # Risk scoring
@@ -146,7 +153,7 @@ class AuditQuestionUpdate(BaseModel):
     max_value: Optional[float] = None
     evidence_requirements: Optional[EvidenceRequirement] = Field(None, validation_alias="evidence_requirements_json")
     conditional_logic: Optional[List[ConditionalLogicRule]] = Field(None, validation_alias="conditional_logic_json")
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
     # Risk scoring (parity with AuditQuestionBase / Create / Response)
     risk_category: Optional[str] = None
@@ -155,7 +162,9 @@ class AuditQuestionUpdate(BaseModel):
     is_active: Optional[bool] = None
     guidance: Optional[str] = None
     criticality: Optional[str] = Field(None, pattern="^(essential|required|good_to_have)$")
-    regulatory_reference: Optional[str] = None
+    # max_length mirrors Create and the String(200) column: the builder now sends
+    # this on every save, so an overlong value would be a 500, not a 422.
+    regulatory_reference: Optional[str] = Field(None, max_length=200)
     guidance_notes: Optional[str] = None
     sign_off_required: Optional[bool] = None
     assessor_guidance: Optional[Dict[str, Any]] = Field(None, validation_alias="assessor_guidance_json")
@@ -199,7 +208,9 @@ class AuditQuestionResponse(BaseModel):
     max_length: Optional[int] = None
     evidence_requirements: Optional[Dict[str, Any]] = Field(None, validation_alias="evidence_requirements_json")
     conditional_logic: Optional[List[Any]] = Field(None, validation_alias="conditional_logic_json")
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
+    # Tokens as well as catalogue ids: a question saved with "9001-8.5.1" must be
+    # readable, not a 500 on GET template.
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
     risk_category: Optional[str] = None
     risk_weight: Optional[float] = None
@@ -754,7 +765,7 @@ class AuditFindingBase(BaseModel):
     )
 
     # Standard mapping
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json_legacy")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
 
     # Risk linkage
@@ -790,7 +801,7 @@ class AuditFindingUpdate(BaseModel):
     description: Optional[str] = None
     severity: Optional[str] = None
     finding_type: Optional[str] = None
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json_legacy")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
     risk_ids: Optional[List[int]] = Field(None, validation_alias="risk_ids_json")
     corrective_action_required: Optional[bool] = None
