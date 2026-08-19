@@ -257,7 +257,7 @@ KNOWN_LAX_WRITE_SCHEMAS: frozenset[str] = frozenset(
 # response model because that is the stable identity of the resource.
 KNOWN_ASYMMETRIC_RESPONSE_FIELDS: dict[str, tuple[str, ...]] = {
     "ActionOwnerNoteRead": ("action_key", "author_email", "author_id"),
-    "ActionResponse": ("action_key", "audit_run_id", "clause_reference", "source_scheme", "source_title"),
+    "ActionResponse": ("action_key", "audit_run_id", "source_scheme", "source_title"),
     "AssessmentRunResponse": (
         "competency_gate_cleared",
         "competency_gate_mode",

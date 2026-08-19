@@ -130,9 +130,11 @@ export interface ActionCreate {
   source_type: string
   source_id?: number
   source_reference?: string
-  /** Mirrors the owner_id returned by the API. Send this or assigned_to_email; if both, they must match. */
+  /** Mirrors the owner_id returned by the API. Send this, assigned_to_email, or owner_email; if more than one, they must match. */
   owner_id?: number
   assigned_to_email?: string
+  owner_email?: string
+  clause_reference?: string
 }
 
 /**

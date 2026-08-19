@@ -115,25 +115,72 @@ async def _resolve_owner_id_or_raise(
     return owner_id
 
 
+_CAPA_WRITE_SOURCES = frozenset({"assessment", "induction", "audit_finding", "near_miss", "risk"})
+
+
+def _accepted_clause_reference(raw: Optional[str], src_type: str) -> Optional[str]:
+    """Persist clause_reference on CAPA writes only. Do not silently drop it."""
+    if raw is None:
+        return None
+    cleaned = raw.strip()
+    if not cleaned:
+        return None
+    if src_type not in _CAPA_WRITE_SOURCES:
+        raise BadRequestError(
+            "clause_reference is only accepted for CAPA sources "
+            "(assessment, induction, audit_finding, near_miss, risk)."
+        )
+    return cleaned
+
+
 async def _resolve_requested_owner(
     db: Any,
     *,
     owner_id: Optional[int],
     assigned_to_email: Optional[str],
     tenant_id: Optional[int],
+    owner_email: Optional[str] = None,
 ) -> Optional[int]:
-    """Resolve whichever spelling of the assignee the caller used.
+    """Resolve owner_id, assigned_to_email, and owner_email to one user.
 
-    Both are accepted because ``ActionResponse`` returns ``owner_id`` while the
-    original write contract only understood ``assigned_to_email`` — a client that
-    echoed back the field it had just read had its assignment silently dropped
-    and got a 201 for an unowned action (PX-168). When both are supplied they
-    must agree, so a contradictory pair cannot resolve to whichever happens to be
-    inspected first.
+    ``ActionResponse`` returns ``owner_id`` and ``owner_email``. PX-168 accepted
+    ``owner_id`` on write; PX-428 accepts ``owner_email`` as the same alias so
+    echoing a GET into a POST does not 422. ``extra="forbid"`` stays. When more
+    than one spelling is supplied they must identify the same user.
     """
+    email_spellings: list[tuple[str, str]] = []
+    seen_emails: set[str] = set()
+    for label, raw in (
+        ("assigned_to_email", assigned_to_email),
+        ("owner_email", owner_email),
+    ):
+        if raw is None:
+            continue
+        cleaned = raw.strip()
+        if not cleaned:
+            raise BadRequestError(
+                f"{label} cannot be empty or whitespace. "
+                "Omit the field to leave the action unassigned, or provide a valid email."
+            )
+        key = cleaned.lower()
+        if key in seen_emails:
+            continue
+        seen_emails.add(key)
+        email_spellings.append((label, cleaned))
+
     resolved_from_email: Optional[int] = None
-    if assigned_to_email is not None:
-        resolved_from_email = await _resolve_assignee_id_or_raise(db, assigned_to_email, tenant_id)
+    email_used: Optional[str] = None
+    label_used: Optional[str] = None
+    for label, email in email_spellings:
+        resolved = await _resolve_assignee_id_or_raise(db, email, tenant_id)
+        if resolved_from_email is not None and resolved != resolved_from_email:
+            raise BadRequestError(
+                f"{label_used} '{email_used}' and {label} '{email}' identify different users. "
+                "Send one, or send a matching pair."
+            )
+        resolved_from_email = resolved
+        email_used = email
+        label_used = label
 
     if owner_id is None:
         return resolved_from_email
@@ -141,7 +188,7 @@ async def _resolve_requested_owner(
     resolved_from_id = await _resolve_owner_id_or_raise(db, owner_id, tenant_id)
     if resolved_from_email is not None and resolved_from_email != resolved_from_id:
         raise BadRequestError(
-            f"owner_id {owner_id} and assigned_to_email '{assigned_to_email}' identify different users. "
+            f"owner_id {owner_id} and {label_used} '{email_used}' identify different users. "
             "Send one, or send a matching pair."
         )
     return resolved_from_id
@@ -185,9 +232,18 @@ class ActionCreate(ActionBase):
     owner_id: Optional[int] = Field(
         None,
         description="User id to assign to. Mirrors the owner_id returned by this API; "
-        "send this or assigned_to_email, and if both, they must identify the same user.",
+        "send this, assigned_to_email, or owner_email; if more than one, they must identify the same user.",
     )
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
+    owner_email: Optional[str] = Field(
+        None,
+        description="Alias of assigned_to_email. Mirrors ActionResponse.owner_email so a GET echo is accepted.",
+    )
+    clause_reference: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Clause token persisted on CAPA sources only (max 50).",
+    )
 
 
 class ActionUpdate(BaseModel):
@@ -1505,11 +1561,14 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     else:
         raise BadRequestError("Invalid source_type")
 
+    clause_ref = _accepted_clause_reference(action_data.clause_reference, src_type)
+
     # Resolve the assignee (either spelling, scoped to tenant) — fail loudly on an unknown user
     owner_id = await _resolve_requested_owner(
         db,
         owner_id=action_data.owner_id,
         assigned_to_email=action_data.assigned_to_email,
+        owner_email=action_data.owner_email,
         tenant_id=current_user.tenant_id,
     )
 
@@ -1574,6 +1633,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     elif src_type == "induction":
         action = CAPAAction(
@@ -1590,6 +1650,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     elif src_type == "audit_finding":
         action = CAPAAction(
@@ -1606,6 +1667,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     elif src_type == "incident":
         action = IncidentAction(
@@ -1674,6 +1736,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     elif src_type == "risk":
         action = CAPAAction(
@@ -1690,6 +1753,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     else:
         raise BadRequestError("Invalid source_type")
@@ -1775,7 +1839,9 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     if isinstance(action, CAPAAction):
         out = await _capa_to_response(db, action)
     else:
-        resolved_email = action_data.assigned_to_email or await _resolve_owner_email(db, action.owner_id)
+        resolved_email = (
+            action_data.assigned_to_email or action_data.owner_email or await _resolve_owner_email(db, action.owner_id)
+        )
         if src_type == "incident":
             sk = STORAGE_INCIDENT_ACTION
         elif src_type == "rta":

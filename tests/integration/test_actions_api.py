@@ -946,3 +946,60 @@ class TestActionOwnerPersistence:
         )
 
         assert response.status_code == 400, response.text
+
+    @pytest.mark.asyncio
+    async def test_create_persists_owner_supplied_as_owner_email(
+        self, client: AsyncClient, auth_headers: dict, test_session
+    ):
+        """PX-428 — POST with owner_email must not 422 and must persist that owner."""
+        incident = await self._incident(test_session, "owner_email create")
+
+        response = await client.post(
+            "/api/v1/actions/",
+            json={
+                "title": "Owned via owner_email",
+                "description": "GET echo field",
+                "source_type": "incident",
+                "source_id": incident.id,
+                "owner_email": "test@example.com",
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["owner_id"] == 1
+        assert body["owner_email"] == "test@example.com"
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_contradictory_owner_id_and_owner_email(
+        self, client: AsyncClient, auth_headers: dict, test_session
+    ):
+        """PX-428 — owner_id and owner_email must agree when both are sent."""
+        from tests.factories import UserFactory
+
+        other = UserFactory.build(
+            email=f"px428-owner-{uuid.uuid4().hex[:8]}@example.com",
+            tenant_id=1,
+            is_active=True,
+        )
+        test_session.add(other)
+        await test_session.commit()
+        await test_session.refresh(other)
+
+        incident = await self._incident(test_session, "owner_email disagree")
+
+        response = await client.post(
+            "/api/v1/actions/",
+            json={
+                "title": "Contradictory owner_email",
+                "description": "three-way agreement",
+                "source_type": "incident",
+                "source_id": incident.id,
+                "owner_id": 1,
+                "owner_email": other.email,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 400, response.text
