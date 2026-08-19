@@ -1,9 +1,24 @@
 """Compliance Automation Pydantic schemas."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Comparable instant for a date that may or may not carry an offset.
+
+    Pydantic parses each field independently, so ``2026-01-01`` arrives naive
+    while ``2027-01-01T00:00:00Z`` arrives aware; comparing the two directly
+    raises ``TypeError`` and would surface as a 500 from inside a validator. A
+    naive value is read as UTC because that is how every reader of the
+    ``certificates`` columns interprets one.
+
+    This is for comparison only. Normalising the values that get stored belongs
+    to the writer, which is the layer that knows the column type.
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
 class RegulatoryUpdateResponse(BaseModel):
@@ -41,14 +56,52 @@ class CertificateListResponse(BaseModel):
 
 
 class CertificateCreate(BaseModel):
-    certificate_type: str
-    entity_type: str
-    entity_id: Optional[str] = None
-    name: str
-    issued_by: Optional[str] = None
-    issued_date: Optional[datetime] = None
-    expiry_date: Optional[datetime] = None
+    """Body of ``POST /compliance-automation/certificates``.
+
+    Every field is named for the ``Certificate`` column it writes. The previous
+    version of this schema named ``issued_by`` / ``issued_date``, which match no
+    column and no caller: the register stores ``issuing_body`` / ``issue_date``,
+    and the frontend client has always sent those. Because no route ever accepted
+    this body, the mismatch was invisible rather than harmless — wiring it up as
+    written would have dropped the issuer and the issue date on every write
+    (PX-427).
+
+    ``extra="forbid"`` so an unrecognised field is a 422 rather than a silent
+    discard, which is the PX-168 shape the write-contract guards exist to stop.
+
+    ``issue_date`` and ``expiry_date`` are required because both columns are NOT
+    NULL, and an undated certificate is the specific thing the framework
+    countdown cannot report on.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255)
+    certificate_type: str = Field(min_length=1, max_length=50)
+    reference_number: Optional[str] = Field(default=None, max_length=100)
+    entity_type: str = Field(min_length=1, max_length=50)
+    #: Scoping key inside the tenant (a person, asset or site). Omitted for an
+    #: organisation-level accreditation, where the tenant itself is the entity
+    #: and the server supplies its id — a client has no reason to know it.
+    entity_id: Optional[str] = Field(default=None, max_length=36)
+    entity_name: Optional[str] = Field(default=None, max_length=255)
+    issuing_body: Optional[str] = Field(default=None, max_length=255)
+    issue_date: datetime
+    expiry_date: datetime
+    reminder_days: int = Field(default=30, ge=0, le=365)
+    is_critical: bool = False
     notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _expiry_not_before_issue(self) -> "CertificateCreate":
+        """Refuse a certificate that expires before it was issued.
+
+        The register exists to be read as a countdown, and a negative validity
+        period renders as an already-expired credential nobody can account for.
+        """
+        if _as_utc(self.expiry_date) < _as_utc(self.issue_date):
+            raise ValueError("expiry_date must not be earlier than issue_date")
+        return self
 
 
 class ScheduledAuditListResponse(BaseModel):

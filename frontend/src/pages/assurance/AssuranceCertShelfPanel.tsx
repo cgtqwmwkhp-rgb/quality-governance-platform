@@ -16,6 +16,7 @@ import {
   BookOpen,
   ExternalLink,
   Leaf,
+  Plus,
   RefreshCw,
   Shield,
 } from 'lucide-react'
@@ -23,6 +24,7 @@ import { complianceAutomationApi, getApiErrorMessage } from '../../api/client'
 import { cn } from '../../helpers/utils'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState } from '../../components/ui'
 import { toast } from '../../contexts/ToastContext'
+import { CertificateFormDialog } from '../compliance/CertificateFormDialog'
 import {
   ASSURANCE_CERT_READINESS_COLORS,
   ASSURANCE_CERT_READINESS_LABELS,
@@ -62,6 +64,7 @@ export default function AssuranceCertShelfPanel() {
   const [shelf, setShelf] = useState<AssuranceCertShelfResponse | null>(null)
   const [schemeFilter, setSchemeFilter] = useState<(typeof SCHEME_FILTERS)[number]>('all')
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>('all')
+  const [addCertOpen, setAddCertOpen] = useState(false)
 
   const loadShelf = useCallback(async () => {
     setLoading(true)
@@ -113,10 +116,16 @@ export default function AssuranceCertShelfPanel() {
             'Readiness across Library masters and external assurance systems of record (UVDB, Planet Mark).',
           )}
         </p>
-        <Button variant="outline" onClick={() => void loadShelf()} data-testid="assurance-cert-shelf-refresh">
-          <RefreshCw className={cn('w-4 h-4 mr-2', loading && 'animate-spin')} />
-          {t('common.refresh', 'Refresh')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => setAddCertOpen(true)} data-testid="assurance-cert-shelf-add">
+            <Plus className="w-4 h-4 mr-2" />
+            {t('compliance.automation.certificate_form.title', 'Add certificate')}
+          </Button>
+          <Button variant="outline" onClick={() => void loadShelf()} data-testid="assurance-cert-shelf-refresh">
+            <RefreshCw className={cn('w-4 h-4 mr-2', loading && 'animate-spin')} />
+            {t('common.refresh', 'Refresh')}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="assurance-cert-shelf-summary">
@@ -201,6 +210,17 @@ export default function AssuranceCertShelfPanel() {
           )}
         </CardContent>
       </Card>
+
+      <CertificateFormDialog
+        open={addCertOpen}
+        onOpenChange={setAddCertOpen}
+        onSaved={() => {
+          toast.success(
+            t('compliance.automation.certificate_form.saved', 'Certificate added to the register'),
+          )
+          void loadShelf()
+        }}
+      />
     </div>
   )
 }

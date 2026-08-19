@@ -12955,6 +12955,120 @@
         "title": "CatalogueTemplateResponse",
         "type": "object"
       },
+      "CertificateCreate": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /compliance-automation/certificates``.\n\nEvery field is named for the ``Certificate`` column it writes. The previous\nversion of this schema named ``issued_by`` / ``issued_date``, which match no\ncolumn and no caller: the register stores ``issuing_body`` / ``issue_date``,\nand the frontend client has always sent those. Because no route ever accepted\nthis body, the mismatch was invisible rather than harmless \u2014 wiring it up as\nwritten would have dropped the issuer and the issue date on every write\n(PX-427).\n\n``extra=\"forbid\"`` so an unrecognised field is a 422 rather than a silent\ndiscard, which is the PX-168 shape the write-contract guards exist to stop.\n\n``issue_date`` and ``expiry_date`` are required because both columns are NOT\nNULL, and an undated certificate is the specific thing the framework\ncountdown cannot report on.",
+        "properties": {
+          "certificate_type": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Certificate Type",
+            "type": "string"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "entity_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Name"
+          },
+          "entity_type": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "expiry_date": {
+            "format": "date-time",
+            "title": "Expiry Date",
+            "type": "string"
+          },
+          "is_critical": {
+            "default": false,
+            "title": "Is Critical",
+            "type": "boolean"
+          },
+          "issue_date": {
+            "format": "date-time",
+            "title": "Issue Date",
+            "type": "string"
+          },
+          "issuing_body": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuing Body"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "reference_number": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Number"
+          },
+          "reminder_days": {
+            "default": 30,
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Reminder Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "certificate_type",
+          "entity_type",
+          "issue_date",
+          "expiry_date"
+        ],
+        "title": "CertificateCreate",
+        "type": "object"
+      },
       "CertificationStatusPatch": {
         "properties": {
           "assessment_notes": {
@@ -75142,6 +75256,53 @@
           }
         ],
         "summary": "List Certificates",
+        "tags": [
+          "Compliance Automation"
+        ]
+      },
+      "post": {
+        "description": "Register a certificate on the compliance expiry register.\n\nThe register had a read surface and no writer, so the only way a dated\ncertificate could reach it was a hand-written SQL insert, and the framework\ncountdown on the standards matrix stayed at \"No dated cert\" (PX-427).",
+        "operationId": "add_certificate_api_v1_compliance_automation_certificates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Certificate Api V1 Compliance Automation Certificates Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Certificate",
         "tags": [
           "Compliance Automation"
         ]
