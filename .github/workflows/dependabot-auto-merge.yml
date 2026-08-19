@@ -26,13 +26,32 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # There is deliberately no approval step. It used to run `gh pr review --approve`
-      # and failed on every PR with "GitHub Actions is not permitted to approve pull
-      # requests", which killed the job before auto-merge was ever enabled. Branch
-      # protection on main requires no reviews, so an approval buys nothing — and
-      # granting Actions the right to approve would silently satisfy any review
-      # requirement added later. The setting stays off; the step is gone.
+      # This gate exists because the failure it guards against is SILENT.
       #
+      # Auto-merge enabled with GITHUB_TOKEN works — the PR merges — but the resulting
+      # push does not trigger workflows. CI runs on `push` to main and staging chains off
+      # CI via workflow_run, so an auto-merged PR lands on main and is never built, never
+      # deployed, and never reported as failed. main and production drift apart quietly.
+      # That happened on 2026-08-04 with 78a2efe7 and had to be re-converged by hand.
+      #
+      # An App or PAT-authored merge does fire push, which is why the token below is not
+      # optional. If the secret is absent we fail the job rather than fall back to
+      # GITHUB_TOKEN, because falling back would silently recreate the drift.
+      #
+      # The token must be stored as a DEPENDABOT secret, not an Actions secret: workflow
+      # runs triggered by Dependabot read from a separate store, and an Actions secret
+      # would arrive empty here.
+      - name: Require a non-GITHUB_TOKEN credential
+        env:
+          MERGE_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MERGE_TOKEN:-}" ]; then
+            echo "::error::DEPENDABOT_AUTOMERGE_TOKEN is not set. Add it under Settings -> Secrets and variables -> Dependabot (NOT Actions). Refusing to fall back to GITHUB_TOKEN, because an auto-merge enabled with GITHUB_TOKEN lands on main without triggering CI or any deploy."
+            exit 1
+          fi
+          echo "Merge credential present."
+
       # github_actions is excluded on purpose. A compromised action executes inside CI
       # holding this repository's credentials and can rewrite the very workflows meant to
       # catch it, and nothing in the required checks inspects what an action does.
@@ -41,6 +60,10 @@ jobs:
       #
       # For a grouped PR, update-type reports the highest semver change in the group, so
       # a group containing a major cannot slip through labelled as minor.
+      #
+      # There is deliberately no approval step. Branch protection requires no reviews, so
+      # an approval buys nothing, and granting Actions the right to approve pull requests
+      # would silently satisfy any review requirement added later.
       - name: Enable auto-merge
         if: >-
           steps.metadata.outputs.package-ecosystem != 'github_actions'
@@ -49,4 +72,4 @@ jobs:
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
