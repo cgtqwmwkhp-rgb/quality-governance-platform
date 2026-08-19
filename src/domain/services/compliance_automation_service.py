@@ -37,6 +37,53 @@ def _utc_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _as_naive_utc(value: datetime) -> datetime:
+    """Normalise a caller-supplied date for a TIMESTAMP WITHOUT TIME ZONE column.
+
+    Same failure class as PX-424: asyncpg refuses an aware datetime on these
+    columns, so a client sending ``2026-09-01T00:00:00Z`` 500s unless the offset
+    is removed before the bind.
+
+    The offset is *converted* rather than dropped. Every reader of
+    ``certificates.expiry_date`` treats a naive value as UTC —
+    :meth:`get_expiring_certificates_summary` here, ``AssuranceCertShelfService``,
+    and the matrix framework countdown all re-attach ``timezone.utc`` — so
+    discarding a ``+01:00`` would move the recorded expiry by an hour and shift
+    the countdown a day at the boundary.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _certificate_row(certificate: Certificate) -> dict[str, Any]:
+    """The register's representation of one certificate.
+
+    Shared by the list read and the create writer so that what a POST reports back
+    cannot drift from what the following GET shows — the round-trip the write
+    contract is judged on.
+    """
+    return {
+        "id": certificate.id,
+        "name": certificate.name,
+        "certificate_type": certificate.certificate_type,
+        "reference_number": certificate.reference_number,
+        "entity_type": certificate.entity_type,
+        "entity_id": certificate.entity_id,
+        "entity_name": certificate.entity_name,
+        "issuing_body": certificate.issuing_body,
+        "issue_date": _to_iso(certificate.issue_date),
+        "expiry_date": _to_iso(certificate.expiry_date),
+        "reminder_days": certificate.reminder_days,
+        "reminder_sent": certificate.reminder_sent,
+        "status": certificate.status,
+        "is_critical": certificate.is_critical,
+        "primary_evidence_asset_id": certificate.primary_evidence_asset_id,
+        "document_url": certificate.document_url,
+        "notes": certificate.notes,
+    }
+
+
 def _normalize_standard_text(*values: Optional[str]) -> str:
     return " ".join(value or "" for value in values).lower()
 
@@ -378,28 +425,68 @@ class ComplianceAutomationService:
             query = query.where(Certificate.expiry_date <= _utc_naive() + timedelta(days=expiring_within_days))
 
         result = await self.db.execute(query.order_by(Certificate.expiry_date.asc()))
-        return [
-            {
-                "id": certificate.id,
-                "name": certificate.name,
-                "certificate_type": certificate.certificate_type,
-                "reference_number": certificate.reference_number,
-                "entity_type": certificate.entity_type,
-                "entity_id": certificate.entity_id,
-                "entity_name": certificate.entity_name,
-                "issuing_body": certificate.issuing_body,
-                "issue_date": _to_iso(certificate.issue_date),
-                "expiry_date": _to_iso(certificate.expiry_date),
-                "reminder_days": certificate.reminder_days,
-                "reminder_sent": certificate.reminder_sent,
-                "status": certificate.status,
-                "is_critical": certificate.is_critical,
-                "primary_evidence_asset_id": certificate.primary_evidence_asset_id,
-                "document_url": certificate.document_url,
-                "notes": certificate.notes,
-            }
-            for certificate in result.scalars().all()
-        ]
+        return [_certificate_row(certificate) for certificate in result.scalars().all()]
+
+    async def create_certificate(
+        self,
+        *,
+        tenant_id: int,
+        name: str,
+        certificate_type: str,
+        entity_type: str,
+        issue_date: datetime,
+        expiry_date: datetime,
+        entity_id: Optional[str] = None,
+        entity_name: Optional[str] = None,
+        reference_number: Optional[str] = None,
+        issuing_body: Optional[str] = None,
+        reminder_days: int = 30,
+        is_critical: bool = False,
+        notes: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Register a certificate on the expiry register and return the stored row.
+
+        ``tenant_id`` is stamped here rather than accepted as data. Leaving it
+        NULL would not merely lose the scoping — every read in this service and in
+        ``AssuranceCertShelfService`` matches ``tenant_id IS NULL`` as well as the
+        caller's own tenant, so a NULL row is visible to every tenant on the
+        deployment.
+
+        ``status`` is deliberately left at the column default rather than derived
+        from ``expiry_date``. Nothing recomputes it afterwards, so a stored
+        verdict would be a snapshot that quietly goes stale; the readers that
+        matter (the Monitoring list, the shelf, the framework countdown) all grade
+        from ``expiry_date`` on every read.
+        """
+        certificate = Certificate(
+            tenant_id=tenant_id,
+            name=name,
+            certificate_type=certificate_type,
+            reference_number=reference_number,
+            entity_type=entity_type,
+            # An organisation-level accreditation has no row inside the tenant to
+            # point at, and the column is NOT NULL. The tenant is the entity in
+            # that case, so its id is the honest scoping key — not a placeholder,
+            # and not a join onto `companies`.
+            entity_id=entity_id if entity_id else str(tenant_id),
+            entity_name=entity_name,
+            issuing_body=issuing_body,
+            issue_date=_as_naive_utc(issue_date),
+            expiry_date=_as_naive_utc(expiry_date),
+            reminder_days=reminder_days,
+            is_critical=is_critical,
+            notes=notes,
+        )
+        self.db.add(certificate)
+        # Flush, not commit: the route owns the transaction boundary, matching the
+        # other writers in this service.
+        await self.db.flush()
+        # Explicit refresh so every column the response reports is loaded in one
+        # predictable SELECT. Reading an unpopulated attribute off a persistent
+        # object instead triggers a lazy load, which raises MissingGreenlet on an
+        # async session rather than returning the value.
+        await self.db.refresh(certificate)
+        return _certificate_row(certificate)
 
     async def get_expiring_certificates_summary(self, *, tenant_id: int) -> dict[str, Any]:
         now = datetime.now(timezone.utc)

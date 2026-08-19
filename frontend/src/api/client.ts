@@ -1771,11 +1771,18 @@ export const complianceAutomationApi = {
     name: string
     certificate_type: string
     entity_type: string
-    entity_id: string
+    /**
+     * Scoping key inside the tenant. Omitted for an organisation-level
+     * accreditation, where the server supplies the tenant's own id — the browser
+     * has no tenant id to send.
+     */
+    entity_id?: string
     entity_name?: string
+    reference_number?: string
     issuing_body?: string
     issue_date: string
     expiry_date: string
+    reminder_days?: number
     is_critical?: boolean
     notes?: string
   }) => api.post<unknown>('/api/v1/compliance-automation/certificates', data),

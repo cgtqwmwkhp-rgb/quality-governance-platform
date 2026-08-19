@@ -36,6 +36,7 @@ import {
   RefreshCw,
   Zap,
   BookOpen,
+  Plus,
 } from 'lucide-react'
 import {
   auditsApi,
@@ -50,6 +51,7 @@ import { Button } from '../components/ui/Button'
 import { IconButton } from '../components/ui/IconButton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { toast } from '../contexts/ToastContext'
+import { CertificateFormDialog } from './compliance/CertificateFormDialog'
 import {
   CERT_EXPIRY_WINDOW_DAYS,
   countOverdueMonitoringRuns,
@@ -147,6 +149,7 @@ export default function ComplianceAutomation() {
   const [standardsDigest, setStandardsDigest] = useState<StandardsDigest | null>(null)
   const [digestLoading, setDigestLoading] = useState(false)
   const [digestError, setDigestError] = useState<string | null>(null)
+  const [addCertOpen, setAddCertOpen] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -819,18 +822,24 @@ export default function ComplianceAutomation() {
           className="bg-card/50 border border-border rounded-xl overflow-hidden"
           data-testid="monitoring-certificates-tab"
         >
-          <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h3 className="font-medium text-foreground">
               {t('compliance.automation.cert_expiry_tracking', 'Certificate Expiry Tracking')}
             </h3>
-            <Link
-              to="/compliance-schedule?view=certificates"
-              className="flex items-center gap-2 px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm transition-colors"
-              data-testid="monitoring-certificates-open-shelf"
-            >
-              <Award className="w-4 h-4" />
-              {t('assurance.cert_shelf.open_shelf', 'Open certificate shelf')}
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={() => setAddCertOpen(true)} data-testid="monitoring-certificates-add">
+                <Plus className="w-4 h-4 mr-2" />
+                {t('compliance.automation.certificate_form.title', 'Add certificate')}
+              </Button>
+              <Link
+                to="/compliance-schedule?view=certificates"
+                className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-sm text-foreground hover:bg-accent transition-colors"
+                data-testid="monitoring-certificates-open-shelf"
+              >
+                <Award className="w-4 h-4" />
+                {t('assurance.cert_shelf.open_shelf', 'Open certificate shelf')}
+              </Link>
+            </div>
           </div>
           {certificates.length === 0 ? (
             <div data-testid="monitoring-certificates-empty">
@@ -841,6 +850,14 @@ export default function ComplianceAutomation() {
                   'compliance.automation.empty.certificates.description',
                   'Track training, equipment, and site certificates here once added. Empty means none on record — not sample data.',
                 )}
+                action={
+                  <Button
+                    onClick={() => setAddCertOpen(true)}
+                    data-testid="monitoring-certificates-empty-cta"
+                  >
+                    {t('compliance.automation.certificate_form.title', 'Add certificate')}
+                  </Button>
+                }
               />
             </div>
           ) : (
@@ -1507,6 +1524,17 @@ export default function ComplianceAutomation() {
           </div>
         </div>
       )}
+
+      <CertificateFormDialog
+        open={addCertOpen}
+        onOpenChange={setAddCertOpen}
+        onSaved={() => {
+          toast.success(
+            t('compliance.automation.certificate_form.saved', 'Certificate added to the register'),
+          )
+          void loadData()
+        }}
+      />
     </div>
   )
 }
