@@ -145,10 +145,47 @@ type BackendQuestion = {
   max_score?: number | null
   max_value?: number | null
   regulatory_reference?: string | null
+  clause_ids?: Array<number | string> | null
   assessor_guidance?: Record<string, unknown> | null
   assessor_guidance_json?: Record<string, unknown> | null
   criticality?: string | null
   conditional_logic?: ConditionalLogicRule[] | null
+}
+
+/**
+ * Split the free-text ISO Clause box into clause tokens for `clause_ids`.
+ *
+ * Tokens are passed through verbatim apart from trimming, because the standards
+ * matcher already normalises "7.2", "Clause 7.2" and "9001-8.5.1" itself. No
+ * framework prefix is added: the builder never learns which standard the
+ * template claims, and guessing one would paint a column nobody named.
+ */
+export function parseClauseTokens(isoClause: string | null | undefined): string[] {
+  const tokens: string[] = []
+  const seen = new Set<string>()
+  for (const part of (isoClause ?? '').split(/[,;\n]+/)) {
+    const token = part.trim()
+    if (!token) continue
+    const key = token.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    tokens.push(token)
+  }
+  return tokens
+}
+
+/** Token strings from a stored `clause_ids`; integer catalogue ids are not clause numbers. */
+export function clauseTokensFromApi(clauseIds: ReadonlyArray<number | string> | null | undefined): string[] {
+  return (clauseIds ?? []).filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+}
+
+function clauseCatalogIdsFromApi(
+  clauseIds: ReadonlyArray<number | string> | null | undefined,
+): number[] | undefined {
+  const ids = (clauseIds ?? []).filter(
+    (id): id is number => typeof id === 'number' && Number.isFinite(id),
+  )
+  return ids.length > 0 ? ids : undefined
 }
 
 function mapBackendQuestionType(q: BackendQuestion): QuestionType {
@@ -250,7 +287,11 @@ function mapApiQuestion(q: BackendQuestion, questionIdMap: Record<string, number
     riskLevel: q.risk_category as Question['riskLevel'],
     guidance: q.help_text,
     positiveAnswer: q.positive_answer || undefined,
-    isoClause: q.regulatory_reference || undefined,
+    // Fall back to the stored tokens so a question mapped by an import (which
+    // writes clause_ids but no regulatory_reference) does not read back blank
+    // and get its mapping cleared by the next save.
+    isoClause: q.regulatory_reference || clauseTokensFromApi(q.clause_ids).join(', ') || undefined,
+    clauseCatalogIds: clauseCatalogIdsFromApi(q.clause_ids),
     standardLinks,
     criticality: mapCriticalityFromApi(q.criticality),
     conditionalLogicRules: q.conditional_logic ?? undefined,
@@ -369,6 +410,10 @@ export function buildQuestionPayload(
   sectionId?: number,
 ): AuditQuestionCreate | AuditQuestionUpdate {
   const apiType = toApiQuestionType(q.type)
+  const clauseRefs: Array<number | string> = [
+    ...(q.clauseCatalogIds ?? []),
+    ...parseClauseTokens(q.isoClause),
+  ]
   const base = {
     question_text: q.text,
     question_type: apiType.questionType,
@@ -393,6 +438,13 @@ export function buildQuestionPayload(
     positive_answer: q.positiveAnswer || undefined,
     criticality: q.criticality,
     conditional_logic: q.conditionalLogicRules?.length ? q.conditionalLogicRules : null,
+    // The ISO Clause box is the only clause mapping in the builder, so it must
+    // reach both surfaces: regulatory_reference is what the builder reads back,
+    // clause_ids is what auto-created findings copy and the matrix joins on.
+    // Explicit null (not omission) so clearing the box clears the mapping
+    // instead of leaving the matrix painted from a deleted claim.
+    regulatory_reference: q.isoClause?.trim() || null,
+    clause_ids: clauseRefs.length > 0 ? clauseRefs : null,
     // Omit empty risk_category so update payloads don't send useless extras
     // under schemas that still forbid unknown/empty risk fields.
     ...(q.riskLevel ? { risk_category: q.riskLevel } : {}),

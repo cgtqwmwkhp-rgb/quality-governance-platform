@@ -577,7 +577,10 @@ export default function QuestionEditor({
                   type="text"
                   value={question.isoClause || ''}
                   onChange={(e) => onUpdate(question.id, { isoClause: e.target.value })}
-                  placeholder="e.g., 7.1.2"
+                  placeholder="e.g., 7.1.2 or 9001-8.5.1"
+                  // regulatory_reference is String(200); overflowing it would 422
+                  // the whole template save, not just this field.
+                  maxLength={200}
                   className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
                 />
               </div>
