@@ -158,7 +158,10 @@ async def _resolve_requested_owner(
             continue
         cleaned = raw.strip()
         if not cleaned:
-            continue
+            raise BadRequestError(
+                f"{label} cannot be empty or whitespace. "
+                "Omit the field to leave the action unassigned, or provide a valid email."
+            )
         key = cleaned.lower()
         if key in seen_emails:
             continue

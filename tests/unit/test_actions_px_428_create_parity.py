@@ -75,6 +75,24 @@ async def test_resolve_requested_owner_owner_email_only() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("email_field", ["assigned_to_email", "owner_email"])
+async def test_resolve_requested_owner_rejects_blank_email(email_field: str) -> None:
+    db = SimpleNamespace(execute=AsyncMock())
+    email_values = {"assigned_to_email": None, "owner_email": None}
+    email_values[email_field] = "   "
+
+    with pytest.raises(BadRequestError, match=rf"{email_field} cannot be empty or whitespace"):
+        await _resolve_requested_owner(
+            db,
+            owner_id=None,
+            tenant_id=1,
+            **email_values,
+        )
+
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_resolve_requested_owner_three_way_agree() -> None:
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.side_effect = [
