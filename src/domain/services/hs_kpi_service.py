@@ -19,6 +19,11 @@ LTIFR_NO_HOURS = "no_hours_recorded"
 LTIFR_NOT_CLASSIFIED = "no_lti_classification"
 
 
+def compliment_to_complaint_ratio(compliments: int, complaints: int) -> float | None:
+    """Compliment:Complaint board ratio. Same honesty as NM:Injury — never inf, never a fake 0."""
+    return round(compliments / complaints, 2) if complaints else None
+
+
 def pro_rated_hours(*, average_fte: float, hours_per_fte_year: float, period_start: date, period_end: date) -> float:
     """Return Excel-compatible annual-hours pro-rata, inclusive of both dates."""
     days = max(0, (period_end - period_start).days + 1)
@@ -189,6 +194,22 @@ class HsKpiService:
         # Injuries as the board denominator for NM:I (Excel SLT convention).
         near_miss_to_injury_ratio = round(near_misses / injuries, 2) if injuries else None
         hipo_near_miss_to_injury_ratio = round(hipo_near_misses / injuries, 2) if injuries else None
+        complaints = await self._count(
+            Complaint,
+            Complaint.received_date,
+            period.tenant_id,
+            start,
+            end,
+            Complaint.feedback_kind == "complaint",
+        )
+        compliments = await self._count(
+            Complaint,
+            Complaint.received_date,
+            period.tenant_id,
+            start,
+            end,
+            Complaint.feedback_kind == "compliment",
+        )
         ltis = incident_ltis + rta_ltis
         # Non-null days_lost (including 0) or an explicit is_lti=True counts as assessed.
         lti_assessed_injuries = await self._count(
@@ -223,14 +244,9 @@ class HsKpiService:
             "near_miss_to_injury_ratio": near_miss_to_injury_ratio,
             "hipo_near_miss_to_injury_ratio": hipo_near_miss_to_injury_ratio,
             "rtas": rtas,
-            "complaints": await self._count(
-                Complaint,
-                Complaint.received_date,
-                period.tenant_id,
-                start,
-                end,
-                Complaint.feedback_kind == "complaint",
-            ),
+            "complaints": complaints,
+            "compliments": compliments,
+            "compliment_to_complaint_ratio": compliment_to_complaint_ratio(compliments, complaints),
             "ltis": ltis,
             "riddor": riddor_incidents + riddor_rtas,
             "ltifr": ltifr,

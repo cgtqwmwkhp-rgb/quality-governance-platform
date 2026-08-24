@@ -11,10 +11,10 @@ from collections import defaultdict
 from datetime import datetime, time, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.complaint import Complaint
+from src.domain.models.complaint import Complaint, FeedbackKind
 from src.domain.models.incident import Incident
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision
@@ -26,7 +26,7 @@ from src.domain.models.safety_insight import (
     SafetyInsightThemeCase,
 )
 from src.domain.services.gemini_ai_service import GeminiAIService
-from src.domain.services.hs_kpi_service import HsKpiService
+from src.domain.services.hs_kpi_service import HsKpiService, compliment_to_complaint_ratio
 
 logger = logging.getLogger(__name__)
 
@@ -620,6 +620,29 @@ Cases:
                 theme["velocity"] = "stable"
         return themes
 
+    async def _count_feedback_kind(
+        self,
+        *,
+        tenant_id: int,
+        kind: FeedbackKind,
+        date_from: Optional[datetime],
+        date_to: Optional[datetime],
+    ) -> int:
+        """Register counts for the ratio — not the capped Insights corpus."""
+        query = (
+            select(func.count())
+            .select_from(Complaint)
+            .where(
+                Complaint.tenant_id == tenant_id,
+                Complaint.feedback_kind == kind,
+            )
+        )
+        if date_from is not None:
+            query = query.where(Complaint.received_date >= date_from)
+        if date_to is not None:
+            query = query.where(Complaint.received_date <= date_to)
+        return int((await self.db.execute(query)).scalar() or 0)
+
     # ------------------------------------------------------------------ ratios / synthesis / research
     async def compute_internal_benchmarks(
         self,
@@ -634,6 +657,20 @@ Cases:
         hipo = sum(1 for c in corpus if c["module"] == "near_miss" and c.get("is_hipo"))
         nm_ratio = round(near_misses / incidents, 2) if incidents else None
         hipo_ratio = round(hipo / incidents, 2) if incidents else None
+
+        compliments = await self._count_feedback_kind(
+            tenant_id=tenant_id,
+            kind=FeedbackKind.COMPLIMENT,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        complaints = await self._count_feedback_kind(
+            tenant_id=tenant_id,
+            kind=FeedbackKind.COMPLAINT,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        cc_ratio = compliment_to_complaint_ratio(compliments, complaints)
 
         # Period board ratios from HsKpiService for latest year overlap
         board: list[dict[str, Any]] = []
@@ -655,6 +692,9 @@ Cases:
                         "hipo_near_misses": hipo_nm,
                         "ltifr": period.get("ltifr"),
                         "afr": period.get("afr"),
+                        "complaints": int(period.get("complaints") or 0),
+                        "compliments": int(period.get("compliments") or 0),
+                        "compliment_to_complaint_ratio": period.get("compliment_to_complaint_ratio"),
                     }
                 )
         except Exception as exc:  # noqa: BLE001
@@ -667,6 +707,9 @@ Cases:
                 "hipo_near_misses": hipo,
                 "near_miss_to_incident_ratio": nm_ratio,
                 "hipo_near_miss_to_incident_ratio": hipo_ratio,
+                "complaints": complaints,
+                "compliments": compliments,
+                "compliment_to_complaint_ratio": cc_ratio,
                 "date_from": date_from.isoformat() if date_from else None,
                 "date_to": date_to.isoformat() if date_to else None,
             },

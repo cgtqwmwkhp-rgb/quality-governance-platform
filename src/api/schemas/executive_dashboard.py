@@ -81,6 +81,8 @@ class ComplaintSummary(BaseModel):
     register_closed: Optional[int] = None
     received_in_period_closed: Optional[int] = None
     avg_resolution_days: Optional[float] = None
+    compliments_in_period: int = 0
+    compliment_to_complaint_ratio: Optional[float] = None
 
 
 class RTASummary(BaseModel):

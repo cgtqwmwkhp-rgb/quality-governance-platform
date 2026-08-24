@@ -146,6 +146,13 @@ class SafetyInsightsExportService:
                 f"{_fmt_ratio(corpus_ratios.get('hipo_near_miss_to_incident_ratio'))} "
                 f"(HiPo NM={corpus_ratios.get('hipo_near_misses')})",
             )
+            _write_line(
+                pdf,
+                "Compliment to complaint: "
+                f"{_fmt_ratio(corpus_ratios.get('compliment_to_complaint_ratio'))} "
+                f"(compliments={corpus_ratios.get('compliments')}, "
+                f"complaints={corpus_ratios.get('complaints')})",
+            )
             board_years = ratios.get("hs_board_by_year") if isinstance(ratios, dict) else None
             if isinstance(board_years, list) and board_years:
                 pdf.set_font("Helvetica", "B", 9)
@@ -159,6 +166,7 @@ class SafetyInsightsExportService:
                         f"Year {row.get('reporting_year')}: "
                         f"NM/injury={_fmt_ratio(row.get('near_miss_to_injury_ratio'))}, "
                         f"HiPo/injury={_fmt_ratio(row.get('hipo_near_miss_to_injury_ratio'))}, "
+                        f"CMND/COMP={_fmt_ratio(row.get('compliment_to_complaint_ratio'))}, "
                         f"LTIFR={_fmt_ratio(row.get('ltifr'))}, AFR={_fmt_ratio(row.get('afr'))}",
                         height=4.5,
                     )

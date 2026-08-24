@@ -11,6 +11,9 @@ const metrics = [
   ['hipo_near_misses', 'HiPo near misses'],
   ['near_miss_to_injury_ratio', 'NM : Injury'],
   ['hipo_near_miss_to_injury_ratio', 'HiPo NM : Injury'],
+  ['complaints', 'Complaints'],
+  ['compliments', 'Compliments'],
+  ['compliment_to_complaint_ratio', 'Compliment : Complaint'],
   ['rtas', 'RTAs'],
   ['ltis', 'LTIs'],
   ['riddor', 'RIDDOR'],
@@ -118,14 +121,14 @@ export default function HsPerformance() {
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
         {metrics.map(([key, label]) => {
           const raw = latest?.[key]
-          const isRate = key === 'ltifr' || key === 'afr'
+          const isRatio = key.endsWith('_ratio') || key === 'ltifr' || key === 'afr'
           const reason =
             key === 'ltifr'
               ? latest?.ltifr_unavailable_reason
               : key === 'afr'
                 ? latest?.afr_unavailable_reason
                 : null
-          const display = isRate
+          const display = isRatio
             ? formatRateValue(raw as number | null | undefined)
             : raw ?? '—'
           return (
@@ -135,7 +138,7 @@ export default function HsPerformance() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-semibold">{display}</div>
-                {isRate && reason ? (
+                {reason ? (
                   <p className="mt-1 text-xs text-muted-foreground" data-testid={`hs-kpi-${key}-reason`}>
                     {RATE_UNAVAILABLE_TEXT[reason] ?? reason}
                   </p>
@@ -182,6 +185,9 @@ export default function HsPerformance() {
                 <th>Injuries</th>
                 <th>Near misses</th>
                 <th>HiPo</th>
+                <th>Complaints</th>
+                <th>Compliments</th>
+                <th>C:C</th>
                 <th>RTAs</th>
                 <th>LTIs</th>
                 <th>RIDDOR</th>
@@ -200,6 +206,11 @@ export default function HsPerformance() {
                   <td>{year.injuries}</td>
                   <td>{year.near_misses}</td>
                   <td>{year.hipo_near_misses ?? 0}</td>
+                  <td>{year.complaints}</td>
+                  <td>{year.compliments ?? 0}</td>
+                  <td data-testid={`hs-table-cc-${year.reporting_year}`}>
+                    {formatRateValue(year.compliment_to_complaint_ratio)}
+                  </td>
                   <td>{year.rtas}</td>
                   <td>{year.ltis}</td>
                   <td>{year.riddor}</td>
