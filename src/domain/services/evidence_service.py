@@ -8,6 +8,7 @@ import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from pydantic import BaseModel
@@ -46,9 +47,54 @@ ALLOWED_CONTENT_TYPES = {
     "audio/mpeg": "audio",
     "audio/wav": "audio",
     "audio/ogg": "audio",
+    # Email / text evidence. Browsers often send these as octet-stream — see resolver.
+    "message/rfc822": "document",
+    "application/vnd.ms-outlook": "document",
+    "text/plain": "document",
+    "text/csv": "document",
+    "text/rtf": "document",
+    "application/rtf": "document",
+}
+
+# Used when content_type is missing or application/octet-stream (typical for .eml / .msg).
+ALLOWED_EXTENSIONS: dict[str, str] = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".eml": "message/rfc822",
+    ".msg": "application/vnd.ms-outlook",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".rtf": "application/rtf",
 }
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
+
+
+def resolve_evidence_content_type(filename: str | None, declared: str | None) -> str | None:
+    """Return an allowlisted MIME type, or None if the file cannot be accepted."""
+    declared_type = (declared or "").split(";", 1)[0].strip().lower()
+    if declared_type in ALLOWED_CONTENT_TYPES:
+        return declared_type
+    mapped = ALLOWED_EXTENSIONS.get(Path(filename or "").suffix.lower())
+    if mapped and mapped in ALLOWED_CONTENT_TYPES:
+        return mapped
+    return None
 
 
 class EvidenceService:
@@ -143,8 +189,10 @@ class EvidenceService:
         await self.validate_source_exists(source_module, source_id)
         normalized_source_id = str(source_id)
 
-        if content_type not in ALLOWED_CONTENT_TYPES:
+        resolved_type = resolve_evidence_content_type(filename, content_type)
+        if resolved_type is None:
             raise ValueError(f"Content type {content_type} is not allowed")
+        content_type = resolved_type
 
         detected_asset_type = ALLOWED_CONTENT_TYPES.get(content_type, "other")
         final_asset_type = asset_type or detected_asset_type

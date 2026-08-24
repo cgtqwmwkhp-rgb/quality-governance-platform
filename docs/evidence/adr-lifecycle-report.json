@@ -1,6 +1,6 @@
 {
-  "generated": "2026-07-09",
-  "adr_count": 17,
+  "generated": "2026-08-24",
+  "adr_count": 25,
   "total_violations": 0,
   "adrs": [
     {
@@ -119,6 +119,62 @@
       "file": "ADR-0017-idempotency-key-strategy.md",
       "status": "Accepted",
       "date": "2026-04-07",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0018-admin-portal-form-dual-spine.md",
+      "status": "Accepted",
+      "date": "2026-07-15",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0019-production-hosting-isolation-and-region.md",
+      "status": "Proposed",
+      "date": "2026-07-25",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0020-compliance-schedule-occurrence-model.md",
+      "status": "Accepted",
+      "date": "2026-08-03",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0021-document-relationship-graph.md",
+      "status": "Accepted",
+      "date": "2026-08-07",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0022-job-axis-vocabulary.md",
+      "status": "Accepted",
+      "date": "2026-08-08",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0023-governance-library-reference-scheme.md",
+      "status": "Accepted",
+      "date": "2026-08-08",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0024-native-draft-editor-and-front-sheet.md",
+      "status": "Accepted \u2014 WJ-1-M1 mounted (Front Sheet live; native path awaits `content_format` in M2)",
+      "date": "2026-08-09",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0025-customer-feedback-kinds.md",
+      "status": "Accepted",
+      "date": "2026-08-24",
       "superseded_by": null,
       "violations": []
     }

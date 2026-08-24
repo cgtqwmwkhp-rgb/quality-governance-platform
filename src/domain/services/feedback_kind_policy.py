@@ -57,7 +57,7 @@ def kinds_write_enabled() -> bool:
 
 
 def assert_kind_may_be_written(kind: FeedbackKind) -> None:
-    """PR-5 flips the flag. Until then only complaint may be created."""
+    """Complaint is always writable. Other kinds require customer_feedback_kinds."""
     if kind is FeedbackKind.COMPLAINT:
         return
     if kinds_write_enabled():

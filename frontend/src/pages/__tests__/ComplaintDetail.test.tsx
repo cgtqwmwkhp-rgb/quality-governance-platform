@@ -437,7 +437,7 @@ describe('ComplaintDetail', () => {
     })
   })
 
-  it('renders the shared Photos tab wired to evidence-assets upload', async () => {
+  it('renders the shared Evidence tab wired to evidence-assets upload', async () => {
     renderPage()
 
     await waitFor(() => {

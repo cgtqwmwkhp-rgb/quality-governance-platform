@@ -23,9 +23,47 @@ import {
 
 /** Default upload constraints shared by every case that embeds the gallery. */
 export const DEFAULT_EVIDENCE_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
-export const DEFAULT_EVIDENCE_MIME_PREFIXES = ['image/', 'video/']
-export const DEFAULT_EVIDENCE_MIME_TYPES = ['application/pdf']
-export const DEFAULT_EVIDENCE_UPLOAD_ACCEPT = 'image/*,video/*,.pdf'
+export const DEFAULT_EVIDENCE_MIME_PREFIXES = ['image/', 'video/', 'audio/']
+export const DEFAULT_EVIDENCE_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'message/rfc822',
+  'application/vnd.ms-outlook',
+  'text/plain',
+  'text/csv',
+  'text/rtf',
+  'application/rtf',
+]
+export const DEFAULT_EVIDENCE_EXTENSIONS = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.heic',
+  '.heif',
+  '.mp4',
+  '.webm',
+  '.mov',
+  '.mp3',
+  '.wav',
+  '.ogg',
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.csv',
+  '.txt',
+  '.rtf',
+  '.eml',
+  '.msg',
+]
+export const DEFAULT_EVIDENCE_UPLOAD_ACCEPT =
+  'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.eml,.msg'
 
 type Props = {
   assets: EvidenceAsset[]
@@ -56,6 +94,7 @@ type Props = {
   maxFileSizeBytes?: number
   allowedMimePrefixes?: string[]
   allowedMimeTypes?: string[]
+  allowedExtensions?: string[]
 }
 
 type PreviewUrls = Record<number, string>
@@ -68,8 +107,21 @@ const assetLabel = (asset: EvidenceAsset) =>
 const assetNeedsInlinePreview = (asset: EvidenceAsset) =>
   canPreviewInApp(asset.content_type, asset.original_filename || asset.title)
 
-const isSupportedFileType = (file: File, prefixes: string[], types: string[]) =>
-  prefixes.some((prefix) => file.type.startsWith(prefix)) || types.includes(file.type)
+export function evidenceFileExtension(filename: string): string {
+  const i = filename.lastIndexOf('.')
+  return i >= 0 ? filename.slice(i).toLowerCase() : ''
+}
+
+export function isSupportedEvidenceFile(
+  file: File,
+  prefixes: string[] = DEFAULT_EVIDENCE_MIME_PREFIXES,
+  types: string[] = DEFAULT_EVIDENCE_MIME_TYPES,
+  extensions: string[] = DEFAULT_EVIDENCE_EXTENSIONS,
+): boolean {
+  if (prefixes.some((prefix) => file.type.startsWith(prefix))) return true
+  if (types.includes(file.type)) return true
+  return extensions.includes(evidenceFileExtension(file.name))
+}
 
 export function EvidenceGallery({
   assets,
@@ -90,6 +142,7 @@ export function EvidenceGallery({
   maxFileSizeBytes = DEFAULT_EVIDENCE_MAX_FILE_SIZE_BYTES,
   allowedMimePrefixes = DEFAULT_EVIDENCE_MIME_PREFIXES,
   allowedMimeTypes = DEFAULT_EVIDENCE_MIME_TYPES,
+  allowedExtensions = DEFAULT_EVIDENCE_EXTENSIONS,
 }: Props) {
   const [previewUrls, setPreviewUrls] = useState<PreviewUrls>({})
   const [previewFailures, setPreviewFailures] = useState<Set<number>>(new Set())
@@ -229,7 +282,7 @@ export function EvidenceGallery({
     const uploadedAssetIds: number[] = []
     try {
       for (const file of files) {
-        if (!isSupportedFileType(file, allowedMimePrefixes, allowedMimeTypes)) {
+        if (!isSupportedEvidenceFile(file, allowedMimePrefixes, allowedMimeTypes, allowedExtensions)) {
           failures.push(`${file.name} is not a supported file type.`)
           continue
         }
@@ -282,7 +335,8 @@ export function EvidenceGallery({
           {uploading ? 'Uploading…' : uploadLabel}
         </Button>
         <p className="text-xs text-muted-foreground">
-          Images, video, or PDF. Max {Math.round(maxFileSizeBytes / (1024 * 1024))}MB per file.
+          Images, video, audio, documents, or email (.eml, .msg). Max{' '}
+          {Math.round(maxFileSizeBytes / (1024 * 1024))}MB per file.
         </p>
       </div>
       {uploadError ? <p className="text-sm text-destructive" role="alert">{uploadError}</p> : null}

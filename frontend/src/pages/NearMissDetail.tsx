@@ -649,7 +649,7 @@ export default function NearMissDetail() {
           </TabsTrigger>
           <TabsTrigger value="photos" data-testid="near-miss-photos-tab">
             <Camera className="w-4 h-4 mr-1.5" />
-            {t('near_misses.tabs.photos', 'Photos')}
+            {t('near_misses.tabs.photos', 'Evidence')}
           </TabsTrigger>
           <TabsTrigger value="running-sheet">{t('common.running_sheet', 'Running Sheet')}</TabsTrigger>
           <TabsTrigger value="actions" data-testid="near-miss-actions-tab">

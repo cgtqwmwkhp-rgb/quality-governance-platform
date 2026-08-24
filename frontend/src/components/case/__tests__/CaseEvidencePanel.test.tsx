@@ -81,7 +81,9 @@ describe('CaseEvidencePanel', () => {
 
     expect(await screen.findByText('No evidence uploaded yet')).toBeInTheDocument()
     expect(
-      screen.getByText('Upload photos, videos, or documents to attach evidence to this case.'),
+      screen.getByText(
+        'Upload photos, videos, documents, or email files (.eml, .msg) to attach evidence to this case.',
+      ),
     ).toBeInTheDocument()
     expect(screen.queryByText('Upload evidence')).not.toBeInTheDocument()
   })

@@ -461,7 +461,10 @@ class TestCheckComplainantEmailAccess:
 
 class TestFeedbackKindWritePath:
     @pytest.mark.asyncio
-    async def test_flag_off_rejects_non_complaint_kind(self):
+    async def test_flag_off_rejects_non_complaint_kind(self, monkeypatch):
+        from src.core.config import settings
+
+        monkeypatch.setattr(settings, "customer_feedback_kinds_enabled", False)
         db = AsyncMock()
         data = MagicMock()
         data.model_dump.return_value = {

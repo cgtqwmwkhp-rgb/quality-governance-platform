@@ -145,7 +145,7 @@ export default function Layout({
         { path: '/incidents', icon: AlertTriangle, label: t('nav.incidents') },
         { path: '/near-misses', icon: AlertTriangle, label: t('nav.near_misses') },
         { path: '/rtas', icon: Car, label: t('nav.rtas') },
-        { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
+        { path: '/complaints', icon: MessageSquare, label: t('nav.complaints', 'Feedback') },
         { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
       ],
     },
