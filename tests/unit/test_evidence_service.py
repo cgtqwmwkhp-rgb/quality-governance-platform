@@ -30,6 +30,28 @@ class TestConstants:
 
     def test_document_types_map_correctly(self):
         assert ALLOWED_CONTENT_TYPES["application/pdf"] == "pdf"
+        assert ALLOWED_CONTENT_TYPES["message/rfc822"] == "document"
+        assert ALLOWED_CONTENT_TYPES["application/vnd.ms-outlook"] == "document"
+
+
+def test_resolve_eml_from_declared_mime():
+    from src.domain.services.evidence_service import resolve_evidence_content_type
+
+    assert resolve_evidence_content_type("mail.eml", "message/rfc822") == "message/rfc822"
+
+
+def test_resolve_eml_from_extension_when_octet_stream():
+    from src.domain.services.evidence_service import resolve_evidence_content_type
+
+    assert resolve_evidence_content_type("witness.eml", "application/octet-stream") == "message/rfc822"
+    assert resolve_evidence_content_type("outlook.msg", "") == "application/vnd.ms-outlook"
+
+
+def test_resolve_rejects_executables():
+    from src.domain.services.evidence_service import resolve_evidence_content_type
+
+    assert resolve_evidence_content_type("malware.exe", "application/x-msdownload") is None
+    assert resolve_evidence_content_type("malware.exe", "application/octet-stream") is None
 
 
 # ---------------------------------------------------------------------------

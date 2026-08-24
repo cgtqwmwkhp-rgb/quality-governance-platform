@@ -39,6 +39,7 @@ import {
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { EvidenceAssetPreviewDialog } from '../components/EvidenceAssetPreviewDialog'
+import { isSupportedEvidenceFile } from '../components/EvidenceGallery'
 import { Entity360Strip } from '../components/graph/Entity360Strip'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath, parseActionDetailId } from './actionLinks'
@@ -49,9 +50,9 @@ const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 /** Matches `ActionOwnerNoteCreate.body` max_length on the API. */
 const MAX_NOTE_BODY_CHARS = 16000
 
-/** Matches backend allowlist in `src/api/routes/evidence_assets.py` (subset for picker UX). */
+/** Matches backend allowlist in `src/domain/services/evidence_service.py` (picker UX). */
 const EVIDENCE_FILE_INPUT_ACCEPT =
-  'image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,audio/mpeg,audio/wav,audio/ogg'
+  'image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.eml,.msg,audio/mpeg,audio/wav,audio/ogg'
 
 function formatRelativeTime(iso: string): string {
   const t = new Date(iso).getTime()
@@ -75,26 +76,6 @@ function formatFileSize(bytes: number | undefined): string {
   const mb = kb / 1024
   return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`
 }
-
-const SUPPORTED_EVIDENCE_MIME_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-  'video/mp4',
-  'video/webm',
-  'video/quicktime',
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'audio/mpeg',
-  'audio/wav',
-  'audio/ogg',
-]
 
 /** Bare numeric /actions/:id deep links (UAT) resolve as capa:{id}. */
 function resolveActionLookupKey(raw: string): string {
@@ -325,13 +306,9 @@ export default function ActionDetail() {
         if (files.length > 1) {
           setInlineMessage({ tone: 'success', text: `Uploading file ${index} of ${files.length}…` })
         }
-        const okMime =
-          SUPPORTED_EVIDENCE_MIME_TYPES.includes(file.type) ||
-          file.type.startsWith('image/') ||
-          file.type.startsWith('video/')
-        if (!okMime) {
+        if (!isSupportedEvidenceFile(file)) {
           throw new Error(
-            `${file.name} is not a supported type. Use images, PDF, Office documents, video, or audio listed in the evidence module.`,
+            `${file.name} is not a supported type. Use images, video, audio, documents, or email (.eml, .msg).`,
           )
         }
         if (file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {

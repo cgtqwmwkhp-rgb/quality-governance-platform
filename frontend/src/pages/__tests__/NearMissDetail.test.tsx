@@ -235,7 +235,7 @@ describe('NearMissDetail investigation → CAPA honesty', () => {
     })
   })
 
-  it('renders the shared Photos tab wired to evidence-assets upload', async () => {
+  it('renders the shared Evidence tab wired to evidence-assets upload', async () => {
     ;(client.nearMissesApi.listInvestigations as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: { items: [], total: 0 },
     })

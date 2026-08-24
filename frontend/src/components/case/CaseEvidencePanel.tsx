@@ -128,7 +128,7 @@ export function CaseEvidencePanel({
             emptyDescription ??
             t(
               'case.evidence.empty_description',
-              'Upload photos, videos, or documents to attach evidence to this case.',
+              'Upload photos, videos, documents, or email files (.eml, .msg) to attach evidence to this case.',
             )
           }
           onDelete={canDelete ? handleDelete : undefined}

@@ -1084,7 +1084,7 @@ export default function ComplaintDetail() {
           </TabsTrigger>
           <TabsTrigger value="photos" data-testid="complaint-photos-tab">
             <Camera className="w-4 h-4 mr-1.5" />
-            {t('complaints.tabs.photos', 'Photos')}
+            {t('complaints.tabs.photos', 'Evidence')}
           </TabsTrigger>
           <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
           <TabsTrigger value="actions" data-testid="complaint-actions-tab">
