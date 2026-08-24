@@ -65,6 +65,9 @@ const REPORT_TYPE_ALIASES: Record<string, ReportType> = {
   near_miss: 'near_miss',
   'near miss': 'near_miss',
   complaint: 'complaint',
+  compliment: 'complaint',
+  suggestion: 'complaint',
+  feedback: 'complaint',
   rta: 'rta',
   'road traffic collision': 'rta',
 }

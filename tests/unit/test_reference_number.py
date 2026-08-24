@@ -222,7 +222,7 @@ class TestPortalMint:
         from src.api.routes.employee_portal import mint_portal_reference
 
         db = AsyncMock()
-        for prefix in ("INC", "COMP", "RTA", "NM"):
+        for prefix in ("INC", "COMP", "CMND", "SUGG", "FDBK", "RTA", "NM"):
             with patch.object(ReferenceNumberService, "_next_sequence", new_callable=AsyncMock, return_value=1):
                 reference = await mint_portal_reference(db, prefix)
             assert reference == f"{prefix}-{datetime.now().year}-0001"
