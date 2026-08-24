@@ -348,7 +348,8 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         required_permission="complaint:create",
         reason=(
             "Gates the staff New Feedback kind selector and POST/PATCH of "
-            "feedback_kind other than complaint. Default off until FB-PR5. The API "
+            "feedback_kind other than complaint. Default on (FB-PR5); "
+            "CUSTOMER_FEEDBACK_KINDS_ENABLED=false still subtracts. The API "
             "422s other kinds when this is off, so the flag discloses only that this "
             "deployment opted the write path in."
         ),
