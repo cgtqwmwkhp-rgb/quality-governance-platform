@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { cn } from '../helpers/utils'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 
 // Report type options
 const REPORT_TYPES = [
@@ -61,10 +62,32 @@ export default function PortalReport() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [typeFilter, setTypeFilter] = useState('all')
+  const kindsEnabled = useFeatureFlag('customer_feedback_kinds')
+
+  const reportTypes = useMemo(() => {
+    return REPORT_TYPES.map((type) => {
+      if (type.id !== 'complaint') return type
+      if (!kindsEnabled) {
+        return {
+          ...type,
+          title: t('portal.complaint_label'),
+          subtitle: t('portal.complaint_sub'),
+          description: t('portal.complaint_desc'),
+        }
+      }
+      return {
+        ...type,
+        path: '/portal/report/feedback',
+        title: t('portal.feedback_label'),
+        subtitle: t('portal.feedback_sub'),
+        description: t('portal.feedback_desc'),
+      }
+    })
+  }, [kindsEnabled, t])
 
   const visibleTypes = useMemo(
-    () => (typeFilter === 'all' ? REPORT_TYPES : REPORT_TYPES.filter((type) => type.id === typeFilter)),
-    [typeFilter],
+    () => (typeFilter === 'all' ? reportTypes : reportTypes.filter((type) => type.id === typeFilter)),
+    [typeFilter, reportTypes],
   )
 
   return (
@@ -104,7 +127,7 @@ export default function PortalReport() {
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
           >
             <option value="all">All report types</option>
-            {REPORT_TYPES.map((type) => (
+            {reportTypes.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.title}
               </option>
