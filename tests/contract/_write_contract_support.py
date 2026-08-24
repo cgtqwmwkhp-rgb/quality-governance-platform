@@ -297,9 +297,7 @@ SERVER_OWNED_FIELDS = frozenset(
         "created_by_email",
         "reference_number",
         "version",
-        # FB-PR1: feedback_kind is server-defaulted to complaint until the
-        # write path (PR-2). feedback_polarity is always derived from kind.
-        "feedback_kind",
+        # Derived from feedback_kind. Kind itself is writable on Create/Update (FB-PR2).
         "feedback_polarity",
     }
 )
@@ -564,6 +562,18 @@ LOOKUP_BINDINGS: tuple[LookupBinding, ...] = (
         request_model="ComplaintUpdate",
         field="complaint_type",
         ui_evidence="frontend/src/pages/ComplaintDetail.tsx: lookupsApi.list('complaint_types', true)",
+    ),
+    LookupBinding(
+        category="feedback_kinds",
+        request_model="ComplaintCreate",
+        field="feedback_kind",
+        ui_evidence="frontend/src/pages/Complaints.tsx: lookupsApi.list('feedback_kinds', true)",
+    ),
+    LookupBinding(
+        category="feedback_kinds",
+        request_model="ComplaintUpdate",
+        field="feedback_kind",
+        ui_evidence="frontend/src/pages/ComplaintDetail.tsx: lookupsApi.list('feedback_kinds', true)",
     ),
     # severity_levels is merged into the *priority* select on complaints, not a
     # field called "severity" -- name-based matching would have missed this.

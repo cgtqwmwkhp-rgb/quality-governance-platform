@@ -40,6 +40,8 @@ export interface CaseCloseSummaryDialogProps {
   /** Where "Go to actions" should take the operator, when the page has a tab for it. */
   onOpenActions?: () => void
   testIdPrefix?: string
+  /** When false, Confirm does not wait for lessons text (compliment/general). */
+  requireLessons?: boolean
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
@@ -72,6 +74,7 @@ export function CaseCloseSummaryDialog({
   onOpenChange,
   onOpenActions,
   testIdPrefix = 'case',
+  requireLessons = true,
 }: CaseCloseSummaryDialogProps) {
   const { t } = useTranslation()
   const [validation, setValidation] = useState<CaseClosureValidation | null>(null)
@@ -120,7 +123,11 @@ export function CaseCloseSummaryDialog({
   const transitionAllowed = validation?.transition_allowed !== false
   const nextStatuses = validation?.allowed_next_statuses ?? []
   const canConfirm =
-    Boolean(validation) && transitionAllowed && !blockedByOpenWork && lessonsPresent && !submitting
+    Boolean(validation) &&
+    transitionAllowed &&
+    !blockedByOpenWork &&
+    (!requireLessons || lessonsPresent) &&
+    !submitting
 
   const handleConfirm = async () => {
     if (!canConfirm) return

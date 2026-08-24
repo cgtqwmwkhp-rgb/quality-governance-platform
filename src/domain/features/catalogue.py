@@ -340,6 +340,19 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
             "not an independent one: on with the master off means no inference at all."
         ),
     ),
+    ClientFeature(
+        ui_key="customer_feedback_kinds",
+        settings_attr="customer_feedback_kinds_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="complaint:create",
+        reason=(
+            "Gates the staff New Feedback kind selector and POST/PATCH of "
+            "feedback_kind other than complaint. Default off until FB-PR5. The API "
+            "422s other kinds when this is off, so the flag discloses only that this "
+            "deployment opted the write path in."
+        ),
+    ),
 )
 
 #: Lookup by the name the frontend uses.

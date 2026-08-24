@@ -98,9 +98,16 @@ import {
   CaseCapaHeaderButton,
 } from '../components/case/CaseCapaActionsPanel'
 import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
-import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
+import { isCaseClosed } from '../api/caseClosureClient'
 import { CaseEvidencePanel } from '../components/case/CaseEvidencePanel'
 import { CaseWitnessesPanel, type CaseWitnessesValue } from '../components/case/CaseWitnessesPanel'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import {
+  FEEDBACK_KIND_OPTIONS,
+  lessonsRequiredForKind,
+  reopenStatusForKind,
+  statusOptionsForKind,
+} from '../helpers/feedbackKind'
 
 type ComplaintSlaFields = Pick<
   Complaint,
@@ -214,6 +221,7 @@ const COMPLAINT_TYPE_VALUES = [
 
 export default function ComplaintDetail() {
   const { t } = useTranslation()
+  const kindsEnabled = useFeatureFlag('customer_feedback_kinds')
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -247,6 +255,7 @@ export default function ComplaintDetail() {
   ]
   const [typeOptions, setTypeOptions] =
     useState<Array<{ value: string; label: string }>>(defaultTypeOptions)
+  const [kindOptions, setKindOptions] = useState(FEEDBACK_KIND_OPTIONS)
   const [priorityOptions, setPriorityOptions] = useState(defaultPriorityOptions)
 
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
@@ -305,10 +314,12 @@ export default function ComplaintDetail() {
     void Promise.all([
       lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
       lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
-    ]).then(([typesRes, severityRes]) => {
+      lookupsApi.list('feedback_kinds', true).catch(() => ({ items: [], total: 0 })),
+    ]).then(([typesRes, severityRes, kindRes]) => {
       if (!cancelled) {
         setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
         setPriorityOptions(mergeLookupSelectOptions(defaultPriorityOptions, severityRes.items))
+        setKindOptions(mergeLookupSelectOptions([...FEEDBACK_KIND_OPTIONS], kindRes.items))
       }
     })
     return () => {
@@ -327,6 +338,7 @@ export default function ComplaintDetail() {
         title: response.data.title,
         description: response.data.description,
         complaint_type: response.data.complaint_type,
+        feedback_kind: response.data.feedback_kind || 'complaint',
         priority: response.data.priority,
         status: response.data.status,
         complainant_name: response.data.complainant_name,
@@ -409,6 +421,9 @@ export default function ComplaintDetail() {
       // Omit unchanged status so the server does not reject a no-op transition
       // (ACKNOWLEDGED → ACKNOWLEDGED) and discard field edits (PX-206).
       const payload: ComplaintUpdate = { ...editForm }
+      if (!kindsEnabled) {
+        delete payload.feedback_kind
+      }
       if (payload.status === complaint.status || closingFromEdit) {
         delete payload.status
       }
@@ -447,7 +462,7 @@ export default function ComplaintDetail() {
     if (!complaint) return
     try {
       const response = await complaintsApi.update(complaint.id, {
-        status: CASE_REOPEN_STATUS.complaint,
+        status: reopenStatusForKind(complaint.feedback_kind),
       })
       setComplaint(response.data)
       toast.success(t('caseClosure.reopened', 'Case reopened'))
@@ -463,6 +478,7 @@ export default function ComplaintDetail() {
         title: complaint.title,
         description: complaint.description,
         complaint_type: complaint.complaint_type,
+        feedback_kind: complaint.feedback_kind || 'complaint',
         priority: complaint.priority,
         status: complaint.status,
         complainant_name: complaint.complainant_name,
@@ -976,6 +992,7 @@ export default function ComplaintDetail() {
                 closeDialogOpen={showCloseDialog}
                 onCloseDialogOpenChange={setShowCloseDialog}
                 testIdPrefix="complaint"
+                requireLessons={lessonsRequiredForKind(complaint.feedback_kind)}
               />
               <Button
                 variant="outline"
@@ -995,6 +1012,7 @@ export default function ComplaintDetail() {
                 onOpenCapa={() => navigate(getCapaLink('complaint', complaint.id))}
                 testIdPrefix="complaint"
               />
+              {complaint.feedback_kind === 'compliment' ? null : (
               <Button
                 data-testid="complaint-start-investigation"
                 onClick={() => setShowInvestigationModal(true)}
@@ -1002,6 +1020,7 @@ export default function ComplaintDetail() {
                 <FlaskConical className="w-4 h-4 mr-2" />
                 {t('complaints.detail.start_investigation')}
               </Button>
+              )}
             </>
           )}
         </div>
@@ -1146,6 +1165,36 @@ export default function ComplaintDetail() {
                             </SelectContent>
                           </Select>
                         </div>
+                        {kindsEnabled ? (
+                          <div className="col-span-2">
+                            <label
+                              htmlFor="complaintdetail-feedback-kind"
+                              className="text-sm font-medium text-muted-foreground"
+                            >
+                              {t('complaints.form.feedback_kind', 'Feedback kind')}
+                            </label>
+                            <Select
+                              value={editForm.feedback_kind || complaint.feedback_kind || 'complaint'}
+                              onValueChange={(value) =>
+                                setEditForm({
+                                  ...editForm,
+                                  feedback_kind: value as ComplaintUpdate['feedback_kind'],
+                                })
+                              }
+                            >
+                              <SelectTrigger id="complaintdetail-feedback-kind" className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {kindOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
                         <div>
                           <label
                             htmlFor="complaintdetail-field-3"
@@ -1184,30 +1233,13 @@ export default function ComplaintDetail() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="received">
-                                {t('complaints.status.received')}
-                              </SelectItem>
-                              <SelectItem value="acknowledged">
-                                {t('complaints.status.acknowledged')}
-                              </SelectItem>
-                              <SelectItem value="under_investigation">
-                                {t('complaints.status.under_investigation')}
-                              </SelectItem>
-                              <SelectItem value="pending_response">
-                                {t('complaints.status.pending_response')}
-                              </SelectItem>
-                              <SelectItem value="awaiting_customer">
-                                {t('complaints.status.awaiting_customer')}
-                              </SelectItem>
-                              <SelectItem value="escalated">
-                                {t('complaints.status.escalated')}
-                              </SelectItem>
-                              <SelectItem value="resolved">
-                                {t('complaints.status.resolved')}
-                              </SelectItem>
-                              <SelectItem value="closed">
-                                {t('complaints.status.closed')}
-                              </SelectItem>
+                              {statusOptionsForKind(
+                                editForm.feedback_kind || complaint.feedback_kind,
+                              ).map((code) => (
+                                <SelectItem key={code} value={code}>
+                                  {t(`complaints.status.${code}`)}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>

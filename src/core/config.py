@@ -348,6 +348,9 @@ class Settings(BaseSettings):
     # PR3b: grounded register answers. Default off; ANDed with ai_copilot_enabled at the gate.
     ai_copilot_inference_enabled: bool = False
 
+    # FB-PR2: staff/API write of compliment/suggestion/general. Default off until PR-5.
+    customer_feedback_kinds_enabled: bool = False
+
     # Compliance Schedule (Wave 0). Closed until explicitly opted in; kill switch
     # can only subtract (see compliance_schedule_kill_switch).
     compliance_schedule_enabled: bool = False

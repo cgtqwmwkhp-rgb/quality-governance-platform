@@ -263,7 +263,7 @@ def resolve_case_tenant_id(case: Any) -> int:
     return int(tenant_id)
 
 
-def check_close_transition(case_type: str, status: Any) -> CaseTransitionCheck:
+def check_close_transition(case_type: str, status: Any, *, case: Any = None) -> CaseTransitionCheck:
     """Ask this register whether ``status`` may move straight to closed.
 
     The verdict comes from the very function the update path calls before it
@@ -275,8 +275,26 @@ def check_close_transition(case_type: str, status: Any) -> CaseTransitionCheck:
     An unrecognised status label is left to the register's own judgement: each
     validator waves legacy labels through, and the gate must agree with that
     rather than invent a stricter rule of its own.
+
+    Complaints pass ``case`` so compliment/general close from acknowledged; the
+    complaint map itself still forbids that skip of ISO 10002 investigation.
     """
     config = _config(case_type)
+    if case_type == CASE_TYPE_COMPLAINT:
+        from src.domain.services.complaint_service import validate_complaint_transition
+        from src.domain.services.feedback_kind_policy import parse_feedback_kind
+
+        kind = parse_feedback_kind(getattr(case, "feedback_kind", None) if case is not None else None)
+        try:
+            validate_complaint_transition(status_value(status), config.closed_status, kind=kind)
+        except StateTransitionError as exc:
+            allowed = exc.details.get("allowed") if isinstance(exc.details, dict) else None
+            return CaseTransitionCheck(
+                allowed=False,
+                allowed_next_statuses=[str(item) for item in (allowed or [])],
+            )
+        return CaseTransitionCheck(allowed=True)
+
     validator = _TRANSITION_VALIDATOR_LOADERS[case_type]()
     try:
         validator(status_value(status), config.closed_status)
@@ -544,7 +562,16 @@ async def evaluate_case_closure(
     effective_lessons = getattr(case, "lessons_learnt", None) if lessons_learnt is _UNSET else lessons_learnt
     lessons_present = lessons_are_present(effective_lessons)
 
-    transition = check_close_transition(case_type, getattr(case, "status", ""))
+    transition = check_close_transition(case_type, getattr(case, "status", ""), case=case)
+
+    from src.domain.services.feedback_kind_policy import lessons_required_for, parse_feedback_kind
+
+    kind = (
+        parse_feedback_kind(getattr(case, "feedback_kind", None))
+        if case_type == CASE_TYPE_COMPLAINT
+        else None
+    )
+    require_lessons = True if kind is None else lessons_required_for(kind)
 
     open_work, tally = await fetch_open_work_for_case(
         db,
@@ -558,7 +585,7 @@ async def evaluate_case_closure(
     reasons: list[str] = []
     if not transition.allowed:
         reasons.append(CLOSURE_REASON_INVALID_STATE_TRANSITION)
-    if not lessons_present:
+    if require_lessons and not lessons_present:
         reasons.append(CLOSURE_REASON_MISSING_LESSONS_LEARNT)
     if open_work:
         reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)

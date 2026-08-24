@@ -386,13 +386,12 @@ class TestDiscoveryIsNotVacuous:
         """
         from src.domain.services.lookup_defaults_seed_data import SEED_CATEGORIES
 
-        # feedback_kinds is seeded in FB-PR1 so the admin list exists, but no
-        # write field binds it until PR-2 (ComplaintCreate.feedback_kind).
+        # workforce_roles / medical_assistance / emergency_services are admin
+        # catalogues with no write field on a case create schema.
         unbound_by_design = {
             "workforce_roles",
             "medical_assistance",
             "emergency_services",
-            "feedback_kinds",
         }
         bound = {b.category for b in LOOKUP_BINDINGS}
         unaccounted = sorted(set(SEED_CATEGORIES) - bound - unbound_by_design)
