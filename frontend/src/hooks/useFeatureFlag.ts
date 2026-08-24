@@ -58,6 +58,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   ai_copilot: false,
   ai_copilot_inference: false,
 
+  // FB-PR2: staff kind selector. Mirrors CUSTOMER_FEEDBACK_KINDS_ENABLED. Off until PR-5.
+  customer_feedback_kinds: false,
+
   // Other feature flags can be added here
   portal_offline_mode: false,
   admin_ai_copilot: false,

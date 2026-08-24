@@ -40,7 +40,7 @@ export interface Complaint {
   title: string
   description: string
   complaint_type: string
-  /** Discriminator. PR-1 is read-only; every row is `complaint` until PR-2. */
+  /** Discriminator. Writable when customer_feedback_kinds is on (FB-PR2). */
   feedback_kind?: 'complaint' | 'compliment' | 'suggestion' | 'general'
   /** Derived from `feedback_kind`. Never stored. */
   feedback_polarity?: 'negative' | 'positive' | 'neutral'
@@ -122,12 +122,14 @@ export interface ComplaintCreate {
   response_sla_hours?: number | null
   response_due_at?: string | null
   reporter_submission?: Record<string, unknown>
+  feedback_kind?: 'complaint' | 'compliment' | 'suggestion' | 'general'
 }
 
 export interface ComplaintUpdate {
   title?: string
   description?: string
   complaint_type?: string
+  feedback_kind?: 'complaint' | 'compliment' | 'suggestion' | 'general'
   priority?: string
   status?: string
   complainant_name?: string
@@ -156,12 +158,17 @@ export interface ComplaintUpdate {
 
 export function createComplaintsApi(api: AxiosInstance) {
   return {
-    list: (page = 1, pageSize = 10, options?: { owner?: 'unassigned' }) => {
+    list: (
+      page = 1,
+      pageSize = 10,
+      options?: { owner?: 'unassigned'; feedback_kind?: 'complaint' | 'all' },
+    ) => {
       const params = new URLSearchParams({
         page: String(page),
         page_size: String(pageSize),
       })
       if (options?.owner) params.set('owner', options.owner)
+      if (options?.feedback_kind) params.set('feedback_kind', options.feedback_kind)
       return api.get<PaginatedResponse<Complaint>>(`/api/v1/complaints/?${params.toString()}`)
     },
     create: (data: ComplaintCreate) => api.post<Complaint>('/api/v1/complaints/', data),

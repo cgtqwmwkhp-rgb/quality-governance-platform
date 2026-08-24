@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.domain.exceptions import StateTransitionError
+from src.domain.exceptions import StateTransitionError, ValidationError
 from src.domain.models.complaint import ComplaintStatus
 from src.domain.services.complaint_service import (
     COMPLAINT_TRANSITIONS,
@@ -457,3 +457,70 @@ class TestCheckComplainantEmailAccess:
     def test_no_current_user_email_denies(self):
         svc = _make_service()
         assert svc.check_complainant_email_access("any@x.com", None, False, False) is False
+
+
+class TestFeedbackKindWritePath:
+    @pytest.mark.asyncio
+    async def test_flag_off_rejects_non_complaint_kind(self):
+        db = AsyncMock()
+        data = MagicMock()
+        data.model_dump.return_value = {
+            "title": "Well done",
+            "external_ref": None,
+            "feedback_kind": "compliment",
+            "subject_name": "Alex Fitter",
+        }
+        svc = _make_service(db)
+        with pytest.raises(ValidationError, match="customer_feedback_kinds"):
+            await svc.create_complaint(complaint_data=data, user_id=5, tenant_id=10)
+
+    @pytest.mark.asyncio
+    async def test_compliment_requires_a_named_subject_when_flag_on(self, monkeypatch):
+        from src.core.config import settings
+
+        monkeypatch.setattr(settings, "customer_feedback_kinds_enabled", True)
+        db = AsyncMock()
+        data = MagicMock()
+        data.model_dump.return_value = {
+            "title": "Well done",
+            "external_ref": None,
+            "feedback_kind": "compliment",
+            "subject_name": None,
+            "subject_user_id": None,
+        }
+        svc = _make_service(db)
+        with pytest.raises(ValidationError, match="staff member"):
+            await svc.create_complaint(complaint_data=data, user_id=5, tenant_id=10)
+
+    @pytest.mark.asyncio
+    @patch("src.domain.services.complaint_service.track_metric")
+    @patch("src.domain.services.complaint_service.invalidate_tenant_cache", new_callable=AsyncMock)
+    @patch("src.domain.services.complaint_service.record_audit_event", new_callable=AsyncMock)
+    @patch("src.domain.services.complaint_service.ReferenceNumberService")
+    async def test_compliment_mints_cmnd_prefix_when_flag_on(
+        self, mock_ref, mock_audit, mock_cache, mock_metric, monkeypatch
+    ):
+        from src.core.config import settings
+
+        monkeypatch.setattr(settings, "customer_feedback_kinds_enabled", True)
+        mock_ref.generate = AsyncMock(return_value="CMND-2026-0001")
+        db = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = None
+        db.execute.return_value = result_mock
+        data = MagicMock()
+        data.model_dump.return_value = {
+            "title": "Well done",
+            "external_ref": None,
+            "feedback_kind": "compliment",
+            "subject_name": "Alex Fitter",
+        }
+        svc = _make_service(db)
+        await svc.create_complaint(complaint_data=data, user_id=5, tenant_id=10)
+        assert mock_ref.generate.await_args.args[1] == "compliment"
+        mock_metric.assert_called_once_with("complaints.created")
+
+    def test_complaint_still_cannot_skip_investigation_to_close(self):
+        with pytest.raises(StateTransitionError):
+            validate_complaint_transition("acknowledged", "closed")
+        validate_complaint_transition("acknowledged", "closed", kind="compliment")
