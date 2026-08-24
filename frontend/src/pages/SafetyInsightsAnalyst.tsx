@@ -469,6 +469,14 @@ export default function SafetyInsightsAnalyst() {
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
+                    <CardTitle className="text-xs text-muted-foreground">Compliment : Complaint</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-2xl font-semibold">
+                    {String(corpusRatios.compliment_to_complaint_ratio ?? '—')}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
                     <CardTitle className="text-xs text-muted-foreground">Near misses</CardTitle>
                   </CardHeader>
                   <CardContent className="text-2xl font-semibold">
@@ -481,6 +489,22 @@ export default function SafetyInsightsAnalyst() {
                   </CardHeader>
                   <CardContent className="text-2xl font-semibold">
                     {String(corpusRatios.incidents ?? '—')}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs text-muted-foreground">Compliments</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-2xl font-semibold">
+                    {String(corpusRatios.compliments ?? '—')}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs text-muted-foreground">Complaints</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-2xl font-semibold">
+                    {String(corpusRatios.complaints ?? '—')}
                   </CardContent>
                 </Card>
               </div>
