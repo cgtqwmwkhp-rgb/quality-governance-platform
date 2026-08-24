@@ -30,6 +30,7 @@ SEED_CATEGORIES: tuple[str, ...] = (
     "severity_levels",
     "incident_types",
     "complaint_types",
+    "feedback_kinds",
     "medical_assistance",
     "emergency_services",
 )
@@ -80,6 +81,11 @@ LOOKUP_DEFAULT_ROWS: tuple[LookupDefaultRow, ...] = (
     LookupDefaultRow("complaint_types", "safety", "Health and safety concern", 7),
     LookupDefaultRow("complaint_types", "environmental", "Environmental (noise, spill, waste)", 8),
     LookupDefaultRow("complaint_types", "other", "Other", 9),
+    # 4b. Feedback kinds — codes are ``FeedbackKind`` members (FB-PR1).
+    LookupDefaultRow("feedback_kinds", "complaint", "Complaint", 1),
+    LookupDefaultRow("feedback_kinds", "compliment", "Compliment", 2),
+    LookupDefaultRow("feedback_kinds", "suggestion", "Suggestion", 3),
+    LookupDefaultRow("feedback_kinds", "general", "General feedback", 4),
     # 5. Medical Assistance
     LookupDefaultRow("medical_assistance", "none", "None required", 1),
     LookupDefaultRow("medical_assistance", "self_administered", "Self-administered first aid", 2),

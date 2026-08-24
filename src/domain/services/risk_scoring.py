@@ -559,7 +559,12 @@ class KRIService:
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
-        result = await self.db.execute(select(func.count(Complaint.id)).where(Complaint.created_at >= cutoff))
+        result = await self.db.execute(
+            select(func.count(Complaint.id)).where(
+                Complaint.created_at >= cutoff,
+                Complaint.feedback_kind == "complaint",
+            )
+        )
         return float(result.scalar() or 0)
 
     async def _calculate_avg_resolution_days(self, entity_type: str) -> float:
@@ -574,6 +579,7 @@ class KRIService:
                         Complaint.status.in_([ComplaintStatus.RESOLVED, ComplaintStatus.CLOSED]),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                         Complaint.resolved_date.isnot(None),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                         Complaint.created_at >= cutoff,
+                        Complaint.feedback_kind == "complaint",
                     )
                 )
             )
