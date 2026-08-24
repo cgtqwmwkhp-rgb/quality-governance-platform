@@ -141,10 +141,10 @@ def test_migration_revises_the_int_w6_head() -> None:
     assert 'down_revision: Union[str, Sequence[str], None] = "20261113_standards_w6_edges"' in text
 
 
-def test_flag_defaults_closed() -> None:
+def test_flag_defaults_on() -> None:
     from src.core.config import Settings
 
-    assert Settings.model_fields["customer_feedback_kinds_enabled"].default is False
+    assert Settings.model_fields["customer_feedback_kinds_enabled"].default is True
 
 
 def test_kind_prefixes_are_independent_of_comp() -> None:
