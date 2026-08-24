@@ -58,14 +58,21 @@ async def record_action_assigned_audit(
     assigned_by_user_id: int,
     request_id: str,
     source_type: str,
+    tenant_id: Optional[int],
     reference_number: Optional[str] = None,
 ) -> None:
-    """Record an explicit assignment audit event when an action owner changes."""
+    """Record an explicit assignment audit event when an action owner changes.
+
+    ``tenant_id`` is the owning tenant of the action row, which this helper
+    cannot resolve from ``action_key`` alone; it is required rather than
+    defaulted because the audit row cannot be written without it.
+    """
     await record_audit_event(
         db=db,
         event_type="unified_action.assigned",
         entity_type="unified_action",
         entity_id=action_key,
+        entity_name=reference_number or action_key,
         action="assign",
         description=f"Assigned unified action {reference_number or action_key}",
         payload={
@@ -75,4 +82,5 @@ async def record_action_assigned_audit(
         },
         user_id=assigned_by_user_id,
         request_id=request_id,
+        tenant_id=tenant_id,
     )

@@ -220,43 +220,17 @@ class TestMatchesCondition:
         )
 
 
-class TestApprovalManagement:
-    def test_approve(self, engine):
-        result = engine.approve("APR-001", user_id=5, notes="Looks good")
-
-        assert result["status"] == "approved"
-        assert result["approved_by"] == 5
-        assert result["notes"] == "Looks good"
-        assert "timestamp" in result
-
-    def test_reject(self, engine):
-        result = engine.reject("APR-002", user_id=3, reason="Incomplete evidence")
-
-        assert result["status"] == "rejected"
-        assert result["rejected_by"] == 3
-        assert result["reason"] == "Incomplete evidence"
-
-    def test_bulk_approve(self, engine):
-        result = engine.bulk_approve(
-            ["APR-001", "APR-002", "APR-003"],
-            user_id=5,
-            notes="Batch approval",
-        )
-
-        assert result["processed"] == 3
-        assert result["successful"] == 3
-        assert result["failed"] == 0
-        assert len(result["results"]) == 3
-        for r in result["results"]:
-            assert r["status"] == "approved"
-
-    def test_bulk_approve_empty(self, engine):
-        result = engine.bulk_approve([], user_id=5)
-        assert result["processed"] == 0
-
-    def test_get_pending_approvals_returns_list(self, engine):
-        result = engine.get_pending_approvals(user_id=1)
-        assert isinstance(result, list)
+# TestApprovalManagement stood here, and its assertions were the fiction stated
+# outright: result["status"] == "approved", result["approved_by"] == 5, and
+# processed == 3 from a loop that never looked an id up. The methods held no
+# state, so nothing was approved and nothing was recorded, and the tests could
+# only ever pass. get_pending_approvals was pinned as isinstance(result, list),
+# which was true of the [] it returned to every user forever.
+#
+# Deleted with the methods in FR-APPROVALS-01. Outstanding decisions are now read
+# from the domains that hold them (tests/unit/test_approvals_read_model.py,
+# tests/integration/test_approvals_my_decisions.py), and each decision is
+# recorded by the domain that owns the record.
 
 
 class TestEscalation:
@@ -287,52 +261,16 @@ class TestEscalation:
         assert result["new_priority"] == "high"
 
 
-class TestDelegation:
-    def test_set_delegation(self, engine):
-        start = datetime(2026, 4, 5, tzinfo=timezone.utc)
-        end = datetime(2026, 4, 12, tzinfo=timezone.utc)
-        result = engine.set_delegation(
-            user_id=1,
-            delegate_id=2,
-            start_date=start,
-            end_date=end,
-            reason="Annual leave",
-        )
-
-        assert result["user_id"] == 1
-        assert result["delegate_id"] == 2
-        assert result["reason"] == "Annual leave"
-        assert result["status"] == "active"
-        assert result["id"].startswith("DEL-")
-
-    def test_set_delegation_with_workflow_types(self, engine):
-        start = datetime(2026, 4, 5, tzinfo=timezone.utc)
-        end = datetime(2026, 4, 12, tzinfo=timezone.utc)
-        result = engine.set_delegation(
-            user_id=1,
-            delegate_id=2,
-            start_date=start,
-            end_date=end,
-            workflow_types=["CAPA", "NCR"],
-        )
-
-        assert result["workflow_types"] == ["CAPA", "NCR"]
-
-    def test_set_delegation_default_workflow_types(self, engine):
-        start = datetime(2026, 4, 5, tzinfo=timezone.utc)
-        end = datetime(2026, 4, 12, tzinfo=timezone.utc)
-        result = engine.set_delegation(
-            user_id=1,
-            delegate_id=2,
-            start_date=start,
-            end_date=end,
-        )
-        assert result["workflow_types"] == ["all"]
-
-    def test_get_active_delegations(self, engine):
-        result = engine.get_active_delegations(user_id=1)
-        assert isinstance(result, list)
-        assert len(result) >= 1
+# TestDelegation stood here. set_delegation returned a dict it had just built and
+# stored nowhere, so a delegation was forgotten before the response was
+# serialised; get_active_delegations was asserted to return len(result) >= 1,
+# which held because the method handed every caller the same hardcoded
+# "Jane Smith / Annual leave" record. That assertion is why the invented row could
+# not be deleted without a test going red.
+#
+# Deleted with the methods in FR-APPROVALS-01. Delegation is not reimplemented
+# anywhere: the read model attributes a decision only to the user its own domain
+# names on the record.
 
 
 class TestRoutingRules:
@@ -349,42 +287,16 @@ class TestRoutingRules:
         assert rules == []
 
 
-class TestWorkflowStats:
-    def test_get_workflow_stats(self, engine):
-        stats = engine.get_workflow_stats(user_id=1)
-
-        assert "active_workflows" in stats
-        assert "pending_approvals" in stats
-        assert "overdue" in stats
-        assert "completed_today" in stats
-        assert "sla_compliance_rate" in stats
-        assert "by_template" in stats
-        assert "by_priority" in stats
-
-    def test_pending_approvals_matches_the_queue_it_summarises(self, engine):
-        """PX-286: the tile counts the very list the Workflow Center renders."""
-        user_id = 7
-        stats = engine.get_workflow_stats(user_id=user_id)
-
-        assert stats["pending_approvals"] == len(engine.get_pending_approvals(user_id))
-        assert stats["pending_approvals_scope"] == "assigned_to_me"
-
-    def test_unmeasurable_stats_are_null_not_invented(self, engine):
-        """PX-286: the engine persists no instances, so it must not report counts.
-
-        Replaces the former `test_stats_by_template_keys`, which asserted that
-        `by_template` contained hardcoded RIDDOR/CAPA demo rows. That assertion pinned
-        the defect in place: those numbers were fabricated constants served to the
-        Workflow Center as live KPIs.
-        """
-        stats = engine.get_workflow_stats(user_id=1)
-
-        assert stats["active_workflows"] is None
-        assert stats["overdue"] is None
-        assert stats["completed_today"] is None
-        assert stats["sla_compliance_rate"] is None
-        assert stats["by_template"] == {}
-        assert stats["by_priority"] == {}
+# TestWorkflowStats stood here. Its own most recent tests were honest about the
+# engine — active_workflows is None, by_template == {} — which is exactly why the
+# endpoint above them had nothing left to say: every figure it could not measure
+# was null, and the one it could (pending_approvals) counted a queue that was
+# always empty.
+#
+# Deleted with get_workflow_stats in FR-APPROVALS-01 rather than kept as a tile of
+# nulls. A count of what genuinely needs the caller's decision now comes from
+# GET /api/v1/approvals/my-decisions, which reads three domains and names any it
+# could not.
 
 
 class TestDefaultTemplates:

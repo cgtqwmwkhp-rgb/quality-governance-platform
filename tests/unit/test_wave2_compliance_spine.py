@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.routes.compliance import get_compliance_coverage, link_evidence, list_standards
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceCoverKind, EvidenceLinkMethod
 from src.domain.models.standard import Standard
 from src.domain.services.ims_dashboard_service import IMSDashboardService
 
@@ -55,6 +55,7 @@ async def test_link_evidence_persists_tenant_scoped_links():
             confidence=88.0,
             title="Controlled document",
             notes="Quarterly evidence set",
+            cover_kind=EvidenceCoverKind.EVIDENCES.value,
         ),
         db,
         current_user,
@@ -65,7 +66,68 @@ async def test_link_evidence_persists_tenant_scoped_links():
     assert all(link.created_by_id == 17 for link in added)
     assert all(link.created_by_email == "qa@example.com" for link in added)
     assert all(link.linked_by == EvidenceLinkMethod.MANUAL for link in added)
+    assert all(link.cover_kind == EvidenceCoverKind.EVIDENCES for link in added)
     assert response["message"] == "Upserted 2 evidence link(s)"
+
+
+@pytest.mark.asyncio
+async def test_link_evidence_accepts_loaded_scheme_catalogue_keys():
+    added = []
+
+    async def refresh(link):
+        link.id = len(added)
+        link.created_at = datetime(2026, 3, 22, tzinfo=timezone.utc)
+
+    db = types.SimpleNamespace(
+        execute=AsyncMock(return_value=_FakeExecuteResult([])),
+        add=lambda obj: added.append(obj),
+        commit=AsyncMock(),
+        refresh=AsyncMock(side_effect=refresh),
+    )
+    current_user = types.SimpleNamespace(id=17, email="qa@example.com", tenant_id=91)
+
+    response = await link_evidence(
+        types.SimpleNamespace(
+            entity_type="document",
+            entity_id="DOC-CE-1",
+            clause_ids=["ce-firewalls"],
+            linked_by="manual",
+            confidence=90.0,
+            title="Firewall standard",
+            notes="CE control evidence",
+            cover_kind=EvidenceCoverKind.EVIDENCES.value,
+        ),
+        db,
+        current_user,
+    )
+
+    assert len(added) == 1
+    assert added[0].clause_id == "ce-firewalls"
+    assert response["message"] == "Upserted 1 evidence link(s)"
+
+
+@pytest.mark.asyncio
+async def test_link_evidence_refuses_provisional_scheme_keys():
+    from src.domain.exceptions import BadRequestError
+
+    db = types.SimpleNamespace(execute=AsyncMock())
+    current_user = types.SimpleNamespace(id=17, email="qa@example.com", tenant_id=91)
+
+    with pytest.raises(BadRequestError, match="Invalid clause ID"):
+        await link_evidence(
+            types.SimpleNamespace(
+                entity_type="document",
+                entity_id="DOC-CHAS",
+                clause_ids=["chas-CHAS 1"],
+                linked_by="manual",
+                confidence=90.0,
+                title="CHAS theme",
+                notes="must not write",
+                cover_kind=EvidenceCoverKind.EVIDENCES.value,
+            ),
+            db,
+            current_user,
+        )
 
 
 @pytest.mark.asyncio
@@ -132,6 +194,17 @@ async def test_list_standards_bridges_db_standard_and_ims_counts():
     assert iso9001.has_canonical_standard is True
     assert iso9001.canonical_data_degraded is False
     assert iso9001.canonical_data_message is None
+    ids = {item.id for item in standards}
+    assert "ce" in ids
+    assert "cep" in ids
+    assert "iip" in ids
+    assert "chas" not in ids
+    assert "ssip" not in ids
+    assert "pm" not in ids
+    assert "uvdb" not in ids
+    ce = next(item for item in standards if item.id == "ce")
+    assert ce.clause_count == 5
+    assert ce.code == "Cyber Essentials"
 
 
 @pytest.mark.asyncio

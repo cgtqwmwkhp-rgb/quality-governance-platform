@@ -12,7 +12,12 @@ jobs:
   auto-merge:
     name: Auto-merge Dependabot (patch/minor)
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    # user.login rather than github.actor: actor reflects whoever triggered the event,
+    # so a maintainer pushing to or reopening a Dependabot branch would skip this job.
+    # The repository check stops the job doing anything on a fork.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]'
+      && github.repository == 'cgtqwmwkhp-rgb/quality-governance-platform'
 
     steps:
       - name: Fetch Dependabot metadata
@@ -21,15 +26,26 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Auto-approve patch and minor updates
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
-        run: gh pr review --approve "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Enable auto-merge for patch and minor
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+      # There is deliberately no approval step. It used to run `gh pr review --approve`
+      # and failed on every PR with "GitHub Actions is not permitted to approve pull
+      # requests", which killed the job before auto-merge was ever enabled. Branch
+      # protection on main requires no reviews, so an approval buys nothing — and
+      # granting Actions the right to approve would silently satisfy any review
+      # requirement added later. The setting stays off; the step is gone.
+      #
+      # github_actions is excluded on purpose. A compromised action executes inside CI
+      # holding this repository's credentials and can rewrite the very workflows meant to
+      # catch it, and nothing in the required checks inspects what an action does.
+      # A library at least has to survive the test suite, CodeQL and pip-audit. Those
+      # bumps are few and are reviewed by a human.
+      #
+      # For a grouped PR, update-type reports the highest semver change in the group, so
+      # a group containing a major cannot slip through labelled as minor.
+      - name: Enable auto-merge
+        if: >-
+          steps.metadata.outputs.package-ecosystem != 'github_actions'
+          && (steps.metadata.outputs.update-type == 'version-update:semver-patch'
+              || steps.metadata.outputs.update-type == 'version-update:semver-minor')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}

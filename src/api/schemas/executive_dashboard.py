@@ -98,8 +98,17 @@ class RTASummary(BaseModel):
 
 
 class RiskSummary(BaseModel):
-    """Risk module summary."""
+    """Risk module summary.
 
+    Two populations, kept apart on purpose. `register_total` is the whole
+    Enterprise Risk Register visible to the tenant and reconciles exactly with
+    `GET /api/v1/risk-register/`; `total_active` and the level breakdown cover
+    the narrower not-closed subset reported by `/risk-register/summary`.
+    `register_total` is None when the aggregate could not be computed, so a
+    failure does not read as an empty register.
+    """
+
+    register_total: Optional[int] = None
     total_active: int
     by_level: Dict[str, int]
     high_critical: int
@@ -145,6 +154,21 @@ class AuditSummary(BaseModel):
     incomplete_critical_count: int = 0
 
 
+class TrainingSummary(BaseModel):
+    """Headline training compliance from the tenant's latest matrix import.
+
+    Every field is optional and defaults to None because "we could not measure
+    this" has to be expressible. An unpopulated or unreadable matrix is not a
+    workforce with 0% training, and it is not one with 100% either (C-7).
+    """
+
+    measured_cells: Optional[int] = None
+    compliant_cells: Optional[int] = None
+    completion_rate: Optional[float] = None
+    expiring_soon: Optional[int] = None
+    overdue: Optional[int] = None
+
+
 class TrendDataPoint(BaseModel):
     """Single trend data point.
 
@@ -182,6 +206,23 @@ class ActiveAlert(BaseModel):
     triggered_at: str
 
 
+class ComplianceScheduleSummary(BaseModel):
+    """Compliance Schedule obligation counts for the executive surface.
+
+    Absent (``None`` on the parent) when the module is closed to the caller —
+    deployment flag off, kill switch engaged, or missing ``compliance_schedule:read``.
+    When present, ``available`` is False only if the register could not be read,
+    so the tile can show unavailable rather than a fabricated empty estate.
+    """
+
+    available: bool = False
+    total_active: Optional[int] = None
+    current: Optional[int] = None
+    due_soon: Optional[int] = None
+    overdue: Optional[int] = None
+    href: str = "/compliance-schedule"
+
+
 class SafetyInsightsSummary(BaseModel):
     """Latest Safety Insights Analyst snapshot for the executive surface."""
 
@@ -208,9 +249,11 @@ class ExecutiveDashboardResponse(BaseModel):
     compliance: ComplianceSummary
     sla_performance: SLASummary
     audits: AuditSummary = Field(default_factory=AuditSummary)
+    training: TrainingSummary = Field(default_factory=TrainingSummary)
     trends: TrendData
     alerts: List[ActiveAlert]
     safety_insights: SafetyInsightsSummary = Field(default_factory=SafetyInsightsSummary)
+    compliance_schedule: Optional[ComplianceScheduleSummary] = None
 
 
 class VehicleGovernanceSummary(BaseModel):
@@ -238,6 +281,21 @@ class DashboardSummaryResponse(BaseModel):
     health_score: Optional[float] = None
     health_status: str
     open_incidents: int
-    pending_actions: int
+    open_cases: int = Field(
+        ...,
+        description=(
+            "Open incidents plus open complaints. This is the figure `pending_actions` "
+            "used to carry under a name that promised remedial work (C-66): it moves with "
+            "case volume and is unaffected by closing every action in the system."
+        ),
+    )
+    pending_actions: Optional[int] = Field(
+        ...,
+        description=(
+            "Actions still owed across every action store, from the same aggregate that "
+            "backs /actions/summary. `null` means the aggregate could not be computed — "
+            "distinct from 0, which means there are genuinely none outstanding."
+        ),
+    )
     overdue_items: int
     kri_alerts: int

@@ -72,33 +72,70 @@ def test_call_site_matches_the_signature(path: Path, call: ast.Call) -> None:
 
 @pytest.mark.parametrize("path,call", _call_sites(), ids=_ids())
 def test_call_site_passes_a_tenant(path: Path, call: ast.Call) -> None:
-    """Without a tenant the bridge logs a warning and persists nothing.
+    """Every call site must supply a tenant, with no exemption list.
 
-    That is the second half of PX-155 and the quieter one: the request succeeds,
-    the caller sees no error, and no audit row is ever written. Sites that have
-    not yet been threaded are listed below so the number can only go down.
+    That is the second half of PX-155 and the quieter one. 44 of the 71 sites
+    omitted tenant_id, including ``permanent_delete`` and ``purge``, and the
+    bridge answered by logging a warning and returning the unsaved event — so
+    the request succeeded, the caller saw no error, and no audit row was ever
+    written. ``tenant_id`` is now a required keyword-only parameter, which makes
+    ``test_call_site_matches_the_signature`` above enforce the same thing; this
+    test states the reason when it fails.
     """
-    unthreaded = {
-        "api/routes/actions.py",
-        "api/routes/complaints.py",
-        "api/routes/incidents.py",
-        "api/routes/near_miss.py",
-        "api/routes/policies.py",
-        "api/routes/rtas.py",
-        "api/routes/vehicle_checklists.py",
-        "domain/services/action_assignment_service.py",
-        "domain/services/audit_service.py",
-        "domain/services/capa_service.py",
-        "domain/services/competence_gap_service.py",
-        "domain/services/near_miss_service.py",
-        "domain/services/rta_service.py",
-    }
     rel = str(path.relative_to(SRC))
-    if rel in unthreaded:
-        pytest.xfail(f"{rel} has not been threaded with tenant_id yet (PX-155)")
-
     kwargs = {kw.arg for kw in call.keywords if kw.arg is not None}
     assert "tenant_id" in kwargs, (
         f"{rel}:{call.lineno} does not pass tenant_id, so record_audit_event() "
-        f"will log a warning and persist no audit row."
+        f"will refuse the event and raise AuditNotRecordableError."
     )
+
+
+@pytest.mark.parametrize("path,call", _call_sites(), ids=_ids())
+def test_every_call_site_names_the_record(path: Path, call: ast.Call) -> None:
+    """Every call site must say *which* record the event is about (C-5).
+
+    Sampled entries carried the actor, the entity *type* and the timestamp, and a
+    null ``entity_name`` — so the trail could say "this user updated an incident"
+    but never which incident. For ISO 9001 / 45001 that is not a defensible
+    record, and it is the difference between an audit trail that is populated and
+    one that is evidence.
+
+    ``entity_name`` is deliberately *optional* in the signature: it is metadata,
+    and per the fail-closed contract added by #1413 a missing name must never
+    refuse the mutation being audited the way a missing tenant does. A required
+    parameter would turn an omission into a TypeError, i.e. an HTTP 500 on a
+    business operation, which trades this defect for a worse one. So the
+    signature cannot enforce this and this census does instead.
+
+    Where an event genuinely has no single subject — a list endpoint, a bulk
+    purge — the call site passes ``NO_SINGLE_ENTITY`` or a phrase naming the set.
+    That is a deliberate answer and is visibly different from a null, which is
+    what "we forgot" looks like.
+    """
+    rel = str(path.relative_to(SRC))
+    kwargs = {kw.arg for kw in call.keywords if kw.arg is not None}
+    assert "entity_name" in kwargs, (
+        f"{rel}:{call.lineno} does not pass entity_name, so the audit entry will "
+        f"name the entity type but not the record. Pass the record's reference "
+        f"number or title, or NO_SINGLE_ENTITY if the event covers a set."
+    )
+
+
+@pytest.mark.parametrize("path,call", _call_sites(), ids=_ids())
+def test_no_call_site_passes_an_empty_entity_name(path: Path, call: ast.Call) -> None:
+    """A literal empty or whitespace name satisfies the census above but says nothing.
+
+    Only catches constants; an expression that evaluates to ``""`` at runtime is
+    normalised to ``None`` by the bridge rather than stored as a blank.
+    """
+    rel = str(path.relative_to(SRC))
+    for kw in call.keywords:
+        if kw.arg != "entity_name":
+            continue
+        if isinstance(kw.value, ast.Constant):
+            value = kw.value.value
+            assert value is not None, f"{rel}:{call.lineno} passes entity_name=None explicitly."
+            assert isinstance(value, str) and value.strip(), (
+                f"{rel}:{call.lineno} passes a blank entity_name, which records nothing. "
+                f"Use NO_SINGLE_ENTITY if the event has no single subject record."
+            )

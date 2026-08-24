@@ -120,8 +120,10 @@ export function buildCampaignResultsHref(documentId: number, campaignId: number)
 }
 
 /**
- * Platform-style campaign reference (PX-222): CAM-YYYY-NNNN.
- * Prefer launched/created year when available; else calendar year.
+ * Platform-style campaign reference (PX-222): CAM-YYYY-NNNN, rebuilt from the id.
+ *
+ * Only for campaigns created before the reference column was backfilled — prefer
+ * `campaignReference`, which reads the stored reference the server minted.
  */
 export function formatCampaignReference(
   campaignId: number,
@@ -136,6 +138,29 @@ export function formatCampaignReference(
   }
   const seq = Math.max(0, Math.trunc(campaignId))
   return `CAM-${year}-${String(seq).padStart(4, '0')}`
+}
+
+/**
+ * A campaign as seen by any surface that has to name it. `reference_number` is
+ * the stored SSOT (PX-222); the id and dates are only used to rebuild a
+ * reference for rows the backfill has not reached.
+ */
+export type CampaignReferenceLike = {
+  reference_number?: string | null
+  launched_at?: string | null
+  created_at?: string | null
+}
+
+/**
+ * The campaign's reference, preferring what the server stored (PX-222).
+ *
+ * Deriving `CAM-YYYY-NNNN` in the browser let two surfaces disagree about the
+ * same campaign, because they disagreed about which date supplied the year.
+ */
+export function campaignReference(campaignId: number, campaign: CampaignReferenceLike): string {
+  const stored = campaign.reference_number?.trim()
+  if (stored) return stored
+  return formatCampaignReference(campaignId, campaign.launched_at ?? campaign.created_at)
 }
 
 /** UAT / thin-suite campaign artefacts (PX-221 honesty — data purge is ops). */
@@ -176,9 +201,10 @@ export function formatCampaignHealthBadge(row: CampaignComplianceRow): string {
 
 /** Label for a campaign row/selector that prefers a real title when present. */
 export function formatCampaignListLabel(
-  campaign: Pick<DocumentCampaign, 'id' | 'title' | 'launched_at' | 'created_at'>,
+  campaign: Pick<DocumentCampaign, 'id' | 'title' | 'launched_at' | 'created_at'> &
+    CampaignReferenceLike,
 ): string {
-  const ref = formatCampaignReference(campaign.id, campaign.launched_at ?? campaign.created_at)
+  const ref = campaignReference(campaign.id, campaign)
   const title = campaign.title?.trim()
   return title ? `${ref} · ${title}` : ref
 }

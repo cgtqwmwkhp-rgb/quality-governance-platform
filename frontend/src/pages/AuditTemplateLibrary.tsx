@@ -31,6 +31,9 @@ import {
   ChevronRight,
   Hash,
   Timer,
+  ClipboardCheck,
+  GraduationCap,
+  BookOpen,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -56,6 +59,7 @@ import { auditsApi, AuditTemplate, CategoryCount } from '../api/client'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { cn } from '../helpers/utils'
 import { isAutomationTestTemplate, partitionAutomationTemplates } from './auditTemplateHonesty'
+import { parseInstrument, type InstrumentKind } from './auditInstrument'
 
 // ============================================================================
 // HELPERS
@@ -122,6 +126,8 @@ export default function AuditTemplateLibrary() {
   /** Hero band publish-state filter (all | published | draft). */
   type PublishFilter = 'all' | 'published' | 'draft'
   const [publishFilter, setPublishFilter] = useState<PublishFilter>('all')
+  const [instrumentFilter, setInstrumentFilter] = useState<'all' | InstrumentKind>('all')
+  const [showPurposeChooser, setShowPurposeChooser] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [sortBy, setSortBy] = useState<'name' | 'updated'>('updated')
   const [showArchive, setShowArchive] = useState(false)
@@ -286,6 +292,16 @@ export default function AuditTemplateLibrary() {
     [loadTemplates, loadCategories, showToast],
   )
 
+  const openPurposeChooser = useCallback(() => setShowPurposeChooser(true), [])
+
+  const chooseInstrument = useCallback(
+    (kind: InstrumentKind) => {
+      setShowPurposeChooser(false)
+      navigate(`/audit-templates/new?instrument=${kind}`)
+    },
+    [navigate],
+  )
+
   const handleImport = useCallback(async () => {
     if (!importPath.trim()) return
     try {
@@ -333,8 +349,11 @@ export default function AuditTemplateLibrary() {
     if (publishFilter === 'published') list = list.filter((t) => t.is_published)
     if (publishFilter === 'draft') list = list.filter((t) => !t.is_published)
     if (hideAutomationFixtures) list = list.filter((t) => !isAutomationTestTemplate(t))
+    if (instrumentFilter !== 'all') {
+      list = list.filter((tpl) => parseInstrument(tpl.tags) === instrumentFilter)
+    }
     return list
-  }, [sortedTemplates, publishFilter, hideAutomationFixtures])
+  }, [sortedTemplates, publishFilter, hideAutomationFixtures, instrumentFilter])
 
   const recentTemplates = useMemo(() => {
     return [...publishFilteredTemplates]
@@ -550,7 +569,7 @@ export default function AuditTemplateLibrary() {
           <Button variant="outline" onClick={() => setShowImportDialog(true)}>
             <Upload className="w-4 h-4" /> {t('import')}
           </Button>
-          <Button onClick={() => navigate('/audit-templates/new')}>
+          <Button onClick={openPurposeChooser}>
             <Plus className="w-5 h-5" /> {t('audit_templates.new')}
           </Button>
         </div>
@@ -792,6 +811,45 @@ export default function AuditTemplateLibrary() {
               ? `Hiding ${stats.automation} fixture${stats.automation === 1 ? '' : 's'}`
               : `Show fixtures (${stats.automation})`}
           </button>
+        </div>
+
+        <div
+          className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0"
+          role="tablist"
+          aria-label="Filter by purpose"
+          data-testid="audit-templates-instrument-chips"
+        >
+          {(
+            [
+              { id: 'all' as const, labelKey: 'audit_templates.instrument.all', aria: 'All purposes' },
+              { id: 'audit' as const, labelKey: 'audit_templates.instrument.audits', aria: 'Audits' },
+              { id: 'skills' as const, labelKey: 'audit_templates.instrument.skills', aria: 'Skills' },
+              {
+                id: 'induction' as const,
+                labelKey: 'audit_templates.instrument.inductions',
+                aria: 'Inductions',
+              },
+            ] as const
+          ).map((chip) => {
+            const isActive = instrumentFilter === chip.id
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setInstrumentFilter(chip.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all min-h-[44px] ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-secondary-foreground hover:bg-surface border border-border'
+                }`}
+                role="tab"
+                aria-selected={isActive}
+                aria-label={chip.aria}
+              >
+                <span className="text-sm font-medium">{t(chip.labelKey)}</span>
+              </button>
+            )
+          })}
         </div>
 
         <div
@@ -1138,24 +1196,31 @@ export default function AuditTemplateLibrary() {
             {t('audit_templates.empty.title')}
           </h3>
           <p className="text-muted-foreground mb-6">
-            {searchInput || selectedCategory !== 'all' || publishFilter !== 'all'
+            {searchInput ||
+            selectedCategory !== 'all' ||
+            publishFilter !== 'all' ||
+            instrumentFilter !== 'all'
               ? t('audit_templates.empty.filter_hint')
               : t('audit_templates.empty.subtitle')}
           </p>
           <div className="flex items-center justify-center gap-3">
-            {(searchInput || selectedCategory !== 'all' || publishFilter !== 'all') && (
+            {(searchInput ||
+              selectedCategory !== 'all' ||
+              publishFilter !== 'all' ||
+              instrumentFilter !== 'all') && (
               <Button
                 variant="outline"
                 onClick={() => {
                   setSearchInput('')
                   setSelectedCategory('all')
                   setPublishFilter('all')
+                  setInstrumentFilter('all')
                 }}
               >
                 <RotateCcw className="w-4 h-4" /> {t('audit_templates.clear_filters')}
               </Button>
             )}
-            <Button onClick={() => navigate('/audit-templates/new')}>
+            <Button onClick={openPurposeChooser}>
               <Plus className="w-4 h-4" /> {t('audit_templates.new')}
             </Button>
           </div>
@@ -1317,6 +1382,53 @@ export default function AuditTemplateLibrary() {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPurposeChooser} onOpenChange={setShowPurposeChooser}>
+        <DialogContent data-testid="audit-template-purpose-chooser" className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{t('audit_templates.purpose.chooser_title')}</DialogTitle>
+            <DialogDescription>{t('audit_templates.purpose.chooser_subtitle')}</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 py-2">
+            {(
+              [
+                {
+                  kind: 'audit' as const,
+                  icon: ClipboardCheck,
+                  titleKey: 'audit_templates.purpose.audit',
+                  hintKey: 'audit_templates.purpose.audit_hint',
+                },
+                {
+                  kind: 'skills' as const,
+                  icon: GraduationCap,
+                  titleKey: 'audit_templates.purpose.skills',
+                  hintKey: 'audit_templates.purpose.skills_hint',
+                },
+                {
+                  kind: 'induction' as const,
+                  icon: BookOpen,
+                  titleKey: 'audit_templates.purpose.induction',
+                  hintKey: 'audit_templates.purpose.induction_hint',
+                },
+              ] as const
+            ).map((card) => (
+              <button
+                key={card.kind}
+                type="button"
+                data-testid={`audit-template-purpose-${card.kind}`}
+                onClick={() => chooseInstrument(card.kind)}
+                className="text-left rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px]"
+              >
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
+                  <card.icon className="w-5 h-5 text-primary" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">{t(card.titleKey)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t(card.hintKey)}</p>
+              </button>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

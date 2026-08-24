@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
@@ -23,6 +23,14 @@ router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
 
 
 class CreateFiveWhysRequest(BaseModel):
+    """Create a 5-Whys analysis.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the analysis being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     problem_statement: str
     entity_type: Optional[str] = None
     entity_id: Optional[int] = None
@@ -30,21 +38,53 @@ class CreateFiveWhysRequest(BaseModel):
 
 
 class AddWhyRequest(BaseModel):
+    """Append one Why step to a 5-Whys analysis.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the step being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     why_question: str
     answer: str
     evidence: Optional[str] = None
 
 
 class SetRootCauseRequest(BaseModel):
+    """Set the primary root cause on a 5-Whys analysis.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the root cause being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     primary_root_cause: str
     contributing_factors: Optional[List[str]] = None
 
 
 class CompleteAnalysisRequest(BaseModel):
+    """Mark an RCA analysis/diagram complete.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of completion succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     proposed_actions: Optional[List[Dict[str, Any]]] = None
 
 
 class CreateFishboneRequest(BaseModel):
+    """Create a Fishbone diagram.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the diagram being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     effect_statement: str
     entity_type: Optional[str] = None
     entity_id: Optional[int] = None
@@ -52,6 +92,14 @@ class CreateFishboneRequest(BaseModel):
 
 
 class AddCauseRequest(BaseModel):
+    """Add a cause to a fishbone diagram.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the cause being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     category: str = Field(
         ...,
         description="manpower, method, machine, material, measurement, mother_nature",
@@ -61,12 +109,28 @@ class AddCauseRequest(BaseModel):
 
 
 class SetFishboneRootCauseRequest(BaseModel):
+    """Set the root cause on a fishbone diagram.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the root cause being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     root_cause: str
     root_cause_category: str
     primary_causes: Optional[List[str]] = None
 
 
 class CreateCAPARequest(BaseModel):
+    """Create a CAPA item from RCA tools.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the CAPA being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     action_type: str = Field(..., description="corrective or preventive")
     title: str
     description: str
@@ -80,11 +144,27 @@ class CreateCAPARequest(BaseModel):
 
 
 class UpdateCAPAStatusRequest(BaseModel):
+    """Update RCA-tools CAPA status.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the status changing while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     status: str
     notes: Optional[str] = None
 
 
 class VerifyCAPARequest(BaseModel):
+    """Verify an RCA-tools CAPA is effective.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of verification succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     verification_notes: Optional[str] = None
     is_effective: bool = True
 

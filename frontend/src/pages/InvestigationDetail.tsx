@@ -30,6 +30,7 @@ import {
   AlertCircle,
   Save,
   ExternalLink,
+  RotateCcw,
 } from 'lucide-react'
 import {
   investigationsApi,
@@ -97,16 +98,27 @@ import {
 import {
   buildGeneratedPackDownload,
   buildPackManifestStubDownload,
+  packPdfFilename,
   triggerPackDownload,
+  triggerPackPdfDownload,
 } from './investigation/investigationReportHelpers'
 import { getReportSectionsForLevel } from './investigation/hsg245ReportSections'
 import {
   addManualTimelineEntry,
   approveCustomerPackOmit,
+  fetchCustomerPackPdf,
   readCustomerPackVisibility,
   requestCustomerPackOmit,
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
+import { formatCodedValue, formatPermissionCode } from '../helpers/displayLabels'
+import { InvestigationCloseSummaryDialog } from '../components/investigations/InvestigationCloseSummaryDialog'
+
+/** The single reverse edge out of closed for an investigation. */
+const INVESTIGATION_REOPEN_STATUS = 'under_review'
+
+/** Permission a section omit needs; always rendered through formatPermissionCode (PX-144). */
+const OMIT_APPROVAL_PERMISSION = 'investigation:approve_customer_omit'
 
 const TABS = [
   { id: 'summary', label: 'Summary', icon: FileText },
@@ -149,6 +161,7 @@ export default function InvestigationDetail() {
   const [packsLoading, setPacksLoading] = useState(false)
   const [generatingPack, setGeneratingPack] = useState(false)
   const [downloadingPackId, setDownloadingPackId] = useState<number | null>(null)
+  const [downloadingPdfPackId, setDownloadingPdfPackId] = useState<number | null>(null)
   const [packCapability, setPackCapability] = useState<PackCapability>({ canGenerate: true })
   const [packError, setPackError] = useState<string | null>(null)
 
@@ -170,6 +183,9 @@ export default function InvestigationDetail() {
   const [closureLoadFailed, setClosureLoadFailed] = useState(false)
   const [closingInvestigation, setClosingInvestigation] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
+  const [showReopenDialog, setShowReopenDialog] = useState(false)
+  const [reopening, setReopening] = useState(false)
 
   const [actions, setActions] = useState<Action[]>([])
   const [actionsLoading, setActionsLoading] = useState(false)
@@ -473,12 +489,31 @@ export default function InvestigationDetail() {
     try {
       const payload = buildPackManifestStubDownload(pack, investigation.reference_number)
       triggerPackDownload(payload)
-      toast.success(t('investigations.report.download_stub_success'))
+      toast.success('Manifest stub downloaded — use PDF for the issuable document.')
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'downloadPack' })
       setPackError(getApiErrorMessage(err))
     } finally {
       setDownloadingPackId(null)
+    }
+  }
+
+  /** Download the issuable branded PDF for a stored pack (PX-143). */
+  const handleDownloadPackPdf = async (packId: number, packUuid: string) => {
+    if (!investigation || !investigationId) return
+    setDownloadingPdfPackId(packId)
+    setPackError(null)
+    try {
+      const pdf = await fetchCustomerPackPdf(investigationId, packId)
+      triggerPackPdfDownload(pdf, packPdfFilename(investigation.reference_number, packUuid))
+      toast.success('Customer pack PDF downloaded.')
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'downloadPackPdf' })
+      const message = getApiErrorMessage(err, 'Could not build the customer pack PDF.')
+      setPackError(message)
+      toast.error(message)
+    } finally {
+      setDownloadingPdfPackId(null)
     }
   }
 
@@ -491,7 +526,9 @@ export default function InvestigationDetail() {
       triggerPackDownload(buildGeneratedPackDownload(response.data))
       const log = response.data.redaction_log
       setLastRedactionLog(Array.isArray(log) ? log : null)
-      toast.success(t('investigations.report.generate_download_success'))
+      toast.success('Report generated — downloading PDF and JSON record.')
+      // The PDF is the issuable document; the JSON above is the machine-readable record.
+      await handleDownloadPackPdf(response.data.pack_id, response.data.pack_uuid)
       await loadPacks()
       await loadInvestigation()
     } catch (err: unknown) {
@@ -580,6 +617,7 @@ export default function InvestigationDetail() {
     try {
       await investigationsApi.update(investigationId, { status: 'closed' })
       toast.success(t('investigations.closure.closed_success', 'Investigation closed'))
+      setShowCloseDialog(false)
       await loadInvestigation()
       await loadClosureValidation()
     } catch (err) {
@@ -587,8 +625,27 @@ export default function InvestigationDetail() {
       const message = getApiErrorMessage(err)
       setCloseError(message)
       toast.error(message)
+      // The refusal usually means the run moved under us; re-read the gate.
+      await loadClosureValidation()
     } finally {
       setClosingInvestigation(false)
+    }
+  }
+
+  const handleReopenInvestigation = async () => {
+    if (!investigationId) return
+    setReopening(true)
+    try {
+      await investigationsApi.update(investigationId, { status: INVESTIGATION_REOPEN_STATUS })
+      toast.success(t('caseClosure.reopened', 'Case reopened'))
+      setShowReopenDialog(false)
+      await loadInvestigation()
+      await loadClosureValidation()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'reopenInvestigation' })
+      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
+    } finally {
+      setReopening(false)
     }
   }
 
@@ -1378,7 +1435,10 @@ export default function InvestigationDetail() {
                     {closureValidation.can_close && investigation.status !== 'closed' ? (
                       <div className="space-y-2">
                         <Button
-                          onClick={() => void handleCloseInvestigation()}
+                          onClick={() => {
+                            setCloseError(null)
+                            setShowCloseDialog(true)
+                          }}
                           disabled={closingInvestigation}
                           data-testid="investigation-close-cta"
                         >
@@ -1401,12 +1461,23 @@ export default function InvestigationDetail() {
                       </div>
                     ) : null}
                     {investigation.status === 'closed' ? (
-                      <p
-                        className="text-sm text-muted-foreground"
-                        data-testid="investigation-already-closed"
-                      >
-                        {t('investigations.closure.already_closed', 'This investigation is closed.')}
-                      </p>
+                      <div className="space-y-2">
+                        <p
+                          className="text-sm text-muted-foreground"
+                          data-testid="investigation-already-closed"
+                        >
+                          {t('investigations.closure.already_closed', 'This investigation is closed.')}
+                        </p>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowReopenDialog(true)}
+                          disabled={reopening}
+                          data-testid="investigation-reopen"
+                        >
+                          <RotateCcw className="w-4 h-4 mr-2" />
+                          {t('caseClosure.reopen', 'Reopen')}
+                        </Button>
+                      </div>
                     ) : null}
                     {closureBlockers.length > 0 && (
                       <div className="space-y-1">
@@ -1713,8 +1784,9 @@ export default function InvestigationDetail() {
               <h3 className="text-lg font-semibold text-foreground">HSG245 report scope</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 {String(investigation.level || 'medium').toUpperCase()} level sections required for this
-                investigation. Request omit from customer pack; H&S Advisor/Admin approval required
-                (`investigation:approve_customer_omit`).
+                investigation. You can ask for a section to be left out of the customer pack, but an
+                H&amp;S Advisor or Admin holding “{formatPermissionCode(OMIT_APPROVAL_PERMISSION)}”
+                has to approve it first.
               </p>
               <div className="mt-4 space-y-3">
                 {getReportSectionsForLevel(investigation.level).map((section) => {
@@ -1813,8 +1885,11 @@ export default function InvestigationDetail() {
               <h3 className="text-lg font-semibold text-foreground mb-2">
                 {t('investigations.generate_report')}
               </h3>
+              {/* Inline English: the locale copy still says the PDF is a follow-on, and
+                  i18n files are owned by another lane this wave. */}
               <p className="text-sm text-muted-foreground mb-4">
-                {t('investigations.report.generate_hint')}
+                Generating a pack produces a branded PDF for issue to the customer, plus a JSON
+                copy of the same payload for the record. Both carry a checksum for verification.
               </p>
               {!packCapability.canGenerate && (
                 <div
@@ -1963,6 +2038,19 @@ export default function InvestigationDetail() {
                             </p>
                           )}
                         </div>
+                        <Button
+                          size="sm"
+                          data-testid={`investigation-pack-download-pdf-${pack.id}`}
+                          disabled={downloadingPdfPackId === pack.id}
+                          onClick={() => void handleDownloadPackPdf(pack.id, pack.pack_uuid)}
+                        >
+                          {downloadingPdfPackId === pack.id ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                          )}
+                          PDF
+                        </Button>
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1981,7 +2069,7 @@ export default function InvestigationDetail() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              {t('investigations.report.download_manifest_tooltip')}
+                              Download JSON manifest stub (checksum metadata only)
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -2048,6 +2136,45 @@ export default function InvestigationDetail() {
             </Button>
             <Button variant="destructive" onClick={confirmDeleteEvidence}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <InvestigationCloseSummaryDialog
+        open={showCloseDialog}
+        investigation={investigation}
+        validation={closureValidation}
+        submitting={closingInvestigation}
+        error={closeError}
+        onConfirm={() => void handleCloseInvestigation()}
+        onOpenChange={setShowCloseDialog}
+        onOpenActions={() => setActiveTab('actions')}
+      />
+
+      <Dialog open={showReopenDialog} onOpenChange={setShowReopenDialog}>
+        <DialogContent data-testid="investigation-reopen-dialog">
+          <DialogHeader>
+            <DialogTitle>{t('caseClosure.reopenTitle', 'Reopen this case?')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t('caseClosure.reopenDescription', {
+              defaultValue:
+                'The case moves back to {{status}} and its closure stamp is cleared. The audit trail keeps the original close.',
+              status: formatCodedValue(INVESTIGATION_REOPEN_STATUS),
+            })}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReopenDialog(false)} disabled={reopening}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              onClick={() => void handleReopenInvestigation()}
+              disabled={reopening}
+              data-testid="investigation-reopen-confirm"
+            >
+              {reopening ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              {t('caseClosure.reopen', 'Reopen')}
             </Button>
           </DialogFooter>
         </DialogContent>

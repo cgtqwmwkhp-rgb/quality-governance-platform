@@ -302,13 +302,14 @@ class TestPortalSmoke:
     def test_portal_report_submission(self, client):
         """✓ Portal can submit reports."""
         response = client.post(
-            "/api/v1/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Smoke Test Incident",
                 "description": "This is an automated smoke test incident.",
                 "severity": "low",
-                "is_anonymous": True,
+                "is_anonymous": False,
+                "reporter_name": "Smoke Tester",
             },
         )
         # 404 = route not configured in test environment

@@ -39,6 +39,9 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
         add=Mock(),
         commit=AsyncMock(),
         refresh=AsyncMock(),
+        flush=AsyncMock(),
+        # Tenant existence lookup in _resolve_new_user_tenant.
+        scalar=AsyncMock(return_value=1),
     )
 
     async def _execute(_query):
@@ -46,15 +49,25 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
             return _FakeResult(None)
         if db.execute.await_count == 2:
             return _FakeResult([role])
-        created = db.add.call_args.args[0]
+        # The route now adds a tenant membership row too, so address the User positionally
+        # rather than taking whatever happened to be added last.
+        created = db.add.call_args_list[0].args[0]
         created.id = 101
         created.created_at = now
         created.updated_at = now
         return _FakeResult(created)
 
     db.execute = AsyncMock(side_effect=_execute)
-    current_user = types.SimpleNamespace(id=1, email="admin@example.com", is_superuser=True)
+    # A real creating admin always carries a tenant; a tenant-less one is now refused.
+    current_user = types.SimpleNamespace(id=1, email="admin@example.com", is_superuser=True, tenant_id=1)
     monkeypatch.setattr("src.api.routes.users._ensure_user_management_enabled", AsyncMock())
+    # Person provisioning now runs (it was skipped while tenant_id was NULL). It has its
+    # own integration cover; stub it here so this test keeps asserting only SSO password
+    # handling and its exact DB round-trip count.
+    monkeypatch.setattr(
+        "src.domain.services.engineer_user_link_service.ensure_engineer_for_user_async",
+        AsyncMock(),
+    )
 
     await create_user(
         UserCreate(
@@ -68,7 +81,7 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
         current_user,
     )
 
-    created_user = db.add.call_args.args[0]
+    created_user = db.add.call_args_list[0].args[0]
     assert created_user.email == "sso.user@example.com"
     assert created_user.hashed_password == ""
     assert created_user.roles[0].name == "manager"

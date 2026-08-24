@@ -14,6 +14,15 @@ def service():
     return CopilotService(db=SimpleNamespace())
 
 
+def test_simulate_explains_capa_without_live_register_claim(service: CopilotService):
+    """Demo prompt "what is CAPA" must return general CAPA guidance (no live register)."""
+    content, action = service._simulate_ai_response("what is CAPA", {})
+    assert action is None
+    assert "Corrective and Preventive Action" in content
+    assert "General guidance only" in content
+    assert "CAPA-" not in content  # no fabricated reference numbers
+
+
 def test_simulate_refuses_fabricated_compliance_percentage(service: CopilotService):
     content, action = service._simulate_ai_response("Compliance Status", {})
     assert "92%" not in content
@@ -40,6 +49,43 @@ def test_simulate_refuses_incident_create_without_false_proceed(service: Copilot
     assert action is not None
     assert action["action"] == "create_incident"
     assert action["honesty"] == "not_performed"
+
+
+def test_simulate_refusals_track_whether_the_registers_are_wired_up(service: CopilotService):
+    """The same refusal is worded two ways because two different things are true.
+
+    Off, the surface is a disconnected keyword demo. On, the registers are read for
+    the closed question set and only the set is the limit — so the demo sentence
+    would be a false disclaimer, not a cautious one.
+    """
+    demo, demo_action = service._simulate_ai_response("Compliance Status", {})
+    grounded, grounded_action = service._simulate_ai_response("Compliance Status", {}, grounded=True)
+
+    assert "demo is not connected" in demo.lower()
+    assert "demo" not in grounded.lower()
+    assert "fixed set of questions from your registers" in grounded.lower()
+    # The grounded string also serves the no-permission and module-off cases, where the
+    # question *is* in the set, so it must not name the question as the reason.
+    assert "outside the fixed set" not in grounded.lower()
+
+    # Wording is the only thing that moves: both still refuse the figure outright.
+    assert "92%" not in grounded
+    assert "will not invent" in grounded.lower()
+    assert demo_action["honesty"] == grounded_action["honesty"] == "not_performed"
+    assert demo_action["action"] == grounded_action["action"] == "get_compliance_status"
+
+
+def test_simulate_grounded_fallbacks_never_call_themselves_a_demo(service: CopilotService):
+    """Every branch the ungrounded fall-through can reach, not just the refusals."""
+    for question in (
+        "create an incident for a slip",
+        "Risk Summary",
+        "what is quokka governance",
+        "go to incidents",
+        "how is the weather",
+    ):
+        content, _ = service._simulate_ai_response(question, {}, grounded=True)
+        assert "demo" not in content.lower(), question
 
 
 @pytest.mark.asyncio

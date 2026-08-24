@@ -1,0 +1,54 @@
+import { useCallback, useEffect, useState } from 'react'
+import type { AxiosError, AxiosResponse } from 'axios'
+import { standardsCellAggregateApi, getApiErrorMessage } from '../../../api/client'
+import type { StandardsCellAggregate } from '../../../api/standardsCellAggregateTypes'
+import type { FrameworkId } from '../standardsMatrixFilters'
+
+export function useStandardsCellAggregate(
+  frameworkId: FrameworkId | string | null | undefined,
+  clauseNumber: string | null | undefined,
+) {
+  const [data, setData] = useState<StandardsCellAggregate | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+
+  const refetch = useCallback(() => {
+    setReloadToken((token) => token + 1)
+  }, [])
+
+  useEffect(() => {
+    const framework = (frameworkId || '').trim()
+    const clause = (clauseNumber || '').trim()
+    if (!framework || !clause) {
+      setData(null)
+      setError(null)
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    standardsCellAggregateApi
+      .getCell(framework, clause)
+      .then((res: AxiosResponse<StandardsCellAggregate>) => {
+        if (!cancelled) setData(res.data)
+      })
+      .catch((err: AxiosError | Error) => {
+        if (!cancelled) {
+          setData(null)
+          setError(getApiErrorMessage(err))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [frameworkId, clauseNumber, reloadToken])
+
+  return { data, loading, error, refetch }
+}

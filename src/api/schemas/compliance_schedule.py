@@ -1,0 +1,420 @@
+"""Pydantic schemas for Compliance Schedule (Wave 1)."""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from src.api.schemas.validators import sanitize_field
+from src.domain.models.compliance_schedule import (
+    ComplianceFilingStatus,
+    ComplianceRecordOutcome,
+    ComplianceScheduleAnchor,
+)
+
+ComplianceStatusLiteral = Literal["current", "due_soon", "overdue"]
+
+
+class CatalogueTemplateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    id: int
+    template_key: str
+    title: str
+    taxonomy_id: str
+    description: Optional[str] = None
+    regulatory_basis: Optional[str] = None
+    frequency_months: Optional[int] = None
+    frequency_days: Optional[int] = None
+    anchor: ComplianceScheduleAnchor
+    statutory: bool
+    is_active: bool
+
+
+class CatalogueListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[CatalogueTemplateResponse]
+    total: int
+
+
+class CatalogueActivateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: Optional[int] = None
+    next_due_date: Optional[date] = None
+    last_completed_at: Optional[datetime] = None
+    owner_id: Optional[int] = None
+
+
+class RequirementCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(..., min_length=1, max_length=255)
+    taxonomy_id: str = Field(..., min_length=1, max_length=20)
+    description: Optional[str] = None
+    regulatory_basis: Optional[str] = Field(None, max_length=255)
+    regulatory_standard_id: Optional[int] = Field(None, ge=1)
+    regulatory_clause_id: Optional[int] = Field(None, ge=1)
+    frequency_months: Optional[int] = Field(None, ge=1)
+    frequency_days: Optional[int] = Field(None, ge=1)
+    anchor: ComplianceScheduleAnchor = ComplianceScheduleAnchor.SCHEDULE
+    statutory: bool = False
+    next_due_date: date
+    last_completed_at: Optional[datetime] = None
+    location_id: Optional[int] = None
+    owner_id: Optional[int] = None
+    template_id: Optional[int] = None
+    is_active: bool = True
+
+    @field_validator("title", "taxonomy_id", "description", "regulatory_basis", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+
+class RequirementUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    taxonomy_id: Optional[str] = Field(None, min_length=1, max_length=20)
+    description: Optional[str] = None
+    regulatory_basis: Optional[str] = Field(None, max_length=255)
+    regulatory_standard_id: Optional[int] = Field(None, ge=1)
+    regulatory_clause_id: Optional[int] = Field(None, ge=1)
+    frequency_months: Optional[int] = Field(None, ge=1)
+    frequency_days: Optional[int] = Field(None, ge=1)
+    anchor: Optional[ComplianceScheduleAnchor] = None
+    statutory: Optional[bool] = None
+    next_due_date: Optional[date] = None
+    last_completed_at: Optional[datetime] = None
+    location_id: Optional[int] = None
+    owner_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("title", "taxonomy_id", "description", "regulatory_basis", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+
+class RequirementResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    id: int
+    external_id: str
+    tenant_id: int
+    reference_number: str
+    template_id: Optional[int] = None
+    location_id: Optional[int] = None
+    title: str
+    taxonomy_id: str
+    description: Optional[str] = None
+    regulatory_basis: Optional[str] = None
+    regulatory_standard_id: Optional[int] = None
+    regulatory_clause_id: Optional[int] = None
+    frequency_months: Optional[int] = None
+    frequency_days: Optional[int] = None
+    anchor: ComplianceScheduleAnchor
+    statutory: bool
+    next_due_date: date
+    last_completed_at: Optional[datetime] = None
+    owner_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    is_active: bool
+    status: Optional[ComplianceStatusLiteral] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    # Server-authoritative FRA OCR eligibility (template key OR custom 03.01).
+    # Do not re-derive from taxonomy alone on the client.
+    fra_ocr_eligible: bool = False
+
+
+class RegulatoryBasisSuggestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(..., min_length=1, max_length=255)
+    taxonomy_id: str = Field(..., min_length=1, max_length=20)
+    description: Optional[str] = Field(None, max_length=4000)
+    statutory: bool = False
+    requirement_id: Optional[int] = Field(None, ge=1)
+
+    @field_validator("title", "taxonomy_id", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+
+class RegulatoryBasisClarifyAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str = Field(..., min_length=1, max_length=64)
+    answer: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("question_id", "answer", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+
+class RegulatoryBasisClarifyRequest(RegulatoryBasisSuggestRequest):
+    answers: List[RegulatoryBasisClarifyAnswer] = Field(..., min_length=1, max_length=4)
+
+
+class RegulatoryBasisCandidateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str
+    regulation_or_standard_code: str
+    standard_id: Optional[int] = None
+    clause_ids: List[int] = Field(default_factory=list)
+    confidence: float
+    rationale: str
+    source: str
+
+
+class RegulatoryBasisQuestionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    question: str
+    options: List[str] = Field(default_factory=list)
+    why: str = ""
+
+
+class RegulatoryBasisSuggestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: List[RegulatoryBasisCandidateResponse]
+    needs_clarification: bool
+    clarifying_questions: List[RegulatoryBasisQuestionResponse] = Field(default_factory=list)
+    confidence_threshold: float
+    ai_available: bool
+    notice: Optional[str] = None
+
+
+class RequirementListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[RequirementResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class RecordCompleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    completed_at: Optional[datetime] = None
+    check_passed: Optional[bool] = None
+    notes: Optional[str] = None
+    evidence_asset_ids: Optional[List[int]] = None
+    due_date: Optional[date] = None
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+
+class RecordEvidenceAttachRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_asset_ids: List[int] = Field(..., min_length=1)
+
+
+class RecordFileRequest(BaseModel):
+    """Body for the explicit Library filing step (ADR-0020).
+
+    Exactly one mode per request:
+
+    * ``evidence_asset_id`` + ``category_id`` — copy an evidence asset already
+      attached to this occurrence into the Governance Library as a new draft
+      document under that taxonomy category.
+    * ``library_document_id`` — point the occurrence at a document that is
+      already in the Library.
+
+    The two are mutually exclusive rather than merged into one optional-field
+    soup because they authorise differently: one creates a document, the other
+    exposes an existing one. A request that supplies both is a caller who has
+    not decided which they meant, and guessing for them would file something.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_asset_id: Optional[int] = Field(None, ge=1)
+    category_id: Optional[int] = Field(None, ge=1)
+    # Owning function for the PEL reference (ADR-0023) — a different axis from
+    # category_id. Omitted means "not yet confirmed": the document is filed
+    # with no PEL reference rather than one derived from the category, because
+    # an issued reference can never be corrected in place.
+    function_code: Optional[str] = Field(None, min_length=1, max_length=20)
+    # Cascade level 1-5 (NS-1) — the band the PEL reference is drawn from, and
+    # the first digit of its sequence. Required alongside function_code because
+    # the band is baked into an immutable reference: filed evidence is usually
+    # a level-5 record but not always, and a defaulted band would misplace the
+    # document in the cascade permanently.
+    cascade_level: Optional[int] = Field(None, ge=1, le=5)
+    library_document_id: Optional[int] = Field(None, ge=1)
+    title: Optional[str] = Field(None, min_length=1, max_length=500)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
+    @model_validator(mode="after")
+    def _exactly_one_mode(self) -> "RecordFileRequest":
+        if (self.evidence_asset_id is None) == (self.library_document_id is None):
+            raise ValueError("Provide exactly one of evidence_asset_id or library_document_id")
+        if self.evidence_asset_id is not None and self.category_id is None:
+            raise ValueError("category_id is required when filing an evidence asset")
+        if self.library_document_id is not None and self.category_id is not None:
+            raise ValueError("category_id does not apply when linking an existing library document")
+        if self.library_document_id is not None and self.function_code is not None:
+            raise ValueError("function_code does not apply when linking an existing library document")
+        if self.library_document_id is not None and self.cascade_level is not None:
+            raise ValueError("cascade_level does not apply when linking an existing library document")
+        if self.function_code is not None and self.cascade_level is None:
+            raise ValueError("cascade_level is required when function_code is supplied (NS-1 banded PEL reference)")
+        if self.library_document_id is not None and self.title is not None:
+            raise ValueError("title does not apply when linking an existing library document")
+        return self
+
+
+class RecordResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    id: int
+    external_id: str
+    tenant_id: int
+    reference_number: str
+    requirement_id: int
+    due_date: date
+    outcome: ComplianceRecordOutcome
+    completed_at: Optional[datetime] = None
+    check_passed: Optional[bool] = None
+    notes: Optional[str] = None
+    library_document_id: Optional[int] = None
+    filing_status: ComplianceFilingStatus
+    filing_error: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class RecordFilingResponse(BaseModel):
+    """Outcome of one filing attempt.
+
+    Returns the updated occurrence so the caller needs no second read, plus the
+    parts of the outcome the occurrence has nowhere to hold: the allocated PEL
+    reference, and whether the Library already holds an approved document that
+    looks like this one. A duplicate does not block the filing — the occurrence
+    is still filed — so the warning has to travel back with the response or it
+    is lost.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    record: RecordResponse
+    library_document_id: int
+    pel_doc_ref: Optional[str] = None
+    linked_existing: bool
+    duplicate_warning: bool = False
+    duplicate_warning_detail: Optional[List[dict]] = None
+    index_job_id: Optional[int] = None
+
+
+class RecordListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[RecordResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class ComplianceScheduleStatsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    total_active: int
+    current: int
+    due_soon: int
+    overdue: int
+
+
+class LocationCoverageGapItem(BaseModel):
+    """One active location and whether FRA / fire-drill obligations cover it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: int
+    location_name: str
+    location_kind: str
+    has_fra: bool
+    has_fire_drill: bool
+    fra_requirement_id: Optional[int] = None
+    fire_drill_requirement_id: Optional[int] = None
+    missing_fra: bool
+    missing_fire_drill: bool
+
+
+class LocationCoverageGapsResponse(BaseModel):
+    """Wave 3 — locations missing active FRA and/or fire-drill obligations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_locations: int
+    missing_fra: int
+    missing_fire_drill: int
+    missing_both: int
+    items: List[LocationCoverageGapItem]
+
+
+class ComplianceImportRowError(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row: int
+    code: str
+    message: str
+    field: Optional[str] = None
+
+
+class ComplianceImportPreviewRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row: int
+    action: str
+    template_key: str
+    location_id: int
+    location_name: str
+    title: str
+    next_due_date: Optional[str] = None
+    owner_id: Optional[int] = None
+
+
+class ComplianceImportValidationReportResponse(BaseModel):
+    """Dry-run / commit validation report for CS CSV import."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dry_run: bool
+    total_rows: int
+    valid_rows: int
+    error_rows: int
+    creates: int
+    skips: int
+    ok: bool
+    errors: List[ComplianceImportRowError] = Field(default_factory=list)
+    preview: List[ComplianceImportPreviewRow] = Field(default_factory=list)
+
+
+class ComplianceImportCommitResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    created_count: int
+    created_requirement_ids: List[int]
+    report: ComplianceImportValidationReportResponse

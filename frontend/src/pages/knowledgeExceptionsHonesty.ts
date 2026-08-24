@@ -16,6 +16,7 @@ export interface ExceptionLinkLike {
   title: string | null
   notes: string | null
   signal_type?: string | null
+  gate_reason?: string | null
   confidence: number | null
   linked_by?: string | null
 }
@@ -247,7 +248,7 @@ function allocationKindForGroup(
 
 /**
  * Collapse twin proposals / show existing allocation honestly (KE-05).
- * Preserves server order within groups; newest/highest-confidence proposal wins ties.
+ * Preserves server order between allocations; newest/highest-confidence proposal wins within a group.
  */
 export function dedupeKnowledgeExceptions(items: ExceptionLinkLike[]): DedupedExceptionRow[] {
   const groups = new Map<string, ExceptionLinkLike[]>()
@@ -270,7 +271,7 @@ export function dedupeKnowledgeExceptions(items: ExceptionLinkLike[]): DedupedEx
     })
   }
 
-  return rows.sort((a, b) => b.primary.id - a.primary.id)
+  return rows
 }
 
 export function isGenericRationale(text: string | null | undefined): boolean {
@@ -304,6 +305,9 @@ export function buildWhyDetail(link: ExceptionLinkLike): WhyDetail {
   if (signal) lines.push(`Signal: ${signal.replace(/_/g, ' ')}`)
   if (link.confidence != null) {
     lines.push(`AI confidence: ${Math.round(link.confidence * 100)}%`)
+  }
+  if (link.gate_reason) {
+    lines.push(`Ingest gate: ${link.gate_reason.replace(/_/g, ' ')}`)
   }
   if (link.linked_by) lines.push(`Linked by: ${link.linked_by}`)
 

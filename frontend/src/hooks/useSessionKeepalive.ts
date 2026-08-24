@@ -17,28 +17,51 @@
  * token. All refreshes go through the single-flight `refreshSession()`
  * helper so concurrent callers share one in-flight request.
  */
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { refreshSession } from '../api/client'
 import {
   getPlatformRefreshToken,
   getPlatformToken,
+  getSecondsUntilExpiry,
   getTokenExpirySeconds,
+  SESSION_WARNING_LEAD_SECONDS,
   shouldRefreshToken,
   TOKEN_REFRESH_LEAD_SECONDS,
 } from '../utils/auth'
 
 const MIN_TIMER_MS = 15_000 // never schedule sooner than 15s
 const MAX_TIMER_MS = 25 * 60 * 1000 // never schedule later than 25min
+const WARNING_POLL_MS = 10_000
 
 interface UseSessionKeepaliveOptions {
   enabled?: boolean
 }
 
-export function useSessionKeepalive(options: UseSessionKeepaliveOptions = {}): void {
+export interface SessionKeepaliveState {
+  /**
+   * True once the session is inside the warning window with no successful
+   * silent refresh — i.e. the user is genuinely about to be signed out.
+   */
+  expiryImminent: boolean
+  /** True while a user-initiated "stay signed in" refresh is in flight. */
+  extending: boolean
+  /** True when the most recent extend attempt failed; the session will end. */
+  extendFailed: boolean
+  /** Attempt an immediate refresh. Resolves true when the session was extended. */
+  extendSession: () => Promise<boolean>
+}
+
+export function useSessionKeepalive(
+  options: UseSessionKeepaliveOptions = {},
+): SessionKeepaliveState {
   const { enabled = true } = options
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
+
+  const [expiryImminent, setExpiryImminent] = useState(false)
+  const [extending, setExtending] = useState(false)
+  const [extendFailed, setExtendFailed] = useState(false)
 
   useEffect(() => {
     if (!enabled) return
@@ -127,6 +150,68 @@ export function useSessionKeepalive(options: UseSessionKeepaliveOptions = {}): v
       window.removeEventListener('focus', onFocus)
     }
   }, [enabled])
+
+  // Watch the countdown so the shell can warn before the session actually
+  // ends. Read-only: this poll never refreshes, so it cannot race the
+  // scheduler above (PX-179).
+  useEffect(() => {
+    if (!enabled) {
+      setExpiryImminent(false)
+      setExtendFailed(false)
+      return
+    }
+
+    const evaluate = () => {
+      const token = getPlatformToken()
+      if (!token) {
+        setExpiryImminent(false)
+        return
+      }
+      const remaining = getSecondsUntilExpiry(token)
+      // An unreadable `exp` gives us nothing honest to warn about; the 401
+      // interceptor remains the backstop.
+      if (remaining === null) {
+        setExpiryImminent(false)
+        return
+      }
+      const imminent = remaining <= SESSION_WARNING_LEAD_SECONDS
+      setExpiryImminent(imminent)
+      if (!imminent) setExtendFailed(false)
+    }
+
+    evaluate()
+    const handle = setInterval(evaluate, WARNING_POLL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') evaluate()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearInterval(handle)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [enabled])
+
+  const extendSession = useCallback(async () => {
+    setExtending(true)
+    try {
+      const token = await refreshSession()
+      if (token) {
+        setExpiryImminent(false)
+        setExtendFailed(false)
+        return true
+      }
+      setExtendFailed(true)
+      return false
+    } catch {
+      setExtendFailed(true)
+      return false
+    } finally {
+      setExtending(false)
+    }
+  }, [])
+
+  return { expiryImminent, extending, extendFailed, extendSession }
 }
 
 export default useSessionKeepalive

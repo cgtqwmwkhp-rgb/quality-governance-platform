@@ -5,29 +5,48 @@ Interactive conversational AI assistant for QHSE management.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.core.security import decode_token
 from src.domain.exceptions import NotFoundError
+from src.domain.models.user import User
 from src.infrastructure.database import async_session_maker
 
 # PX-248: copilot answers are hardcoded simulations, not inference over tenant data.
 # Serving them would present fabricated figures as fact, so the surface is closed
-# unless an operator explicitly opts a non-production environment in.
-COPILOT_DISABLED_DETAIL = "AI Copilot is not enabled in this environment."
+# in every environment unless an operator explicitly opts that environment in.
+COPILOT_DISABLED_DETAIL = "PlantEx Assist is not enabled in this environment."
 
 
-def require_copilot_enabled() -> None:
-    """Reject every copilot HTTP request unless the feature is explicitly opted in."""
+async def copilot_is_open() -> bool:
+    """Whether the copilot may answer right now: configuration, then the kill switch.
+
+    The order is the guarantee. ``copilot_is_enabled()`` is checked first and short
+    circuits, so a copilot that configuration has not opened performs no database read
+    and no database state can open it. Only once configuration says yes does the runtime
+    switch get a say, and all it can do is say no.
+
+    The session comes from ``async_session_maker`` rather than the request's own, so a
+    failing read cannot leave the caller's transaction unusable. It is opened only when
+    the cached verdict has expired, not on every request.
+    """
+    from src.domain.services.copilot_kill_switch import copilot_kill_switch_engaged
     from src.domain.services.copilot_service import copilot_is_enabled
 
     if not copilot_is_enabled():
+        return False
+    return not await copilot_kill_switch_engaged(async_session_maker)
+
+
+async def require_copilot_enabled() -> None:
+    """Reject every copilot HTTP request unless the feature is explicitly opted in."""
+    if not await copilot_is_open():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=COPILOT_DISABLED_DETAIL)
 
 
@@ -142,9 +161,12 @@ async def get_active_session(
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
 
-    session = await service.get_active_session(current_user.id)
+    session = await service.get_active_session(current_user.id, current_user.tenant_id)
     return session
 
 
@@ -153,10 +175,17 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
 
-    service = CopilotService(db)
-    session = await service.get_session(session_id)
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
 
-    if not session or session.user_id != current_user.id:
+    service = CopilotService(db)
+    session = await service.get_session(
+        session_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
+
+    if not session:
         raise NotFoundError("Session not found")
 
     return session
@@ -167,11 +196,19 @@ async def close_session(session_id: int, db: DbSession, current_user: CurrentUse
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
-    session = await service.get_session(session_id)
-    if not session or session.user_id != current_user.id:
-        raise NotFoundError("Session not found")
-    await service.close_session(session_id)
+
+    try:
+        await service.close_session(
+            session_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+        )
+    except ValueError as e:
+        raise NotFoundError(str(e))
 
     return {"status": "closed"}
 
@@ -186,9 +223,15 @@ async def list_sessions(
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     result = await db.execute(
         select(CopilotSession)
-        .where(CopilotSession.user_id == current_user.id)
+        .where(
+            CopilotSession.user_id == current_user.id,
+            CopilotSession.tenant_id == current_user.tenant_id,
+        )
         .order_by(CopilotSession.updated_at.desc())
         .offset(offset)
         .limit(limit)
@@ -213,6 +256,9 @@ async def send_message(
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
 
     try:
@@ -220,6 +266,7 @@ async def send_message(
             session_id=session_id,
             content=data.content,
             user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
         )
         return message
     except ValueError as e:
@@ -236,11 +283,20 @@ async def get_messages(
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
-    session = await service.get_session(session_id)
-    if not session or session.user_id != current_user.id:
-        raise NotFoundError("Session not found")
-    messages = await service.get_session_messages(session_id, limit=limit)
+
+    try:
+        messages = await service.get_session_messages(
+            session_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            limit=limit,
+        )
+    except ValueError as e:
+        raise NotFoundError(str(e))
 
     return messages
 
@@ -316,7 +372,7 @@ async def execute_action(
         "result": {
             "success": False,
             "performed": False,
-            "reason": "AI Copilot cannot execute writes or live-data reads; use the relevant module.",
+            "reason": "PlantEx Assist cannot execute writes or live-data reads; use the relevant module.",
         },
     }
 
@@ -438,11 +494,17 @@ async def add_knowledge(
     title: str,
     content: str,
     category: str,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("admin:manage"))],
     db: DbSession,
     tags: Optional[list[str]] = None,
 ):
-    """Add to the knowledge base."""
+    """Add to the knowledge base — tenant admins only.
+
+    What lands here is retrieved by ``/knowledge/search`` and read back to every user in
+    the tenant with the copilot's voice behind it, so authoring it is a publishing act
+    rather than an ordinary write. Until now any authenticated user could perform it,
+    which made the knowledge base a route for putting words in the assistant's mouth.
+    """
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
@@ -487,11 +549,9 @@ manager = ConnectionManager()
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: int):
     """WebSocket endpoint for real-time chat. Requires token in query params."""
-    from src.domain.models.ai_copilot import CopilotSession
-    from src.domain.models.user import User
-    from src.domain.services.copilot_service import CopilotService, copilot_is_enabled
+    from src.domain.services.copilot_service import CopilotService
 
-    if not copilot_is_enabled():
+    if not await copilot_is_open():
         await websocket.close(code=4004, reason=COPILOT_DISABLED_DETAIL)
         return
 
@@ -525,22 +585,21 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
             await websocket.close(code=4001, reason="Invalid token")
             return
 
-        session_result = await db.execute(
-            select(CopilotSession).where(
-                CopilotSession.id == session_id,
-                CopilotSession.user_id == user.id,
-            )
-        )
-        session_obj = session_result.scalar_one_or_none()
-        if not session_obj:
-            await websocket.close(code=4003, reason="Session not found or access denied")
-            return
-
         user_id = user.id
         try:
             tenant_id = require_tenant_id(user.tenant_id)
         except HTTPException:
             await websocket.close(code=4003, reason="Tenant access denied")
+            return
+
+        service = CopilotService(db)
+        session_obj = await service.get_session(
+            session_id,
+            user_id=user_id,
+            tenant_id=tenant_id,
+        )
+        if not session_obj:
+            await websocket.close(code=4003, reason="Session not found or access denied")
             return
 
     await manager.connect(websocket, session_id)
@@ -558,6 +617,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                         session_id=session_id,
                         content=data["content"],
                         user_id=user_id,
+                        tenant_id=tenant_id,
                     )
 
                     await manager.send_message(

@@ -262,6 +262,47 @@ class TestLookupOptions:
         result = await svc.update_lookup_option("cat", 1, data=MagicMock(), tenant_id=1)
         assert result is option
 
+    @pytest.mark.asyncio
+    async def test_create_rejects_code_outside_enum(self):
+        from src.api.schemas.form_config import LookupOptionCreate
+        from src.domain.exceptions import ValidationError
+
+        svc, _db = _make_service()
+        data = LookupOptionCreate(code="workmanship", label="Workmanship")
+        with pytest.raises(ValidationError, match="workmanship"):
+            await svc.create_lookup_option("complaint_types", data=data, tenant_id=1)
+
+    @pytest.mark.asyncio
+    @patch("src.domain.services.form_config_service.invalidate_tenant_cache", new_callable=AsyncMock)
+    @patch("src.domain.services.form_config_service.track_metric")
+    async def test_create_accepts_enum_member(self, _metric, _cache):
+        from src.api.schemas.form_config import LookupOptionCreate
+
+        svc, db = _make_service()
+        db.refresh = AsyncMock()
+        data = LookupOptionCreate(code="service", label="Service or workmanship")
+        result = await svc.create_lookup_option("complaint_types", data=data, tenant_id=1)
+        assert result.code == "service"
+        db.add.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("src.domain.services.form_config_service.invalidate_tenant_cache", new_callable=AsyncMock)
+    @patch("src.domain.services.form_config_service.track_metric")
+    async def test_update_rejects_code_outside_enum(self, _metric, _cache):
+        from src.api.schemas.form_config import LookupOptionUpdate
+        from src.domain.exceptions import ValidationError
+
+        svc, db = _make_service()
+        option = MagicMock(id=1, category="complaint_types", code="service")
+        db.execute.return_value = _mock_scalar(option)
+        with pytest.raises(ValidationError, match="workmanship"):
+            await svc.update_lookup_option(
+                "complaint_types",
+                1,
+                data=LookupOptionUpdate(code="workmanship"),
+                tenant_id=1,
+            )
+
 
 # ---------------------------------------------------------------------------
 # Step/field CRUD (via _get_or_raise)

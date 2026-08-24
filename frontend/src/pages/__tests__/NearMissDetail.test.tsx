@@ -11,6 +11,13 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
+
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({ testId = 'engineer-people-picker' }: { testId?: string }) => (
+    <input data-testid={testId} aria-label="Assign to" />
+  ),
+}))
+
 vi.mock('../../contexts/ToastContext', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
@@ -113,7 +120,7 @@ const nearMiss = {
   event_date: '2026-07-01T10:00:00Z',
   description: 'Near miss description long enough',
   witnesses_present: false,
-  status: 'REPORTED',
+  status: 'reported',
   priority: 'MEDIUM',
   created_at: '2026-07-01T10:00:00Z',
   updated_at: '2026-07-01T10:00:00Z',
@@ -252,5 +259,80 @@ describe('NearMissDetail investigation → CAPA honesty', () => {
       source_id: 5,
       page_size: 50,
     })
+  })
+})
+
+describe('NearMissDetail closure lifecycle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(client.nearMissesApi.listInvestigations as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [], total: 0 },
+    })
+    ;(client.actionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [], total: 0 },
+    })
+    ;(client.nearMissesApi.listRunningSheet as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+    })
+  })
+
+  const renderPage = () =>
+    render(
+      <MemoryRouter initialEntries={['/near-misses/5']}>
+        <Routes>
+          <Route path="/near-misses/:id" element={<NearMissDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+  it('offers Close on an open near miss and shows the status badge', async () => {
+    ;(client.nearMissesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: nearMiss })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('near-miss-close')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('near-miss-status-badge')).toHaveTextContent('Reported')
+    expect(screen.queryByTestId('near-miss-reopen')).not.toBeInTheDocument()
+  })
+
+  // N-2: the reopen target is the incident register's, not a near-miss-only one.
+  it('reopens a closed near miss back to pending_review', async () => {
+    ;(client.nearMissesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { ...nearMiss, status: 'closed' },
+    })
+    ;(client.nearMissesApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { ...nearMiss, status: 'pending_review' },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('near-miss-reopen')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('near-miss-reopen'))
+    fireEvent.click(await screen.findByTestId('near-miss-reopen-confirm'))
+
+    await waitFor(() => {
+      expect(client.nearMissesApi.update).toHaveBeenCalledWith(5, { status: 'pending_review' })
+    })
+  })
+
+  it('edits status through a Select, not free text', async () => {
+    ;(client.nearMissesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: nearMiss })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('near-miss-close')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit/i }))
+
+    const statusControl = await screen.findByRole('combobox', { name: 'Status' })
+    expect(statusControl).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Status' })).not.toBeInTheDocument()
   })
 })

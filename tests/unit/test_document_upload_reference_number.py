@@ -39,6 +39,7 @@ async def test_upload_document_sets_generated_reference_number():
     file.filename = "policy.pdf"
     file.content_type = "application/pdf"
     file.read = AsyncMock(return_value=b"%PDF-1.4 fake")
+    file.seek = AsyncMock()
 
     db = AsyncMock()
     db.add = MagicMock()
@@ -53,6 +54,13 @@ async def test_upload_document_sets_generated_reference_number():
         patch.object(documents_route, "document_version_service") as dvs,
         patch.object(documents_route, "storage_service") as storage,
         patch.object(documents_route, "_process_uploaded_document", new_callable=AsyncMock),
+        patch.object(
+            documents_route,
+            "_create_document_index_job",
+            new_callable=AsyncMock,
+            return_value=MagicMock(id=7),
+        ),
+        patch.object(documents_route, "_dispatch_single_index_job", new_callable=AsyncMock, return_value=True),
         patch.object(documents_route, "track_metric"),
     ):
         dvs.build_initial_library_version.return_value = MagicMock()
@@ -72,5 +80,6 @@ async def test_upload_document_sets_generated_reference_number():
 
     gen.assert_awaited_once()
     assert captured["reference_number"] == generated
+    assert captured["malware_scan_status"] == "clean"
     assert response.reference_number == generated
     assert response.id == 99

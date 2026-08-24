@@ -30,6 +30,40 @@ def display_name_for_user(user: User) -> str:
     return (user.email or f"User {user.id}")[:200]
 
 
+def _adoptable_roster_row(candidates: list[Engineer], user: User, name: str) -> Optional[Engineer]:
+    """Choose the roster row this login belongs to, or None to create a fresh one.
+
+    Display names are not unique, so two unlinked rows sharing a name mean the name does
+    not identify a person. Adopting one anyway hands the new account another employee's
+    competency and assignment history, so refuse: an unlinked person record is visible and
+    correctable, whereas a wrongly linked one is silent. Candidates arrive ordered so an
+    active row outranks a retired one, which means a tie on ``is_active`` is exactly the
+    case where the choice would be arbitrary.
+    """
+    if not candidates:
+        return None
+
+    best = candidates[0]
+    if len(candidates) > 1 and bool(candidates[1].is_active) == bool(best.is_active):
+        logger.warning(
+            "engineer_user_link_ambiguous user_id=%s display_name=%r candidates=%s action=created_new",
+            user.id,
+            name,
+            [candidate.id for candidate in candidates],
+        )
+        return None
+
+    if not best.is_active:
+        # Assignment requires an *active* linked person, so this login cannot yet be given
+        # actions or own a case. Only the upstream roster can put that right.
+        logger.warning(
+            "engineer_user_link_inactive_roster_row engineer_id=%s user_id=%s not_assignable_until_reactivated",
+            best.id,
+            user.id,
+        )
+    return best
+
+
 async def ensure_engineer_for_user_async(
     db: AsyncSession,
     user: User,
@@ -47,17 +81,23 @@ async def ensure_engineer_for_user_async(
 
     # Prefer an unlinked PAMS/roster row whose display_name matches the user.
     name = display_name_for_user(user)
-    match = (
-        await db.execute(
-            select(Engineer)
-            .where(
-                Engineer.tenant_id == effective_tenant,
-                Engineer.user_id.is_(None),
-                func.lower(Engineer.display_name) == name.lower(),
+    candidates = list(
+        (
+            await db.execute(
+                select(Engineer)
+                .where(
+                    Engineer.tenant_id == effective_tenant,
+                    Engineer.user_id.is_(None),
+                    func.lower(Engineer.display_name) == name.lower(),
+                )
+                .order_by(Engineer.is_active.desc(), Engineer.id.asc())
+                .limit(2)
             )
-            .limit(1)
         )
-    ).scalar_one_or_none()
+        .scalars()
+        .all()
+    )
+    match = _adoptable_roster_row(candidates, user, name)
     if match is not None:
         match.user_id = user.id
         if not match.job_title and user.job_title:
@@ -106,15 +146,21 @@ def ensure_engineer_for_user_sync(
         return existing
 
     name = display_name_for_user(user)
-    match = db.execute(
-        select(Engineer)
-        .where(
-            Engineer.tenant_id == effective_tenant,
-            Engineer.user_id.is_(None),
-            func.lower(Engineer.display_name) == name.lower(),
+    candidates = list(
+        db.execute(
+            select(Engineer)
+            .where(
+                Engineer.tenant_id == effective_tenant,
+                Engineer.user_id.is_(None),
+                func.lower(Engineer.display_name) == name.lower(),
+            )
+            .order_by(Engineer.is_active.desc(), Engineer.id.asc())
+            .limit(2)
         )
-        .limit(1)
-    ).scalar_one_or_none()
+        .scalars()
+        .all()
+    )
+    match = _adoptable_roster_row(candidates, user, name)
     if match is not None:
         match.user_id = user.id
         db.flush()

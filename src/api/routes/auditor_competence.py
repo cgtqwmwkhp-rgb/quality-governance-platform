@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,14 @@ router = APIRouter(prefix="/auditor-competence", tags=["Auditor Competence"])
 
 
 class CreateProfileRequest(BaseModel):
+    """Create an auditor competence profile.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the profile being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     user_id: int
     job_title: Optional[str] = None
     department: Optional[str] = None
@@ -44,6 +52,14 @@ class UpdateProfileRequest(BaseModel):
 
 
 class AddCertificationRequest(BaseModel):
+    """Add a certification to an auditor competence profile.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the certification being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     certification_name: str
     certification_body: str
     issued_date: datetime
@@ -54,6 +70,14 @@ class AddCertificationRequest(BaseModel):
 
 
 class AddTrainingRequest(BaseModel):
+    """Add a training record to an auditor competence profile.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the training being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     training_name: str
     start_date: datetime
     training_type: str = "course"
@@ -62,6 +86,14 @@ class AddTrainingRequest(BaseModel):
 
 
 class CompleteTrainingRequest(BaseModel):
+    """Mark auditor training as completed.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of completion being recorded while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     completion_date: datetime
     assessment_passed: Optional[bool] = None
     assessment_score: Optional[float] = None
@@ -69,6 +101,14 @@ class CompleteTrainingRequest(BaseModel):
 
 
 class AssessCompetencyRequest(BaseModel):
+    """Record a competency assessment for an auditor.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the assessment being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     competency_area_id: int
     current_level: int = Field(..., ge=1, le=5)
     assessment_method: str = "supervisor"

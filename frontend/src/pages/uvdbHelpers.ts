@@ -112,3 +112,54 @@ export function formatUvdbAverageKpi(alignment: UvdbBoardAlignment): {
     caption: 'Calculated in-app from UVDB protocol responses',
   }
 }
+
+/** PX-255 — pending-empty protocol shells must not display a qualification %. */
+export type UvdbContentStatus = 'loaded' | 'pending_protocol_pdf'
+
+export type UvdbSectionScoreLike = {
+  score?: number | null
+  max_score?: number | null
+  percentage?: number | null
+  score_source?: string | null
+  assessed?: boolean
+  excluded_from_qualification?: boolean
+  exclusion_reason?: string | null
+}
+
+/**
+ * Display gate for protocol section cards: pending / excluded sections render
+ * as not scored (no green bar), never as a fabricated compliance %.
+ *
+ * Generic so callers keep their concrete `score_source` union (e.g. ScoreSource)
+ * instead of widening to `string`.
+ */
+export function gateUvdbSectionScoreForDisplay<T extends UvdbSectionScoreLike>(
+  score: T | null | undefined,
+  contentStatus: UvdbContentStatus | undefined,
+): T | null {
+  if (!score) return null
+  const pending = contentStatus === 'pending_protocol_pdf'
+  const excluded =
+    score.excluded_from_qualification === true ||
+    score.assessed === false ||
+    pending
+  if (!excluded) return score
+  return {
+    ...score,
+    score: null,
+    percentage: null,
+    assessed: false,
+    excluded_from_qualification: true,
+    exclusion_reason: score.exclusion_reason || 'pending_protocol_pdf',
+  }
+}
+
+export function uvdbPendingScoreExclusionCopy(reason?: string | null): string {
+  if (reason === 'empty_section') {
+    return 'This section has no loaded questions, so it is excluded from the qualification score.'
+  }
+  return (
+    'Questions pending protocol PDF — excluded from the qualification score so an ' +
+    'imported figure cannot count as assessed.'
+  )
+}

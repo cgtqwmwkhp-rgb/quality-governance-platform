@@ -4,13 +4,19 @@ Tests CRUD, status transition validation, and email access checks
 using mocked AsyncSession (no real database).
 """
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.complaint import ComplaintStatus
-from src.domain.services.complaint_service import COMPLAINT_TRANSITIONS, ComplaintService, validate_complaint_transition
+from src.domain.services.complaint_service import (
+    COMPLAINT_TRANSITIONS,
+    ComplaintService,
+    resolve_response_due_at,
+    validate_complaint_transition,
+)
 
 # ---------------------------------------------------------------------------
 # Transition validation (pure function, no DB needed)
@@ -26,8 +32,9 @@ class TestComplaintTransitionMap:
     def test_received_can_escalate(self):
         assert ComplaintStatus.ESCALATED in COMPLAINT_TRANSITIONS[ComplaintStatus.RECEIVED]
 
-    def test_closed_has_no_transitions(self):
-        assert COMPLAINT_TRANSITIONS[ComplaintStatus.CLOSED] == set()
+    def test_closed_only_allows_the_reopen_edge(self):
+        """Closed is no longer terminal: reopen goes to under_investigation and nowhere else."""
+        assert COMPLAINT_TRANSITIONS[ComplaintStatus.CLOSED] == {ComplaintStatus.UNDER_INVESTIGATION}
 
     def test_resolved_can_reopen_or_close(self):
         allowed = COMPLAINT_TRANSITIONS[ComplaintStatus.RESOLVED]
@@ -52,9 +59,12 @@ class TestValidateComplaintTransition:
         with pytest.raises(StateTransitionError, match="Cannot transition"):
             validate_complaint_transition("received", "closed")
 
-    def test_closed_to_anything_raises(self):
+    def test_closed_to_anything_but_reopen_raises(self):
         with pytest.raises(StateTransitionError):
             validate_complaint_transition("closed", "received")
+
+    def test_closed_to_under_investigation_passes(self):
+        validate_complaint_transition("closed", "under_investigation")
 
     def test_unknown_status_values_silently_pass(self):
         validate_complaint_transition("nonexistent", "anything")
@@ -270,6 +280,161 @@ class TestUpdateComplaint:
         svc = _make_service(db)
         with pytest.raises(StateTransitionError):
             await svc.update_complaint(1, data, user_id=5, tenant_id=10)
+
+
+class TestResponseSla:
+    """PX-210 — a complaint keeps a real response deadline, or honestly none."""
+
+    RECEIVED = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
+
+    def test_no_sla_and_no_explicit_date_means_no_deadline(self):
+        assert resolve_response_due_at(self.RECEIVED, None, None) is None
+
+    def test_deadline_derives_from_received_date_plus_sla(self):
+        assert resolve_response_due_at(self.RECEIVED, 48, None) == datetime(2026, 3, 4, 9, 0, tzinfo=timezone.utc)
+
+    def test_explicit_date_wins_over_the_sla(self):
+        explicit = datetime(2026, 3, 3, 17, 0, tzinfo=timezone.utc)
+        assert resolve_response_due_at(self.RECEIVED, 48, explicit) == explicit
+
+    def test_non_positive_sla_is_not_a_deadline(self):
+        assert resolve_response_due_at(self.RECEIVED, 0, None) is None
+
+    def test_changing_the_sla_rederives_the_deadline(self):
+        complaint = _fake_complaint(
+            received_date=self.RECEIVED,
+            response_sla_hours=24,
+            response_due_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            first_response_at=None,
+        )
+
+        ComplaintService._apply_response_sla(
+            complaint,
+            old_status=ComplaintStatus.RECEIVED,
+            raw_update={"response_sla_hours": 24},
+        )
+
+        assert complaint.response_due_at == datetime(2026, 3, 3, 9, 0, tzinfo=timezone.utc)
+
+    def test_clearing_the_sla_clears_the_derived_deadline(self):
+        complaint = _fake_complaint(
+            received_date=self.RECEIVED,
+            response_sla_hours=None,
+            response_due_at=datetime(2026, 3, 4, 9, 0, tzinfo=timezone.utc),
+            first_response_at=None,
+        )
+
+        ComplaintService._apply_response_sla(
+            complaint,
+            old_status=ComplaintStatus.RECEIVED,
+            raw_update={"response_sla_hours": None},
+        )
+
+        assert complaint.response_due_at is None
+
+    def test_a_deadline_sent_in_the_same_request_is_not_overwritten(self):
+        explicit = datetime(2026, 3, 3, 17, 0, tzinfo=timezone.utc)
+        complaint = _fake_complaint(
+            received_date=self.RECEIVED,
+            response_sla_hours=48,
+            response_due_at=explicit,
+            first_response_at=None,
+        )
+
+        ComplaintService._apply_response_sla(
+            complaint,
+            old_status=ComplaintStatus.RECEIVED,
+            raw_update={"response_sla_hours": 48, "response_due_at": explicit},
+        )
+
+        assert complaint.response_due_at == explicit
+
+    def test_first_response_is_stamped_on_reaching_awaiting_customer(self):
+        complaint = _fake_complaint(
+            received_date=self.RECEIVED,
+            response_sla_hours=48,
+            response_due_at=None,
+            first_response_at=None,
+            status=ComplaintStatus.AWAITING_CUSTOMER,
+        )
+
+        ComplaintService._apply_response_sla(
+            complaint,
+            old_status=ComplaintStatus.UNDER_INVESTIGATION,
+            raw_update={"status": "awaiting_customer"},
+        )
+
+        assert complaint.first_response_at is not None
+
+    def test_pending_response_does_not_count_as_having_responded(self):
+        complaint = _fake_complaint(
+            received_date=self.RECEIVED,
+            response_sla_hours=48,
+            response_due_at=None,
+            first_response_at=None,
+            status=ComplaintStatus.PENDING_RESPONSE,
+        )
+
+        ComplaintService._apply_response_sla(
+            complaint,
+            old_status=ComplaintStatus.UNDER_INVESTIGATION,
+            raw_update={"status": "pending_response"},
+        )
+
+        assert complaint.first_response_at is None
+
+    def test_first_response_is_never_restamped(self):
+        original = datetime(2026, 3, 3, 8, 0, tzinfo=timezone.utc)
+        complaint = _fake_complaint(
+            received_date=self.RECEIVED,
+            response_sla_hours=48,
+            response_due_at=None,
+            first_response_at=original,
+            status=ComplaintStatus.RESOLVED,
+        )
+
+        ComplaintService._apply_response_sla(
+            complaint,
+            old_status=ComplaintStatus.AWAITING_CUSTOMER,
+            raw_update={"status": "resolved"},
+        )
+
+        assert complaint.first_response_at == original
+
+
+class TestDeleteComplaint:
+    @pytest.mark.asyncio
+    @patch("src.domain.services.complaint_service.invalidate_tenant_cache", new_callable=AsyncMock)
+    @patch("src.domain.services.complaint_service.record_audit_event", new_callable=AsyncMock)
+    async def test_delete_complaint_soft_deletes(self, mock_audit, mock_cache):
+        complaint = _fake_complaint(deleted_at=None, deleted_by_id=None)
+        db = AsyncMock()
+        get_result = MagicMock()
+        get_result.scalar_one_or_none.return_value = complaint
+        empty_children = MagicMock()
+        empty_children.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(side_effect=[get_result, empty_children])
+
+        svc = _make_service(db)
+        await svc.delete_complaint(1, user_id=5, tenant_id=10, request_id="r1")
+
+        assert complaint.deleted_at is not None
+        assert complaint.deleted_by_id == 5
+        db.delete.assert_not_called()
+        db.flush.assert_awaited()
+        mock_audit.assert_awaited_once()
+        mock_cache.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_complaint_not_found(self):
+        db = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = None
+        db.execute.return_value = result_mock
+
+        svc = _make_service(db)
+        with pytest.raises(LookupError):
+            await svc.delete_complaint(999, user_id=5, tenant_id=10)
 
 
 class TestCheckComplainantEmailAccess:

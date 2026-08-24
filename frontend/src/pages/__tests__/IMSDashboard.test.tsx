@@ -44,9 +44,55 @@ vi.mock('../../api/client', () => ({
     err instanceof Error ? err.message : 'Something went wrong',
 }))
 
+const cellOverviewFixture = {
+  tracked_count: 7,
+  matrix_loaded: false,
+  matrix_version: null,
+  totals: { covered: 2, partial: 1, gap: 1, unknown: 81, cells: 85 },
+  frameworks: [
+    {
+      framework: 'ce',
+      axis_source: 'requirement_catalogue',
+      cells: 5,
+      covered: 1,
+      partial: 0,
+      gap: 0,
+      unknown: 4,
+      cert_count: 1,
+      open_nc_cells: 0,
+    },
+    {
+      framework: 'uvdb',
+      axis_source: 'requirement_catalogue',
+      cells: 46,
+      covered: 0,
+      partial: 1,
+      gap: 1,
+      unknown: 44,
+      cert_count: 0,
+      open_nc_cells: 1,
+    },
+    {
+      framework: 'pm',
+      axis_source: 'requirement_catalogue',
+      cells: 4,
+      covered: 1,
+      partial: 0,
+      gap: 0,
+      unknown: 3,
+      cert_count: 1,
+      open_nc_cells: 0,
+    },
+  ],
+  scan_truncated: false,
+  scan_truncated_sources: [],
+  honesty: 'Counts of matrix cells — not a compliance percentage.',
+}
+
 const dashboardFixture = {
   generated_at: '2026-07-13T00:00:00Z',
   overall_compliance: 82,
+  cell_overview: cellOverviewFixture,
   standards: [
     {
       standard_id: 1,
@@ -137,10 +183,10 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     })
 
     await user.click(screen.getByTestId('compliance-hub-standards'))
-    expect(mockNavigate).toHaveBeenCalledWith('/standards')
+    expect(mockNavigate).toHaveBeenCalledWith('/compliance?view=matrix')
 
     await user.click(screen.getByTestId('compliance-hub-evidence'))
-    expect(mockNavigate).toHaveBeenCalledWith('/compliance')
+    expect(mockNavigate).toHaveBeenCalledWith('/compliance?view=evidence')
 
     await user.click(screen.getByTestId('compliance-hub-monitoring'))
     expect(mockNavigate).toHaveBeenCalledWith('/compliance-automation')
@@ -174,17 +220,38 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/audits/42/execute')
   })
 
-  it('labels control implementation vs evidence coverage when both metrics are live', async () => {
+  it('meters IMS Overview from cell aggregate, not Control-table implementation %', async () => {
+    const { default: IMSDashboard } = await import('../IMSDashboard')
+
+    render(
+      <MemoryRouter initialEntries={['/ims']}>
+        <Routes>
+          <Route path="/ims" element={<IMSDashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ims-metric-cell-overview')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('ims-metric-frameworks-tracked')).toHaveTextContent('7')
+    expect(screen.getByTestId('ims-frameworks-tracked-badge')).toBeInTheDocument()
+    expect(screen.getByTestId('ims-metric-cells-covered')).toHaveTextContent('2')
+    expect(screen.queryByTestId('ims-metric-control-implementation')).not.toBeInTheDocument()
+    expect(screen.queryByText('82%')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Control implementation — live from management system controls/i)).not.toBeInTheDocument()
+    expect(screen.getByTestId('ims-overview-framework-meters')).toBeInTheDocument()
+    expect(screen.getByTestId('ims-overview-fw-uvdb')).toBeInTheDocument()
+    expect(screen.getByTestId('ims-overview-fw-pm')).toBeInTheDocument()
+  })
+
+  it('still shows frameworks tracked when the Control table is empty', async () => {
     mockGetDashboard.mockResolvedValue({
       data: {
         ...dashboardFixture,
-        compliance_coverage: {
-          total_clauses: 20,
-          covered_clauses: 15,
-          coverage_percentage: 67,
-          gaps: 5,
-          total_evidence_links: 22,
-        },
+        overall_compliance: 0,
+        standards: [],
       },
     })
 
@@ -199,33 +266,9 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTestId('ims-metric-control-implementation')).toBeInTheDocument()
+      expect(screen.getByTestId('ims-metric-frameworks-tracked')).toHaveTextContent('7')
     })
-
-    expect(screen.getByTestId('ims-metric-evidence-coverage')).toBeInTheDocument()
-    expect(screen.getByLabelText('82% control implementation')).toBeInTheDocument()
-    expect(screen.getByLabelText('67% evidence coverage')).toBeInTheDocument()
-    expect(screen.getAllByText('Control implementation').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Evidence coverage').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('labels single banner as control implementation when evidence coverage is absent', async () => {
-    const { default: IMSDashboard } = await import('../IMSDashboard')
-
-    render(
-      <MemoryRouter initialEntries={['/ims']}>
-        <Routes>
-          <Route path="/ims" element={<IMSDashboard />} />
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('82% control implementation')).toBeInTheDocument()
-    })
-
-    expect(screen.queryByTestId('ims-metric-evidence-coverage')).not.toBeInTheDocument()
-    expect(screen.getByText(/Control implementation — live from management system controls/i)).toBeInTheDocument()
+    expect(screen.getByTestId('ims-frameworks-tracked-badge')).toBeInTheDocument()
   })
 
   it('shows live overview KPIs and audit-schedule activity without demo feed', async () => {

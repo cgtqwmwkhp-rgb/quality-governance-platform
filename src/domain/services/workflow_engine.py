@@ -1348,58 +1348,13 @@ class WorkflowTemplateEngine:
         }
 
     # ==================== Approval Management ====================
-
-    def get_pending_approvals(self, user_id: int) -> List[Dict[str, Any]]:
-        """Get all pending approvals for a user."""
-        return []
-
-    def approve(
-        self,
-        approval_id: str,
-        user_id: int,
-        notes: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Approve an approval request."""
-        return {
-            "approval_id": approval_id,
-            "status": "approved",
-            "approved_by": user_id,
-            "notes": notes,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-    def reject(
-        self,
-        approval_id: str,
-        user_id: int,
-        reason: str,
-    ) -> Dict[str, Any]:
-        """Reject an approval request."""
-        return {
-            "approval_id": approval_id,
-            "status": "rejected",
-            "rejected_by": user_id,
-            "reason": reason,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-    def bulk_approve(
-        self,
-        approval_ids: List[str],
-        user_id: int,
-        notes: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Bulk approve multiple requests."""
-        results = []
-        for approval_id in approval_ids:
-            results.append(self.approve(approval_id, user_id, notes))
-
-        return {
-            "processed": len(results),
-            "successful": len(results),
-            "failed": 0,
-            "results": results,
-        }
+    #
+    # Removed by FR-APPROVALS-01. `get_pending_approvals` returned `[]` for every
+    # user, and `approve` / `reject` / `bulk_approve` returned a decided-looking
+    # dict without writing anywhere — this class holds no state. Pending decisions
+    # are read from the domains that own them by
+    # `src/domain/services/approvals_read_model.py`, and decisions are recorded by
+    # those domains. Nothing here is a substitute for either.
 
     # ==================== Escalation ====================
 
@@ -1428,41 +1383,12 @@ class WorkflowTemplateEngine:
         }
 
     # ==================== Delegation ====================
-
-    def set_delegation(
-        self,
-        user_id: int,
-        delegate_id: int,
-        start_date: datetime,
-        end_date: datetime,
-        reason: Optional[str] = None,
-        workflow_types: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        """Set up out-of-office delegation."""
-        return {
-            "id": f"DEL-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
-            "user_id": user_id,
-            "delegate_id": delegate_id,
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
-            "reason": reason,
-            "workflow_types": workflow_types or ["all"],
-            "status": "active",
-        }
-
-    def get_active_delegations(self, user_id: int) -> List[Dict[str, Any]]:
-        """Get active delegations for a user."""
-        return [
-            {
-                "id": "DEL-20260115001",
-                "delegate_id": 5,
-                "delegate_name": "Jane Smith",
-                "start_date": "2026-01-20T00:00:00Z",
-                "end_date": "2026-01-27T23:59:59Z",
-                "reason": "Annual leave",
-                "status": "scheduled",
-            }
-        ]
+    #
+    # Removed by FR-APPROVALS-01. `get_active_delegations` returned one invented
+    # record — "DEL-20260115001 / Jane Smith / Annual leave" — to every caller of
+    # every tenant, and `set_delegation` returned an active-looking delegation it
+    # never stored. Delegated approval needs a table and an audit trail before it
+    # can be offered again; a hardcoded colleague is not a smaller version of it.
 
     # ==================== Routing ====================
 
@@ -1541,32 +1467,12 @@ class WorkflowTemplateEngine:
         return True
 
     # ==================== Statistics ====================
-
-    def get_workflow_stats(self, user_id: int) -> Dict[str, Any]:
-        """Get workflow statistics for the signed-in user's approval queue.
-
-        `pending_approvals` is counted from `get_pending_approvals` — the exact list the
-        Workflow Center renders — so the tile and the panel beneath it cannot disagree.
-        It is a personal figure, not an organisation-wide one, and callers must label it
-        that way.
-
-        This engine holds no workflow state (`start_workflow` returns an unsaved dict and
-        `list_workflow_instances` returns an empty page), so active / overdue /
-        completed-today have no source to count. They are reported as ``None`` — an
-        honest "unmeasured" — rather than as fabricated constants or as zero.
-        """
-        return {
-            "pending_approvals": len(self.get_pending_approvals(user_id)),
-            "pending_approvals_scope": "assigned_to_me",
-            "active_workflows": None,
-            "overdue": None,
-            "completed_today": None,
-            "completed_this_week": None,
-            "average_completion_time_hours": None,
-            "sla_compliance_rate": None,
-            "by_template": {},
-            "by_priority": {},
-        }
+    #
+    # Removed by FR-APPROVALS-01 with the approval queue it counted. Every figure
+    # was `None` except `pending_approvals`, which was `len([])` — so the only
+    # number the tile ever showed was a zero nothing had measured, and the honest
+    # nulls around it lent it credibility. The count now comes from
+    # `GET /api/v1/approvals/my-decisions`, which reports which sources it read.
 
 
 # Singleton instance

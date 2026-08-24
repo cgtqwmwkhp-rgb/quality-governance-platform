@@ -1,0 +1,257 @@
+{
+  "version": "1.0",
+  "generated": "2026-08-03",
+  "boundary": "Organisation or location obligations only — excludes per-asset, per-vehicle, and per-person owned schedules (LOLER/PAT/PSSR per item, training, drivers).",
+  "templates": [
+    {
+      "template_key": "fire_risk_assessment",
+      "title": "Fire Risk Assessment",
+      "taxonomy_id": "03.01",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Regulatory Reform (Fire Safety) Order 2005",
+      "description": "Annual FRA review for each premises; new FRA on significant change."
+    },
+    {
+      "template_key": "fra_site_visit",
+      "title": "FRA Site Visit",
+      "taxonomy_id": "03.02",
+      "frequency_months": 12,
+      "anchor": "completion",
+      "statutory": false,
+      "regulatory_basis": "Fire Safety Order 2005 — follow-up visits",
+      "description": "Internal or external assessor visit feeding the FRA."
+    },
+    {
+      "template_key": "fire_inspection_testing",
+      "title": "Fire Inspections & Testing",
+      "taxonomy_id": "03.03",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Fire Safety Order 2005 — equipment testing",
+      "description": "Premises fire system and equipment servicing programme (alarms, extinguishers, emergency lighting)."
+    },
+    {
+      "template_key": "fire_drill_evacuation",
+      "title": "Fire Drill & Evacuation",
+      "taxonomy_id": "03.04",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Fire Safety Order 2005 — evacuation practice",
+      "description": "At least annual fire drill and evacuation plan review per premises."
+    },
+    {
+      "template_key": "fixed_electrical_eicr",
+      "title": "Fixed Electrical Inspection (EICR)",
+      "taxonomy_id": "04.02",
+      "frequency_months": 60,
+      "anchor": "completion",
+      "statutory": true,
+      "regulatory_basis": "Electricity at Work Regulations 1989",
+      "description": "Fixed-wire EICR for premises (typically five-yearly)."
+    },
+    {
+      "template_key": "ev_charging_infrastructure",
+      "title": "EV & Charging Infrastructure Inspection",
+      "taxonomy_id": "04.03",
+      "frequency_months": 12,
+      "anchor": "completion",
+      "statutory": false,
+      "regulatory_basis": "Manufacturer / BS EN guidance",
+      "description": "Inspection and maintenance of site EV charge points."
+    },
+    {
+      "template_key": "lev_thorough_examination",
+      "title": "LEV Thorough Examination & Test",
+      "taxonomy_id": "04.06",
+      "frequency_months": 14,
+      "anchor": "completion",
+      "statutory": true,
+      "regulatory_basis": "COSHH Reg 9 — every 14 months",
+      "description": "Thorough examination and test of local exhaust ventilation systems."
+    },
+    {
+      "template_key": "gas_safety",
+      "title": "Gas Safety Inspection",
+      "taxonomy_id": "04.07",
+      "frequency_months": 12,
+      "anchor": "completion",
+      "statutory": true,
+      "regulatory_basis": "Gas Safety (Installation and Use) Regulations 1998",
+      "description": "Annual Gas Safe inspection of premises heating and appliances."
+    },
+    {
+      "template_key": "asbestos_reinspection",
+      "title": "Asbestos Re-inspection",
+      "taxonomy_id": "04.08",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Control of Asbestos Regulations 2012",
+      "description": "Annual re-inspection of asbestos register / management plan for pre-2000 buildings."
+    },
+    {
+      "template_key": "legionella_risk_assessment",
+      "title": "Legionella Risk Assessment",
+      "taxonomy_id": "04.09",
+      "frequency_months": 24,
+      "anchor": "completion",
+      "statutory": true,
+      "regulatory_basis": "COSHH / ACOP L8",
+      "description": "Legionella risk assessment (typically two-yearly) with ongoing monitoring programme."
+    },
+    {
+      "template_key": "insurance_renewal",
+      "title": "Insurance Renewal",
+      "taxonomy_id": "04.10",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Employers' Liability (Compulsory Insurance) Act 1969",
+      "description": "Annual renewal of EL/PL and related insurance certificates."
+    },
+    {
+      "template_key": "licences_permits_renewal",
+      "title": "Licences & Permits Renewal",
+      "taxonomy_id": "04.11",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Per licence / permit conditions",
+      "description": "Renewal tracking for waste carrier, F-Gas, trade accreditations and similar permits."
+    },
+    {
+      "template_key": "buildings_premises_compliance",
+      "title": "Buildings & Premises Compliance Review",
+      "taxonomy_id": "04.13",
+      "frequency_months": 60,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "Building Safety Act / lease conditions",
+      "description": "Periodic premises condition and lease-compliance review."
+    },
+    {
+      "template_key": "dsear_assessment",
+      "title": "DSEAR Assessment",
+      "taxonomy_id": "02.03",
+      "frequency_months": 36,
+      "anchor": "completion",
+      "statutory": true,
+      "regulatory_basis": "Dangerous Substances and Explosive Atmospheres Regulations 2002",
+      "description": "DSEAR risk assessment review for workshop / stores processes."
+    },
+    {
+      "template_key": "first_aid_welfare_review",
+      "title": "First Aid & Welfare Review",
+      "taxonomy_id": "02.09",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Health and Safety (First-Aid) Regulations 1981",
+      "description": "Annual review of first-aid provision and welfare arrangements."
+    },
+    {
+      "template_key": "business_continuity_test",
+      "title": "Business Continuity Plan Test",
+      "taxonomy_id": "01.07",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "ISO 22301 / internal policy",
+      "description": "Annual BCP / emergency plan test."
+    },
+    {
+      "template_key": "policy_review_cycle",
+      "title": "Policy Review Cycle",
+      "taxonomy_id": "01.01",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "Internal governance / ISO management system",
+      "description": "Annual review of company policy suite."
+    },
+    {
+      "template_key": "management_review",
+      "title": "Management Review",
+      "taxonomy_id": "01.08",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "ISO 9001/14001/45001 clause 9.3",
+      "description": "Annual ISO management review meeting and record."
+    },
+    {
+      "template_key": "internal_audit_programme",
+      "title": "Internal Audit Programme",
+      "taxonomy_id": "07.02",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "ISO 9001/14001/45001 clause 9.2",
+      "description": "Annual internal audit programme completion."
+    },
+    {
+      "template_key": "carbon_reporting",
+      "title": "Carbon / Planet Mark Reporting",
+      "taxonomy_id": "08.02",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "Planet Mark / SECR where applicable",
+      "description": "Annual carbon reporting cycle."
+    },
+    {
+      "template_key": "environmental_aspects_spill",
+      "title": "Environmental Aspects & Spill Response Review",
+      "taxonomy_id": "08.04",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "ISO 14001 / Environmental Protection Act",
+      "description": "Annual environmental aspects register and spill-response readiness review."
+    },
+    {
+      "template_key": "uk_gdpr_annual_review",
+      "title": "UK GDPR Annual Review",
+      "taxonomy_id": "11.01",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "UK GDPR / Data Protection Act 2018",
+      "description": "Annual data-protection compliance review."
+    },
+    {
+      "template_key": "information_security_annual_review",
+      "title": "Information Security Annual Review",
+      "taxonomy_id": "11.02",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "ISO 27001 / internal ISMS",
+      "description": "Annual information security / ISMS review."
+    },
+    {
+      "template_key": "approved_supplier_register_review",
+      "title": "Approved Supplier Register Review",
+      "taxonomy_id": "13.01",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "ISO 9001 purchasing / internal policy",
+      "description": "Annual approved-supplier register review."
+    },
+    {
+      "template_key": "toolbox_talk_programme",
+      "title": "Toolbox Talk Programme",
+      "taxonomy_id": "10.03",
+      "frequency_months": 1,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "Internal H&S programme",
+      "description": "Monthly toolbox-talk programme cadence (org/location programme, not per-person training records)."
+    }
+  ]
+}

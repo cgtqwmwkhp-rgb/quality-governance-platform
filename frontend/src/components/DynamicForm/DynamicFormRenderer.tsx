@@ -39,6 +39,20 @@ import type { FormTemplate, FormField } from '../../services/api'
 import FuzzySearchDropdown from '../FuzzySearchDropdown'
 import BodyInjurySelector, { InjurySelection } from '../BodyInjurySelector'
 
+/**
+ * P0 CUJs (`portal-incident-report`, `portal-near-miss-report`) wait for
+ * `[data-testid='field-contract']`. Admin-authored templates often name that
+ * picker `customer` or `client`. Alias those to the stable hook; other fields
+ * keep `field-${name}`.
+ */
+export function portalFieldTestId(fieldName: string): string {
+  const n = fieldName.trim().toLowerCase()
+  if (n.includes('contract') || n.includes('customer') || n.includes('client')) {
+    return 'field-contract'
+  }
+  return `field-${fieldName}`
+}
+
 // ==================== Types ====================
 
 export interface DynamicFormData {
@@ -1179,7 +1193,7 @@ export default function DynamicFormRenderer({
               {[...currentStepData.fields]
                 .sort((a, b) => a.order - b.order)
                 .map((field) => (
-                  <div key={field.id} data-testid={`field-${field.name}`}>
+                  <div key={field.id} data-testid={portalFieldTestId(field.name)}>
                     <FieldRenderer
                       field={field}
                       value={formData[field.name]}

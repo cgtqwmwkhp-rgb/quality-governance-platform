@@ -1,13 +1,15 @@
 """Integration tests for Complaint API."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
 
 from src.domain.models.complaint import Complaint, ComplaintStatus, ComplaintType
 from tests.factories import ComplaintFactory
+
+UTC = timezone.utc
 
 
 @pytest.mark.asyncio
@@ -230,3 +232,108 @@ async def test_different_external_refs_create_separate_complaints(
     assert response1.json()["id"] != response2.json()["id"]
     assert response1.json()["external_ref"] == external_ref_1
     assert response2.json()["external_ref"] == external_ref_2
+
+
+# ============================================================================
+# Response SLA (PX-210)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_complaint_without_an_sla_reports_none_stored(client: AsyncClient, auth_headers: dict, test_session):
+    """A complaint with no agreed SLA must not acquire an invented deadline."""
+    data = {
+        "title": "No SLA agreed",
+        "description": "Nothing was agreed about response times.",
+        "complaint_type": ComplaintType.OTHER,
+        "received_date": datetime.now().isoformat(),
+        "complainant_name": "Jo Bloggs",
+    }
+    response = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+
+    assert response.status_code == 201
+    content = response.json()
+    assert content["response_sla_hours"] is None
+    assert content["response_due_at"] is None
+    assert content["response_sla_state"] == "not_configured"
+
+
+@pytest.mark.asyncio
+async def test_response_due_derives_from_received_date_and_sla(client: AsyncClient, auth_headers: dict, test_session):
+    received = datetime(2026, 3, 2, 9, 0, tzinfo=UTC)
+    data = {
+        "title": "48 hour response",
+        "description": "Customer expects a reply within two days.",
+        "complaint_type": ComplaintType.SERVICE,
+        "received_date": received.isoformat(),
+        "complainant_name": "Jo Bloggs",
+        "response_sla_hours": 48,
+    }
+    response = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+
+    assert response.status_code == 201
+    content = response.json()
+    assert content["response_sla_hours"] == 48
+    assert datetime.fromisoformat(content["response_due_at"]).replace(tzinfo=UTC) == received + timedelta(hours=48)
+    assert content["response_sla_state"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_responding_after_the_deadline_reports_a_breach(client: AsyncClient, auth_headers: dict, test_session):
+    received = datetime(2026, 3, 2, 9, 0, tzinfo=UTC)
+    created = await client.post(
+        "/api/v1/complaints/",
+        json={
+            "title": "Late reply",
+            "description": "Nobody answered in time.",
+            "complaint_type": ComplaintType.SERVICE,
+            "received_date": received.isoformat(),
+            "complainant_name": "Jo Bloggs",
+            "response_sla_hours": 24,
+        },
+        headers=auth_headers,
+    )
+    assert created.status_code == 201
+    complaint_id = created.json()["id"]
+
+    patched = await client.patch(
+        f"/api/v1/complaints/{complaint_id}",
+        json={"first_response_at": (received + timedelta(hours=72)).isoformat()},
+        headers=auth_headers,
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["response_sla_state"] == "breached"
+
+
+@pytest.mark.asyncio
+async def test_reaching_awaiting_customer_stamps_the_first_response(
+    client: AsyncClient, auth_headers: dict, test_session
+):
+    """The response stamp is a consequence of the case moving on, not a manual chore."""
+    complaint = ComplaintFactory.build(
+        title="Stamped on hand-back",
+        description="Replied and now waiting on the customer.",
+        complainant_name="Jo Bloggs",
+        reference_number=f"COMP-2026-{uuid.uuid4().hex[:8]}",
+        status=ComplaintStatus.UNDER_INVESTIGATION,
+    )
+    test_session.add(complaint)
+    await test_session.commit()
+    await test_session.refresh(complaint)
+
+    response = await client.patch(
+        f"/api/v1/complaints/{complaint.id}",
+        json={"status": ComplaintStatus.PENDING_RESPONSE},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["first_response_at"] is None
+
+    response = await client.patch(
+        f"/api/v1/complaints/{complaint.id}",
+        json={"status": ComplaintStatus.AWAITING_CUSTOMER},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["first_response_at"] is not None

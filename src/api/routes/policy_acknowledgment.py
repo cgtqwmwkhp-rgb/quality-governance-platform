@@ -9,21 +9,23 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import and_, select
-from sqlalchemy.exc import ProgrammingError
 
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.api.schemas.policy_acknowledgment import (
     AcknowledgmentRequirementCreate,
     AcknowledgmentRequirementResponse,
     AssignAcknowledgmentRequest,
+    ComplianceDashboardMetrics,
     ComplianceDashboardResponse,
     DocumentReadLogListResponse,
     DocumentReadLogResponse,
     LogDocumentReadRequest,
+    MeasuredComplianceDashboard,
     PolicyAcknowledgmentListResponse,
     PolicyAcknowledgmentResponse,
     PolicyAcknowledgmentStatusResponse,
     RecordAcknowledgmentRequest,
+    UnmeasurableComplianceDashboard,
 )
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.policy_acknowledgment import (
@@ -33,7 +35,11 @@ from src.domain.models.policy_acknowledgment import (
     PolicyAcknowledgmentRequirement,
 )
 from src.domain.models.user import User
-from src.domain.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
+from src.domain.services.policy_acknowledgment import (
+    DocumentReadLogService,
+    PolicyAcknowledgmentService,
+    UnmeasurableCompliance,
+)
 
 router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgments"])
 logger = logging.getLogger(__name__)
@@ -80,6 +86,9 @@ async def create_acknowledgment_requirement(
         reminder_days_before=requirement_data.reminder_days_before,
         quiz_questions=requirement_data.quiz_questions,
         quiz_passing_score=requirement_data.quiz_passing_score,
+        re_acknowledge_on_update=requirement_data.re_acknowledge_on_update,
+        re_acknowledge_period_months=requirement_data.re_acknowledge_period_months,
+        is_active=requirement_data.is_active,
     )
     return _requirement_response(requirement)
 
@@ -143,43 +152,23 @@ async def get_my_pending_acknowledgments(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get current user's pending acknowledgments."""
+    """Get current user's pending acknowledgments.
+
+    No failure is converted into an empty list here. If the backing table is
+    absent the service raises ``MeasurementUnavailableError`` and the caller gets
+    a 503 naming it, because an empty reading queue is something a user acts on
+    by doing nothing.
+    """
     service = PolicyAcknowledgmentService(db)
-    try:
-        pending = await service.get_user_pending_acknowledgments(
-            current_user.id,
-            tenant_id=current_user.tenant_id,
-        )
-    except ProgrammingError:
-        logger.exception("GET /policy-acknowledgments/my-pending — table unavailable")
-        await db.rollback()
-        return PolicyAcknowledgmentListResponse(items=[], total=0)
+    pending = await service.get_user_pending_acknowledgments(
+        current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
 
     return PolicyAcknowledgmentListResponse(
         items=[_policy_ack_response(a) for a in pending],
         total=len(pending),
     )
-
-
-@router.get("/{acknowledgment_id}", response_model=PolicyAcknowledgmentResponse)
-async def get_acknowledgment(
-    acknowledgment_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get a specific acknowledgment."""
-    result = await db.execute(
-        select(PolicyAcknowledgment).where(
-            PolicyAcknowledgment.id == acknowledgment_id,
-            PolicyAcknowledgment.tenant_id == current_user.tenant_id,
-        )
-    )
-    ack = result.scalar_one_or_none()
-
-    if not ack:
-        raise NotFoundError("Acknowledgment not found")
-
-    return _policy_ack_response(ack)
 
 
 @router.post("/{acknowledgment_id}/open")
@@ -272,22 +261,27 @@ async def get_compliance_dashboard(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get overall policy acknowledgment compliance dashboard."""
+    """Get overall policy acknowledgment compliance, or report it as unmeasurable.
+
+    A missing backing table used to be caught here and answered with zeros, which
+    told an auditor that nobody had acknowledged anything — a measurement that had
+    never been taken. The two outcomes are now separate response variants, so a
+    caller cannot read a rate that was never computed.
+    """
     service = PolicyAcknowledgmentService(db)
-    try:
-        dashboard = await service.get_compliance_dashboard(tenant_id=current_user.tenant_id)
-    except ProgrammingError:
-        logger.exception("GET /policy-acknowledgments/dashboard — table unavailable")
-        await db.rollback()
-        dashboard = {
-            "total_assignments": 0,
-            "completed": 0,
-            "pending": 0,
-            "overdue": 0,
-            "completion_rate": 0.0,
-            "overdue_rate": 0.0,
-        }
-    return ComplianceDashboardResponse(**dashboard)
+    result = await service.get_compliance_dashboard(tenant_id=current_user.tenant_id)
+
+    if isinstance(result, UnmeasurableCompliance):
+        return UnmeasurableComplianceDashboard(
+            reason=(
+                "Acknowledgment compliance cannot be measured: "
+                f"{', '.join(result.missing_tables)} absent from the database. "
+                "This is not a report of zero compliance."
+            ),
+            missing_tables=list(result.missing_tables),
+        )
+
+    return MeasuredComplianceDashboard(metrics=ComplianceDashboardMetrics(**result.metrics))
 
 
 @router.post("/check-overdue")
@@ -388,3 +382,37 @@ async def get_user_read_history(
         items=[_read_log_response(l) for l in logs],
         total=len(logs),
     )
+
+
+# =============================================================================
+# Single-segment catch-all — MUST stay last in this module
+# =============================================================================
+#
+# ``GET /{acknowledgment_id}`` matches any single path segment, so FastAPI's
+# declaration-order routing makes it answer every sibling literal declared below
+# it — ``/dashboard`` and ``/reminders-needed`` both used to land here and get
+# rejected with a 422 ``path -> acknowledgment_id`` int-parsing error while still
+# appearing in the OpenAPI document. Any new single-segment literal GET on this
+# router must be declared ABOVE this route.
+# ``tests/integration/test_route_shadowing_guard.py`` enforces this repo-wide.
+
+
+@router.get("/{acknowledgment_id}", response_model=PolicyAcknowledgmentResponse)
+async def get_acknowledgment(
+    acknowledgment_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a specific acknowledgment."""
+    result = await db.execute(
+        select(PolicyAcknowledgment).where(
+            PolicyAcknowledgment.id == acknowledgment_id,
+            PolicyAcknowledgment.tenant_id == current_user.tenant_id,
+        )
+    )
+    ack = result.scalar_one_or_none()
+
+    if not ack:
+        raise NotFoundError("Acknowledgment not found")
+
+    return _policy_ack_response(ack)

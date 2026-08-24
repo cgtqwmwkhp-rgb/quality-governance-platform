@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
+import { usePreferencesStore } from '../../stores/usePreferencesStore'
 
 const hasRoleMock = vi.fn(() => true)
 const isSuperuserMock = vi.fn(() => true)
@@ -77,6 +78,7 @@ describe('Layout', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/dashboard')
     onLogout.mockClear()
+    usePreferencesStore.setState({ sidebarCollapsed: false })
     hasRoleMock.mockReset()
     hasRoleMock.mockReturnValue(true)
     isSuperuserMock.mockReset()
@@ -108,17 +110,18 @@ describe('Layout', () => {
       'nav.my_work',
       'nav.safety_cases',
       'nav.workforce',
-      'nav.assurance',
+      'nav.audits_hub',
       'nav.compliance_sustainability',
       'nav.risk_improvement',
+      'nav.library',
       'nav.insights',
       'nav.admin',
     ]) {
       expect(screen.getByRole('button', { name: hub })).toHaveAttribute('aria-expanded', 'false')
     }
 
-    expect(navLink('/documents')).toHaveTextContent('nav.library')
-    expect(screen.queryByRole('button', { name: 'nav.library' })).not.toBeInTheDocument()
+    expect(navLink('/documents')).not.toBeInTheDocument()
+    expect(navLink('/document-control')).not.toBeInTheDocument()
     expect(navLink('/policies')).not.toBeInTheDocument()
 
     expect(screen.queryByRole('button', { name: /nav\.more|More/i })).not.toBeInTheDocument()
@@ -135,18 +138,12 @@ describe('Layout', () => {
     )
 
     const hubs = [
-      ['nav.my_work', ['/actions', '/my-reading', '/my-compliance', '/workflows']],
+      ['nav.my_work', ['/actions', '/my-reading', '/my-compliance']],
       [
         'nav.safety_cases',
-        [
-          '/incidents',
-          '/near-misses',
-          '/rtas',
-          '/complaints',
-          '/investigations',
-          '/vehicle-checklists',
-        ],
+        ['/incidents', '/near-misses', '/rtas', '/complaints', '/investigations'],
       ],
+      ['nav.fleet_assets', ['/vehicle-checklists', '/safety-assets']],
       [
         'nav.workforce',
         [
@@ -154,26 +151,24 @@ describe('Layout', () => {
           '/workforce/assessments',
           '/workforce/training',
           '/workforce/engineers',
-          '/workforce/calendar',
-          '/workforce/competence-gaps',
         ],
       ],
       [
-        'nav.assurance',
-        ['/audits', '/audit-templates', '/uvdb', '/planet-mark', '/customer-audits'],
+        'nav.audits_hub',
+        ['/audits', '/audit-templates', '/customer-audits'],
       ],
       [
         'nav.compliance_sustainability',
         [
           '/ims',
-          '/standards',
           '/compliance',
           '/knowledge-exceptions',
-          '/document-control',
+          '/compliance-schedule',
           '/compliance-automation',
         ],
       ],
-      ['nav.risk_improvement', ['/risk-register']],
+      ['nav.risk_improvement', ['/risk-register', '/job-lifecycle']],
+      ['nav.library', ['/documents', '/document-control']],
       [
         'nav.insights',
         ['/analytics', '/calendar', '/exports'],
@@ -204,7 +199,8 @@ describe('Layout', () => {
     }
   })
 
-  it('exposes Library and Document campaigns sidebar entries', async () => {
+  it('places Customer & external under Audits and keeps UVDB/Planet Mark off the sidebar (N-NAV)', async () => {
+    const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
 
     render(
@@ -213,20 +209,190 @@ describe('Layout', () => {
       </BrowserRouter>,
     )
 
-    const libraryLink = navLink('/documents')
-    expect(libraryLink).toBeInTheDocument()
-    expect(libraryLink).toHaveTextContent('nav.library')
-    expect(libraryLink).toHaveAttribute('href', '/documents')
-    expect(navLink('/documents/campaigns')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'nav.audits_hub' }))
+    const assurancePanel = screen.getByTestId('nav-hub-assurance')
+    expect(within(assurancePanel).getByRole('link', { name: 'nav.audits' })).toHaveAttribute(
+      'href',
+      '/audits',
+    )
+    expect(within(assurancePanel).getByRole('link', { name: 'nav.audit_builder' })).toHaveAttribute(
+      'href',
+      '/audit-templates',
+    )
+    expect(
+      within(assurancePanel).getByRole('link', { name: 'nav.customer_external' }),
+    ).toHaveAttribute('href', '/customer-audits')
+    expect(within(assurancePanel).queryByRole('link', { name: 'nav.uvdb_achilles' })).not.toBeInTheDocument()
+    expect(within(assurancePanel).queryByRole('link', { name: 'nav.planet_mark' })).not.toBeInTheDocument()
+    expect(
+      within(assurancePanel).queryByRole('link', { name: /nav\.customer_audits|nav\.customer_programme/ }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
+    const compliancePanel = screen.getByTestId('nav-hub-compliance-sustainability')
+    expect(within(compliancePanel).getByRole('link', { name: 'nav.standards' })).toHaveAttribute(
+      'href',
+      '/compliance',
+    )
+    expect(within(compliancePanel).queryByRole('link', { name: 'nav.uvdb_achilles' })).not.toBeInTheDocument()
+    expect(within(compliancePanel).queryByRole('link', { name: 'nav.planet_mark' })).not.toBeInTheDocument()
+    expect(
+      within(compliancePanel).queryByRole('link', { name: 'nav.customer_programme' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(compliancePanel).queryByRole('link', { name: 'nav.customer_external' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('auto-expands Compliance and marks Standards when a scheme home is the active route (N-NAV)', async () => {
+    window.history.pushState({}, '', '/uvdb')
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByRole('button', { name: 'nav.compliance_sustainability' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'nav.audits_hub' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(navLink('/uvdb')).not.toBeInTheDocument()
+    expect(navLink('/compliance').className).toContain('bg-primary/10')
+  })
+
+  it('auto-expands Audits when Customer & external is the active route (N-NAV)', async () => {
+    window.history.pushState({}, '', '/customer-audits')
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByRole('button', { name: 'nav.audits_hub' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'nav.compliance_sustainability' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(navLink('/customer-audits')).toBeInTheDocument()
+  })
+
+  it('exposes Fleet & Assets as a first-level hub (not a Safety subsection)', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const fleetHub = screen.getByRole('button', { name: 'nav.fleet_assets' })
+    await user.click(fleetHub)
+    const fleetPanel = screen.getByTestId('nav-hub-fleet-assets')
+    expect(within(fleetPanel).getByRole('link', { name: /vehicle_checklists|Van/i })).toBeTruthy()
+    expect(within(fleetPanel).getByRole('link', { name: /safety_asset_register|Asset Register/i })).toBeTruthy()
+    expect(screen.queryByTestId('nav-group-fleet-assets')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'nav.safety_cases' }))
+    const safetyPanel = screen.getByTestId('nav-hub-safety-cases')
+    expect(within(safetyPanel).queryByRole('link', { name: /vehicle_checklists/i })).not.toBeInTheDocument()
+    expect(within(safetyPanel).queryByRole('link', { name: /safety_asset_register/i })).not.toBeInTheDocument()
+  })
+
+  // FR-CS-CERT-IN-SCHEDULE: the shelf is a view of the Compliance Schedule, so it
+  // has no nav entry of its own in any hub — reaching it goes through the schedule.
+  it('does not list the Certificate shelf as a nav item beside the schedule', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
+    const compliancePanel = screen.getByTestId('nav-hub-compliance-sustainability')
+    expect(
+      within(compliancePanel).queryByRole('link', { name: /assurance_cert_shelf/i }),
+    ).not.toBeInTheDocument()
+    expect(within(compliancePanel).getByRole('link', { name: /compliance_schedule/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'nav.audits_hub' }))
+    const assurancePanel = screen.getByTestId('nav-hub-assurance')
+    expect(
+      within(assurancePanel).queryByRole('link', { name: /assurance_cert_shelf/i }),
+    ).not.toBeInTheDocument()
+
+    expect(navLink('/assurance/certificates')).not.toBeInTheDocument()
+  })
+
+  it('exposes Library as a hub with Documents and Document Control, not campaigns or policies', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const libraryHub = screen.getByRole('button', { name: 'nav.library' })
+    await user.click(libraryHub)
+
+    const libraryPanel = screen.getByTestId('nav-hub-library')
+    expect(within(libraryPanel).getByRole('link', { name: 'nav.documents' })).toHaveAttribute(
+      'href',
+      '/documents',
+    )
+    expect(
+      within(libraryPanel).getByRole('link', { name: 'nav.document_control' }),
+    ).toHaveAttribute('href', '/document-control')
+    // Document campaigns and Policies live under LibraryShell tabs, not the vertical menu.
+    expect(navLink('/documents/campaigns')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('nav-document-campaigns')).not.toBeInTheDocument()
     expect(navLink('/policies')).not.toBeInTheDocument()
-    expect(screen.queryByText('nav.documents')).not.toBeInTheDocument()
     expect(screen.queryByText('nav.policies')).not.toBeInTheDocument()
   })
 
-  it('marks Library active on /documents and /policies routes', async () => {
+  it('keeps Document Control out of Compliance after the Library move', async () => {
+    const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
 
-    for (const path of ['/documents', '/policies', '/documents/42', '/policies/7']) {
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
+    const compliancePanel = screen.getByTestId('nav-hub-compliance-sustainability')
+    expect(
+      within(compliancePanel).queryByRole('link', { name: 'nav.document_control' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('marks Library active on Library shell routes including campaigns', async () => {
+    const Layout = (await import('../Layout')).default
+
+    for (const path of [
+      '/documents',
+      '/policies',
+      '/documents/42',
+      '/policies/7',
+      '/documents/campaigns',
+    ]) {
       cleanup()
 
       render(
@@ -235,26 +401,33 @@ describe('Layout', () => {
         </MemoryRouter>,
       )
 
-      expect(screen.getByRole('link', { name: 'nav.library' })).toHaveAttribute(
-        'aria-current',
-        'page',
+      expect(screen.getByRole('button', { name: 'nav.library' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
       )
+      expect(navLink('/documents')).toHaveClass('bg-primary/10')
+      expect(navLink('/documents/campaigns')).not.toBeInTheDocument()
     }
   })
 
-  it('marks Document campaigns active on /documents/campaigns without Library', async () => {
+  it('auto-expands Library and marks Document Control when that route is active', async () => {
+    window.history.pushState({}, '', '/document-control')
     const Layout = (await import('../Layout')).default
 
     render(
-      <MemoryRouter initialEntries={['/documents/campaigns']}>
+      <BrowserRouter>
         <Layout onLogout={onLogout} />
-      </MemoryRouter>,
+      </BrowserRouter>,
     )
 
-    expect(navLink('/documents/campaigns')).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'nav.library' })).not.toHaveAttribute(
-      'aria-current',
-      'page',
+    expect(screen.getByRole('button', { name: 'nav.library' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(navLink('/document-control')).toHaveClass('bg-primary/10')
+    expect(screen.getByRole('button', { name: 'nav.compliance_sustainability' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
     )
   })
 
@@ -341,7 +514,50 @@ describe('Layout', () => {
     }
   })
 
-  it('points the header Settings gear to Admin Console for superusers', async () => {
+  it('does not offer the frozen Workflow Center under My Work', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.my_work' }))
+
+    expect(navLink('/actions')).toBeInTheDocument()
+    expect(navLink('/workflows')).not.toBeInTheDocument()
+  })
+
+  // FR-WFFORCE-CAL-01 / FR-WF-CG-01: both routes still resolve as redirects, so
+  // only the absent nav entry proves the duplicate and the orphan are gone.
+  it('does not offer the retired Workforce calendar or Competence gaps entries', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.workforce' }))
+
+    expect(navLink('/workforce/engineers')).toBeInTheDocument()
+    expect(navLink('/workforce/calendar')).not.toBeInTheDocument()
+    expect(navLink('/workforce/competence-gaps')).not.toBeInTheDocument()
+
+    // The surviving calendar is the unified one under Insights.
+    await user.click(screen.getByRole('button', { name: 'nav.insights' }))
+    expect(navLink('/calendar')).toBeInTheDocument()
+  })
+
+  it('points the header Settings gear to Admin Console for admin-capable roles', async () => {
+    hasRoleMock.mockImplementation((...roles: string[]) =>
+      roles.some((role) => ['admin', 'manager', 'hsec'].includes(role)),
+    )
+    isSuperuserMock.mockReturnValue(false)
     const Layout = (await import('../Layout')).default
 
     render(
@@ -353,8 +569,22 @@ describe('Layout', () => {
     expect(screen.getByRole('link', { name: 'nav.settings' })).toHaveAttribute('href', '/admin')
   })
 
+  it('points the header Settings gear to the dashboard when Admin is not allowed', async () => {
+    hasRoleMock.mockReturnValue(false)
+    isSuperuserMock.mockReturnValue(false)
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: 'nav.settings' })).toHaveAttribute('href', '/dashboard')
+  })
+
   it('auto-expands the hub containing the active child route', async () => {
-    window.history.pushState({}, '', '/workflows/active')
+    window.history.pushState({}, '', '/my-reading/42')
     const Layout = (await import('../Layout')).default
 
     render(
@@ -367,8 +597,8 @@ describe('Layout', () => {
       'aria-expanded',
       'true',
     )
-    expect(navLink('/workflows')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'nav.assurance' })).toHaveAttribute(
+    expect(navLink('/my-reading')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'nav.audits_hub' })).toHaveAttribute(
       'aria-expanded',
       'false',
     )
@@ -412,13 +642,36 @@ describe('Layout', () => {
     await user.click(screen.getByRole('button', { name: 'nav.compliance_sustainability' }))
 
     expect(navLink('/ims')).toBeInTheDocument()
-    expect(navLink('/standards')).toBeInTheDocument()
     expect(navLink('/compliance')).toBeInTheDocument()
+    expect(navLink('/standards')).not.toBeInTheDocument()
     expect(navLink('/compliance-automation')).not.toBeInTheDocument()
   })
 
-  it('only shows the Admin hub when user management is enabled for a superuser', async () => {
+  it('shows the Admin hub for roles that can deep-link /admin', async () => {
+    const user = userEvent.setup()
+    // Align with App.tsx RequireRole(['admin','manager','hsec']) — not isSuperuser.
+    hasRoleMock.mockImplementation((...roles: string[]) =>
+      roles.some((role) => ['admin', 'manager', 'hsec'].includes(role)),
+    )
+    isSuperuserMock.mockReturnValue(false)
     useFeatureFlagMock.mockReturnValue(false)
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const adminHub = screen.getByRole('button', { name: 'nav.admin' })
+    await user.click(adminHub)
+    expect(navLink('/admin')).toBeInTheDocument()
+  })
+
+  it('hides the Admin hub when the user cannot deep-link /admin', async () => {
+    hasRoleMock.mockReturnValue(false)
+    isSuperuserMock.mockReturnValue(true)
+    useFeatureFlagMock.mockReturnValue(true)
     const Layout = (await import('../Layout')).default
 
     render(
@@ -444,7 +697,7 @@ describe('Layout', () => {
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument()
   })
 
-  it('hides every AI Copilot entry point when the demo flag is off', async () => {
+  it('hides every PlantEx Assist entry point when the demo flag is off', async () => {
     const Layout = (await import('../Layout')).default
 
     render(
@@ -458,7 +711,7 @@ describe('Layout', () => {
     expect(navLink('/copilot')).not.toBeInTheDocument()
   })
 
-  it('lazy-mounts AI Copilot only after the header control is opened', async () => {
+  it('lazy-mounts PlantEx Assist only after the header control is opened', async () => {
     isAICopilotDemoEnabledMock.mockReturnValue(true)
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
@@ -494,5 +747,31 @@ describe('Layout', () => {
     expect(screen.getByText('search.palette_title')).toBeInTheDocument()
     expect(window.location.pathname).toBe('/rtas/99')
     expect(window.location.pathname).not.toBe('/search')
+  })
+
+  it('toggles the desktop sidebar width when the collapse control is clicked', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const sidebar = document.getElementById('app-sidebar')
+    expect(sidebar).toBeTruthy()
+    expect(sidebar).not.toHaveAttribute('data-collapsed')
+    expect(sidebar?.className).not.toMatch(/\blg:w-16\b/)
+
+    await user.click(screen.getByTestId('nav-sidebar-collapse'))
+
+    expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+    expect(sidebar?.className).toMatch(/\blg:w-16\b/)
+
+    await user.click(screen.getByTestId('nav-sidebar-collapse'))
+
+    expect(sidebar).not.toHaveAttribute('data-collapsed')
+    expect(sidebar?.className).not.toMatch(/\blg:w-16\b/)
   })
 })

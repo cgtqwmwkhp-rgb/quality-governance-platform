@@ -42,4 +42,9 @@ describe('systemSettingsHelpers', () => {
       expect(row?.select_options?.length).toBeGreaterThan(0)
     }
   })
+
+  it('does not expose allow_portal_anonymous (PX-312)', () => {
+    const defs = buildSettingDefinitions()
+    expect(defs.find((d) => d.key === 'allow_portal_anonymous')).toBeUndefined()
+  })
 })

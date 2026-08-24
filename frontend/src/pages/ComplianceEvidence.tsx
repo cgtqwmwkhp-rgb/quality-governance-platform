@@ -26,6 +26,7 @@ import {
   Trash2,
   Brain,
   CheckSquare,
+  Filter,
 } from 'lucide-react'
 import {
   complianceApi,
@@ -67,6 +68,7 @@ import { toast } from '../contexts/ToastContext'
 import {
   COMPLIANCE_EVIDENCE_DEFAULT_SECTION,
   COMPLIANCE_EVIDENCE_SECTIONS,
+  complianceEvidenceEntityRoute,
   complianceEvidenceSectionQueryValue,
   parseComplianceEvidenceSection,
   type ComplianceEvidenceSectionId,
@@ -76,50 +78,33 @@ import {
   standardCoverageState,
   standardProvenanceLabel,
 } from './compliance/standardCoverageHonesty'
-
-/**
- * Maps entity_type values (as stored in ComplianceEvidenceLink) to valid SPA routes.
- *
- * For `audit_finding` we deep-link to the Audits Findings tab pre-filtered by
- * the specific finding ID (?view=findings&findingId=N) so the user lands on the
- * exact finding rather than the general audit board.
- *
- * Using a naive `/${entity_type}s` template produces broken routes such as:
- *   audit_finding → /audit_findings (no route)
- *   policy        → /policys        (no route)
- *   training      → /trainings      (no route — correct is /workforce/training)
- */
-const ENTITY_TYPE_ROUTE: Record<string, string> = {
-  audit: '/audits',
-  incident: '/incidents',
-  complaint: '/complaints',
-  near_miss: '/near-misses',
-  action: '/actions',
-  risk: '/risk-register',
-  policy: '/policies',
-  document: '/documents',
-  training: '/workforce/training',
-}
-
-const getEntityRoute = (entityType: string, entityId?: string): string => {
-  if (entityType === 'audit_finding' && entityId) {
-    return `/audits?view=findings&findingId=${encodeURIComponent(entityId)}`
-  }
-  if (entityType === 'audit_finding') return '/audits?view=findings'
-  if (entityType === 'audit' && entityId) {
-    return `/audits?runId=${encodeURIComponent(entityId)}`
-  }
-  if (entityType === 'action' && entityId) {
-    return `/actions?sourceId=${encodeURIComponent(entityId)}`
-  }
-  if (entityType === 'incident' && entityId) {
-    return `/incidents?id=${encodeURIComponent(entityId)}`
-  }
-  if (entityType === 'risk' && entityId) {
-    return `/risk-register?id=${encodeURIComponent(entityId)}`
-  }
-  return ENTITY_TYPE_ROUTE[entityType] ?? `/${entityType}s`
-}
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { ClauseDocumentsFreshnessPanel } from './ClauseDocumentsFreshnessPanel'
+import { StandardsMatrixShell } from './compliance/StandardsMatrixShell'
+import {
+  EvidenceWorkspaceHost,
+  type EvidenceWorkspaceSelection,
+} from './compliance/EvidenceWorkspaceHost'
+import {
+  MATRIX_PRESET_IDS,
+  SPECIALIST_FRAMEWORK_ROUTES,
+  complianceStandardIdFromFrameworkId,
+  frameworkIdFromCode,
+  parseComplianceShellView,
+  visibleFrameworks,
+  type ComplianceShellView,
+  type MatrixPresetId,
+} from './compliance/standardsMatrixFilters'
+import {
+  CHROME_WITHOUT_CLAUSE_CATALOGUE,
+  chromeEvidenceHonesty,
+  chromeProgramLabel,
+  chromeSpecialistRoute,
+  clauseCatalogueApiFilter,
+  importedRecordMatchesChrome,
+  isChromeWithoutClauseCatalogue,
+  type ChromeWithoutClauseCatalogue,
+} from './compliance/chromeCatalogueHonesty'
 
 /** Surface operator-visible failures (banner + toast). Never silent. */
 const reportFailure = (
@@ -151,17 +136,18 @@ const standardIcons: Record<string, React.ElementType> = {
   iso14001: Leaf,
   iso45001: HardHat,
   iso27001: Shield,
+  iso22301: Clock,
   planetmark: Leaf,
   uvdb: Award,
 }
 
-const standardColors: Record<string, string> = {
-  iso9001: 'blue',
-  iso14001: 'green',
-  iso45001: 'orange',
-  iso27001: 'purple',
-  planetmark: 'teal',
-  uvdb: 'yellow',
+/** Always a component. Catalogue ids missing from the map (e.g. iso22301 before this
+ *  map row existed) must not reach React.createElement — that is minified error #130. */
+function iconForStandard(standardId: string | undefined): React.ElementType {
+  if (standardId && standardIcons[standardId]) {
+    return standardIcons[standardId]
+  }
+  return Award
 }
 
 // Explicit Tailwind class maps — dynamic interpolation (`text-${color}-400`) is not
@@ -171,6 +157,7 @@ const standardIconClass: Record<string, string> = {
   iso14001: 'w-5 h-5 text-green-400',
   iso45001: 'w-5 h-5 text-orange-400',
   iso27001: 'w-5 h-5 text-purple-400',
+  iso22301: 'w-5 h-5 text-cyan-400',
   planetmark: 'w-5 h-5 text-teal-400',
   uvdb: 'w-5 h-5 text-yellow-400',
 }
@@ -179,6 +166,7 @@ const standardBgClass: Record<string, string> = {
   iso14001: 'p-2 rounded-lg bg-green-500/20',
   iso45001: 'p-2 rounded-lg bg-orange-500/20',
   iso27001: 'p-2 rounded-lg bg-purple-500/20',
+  iso22301: 'p-2 rounded-lg bg-cyan-500/20',
   planetmark: 'p-2 rounded-lg bg-teal-500/20',
   uvdb: 'p-2 rounded-lg bg-yellow-500/20',
 }
@@ -187,6 +175,7 @@ const standardTreeIconClass: Record<string, string> = {
   iso14001: 'w-4 h-4 text-green-400 flex-shrink-0',
   iso45001: 'w-4 h-4 text-orange-400 flex-shrink-0',
   iso27001: 'w-4 h-4 text-purple-400 flex-shrink-0',
+  iso22301: 'w-4 h-4 text-cyan-400 flex-shrink-0',
   planetmark: 'w-4 h-4 text-teal-400 flex-shrink-0',
   uvdb: 'w-4 h-4 text-yellow-400 flex-shrink-0',
 }
@@ -195,6 +184,7 @@ const standardResultIconClass: Record<string, string> = {
   iso14001: 'w-5 h-5 text-green-400 flex-shrink-0 mt-0.5',
   iso45001: 'w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5',
   iso27001: 'w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5',
+  iso22301: 'w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5',
   planetmark: 'w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5',
   uvdb: 'w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5',
 }
@@ -203,6 +193,7 @@ const standardPercentageClass: Record<string, string> = {
   iso14001: 'text-2xl font-bold text-green-400',
   iso45001: 'text-2xl font-bold text-orange-400',
   iso27001: 'text-2xl font-bold text-purple-400',
+  iso22301: 'text-2xl font-bold text-cyan-400',
   planetmark: 'text-2xl font-bold text-teal-400',
   uvdb: 'text-2xl font-bold text-yellow-400',
 }
@@ -211,6 +202,7 @@ const standardProgressClass: Record<string, string> = {
   iso14001: 'h-2 rounded-full bg-gradient-to-r from-green-600 to-green-400',
   iso45001: 'h-2 rounded-full bg-gradient-to-r from-orange-600 to-orange-400',
   iso27001: 'h-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-400',
+  iso22301: 'h-2 rounded-full bg-gradient-to-r from-cyan-600 to-cyan-400',
   planetmark: 'h-2 rounded-full bg-gradient-to-r from-teal-600 to-teal-400',
   uvdb: 'h-2 rounded-full bg-gradient-to-r from-yellow-600 to-yellow-400',
 }
@@ -218,11 +210,16 @@ const standardProgressClass: Record<string, string> = {
 export default function ComplianceEvidence() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const documentGraphEnabled = useFeatureFlag('document_graph')
   const clauseFromUrl = (searchParams.get('clause') || '').trim()
   const standardFromUrl = (searchParams.get('standard') || '').trim()
+  const codeFromUrl = (searchParams.get('code') || '').trim()
   const section = parseComplianceEvidenceSection(searchParams.get('section'))
+  const shellView = parseComplianceShellView(searchParams.get('view'), codeFromUrl)
+  const [matrixSelection, setMatrixSelection] = useState<EvidenceWorkspaceSelection | null>(null)
 
   const [selectedStandard, setSelectedStandard] = useState<string | 'all'>('all')
+  const [evidencePreset, setEvidencePreset] = useState<MatrixPresetId>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedClauses, setExpandedClauses] = useState<Set<string>>(new Set())
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null)
@@ -294,6 +291,20 @@ export default function ComplianceEvidence() {
     [setQuery],
   )
 
+  const setShellView = useCallback(
+    (next: ComplianceShellView) => {
+      setMatrixSelection(null)
+      // evidence is the CUJ default — omit view=evidence from the URL when possible
+      setQuery({ view: next === 'evidence' ? null : next })
+    },
+    [setQuery],
+  )
+
+  const matrixFrameworkHint = useMemo(
+    () => frameworkIdFromCode(codeFromUrl) ?? frameworkIdFromCode(standardFromUrl),
+    [codeFromUrl, standardFromUrl],
+  )
+
   // Debounce search query to avoid firing an API call on every keystroke
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 350)
@@ -340,12 +351,14 @@ export default function ComplianceEvidence() {
       setPartialLoadWarning(null)
       setFailedSources([])
       try {
-        const standardFilter = selectedStandard === 'all' ? undefined : selectedStandard
+        const standardFilter = clauseCatalogueApiFilter(selectedStandard)
         const labels = ['standards', 'clauses', 'coverage', 'report', 'evidence links'] as const
         const settled = await Promise.allSettled([
           complianceApi.listStandards(),
           complianceApi.listClauses(standardFilter, debouncedSearchQuery || undefined),
-          complianceApi.getCoverage(standardFilter),
+          // Score cards must keep every loaded axis. Filtering coverage to the
+          // selected tree used to omit by_standard rows and mash Full/Partial.
+          complianceApi.getCoverage(),
           complianceApi.getReport(standardFilter),
           complianceApi.listEvidenceLinks(),
         ])
@@ -494,22 +507,42 @@ export default function ComplianceEvidence() {
       (acc, standard) => {
         const byStandard = coverage?.by_standard?.[standard.id]
         const total = standard.clause_count
-        // Source truth from backend by_standard when available; fall back to standard fields.
-        // by_standard uses the same full/partial semantics as the main coverage formula.
-        const covered = byStandard?.covered ?? standard.covered_clauses
-        const partial = byStandard?.partial_coverage ?? 0
-        const gaps = total - covered - partial
+        // by_standard is the Full/Partial split. If the map exists but this id
+        // is missing, do not treat mashed covered_clauses as Full with Partial=0.
+        if (byStandard) {
+          const covered = byStandard.covered
+          const partial = byStandard.partial_coverage
+          acc[standard.id] = {
+            total,
+            covered,
+            partial,
+            gaps: Math.max(total - covered - partial, 0),
+          }
+          return acc
+        }
+        if (coverage?.by_standard) {
+          acc[standard.id] = { total, covered: 0, partial: 0, gaps: total }
+          return acc
+        }
+        const covered = standard.covered_clauses
         acc[standard.id] = {
           total,
           covered,
-          partial,
-          gaps: Math.max(gaps, 0),
+          partial: 0,
+          gaps: Math.max(total - covered, 0),
         }
         return acc
       },
       {},
     )
   }, [coverage, standards])
+
+  const standardsById = useMemo(() => new Map(standards.map((s) => [s.id, s])), [standards])
+
+  const scoreCardFrameworks = useMemo(
+    () => visibleFrameworks(evidencePreset, null),
+    [evidencePreset],
+  )
 
   const clauseDetailsById = useMemo(() => {
     return new Map(report?.clauses.map((clause) => [clause.clause_id, clause]) ?? [])
@@ -607,6 +640,7 @@ export default function ComplianceEvidence() {
       const response = await complianceApi.downloadAuditPack({
         includeNonconformity: false,
         includeSoa: true,
+        frameworks: scoreCardFrameworks.map((fw) => fw.id),
       })
       const pack = response.data
       const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' })
@@ -664,6 +698,53 @@ export default function ComplianceEvidence() {
 
   const coverageUnavailable = failedSources.includes('coverage')
   const reportUnavailable = failedSources.includes('report')
+  const selectedChrome: ChromeWithoutClauseCatalogue | null =
+    isChromeWithoutClauseCatalogue(selectedStandard) ? selectedStandard : null
+  const chromeImportedRecords = selectedChrome
+    ? importedRecords.filter((record) =>
+        importedRecordMatchesChrome(record.scheme, selectedChrome),
+      )
+    : importedRecords
+
+  const renderChromeHonesty = (
+    sectionId: ComplianceEvidenceSectionId,
+    panel: 'main' | 'detail' = 'main',
+  ) => {
+    if (!selectedChrome) return null
+    const copy = chromeEvidenceHonesty(selectedChrome, sectionId)
+    const specialistHref = chromeSpecialistRoute(selectedChrome)
+    const program = chromeProgramLabel(selectedChrome)
+    return (
+      <div data-testid={`compliance-chrome-honesty-${panel}-${sectionId}`}>
+        <EmptyState
+          icon={
+            sectionId === 'gaps' ? (
+              <AlertTriangle className="w-8 h-8 text-warning" />
+            ) : sectionId === 'imported' ? (
+              <ClipboardCheck className="w-8 h-8 text-muted-foreground" />
+            ) : sectionId === 'evidence' ? (
+              <FileText className="w-8 h-8 text-muted-foreground" />
+            ) : (
+              <BookOpen className="w-8 h-8 text-muted-foreground" />
+            )
+          }
+          title={t(copy.titleKey, { defaultValue: copy.title, program })}
+          description={t(copy.descriptionKey, { defaultValue: copy.description, program })}
+        />
+        {specialistHref ? (
+          <div className="mt-3">
+            <Link
+              to={specialistHref}
+              className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+              data-testid={`compliance-chrome-honesty-specialist-${sectionId}`}
+            >
+              Open {program} <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
 
   const getCoverageStatus = (clauseId: string): 'full' | 'partial' | 'none' | 'unavailable' => {
     if (reportUnavailable || !report) return 'unavailable'
@@ -689,7 +770,7 @@ export default function ComplianceEvidence() {
           const evidence = getEvidenceForClause(clause.id)
           const isExpanded = expandedClauses.has(clause.id)
           const hasChildren = filteredClauses.some((c) => c.parent_clause === clause.id)
-          const StandardIcon = standardIcons[clause.standard] || Award
+          const StandardIcon = iconForStandard(clause.standard)
 
           return (
             <div key={clause.id} className="mb-2">
@@ -775,12 +856,49 @@ export default function ComplianceEvidence() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Target className="w-6 h-6 text-primary" aria-hidden="true" />
-            ISO Compliance Evidence Center
+            {shellView === 'matrix'
+              ? t('compliance.standards_shell.title', { defaultValue: 'Standards' })
+              : t('compliance.evidence.title', { defaultValue: 'Standards Evidence Center' })}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Live repository for compliance evidence, clause coverage, and cross-standard mappings
+            {shellView === 'matrix'
+              ? t('compliance.standards_shell.subtitle', {
+                  defaultValue:
+                    'Programme shell for multi-framework coverage. Matrix cells and workspace join live audits, NC, actions, risks, and certs.',
+                })
+              : t('compliance.evidence.subtitle', {
+                  defaultValue:
+                    'Live repository for multi-framework evidence, clause coverage, and specialist programme deep-links',
+                })}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="compliance-evidence-hub-links">
+            <div
+              className="inline-flex rounded-lg border border-border bg-card p-0.5"
+              role="group"
+              aria-label={t('compliance.standards_shell.mode_aria', {
+                defaultValue: 'Standards programme view',
+              })}
+              data-testid="compliance-shell-mode-toggle"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant={shellView === 'matrix' ? 'default' : 'ghost'}
+                onClick={() => setShellView('matrix')}
+                data-testid="compliance-shell-mode-matrix"
+              >
+                {t('compliance.standards_shell.mode.matrix', { defaultValue: 'Matrix' })}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={shellView === 'evidence' ? 'default' : 'ghost'}
+                onClick={() => setShellView('evidence')}
+                data-testid="compliance-shell-mode-evidence"
+              >
+                {t('compliance.standards_shell.mode.evidence', { defaultValue: 'Evidence' })}
+              </Button>
+            </div>
             {!loading && failedSources.length === 0 && !error && (
               <Badge variant="secondary" data-testid="compliance-live-badge">
                 Live data
@@ -807,6 +925,7 @@ export default function ComplianceEvidence() {
             </Link>
           </div>
         </div>
+        {shellView === 'evidence' ? (
         <div className="flex items-center gap-3 flex-wrap" data-testid="compliance-evidence-filters">
           <select
             value={section}
@@ -838,13 +957,35 @@ export default function ComplianceEvidence() {
             )}
             Annex A SoA
           </Button>
-          <Button variant="outline" onClick={handleDownloadAuditPack} title="Download full ISO audit evidence pack">
+          <Button
+            variant="outline"
+            onClick={handleDownloadAuditPack}
+            title="Download audit pack with evidence, findings, actions, and certs appendix"
+          >
             <Download className="w-4 h-4 mr-2" aria-hidden="true" />
             Audit Pack
           </Button>
         </div>
+        ) : null}
       </div>
 
+      {shellView === 'matrix' ? (
+        <>
+          <StandardsMatrixShell
+            initialFrameworkId={matrixFrameworkHint}
+            initialClause={clauseFromUrl || null}
+            selected={matrixSelection}
+            onSelectCell={setMatrixSelection}
+          />
+          {matrixSelection ? (
+            <EvidenceWorkspaceHost
+              selection={matrixSelection}
+              onClose={() => setMatrixSelection(null)}
+            />
+          ) : null}
+        </>
+      ) : (
+      <>
       {/* Alerts */}
       {error && (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -868,136 +1009,234 @@ export default function ComplianceEvidence() {
         </div>
       )}
 
-      {/* Compliance Score Cards */}
+      {/* Theme presets — shared catalogue with Matrix */}
+      {shellView === 'evidence' && (
+        <div className="flex flex-wrap items-center gap-2" data-testid="compliance-evidence-presets">
+          <Filter className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {t('compliance.standards_matrix.presets', { defaultValue: 'Presets' })}
+          </span>
+          {MATRIX_PRESET_IDS.map((id) => (
+            <Button
+              key={id}
+              type="button"
+              size="sm"
+              variant={evidencePreset === id ? 'default' : 'outline'}
+              onClick={() => setEvidencePreset(id)}
+              data-testid={`compliance-evidence-preset-${id}`}
+            >
+              {t(`compliance.standards_matrix.preset.${id}`, { defaultValue: id })}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {/* Compliance Score Cards — catalogue frameworks (honest metrics per kind) */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <Card key={i}><CardContent className="p-6"><TableSkeleton rows={3} columns={1} /></CardContent></Card>
           ))}
         </div>
-      ) : standards.length === 0 ? (
+      ) : scoreCardFrameworks.length === 0 ? (
         <EmptyState
           icon={<Target className="w-8 h-8 text-muted-foreground" />}
-          title="No standards available"
-          description={
-            error
-              ? 'Compliance standards could not be loaded. Retry after resolving the error above.'
-              : 'No compliance standards were returned for this tenant.'
-          }
+          title="No frameworks in this preset"
+          description="Choose another theme preset to show Standards Evidence cards."
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="compliance-score-cards">
-          {standards.map((standard) => {
-            const stats = complianceStats[standard.id] ?? {
-              total: standard.clause_count,
-              covered: 0,
-              partial: 0,
-              gaps: standard.clause_count,
-            }
-            const coverageState = standardCoverageState({
-              coverageUnavailable,
-              canonicalDataDegraded: Boolean(standard.canonical_data_degraded),
-              canonicalDataMessage: standard.canonical_data_message ?? null,
-              hasCanonicalStandard: Boolean(standard.has_canonical_standard),
-              stats,
-            })
-            const Icon = standardIcons[standard.id]
-            const showPercent = coverageState.kind === 'coverage'
-            const percentage = showPercent ? coverageState.percent : 0
-            const denomNote = clauseDenominatorNote(standard.clause_count_breakdown)
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" data-testid="compliance-score-cards">
+          {scoreCardFrameworks.map((fw) => {
+            const apiId = complianceStandardIdFromFrameworkId(fw.id)
+            const standard = apiId ? standardsById.get(apiId) : undefined
+            const specialistRoute = SPECIALIST_FRAMEWORK_ROUTES[fw.id]
+            const chromeId = standard?.id ?? fw.id
+            const Icon = standardIcons[chromeId] ?? (fw.kind === 'scheme' ? Leaf : Award)
 
+            if (standard) {
+              const stats = complianceStats[standard.id] ?? {
+                total: standard.clause_count,
+                covered: 0,
+                partial: 0,
+                gaps: standard.clause_count,
+              }
+              const coverageState = standardCoverageState({
+                coverageUnavailable:
+                  coverageUnavailable ||
+                  Boolean(coverage?.by_standard && coverage.by_standard[standard.id] === undefined),
+                canonicalDataDegraded: Boolean(standard.canonical_data_degraded),
+                canonicalDataMessage: standard.canonical_data_message ?? null,
+                hasCanonicalStandard: Boolean(standard.has_canonical_standard),
+                stats,
+              })
+              const showPercent = coverageState.kind === 'coverage'
+              const percentage = showPercent ? coverageState.percent : 0
+              const denomNote = clauseDenominatorNote(standard.clause_count_breakdown)
+
+              return (
+                <div
+                  key={fw.id}
+                  onClick={() => setSelectedStandard(standard.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selectedStandard === standard.id}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setSelectedStandard(standard.id)
+                    }
+                  }}
+                  className={cn(
+                    'p-4 rounded-xl bg-card border-2 cursor-pointer transition-all duration-200',
+                    selectedStandard === standard.id
+                      ? 'border-primary shadow-lg shadow-primary/20'
+                      : 'border-border hover:border-border-strong',
+                  )}
+                  data-testid={`compliance-framework-card-${fw.id}`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={standardBgClass[chromeId] ?? 'p-2 rounded-lg bg-primary/20'}>
+                        <Icon className={standardIconClass[chromeId] ?? 'w-5 h-5 text-primary'} aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-foreground">{standard.code}</h3>
+                        <p className="text-xs text-muted-foreground">
+                          {standard.name}
+                          {' • '}
+                          {standardProvenanceLabel(coverageState)}
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className={
+                        showPercent
+                          ? standardPercentageClass[chromeId] ?? 'text-2xl font-bold text-primary'
+                          : 'text-lg font-bold text-muted-foreground'
+                      }
+                      aria-label={
+                        coverageState.kind === 'unavailable'
+                          ? 'Coverage unavailable'
+                          : showPercent
+                            ? `${percentage}% weighted clause evidence coverage for ${standard.code}`
+                            : standardProvenanceLabel(coverageState)
+                      }
+                      data-testid={`compliance-score-${standard.id}`}
+                    >
+                      {showPercent ? `${percentage}%` : '—'}
+                    </div>
+                  </div>
+
+                  {showPercent ? (
+                    <div
+                      className="w-full bg-surface rounded-full h-2 mb-3"
+                      role="progressbar"
+                      aria-valuenow={percentage}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
+                      <div
+                        className={standardProgressClass[chromeId] ?? 'h-2 rounded-full bg-primary'}
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mb-3" data-testid={`compliance-score-note-${standard.id}`}>
+                      {coverageState.kind === 'not_adopted'
+                        ? `${coverageState.clausesWithEvidence} of ${coverageState.clauseTotal} built-in clauses have evidence links. No coverage percentage: this tenant has no standard record, so there is no adopted clause set to score against.`
+                        : coverageState.kind === 'degraded'
+                          ? 'Coverage percentage withheld while canonical enrichment is degraded.'
+                          : 'Coverage metrics unavailable'}
+                    </p>
+                  )}
+
+                  <div className="flex justify-between text-xs">
+                    {showPercent ? (
+                      <>
+                        <span className="text-success">{coverageState.covered} Full</span>
+                        <span className="text-warning">{coverageState.partial} Partial</span>
+                        <span className="text-destructive">{coverageState.gaps} Gaps</span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">Coverage metrics withheld</span>
+                    )}
+                  </div>
+                  {denomNote ? (
+                    <p className="mt-2 text-[11px] text-muted-foreground" data-testid={`compliance-denom-${standard.id}`}>
+                      {denomNote}
+                    </p>
+                  ) : null}
+                </div>
+              )
+            }
+
+            // Non-ISO / scheme / accreditation without clause-coverage API row — honest empty.
+            const chromeSelected = selectedStandard === fw.id
             return (
               <div
-                key={standard.id}
-                onClick={() => setSelectedStandard(standard.id)}
+                key={fw.id}
                 role="button"
                 tabIndex={0}
-                aria-pressed={selectedStandard === standard.id}
+                aria-pressed={chromeSelected}
+                onClick={() =>
+                  setSelectedStandard((current) => (current === fw.id ? 'all' : fw.id))
+                }
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
-                    setSelectedStandard(standard.id)
+                    setSelectedStandard((current) => (current === fw.id ? 'all' : fw.id))
                   }
                 }}
                 className={cn(
                   'p-4 rounded-xl bg-card border-2 cursor-pointer transition-all duration-200',
-                  selectedStandard === standard.id
+                  chromeSelected
                     ? 'border-primary shadow-lg shadow-primary/20'
                     : 'border-border hover:border-border-strong',
                 )}
+                data-testid={`compliance-framework-card-${fw.id}`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className={standardBgClass[standard.id] ?? 'p-2 rounded-lg bg-primary/20'}>
-                      <Icon className={standardIconClass[standard.id] ?? 'w-5 h-5 text-primary'} aria-hidden="true" />
+                    <div className="p-2 rounded-lg bg-primary/20">
+                      <Icon className="w-5 h-5 text-primary" aria-hidden="true" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-foreground">{standard.code}</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {standard.name}
-                        {' • '}
-                        {standardProvenanceLabel(coverageState)}
-                      </p>
+                      <h3 className="font-bold text-foreground">{fw.shortLabel}</h3>
+                      <p className="text-xs text-muted-foreground">{fw.label}</p>
                     </div>
                   </div>
-                  <div
-                    className={
-                      showPercent
-                        ? standardPercentageClass[standard.id] ?? 'text-2xl font-bold text-primary'
-                        : 'text-lg font-bold text-muted-foreground'
-                    }
-                    aria-label={
-                      coverageState.kind === 'unavailable'
-                        ? 'Coverage unavailable'
-                        : showPercent
-                          ? `${percentage}% weighted clause evidence coverage for ${standard.code}`
-                          : standardProvenanceLabel(coverageState)
-                    }
-                    data-testid={`compliance-score-${standard.id}`}
-                  >
-                    {showPercent ? `${percentage}%` : '—'}
+                  <div className="text-lg font-bold text-muted-foreground" aria-label="No clause coverage percentage">
+                    —
                   </div>
                 </div>
-
-                {showPercent ? (
-                  <div
-                    className="w-full bg-surface rounded-full h-2 mb-3"
-                    role="progressbar"
-                    aria-valuenow={percentage}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    <div
-                      className={standardProgressClass[standard.id] ?? 'h-2 rounded-full bg-primary'}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground mb-3" data-testid={`compliance-score-note-${standard.id}`}>
-                    {coverageState.kind === 'not_adopted'
-                      ? `${coverageState.clausesWithEvidence} of ${coverageState.clauseTotal} built-in clauses have evidence links. No coverage percentage: this tenant has no standard record, so there is no adopted clause set to score against.`
-                      : coverageState.kind === 'degraded'
-                        ? 'Coverage percentage withheld while canonical enrichment is degraded.'
-                        : 'Coverage metrics unavailable'}
-                  </p>
-                )}
-
-                <div className="flex justify-between text-xs">
-                  {showPercent ? (
-                    <>
-                      <span className="text-success">{coverageState.covered} Full</span>
-                      <span className="text-warning">{coverageState.partial} Partial</span>
-                      <span className="text-destructive">{coverageState.gaps} Gaps</span>
-                    </>
+                <p className="text-xs text-muted-foreground mb-3" data-testid={`compliance-score-note-${fw.id}`}>
+                  {specialistRoute
+                    ? 'Specialist programme — open the dedicated workspace for operational metrics. Clause Full/Partial/Gaps are not invented here.'
+                    : 'Not in the clause evidence catalogue yet. Matrix alignment and cert shelf still apply; no fake coverage %.'}
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {specialistRoute ? (
+                    <Link
+                      to={specialistRoute}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                      data-testid={`compliance-specialist-link-${fw.id}`}
+                    >
+                      Open {fw.label} <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                    </Link>
                   ) : (
-                    <span className="text-muted-foreground">Coverage metrics withheld</span>
+                    <a
+                      href={fw.homeUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                      data-testid={`compliance-home-link-${fw.id}`}
+                    >
+                      Official source <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                    </a>
                   )}
                 </div>
-                {denomNote ? (
-                  <p className="mt-2 text-[11px] text-muted-foreground" data-testid={`compliance-denom-${standard.id}`}>
-                    {denomNote}
-                  </p>
-                ) : null}
               </div>
             )
           })}
@@ -1055,6 +1294,11 @@ export default function ComplianceEvidence() {
                   {s.code}
                 </SelectItem>
               ))}
+              {CHROME_WITHOUT_CLAUSE_CATALOGUE.map((id) => (
+                <SelectItem key={id} value={id}>
+                  {chromeProgramLabel(id)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -1071,7 +1315,9 @@ export default function ComplianceEvidence() {
                   <BookOpen className="w-5 h-5 text-primary" aria-hidden="true" />
                   Clause Structure
                 </h2>
-                {loading ? (
+                {selectedChrome ? (
+                  renderChromeHonesty('clauses')
+                ) : loading ? (
                   <TableSkeleton rows={8} columns={1} />
                 ) : clauses.length === 0 ? (
                   <EmptyState
@@ -1083,8 +1329,8 @@ export default function ComplianceEvidence() {
                   ? standards.map((standard) => (
                       <div key={standard.id} className="mb-6">
                         <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                          {React.createElement(standardIcons[standard.id], {
-                            className: `w-4 h-4 text-${standardColors[standard.id]}-400`,
+                          {React.createElement(iconForStandard(standard.id), {
+                            className: standardTreeIconClass[standard.id] ?? 'w-4 h-4 text-primary flex-shrink-0',
                             'aria-hidden': 'true',
                           })}
                           {standard.code}
@@ -1101,15 +1347,19 @@ export default function ComplianceEvidence() {
                 <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <FileText className="w-5 h-5 text-primary" aria-hidden="true" />
                   All Evidence
-                  <Badge variant="secondary">{evidenceLinks.length} items</Badge>
+                  {selectedChrome ? null : (
+                    <Badge variant="secondary">{evidenceLinks.length} items</Badge>
+                  )}
                 </h2>
-                {loading ? (
+                {selectedChrome ? (
+                  renderChromeHonesty('evidence')
+                ) : loading ? (
                   <TableSkeleton rows={5} columns={1} />
                 ) : evidenceLinks.length === 0 ? (
                   <EmptyState
                     icon={<FileText className="w-8 h-8 text-muted-foreground" />}
                     title="No evidence items"
-                    description="Evidence items will appear here when linked to ISO clauses."
+                    description="Evidence items will appear here when linked to ISO or loaded-scheme clauses."
                   />
                 ) : (
                   <div className="space-y-3">
@@ -1169,7 +1419,11 @@ export default function ComplianceEvidence() {
                                 {new Date(evidence.created_at).toLocaleDateString()}
                               </span>
                               <Link
-                                to={getEntityRoute(evidence.entity_type, evidence.entity_id)}
+                                to={complianceEvidenceEntityRoute(
+                                  evidence.entity_type,
+                                  evidence.entity_id,
+                                  { documentGraphEnabled },
+                                )}
                                 className="p-1 rounded text-primary hover:text-primary/80 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ml-1"
                                 aria-label={`View ${config.label}`}
                               >
@@ -1197,12 +1451,16 @@ export default function ComplianceEvidence() {
               <div data-testid="compliance-evidence-section-imported">
                 <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <ClipboardCheck className="w-5 h-5 text-primary" aria-hidden="true" />
-                  Imported ISO Audits
-                  <Badge variant="secondary">{importedTotal}</Badge>
+                  {selectedChrome ? 'Imported Audits' : 'Imported ISO Audits'}
+                  <Badge variant="secondary">
+                    {selectedChrome ? chromeImportedRecords.length : importedTotal}
+                  </Badge>
                 </h2>
-                {loadingImported ? (
+                {selectedChrome && chromeImportedRecords.length === 0 ? (
+                  renderChromeHonesty('imported')
+                ) : loadingImported ? (
                   <TableSkeleton rows={4} columns={1} />
-                ) : importedRecords.length === 0 ? (
+                ) : (selectedChrome ? chromeImportedRecords : importedRecords).length === 0 ? (
                   <EmptyState
                     icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
                     title="No imported ISO audits"
@@ -1210,7 +1468,7 @@ export default function ComplianceEvidence() {
                   />
                 ) : (
                   <div className="space-y-3">
-                    {importedRecords.map((record) => (
+                    {(selectedChrome ? chromeImportedRecords : importedRecords).map((record) => (
                       <div
                         key={record.id}
                         className="p-4 bg-surface rounded-lg border border-border hover:border-primary/40 transition-all"
@@ -1287,7 +1545,9 @@ export default function ComplianceEvidence() {
                   <AlertTriangle className="w-5 h-5 text-destructive" aria-hidden="true" />
                   Gap Analysis — Clauses Needing Evidence
                 </h2>
-                {loading ? (
+                {selectedChrome ? (
+                  renderChromeHonesty('gaps')
+                ) : loading ? (
                   <TableSkeleton rows={6} columns={1} />
                 ) : coverageUnavailable || coverage == null ? (
                   <EmptyState
@@ -1308,7 +1568,7 @@ export default function ComplianceEvidence() {
                     {(coverage.gap_clauses ?? [])
                       .filter((c) => selectedStandard === 'all' || c.standard === selectedStandard)
                       .map((clause) => {
-                        const Icon = standardIcons[clause.standard]
+                        const Icon = iconForStandard(clause.standard)
 
                         return (
                           <div
@@ -1359,7 +1619,9 @@ export default function ComplianceEvidence() {
         {/* Right Panel — Clause Details */}
         <Card className="max-h-[70vh] overflow-y-auto">
           <CardContent className="p-6">
-            {selectedClause ? (
+            {selectedChrome ? (
+              renderChromeHonesty(section, 'detail')
+            ) : selectedClause ? (
               <>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-bold text-foreground">Clause Details</h2>
@@ -1377,8 +1639,8 @@ export default function ComplianceEvidence() {
                   {/* Clause Info */}
                   <div className="p-4 bg-surface rounded-lg border border-border">
                     <div className="flex items-center gap-2 mb-2">
-                      {React.createElement(standardIcons[selectedClause.standard], {
-                        className: `w-5 h-5 text-${standardColors[selectedClause.standard]}-400`,
+                      {React.createElement(iconForStandard(selectedClause.standard), {
+                        className: standardIconClass[selectedClause.standard] ?? 'w-5 h-5 text-primary',
                         'aria-hidden': 'true',
                       })}
                       <span className="font-bold text-foreground">{selectedClause.clause_number}</span>
@@ -1522,6 +1784,11 @@ export default function ComplianceEvidence() {
                     </div>
                   </div>
 
+                  <ClauseDocumentsFreshnessPanel
+                    clauseId={selectedClause.id}
+                    enabled={documentGraphEnabled}
+                  />
+
                   {/* Linked Evidence */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -1536,7 +1803,11 @@ export default function ComplianceEvidence() {
                           const config =
                             evidenceTypeConfig[evidence.entity_type] ?? evidenceTypeConfig.document
                           const Icon = config.icon
-                          const route = getEntityRoute(evidence.entity_type, evidence.entity_id)
+                          const route = complianceEvidenceEntityRoute(
+                            evidence.entity_type,
+                            evidence.entity_id,
+                            { documentGraphEnabled },
+                          )
                           const isDeleting = deletingLinkId === evidence.id
                           return (
                             <div
@@ -1769,7 +2040,7 @@ export default function ComplianceEvidence() {
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {autoTagResults.map((clause) => {
                   const deepResult = deepAnalysisResult?.primary_results.find(r => r.clause_id === clause.id)
-                  const Icon = standardIcons[clause.standard]
+                  const Icon = iconForStandard(clause.standard)
                   return (
                     <div
                       key={clause.id}
@@ -2006,6 +2277,8 @@ export default function ComplianceEvidence() {
           )}
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   )
 }

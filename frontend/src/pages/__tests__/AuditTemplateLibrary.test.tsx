@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import AuditTemplateLibrary from '../AuditTemplateLibrary'
 
@@ -9,8 +9,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
-        'audit_templates.title': 'Audit Template Library',
-        'audit_templates.subtitle': 'Manage your inspection templates',
+        'audit_templates.title': 'Audit & Assessment Library',
+        'audit_templates.subtitle': 'Author checklists for audits, skills assessments, and inductions.',
         'audit_templates.new': 'New Template',
         'audit_templates.search_placeholder': 'Search templates...',
         'audit_templates.batch_import': 'Batch Import',
@@ -18,6 +18,19 @@ vi.mock('react-i18next', () => ({
         'audit_templates.empty.subtitle': 'Create your first template',
         'audit_templates.empty.filter_hint': 'Try adjusting your search or filters',
         'audit_templates.clear_filters': 'Clear Filters',
+        'audit_templates.instrument.all': 'All',
+        'audit_templates.instrument.audits': 'Audits',
+        'audit_templates.instrument.skills': 'Skills',
+        'audit_templates.instrument.inductions': 'Inductions',
+        'audit_templates.purpose.chooser_title': 'What are you authoring?',
+        'audit_templates.purpose.chooser_subtitle':
+          'Choose a purpose. This template will be available for that run type after you publish.',
+        'audit_templates.purpose.audit': 'Audit',
+        'audit_templates.purpose.audit_hint': 'Inspection and audit checklists',
+        'audit_templates.purpose.skills': 'Skills assessment',
+        'audit_templates.purpose.skills_hint': 'Competency and skills assessments',
+        'audit_templates.purpose.induction': 'Induction',
+        'audit_templates.purpose.induction_hint': 'Induction and training checklists',
         import: 'Import',
       }
       return translations[key] || key
@@ -120,7 +133,7 @@ describe('AuditTemplateLibrary', () => {
   it('renders the page heading', async () => {
     setup()
 
-    expect(screen.getByRole('heading', { name: 'Audit Template Library' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Audit & Assessment Library' })).toBeInTheDocument()
   })
 
   it('shows skeleton loader while data is loading', () => {
@@ -262,7 +275,7 @@ describe('AuditTemplateLibrary', () => {
     })
   })
 
-  it('navigates to new template page when "New Template" is clicked', async () => {
+  it('opens a purpose chooser and navigates with instrument, never without', async () => {
     setup()
 
     await waitFor(() => {
@@ -272,7 +285,91 @@ describe('AuditTemplateLibrary', () => {
     const newBtn = screen.getByRole('button', { name: /New Template/i })
     fireEvent.click(newBtn)
 
-    expect(mockNavigate).toHaveBeenCalledWith('/audit-templates/new')
+    expect(mockNavigate).not.toHaveBeenCalled()
+    expect(screen.getByTestId('audit-template-purpose-chooser')).toBeInTheDocument()
+    expect(screen.getByText('What are you authoring?')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('audit-template-purpose-audit'))
+    expect(mockNavigate).toHaveBeenCalledWith('/audit-templates/new?instrument=audit')
+
+    fireEvent.click(newBtn)
+    fireEvent.click(screen.getByTestId('audit-template-purpose-skills'))
+    expect(mockNavigate).toHaveBeenCalledWith('/audit-templates/new?instrument=skills')
+
+    fireEvent.click(newBtn)
+    fireEvent.click(screen.getByTestId('audit-template-purpose-induction'))
+    expect(mockNavigate).toHaveBeenCalledWith('/audit-templates/new?instrument=induction')
+    expect(mockNavigate).not.toHaveBeenCalledWith('/audit-templates/new')
+  })
+
+  it('filters by instrument chips; untagged LIVE templates default to Audits', async () => {
+    auditsApi.listTemplates.mockResolvedValue({
+      data: {
+        items: [
+          ...MOCK_TEMPLATES,
+          {
+            id: 3,
+            reference_number: 'TPL-003',
+            name: 'Forklift skills check',
+            description: 'Skills assessment',
+            category: 'Plant & Machinery',
+            audit_type: 'inspection',
+            tags: ['instrument:skills'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-02-15T00:00:00Z',
+            scoring_method: 'percentage',
+            question_count: 4,
+            section_count: 1,
+          },
+          {
+            id: 4,
+            reference_number: 'TPL-004',
+            name: 'Site induction pack',
+            description: 'Induction checklist',
+            category: 'Vehicles',
+            audit_type: 'inspection',
+            tags: ['instrument:induction'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-02-15T00:00:00Z',
+            scoring_method: 'percentage',
+            question_count: 6,
+            section_count: 1,
+          },
+        ],
+        total: 4,
+      },
+    })
+
+    setup()
+
+    await waitFor(() => {
+      expect(screen.getByText('Vehicle Inspection Checklist')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Forklift skills check')).toBeInTheDocument()
+    expect(screen.getByText('Site induction pack')).toBeInTheDocument()
+
+    const chips = screen.getByTestId('audit-templates-instrument-chips')
+    fireEvent.click(within(chips).getByRole('tab', { name: 'Audits' }))
+    expect(screen.getByText('Vehicle Inspection Checklist')).toBeInTheDocument()
+    expect(screen.getByText('Plant Safety Audit')).toBeInTheDocument()
+    expect(screen.queryByText('Forklift skills check')).not.toBeInTheDocument()
+    expect(screen.queryByText('Site induction pack')).not.toBeInTheDocument()
+
+    fireEvent.click(within(chips).getByRole('tab', { name: 'Skills' }))
+    expect(screen.getByText('Forklift skills check')).toBeInTheDocument()
+    expect(screen.queryByText('Vehicle Inspection Checklist')).not.toBeInTheDocument()
+    expect(screen.queryByText('Site induction pack')).not.toBeInTheDocument()
+
+    fireEvent.click(within(chips).getByRole('tab', { name: 'Inductions' }))
+    expect(screen.getByText('Site induction pack')).toBeInTheDocument()
+    expect(screen.queryByText('Forklift skills check')).not.toBeInTheDocument()
+    expect(screen.queryByText('Vehicle Inspection Checklist')).not.toBeInTheDocument()
   })
 
   it('shows empty state when no templates match', async () => {

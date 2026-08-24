@@ -93,4 +93,11 @@ describe('PartnerWebhooks', () => {
       }),
     )
   })
+
+  it('exposes loading as a status region instead of aria-label on a generic div', () => {
+    mockListSubscriptions.mockReturnValue(new Promise(() => {}))
+    render(<PartnerWebhooks />)
+    expect(screen.getByRole('status')).toHaveTextContent('Loading')
+    expect(document.querySelector('[aria-label="Loading"]')).toBeNull()
+  })
 })

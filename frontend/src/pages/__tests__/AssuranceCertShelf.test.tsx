@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import AssuranceCertShelf from '../AssuranceCertShelf'
+import AssuranceCertShelf from '../assurance/AssuranceCertShelfPanel'
 
 const mockGetAssuranceCertShelf = vi.fn()
 
@@ -26,7 +26,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
-describe('AssuranceCertShelf', () => {
+describe('AssuranceCertShelfPanel', () => {
   beforeEach(() => {
     mockGetAssuranceCertShelf.mockReset()
     mockGetAssuranceCertShelf.mockResolvedValue({
@@ -70,7 +70,7 @@ describe('AssuranceCertShelf', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTestId('assurance-cert-shelf-page')).toBeInTheDocument()
+      expect(screen.getByTestId('assurance-cert-shelf-panel')).toBeInTheDocument()
     })
 
     expect(screen.getByText('Planet Mark YE2025')).toBeInTheDocument()
@@ -122,7 +122,7 @@ describe('AssuranceCertShelf', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTestId('assurance-cert-shelf-page')).toBeInTheDocument()
+      expect(screen.getByTestId('assurance-cert-shelf-panel')).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByText('UVDB Achilles'))

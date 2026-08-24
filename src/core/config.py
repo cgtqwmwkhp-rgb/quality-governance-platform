@@ -198,6 +198,7 @@ class Settings(BaseSettings):
         logger.info("Configuration summary: genspark_configured=%s", genspark_configured)
         logger.info("Configuration summary: ai_provider=%s", ai_provider_effective)
         logger.info("Configuration summary: external_audit_import_enabled=%s", self.external_audit_import_enabled)
+        logger.info("Configuration summary: entra_attestation_enabled=%s", self.entra_attestation_enabled)
         logger.info("Configuration summary: cors_origin_count=%s", len(self.cors_origins))
 
     # Application
@@ -228,6 +229,18 @@ class Settings(BaseSettings):
     azure_tenant_id: str = ""
     azure_ad_jwks_cache_ttl_seconds: int = 3600
 
+    # Int-W8: dedicated Entra MFA attestation reader. Fail-closed defaults.
+    # Do not reuse the login app registration — no fallback to azure_client_*.
+    entra_attestation_enabled: bool = False
+    entra_attestation_tenant_id: str = ""
+    entra_attestation_client_id: str = ""
+    entra_attestation_client_secret: str = ""
+    entra_attestation_qgp_tenant_ids: str = ""
+    entra_attestation_breakglass_excluded_user_ids: str = ""
+    entra_attestation_timeout_seconds: float = 5.0
+    entra_attestation_cache_ttl_seconds: int = 300
+    entra_attestation_error_cache_ttl_seconds: int = 60
+
     # Azure Blob Storage
     azure_storage_connection_string: str = ""
     azure_storage_container_name: str = "attachments"
@@ -243,6 +256,10 @@ class Settings(BaseSettings):
 
     # Frontend URL — used for password reset links, email CTAs, etc.
     frontend_url: str = "https://purple-water-03205fa03.6.azurestaticapps.net"
+
+    # Notification quiet hours are stored as bare HH:MM strings with no per-user
+    # timezone column, so bounds are interpreted in this deployment-wide zone.
+    notification_quiet_hours_timezone: str = "Europe/London"
 
     # CORS - explicit allowlist for production safety
     # Production SWA origins must be listed explicitly (no wildcards)
@@ -327,7 +344,48 @@ class Settings(BaseSettings):
     # OpenAI (tertiary AI provider)
     openai_api_key: str = ""
 
-    ai_copilot_enabled: bool = False  # PX-248: copilot replies are simulated — closed until real inference exists
+    ai_copilot_enabled: bool = False  # PX-248: copilot surface gate — closed until explicitly opted in
+    # PR3b: grounded register answers. Default off; ANDed with ai_copilot_enabled at the gate.
+    ai_copilot_inference_enabled: bool = False
+
+    # Compliance Schedule (Wave 0). Closed until explicitly opted in; kill switch
+    # can only subtract (see compliance_schedule_kill_switch).
+    compliance_schedule_enabled: bool = False
+    # FRA / PAS 79 OCR ingest (Wave 3). ANDed with compliance_schedule_enabled at
+    # the nested FRA OCR router — closed until bake sign-off.
+    compliance_schedule_fra_ocr_enabled: bool = False
+    # Confirm→CAPA for checked FRA OCR priority actions. Default off; persist via
+    # deploy vars like COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED.
+    compliance_schedule_fra_ocr_actions_enabled: bool = False
+    # Confirm→Risk proposal requires operator-entered likelihood/impact.
+    # Default off; persist via COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED.
+    # Never invents scores from OCR alone.
+    compliance_schedule_fra_ocr_risk_enabled: bool = False
+    # When true, File-to-Library (occurrence + FRA OCR draft filing) creates an
+    # IndexJob so filed drafts get chunks / Library search. Default off — Pinecone
+    # spend and OCR load; flip via vars like COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED.
+    compliance_filing_index_enabled: bool = False
+    # Track C: AI regulatory-basis assist on Add/Edit obligation. Requires CS open.
+    compliance_schedule_regulatory_ai_enabled: bool = False
+    compliance_schedule_regulatory_ai_confidence_threshold: float = 0.7
+
+    # Doc Graph (ADR-0021). Closed until explicitly opted in; sub-flags stay off
+    # even if the master gate opens so propose/impact can roll out independently.
+    document_graph_enabled: bool = False
+    document_graph_heuristic_propose_enabled: bool = False
+    document_graph_impact_propagation_enabled: bool = False
+    document_graph_llm_propose_enabled: bool = False
+    # X-0 programme flags (default off) — pre-registered so later slices do not
+    # thrash config / catalogue / FE defaults. Master document_graph still gates API.
+    document_graph_thread_ambient_enabled: bool = False
+    document_graph_map_view_enabled: bool = False
+    document_graph_dnd_propose_enabled: bool = False
+    document_graph_structure_map_enabled: bool = False
+    graph_coach_enabled: bool = False
+    entity_360_enabled: bool = False
+    entity_360_satellites_enabled: bool = False
+    job_lifecycle_enabled: bool = False
+    job_cell_links_enabled: bool = False
 
     # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
     library_horizon_provider: str = "stub"

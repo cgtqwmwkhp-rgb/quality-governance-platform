@@ -14,7 +14,13 @@ on:
 
 concurrency:
   group: deploy-staging
-  cancel-in-progress: true
+  # cancel-in-progress MUST be false. Rapid main merges otherwise cancel an in-flight
+  # staging deploy mid-write: the App Service can end up on the new image while the
+  # staging run concludes cancelled, its release gate fails, and production's
+  # workflow_run trigger then fail-closes ("staging did not deploy"). That leaves
+  # staging LIVE on a SHA that the governed path will never promote. Same rationale
+  # as deploy-production.yml — never kill a deploy that is already mutating Azure.
+  cancel-in-progress: false
 
 env:
   ACR_NAME: ${{ secrets.ACR_NAME }}
@@ -30,9 +36,17 @@ jobs:
   build-and-deploy:
     name: Build and Deploy to Staging
     runs-on: ubuntu-latest
+    # head_branch is asserted as well as filtered. The `branches: [main]` filter on
+    # the workflow_run trigger is the only thing that stops a CI run on a non-main
+    # ref (e.g. a future merge-queue candidate gh-readonly-queue/main/pr-N-<sha>) from
+    # starting this deployment — and this is the head of the chain that ends in a
+    # production write. Relying on glob semantics alone is too thin, so the branch is
+    # named here too. No behaviour change today for pushes to main.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'workflow_run'
+       && github.event.workflow_run.conclusion == 'success'
+       && github.event.workflow_run.head_branch == 'main')
     outputs:
       deployment_id: ${{ steps.generate-id.outputs.deployment_id }}
       image_tag: ${{ steps.build.outputs.image_tag }}
@@ -46,7 +60,7 @@ jobs:
           echo "📋 Deployment ID: $DEPLOYMENT_ID"
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Log deployment info
         run: |
@@ -282,6 +296,19 @@ jobs:
               ANTHROPIC_MODEL="claude-sonnet-4-5" \
               OPENAI_API_KEY="${OPENAI_API_KEY_VAL}" \
               AI_PROVIDER="anthropic" \
+              AI_COPILOT_ENABLED="${{ vars.AI_COPILOT_ENABLED || 'false' }}" \
+              AI_COPILOT_INFERENCE_ENABLED="${{ vars.AI_COPILOT_INFERENCE_ENABLED || 'false' }}" \
+              COMPLIANCE_SCHEDULE_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_ENABLED || 'false' }}" \
+              COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED || 'false' }}" \
+              COMPLIANCE_FILING_INDEX_ENABLED="${{ vars.COMPLIANCE_FILING_INDEX_ENABLED || 'false' }}" \
+              COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED || 'false' }}" \
+              COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_ENABLED="${{ vars.DOCUMENT_GRAPH_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED="${{ vars.DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED="${{ vars.DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_MAP_VIEW_ENABLED="${{ vars.DOCUMENT_GRAPH_MAP_VIEW_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_DND_PROPOSE_ENABLED="${{ vars.DOCUMENT_GRAPH_DND_PROPOSE_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED="${{ vars.DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED || 'false' }}" \
               AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
               AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
               AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
@@ -291,6 +318,7 @@ jobs:
               PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
               PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-aped-4627-b74a}" \
               UAT_MODE="READ_WRITE" \
+              DEFAULT_TENANT_ID="1" \
               CELERY_BROKER_URL="${REDIS_URL_VAL}" \
               CELERY_RESULT_BACKEND="${REDIS_URL_VAL}" \
               REDIS_URL="${REDIS_URL_VAL}" \
@@ -298,12 +326,27 @@ jobs:
           
           echo "   ✅ Application settings configured"
 
+          # The worker runs the Compliance Schedule sweep, which reads
+          # COMPLIANCE_SCHEDULE_ENABLED itself and treats "unset" as off. That flag must
+          # therefore come from the same variable the API block uses: if only the API is
+          # told, the two silently disagree and the sweep no-ops while the module looks on.
           for celery_app in "${{ env.AZURE_WEBAPP_NAME }}-worker" "${{ env.AZURE_WEBAPP_NAME }}-beat"; do
             if az webapp show --name "$celery_app" --resource-group rg-qgp-staging &>/dev/null; then
               az webapp config appsettings set \
                 --name "$celery_app" \
                 --resource-group rg-qgp-staging \
                 --settings \
+                  COMPLIANCE_SCHEDULE_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_ENABLED || 'false' }}" \
+                  COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED || 'false' }}" \
+                  COMPLIANCE_FILING_INDEX_ENABLED="${{ vars.COMPLIANCE_FILING_INDEX_ENABLED || 'false' }}" \
+                  COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED || 'false' }}" \
+                  COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_ENABLED="${{ vars.DOCUMENT_GRAPH_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED="${{ vars.DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED="${{ vars.DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_MAP_VIEW_ENABLED="${{ vars.DOCUMENT_GRAPH_MAP_VIEW_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_DND_PROPOSE_ENABLED="${{ vars.DOCUMENT_GRAPH_DND_PROPOSE_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED="${{ vars.DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED || 'false' }}" \
                   AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
                   AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
                   AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
@@ -316,7 +359,8 @@ jobs:
                   PINECONE_API_KEY="${PINECONE_API_KEY_VAL}" \
                   PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
                   PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-gcp-starter}" \
-                --output none || true
+                --output none \
+                || echo "::warning title=Celery settings not applied::$celery_app kept its previous app settings, so COMPLIANCE_SCHEDULE_ENABLED may now disagree with the API"
             fi
           done
 
@@ -704,7 +748,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run smoke tests
         id: smoke
@@ -817,6 +861,41 @@ jobs:
           # cold container start: an observed redeploy left the worker unreachable for 5m10s
           # (warm shutdown 16:41:21 → "celery@... ready." 16:46:31), while a 4x5s budget gave up
           # after ~60s. Exits on the first pong, so a healthy worker costs nothing extra.
+          #
+          # Budget arithmetic — read this before changing the numbers, because the obvious
+          # reading of it is wrong. The cost of one attempt is NOT --sleep: when no worker
+          # answers, inspect().ping() first blocks for its --timeout (default 10s) and only
+          # then sleeps. Measured from staging run 30418614706 attempt 1, where the worker
+          # was still starting:
+          #     attempt 1  03:14:44.52
+          #     attempt 2  03:15:06.14   (+21.61s)
+          #     attempt 3  03:15:27.71   (+21.61s)
+          #     pong       03:15:49.33   (+21.61s)
+          # So one attempt costs ~21.6s (10s ping timeout + 10s sleep + ~1.6s overhead),
+          # and the real budget is --retries x ~21.6s, not --retries x --sleep:
+          #   * 30 retries ≈ 648s — already ~2.1x the 310s cold start recorded above, so
+          #     the old setting was not in fact losing that race.
+          #   * 45 retries would be ~972s. It was briefly set to that and is being put back,
+          #     because the finding it was widened for turned out to be false.
+          #
+          # THE NUMBER STAYS AT 30. Finding C-40 claimed this step gave the worker a 300s
+          # budget against a 310s cold start and had stalled the release queue. Both halves
+          # were wrong. The budget was ~648s, as the arithmetic above shows. And the Celery
+          # ping step has NEVER failed: across every failed staging run of 27-29 July
+          # (30284286537, 30285921150, 30317596838, 30351982424, 30418614706) the count of
+          # failed Celery-named steps is zero in all five. The real 28/07 stall was run
+          # 30351982424, where Build and Deploy was SKIPPED and the release gate correctly
+          # refused to call that a success. The mistake was most likely reading this script's
+          # ordinary 'attempt 1/30, attempt 2/30' progress output as a budget running out.
+          #
+          # So there is no race here to fix, and widening is not free: it makes a genuinely
+          # dead worker take ~16min to fail instead of ~11min, delaying the signal that
+          # something needs a human. A change with a disproven justification and a real cost
+          # does not stay.
+          #
+          # A healthy worker exits on the first pong in a couple of seconds, so none of this
+          # budget is spent on the happy path.
+          # Do NOT add --allow-missing: a worker that never answers must fail the deploy.
           python3 scripts/celery/smoke_inspect_ping.py --retries 30 --sleep 10
           echo "Celery ping step complete (fail-closed)"
 
@@ -835,6 +914,57 @@ jobs:
           done
           python3 scripts/smoke/check_email_config.py
 
+      - name: Portal intake tenant config smoke
+        run: |
+          set -euo pipefail
+          # get_default_portal_tenant_id() fails closed with 503 CONFIGURATION_ERROR
+          # when DEFAULT_TENANT_ID is unset, which is correct — a public submission
+          # must not silently land in tenant 1. But it means the whole portal intake
+          # journey is dead on an environment that is missing the setting, and it
+          # only shows up when someone tries to submit. Staging was missing it while
+          # production had it set by hand, so the complaint journey could not be
+          # exercised anywhere except production. Assert it rather than rediscover it.
+          VAL=$(az webapp config appsettings list \
+                  -g rg-qgp-staging -n "${{ secrets.AZURE_WEBAPP_NAME }}" \
+                  --query "[?name=='DEFAULT_TENANT_ID'].value | [0]" -o tsv 2>/dev/null || true)
+          if [ -z "${VAL:-}" ] || [ "$VAL" = "null" ]; then
+            echo "❌ DEFAULT_TENANT_ID is not set — portal intake will return 503 CONFIGURATION_ERROR"
+            exit 1
+          fi
+          echo "✅ DEFAULT_TENANT_ID=$VAL — portal intake tenant is configured"
+
+      - name: Assert COMPLIANCE_SCHEDULE_ENABLED API/worker live parity
+        run: |
+          set -euo pipefail
+          # Post-deploy live check: PR #1590 made deploy *write* the same expression to API
+          # and worker, but a manual `az webapp config appsettings set` can still drift them
+          # afterwards. Fail the deploy if the live Azure values disagree.
+          RG=rg-qgp-staging
+          API_APP="${{ secrets.AZURE_WEBAPP_NAME }}"
+          WORKER_APP="${API_APP}-worker"
+          FLAG=COMPLIANCE_SCHEDULE_ENABLED
+
+          API_VAL=$(az webapp config appsettings list \
+            -g "$RG" -n "$API_APP" \
+            --query "[?name=='$FLAG'].value | [0]" -o tsv)
+          WORKER_VAL=$(az webapp config appsettings list \
+            -g "$RG" -n "$WORKER_APP" \
+            --query "[?name=='$FLAG'].value | [0]" -o tsv)
+
+          # az prints the literal string "null" when JMESPath finds nothing; treat as unset.
+          # Use if/fi (not `&&`) so a non-match does not trip `set -e`.
+          if [ "${API_VAL:-}" = "null" ]; then API_VAL=""; fi
+          if [ "${WORKER_VAL:-}" = "null" ]; then WORKER_VAL=""; fi
+
+          echo "API ($API_APP): $FLAG=${API_VAL:-<unset>}"
+          echo "Worker ($WORKER_APP): $FLAG=${WORKER_VAL:-<unset>}"
+
+          if [ "${API_VAL}" != "${WORKER_VAL}" ]; then
+            echo "::error title=Flag parity failed::$FLAG differs between API ('${API_VAL:-<unset>}') and worker ('${WORKER_VAL:-<unset>}')"
+            exit 1
+          fi
+          echo "✅ $FLAG matches on API and worker (${API_VAL:-<unset>})"
+
       - name: Post-deploy SLO assertion (D18 — error rate + latency)
         id: slo-check
         run: |
@@ -844,29 +974,88 @@ jobs:
 
           SLO_FAIL=0
 
-          # ── Health endpoint: must return 200 ──────────────────────────────
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$BASE_URL/healthz" || echo "000")
-          LATENCY_MS=$(curl -s -o /dev/null -w "%{time_total}" --max-time 10 "$BASE_URL/healthz" 2>/dev/null | awk '{printf "%d", $1 * 1000}' || echo "9999")
-          echo "  /healthz → HTTP $HTTP_CODE  (${LATENCY_MS}ms)"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "  ❌ FAIL: /healthz returned $HTTP_CODE (expected 200)"
-            SLO_FAIL=1
-          fi
-          if [ "$LATENCY_MS" -gt 2000 ]; then
-            echo "  ❌ FAIL: /healthz p95 latency ${LATENCY_MS}ms > 2000ms SLO"
+          # ── Warm-up tolerance — NOT a weaker SLO ─────────────────────────
+          # Six App Services share one Basic B2 plan (two cores) in this environment, so a
+          # container that is briefly not-ready right after a deploy is normal, not a defect.
+          # A single sample measured that race instead of the SLO. Run 30418614706 attempt 1
+          # (0e1ab69a) had built and deployed successfully, passed 5/5 core smoke tests and
+          # got a Celery pong, then failed the whole deploy here on one reading:
+          #     /healthz → HTTP 200  (641ms)
+          #     /readyz  → HTTP 503  (1295ms)
+          # The same endpoint answered 200 with "database": "connected" and "redis":
+          # "connected" on 3/3 manual samples shortly after, all under 1.2s. Nothing was
+          # wrong with the build: attempt 2 of the same run passed unchanged. The cost of
+          # that one 503 was that promotion was blocked and the production queue sat idle
+          # from 03:16:27 until a human re-ran it at 04:52:05 — 1h36m of dead time.
+          #
+          # The polls below tolerate "not ready yet". They do NOT tolerate "never ready":
+          #   * an endpoint that never returns 200 inside the budget still exits 1, so a
+          #     genuinely broken deploy still fails the gate and still blocks promotion;
+          #   * the latency SLO threshold is unchanged (2000ms). It is now asserted against
+          #     the sample that actually returned 200 — i.e. steady state rather than a cold
+          #     start, which is the reading the SLO is about.
+          # This removes a race condition; it does not lower a bar. Do not "tidy" it back
+          # into a single curl, and do not raise the latency threshold to make it pass.
+          POLL_ATTEMPTS=12
+          POLL_SLEEP=10          # 12 attempts x 10s = up to ~120s per endpoint
+
+          # Polls $1 until it returns HTTP 200. Prints "<code> <latency_ms> <attempt>" on
+          # stdout; returns 0 on the first 200, or 1 once the budget is exhausted.
+          poll_until_200() {
+            local url="$1"
+            local attempt sample code latency_ms
+            code="000"
+            latency_ms="9999"
+            for attempt in $(seq 1 "$POLL_ATTEMPTS"); do
+              sample=$(curl -s -o /dev/null -w "%{http_code} %{time_total}" --max-time 10 "$url" || echo "000 9.999")
+              code=$(printf '%s' "$sample" | awk '{print $1}')
+              latency_ms=$(printf '%s' "$sample" | awk '{printf "%d", $2 * 1000}')
+              if [ "$code" = "200" ]; then
+                printf '%s %s %s\n' "$code" "$latency_ms" "$attempt"
+                return 0
+              fi
+              echo "    attempt ${attempt}/${POLL_ATTEMPTS}: HTTP ${code} (${latency_ms}ms) — not ready yet" >&2
+              if [ "$attempt" -lt "$POLL_ATTEMPTS" ]; then
+                sleep "$POLL_SLEEP"
+              fi
+            done
+            printf '%s %s %s\n' "$code" "$latency_ms" "$POLL_ATTEMPTS"
+            return 1
+          }
+
+          # ── Health endpoint: must return 200 within the warm-up budget ───
+          if HEALTH_SAMPLE=$(poll_until_200 "$BASE_URL/healthz"); then
+            HTTP_CODE=$(printf '%s' "$HEALTH_SAMPLE" | awk '{print $1}')
+            LATENCY_MS=$(printf '%s' "$HEALTH_SAMPLE" | awk '{print $2}')
+            ATTEMPT_USED=$(printf '%s' "$HEALTH_SAMPLE" | awk '{print $3}')
+            echo "  /healthz → HTTP $HTTP_CODE  (${LATENCY_MS}ms, ready on attempt ${ATTEMPT_USED}/${POLL_ATTEMPTS})"
+            if [ "$LATENCY_MS" -gt 2000 ]; then
+              echo "  ❌ FAIL: /healthz p95 latency ${LATENCY_MS}ms > 2000ms SLO"
+              SLO_FAIL=1
+            fi
+          else
+            HTTP_CODE=$(printf '%s' "$HEALTH_SAMPLE" | awk '{print $1}')
+            echo "  /healthz → HTTP $HTTP_CODE  (never became healthy)"
+            echo "  ❌ FAIL: /healthz never returned 200 within ~$((POLL_ATTEMPTS * POLL_SLEEP))s (last HTTP $HTTP_CODE, expected 200)"
             SLO_FAIL=1
           fi
 
-          # ── Readiness endpoint: must return 200 ──────────────────────────
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$BASE_URL/readyz" || echo "000")
-          LATENCY_MS=$(curl -s -o /dev/null -w "%{time_total}" --max-time 10 "$BASE_URL/readyz" 2>/dev/null | awk '{printf "%d", $1 * 1000}' || echo "9999")
-          echo "  /readyz  → HTTP $HTTP_CODE  (${LATENCY_MS}ms)"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "  ❌ FAIL: /readyz returned $HTTP_CODE (expected 200)"
+          # ── Readiness endpoint: must return 200 within the warm-up budget ─
+          if READY_SAMPLE=$(poll_until_200 "$BASE_URL/readyz"); then
+            HTTP_CODE=$(printf '%s' "$READY_SAMPLE" | awk '{print $1}')
+            LATENCY_MS=$(printf '%s' "$READY_SAMPLE" | awk '{print $2}')
+            ATTEMPT_USED=$(printf '%s' "$READY_SAMPLE" | awk '{print $3}')
+            echo "  /readyz  → HTTP $HTTP_CODE  (${LATENCY_MS}ms, ready on attempt ${ATTEMPT_USED}/${POLL_ATTEMPTS})"
+          else
+            HTTP_CODE=$(printf '%s' "$READY_SAMPLE" | awk '{print $1}')
+            echo "  /readyz  → HTTP $HTTP_CODE  (never became ready)"
+            echo "  ❌ FAIL: /readyz never returned 200 within ~$((POLL_ATTEMPTS * POLL_SLEEP))s (last HTTP $HTTP_CODE, expected 200)"
             SLO_FAIL=1
           fi
 
           # ── Version endpoint: must return 200 and non-empty build_sha ────
+          # Single sample on purpose: it runs only after /healthz and /readyz have both
+          # answered 200, so the container is warm by here and there is no race to lose.
           VERSION_BODY=$(curl -s --max-time 10 "$BASE_URL/api/v1/meta/version" || echo "{}")
           BUILD_SHA=$(echo "$VERSION_BODY" | python3 -c "import sys, json; print(json.load(sys.stdin).get('build_sha',''))" 2>/dev/null || echo "")
           echo "  /api/v1/meta/version → build_sha=${BUILD_SHA:-MISSING}"

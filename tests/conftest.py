@@ -336,7 +336,7 @@ def portal_report_data():
             "title": title,
             "description": kwargs.get("description", "Test report description"),
             "severity": kwargs.get("severity", "low"),
-            "is_anonymous": kwargs.get("is_anonymous", True),
+            "is_anonymous": kwargs.get("is_anonymous", False),
             **kwargs,
         }
 
@@ -401,6 +401,26 @@ def pytest_runtest_makereport(item, call):
     setattr(item, f"rep_{rep.when}", rep)
 
 
+def format_suite_verdict(*, passed: int, failed: int, skipped: int, errors: int) -> tuple[str, Optional[str]]:
+    """Return (verdict line, colour kwarg name) for the terminal summary.
+
+    C-57: a pass rate is not a deployment verdict. Never claim production-ready
+    (or any unqualified green) when failed>0 or errors>0 — skipped tests inflate
+    the rate and used to let one failure in twenty print "✅ PRODUCTION READY".
+    """
+    total = passed + failed + skipped + errors
+    if failed or errors:
+        return f"❌ SUITE FAILED — {failed} failed, {errors} errored", "red"
+    if total == 0:
+        return "❌ NO TESTS RAN", "red"
+    if skipped:
+        return (
+            f"✅ {passed} passed — but {skipped} SKIPPED, so this run is not evidence for those",
+            "yellow",
+        )
+    return f"✅ {passed} passed, none skipped", "green"
+
+
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """Add custom summary to test report."""
     terminalreporter.write_sep("=", "Test Suite Summary")
@@ -408,19 +428,24 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     passed = len(terminalreporter.stats.get("passed", []))
     failed = len(terminalreporter.stats.get("failed", []))
     skipped = len(terminalreporter.stats.get("skipped", []))
+    errors = len(terminalreporter.stats.get("error", []))
 
-    total = passed + failed + skipped
+    total = passed + failed + skipped + errors
     pass_rate = (passed / total * 100) if total > 0 else 0
 
     terminalreporter.write_line(f"Total Tests: {total}")
     terminalreporter.write_line(f"Passed: {passed}")
     terminalreporter.write_line(f"Failed: {failed}")
+    terminalreporter.write_line(f"Errors: {errors}")
     terminalreporter.write_line(f"Skipped: {skipped}")
     terminalreporter.write_line(f"Pass Rate: {pass_rate:.1f}%")
 
-    if pass_rate >= 95:
-        terminalreporter.write_line("✅ PRODUCTION READY", green=True)
-    elif pass_rate >= 80:
-        terminalreporter.write_line("⚠️ STAGING ONLY", yellow=True)
+    verdict, colour = format_suite_verdict(passed=passed, failed=failed, skipped=skipped, errors=errors)
+    if colour == "red":
+        terminalreporter.write_line(verdict, red=True)
+    elif colour == "yellow":
+        terminalreporter.write_line(verdict, yellow=True)
+    elif colour == "green":
+        terminalreporter.write_line(verdict, green=True)
     else:
-        terminalreporter.write_line("❌ NOT READY FOR DEPLOYMENT", red=True)
+        terminalreporter.write_line(verdict)

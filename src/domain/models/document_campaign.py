@@ -94,7 +94,17 @@ class DocumentCampaign(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
+    # PX-222: the campaign reference is stored, not derived from the surrogate id
+    # by each surface. Nullable so that a rolling deploy — where the previous
+    # release is still inserting campaigns while the new column exists — cannot
+    # start rejecting campaign creation; every write path in this release mints one.
+    reference_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, unique=True, index=True)
+
     document_id: Mapped[int] = mapped_column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    # ADR-0021 P0: pin campaign to the library tip version at create time.
+    document_version_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("document_versions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     quiz_draft_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("document_quiz_drafts.id"), nullable=True, index=True
     )
@@ -176,6 +186,10 @@ class CampaignAssignment(Base, TimestampMixin):
     last_quiz_answers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # ADR-0021 P0: version the assignee acknowledged (campaign pin, else tip at complete).
+    acknowledged_version_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("document_versions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     acceptance_statement: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     signature_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     signature_disposition: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

@@ -1,9 +1,10 @@
-"""Governance Library taxonomy API (Wave W0).
+"""Governance Library taxonomy API (Wave W0, function axis WA-2).
 
-Read-only category tree for any active user (matches access-policy.md:
-"categories, tags, sites: Read: any active user; Write: admin only"), plus
-an admin-only idempotent reseed action for re-applying
-specs/governance-library/taxonomy.json after an edit.
+Read-only category tree, tag vocabulary and function list for any active user
+(matches access-policy.md: "categories, tags, sites: Read: any active user;
+Write: admin only"), plus an admin-only idempotent reseed action for
+re-applying specs/governance-library/taxonomy.json and functions.json after an
+edit.
 """
 
 import logging
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.document_library import DocumentCategory, DocumentTag
+from src.domain.models.document_library import DocumentCategory, DocumentFunction, DocumentTag
 from src.domain.models.user import User
 from src.domain.services.document_category_service import CategorySeedResult, seed_document_categories
 
@@ -71,15 +72,32 @@ class DocumentTagResponse(BaseModel):
         from_attributes = True
 
 
+class DocumentFunctionResponse(BaseModel):
+    """An owning business function — the axis a PEL reference is drawn from (ADR-0023)."""
+
+    id: int
+    code: str
+    name: str
+    description: Optional[str]
+    sort_order: int
+    active: bool
+
+    class Config:
+        from_attributes = True
+
+
 class SeedResultResponse(BaseModel):
     """Outcome of an idempotent taxonomy reseed."""
 
     categories_created: int
     categories_updated: int
+    functions_created: int
+    functions_updated: int
     tags_created: int
     tags_updated: int
     counters_created: int
     total_categories: int
+    total_functions: int
     total_tags: int
 
     @classmethod
@@ -87,10 +105,13 @@ class SeedResultResponse(BaseModel):
         return cls(
             categories_created=result.categories_created,
             categories_updated=result.categories_updated,
+            functions_created=result.functions_created,
+            functions_updated=result.functions_updated,
             tags_created=result.tags_created,
             tags_updated=result.tags_updated,
             counters_created=result.counters_created,
             total_categories=result.total_categories,
+            total_functions=result.total_functions,
             total_tags=result.total_tags,
         )
 
@@ -157,6 +178,33 @@ async def list_document_tags(
     return [DocumentTagResponse.model_validate(t, from_attributes=True) for t in result.scalars().all()]
 
 
+@router.get("/functions", response_model=list[DocumentFunctionResponse])
+async def list_document_functions(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+    include_inactive: bool = False,
+) -> list[DocumentFunctionResponse]:
+    """List the controlled function vocabulary.
+
+    This is the picker behind "which function owns this document?" at filing
+    time. Inactive functions are hidden by default — they still back every
+    reference already issued under them, but must not be offered for a new
+    document.
+
+    Gated on `document:read` rather than the "any active user" posture the
+    sibling category/tag readers carry: the function vocabulary is only
+    meaningful to someone who can already see the Register, and a new endpoint
+    joining the authenticated-only list is what
+    `test_route_authorisation_census` exists to prevent.
+    """
+    del current_user
+    query = select(DocumentFunction).order_by(DocumentFunction.sort_order, DocumentFunction.code)
+    if not include_inactive:
+        query = query.where(DocumentFunction.active.is_(True))
+    result = await db.execute(query)
+    return [DocumentFunctionResponse.model_validate(f, from_attributes=True) for f in result.scalars().all()]
+
+
 class LibraryRbacCatalogResponse(BaseModel):
     """Wave W2 — facet bundles + restricted taxonomy → permission map."""
 
@@ -183,10 +231,11 @@ async def reseed_document_categories(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("admin:manage"))],
 ) -> SeedResultResponse:
-    """Admin-only: idempotently re-apply specs/governance-library/taxonomy.json.
+    """Admin-only: idempotently re-apply taxonomy.json and functions.json.
 
     Safe to call at any time — upserts by natural key, never duplicates,
-    and always re-forces the Wave W0 deactivation list (06.04).
+    and always re-forces the Wave W0 deactivation list (06.04). Existing PEL
+    counters are never reset, so a reseed cannot re-issue a reference.
     """
     del current_user
     result = await seed_document_categories(db)

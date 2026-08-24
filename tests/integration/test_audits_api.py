@@ -52,7 +52,7 @@ class TestAuditsAPI:
             "audit_type": "inspection",
             "scoring_method": "percentage",
             "passing_score": 80.0,
-            "is_active": True,
+            # is_active is update-only; AuditTemplateCreate forbids unknown fields (B-10)
         }
 
         response = await client.post(
@@ -76,12 +76,15 @@ class TestAuditsAPI:
         auth_headers: dict,
     ):
         """Test listing audit templates."""
+        # auth_headers JWT is tenant_id=1; test_user is on a fresh tenant fixture.
+        # List applies apply_tenant_filter, so seeds must match the JWT tenant.
         templates = [
             AuditTemplate(
                 name=f"Template {i}",
                 category="Safety",
                 audit_type="inspection",
-                created_by_id=test_user.id,
+                created_by_id=1,
+                tenant_id=1,
                 reference_number=generate_test_reference("TPL"),
             )
             for i in range(1, 4)
@@ -98,6 +101,8 @@ class TestAuditsAPI:
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
+        names = {item["name"] for item in data["items"]}
+        assert {"Template 1", "Template 2", "Template 3"}.issubset(names)
         assert len(data["items"]) >= 3
         assert data.get("total", 0) >= 3
 
@@ -201,6 +206,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "EXT-NORM-0001",
             },
             headers=auth_headers,
         )
@@ -213,6 +219,62 @@ class TestAuditsAPI:
         assert data["status"] == "pending_review"
         assert data["is_external_audit_import"] is True
         assert data["is_external_import_intake"] is True
+
+    @pytest.mark.asyncio
+    async def test_create_external_audit_run_refuses_duplicate_external_reference(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """FR-DEDUP-02: second Achilles intake with the same supplier id returns 409."""
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
+        template = AuditTemplate(
+            name="ZZZ External Audit Intake (System)",
+            category="System",
+            audit_type="external_import",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+            is_published=True,
+            tags_json=["external_audit_intake", "external_audit_intake:achilles_uvdb"],
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        shared_ref = "EXT-DEDUP-02-SAME"
+        first = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Achilles follow-up audit",
+                "external_audit_type": "achilles_uvdb",
+                "external_reference": shared_ref,
+            },
+            headers=auth_headers,
+        )
+        assert first.status_code == 201
+        first_body = first.json()
+
+        second = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Achilles twin should be refused",
+                "external_audit_type": "achilles_uvdb",
+                "external_reference": shared_ref,
+            },
+            headers=auth_headers,
+        )
+        assert second.status_code == 409
+        payload = second.json()
+        detail = payload.get("detail", payload)
+        assert "already exists" in str(detail).lower() or "EXTERNAL_AUDIT_REFERENCE_EXISTS" in str(detail)
+        details = detail.get("details") if isinstance(detail, dict) else None
+        if details:
+            assert details["existing_run_id"] == first_body["id"]
+            assert details["existing_reference_number"] == first_body["reference_number"]
 
     @pytest.mark.asyncio
     async def test_get_audit_run_detail_marks_external_import_intake(
@@ -243,6 +305,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "EXT-DETAIL-0001",
             },
             headers=auth_headers,
         )
@@ -285,6 +348,7 @@ class TestAuditsAPI:
                 "template_id": 999999,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "EXT-NOTPL-0001",
             },
             headers=auth_headers,
         )
@@ -324,6 +388,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Imported Achilles outcome",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "EXT-START-0001",
             },
             headers=auth_headers,
         )
@@ -385,6 +450,7 @@ class TestAuditsAPI:
                 "template_id": template.id,
                 "title": "Imported Achilles outcome",
                 "external_audit_type": "achilles_uvdb",
+                "external_reference": "EXT-RESP-0001",
             },
             headers=auth_headers,
         )
@@ -429,6 +495,7 @@ class TestAuditsAPI:
                 "template_id": 999999,
                 "title": "Planet Mark import",
                 "external_audit_type": "planet_mark",
+                "external_reference": "PM-CERT-001",
             },
             headers=auth_headers,
         )
@@ -525,6 +592,60 @@ class TestAuditsAPI:
         assert len(data["items"]) >= 3
 
     @pytest.mark.asyncio
+    async def test_list_audit_runs_q_matches_title(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """A5b: q= locates a run by title without relying on the default page window."""
+        # auth_headers JWT is tenant_id=1; test_user is a different tenant fixture.
+        template = AuditTemplate(
+            name="A5b Search Template",
+            category="Testing",
+            audit_type="inspection",
+            created_by_id=1,
+            tenant_id=1,
+            reference_number=generate_test_reference("TPL"),
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        decoy = AuditRun(
+            template_id=template.id,
+            title="Unrelated decoy run",
+            status=AuditStatus.DRAFT,
+            assigned_to_id=1,
+            tenant_id=1,
+            reference_number=generate_test_reference("AUD"),
+        )
+        needle = AuditRun(
+            template_id=template.id,
+            title="A5b-locate-needle-Wickford",
+            location="Wickford",
+            status=AuditStatus.DRAFT,
+            assigned_to_id=1,
+            tenant_id=1,
+            reference_number=generate_test_reference("AUD"),
+        )
+        test_session.add(decoy)
+        test_session.add(needle)
+        await test_session.commit()
+
+        response = await client.get(
+            "/api/v1/audits/runs",
+            params={"q": "A5b-locate-needle-Wickford", "page_size": 1},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        titles = [item["title"] for item in data["items"]]
+        assert titles == ["A5b-locate-needle-Wickford"]
+        assert data["total"] >= 1
+
+    @pytest.mark.asyncio
     async def test_clone_audit_template(
         self,
         client: AsyncClient,
@@ -569,21 +690,24 @@ class TestAuditsAPI:
                 name="Safety 1",
                 category="Safety",
                 audit_type="inspection",
-                created_by_id=test_user.id,
+                created_by_id=1,
+                tenant_id=1,
                 reference_number=generate_test_reference("TPL"),
             ),
             AuditTemplate(
                 name="Safety 2",
                 category="Safety",
                 audit_type="inspection",
-                created_by_id=test_user.id,
+                created_by_id=1,
+                tenant_id=1,
                 reference_number=generate_test_reference("TPL"),
             ),
             AuditTemplate(
                 name="Quality 1",
                 category="Quality",
                 audit_type="audit",
-                created_by_id=test_user.id,
+                created_by_id=1,
+                tenant_id=1,
                 reference_number=generate_test_reference("TPL"),
             ),
         ]

@@ -38,6 +38,42 @@ on:
   release:
     types: [published]
 
+# Production is written by three workflows: this one, `Emergency Rollback - Production`
+# (rollback-production.yml) and `Provision Production Azure Resources`
+# (provision-production.yml). All three share the group `deploy-production` so only one
+# of them can be setting the container image on app-qgp-prod at a time.
+#
+# DO NOT RENAME THIS GROUP without renaming it in the other two files. If they drift
+# there is no error and no failed run — the guard silently stops existing, the workflows
+# run concurrently again, and the last writer wins. That is the bug this stanza fixes.
+#
+# Why it is needed: `Capture previous production image` (id capture_previous_image) reads
+# the live image immediately before `Deploy to Azure Web App` overwrites it. With no
+# deployment slots on this tier that captured value is the only rollback target
+# `auto-rollback` has. Two overlapping runs both capture the same predecessor, so the
+# second run's rollback target is already one deploy stale before it is ever used.
+#
+# cancel-in-progress is false HERE: an arriving deploy must never kill a deploy or a
+# rollback that is already mid-write. Emergency Rollback sets it to true on this same
+# group, so a rollback preempts a deploy but not the reverse. That asymmetry is
+# deliberate and verified — see the comment in rollback-production.yml.
+#
+# A `rollback: true` dispatch runs only `Production rollback (documented)`, which reads
+# Azure config and prints commands. It mutates nothing, so it takes its own group: in the
+# shared group it would queue for no benefit, and while pending it could displace a
+# pending real deploy.
+#
+# If production deploys sit "pending", another run holds the group. Find it with
+#   gh run list --workflow="Deploy to Azure Production"
+#   gh run list --workflow="Emergency Rollback - Production"
+#   gh run list --workflow="Provision Production Azure Resources"
+# and clear it with `gh run cancel <id>`. The break-glass path bypasses Actions entirely:
+# dispatch this workflow with rollback=true to print the az commands, or use Emergency
+# Rollback with a known-good image SHA.
+concurrency:
+  group: ${{ github.event.inputs.rollback == 'true' && 'deploy-production-docs' || 'deploy-production' }}
+  cancel-in-progress: false
+
 env:
   ACR_NAME: ${{ secrets.PROD_ACR_NAME }}
   AZURE_WEBAPP_NAME: ${{ secrets.PROD_AZURE_WEBAPP_NAME }}
@@ -47,6 +83,38 @@ env:
   IMAGE_NAME: quality-governance-platform
 
 jobs:
+  # GitHub fires workflow_run on every Staging *completed* run, including cancelled
+  # twins. Those must not occupy the notify fail-close path (run 32036679572 /
+  # 32036825492): B&D is skipped, Notify always() then fails, and the Actions list
+  # looks like a production deploy failure. A cancelled Staging twin is not a
+  # promote. Name it and succeed so chase does not dispatch a second Production.
+  ignore-non-success-staging:
+    name: Ignore non-success staging twin
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success'
+    steps:
+      - name: Record that production was not attempted
+        env:
+          STAGING_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          STAGING_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          STAGING_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Ignored non-success staging twin"
+            echo ""
+            echo "Staging concluded \`$STAGING_CONCLUSION\`. Production was **not** deployed and this is **not** a deploy failure."
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Staging | [$STAGING_RUN_URL]($STAGING_RUN_URL) |"
+            echo "| Candidate SHA | \`${STAGING_SHA}\` |"
+            echo ""
+            echo "Usual cause: a duplicate Staging run was cancelled before Azure write."
+            echo "The successful Staging twin still promotes via its own \`workflow_run\`."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Gate: Verify staging succeeded (for auto-trigger) or manual approval
   pre-deployment-checks:
     name: Pre-Deployment Checks
@@ -141,7 +209,7 @@ jobs:
 
       - name: Checkout code
         if: steps.freeze.outputs.allowed == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -263,7 +331,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Login to Azure
         uses: azure/login@v3
@@ -313,7 +381,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -360,7 +428,7 @@ jobs:
           fi
 
       - name: Check out signed release SHA
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ env.RELEASE_SHA }}
@@ -488,63 +556,250 @@ jobs:
             echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Create database backup
+      # Confirm a recovery point exists before migrations run, rather than trying to
+      # create one. `az postgres flexible-server backup create` is rejected outright on
+      # Burstable servers -- CustomerOnDemandBackupCannotBePerformedOnBurstableServer --
+      # and both psql-qgp-prod and psql-qgp-staging are Standard_B1ms, so the previous
+      # version of this step could never have succeeded. It also discarded stderr and
+      # relabelled the failure "verify Azure PostgreSQL backup is configured", which sent
+      # readers to inspect a backup configuration that was healthy the whole time.
+      #
+      # What actually protects the database is the automatic daily backup and its PITR
+      # window, so that is what this asserts. Errors from `az` are shown, never swallowed.
+      - name: Verify database recovery point
+        env:
+          MAX_BACKUP_AGE_HOURS: "30"
         run: |
-          echo "Creating pre-deployment database backup..."
+          set -uo pipefail
+          echo "=== Pre-deploy recovery point check ==="
+
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv 2>/dev/null || true)
           SERVER_NAME="${{ secrets.AZURE_DB_SERVER_NAME }}"
           if [ -z "$SERVER_NAME" ] && [ -n "$DB_URL" ]; then
             SERVER_NAME=$(DB_URL="$DB_URL" python3 -c "from urllib.parse import urlparse; import os; host = urlparse(os.environ.get('DB_URL', '')).hostname or ''; print(host.split('.')[0] if host else '')")
           fi
           if [ -z "$SERVER_NAME" ]; then
-            echo "::warning::Database backup command failed — unable to resolve production PostgreSQL server name"
+            echo "::warning::Cannot resolve the production PostgreSQL server name, so the recovery point is unverified. Set the AZURE_DB_SERVER_NAME secret."
             exit 0
           fi
-          az postgres flexible-server backup create \
-            --resource-group ${{ env.AZURE_DB_RESOURCE_GROUP }} \
-            --name "$SERVER_NAME" \
-            --backup-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" \
-            2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
+          echo "Server: $SERVER_NAME (resource group ${{ env.AZURE_DB_RESOURCE_GROUP }})"
+
+          # Two separate queries so a failure of either is attributable. An `az` failure
+          # means "unknown", not "no backup", and must not be reported as the latter.
+          if ! SERVER_JSON=$(az postgres flexible-server show \
+                --resource-group "${{ env.AZURE_DB_RESOURCE_GROUP }}" \
+                --name "$SERVER_NAME" \
+                --query "{retention:backup.backupRetentionDays,geo:backup.geoRedundantBackup,earliest:backup.earliestRestoreDate}" \
+                -o json); then
+            echo "::warning::Could not read backup configuration for $SERVER_NAME (see the az error above) — recovery point unverified."
+            exit 0
+          fi
+
+          # `backup list` identifies the server with --server-name from azure-cli 2.86,
+          # which repurposed --name to mean the backup. Older CLIs only know --name and
+          # reject --server-name. Measured: run 30862396299 on a 2.86+ runner failed with
+          # "unrecognized arguments: --name", while 2.85 locally accepted it. Try the
+          # current spelling, fall back to the old one, so this works either side of that
+          # break rather than tracking whatever the runner image ships.
+          BACKUP_JSON=""
+          for server_flag in --server-name --name; do
+            if BACKUP_JSON=$(az postgres flexible-server backup list \
+                  --resource-group "${{ env.AZURE_DB_RESOURCE_GROUP }}" \
+                  "$server_flag" "$SERVER_NAME" \
+                  -o json 2>/tmp/az_backup_list_err); then
+              echo "Listed backups using $server_flag."
+              break
+            fi
+            BACKUP_JSON=""
+            # Only an unknown-argument rejection is worth retrying with the other
+            # spelling. Anything else is a genuine failure, and retrying it would just
+            # replace the real error with a confusing one.
+            if ! grep -qE "unrecognized arguments|invalid choice" /tmp/az_backup_list_err; then
+              break
+            fi
+          done
+          if [ -z "$BACKUP_JSON" ]; then
+            cat /tmp/az_backup_list_err >&2 || true
+            echo "::warning::Could not list backups for $SERVER_NAME (see the az error above) — recovery point unverified."
+            exit 0
+          fi
+
+          SERVER_JSON="$SERVER_JSON" BACKUP_JSON="$BACKUP_JSON" python3 <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os, sys
+          from datetime import datetime, timedelta, timezone
+
+          server = json.loads(os.environ["SERVER_JSON"])
+          backups = json.loads(os.environ["BACKUP_JSON"])
+          max_age = timedelta(hours=float(os.environ["MAX_BACKUP_AGE_HOURS"]))
+          now = datetime.now(timezone.utc)
+
+          def parsed(value):
+              # Azure emits +00:00 offsets; fromisoformat handles those on 3.11.
+              return datetime.fromisoformat(value) if value else None
+
+          completed = sorted(
+              (d for d in (parsed(b.get("completedTime")) for b in backups) if d),
+              reverse=True,
+          )
+          latest = completed[0] if completed else None
+          earliest = parsed(server.get("earliest"))
+          age = now - latest if latest else None
+
+          print("## Pre-deploy recovery point")
+          print()
+          print("| Item | Value |")
+          print("|------|-------|")
+          print(f"| Backups visible | {len(completed)} |")
+          print(f"| Most recent | {latest.isoformat() if latest else 'none'} |")
+          print(f"| Age | {f'{age.total_seconds() / 3600:.1f} h' if age else 'n/a'} |")
+          print(f"| Earliest restore point | {earliest.isoformat() if earliest else 'unknown'} |")
+          print(f"| Retention | {server.get('retention')} days |")
+          print(f"| Geo-redundant | {server.get('geo')} |")
+
+          # Only a definite answer blocks the deploy. Migrating with no recoverable state
+          # is the thing this gate exists to stop; an unreadable API is handled above.
+          if latest is None:
+              print()
+              print("**No recovery point.** Migrating would be unrecoverable.")
+              print("::error::No backup found for this server — refusing to migrate production without a recovery point.", file=sys.stderr)
+              sys.exit(1)
+
+          if age > max_age:
+              print()
+              print(f"**Newest backup is {age.total_seconds() / 3600:.1f} h old**, over the {max_age.total_seconds() / 3600:.0f} h threshold.")
+              print(
+                  f"::error::Newest backup for this server is {age.total_seconds() / 3600:.1f}h old, "
+                  "which exceeds the allowed age — investigate the Azure backup schedule before migrating.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print()
+          print(f"Recoverable to any point from {earliest.isoformat() if earliest else 'unknown'} onwards.")
+
+          # Worth stating on every deploy: the backups share a region with the server, so a
+          # regional loss takes both. Not a blocker, but it should not be silent either.
+          if str(server.get("geo")).lower() != "enabled":
+              print("::warning::Geo-redundant backup is disabled — a regional outage would take the database and its backups together.", file=sys.stderr)
+          PY
+
+          echo "Recovery point verified."
 
       - name: Pre-deploy staging canary verification (D18 — progressive delivery gate)
         run: |
           echo "=== Pre-Deploy Staging Canary Gate ==="
           STAGING_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           echo "Verifying staging is healthy before promoting to production..."
-          STAGING_VERSION=$(curl -sf --max-time 15 "$STAGING_URL/api/v1/meta/version" 2>/dev/null || echo '{}')
-          STAGING_SHA=$(echo "$STAGING_VERSION" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('build_sha','unknown'))" 2>/dev/null || echo "unknown")
           EXPECTED_SHA="${{ env.RELEASE_SHA }}"
-          echo "  Staging build_sha : $STAGING_SHA"
           echo "  Expected SHA      : $EXPECTED_SHA"
-          if [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
-            echo "::warning::Staging SHA $STAGING_SHA does not match expected $EXPECTED_SHA — verify staging deploy succeeded before proceeding"
-          else
-            echo "  ✅ Staging SHA matches — safe to promote to production"
-          fi
-          STAGING_HEALTH=$(curl -sf --max-time 15 -o /dev/null -w "%{http_code}" "$STAGING_URL/healthz" 2>/dev/null || echo "000")
+
+          # Staging /healthz often takes >15s after a deploy (#1751 31873845325, #1649 31875997632).
+          # Retry the same checks. Fail-closed on non-200 healthz, and on a *known* SHA mismatch.
+          # GitHub-hosted runners frequently get healthz 200 and an empty/unparseable /version
+          # body (SHA unknown in ~1s — not a timeout). #1757 made unknown SHA a hard fail and
+          # blocked promotion of a healthy staging (31878431735: 6/6 healthz 200, SHA unknown).
+          # Unknown SHA stays a warning, matching pre-#1757 promote behaviour.
+          STAGING_SHA="unknown"
+          STAGING_HEALTH="000"
+          VER_HTTP="000"
+          ATTEMPTS=6
+          for i in $(seq 1 "$ATTEMPTS"); do
+            echo "  Canary attempt $i/$ATTEMPTS"
+            VER_FILE="$(mktemp)"
+            VER_HTTP=$(curl -sS -L -o "$VER_FILE" -w "%{http_code}" --max-time 25 "$STAGING_URL/api/v1/meta/version" || true)
+            if [ -z "$VER_HTTP" ]; then VER_HTTP="000"; fi
+            STAGING_SHA=$(python3 -c 'import json,sys; d=json.loads(open(sys.argv[1],encoding="utf-8").read().strip() or "{}"); print(d.get("build_sha") or "unknown")' "$VER_FILE" 2>/dev/null || echo unknown)
+            VER_SIZE=$(wc -c < "$VER_FILE" | tr -d " ")
+            rm -f "$VER_FILE"
+            CODE=$(curl -sS -L -o /dev/null -w "%{http_code}" --max-time 25 "$STAGING_URL/healthz" || true)
+            if [ -z "$CODE" ] || [ "$CODE" = "000" ]; then
+              STAGING_HEALTH="000"
+            else
+              STAGING_HEALTH="$CODE"
+            fi
+            echo "    staging build_sha=$STAGING_SHA version_http=$VER_HTTP version_bytes=$VER_SIZE healthz=$STAGING_HEALTH"
+            if [ "${STAGING_SHA:0:12}" = "${EXPECTED_SHA:0:12}" ] && [ "$STAGING_HEALTH" = "200" ]; then
+              echo "  Staging SHA matches and healthz 200 — safe to promote"
+              break
+            fi
+            if [ "$STAGING_HEALTH" = "200" ] && [[ "$STAGING_SHA" =~ ^[0-9a-fA-F]{12,40}$ ]] && [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
+              echo "  Known SHA mismatch on healthy staging — will not promote"
+              break
+            fi
+            if [ "$i" -lt "$ATTEMPTS" ]; then
+              sleep 10
+            fi
+          done
+
           if [ "$STAGING_HEALTH" != "200" ]; then
-            echo "::error::Staging health check returned HTTP $STAGING_HEALTH — cannot promote to production"
+            echo "::error::Staging health check returned HTTP $STAGING_HEALTH after $ATTEMPTS attempts — cannot promote to production"
             exit 1
           fi
-          echo "  ✅ Staging healthy (HTTP $STAGING_HEALTH) — proceeding with production deploy"
+          if [[ "$STAGING_SHA" =~ ^[0-9a-fA-F]{12,40}$ ]] && [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
+            echo "::error::Staging SHA $STAGING_SHA does not match expected $EXPECTED_SHA — cannot promote to production"
+            exit 1
+          fi
+          if [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
+            echo "::warning::Staging SHA $STAGING_SHA (version HTTP $VER_HTTP) does not match expected $EXPECTED_SHA — healthz 200, proceeding as pre-#1757. Verify staging deploy succeeded."
+          fi
+          echo "  Staging healthy (HTTP $STAGING_HEALTH) — proceeding with production deploy"
 
+      # Capture the live production image BEFORE overwriting it. Auto-rollback has no
+      # deployment slots on Basic tier (IT handover item 1), so PREVIOUS_IMAGE is the only
+      # automatic recovery path. Measured failures (e.g. 30528881486, 30526435273): migrate
+      # failed after the new image was already live, then auto-rollback exited 1 with
+      # "no staging slot and no previous_image" because this step queried the wrong Azure
+      # property and always wrote an empty output.
+      #
+      # `az webapp config container show` returns a LIST of {name,value} app settings
+      # (DOCKER_CUSTOM_IMAGE_NAME, …), not an object with linuxFxVersion. Querying
+      # linuxFxVersion on that list is always empty. Prefer DOCKER_CUSTOM_IMAGE_NAME,
+      # then siteConfig.linuxFxVersion (DOCKER|…), then the app setting of the same name.
       - name: Capture previous production image
         id: capture_previous_image
         run: |
           set -euo pipefail
-          RAW=$(az webapp config container show \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --query "linuxFxVersion" -o tsv 2>/dev/null || echo "")
-          PREV="${RAW#DOCKER|}"
-          if [ -z "$PREV" ] || [ "$PREV" = "None" ]; then
-            echo "::warning::Unable to capture previous production image before deploy"
-            echo "previous_image=" >> "$GITHUB_OUTPUT"
-          else
-            echo "Previous production image: $PREV"
-            echo "previous_image=$PREV" >> "$GITHUB_OUTPUT"
-            echo "PREVIOUS_IMAGE=$PREV" >> "$GITHUB_ENV"
+          RG="${{ env.AZURE_RESOURCE_GROUP }}"
+          APP="${{ env.AZURE_WEBAPP_NAME }}"
+          PREV=""
+
+          PREV=$(az webapp config container show \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --query "[?name=='DOCKER_CUSTOM_IMAGE_NAME'].value | [0]" -o tsv 2>/dev/null || true)
+          PREV="${PREV:-}"
+
+          if [ -z "$PREV" ] || [ "$PREV" = "None" ] || [ "$PREV" = "null" ]; then
+            RAW=$(az webapp show \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --query "siteConfig.linuxFxVersion" -o tsv 2>/dev/null || true)
+            RAW="${RAW:-}"
+            case "$RAW" in
+              DOCKER\|*) PREV="${RAW#DOCKER|}" ;;
+              *) PREV="$RAW" ;;
+            esac
           fi
+
+          if [ -z "$PREV" ] || [ "$PREV" = "None" ] || [ "$PREV" = "null" ]; then
+            PREV=$(az webapp config appsettings list \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --query "[?name=='DOCKER_CUSTOM_IMAGE_NAME'].value | [0]" -o tsv 2>/dev/null || true)
+            PREV="${PREV:-}"
+          fi
+
+          if [ -z "$PREV" ] || [ "$PREV" = "None" ] || [ "$PREV" = "null" ]; then
+            echo "::error::Unable to capture previous production image before deploy — refusing to overwrite production without a rollback target"
+            echo "Auto-rollback has no deployment slots on the current Basic tier; PREVIOUS_IMAGE is the only automatic recovery path."
+            echo "Fix Azure container config readability, or use workflow Emergency Rollback - Production with a known-good image SHA."
+            echo "previous_image=" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "Previous production image: $PREV"
+          echo "previous_image=$PREV" >> "$GITHUB_OUTPUT"
+          echo "PREVIOUS_IMAGE=$PREV" >> "$GITHUB_ENV"
 
       - name: Deploy to Azure Web App
         run: |
@@ -623,6 +878,19 @@ jobs:
               ANTHROPIC_MODEL="claude-sonnet-4-5" \
               OPENAI_API_KEY="${OPENAI_API_KEY_VAL}" \
               AI_PROVIDER="anthropic" \
+              AI_COPILOT_ENABLED="${{ vars.AI_COPILOT_ENABLED || 'false' }}" \
+              AI_COPILOT_INFERENCE_ENABLED="${{ vars.AI_COPILOT_INFERENCE_ENABLED || 'false' }}" \
+              COMPLIANCE_SCHEDULE_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_ENABLED || 'false' }}" \
+              COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED || 'false' }}" \
+              COMPLIANCE_FILING_INDEX_ENABLED="${{ vars.COMPLIANCE_FILING_INDEX_ENABLED || 'false' }}" \
+              COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED || 'false' }}" \
+              COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_ENABLED="${{ vars.DOCUMENT_GRAPH_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED="${{ vars.DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED="${{ vars.DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_MAP_VIEW_ENABLED="${{ vars.DOCUMENT_GRAPH_MAP_VIEW_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_DND_PROPOSE_ENABLED="${{ vars.DOCUMENT_GRAPH_DND_PROPOSE_ENABLED || 'false' }}" \
+              DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED="${{ vars.DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED || 'false' }}" \
               AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
               AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
               AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
@@ -632,6 +900,7 @@ jobs:
               PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
               PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-aped-4627-b74a}" \
               UAT_MODE="READ_WRITE" \
+              DEFAULT_TENANT_ID="1" \
               APPLICATIONINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
               CORS_ORIGINS='["https://app-qgp-prod.azurestaticapps.net","https://purple-water-03205fa03.6.azurestaticapps.net"]' \
               CELERY_BROKER_URL="${REDIS_URL_VAL}" \
@@ -642,12 +911,27 @@ jobs:
           echo "✅ Application settings configured"
 
           # Celery worker runs library index OCR — keep DI env aligned with API.
+          # It also runs the Compliance Schedule sweep, which reads
+          # COMPLIANCE_SCHEDULE_ENABLED itself and treats "unset" as off. That flag must
+          # therefore come from the same variable the API block uses: if only the API is
+          # told, the two silently disagree and the sweep no-ops while the module looks on.
           for celery_app in "${{ env.AZURE_WEBAPP_NAME }}-worker" "${{ env.AZURE_WEBAPP_NAME }}-beat"; do
             if az webapp show --name "$celery_app" --resource-group "$AZURE_RESOURCE_GROUP" &>/dev/null; then
               az webapp config appsettings set \
                 --name "$celery_app" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
                 --settings \
+                  COMPLIANCE_SCHEDULE_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_ENABLED || 'false' }}" \
+                  COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED || 'false' }}" \
+                  COMPLIANCE_FILING_INDEX_ENABLED="${{ vars.COMPLIANCE_FILING_INDEX_ENABLED || 'false' }}" \
+                  COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED || 'false' }}" \
+                  COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED="${{ vars.COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_ENABLED="${{ vars.DOCUMENT_GRAPH_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED="${{ vars.DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED="${{ vars.DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_MAP_VIEW_ENABLED="${{ vars.DOCUMENT_GRAPH_MAP_VIEW_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_DND_PROPOSE_ENABLED="${{ vars.DOCUMENT_GRAPH_DND_PROPOSE_ENABLED || 'false' }}" \
+                  DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED="${{ vars.DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED || 'false' }}" \
                   AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
                   AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
                   AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
@@ -660,7 +944,8 @@ jobs:
                   PINECONE_API_KEY="${PINECONE_API_KEY_VAL}" \
                   PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
                   PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-gcp-starter}" \
-                --output none || true
+                --output none \
+                || echo "::warning title=Celery settings not applied::$celery_app kept its previous app settings, so COMPLIANCE_SCHEDULE_ENABLED may now disagree with the API"
             fi
           done
 
@@ -1470,7 +1755,7 @@ jobs:
           echo ""
           # Phase 5: Container Image Provenance Verification (Deploy Proof v3)
           # Primary verification: identity (build_sha) + ACR digest provenance
-          # Secondary (informational): Azure linuxFxVersion (unreliable, may return empty)
+          # Secondary (informational): Azure running image (DOCKER_CUSTOM_IMAGE_NAME / siteConfig)
           echo "### Phase 5: Container Image Provenance Verification"
           
           # Check if we have valid digest provenance from build step
@@ -1483,34 +1768,42 @@ jobs:
             PROVENANCE_RESULT="MISSING"
           fi
           
-          # Attempt Azure linuxFxVersion check (informational only)
-          RUNNING_IMAGE_RAW=$(az webapp config container show \
+          # Attempt Azure running-image check (informational only).
+          # Prefer DOCKER_CUSTOM_IMAGE_NAME from container settings — linuxFxVersion is not
+          # a field on `az webapp config container show` (that command returns a name/value list).
+          RUNNING_IMAGE=$(az webapp config container show \
             --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "linuxFxVersion" -o tsv 2>/dev/null || echo "")
-          RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
+            --query "[?name=='DOCKER_CUSTOM_IMAGE_NAME'].value | [0]" -o tsv 2>/dev/null || echo "")
+          if [ -z "$RUNNING_IMAGE" ] || [ "$RUNNING_IMAGE" = "None" ] || [ "$RUNNING_IMAGE" = "null" ]; then
+            RUNNING_IMAGE_RAW=$(az webapp show \
+              --name "${{ env.AZURE_WEBAPP_NAME }}" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "siteConfig.linuxFxVersion" -o tsv 2>/dev/null || echo "")
+            RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
+          fi
           RUNNING_IMAGE_SAFE="${RUNNING_IMAGE#*/}"
           AZURE_CHECK="UNKNOWN"
           
           if [ -z "$RUNNING_IMAGE" ]; then
-            echo "ℹ️ Azure linuxFxVersion: not reported (informational)"
+            echo "ℹ️ Azure running image: not reported (informational)"
             AZURE_CHECK="NOT_REPORTED"
           elif echo "$RUNNING_IMAGE" | grep -q "@sha256:"; then
             RUNNING_DIGEST="${RUNNING_IMAGE##*@}"
             if [ "$RUNNING_DIGEST" = "$EXPECTED_DIGEST" ]; then
-              echo "✅ Azure linuxFxVersion: digest matches (bonus verification)"
+              echo "✅ Azure running image: digest matches (bonus verification)"
               AZURE_CHECK="MATCH"
             else
-              echo "ℹ️ Azure linuxFxVersion: digest differs (may be stale, informational)"
+              echo "ℹ️ Azure running image: digest differs (may be stale, informational)"
               AZURE_CHECK="STALE"
             fi
           elif echo "$RUNNING_IMAGE" | grep -q ":"; then
             RUNNING_TAG=$(echo "$RUNNING_IMAGE_SAFE" | awk -F: '{print $NF}')
             if [ "$RUNNING_TAG" = "$EXPECTED_SHA" ]; then
-              echo "✅ Azure linuxFxVersion: tag matches"
+              echo "✅ Azure running image: tag matches"
               AZURE_CHECK="MATCH"
             else
-              echo "ℹ️ Azure linuxFxVersion: tag differs (may be stale, informational)"
+              echo "ℹ️ Azure running image: tag differs (may be stale, informational)"
               AZURE_CHECK="STALE"
             fi
           fi
@@ -1691,6 +1984,38 @@ jobs:
             docs/evidence/stability_gate_${{ github.run_id }}.json
           retention-days: 90
 
+      - name: Assert COMPLIANCE_SCHEDULE_ENABLED API/worker live parity
+        run: |
+          set -euo pipefail
+          # Post-deploy live check: PR #1590 made deploy *write* the same expression to API
+          # and worker, but a manual `az webapp config appsettings set` can still drift them
+          # afterwards. Fail the deploy if the live Azure values disagree.
+          RG="${{ env.AZURE_RESOURCE_GROUP }}"
+          API_APP="${{ env.AZURE_WEBAPP_NAME }}"
+          WORKER_APP="${API_APP}-worker"
+          FLAG=COMPLIANCE_SCHEDULE_ENABLED
+
+          API_VAL=$(az webapp config appsettings list \
+            -g "$RG" -n "$API_APP" \
+            --query "[?name=='$FLAG'].value | [0]" -o tsv)
+          WORKER_VAL=$(az webapp config appsettings list \
+            -g "$RG" -n "$WORKER_APP" \
+            --query "[?name=='$FLAG'].value | [0]" -o tsv)
+
+          # az prints the literal string "null" when JMESPath finds nothing; treat as unset.
+          # Use if/fi (not `&&`) so a non-match does not trip `set -e`.
+          if [ "${API_VAL:-}" = "null" ]; then API_VAL=""; fi
+          if [ "${WORKER_VAL:-}" = "null" ]; then WORKER_VAL=""; fi
+
+          echo "API ($API_APP): $FLAG=${API_VAL:-<unset>}"
+          echo "Worker ($WORKER_APP): $FLAG=${WORKER_VAL:-<unset>}"
+
+          if [ "${API_VAL}" != "${WORKER_VAL}" ]; then
+            echo "::error title=Flag parity failed::$FLAG differs between API ('${API_VAL:-<unset>}') and worker ('${WORKER_VAL:-<unset>}')"
+            exit 1
+          fi
+          echo "✅ $FLAG matches on API and worker (${API_VAL:-<unset>})"
+
       - name: Verify deployment - Security checks (Stage 4)
         run: |
           echo "Running post-deployment security verification..."
@@ -1785,7 +2110,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.rollback == true
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Login to Azure
         uses: azure/login@v3
@@ -1869,7 +2194,14 @@ jobs:
             echo "❌ PROD_AZURE_WEBAPP_NAME / AZURE_WEBAPP_NAME is empty — cannot rollback"
             exit 1
           fi
-          echo "🔄 Auto-rollback targeting ${APP} in ${RG}"
+          # RG is intentionally rg-qgp-staging: production App Services live in the shared
+          # resource group (ADR-0019). Targeting that RG is not a mis-route to staging.
+          echo "🔄 Auto-rollback targeting ${APP} in ${RG} (shared prod/staging RG)"
+          if [ -n "${PREVIOUS_IMAGE:-}" ]; then
+            echo "previous_image captured before deploy: ${PREVIOUS_IMAGE}"
+          else
+            echo "previous_image captured before deploy: (empty)"
+          fi
 
           SLOTS=$(az webapp deployment slot list \
             --name "$APP" \
@@ -1919,8 +2251,16 @@ jobs:
   notify:
     name: Notify Deployment
     runs-on: ubuntu-latest
-    needs: build-and-deploy
-    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.rollback == true)
+    # pre-deployment-checks is needed only so the release gate below can name *why*
+    # nothing was deployed. always() means its result never blocks this job.
+    needs: [build-and-deploy, pre-deployment-checks]
+    # always() so a skipped B&D after a *successful* Staging run still fail-closes
+    # (honest "did not deploy"). Do not run at all when Staging itself was
+    # cancelled/failed — that is ignore-non-success-staging, not a promote.
+    if: |
+      always() &&
+      !(github.event_name == 'workflow_dispatch' && inputs.rollback == true) &&
+      !(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success')
     
     steps:
       - name: Notify success
@@ -1955,9 +2295,8 @@ jobs:
 
       # Without this, a run that deployed nothing looks identical in the Actions list to
       # one that shipped: the two steps above are both skipped, this job still passes, and
-      # the run goes green. The conclusion is deliberately left alone — a blocked promotion
-      # and a withheld sign-off are both legitimate outcomes, and the staging run is already
-      # red when it is the former — so say so in the summary instead.
+      # the run goes green. This step keeps the diagnosis; the release gate that follows it
+      # is what keeps the run *conclusion* honest.
       - name: Report that nothing was deployed
         if: needs.build-and-deploy.result != 'success' && needs.build-and-deploy.result != 'failure'
         run: |
@@ -1977,3 +2316,57 @@ jobs:
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=No production deployment::Production unchanged - build-and-deploy was ${{ needs.build-and-deploy.result }}"
+
+      # Release gate, ported from the step of the same name in deploy-staging.yml.
+      # The run conclusion must answer "did you deploy production?" honestly.
+      #
+      # Run 30419130586 (0e1ab69a, 2026-07-29T03:16Z) concluded SUCCESS with every job
+      # skipped except this one: staging had failed, so nothing was built and nothing was
+      # deployed, production stayed on the previous commit — and the Actions list showed a
+      # green tick. Anything reading that conclusion is told production is current when it
+      # is behind.
+      #
+      # The SKIPPING IS CORRECT and is unchanged: staging was red, so production must not
+      # promote. Only the reported conclusion changes. A deliberate non-deploy is still a
+      # non-deploy, so it is reported as a non-success run with the reason named below,
+      # rather than as a success.
+      - name: Release gate — refuse to conclude success without a real deploy
+        if: always()
+        env:
+          BUILD_RESULT: ${{ needs.build-and-deploy.result }}
+          PRE_RESULT: ${{ needs.pre-deployment-checks.result }}
+          SKIP_REASON: ${{ needs.pre-deployment-checks.outputs.skip_reason }}
+          APPROVED: ${{ needs.pre-deployment-checks.outputs.approved }}
+        run: |
+          if [[ "$BUILD_RESULT" == "success" ]]; then
+            echo "✅ Release gate: production was really built and deployed"
+            exit 0
+          fi
+          if [[ "$BUILD_RESULT" == "failure" ]]; then
+            # The deploy job itself failed, so the run conclusion is already 'failure'.
+            # It is honest as it stands — do not add a second, confusing error annotation.
+            echo "ℹ️ Release gate: build-and-deploy failed, so this run already concludes failure"
+            exit 0
+          fi
+          REASON="${SKIP_REASON:-staging did not deploy, or promotion was not approved}"
+          {
+            echo "### 🚧 Release gate: this run did not deploy production"
+            echo ""
+            echo "This run is marked **failed** because \`Build and Deploy to Production\`"
+            echo "concluded \`${BUILD_RESULT}\` — **production is unchanged**. Reporting"
+            echo "success here would claim a deployment that did not happen."
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Build and Deploy | ${BUILD_RESULT} |"
+            echo "| Pre-Deployment Checks | ${PRE_RESULT} |"
+            echo "| Promotion approved | ${APPROVED:-false} |"
+            echo "| Reason | ${REASON} |"
+            echo ""
+            echo "Not deploying was the correct decision — a red staging run must not be"
+            echo "promoted. This failure records that production was **not** updated; it is"
+            echo "not a request to force the deploy."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Production was not deployed (build-and-deploy=${BUILD_RESULT}, pre-deployment-checks=${PRE_RESULT}, reason=${REASON}) - failing this run so its conclusion does not claim a deployment that did not happen"
+          exit 1

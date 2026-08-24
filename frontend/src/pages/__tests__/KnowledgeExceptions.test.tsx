@@ -12,6 +12,7 @@ const mockList = vi.fn()
 const mockConfirm = vi.fn()
 const mockReject = vi.fn()
 const mockBulkConfirm = vi.fn()
+const mockListPendingEdges = vi.fn()
 const mockToastSuccess = vi.fn()
 const mockToastError = vi.fn()
 
@@ -31,6 +32,13 @@ vi.mock('../../api/client', () => ({
     confirmLink: (...a: unknown[]) => mockConfirm(...a),
     rejectLink: (...a: unknown[]) => mockReject(...a),
     bulkConfirm: (...a: unknown[]) => mockBulkConfirm(...a),
+  },
+  // Doc Graph slice (WE-1) stays closed in these cases — the flag hook is not
+  // mocked here, so it resolves to its default-off value and never calls out.
+  documentGraphApi: {
+    listPendingEdges: (...a: unknown[]) => mockListPendingEdges(...a),
+    confirmEdge: vi.fn(),
+    rejectEdge: vi.fn(),
   },
 }))
 
@@ -94,6 +102,7 @@ describe('KnowledgeExceptions closed loop', () => {
           title: 'Gap',
           notes: null,
           signal_type: 'gap',
+          gate_reason: 'below_threshold',
           created_at: '2026-07-13T00:00:00Z',
           created_by_email: null,
         },
@@ -118,7 +127,16 @@ describe('KnowledgeExceptions closed loop', () => {
     )
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith({ status: undefined, entityType: 'incident', signalType: undefined })
+      expect(mockList).toHaveBeenCalledWith({
+        status: undefined,
+        entityType: 'incident',
+        signalType: undefined,
+        gateReason: undefined,
+        clauseId: undefined,
+        scheme: undefined,
+        operationalOnly: undefined,
+        page: 1,
+      })
     })
     expect(screen.getByTestId('exceptions-return-to-case')).toBeInTheDocument()
     expect(screen.getByTestId('exceptions-return-to-case-link')).toHaveAttribute(
@@ -126,6 +144,7 @@ describe('KnowledgeExceptions closed loop', () => {
       '/incidents/7?tab=standards',
     )
     expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent('entity=incident')
+    expect(screen.getByTestId('exception-gate-reason-9')).toHaveTextContent('Below 98% confidence')
   })
 
   it('confirm returns to case when returnTo is present', async () => {
@@ -274,19 +293,64 @@ describe('KnowledgeExceptions honesty (KE-W1)', () => {
     )
 
     expect(await screen.findByText('Inbox clear')).toBeInTheDocument()
-    expect(screen.getByTestId('exceptions-empty-open-standards')).toHaveAttribute('href', '/standards')
+    expect(screen.getByTestId('exceptions-empty-open-standards')).toHaveAttribute(
+      'href',
+      '/compliance?view=matrix',
+    )
   })
 })
 
 describe('exceptions inbox URL sync', () => {
-  it('encodes status + entity_type + signal_type', async () => {
+  it('encodes status + entity_type + signal_type + gate_reason', async () => {
     const { buildExceptionsInboxSearch } = await import('../exceptionsInboxFilters')
     expect(
       buildExceptionsInboxSearch({
         status: 'needs_review',
         entityType: 'near_miss',
         signalType: 'nonconformity',
+        gateReason: 'below_threshold',
       }),
-    ).toBe('status=needs_review&entity_type=near_miss&signal_type=nonconformity')
+    ).toBe(
+      'status=needs_review&entity_type=near_miss&signal_type=nonconformity&gate_reason=below_threshold',
+    )
+    expect(
+      buildExceptionsInboxSearch({
+        status: 'inbox',
+        entityType: 'all',
+        signalType: 'all',
+        gateReason: 'all',
+        page: 2,
+      }),
+    ).toBe('page=2')
+  })
+})
+
+describe('exceptions inbox paging honesty', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+  it('enables Next when the envelope says has_next', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [],
+        page: 1,
+        page_size: 200,
+        truncated: true,
+        has_next: true,
+        has_prev: false,
+      },
+    })
+    const KnowledgeExceptions = (await import('../KnowledgeExceptions')).default
+    render(
+      <MemoryRouter>
+        <KnowledgeExceptions />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByTestId('exceptions-page-next')).not.toBeDisabled()
+    expect(screen.getByTestId('exceptions-page-prev')).toBeDisabled()
+    expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent(
+      /page 1 of up to 200/,
+    )
+    expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent(/more pages follow/)
   })
 })

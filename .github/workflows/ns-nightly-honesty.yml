@@ -1,0 +1,63 @@
+name: Northern Star Nightly Honesty (R08/R25/R30)
+
+# W9 / NS-NIGHTLY — pack honesty report + delivery guard.
+# Report-only against northern-star-v6.json; never writes. Parallel-safe vs W8 routes.
+
+on:
+  schedule:
+    # 03:15 UTC — after nightly contract probe window
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/governance/library/northern_star_nightly_honesty.py"
+      - "docs/governance/library_ns_nightly_honesty_baseline.json"
+      - "specs/governance-library/northern-star-v6.json"
+      - "specs/governance-library/northern-star-rules-v6.json"
+      - "tests/unit/test_northern_star_nightly_honesty.py"
+      - ".github/workflows/ns-nightly-honesty.yml"
+
+jobs:
+  ns-nightly-honesty:
+    name: NS-NIGHTLY honesty + delivery guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install pytest (unit pins only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pytest>=7.4.0,<10.0.0"
+
+      - name: Run honesty report (artifact)
+        run: |
+          python -m scripts.governance.library.northern_star_nightly_honesty --json \
+            > ns-nightly-honesty-report.json
+          python -m scripts.governance.library.northern_star_nightly_honesty \
+            > ns-nightly-honesty-report.txt
+          echo "==== honesty report (text) ===="
+          cat ns-nightly-honesty-report.txt
+
+      - name: Delivery guard (refuse fabricated zeros)
+        run: |
+          python -m scripts.governance.library.northern_star_nightly_honesty --guard
+
+      - name: Unit pins
+        run: |
+          python -m pytest tests/unit/test_northern_star_nightly_honesty.py -q
+
+      - name: Upload honesty report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ns-nightly-honesty-report
+          path: |
+            ns-nightly-honesty-report.json
+            ns-nightly-honesty-report.txt
+          if-no-files-found: warn

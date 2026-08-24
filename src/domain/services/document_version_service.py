@@ -13,12 +13,13 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import Document, DocumentVersion
 from src.domain.models.document_control import ControlledDocument, ControlledDocumentVersion
+from src.domain.services.legal_hold_enforcement import assert_controlled_document_not_held, assert_document_not_held
 
 IMMUTABLE_VERSION_STATUSES = frozenset(
     {
@@ -104,6 +105,32 @@ def assert_document_metadata_editable(status: str | None) -> None:
         raise BadRequestError(f"Document status '{normalized}' is read-only. Revise to open a draft before editing.")
 
 
+def assert_publisher_is_not_author(document: Document, *, published_by_id: int | None) -> None:
+    """Refuse a publish performed by the document's own author (WC-1 / L-40).
+
+    ``approve_document`` already refuses self-approval, but publish was reachable
+    straight from a draft with no second person involved at all — so an author
+    could put their own unreviewed document live and no separation of duties
+    applied anywhere on that path. This closes the author leg of
+    author-review-publish at the one place every publish goes through.
+
+    An unattributed publish (``published_by_id`` None) or an unattributed
+    document (legacy rows with no ``created_by_id``) is not refused: there is no
+    identity to compare, and refusing would block publishing every pre-attribution
+    row rather than enforcing a separation.
+    """
+    author_id = getattr(document, "created_by_id", None)
+    if author_id is None or published_by_id is None:
+        return
+    if author_id == published_by_id:
+        raise BadRequestError(
+            "Self-publication is not permitted: the author of a document cannot publish it. "
+            "A second person must approve or publish the version.",
+            code="SEPARATION_OF_DUTIES",
+            details={"document_id": getattr(document, "id", None)},
+        )
+
+
 LIBRARY_IMMUTABLE_METADATA_STATUSES = frozenset(
     {"published", "approved", "active", "superseded", "retired", "obsolete", "archived"}
 )
@@ -163,6 +190,8 @@ class DocumentVersionService:
         created_by_name: str | None = None,
     ) -> ControlledDocumentVersion:
         """Open a new draft tip. Prior published/superseded rows stay immutable."""
+        await assert_controlled_document_not_held(db, document, tenant_id=tenant_id, action="revised")
+
         open_draft = await db.scalar(
             select(ControlledDocumentVersion)
             .where(
@@ -257,6 +286,8 @@ class DocumentVersionService:
         version_id: int | None = None,
     ) -> ControlledDocumentVersion:
         """Publish working draft; supersede prior published tip (immutable)."""
+        await assert_controlled_document_not_held(db, document, tenant_id=tenant_id, action="published")
+
         if version_id is not None:
             version = await db.scalar(
                 select(ControlledDocumentVersion).where(
@@ -364,6 +395,66 @@ class DocumentVersionService:
         result = await db.execute(stmt.order_by(DocumentVersion.created_at.desc()))
         return list(result.scalars().all())
 
+    async def resolve_tip_library_version(
+        self,
+        db: AsyncSession,
+        *,
+        document_id: int,
+        tenant_id: int,
+    ) -> DocumentVersion | None:
+        """Return the current published (else approved) tip library version, if any."""
+        return await db.scalar(
+            select(DocumentVersion)
+            .where(
+                DocumentVersion.document_id == document_id,
+                DocumentVersion.tenant_id == tenant_id,
+                DocumentVersion.status.in_(("published", "approved")),
+            )
+            .order_by(
+                case((DocumentVersion.status == "published", 0), else_=1),
+                DocumentVersion.published_at.desc().nulls_last(),
+                DocumentVersion.id.desc(),
+            )
+            .limit(1)
+        )
+
+    async def resolve_tip_library_version_ids(
+        self,
+        db: AsyncSession,
+        *,
+        document_ids: list[int],
+        tenant_id: int,
+    ) -> dict[int, tuple[int | None, str | None]]:
+        """Batch tip resolution for digest freshness (same tip rule as single-row).
+
+        Returns ``{document_id: (tip_version_id, tip_version_number)}``. Documents
+        with no published/approved tip are omitted (callers treat missing as unknown).
+        """
+        if not document_ids:
+            return {}
+        unique_ids = sorted({int(doc_id) for doc_id in document_ids})
+        result = await db.execute(
+            select(DocumentVersion)
+            .where(
+                DocumentVersion.document_id.in_(unique_ids),
+                DocumentVersion.tenant_id == tenant_id,
+                DocumentVersion.status.in_(("published", "approved")),
+            )
+            .order_by(
+                DocumentVersion.document_id.asc(),
+                case((DocumentVersion.status == "published", 0), else_=1),
+                DocumentVersion.published_at.desc().nulls_last(),
+                DocumentVersion.id.desc(),
+            )
+        )
+        tips: dict[int, tuple[int | None, str | None]] = {}
+        for version in result.scalars().all():
+            doc_id = int(version.document_id)
+            if doc_id in tips:
+                continue  # first row per document is the tip (order_by matches single-row)
+            tips[doc_id] = (int(version.id), str(version.version_number))
+        return tips
+
     async def revise_library(
         self,
         db: AsyncSession,
@@ -377,6 +468,8 @@ class DocumentVersionService:
         file_size: int | None = None,
         created_by_id: int | None = None,
     ) -> DocumentVersion:
+        await assert_document_not_held(db, document, action="revised")
+
         open_draft = await db.scalar(
             select(DocumentVersion)
             .where(
@@ -467,6 +560,9 @@ class DocumentVersionService:
         published_by_id: int | None = None,
         version_id: int | None = None,
     ) -> DocumentVersion:
+        await assert_document_not_held(db, document, action="published")
+        assert_publisher_is_not_author(document, published_by_id=published_by_id)
+
         if version_id is not None:
             version = await db.scalar(
                 select(DocumentVersion).where(

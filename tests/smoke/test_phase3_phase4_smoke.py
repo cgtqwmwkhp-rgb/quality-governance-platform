@@ -40,25 +40,21 @@ class TestWorkflowCenterSmoke:
         assert response.status_code == 200
         assert "instances" in response.json()
 
-    def test_pending_approvals_endpoint_available(self, auth_client: Any) -> None:
-        """Verify pending approvals endpoint is accessible."""
-        response = auth_client.get("/api/v1/workflows/approvals/pending")
-        assert response.status_code == 200
-        assert "approvals" in response.json()
+    def test_my_decisions_endpoint_available(self, auth_client: Any) -> None:
+        """The outstanding-decisions surface, which replaced three smoke tests here.
 
-    def test_delegations_endpoint_available(self, auth_client: Any) -> None:
-        """Verify delegations endpoint is accessible."""
-        response = auth_client.get("/api/v1/workflows/delegations")
+        Those three checked that `/workflows/approvals/pending`,
+        `/workflows/delegations` and `/workflows/stats` answered 200 with the
+        expected keys — which they always did, over an engine that stored nothing.
+        A smoke test that a route is wired cannot tell an empty queue from a queue
+        that cannot fill, so this one reads the completeness flag instead.
+        """
+        response = auth_client.get("/api/v1/approvals/my-decisions")
         assert response.status_code == 200
-        assert "delegations" in response.json()
-
-    def test_workflow_stats_endpoint_available(self, auth_client: Any) -> None:
-        """Verify workflow stats endpoint is accessible."""
-        response = auth_client.get("/api/v1/workflows/stats")
-        assert response.status_code == 200
-        stats = response.json()
-        assert "active_workflows" in stats
-        assert "pending_approvals" in stats
+        body = response.json()
+        assert "items" in body
+        assert "sources_complete" in body
+        assert body["sources"], "the endpoint must account for the sources it asked"
 
     def test_can_start_workflow(self, client: Any, admin_headers: dict) -> None:
         """Verify workflow can be started by a privileged (superuser) account."""
@@ -147,8 +143,8 @@ class TestFrontendPagesSmoke:
 
         return os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
-    def test_workflow_center_page_loads(self, base_url: str) -> None:
-        """Verify Workflow Center page is accessible."""
+    def test_frozen_workflows_route_still_served(self, base_url: str) -> None:
+        """The frozen /workflows path must still be served (it client-redirects to /actions)."""
         try:
             response = requests.get(f"{base_url}/workflows", timeout=10)
             assert response.status_code in [200, 302]
@@ -168,15 +164,19 @@ class TestIntegrationSmoke:
     """Integration smoke tests."""
 
     def test_workflow_approval_flow(self, auth_client: Any) -> None:
-        """Test basic workflow approval flow."""
+        """Workflow templates plus the live outstanding-decisions surface.
+
+        Replaces checks against `/workflows/approvals/pending` and
+        `/workflows/stats`, which FR-APPROVALS-01 deleted.
+        """
         templates_resp = auth_client.get("/api/v1/workflows/templates")
         assert templates_resp.status_code == 200
 
-        approvals_resp = auth_client.get("/api/v1/workflows/approvals/pending")
-        assert approvals_resp.status_code == 200
-
-        stats_resp = auth_client.get("/api/v1/workflows/stats")
-        assert stats_resp.status_code == 200
+        decisions_resp = auth_client.get("/api/v1/approvals/my-decisions")
+        assert decisions_resp.status_code == 200
+        body = decisions_resp.json()
+        assert "items" in body
+        assert "sources_complete" in body
 
     def test_compliance_monitoring_flow(self, auth_client: Any) -> None:
         """Test basic compliance monitoring flow."""

@@ -1,5 +1,5 @@
 """
-AI Copilot Service
+PlantEx Assist service (technical module: AI Copilot)
 
 Provides conversational AI assistance with:
 - Natural language understanding
@@ -9,12 +9,10 @@ Provides conversational AI assistance with:
 - Multi-turn conversations
 """
 
-import json
-import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +25,7 @@ from src.domain.models.ai_copilot import (
     CopilotMessage,
     CopilotSession,
 )
+from src.domain.services.copilot_kill_switch import copilot_kill_switch_last_known
 
 
 class CopilotDisabledError(RuntimeError):
@@ -34,12 +33,101 @@ class CopilotDisabledError(RuntimeError):
 
 
 def copilot_is_enabled() -> bool:
-    """Single source of truth for whether simulated copilot output may be served (PX-248).
+    """Whether configuration permits copilot output to be served (PX-248).
 
-    Fails closed like the frontend gate: production is never eligible, and every other
-    environment needs an explicit opt-in.
+    Fails closed like the frontend gate: no environment is eligible without an explicit
+    opt-in, and the shipped default is off. Production is eligible on the same terms as
+    every other environment — the operator setting AI_COPILOT_ENABLED is accepting that
+    the replies are keyword simulations, which the UI states before the first exchange.
+
+    This is the configuration gate only. It is also the *first* gate: the runtime kill
+    switch in :mod:`src.domain.services.copilot_kill_switch` is consulted after this
+    returns ``True``, never instead of it, which is what keeps the database able to close
+    the surface and unable to open it.
     """
-    return settings.ai_copilot_enabled and not settings.is_production
+    return settings.ai_copilot_enabled
+
+
+def copilot_inference_is_enabled() -> bool:
+    """Whether grounded inference (PR3b) may run.
+
+    Requires the surface gate (``AI_COPILOT_ENABLED``) *and* the inference gate
+    (``AI_COPILOT_INFERENCE_ENABLED``, default off). When PR3a (#1481) has landed,
+    also respects the subtract-only kill switch's last known verdict without doing
+    I/O here — same posture as ``send_message`` on that branch.
+    """
+    if not copilot_is_enabled():
+        return False
+    if not settings.ai_copilot_inference_enabled:
+        return False
+    try:
+        from src.domain.services.copilot_kill_switch import copilot_kill_switch_last_known
+    except ImportError:
+        return True
+    return not copilot_kill_switch_last_known()
+
+
+# ============================================================================
+# Refusal copy
+# ============================================================================
+#
+# Three different things can stop an answer, and one sentence cannot describe all
+# three without being false about two of them:
+#
+#   * inference off      — no registers are read at all; the replies really are
+#                          hardcoded keyword matches, so "not connected" is true.
+#   * inference on, no   — the registers *are* wired up, so the limit is not the
+#     answer served        connection. It may be the closed question set, or a
+#                          permission the caller lacks, or the module being off
+#                          for the tenant: CopilotGroundingService.try_answer
+#                          collapses all three to ``ungrounded`` on purpose, so
+#                          that a caller cannot tell which one closed. One string
+#                          therefore has to serve all three, and it may not name
+#                          any of them as the cause.
+#   * inference on, the  — the question was in the set and the figures were
+#     citation check       computed, but the wording quoted something that is not
+#     failed               in them, so the answer is dropped unserved.
+#
+# Wording the middle and last cases as a disconnected demo is the defect these
+# constants exist to remove: it understates a surface that answers register
+# questions in the very next breath, which teaches users to disbelieve the
+# disclaimers that matter.
+
+DEMO_LIVE_DATA_REFUSAL = (
+    "I cannot answer from live organisation data. This PlantEx Assist demo is not "
+    "connected to your registers, so I will not invent counts, percentages, named "
+    "risks, or reference numbers. Open the relevant module for real figures."
+)
+
+# Serves the out-of-set, no-permission and module-off cases alike, so it states the
+# inability and the no-fabrication promise without asserting a cause. "That is outside
+# the fixed set" would read well for the first case and be plainly false for the other
+# two, where the question *is* in the set — the same class of false disclaimer this
+# rewrite removes from the demo wording.
+GROUNDED_LIVE_DATA_REFUSAL = (
+    "I cannot answer from live organisation data here, and I will not invent counts, "
+    "percentages, named risks, or reference numbers instead. PlantEx Assist answers a "
+    "fixed set of questions from your registers — try one of those, for example how many "
+    "incidents we have or which actions are overdue, or open the relevant module for real "
+    "figures."
+)
+
+CITATION_REFUSAL = (
+    "I could not verify every figure in that answer against your own registers, so I "
+    "have dropped it rather than serve it. PlantEx Assist only quotes counts, "
+    "percentages and reference numbers that appear in the figures this platform "
+    "computed. Open the relevant module for the live register."
+)
+
+DEMO_WRITE_REFUSAL = (
+    "I cannot create or update records from this PlantEx Assist demo. Nothing was written. "
+    "Use the Incidents register (New) to log a real safety event."
+)
+
+GROUNDED_WRITE_REFUSAL = (
+    "PlantEx Assist never creates, edits or deletes records. Nothing was written. "
+    "Use the Incidents register (New) to log a real safety event."
+)
 
 
 # ============================================================================
@@ -218,7 +306,7 @@ Current context: {context}
 
 class CopilotService:
     """
-    AI Copilot conversation service.
+    PlantEx Assist conversation service.
     """
 
     def __init__(self, db: AsyncSession):
@@ -253,22 +341,49 @@ class CopilotService:
 
         return session
 
-    async def get_session(self, session_id: int) -> Optional[CopilotSession]:
-        """Get a session by ID."""
-        result = await self.db.execute(select(CopilotSession).where(CopilotSession.id == session_id))
+    async def get_session(
+        self,
+        session_id: int,
+        *,
+        user_id: int,
+        tenant_id: int,
+    ) -> Optional[CopilotSession]:
+        """Get a session by ID scoped to the owning user and tenant."""
+        result = await self.db.execute(
+            select(CopilotSession).where(
+                CopilotSession.id == session_id,
+                CopilotSession.user_id == user_id,
+                CopilotSession.tenant_id == tenant_id,
+            )
+        )
         return result.scalars().first()
 
-    async def get_active_session(self, user_id: int) -> Optional[CopilotSession]:
-        """Get the user's active session."""
+    async def get_active_session(self, user_id: int, tenant_id: int) -> Optional[CopilotSession]:
+        """Get the user's active session within a tenant."""
         result = await self.db.execute(
             select(CopilotSession)
-            .where(CopilotSession.user_id == user_id, CopilotSession.is_active == True)
+            .where(
+                CopilotSession.user_id == user_id,
+                CopilotSession.tenant_id == tenant_id,
+                CopilotSession.is_active == True,
+            )
             .order_by(CopilotSession.updated_at.desc())
         )
         return result.scalars().first()
 
-    async def get_session_messages(self, session_id: int, limit: int = 50) -> list[CopilotMessage]:
-        """Get messages for a session."""
+    async def get_session_messages(
+        self,
+        session_id: int,
+        *,
+        user_id: int,
+        tenant_id: int,
+        limit: int = 50,
+    ) -> list[CopilotMessage]:
+        """Get messages for a session owned by the caller."""
+        session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
         result = await self.db.execute(
             select(CopilotMessage)
             .where(CopilotMessage.session_id == session_id)
@@ -277,13 +392,21 @@ class CopilotService:
         )
         return list(result.scalars().all())
 
-    async def close_session(self, session_id: int) -> CopilotSession:
-        """Close a session."""
-        session = await self.get_session(session_id)
-        if session:
-            session.is_active = False
-            await self.db.commit()
-            await self.db.refresh(session)
+    async def close_session(
+        self,
+        session_id: int,
+        *,
+        user_id: int,
+        tenant_id: int,
+    ) -> CopilotSession:
+        """Close a session owned by the caller."""
+        session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        session.is_active = False
+        await self.db.commit()
+        await self.db.refresh(session)
         return session
 
     # =========================================================================
@@ -294,7 +417,9 @@ class CopilotService:
         self,
         session_id: int,
         content: str,
+        *,
         user_id: int,
+        tenant_id: int,
     ) -> CopilotMessage:
         """
         Send a message and get AI response.
@@ -302,9 +427,17 @@ class CopilotService:
         # PX-248: the reply is fabricated, so refuse before anything is persisted.
         # The API layer already returns 404, but this closes non-HTTP callers too.
         if not copilot_is_enabled():
-            raise CopilotDisabledError("AI Copilot is disabled; simulated responses must not be served.")
+            raise CopilotDisabledError("PlantEx Assist is disabled; simulated responses must not be served.")
 
-        session = await self.get_session(session_id)
+        # Second line behind the API guards, which are the ones that refresh the switch.
+        # Deliberately does not read the database: this method runs on a caller's session
+        # and a failed read would leave that session unusable for the caller's own work.
+        # A process that has never refreshed therefore sees no kill here — see
+        # copilot_kill_switch_last_known.
+        if copilot_kill_switch_last_known():
+            raise CopilotDisabledError("PlantEx Assist has been closed by the runtime kill switch.")
+
+        session = await self.get_session(session_id, user_id=user_id, tenant_id=tenant_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
@@ -318,14 +451,20 @@ class CopilotService:
         await self.db.commit()
 
         # Get conversation history
-        history = await self.get_session_messages(session_id, limit=20)
+        history = await self.get_session_messages(session_id, user_id=user_id, tenant_id=tenant_id, limit=20)
 
         # Build context
         context = self._build_context(session)
 
         # Generate AI response
         start_time = time.time()
-        response_content, action_data = await self._generate_response(content, history, context)
+        response_content, action_data, model_used = await self._generate_response(
+            content,
+            history,
+            context,
+            tenant_id=tenant_id,
+            user_id=user_id,
+        )
         latency_ms = int((time.time() - start_time) * 1000)
 
         # Save assistant message
@@ -337,13 +476,14 @@ class CopilotService:
             action_type=action_data.get("action") if action_data else None,
             action_data=action_data.get("parameters") if action_data else None,
             action_status="pending" if action_data else None,
-            model_used="simulated-keyword-match",
+            model_used=model_used,
             latency_ms=latency_ms,
         )
         self.db.add(assistant_message)
 
-        # Update session
-        session.last_message_at = datetime.now(timezone.utc)
+        # Update session — TIMESTAMP WITHOUT TIME ZONE columns need naive UTC
+        # (asyncpg DataError on aware datetimes; prod: "what is CAPA" → 500).
+        session.last_message_at = datetime.now(timezone.utc).replace(tzinfo=None)
         if not session.title and len(content) > 0:
             session.title = content[:50] + ("..." if len(content) > 50 else "")
 
@@ -361,49 +501,60 @@ class CopilotService:
         user_message: str,
         history: list[CopilotMessage],
         context: dict,
-    ) -> tuple[str, Optional[dict]]:
-        """Generate AI response using the configured AI provider."""
+        *,
+        tenant_id: int,
+        user_id: Optional[int] = None,
+    ) -> tuple[str, Optional[dict], str]:
+        """Generate AI response — grounded when the inference flag is on and the
+        question matches a closed intent; otherwise the honesty simulator.
 
-        # Build messages for AI
-        messages = [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT.format(
-                    actions=json.dumps(list(COPILOT_ACTIONS.keys()), indent=2),
-                    context=json.dumps(context, indent=2),
-                ),
-            }
-        ]
+        ``user_id`` is forwarded because some grounded intents are permission-gated
+        and the tenant alone does not say whether this caller may see the figure.
+        """
+        grounded = copilot_inference_is_enabled()
 
-        # Add history
-        for msg in history[-10:]:  # Last 10 messages
-            messages.append({"role": msg.role, "content": msg.content})
+        if grounded:
+            from src.domain.services.copilot_grounding import CopilotGroundingService
 
-        # Add current message
-        messages.append({"role": "user", "content": user_message})
+            outcome = await CopilotGroundingService(self.db).try_answer(
+                user_message,
+                tenant_id=tenant_id,
+                user_id=user_id,
+            )
+            if outcome.kind == "answered" and outcome.content is not None:
+                return outcome.content, None, outcome.model_used or "grounded-facts"
+            if outcome.kind == "refused":
+                return CITATION_REFUSAL, None, "grounded-citation-refused"
 
-        # In production, this would call the actual AI API
-        # For now, we'll use pattern matching for demo
-        response_content, action_data = self._simulate_ai_response(user_message, context)
-
-        return response_content, action_data
+        # ``ungrounded`` lands here: the intent is outside the closed set, or it is a
+        # permission-gated one the caller may not read, or the module is off for the
+        # tenant. All three fall through to the same keyword replies, which is what
+        # keeps them indistinguishable from outside (see
+        # CopilotGroundingService.try_answer). ``grounded`` only changes the wording,
+        # and it reads a deployment-wide flag rather than anything about this caller,
+        # so that indistinguishability survives.
+        response_content, action_data = self._simulate_ai_response(user_message, context, grounded=grounded)
+        return response_content, action_data, "simulated-keyword-match"
 
     def _simulate_ai_response(
         self,
         user_message: str,
         context: dict,
+        *,
+        grounded: bool = False,
     ) -> tuple[str, Optional[dict]]:
-        """Demo keyword replies — refuse live-data fabrication and false writes (PX-248/250)."""
+        """Keyword replies — refuse live-data fabrication and false writes (PX-248/250).
+
+        ``grounded`` says whether inference is open in this deployment, and it exists
+        because the refusals below cannot be worded the same way in both cases. With
+        inference off the surface really is a disconnected keyword demo and should say
+        so; with it on the registers are wired up, so "this demo is not connected to
+        your registers" would be a false disclaimer about a surface that answers
+        register questions two sentences later.
+        """
         message_lower = user_message.lower()
-        live_data_refusal = (
-            "I cannot answer from live organisation data. This demo is not connected to "
-            "your registers, so I will not invent counts, percentages, named risks, or "
-            "reference numbers. Open the relevant module for real figures."
-        )
-        write_refusal = (
-            "I cannot create or update records from this demo. Nothing was written. "
-            "Use the Incidents register (New) to log a real safety event."
-        )
+        live_data_refusal = GROUNDED_LIVE_DATA_REFUSAL if grounded else DEMO_LIVE_DATA_REFUSAL
+        write_refusal = GROUNDED_WRITE_REFUSAL if grounded else DEMO_WRITE_REFUSAL
 
         # Create incident — honest refusal, never "Shall I proceed?" + false success (PX-250).
         if "incident" in message_lower and any(word in message_lower for word in ("create", "log", "report", "new")):
@@ -477,10 +628,15 @@ class CopilotService:
                 "_General guidance only — not your compliance score._",
             }
 
+            no_lookup = (
+                "PlantEx Assist answers a fixed set of register questions and cannot look up "
+                "this term in your organisation's records."
+                if grounded
+                else "This PlantEx Assist demo cannot look up your organisation's records."
+            )
             explanation = explanations.get(
                 topic.lower(),
-                f"**{topic}** is a term used in quality and safety management. "
-                f"This demo cannot look up your organisation's records.",
+                f"**{topic}** is a term used in quality and safety management. {no_lookup}",
             )
 
             return (explanation, None)
@@ -496,11 +652,15 @@ class CopilotService:
                 "reports": "/reports",
             }
 
+            no_navigation = (
+                "PlantEx Assist does not perform navigation for you."
+                if grounded
+                else "This PlantEx Assist demo does not perform navigation for you."
+            )
             for dest, path in destinations.items():
                 if dest in message_lower:
                     return (
-                        f"Open {path} in the application navigation for the {dest} page. "
-                        f"This demo does not perform navigation for you.",
+                        f"Open {path} in the application navigation for the {dest} page. {no_navigation}",
                         {
                             "action": "navigate",
                             "parameters": {"destination": path},
@@ -508,11 +668,16 @@ class CopilotService:
                         },
                     )
 
+        scope = (
+            "PlantEx Assist answers a fixed set of questions from your registers and can "
+            "explain QHSE concepts. Anything outside that set I refuse rather than guess, "
+            "and I never write to a register."
+            if grounded
+            else "In this PlantEx Assist demo I can explain QHSE concepts and will refuse "
+            "live-data questions and writes. I will not invent register data."
+        )
         return (
-            f'I understand you\'re asking about: "{user_message}"\n\n'
-            f"In this demo I can explain QHSE concepts and will refuse live-data "
-            f"questions and writes. I will not invent register data.\n\n"
-            f"What would you like to do?",
+            f'I understand you\'re asking about: "{user_message}"\n\n{scope}\n\nWhat would you like to do?',
             None,
         )
 
@@ -534,11 +699,19 @@ class CopilotService:
                 "get_risk_summary",
                 "navigate",
             }:
+                # The stored reason is the machine-readable half of the same disclosure
+                # the panel shows, so it has to track the deployment for the same reason
+                # the wording does: "demo cannot read live data" is untrue of a
+                # deployment whose grounded intents are reading registers.
                 message.action_result = {
                     "performed": False,
                     "action": action_name,
                     "parameters": parameters,
-                    "reason": "demo_cannot_read_or_write_live_data",
+                    "reason": (
+                        "assist_never_writes_or_reads_outside_grounded_set"
+                        if copilot_inference_is_enabled()
+                        else "demo_cannot_read_or_write_live_data"
+                    ),
                 }
                 message.action_status = "not_performed"
             else:
@@ -578,7 +751,15 @@ class CopilotService:
         feedback_text: Optional[str] = None,
     ) -> CopilotFeedback:
         """Submit feedback on a copilot response."""
-        result = await self.db.execute(select(CopilotMessage).where(CopilotMessage.id == message_id))
+        result = await self.db.execute(
+            select(CopilotMessage)
+            .join(CopilotSession, CopilotMessage.session_id == CopilotSession.id)
+            .where(
+                CopilotMessage.id == message_id,
+                CopilotSession.user_id == user_id,
+                CopilotSession.tenant_id == tenant_id,
+            )
+        )
         message = result.scalars().first()
 
         if not message:

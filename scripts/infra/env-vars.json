@@ -1,14 +1,137 @@
 {
-  "DATABASE_URL": {"required": true, "description": "PostgreSQL connection string", "example": "postgresql://user:pass@host:5432/db"},
-  "REDIS_URL": {"required": true, "required_environments": ["production"], "description": "Redis connection string for caching, rate limiting, and idempotency. Required in production; also required in staging when EXTERNAL_AUDIT_IMPORT_ENABLED=true. Must not be localhost in those environments.", "example": "rediss://:secret@redis.example.com:6380/0"},
-  "CELERY_BROKER_URL": {"required": true, "required_environments": ["production"], "description": "Celery broker URL (typically Redis). Required in production; also required in staging when EXTERNAL_AUDIT_IMPORT_ENABLED=true. No silent localhost default in those environments.", "example": "rediss://:secret@redis.example.com:6380/0"},
-  "CELERY_RESULT_BACKEND": {"required": true, "required_environments": ["production"], "description": "Celery result backend URL. Required in production (and staging with imports); typically a Redis DB index distinct from the broker.", "example": "rediss://:secret@redis.example.com:6380/1"},
-  "SECRET_KEY": {"required": true, "description": "Application secret key for JWT signing", "example": "change-me-in-production"},
-  "AZURE_STORAGE_CONNECTION_STRING": {"required": false, "description": "Azure Blob Storage connection", "example": "DefaultEndpointsProtocol=https;..."},
-  "APPLICATIONINSIGHTS_CONNECTION_STRING": {"required": false, "description": "Azure Application Insights telemetry", "example": "InstrumentationKey=..."},
-  "CORS_ORIGINS": {"required": true, "description": "Comma-separated list of allowed CORS origins", "example": "https://app.qualitygovernance.io"},
-  "TELEMETRY_ENABLED": {"required": false, "description": "Enable OpenTelemetry instrumentation", "default": "true"},
-  "LOG_LEVEL": {"required": false, "description": "Application log level", "default": "INFO"},
-  "RATE_LIMIT_PER_MINUTE": {"required": false, "description": "API rate limit per minute per user", "default": "60"},
-  "DATA_RETENTION_DAYS": {"required": false, "description": "Default data retention period in days", "default": "365"}
+  "DATABASE_URL": {
+    "required": true,
+    "description": "PostgreSQL connection string",
+    "example": "postgresql://user:pass@host:5432/db"
+  },
+  "REDIS_URL": {
+    "required": true,
+    "required_environments": [
+      "production"
+    ],
+    "description": "Redis connection string for caching, rate limiting, and idempotency. Required in production; also required in staging when EXTERNAL_AUDIT_IMPORT_ENABLED=true. Must not be localhost in those environments.",
+    "example": "rediss://:secret@redis.example.com:6380/0"
+  },
+  "CELERY_BROKER_URL": {
+    "required": true,
+    "required_environments": [
+      "production"
+    ],
+    "description": "Celery broker URL (typically Redis). Required in production; also required in staging when EXTERNAL_AUDIT_IMPORT_ENABLED=true. No silent localhost default in those environments.",
+    "example": "rediss://:secret@redis.example.com:6380/0"
+  },
+  "CELERY_RESULT_BACKEND": {
+    "required": true,
+    "required_environments": [
+      "production"
+    ],
+    "description": "Celery result backend URL. Required in production (and staging with imports); typically a Redis DB index distinct from the broker.",
+    "example": "rediss://:secret@redis.example.com:6380/1"
+  },
+  "SECRET_KEY": {
+    "required": true,
+    "description": "Application secret key for JWT signing",
+    "example": "change-me-in-production"
+  },
+  "AZURE_STORAGE_CONNECTION_STRING": {
+    "required": false,
+    "description": "Azure Blob Storage connection",
+    "example": "DefaultEndpointsProtocol=https;..."
+  },
+  "APPLICATIONINSIGHTS_CONNECTION_STRING": {
+    "required": false,
+    "description": "Azure Application Insights telemetry",
+    "example": "InstrumentationKey=..."
+  },
+  "CORS_ORIGINS": {
+    "required": true,
+    "description": "Comma-separated list of allowed CORS origins",
+    "example": "https://app.qualitygovernance.io"
+  },
+  "TELEMETRY_ENABLED": {
+    "required": false,
+    "description": "Enable OpenTelemetry instrumentation",
+    "default": "true"
+  },
+  "LOG_LEVEL": {
+    "required": false,
+    "description": "Application log level",
+    "default": "INFO"
+  },
+  "RATE_LIMIT_PER_MINUTE": {
+    "required": false,
+    "description": "API rate limit per minute per user",
+    "default": "60"
+  },
+  "DATA_RETENTION_DAYS": {
+    "required": false,
+    "description": "Default data retention period in days",
+    "default": "365"
+  },
+  "COMPLIANCE_SCHEDULE_ENABLED": {
+    "required": false,
+    "description": "Enable Compliance Schedule module (organisation/location obligations). Default false; kill switch can only subtract.",
+    "default": "false",
+    "example": "false"
+  },
+  "COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED": {
+    "required": false,
+    "description": "Enable FRA/PAS79 OCR ingest on Compliance Schedule (ANDed with COMPLIANCE_SCHEDULE_ENABLED). Default false in code; set true to open.",
+    "default": "false",
+    "example": "true"
+  },
+  "COMPLIANCE_FILING_INDEX_ENABLED": {
+    "required": false,
+    "description": "When true, Compliance Schedule File-to-Library (occurrence filing and FRA OCR draft filing) creates an IndexJob so the filed DRAFT is chunked and searchable. Default false; governance status stays DRAFT (not auto-APPROVED). Persist via deploy vars like FRA OCR.",
+    "default": "false",
+    "example": "false"
+  },
+  "COMPLIANCE_SCHEDULE_FRA_OCR_ACTIONS_ENABLED": {
+    "required": false,
+    "description": "When true, confirming an FRA OCR draft creates CAPA actions for operator-checked priority rows only (ANDed with FRA OCR ingest). Default false; persist via deploy vars like FRA OCR.",
+    "default": "false",
+    "example": "false"
+  },
+  "COMPLIANCE_SCHEDULE_FRA_OCR_RISK_ENABLED": {
+    "required": false,
+    "description": "When true, confirming an FRA OCR draft may create one Enterprise Risk when the operator supplies likelihood and impact (never from OCR alone). Default false; persist via deploy vars like FRA OCR actions.",
+    "default": "false",
+    "example": "false"
+  },
+  "DOCUMENT_GRAPH_ENABLED": {
+    "required": false,
+    "description": "Enable Library Document Relationship Graph (ADR-0021). Default false; never conflate with Golden Thread. Persist via deploy vars like FRA OCR.",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_HEURISTIC_PROPOSE_ENABLED": {
+    "required": false,
+    "description": "Enable non-LLM Doc Graph heuristic propose (ANDed with DOCUMENT_GRAPH_ENABLED). Default false. Keep IMPACT/LLM propose off for Wave 1 bake.",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_THREAD_AMBIENT_ENABLED": {
+    "required": false,
+    "description": "Show the ambient Doc Graph thread strip (ADR-0021 X-0). ANDed with DOCUMENT_GRAPH_ENABLED. Default false; persist via deploy vars so it is not a hand-set app setting (WE-1).",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_MAP_VIEW_ENABLED": {
+    "required": false,
+    "description": "Offer the Relationships Map|List toggle (DG-1). ANDed with DOCUMENT_GRAPH_ENABLED. Confirm stays a list queue whatever this is set to. Default false; persist via deploy vars (WE-1).",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_DND_PROPOSE_ENABLED": {
+    "required": false,
+    "description": "Allow drag-and-drop propose onto the relationships map (DG-2). Drops are always proposed, never confirmed. ANDed with DOCUMENT_GRAPH_ENABLED. Default false; persist via deploy vars (WE-1).",
+    "default": "false",
+    "example": "true"
+  },
+  "DOCUMENT_GRAPH_STRUCTURE_MAP_ENABLED": {
+    "required": false,
+    "description": "Expose the read-only library Structure Map page (DG-3). Never the default confirm surface. ANDed with DOCUMENT_GRAPH_ENABLED. Default false; persist via deploy vars (WE-1).",
+    "default": "false",
+    "example": "true"
+  }
 }

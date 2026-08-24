@@ -12,6 +12,7 @@ const mockApproveSafetyLookup = vi.fn()
 const mockMergeSafetyLookup = vi.fn()
 const mockRejectSafetyLookup = vi.fn()
 const mockListAssetTypes = vi.fn()
+const mockListLocations = vi.fn()
 
 vi.mock('../../../api/client', () => ({
   lookupsApi: {
@@ -23,6 +24,10 @@ vi.mock('../../../api/client', () => ({
     err instanceof Error ? err.message : fallback || 'error',
 }))
 
+const mockCreateLocation = vi.fn()
+const mockCreateAssetType = vi.fn()
+const mockPreviewSafetyLookup = vi.fn()
+
 vi.mock('../../../api/safetyAssetsClient', () => ({
   safetyAssetsApi: {
     listPendingSafetyLookups: (...args: unknown[]) => mockListPendingSafetyLookups(...args),
@@ -30,13 +35,14 @@ vi.mock('../../../api/safetyAssetsClient', () => ({
     mergeSafetyLookup: (...args: unknown[]) => mockMergeSafetyLookup(...args),
     rejectSafetyLookup: (...args: unknown[]) => mockRejectSafetyLookup(...args),
     listAssetTypes: (...args: unknown[]) => mockListAssetTypes(...args),
+    listLocations: (...args: unknown[]) => mockListLocations(...args),
     listAllAssetTypes: async () => {
       const res = await mockListAssetTypes({ page: 1, page_size: 500 })
       return { items: res.data.items ?? [], total: res.data.total ?? 0 }
     },
-    previewSafetyLookup: vi.fn(),
-    createAssetType: vi.fn(),
-    createLocation: vi.fn(),
+    previewSafetyLookup: (...args: unknown[]) => mockPreviewSafetyLookup(...args),
+    createAssetType: (...args: unknown[]) => mockCreateAssetType(...args),
+    createLocation: (...args: unknown[]) => mockCreateLocation(...args),
   },
 }))
 
@@ -67,8 +73,17 @@ describe('LookupTables configure CTA', () => {
     mockApproveSafetyLookup.mockReset()
     mockMergeSafetyLookup.mockReset()
     mockRejectSafetyLookup.mockReset()
+    mockListLocations.mockReset()
+    mockCreateLocation.mockReset()
+    mockCreateAssetType.mockReset()
+    mockPreviewSafetyLookup.mockReset()
     mockListPendingSafetyLookups.mockResolvedValue({ data: { items: [], total: 0 } })
     mockRejectSafetyLookup.mockResolvedValue({ data: { approval_status: 'rejected' } })
+    mockListLocations.mockResolvedValue({ data: { items: [], total: 0 } })
+    mockPreviewSafetyLookup.mockResolvedValue({
+      data: { intent: 'create', similar_matches: [], blocked_exact_duplicate: false },
+    })
+    mockCreateLocation.mockResolvedValue({ data: { id: 1 } })
     mockList.mockImplementation(async (category: string) => {
       if (
         category === 'workforce_roles' ||
@@ -297,6 +312,82 @@ describe('LookupTables configure CTA', () => {
     await user.click(screen.getByTestId('safety-pending-reject-location-8'))
     await waitFor(() => {
       expect(mockRejectSafetyLookup).toHaveBeenCalledWith('location', 8)
+    })
+  })
+
+  it('exposes Merge into… when similar_matches is empty and merges into chosen target', async () => {
+    const user = userEvent.setup()
+    mockListPendingSafetyLookups.mockResolvedValue({
+      data: {
+        items: [
+          {
+            kind: 'location',
+            id: 9,
+            name: 'Unspecified site (9)',
+            source: 'ces_import',
+            is_active: false,
+            approval_status: 'pending',
+            similar_matches: [],
+          },
+        ],
+        total: 1,
+      },
+    })
+    mockListLocations.mockResolvedValue({
+      data: {
+        items: [
+          { id: 9, name: 'Unspecified site (9)', kind: 'site', is_active: false },
+          { id: 3, name: 'Sandford Depot', kind: 'site', is_active: true },
+          { id: 1, name: 'Head Office', kind: 'site', is_active: true },
+        ],
+        total: 3,
+      },
+    })
+    mockMergeSafetyLookup.mockResolvedValue({ data: { merged: true } })
+
+    renderLookups(<LookupTables />, '/admin/lookups?pending=safety')
+
+    expect(await screen.findByTestId('safety-pending-merge-into-location-9')).toBeInTheDocument()
+    expect(screen.queryByTestId('safety-pending-merge-location-9')).not.toBeInTheDocument()
+
+    await user.click(screen.getByTestId('safety-pending-merge-into-location-9'))
+    expect(await screen.findByTestId('safety-lookup-merge-dialog')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockListLocations).toHaveBeenCalledWith({
+        page: 1,
+        page_size: 500,
+        is_active: true,
+      })
+    })
+
+    const select = await screen.findByTestId('safety-lookup-merge-target')
+    await user.selectOptions(select, '3')
+    await user.click(screen.getByTestId('safety-lookup-merge-confirm'))
+
+    await waitFor(() => {
+      expect(mockMergeSafetyLookup).toHaveBeenCalledWith('location', 9, 3)
+    })
+  })
+
+  it('creates a location with premises kind from the kind select (W1)', async () => {
+    const user = userEvent.setup()
+    renderLookups(<LookupTables />, '/admin/lookups?pending=safety')
+
+    await user.click(await screen.findByRole('button', { name: 'Add location' }))
+    const kindSelect = await screen.findByTestId('safety-create-location-kind')
+    expect(kindSelect).toHaveValue('site')
+    await user.selectOptions(kindSelect, 'premises')
+    expect(kindSelect).toHaveValue('premises')
+
+    await user.type(screen.getByLabelText('Safety lookup name'), 'Main Premises')
+    await user.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(mockCreateLocation).toHaveBeenCalledWith({
+        name: 'Main Premises',
+        kind: 'premises',
+        force: false,
+      })
     })
   })
 })

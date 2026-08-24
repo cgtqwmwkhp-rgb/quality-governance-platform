@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.case_closure import CaseClosureValidationResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.rta import (
     RTAActionCreate,
@@ -32,8 +33,15 @@ from src.domain.services.api_idempotency_service import (
     begin_idempotent_create,
     complete_idempotent_create,
 )
-from src.domain.services.audit_service import record_audit_event
+from src.domain.services.audit_service import NO_SINGLE_ENTITY, record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_RTA,
+    evaluate_case_closure,
+    resolve_case_tenant_id,
+    validation_to_payload,
+)
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.rta_service import RTAService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Road Traffic Collisions"])
@@ -119,10 +127,12 @@ async def create_rta(
         event_type="rta.created",
         entity_type="rta",
         entity_id=str(rta.id),
+        entity_name=rta.reference_number,
         action="create",
         description=f"RTA {rta.reference_number} created",
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=rta.tenant_id,
     )
 
     await complete_idempotent_create(
@@ -141,7 +151,7 @@ async def create_rta(
 @router.get("/", response_model=RTAListResponse)
 async def list_rtas(
     db: DbSession,
-    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
+    current_user: Annotated[User, Depends(require_permission("rta:read"))],
     request_id: str = Depends(get_request_id),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -156,8 +166,8 @@ async def list_rtas(
 ):
     """List RTAs with deterministic ordering and pagination.
 
-    Requires authentication. Users can only filter by their own email
-    unless they have admin permissions.
+    Requires ``rta:read``. Users can only filter by their own email unless they
+    also hold ``rta:view_all``.
     """
     id_list: list[int] | None = None
     # Guard: unit tests may invoke the handler with FastAPI Query defaults unbound.
@@ -186,11 +196,18 @@ async def list_rtas(
 
         # AUDIT: Log email filter usage for security monitoring
         # Note: We log the filter type but NOT the raw email (privacy compliance)
+        #
+        # Fail closed when the caller has no tenant membership. audit_log_entries
+        # .tenant_id is NOT NULL, so this access cannot be recorded without one,
+        # and an email-targeted search across reporters is precisely what this row
+        # exists to police.
+        audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
             event_type="rta.list_filtered",
             entity_type="rta",
             entity_id="*",  # Wildcard - listing operation
+            entity_name=NO_SINGLE_ENTITY,
             action="list",
             description="RTA list accessed with email filter",
             payload={
@@ -201,14 +218,19 @@ async def list_rtas(
             },
             user_id=current_user.id,
             request_id=request_id,
+            tenant_id=audit_tenant_id,
         )
 
     try:
         query = select(RoadTrafficCollision)
 
-        if not getattr(current_user, "is_superuser", False):
-            tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-            query = apply_tenant_filter(query, RoadTrafficCollision, tenant_id)
+        # No superuser bypass on the register list (B-13). The executive
+        # dashboard's RTA `total` is tenant-scoped for every caller, so a list
+        # that spanned tenants for a superuser could not be reconciled with the
+        # tile beside it. Reading, updating or deleting one cross-tenant RTA by
+        # id is still available; enumerating the estate is not.
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        query = apply_tenant_filter(query, RoadTrafficCollision, tenant_id)
 
         if severity:
             query = query.where(RoadTrafficCollision.severity == severity)
@@ -292,34 +314,23 @@ async def update_rta(
     current_user: Annotated[User, Depends(require_permission("rta:update"))],
     request_id: str = Depends(get_request_id),
 ):
-    """Partially update an RTA."""
-    rta = await _get_rta_or_404(db, rta_id, current_user)
+    """Partially update an RTA.
 
-    update_data = rta_in.model_dump(exclude_unset=True)
-    if "status" in update_data:
-        raise HTTPException(
-            status_code=400,
-            detail="RTA status can only be changed via workflow actions, not direct PATCH.",
-        )
-    for field, value in update_data.items():
-        setattr(rta, field, value)
+    Status moves through ``RTA_TRANSITIONS`` in the service rather than being
+    rejected outright: closure is a gated transition, not a forbidden field.
+    """
+    # Resolves the 404 envelope before the service can raise a bare LookupError.
+    await _get_rta_or_404(db, rta_id, current_user)
 
-    rta.updated_by_id = current_user.id
-
-    await record_audit_event(
-        db=db,
-        event_type="rta.updated",
-        entity_type="rta",
-        entity_id=str(rta.id),
-        action="update",
-        description=f"RTA {rta.reference_number} updated",
-        payload=update_data,
+    rta = await RTAService(db).update_rta(
+        rta_id,
+        rta_in,
         user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
         request_id=request_id,
+        skip_tenant_check=current_user.is_superuser,
     )
 
-    await db.commit()
-    await db.refresh(rta)
     await _trigger_operational_standards_assess(db, rta, current_user)
     return rta
 
@@ -332,21 +343,20 @@ async def delete_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
-    rta = await _get_rta_or_404(db, rta_id, current_user)
-
-    await record_audit_event(
-        db=db,
-        event_type="rta.deleted",
-        entity_type="rta",
-        entity_id=str(rta.id),
-        action="delete",
-        description=f"RTA {rta.reference_number} deleted",
-        user_id=current_user.id,
-        request_id=request_id,
-    )
-
-    await db.delete(rta)
-    await db.commit()
+    service = RTAService(db)
+    try:
+        await service.delete_rta(
+            rta_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"RTA with id {rta_id} not found"),
+        )
 
 
 # RTA Actions endpoints
@@ -395,10 +405,12 @@ async def create_rta_action(
         event_type="rta_action.created",
         entity_type="rta_action",
         entity_id=str(action.id),
+        entity_name=action.reference_number,
         action="create",
         description=f"RTA Action {action.reference_number} created for RTA {rta.reference_number}",
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=tenant_id,
     )
 
     await db.commit()
@@ -475,11 +487,13 @@ async def update_rta_action(
         event_type="rta_action.updated",
         entity_type="rta_action",
         entity_id=str(action.id),
+        entity_name=action.reference_number,
         action="update",
         description=f"RTA Action {action.reference_number} updated",
         payload=update_data,
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=action.tenant_id,
     )
 
     await db.commit()
@@ -511,14 +525,33 @@ async def delete_rta_action(
         event_type="rta_action.deleted",
         entity_type="rta_action",
         entity_id=str(action.id),
+        entity_name=action.reference_number,
         action="delete",
         description=f"RTA Action {action.reference_number} deleted",
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=action.tenant_id,
     )
 
     await db.delete(action)
     await db.commit()
+
+
+@router.get("/{rta_id}/closure-validation", response_model=CaseClosureValidationResponse)
+async def get_rta_closure_validation(
+    rta_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("rta:read"))],
+):
+    """Report whether this RTA can be closed, and why not if it cannot."""
+    rta = await _get_rta_or_404(db, rta_id, current_user)
+    validation = await evaluate_case_closure(
+        db,
+        case_type=CASE_TYPE_RTA,
+        case=rta,
+        tenant_id=resolve_case_tenant_id(rta),
+    )
+    return validation_to_payload(validation)
 
 
 @router.get("/{rta_id}/investigations", response_model=dict)
@@ -634,11 +667,13 @@ async def add_running_sheet_entry(
         event_type="rta.runner_sheet_entry.created",
         entity_type="rta",
         entity_id=str(rta.id),
+        entity_name=rta.reference_number,
         action="create",
         description=f"Runner-sheet entry added to RTA {rta.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=rta.tenant_id,
     )
 
     await db.commit()
@@ -678,11 +713,15 @@ async def delete_running_sheet_entry(
         event_type="rta.runner_sheet_entry.deleted",
         entity_type="rta",
         entity_id=str(rta.id),
+        entity_name=rta.reference_number,
         action="delete",
         description=f"Runner-sheet entry deleted from RTA {rta.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        # The parent case, whose tenant_id is NOT NULL. The entry's own column is
+        # nullable, so the parent is the reliable owner.
+        tenant_id=rta.tenant_id,
     )
 
     await db.delete(entry)

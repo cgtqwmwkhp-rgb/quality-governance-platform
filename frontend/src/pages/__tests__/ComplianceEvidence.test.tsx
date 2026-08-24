@@ -29,15 +29,18 @@ vi.mock('../../contexts/ToastContext', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, opts?: { defaultValue?: string }) => {
       const labels: Record<string, string> = {
+        'compliance.evidence.title': 'Standards Evidence Center',
+        'compliance.evidence.subtitle':
+          'Live repository for multi-framework evidence, clause coverage, and specialist programme deep-links',
         'compliance.evidence.shell.section.clauses': 'Clause View',
         'compliance.evidence.shell.section.evidence': 'Evidence List',
         'compliance.evidence.shell.section.gaps': 'Gap Analysis',
         'compliance.evidence.shell.section.imported': 'Imported Audits',
         'compliance.evidence.shell.tabs_aria': 'ISO compliance sections',
       }
-      return labels[key] ?? key
+      return labels[key] ?? opts?.defaultValue ?? key
     },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -285,7 +288,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
 
     expect(mockListStandards).toHaveBeenCalledTimes(1)
     expect(mockListClauses).toHaveBeenCalledTimes(1)
@@ -320,7 +323,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
 
     fireEvent.click(screen.getByText('AI Auto-Tagger'))
     fireEvent.change(screen.getByPlaceholderText(/Paste your content here/i), {
@@ -344,7 +347,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
     fireEvent.click(screen.getByText('AI Auto-Tagger'))
     fireEvent.change(screen.getByPlaceholderText(/Paste your content here/i), {
       target: { value: 'Our document control procedure covers retention.' },
@@ -368,7 +371,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
     const soaButton = screen.getByText('Annex A SoA')
     expect(soaButton).toBeInTheDocument()
 
@@ -399,13 +402,16 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
-    fireEvent.click(screen.getByTitle('Download full ISO audit evidence pack'))
+    await screen.findByText('Standards Evidence Center')
+    fireEvent.click(
+      screen.getByTitle('Download audit pack with evidence, findings, actions, and certs appendix'),
+    )
 
     await waitFor(() => {
       expect(mockDownloadAuditPack).toHaveBeenCalledWith({
         includeNonconformity: false,
         includeSoa: true,
+        frameworks: expect.arrayContaining(['9001', '14001', '22301', 'chas', 'uvdb']),
       })
     })
     await waitFor(() => {
@@ -425,7 +431,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
     fireEvent.click(screen.getByText('AI Auto-Tagger'))
     fireEvent.change(screen.getByPlaceholderText(/Paste your content here/i), {
       target: { value: 'Risk management and information security policy.' },
@@ -482,7 +488,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
 
     await waitFor(() => {
       expect(mockToastWarning).toHaveBeenCalled()
@@ -533,7 +539,7 @@ describe('ComplianceEvidence', () => {
       </BrowserRouter>,
     )
 
-    await screen.findByText('ISO Compliance Evidence Center')
+    await screen.findByText('Standards Evidence Center')
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith(
@@ -601,6 +607,111 @@ describe('ComplianceEvidence', () => {
     expect(screen.getByText(/Gap Analysis — Clauses Needing Evidence/i)).toBeInTheDocument()
   })
 
+
+  it('shows catalogue framework cards beyond the four ISOs with specialist deep-links', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    await screen.findByText('Standards Evidence Center')
+    expect(screen.getByTestId('compliance-framework-card-9001')).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-framework-card-pm')).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-framework-card-uvdb')).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-specialist-link-pm')).toHaveAttribute('href', '/planet-mark')
+    expect(screen.getByTestId('compliance-specialist-link-uvdb')).toHaveAttribute('href', '/uvdb')
+    fireEvent.click(screen.getByTestId('compliance-evidence-preset-buyer'))
+    expect(screen.queryByTestId('compliance-framework-card-9001')).not.toBeInTheDocument()
+    expect(screen.getByTestId('compliance-framework-card-chas')).toBeInTheDocument()
+  })
+
+  it('renders clause view when the live catalogue includes ISO 22301 and an unmapped id', async () => {
+    mockListStandards.mockResolvedValue({
+      data: [
+        ...standardsResponse.data,
+        {
+          id: 'iso22301',
+          code: 'ISO 22301:2019',
+          name: 'Business Continuity Management',
+          description: 'BCMS',
+          clause_count: 1,
+          db_standard_id: 5,
+          db_standard_code: 'ISO22301',
+          db_standard_name: 'ISO 22301:2019',
+          db_clause_count: 1,
+          ims_requirement_count: 0,
+          covered_clauses: 0,
+          coverage_percentage: 0,
+          has_canonical_standard: true,
+          canonical_data_degraded: false,
+          canonical_data_message: null,
+        },
+        {
+          id: 'unmapped-scheme-x',
+          code: 'UNMAPPED-X',
+          name: 'Catalogue id with no icon map row',
+          description: 'Must not throw React #130',
+          clause_count: 0,
+          db_standard_id: null,
+          db_standard_code: null,
+          db_standard_name: null,
+          db_clause_count: 0,
+          ims_requirement_count: 0,
+          covered_clauses: 0,
+          coverage_percentage: 0,
+          has_canonical_standard: false,
+          canonical_data_degraded: false,
+          canonical_data_message: null,
+        },
+      ],
+    })
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <MemoryRouter initialEntries={['/compliance']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('Standards Evidence Center')
+    expect(screen.getByTestId('compliance-evidence-section-clauses')).toBeInTheDocument()
+    expect(screen.getAllByText('ISO 22301:2019').length).toBeGreaterThan(0)
+    expect(screen.getByText('UNMAPPED-X')).toBeInTheDocument()
+  })
+
+  it('renders gap analysis rows for ISO 22301 without throwing on a missing icon', async () => {
+    mockGetCoverage.mockResolvedValue({
+      data: {
+        ...coverageResponse.data,
+        gaps: 1,
+        gap_clauses: [
+          {
+            clause_id: '22301-8.2',
+            clause_number: '8.2',
+            title: 'Business continuity strategy',
+            standard: 'iso22301',
+          },
+        ],
+      },
+    })
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <MemoryRouter initialEntries={['/compliance?section=gaps']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('compliance-evidence-section-gaps')).toBeInTheDocument()
+    expect(screen.getByText('8.2')).toBeInTheDocument()
+    expect(screen.getByText('Business continuity strategy')).toBeInTheDocument()
+  })
+
   it('routes ?section= imported to imported audits panel with honest empty state', async () => {
     const ComplianceEvidence = (await import('../ComplianceEvidence')).default
 
@@ -612,5 +723,126 @@ describe('ComplianceEvidence', () => {
 
     expect(await screen.findByTestId('compliance-evidence-section-imported')).toBeInTheDocument()
     expect(screen.getByText(/No imported ISO audits/i)).toBeInTheDocument()
+  })
+
+  it('keeps CE score-card Full/Partial/% when the ISO tree is selected', async () => {
+    mockListStandards.mockResolvedValue({
+      data: [
+        ...standardsResponse.data,
+        {
+          id: 'ce',
+          code: 'CE',
+          name: 'Cyber Essentials',
+          description: 'NCSC Cyber Essentials',
+          clause_count: 5,
+          db_standard_id: null,
+          db_standard_code: null,
+          db_standard_name: null,
+          db_clause_count: 5,
+          ims_requirement_count: 0,
+          covered_clauses: 5,
+          coverage_percentage: 100,
+          has_canonical_standard: true,
+          canonical_data_degraded: false,
+          canonical_data_message: null,
+        },
+      ],
+    })
+    const isoRow = {
+      total: 1,
+      covered: 1,
+      partial_coverage: 0,
+      gaps: 0,
+      percentage: 100,
+    }
+    const ceRow = {
+      total: 5,
+      covered: 2,
+      partial_coverage: 1,
+      gaps: 2,
+      percentage: 50,
+    }
+    mockGetCoverage.mockImplementation((standard?: string) => {
+      if (standard) {
+        return Promise.resolve({
+          data: {
+            ...coverageResponse.data,
+            by_standard: { [standard]: isoRow },
+          },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          ...coverageResponse.data,
+          by_standard: { iso9001: isoRow, ce: ceRow },
+        },
+      })
+    })
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+    render(
+      <MemoryRouter initialEntries={['/compliance']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('compliance-score-ce')).toHaveTextContent('50%')
+    expect(screen.getByTestId('compliance-score-iso9001')).toHaveTextContent('100%')
+
+    fireEvent.click(screen.getByTestId('compliance-framework-card-9001'))
+
+    await waitFor(() => {
+      const last = mockGetCoverage.mock.calls.at(-1) ?? []
+      expect(last).toEqual([])
+    })
+    expect(mockListClauses.mock.calls.at(-1)?.[0]).toBe('iso9001')
+    expect(screen.getByTestId('compliance-score-ce')).toHaveTextContent('50%')
+    expect(screen.getByTestId('compliance-score-iso9001')).toHaveTextContent('100%')
+    const ceCard = screen.getByTestId('compliance-framework-card-ce')
+    expect(ceCard).toHaveTextContent(/2 Full/)
+    expect(ceCard).toHaveTextContent(/1 Partial/)
+  })
+
+  it('does not invent a CHAS coverage percentage', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+    render(
+      <MemoryRouter initialEntries={['/compliance']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    const chas = await screen.findByTestId('compliance-framework-card-chas')
+    expect(chas).toHaveTextContent('—')
+    expect(screen.getByTestId('compliance-score-note-chas')).toHaveTextContent(/no fake coverage/i)
+    expect(screen.queryByTestId('compliance-score-chas')).not.toBeInTheDocument()
+  })
+
+  it('keeps the four Evidence tabs when CHAS is selected and does not invent a tree', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+    render(
+      <MemoryRouter initialEntries={['/compliance?view=evidence']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    const chas = await screen.findByTestId('compliance-framework-card-chas')
+    fireEvent.click(chas)
+
+    expect(await screen.findByTestId('compliance-chrome-honesty-main-clauses')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Clause View/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Evidence List/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Gap Analysis/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Imported Audits/i })).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-chrome-honesty-main-clauses')).toHaveTextContent(
+      /not in the clause evidence catalogue yet/i,
+    )
+    expect(screen.queryByText('Documented information')).not.toBeInTheDocument()
+    expect(mockListClauses.mock.calls.every((call) => call[0] !== 'chas')).toBe(true)
+
+    fireEvent.click(screen.getByRole('tab', { name: /Gap Analysis/i }))
+    expect(await screen.findByTestId('compliance-chrome-honesty-main-gaps')).toHaveTextContent(
+      /not zero gaps/i,
+    )
+    expect(screen.queryByText(/No gaps found/i)).not.toBeInTheDocument()
   })
 })

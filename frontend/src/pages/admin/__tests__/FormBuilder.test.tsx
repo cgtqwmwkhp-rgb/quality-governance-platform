@@ -88,5 +88,27 @@ describe('FormBuilder API wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: /Text Input/i }))
 
     expect(screen.getByDisplayValue('Text Input')).toBeInTheDocument()
+    expect(screen.getByLabelText('Field label')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove field' })).toBeInTheDocument()
+  })
+
+  it('names the back control, step name, and expand control without nesting interactives', () => {
+    render(<FormBuilder />)
+
+    expect(screen.getByRole('button', { name: 'Back to forms' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Step name')).toHaveValue('Step 1')
+    expect(screen.getByRole('button', { name: 'Collapse step' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.queryByRole('button', { name: 'Step 1' })).not.toBeInTheDocument()
+  })
+
+  it('does not paint Delete form with text-destructive (P1 color-contrast)', () => {
+    render(<FormBuilder />)
+
+    const del = screen.getByRole('button', { name: 'admin.forms.delete_form' })
+    expect(del.className.split(/\s+/)).not.toContain('text-destructive')
+    expect(del).toHaveClass('text-foreground')
   })
 })

@@ -2,11 +2,12 @@
 
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Annotated, Any, Optional, Union, cast
+from typing import Annotated, Any, AsyncIterator, NamedTuple, Optional, Union, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
@@ -46,11 +47,37 @@ from src.domain.models.user import User
 from src.domain.services.action_assignment_service import notify_action_assignment, record_action_assigned_audit
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.capa_service import parse_roster_assignee_marker
+from src.domain.services.session_savepoint import read_savepoint
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Kept under its original name: this module's call sites and the C-53 regression
+# suite import it from here. The implementation moved to the domain layer so the
+# executive dashboard can share it — a domain module importing this route would
+# be the domain → api dependency `scripts/check_import_boundaries.py` forbids (C-8).
+_read_savepoint = read_savepoint
+
+
+def _naive_utc_now() -> datetime:
+    """UTC now with tzinfo stripped — CAPA DateTime columns are naive.
+
+    asyncpg refuses an aware datetime on ``timestamp without time zone``
+    (PX-424). Incident/RTA/complaint actions use timezone-aware columns and
+    must keep ``datetime.now(timezone.utc)``.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _as_capa_naive(value: Optional[datetime]) -> Optional[datetime]:
+    """Strip tzinfo for writes onto CAPAAction naive DateTime columns."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)
 
 
 async def _resolve_assignee_id_or_raise(
@@ -69,6 +96,104 @@ async def _resolve_assignee_id_or_raise(
     return user.id
 
 
+async def _resolve_owner_id_or_raise(
+    db: Any,
+    owner_id: int,
+    tenant_id: Optional[int],
+) -> int:
+    """Confirm an owner id belongs to a user in this tenant; fail loudly if not.
+
+    Validating rather than trusting the id keeps ``owner_id`` at parity with the
+    email spelling, and stops an id from another tenant being written straight
+    through to the row.
+    """
+    result = await db.execute(select(User).where(User.id == owner_id, User.tenant_id == tenant_id))
+    if result.scalar_one_or_none() is None:
+        raise BadRequestError(
+            f"No user with id {owner_id} in this tenant. " "Action was not left unowned — fix the owner_id and retry."
+        )
+    return owner_id
+
+
+_CAPA_WRITE_SOURCES = frozenset({"assessment", "induction", "audit_finding", "near_miss", "risk"})
+
+
+def _accepted_clause_reference(raw: Optional[str], src_type: str) -> Optional[str]:
+    """Persist clause_reference on CAPA writes only. Do not silently drop it."""
+    if raw is None:
+        return None
+    cleaned = raw.strip()
+    if not cleaned:
+        return None
+    if src_type not in _CAPA_WRITE_SOURCES:
+        raise BadRequestError(
+            "clause_reference is only accepted for CAPA sources "
+            "(assessment, induction, audit_finding, near_miss, risk)."
+        )
+    return cleaned
+
+
+async def _resolve_requested_owner(
+    db: Any,
+    *,
+    owner_id: Optional[int],
+    assigned_to_email: Optional[str],
+    tenant_id: Optional[int],
+    owner_email: Optional[str] = None,
+) -> Optional[int]:
+    """Resolve owner_id, assigned_to_email, and owner_email to one user.
+
+    ``ActionResponse`` returns ``owner_id`` and ``owner_email``. PX-168 accepted
+    ``owner_id`` on write; PX-428 accepts ``owner_email`` as the same alias so
+    echoing a GET into a POST does not 422. ``extra="forbid"`` stays. When more
+    than one spelling is supplied they must identify the same user.
+    """
+    email_spellings: list[tuple[str, str]] = []
+    seen_emails: set[str] = set()
+    for label, raw in (
+        ("assigned_to_email", assigned_to_email),
+        ("owner_email", owner_email),
+    ):
+        if raw is None:
+            continue
+        cleaned = raw.strip()
+        if not cleaned:
+            raise BadRequestError(
+                f"{label} cannot be empty or whitespace. "
+                "Omit the field to leave the action unassigned, or provide a valid email."
+            )
+        key = cleaned.lower()
+        if key in seen_emails:
+            continue
+        seen_emails.add(key)
+        email_spellings.append((label, cleaned))
+
+    resolved_from_email: Optional[int] = None
+    email_used: Optional[str] = None
+    label_used: Optional[str] = None
+    for label, email in email_spellings:
+        resolved = await _resolve_assignee_id_or_raise(db, email, tenant_id)
+        if resolved_from_email is not None and resolved != resolved_from_email:
+            raise BadRequestError(
+                f"{label_used} '{email_used}' and {label} '{email}' identify different users. "
+                "Send one, or send a matching pair."
+            )
+        resolved_from_email = resolved
+        email_used = email
+        label_used = label
+
+    if owner_id is None:
+        return resolved_from_email
+
+    resolved_from_id = await _resolve_owner_id_or_raise(db, owner_id, tenant_id)
+    if resolved_from_email is not None and resolved_from_email != resolved_from_id:
+        raise BadRequestError(
+            f"owner_id {owner_id} and {label_used} '{email_used}' identify different users. "
+            "Send one, or send a matching pair."
+        )
+    return resolved_from_id
+
+
 # ============== Schemas ==============
 
 
@@ -83,7 +208,14 @@ class ActionBase(BaseModel):
 
 
 class ActionCreate(ActionBase):
-    """Schema for creating an action."""
+    """Schema for creating an action.
+
+    ``extra="forbid"`` is deliberate: an unrecognised field used to be dropped
+    in silence and the action created anyway, so a wrong-shaped request looked
+    like a success (PX-168). A misspelled or unsupported field must now fail.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     source_type: str = Field(
         ...,
@@ -97,11 +229,30 @@ class ActionCreate(ActionBase):
         None,
         description="UUID reference for assessment_run_id or induction_run_id (for assessment, induction)",
     )
+    owner_id: Optional[int] = Field(
+        None,
+        description="User id to assign to. Mirrors the owner_id returned by this API; "
+        "send this, assigned_to_email, or owner_email; if more than one, they must identify the same user.",
+    )
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
+    owner_email: Optional[str] = Field(
+        None,
+        description="Alias of assigned_to_email. Mirrors ActionResponse.owner_email so a GET echo is accepted.",
+    )
+    clause_reference: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Clause token persisted on CAPA sources only (max 50).",
+    )
 
 
 class ActionUpdate(BaseModel):
-    """Schema for updating an action. All fields are optional."""
+    """Schema for updating an action. All fields are optional.
+
+    See ``ActionCreate`` for why unknown fields are rejected rather than ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(None, max_length=300)
     description: Optional[str] = None
@@ -112,6 +263,11 @@ class ActionUpdate(BaseModel):
         description="One of: open, in_progress, pending_verification, completed, cancelled",
     )
     due_date: Optional[str] = Field(None, description="Due date in ISO format (YYYY-MM-DD)")
+    owner_id: Optional[int] = Field(
+        None,
+        description="User id to assign to. Mirrors the owner_id returned by this API; "
+        "send this or assigned_to_email, and if both, they must identify the same user.",
+    )
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
     completion_notes: Optional[str] = Field(None, description="Notes on completion")
 
@@ -165,6 +321,21 @@ class ActionListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+    sources_complete: bool = Field(
+        True,
+        description=(
+            "False when at least one action store could not be read, so `items` may be "
+            "missing rows and `total` is a floor rather than a total. An empty `items` "
+            "with this false is NOT a report that there are no actions (C-53)."
+        ),
+    )
+    unavailable_sources: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Action stores whose query failed, e.g. ['capa']. Named rather than counted "
+            "so an operator can see which register is broken."
+        ),
+    )
 
 
 class ActionsSummaryResponse(BaseModel):
@@ -193,7 +364,14 @@ class ActionsViewCountsResponse(BaseModel):
 
 
 class ActionOwnerNoteCreate(BaseModel):
-    """Request body for appending owner commentary."""
+    """Request body for appending owner commentary.
+
+    ``extra="forbid"`` matches ``ActionCreate`` / ``ActionUpdate``: the frontend
+    only sends ``key`` and ``body``, and an unrecognised field must 422 rather
+    than be discarded while the note still saves (B-10 / PX-168 class).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     key: str = Field(
         ...,
@@ -376,6 +554,9 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction) -> ActionResponse
     arid = provenance.get("audit_run_id")
     audit_run_id = int(arid) if isinstance(arid, int) else None
     clean_description, roster_assignee = parse_roster_assignee_marker(capa.description)
+    # A roster-only assignee has no users row, so it is carried in both owner fields
+    # rather than left blank in one of them and read as unassigned.
+    roster_only = roster_assignee if capa.assigned_to_id is None and roster_assignee else None
     return ActionResponse(
         id=capa.id,
         reference_number=capa.reference_number,
@@ -397,7 +578,8 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction) -> ActionResponse
         clause_reference=cast(Optional[str], provenance["clause_reference"]),
         audit_run_id=audit_run_id,
         owner_id=capa.assigned_to_id,
-        owner_email=roster_assignee if capa.assigned_to_id is None and roster_assignee else None,
+        owner_email=roster_only,
+        assigned_to_email=roster_only,
         created_at=capa.created_at.isoformat() if capa.created_at else "",
     )
 
@@ -465,13 +647,58 @@ def _capa_item_to_response(item: CAPAItem) -> ActionResponse:
     )
 
 
-async def _safe_scalar(db: "DbSession", query, source_label: str) -> int:
-    """Execute a count query, returning 0 and logging on failure."""
+async def _safe_scalar(
+    db: "DbSession",
+    query,
+    source_label: str,
+    failures: Optional[list[str]] = None,
+) -> int:
+    """Execute a count query, returning 0 and logging on failure.
+
+    Savepoint-scoped so that a store whose schema has drifted costs its own count
+    and nothing else. Without it the six counts behind ``/actions/summary``,
+    ``/actions`` and ``/actions/view-counts`` all returned 0 after the first
+    failure, which reports an empty action register rather than a broken one.
+
+    ``failures`` is where the 0 stops being silent. #1426 contained the blast
+    radius of a drifted store but left every caller unable to tell this 0 from a
+    real one, and the list endpoint then treated a total of 0 as licence to skip
+    querying for rows at all. A caller that passes a list gets the labels of the
+    stores it must not present as empty; one that does not is unchanged.
+    """
     try:
-        return (await db.execute(query)).scalar() or 0
+        async with _read_savepoint(db):
+            return (await db.execute(query)).scalar() or 0
     except Exception:
         logger.warning("actions._count_for_source: %s query failed", source_label, exc_info=True)
+        if failures is not None:
+            failures.append(source_label)
         return 0
+
+
+@asynccontextmanager
+async def _safe_rows(db: "DbSession", source_label: str, failures: list[str]) -> AsyncIterator[None]:
+    """Scope one row read so its failure costs only its own rows, and is recorded.
+
+    The counts got this treatment in #1426; the row reads beside them did not, and
+    they need it for the same reason. Measured on PostgreSQL with
+    ``capa_actions.tenant_id`` dropped, the CAPA row read failed and aborted the
+    transaction, and the ``capa_items`` read that follows it then failed with
+    ``InFailedSQLTransactionError`` — one drifted store costing a second, healthy
+    store its rows. Ordering decided who lost: had the drift been on
+    ``incident_actions``, which is read first, every later store would have been
+    refused and the register would have rendered empty beneath a correct total.
+
+    Recording the label matters as much as the savepoint. Without it a response
+    that says "complete" can still be missing rows, which makes the marker itself
+    a fabrication.
+    """
+    try:
+        async with _read_savepoint(db):
+            yield
+    except Exception:
+        logger.warning("list_actions: %s query failed", source_label, exc_info=True)
+        failures.append(source_label)
 
 
 # Terminal statuses excluded from overdue (matches Actions UI display_status rules).
@@ -532,6 +759,7 @@ async def _count_capa_slice(
     assigned_to_id: Optional[int] = None,
     overdue: bool = False,
     asset_id: Optional[int] = None,
+    failures: Optional[list[str]] = None,
 ) -> int:
     """Count CAPA rows for tenant with optional source slice."""
     q = select(func.count()).select_from(CAPAAction).where(CAPAAction.tenant_id == tenant_id)
@@ -558,7 +786,7 @@ async def _count_capa_slice(
         overdue=overdue,
         done_statuses=(CAPAStatus.CLOSED,),
     )
-    return await _safe_scalar(db, q, "capa")
+    return await _safe_scalar(db, q, "capa", failures)
 
 
 async def _fetch_capa_rows_for_list(
@@ -617,6 +845,7 @@ async def _count_capa_item_slice(
     source_id: Optional[int],
     assigned_to_id: Optional[int] = None,
     overdue: bool = False,
+    failures: Optional[list[str]] = None,
 ) -> int:
     """Count RCA CAPAItem rows for tenant with optional investigation slice."""
     q = select(func.count()).select_from(CAPAItem).where(CAPAItem.tenant_id == tenant_id)
@@ -633,7 +862,7 @@ async def _count_capa_item_slice(
         overdue=overdue,
         done_statuses=_CAPA_ITEM_DONE_STATUSES,
     )
-    return await _safe_scalar(db, q, "capa_item")
+    return await _safe_scalar(db, q, "capa_item", failures)
 
 
 async def _fetch_capa_item_rows_for_list(
@@ -671,6 +900,20 @@ async def _fetch_capa_item_rows_for_list(
     return list(result.scalars().all())
 
 
+class _CountOutcome(NamedTuple):
+    """A count, plus the stores that did not contribute to it.
+
+    ``total`` is a floor rather than a total when ``unavailable`` is non-empty:
+    the stores named there contributed 0 because their query failed, not because
+    they hold nothing. Returned as a pair rather than as a bare int so a caller
+    cannot use the number without the option of seeing that caveat — which is the
+    mistake the list endpoint made, and it cost users their whole register.
+    """
+
+    total: int
+    unavailable: tuple[str, ...]
+
+
 async def _count_for_source(
     db: "DbSession",
     source_type: Optional[str],
@@ -682,10 +925,48 @@ async def _count_for_source(
     overdue: bool = False,
     asset_id: Optional[int] = None,
 ) -> int:
-    """Compute total count across all applicable source tables using SQL COUNT."""
+    """Compute total count across all applicable source tables using SQL COUNT.
+
+    Kept returning a bare int for the callers that have nowhere to put a partial
+    failure: ``/actions/summary`` and ``/actions/view-counts`` publish scalars and
+    already render as "—" client-side when the whole request fails. Callers that
+    can report the caveat should use ``_count_for_source_detailed``.
+    """
+    return (
+        await _count_for_source_detailed(
+            db,
+            source_type,
+            status_filter,
+            source_id,
+            source_reference,
+            tenant_id=tenant_id,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+            asset_id=asset_id,
+        )
+    ).total
+
+
+async def _count_for_source_detailed(
+    db: "DbSession",
+    source_type: Optional[str],
+    status_filter: Optional[str],
+    source_id: Optional[int],
+    source_reference: Optional[str],
+    tenant_id: Optional[int] = None,
+    assigned_to_id: Optional[int] = None,
+    overdue: bool = False,
+    asset_id: Optional[int] = None,
+) -> _CountOutcome:
+    """Count across all applicable source tables, naming any that could not be read."""
+    failures: list[str] = []
     total = 0
     if not source_type or source_type == "incident":
-        q = select(func.count()).select_from(IncidentAction).where(IncidentAction.tenant_id == tenant_id)
+        q = (
+            select(func.count())
+            .select_from(IncidentAction)
+            .where(IncidentAction.tenant_id == tenant_id, IncidentAction.deleted_at.is_(None))
+        )
         if status_filter:
             q = q.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
@@ -701,7 +982,7 @@ async def _count_for_source(
             overdue=overdue,
             done_statuses=_OPERATIONAL_DONE_STATUSES,
         )
-        total += await _safe_scalar(db, q, "incident")
+        total += await _safe_scalar(db, q, "incident", failures)
 
     if not source_type or source_type == "rta":
         q = select(func.count()).select_from(RTAAction).where(RTAAction.tenant_id == tenant_id)
@@ -722,11 +1003,15 @@ async def _count_for_source(
             overdue=overdue,
             done_statuses=_OPERATIONAL_DONE_STATUSES,
         )
-        total += await _safe_scalar(db, q, "rta")
+        total += await _safe_scalar(db, q, "rta", failures)
 
     # Complaint / investigation have no asset golden thread — omit when filtering by asset
     if asset_id is None and (not source_type or source_type == "complaint"):
-        q = select(func.count()).select_from(ComplaintAction).where(ComplaintAction.tenant_id == tenant_id)
+        q = (
+            select(func.count())
+            .select_from(ComplaintAction)
+            .where(ComplaintAction.tenant_id == tenant_id, ComplaintAction.deleted_at.is_(None))
+        )
         if status_filter:
             q = q.where(ComplaintAction.status == status_filter)
         if source_type == "complaint" and source_id:
@@ -740,7 +1025,7 @@ async def _count_for_source(
             overdue=overdue,
             done_statuses=_OPERATIONAL_DONE_STATUSES,
         )
-        total += await _safe_scalar(db, q, "complaint")
+        total += await _safe_scalar(db, q, "complaint", failures)
 
     if asset_id is None and (not source_type or source_type == "investigation"):
         q = select(func.count()).select_from(InvestigationAction).where(InvestigationAction.tenant_id == tenant_id)
@@ -757,7 +1042,7 @@ async def _count_for_source(
             overdue=overdue,
             done_statuses=_OPERATIONAL_DONE_STATUSES,
         )
-        total += await _safe_scalar(db, q, "investigation")
+        total += await _safe_scalar(db, q, "investigation", failures)
 
     st = source_type.lower() if source_type else None
     if not st:
@@ -771,6 +1056,7 @@ async def _count_for_source(
             assigned_to_id=assigned_to_id,
             overdue=overdue,
             asset_id=asset_id,
+            failures=failures,
         )
     elif st == "capa":
         total += await _count_capa_slice(
@@ -783,6 +1069,7 @@ async def _count_for_source(
             assigned_to_id=assigned_to_id,
             overdue=overdue,
             asset_id=asset_id,
+            failures=failures,
         )
     elif st in CAPA_ONLY_API_SOURCE_TYPES:
         ce = capa_enum_from_api_filter(st)
@@ -797,6 +1084,7 @@ async def _count_for_source(
                 assigned_to_id=assigned_to_id,
                 overdue=overdue,
                 asset_id=asset_id,
+                failures=failures,
             )
 
     if asset_id is None and (not st or st == "investigation"):
@@ -807,16 +1095,17 @@ async def _count_for_source(
             source_id=source_id if st == "investigation" else None,
             assigned_to_id=assigned_to_id,
             overdue=overdue,
+            failures=failures,
         )
 
-    return total
+    return _CountOutcome(total=total, unavailable=tuple(failures))
 
 
 @router.get("", response_model=ActionListResponse, include_in_schema=False)
 @router.get("/", response_model=ActionListResponse)
 async def list_actions(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("action:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -840,7 +1129,7 @@ async def list_actions(
     window, then rows are merge-sorted and sliced in process.
     """
     assigned_to_id = _resolve_assigned_to_user_id(assigned_to, current_user)
-    total = await _count_for_source(
+    counted = await _count_for_source_detailed(
         db,
         source_type,
         status_filter,
@@ -851,10 +1140,34 @@ async def list_actions(
         overdue=overdue,
         asset_id=asset_id,
     )
+    total = counted.total
+    # Stores that could not be read, by count or by row query. Seeded from the
+    # counts and added to as the row reads below run.
+    unavailable: list[str] = list(counted.unavailable)
 
-    if total == 0:
-        return ActionListResponse(items=[], total=0, page=page, page_size=page_size, pages=0)
-
+    # There is deliberately no `if total == 0: return` here. That short-circuit
+    # returned an empty register without querying for a single row, so a count
+    # that failed — and `_safe_scalar` reports a failure as 0 — did not merely
+    # publish a wrong number beside a correct list, it removed the list. Measured
+    # on PostgreSQL with `capa_actions.tenant_id` dropped and two CAPA actions in
+    # the table: HTTP 200, `{"items": [], "total": 0}`, on a page that looks like
+    # it loaded. A user cannot act on an action they are not shown.
+    #
+    # Removed outright rather than guarded with `if total == 0 and not unavailable`,
+    # because measurement says it was not buying anything worth the failure mode.
+    # The six reads it skipped are all `WHERE tenant_id = ? ORDER BY created_at
+    # DESC LIMIT n`. Timed on PostgreSQL 16 with 20k rows per table held against a
+    # different tenant, so the register is empty but the tables are not, all six
+    # together cost p50 0.86ms / p95 1.06ms per request, and that is almost
+    # entirely driver round-trip: EXPLAIN (ANALYZE, BUFFERS) on the largest of them
+    # reports an index scan on ix_capa_actions_tenant_id, 2 shared buffer hits and
+    # 0.006ms execution. So the saving is under a millisecond of a request that
+    # already spends several, in exchange for a code path that has now hidden a
+    # populated register twice.
+    #
+    # A conditional would also leave the un-failed empty register on a different
+    # code path from every other case, which is the arrangement that let this go
+    # unnoticed: the common path was never exercised by the failure.
     offset = (page - 1) * page_size
     actions_list: list[ActionResponse] = []
     # When listing across all sources, cap each sub-query to avoid full table scans
@@ -862,10 +1175,10 @@ async def list_actions(
 
     _pending_incident: list = []
     if not source_type or source_type == "incident":
-        try:
+        async with _safe_rows(db, "incident", unavailable):
             q = (
                 select(IncidentAction)
-                .where(IncidentAction.tenant_id == current_user.tenant_id)
+                .where(IncidentAction.tenant_id == current_user.tenant_id, IncidentAction.deleted_at.is_(None))
                 .options(selectinload(IncidentAction.incident))
                 .order_by(IncidentAction.created_at.desc())
             )
@@ -890,13 +1203,10 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             _pending_incident = result.scalars().all()
-        except Exception:
-            _pending_incident = []
-            logger.warning("list_actions: incident query failed", exc_info=True)
 
     _pending_rta: list = []
     if not source_type or source_type == "rta":
-        try:
+        async with _safe_rows(db, "rta", unavailable):
             q = (
                 select(RTAAction)
                 .where(RTAAction.tenant_id == current_user.tenant_id)
@@ -926,15 +1236,13 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             _pending_rta = result.scalars().all()
-        except Exception:
-            logger.warning("list_actions: rta query failed", exc_info=True)
 
     _pending_complaint: list = []
     if asset_id is None and (not source_type or source_type == "complaint"):
-        try:
+        async with _safe_rows(db, "complaint", unavailable):
             q = (
                 select(ComplaintAction)
-                .where(ComplaintAction.tenant_id == current_user.tenant_id)
+                .where(ComplaintAction.tenant_id == current_user.tenant_id, ComplaintAction.deleted_at.is_(None))
                 .options(selectinload(ComplaintAction.complaint))
                 .order_by(ComplaintAction.created_at.desc())
             )
@@ -957,12 +1265,10 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             _pending_complaint = result.scalars().all()
-        except Exception:
-            logger.warning("list_actions: complaint query failed", exc_info=True)
 
     _pending_investigation: list = []
     if asset_id is None and (not source_type or source_type == "investigation"):
-        try:
+        async with _safe_rows(db, "investigation", unavailable):
             q = (
                 select(InvestigationAction)
                 .where(InvestigationAction.tenant_id == current_user.tenant_id)
@@ -988,8 +1294,6 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             _pending_investigation = result.scalars().all()
-        except Exception:
-            logger.warning("list_actions: investigation query failed", exc_info=True)
 
     _all_owner_ids: set[int] = set()
     for _batch in (_pending_incident, _pending_rta, _pending_complaint, _pending_investigation):
@@ -1040,7 +1344,7 @@ async def list_actions(
         )
 
     _pending_capa: list[CAPAAction] = []
-    try:
+    async with _safe_rows(db, "capa", unavailable):
         stl = source_type.lower() if source_type else None
         if not stl:
             _pending_capa = await _fetch_capa_rows_for_list(
@@ -1094,12 +1398,10 @@ async def list_actions(
                 )
         for a in _pending_capa:
             actions_list.append(await _capa_to_response(db, a))
-    except Exception:
-        logger.warning("list_actions: capa query failed", exc_info=True)
 
     _pending_capa_items: list[CAPAItem] = []
     if asset_id is None:
-        try:
+        async with _safe_rows(db, "capa_item", unavailable):
             stl_items = source_type.lower() if source_type else None
             if not stl_items or stl_items == "investigation":
                 _pending_capa_items = await _fetch_capa_item_rows_for_list(
@@ -1116,8 +1418,6 @@ async def list_actions(
                 )
             for item in _pending_capa_items:
                 actions_list.append(_capa_item_to_response(item))
-        except Exception:
-            logger.warning("list_actions: capa_item query failed", exc_info=True)
 
     # When listing across ALL source types, merge-sort and slice in Python
     # (cross-table UNION ALL with heterogeneous schemas is impractical here).
@@ -1127,13 +1427,40 @@ async def list_actions(
 
     actions_list = await _hydrate_action_owner_emails(db, actions_list)
 
+    # A store that failed its count and its rows is one broken store, not two, so
+    # the labels are de-duplicated. Sorted so the field is stable to assert on and
+    # to diff between two responses.
+    unavailable_sources = sorted(set(unavailable))
+
     return ActionListResponse(
         items=actions_list,
         total=total,
         page=page,
         page_size=page_size,
         pages=(total + page_size - 1) // page_size if total > 0 else 0,
+        sources_complete=not unavailable_sources,
+        unavailable_sources=unavailable_sources,
     )
+
+
+async def get_audit_finding_capa_for_tenant(
+    db: "DbSession",
+    tenant_id: int,
+    source_id: int,
+) -> Optional[CAPAAction]:
+    """Return the unique audit-finding CAPA for this tenant, if one exists.
+
+    Backed by ``uq_capa_actions_tenant_audit_finding_source``. PX-426 get-or-create
+    uses this instead of mapping that unique hit to a reference-number 409.
+    """
+    result = await db.execute(
+        select(CAPAAction).where(
+            CAPAAction.tenant_id == tenant_id,
+            CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+            CAPAAction.source_id == source_id,
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 @router.post("", response_model=ActionResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
@@ -1234,10 +1561,16 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     else:
         raise BadRequestError("Invalid source_type")
 
-    # Find owner by email if provided (scoped to tenant) — fail loudly on unknown email
-    owner_id: Optional[int] = None
-    if action_data.assigned_to_email:
-        owner_id = await _resolve_assignee_id_or_raise(db, action_data.assigned_to_email, current_user.tenant_id)
+    clause_ref = _accepted_clause_reference(action_data.clause_reference, src_type)
+
+    # Resolve the assignee (either spelling, scoped to tenant) — fail loudly on an unknown user
+    owner_id = await _resolve_requested_owner(
+        db,
+        owner_id=action_data.owner_id,
+        assigned_to_email=action_data.assigned_to_email,
+        owner_email=action_data.owner_email,
+        tenant_id=current_user.tenant_id,
+    )
 
     # Generate reference number based on source type
     year = datetime.now().year
@@ -1272,6 +1605,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                 except ValueError:
                     continue
 
+    capa_due_date = _as_capa_naive(parsed_due_date)
+
     # Declare action variable
     action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction, CAPAAction]
 
@@ -1297,7 +1632,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     elif src_type == "induction":
         action = CAPAAction(
@@ -1313,7 +1649,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     elif src_type == "audit_finding":
         action = CAPAAction(
@@ -1329,7 +1666,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     elif src_type == "incident":
         action = IncidentAction(
@@ -1397,7 +1735,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     elif src_type == "risk":
         action = CAPAAction(
@@ -1413,7 +1752,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
-            due_date=parsed_due_date,
+            due_date=capa_due_date,
+            clause_reference=clause_ref,
         )
     else:
         raise BadRequestError("Invalid source_type")
@@ -1433,6 +1773,20 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         if "foreign key" in error_msg.lower() or "violates foreign key constraint" in error_msg.lower():
             raise NotFoundError("Source entity not found or was deleted")
         elif "unique" in error_msg.lower() or "duplicate" in error_msg.lower():
+            if src_type == "audit_finding" and src_id:
+                existing = await get_audit_finding_capa_for_tenant(db, current_user.tenant_id, src_id)
+                if existing is not None:
+                    logger.info(
+                        "PX-426 get-or-create: returning existing CAPA id=%s for finding %s",
+                        existing.id,
+                        src_id,
+                    )
+                    out = await _capa_to_response(db, existing)
+                    if existing.assigned_to_id and not out.assigned_to_email:
+                        email = await _resolve_owner_email(db, existing.assigned_to_id)
+                        if email:
+                            out = out.model_copy(update={"owner_email": email, "assigned_to_email": email})
+                    return out
             raise ConflictError("An action with this reference number already exists")
         else:
             logger.error("Database error creating action: %s", error_msg[:500])
@@ -1485,7 +1839,9 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     if isinstance(action, CAPAAction):
         out = await _capa_to_response(db, action)
     else:
-        resolved_email = action_data.assigned_to_email or await _resolve_owner_email(db, action.owner_id)
+        resolved_email = (
+            action_data.assigned_to_email or action_data.owner_email or await _resolve_owner_email(db, action.owner_id)
+        )
         if src_type == "incident":
             sk = STORAGE_INCIDENT_ACTION
         elif src_type == "rta":
@@ -1513,11 +1869,16 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         event_type="unified_action.created",
         entity_type="unified_action",
         entity_id=out.action_key,
+        entity_name=out.reference_number or out.action_key,
         action="create",
         description=f"Created unified action {out.reference_number or out.action_key}",
         payload=create_payload,
         user_id=current_user.id,
         request_id=request_id,
+        # The row that was just committed. Every branch above builds it with
+        # current_user.tenant_id and the column is NOT NULL, so reaching here
+        # means the tenant is known.
+        tenant_id=action.tenant_id,
     )
     if owner_id:
         await record_action_assigned_audit(
@@ -1528,6 +1889,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             assigned_by_user_id=current_user.id,
             request_id=request_id,
             source_type=out.source_type,
+            tenant_id=action.tenant_id,
             reference_number=out.reference_number,
         )
     return out
@@ -1559,6 +1921,18 @@ def _valid_unified_source_type(src_type: str) -> bool:
     return capa_enum_from_api_filter(sl) is not None
 
 
+# The six action stores behind /actions/summary, in the order they are read.
+# (label for the failure log, model, whether display_status maps CAPA statuses)
+_SUMMARY_ACTION_STORES: tuple[tuple[str, Any, bool], ...] = (
+    ("incident", IncidentAction, False),
+    ("rta", RTAAction, False),
+    ("complaint", ComplaintAction, False),
+    ("investigation", InvestigationAction, False),
+    ("capa", CAPAAction, True),
+    ("capa_item", CAPAItem, False),
+)
+
+
 async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) -> ActionsSummaryResponse:
     """Aggregate counts by display_status across all action stores.
 
@@ -1566,6 +1940,12 @@ async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) ->
     that backs the list endpoint and /view-counts — rather than recomputed here. The
     status histogram alone cannot answer "overdue": only CAPA persists a literal
     `overdue` status, while every surface means "open and past due_date".
+
+    Each store is read inside its own savepoint (C-53). Every store used to be
+    read in its own bare `try`, which on PostgreSQL meant the first failure
+    aborted the transaction and the remaining five plus both trailing counts were
+    refused — reporting an empty action register instead of a partially readable
+    one. The per-store warning is kept: per C-33 these logs are the only record.
     """
     by_display: dict[str, int] = {}
 
@@ -1575,65 +1955,15 @@ async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) ->
         d = display_status_for(raw, from_capa=capa)
         by_display[d] = by_display.get(d, 0) + n
 
-    try:
-        q = (
-            select(IncidentAction.status, func.count())
-            .where(IncidentAction.tenant_id == tenant_id)
-            .group_by(IncidentAction.status)
-        )
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: incident aggregate failed", exc_info=True)
-
-    try:
-        q = select(RTAAction.status, func.count()).where(RTAAction.tenant_id == tenant_id).group_by(RTAAction.status)
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: rta aggregate failed", exc_info=True)
-
-    try:
-        q = (
-            select(ComplaintAction.status, func.count())
-            .where(ComplaintAction.tenant_id == tenant_id)
-            .group_by(ComplaintAction.status)
-        )
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: complaint aggregate failed", exc_info=True)
-
-    try:
-        q = (
-            select(InvestigationAction.status, func.count())
-            .where(InvestigationAction.tenant_id == tenant_id)
-            .group_by(InvestigationAction.status)
-        )
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: investigation aggregate failed", exc_info=True)
-
-    try:
-        q = select(CAPAAction.status, func.count()).where(CAPAAction.tenant_id == tenant_id).group_by(CAPAAction.status)
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=True)
-    except Exception:
-        logger.warning("actions.summary: capa aggregate failed", exc_info=True)
-
-    try:
-        q = select(CAPAItem.status, func.count()).where(CAPAItem.tenant_id == tenant_id).group_by(CAPAItem.status)
-        for st, cnt in (await db.execute(q)).all():
-            raw = st.value if hasattr(st, "value") else str(st)
-            _merge(raw, int(cnt), capa=False)
-    except Exception:
-        logger.warning("actions.summary: capa_item aggregate failed", exc_info=True)
+    for label, model, from_capa in _SUMMARY_ACTION_STORES:
+        try:
+            async with _read_savepoint(db):
+                q = select(model.status, func.count()).where(model.tenant_id == tenant_id).group_by(model.status)
+                for st, cnt in (await db.execute(q)).all():
+                    raw = st.value if hasattr(st, "value") else str(st)
+                    _merge(raw, int(cnt), capa=from_capa)
+        except Exception:
+            logger.warning("actions.summary: %s aggregate failed", label, exc_info=True)
 
     total = await _count_for_source(db, None, None, None, None, tenant_id=tenant_id)
     overdue = await _count_for_source(db, None, None, None, None, tenant_id=tenant_id, overdue=True)
@@ -1712,7 +2042,10 @@ async def load_action_response_by_key(
         capa_row = cast(Optional[CAPAAction], result.scalar_one_or_none())
         if capa_row is None:
             raise NotFoundError("Action not found")
-        return await _capa_to_response(db, capa_row)
+        # Hydrate the assignee exactly as the list view does — otherwise a CAPA with a
+        # real assigned_to_id reads as unassigned on detail while the list shows an owner.
+        hydrated = await _hydrate_action_owner_emails(db, [await _capa_to_response(db, capa_row)])
+        return hydrated[0]
 
     if kind == STORAGE_CAPA_ITEM:
         result = await db.execute(
@@ -1870,11 +2203,15 @@ async def create_action_owner_note(
         event_type="unified_action.owner_note.created",
         entity_type="unified_action",
         entity_id=resolved.action_key,
+        entity_name=resolved.action_key,
         action="comment",
         description=f"Owner note on action {resolved.action_key}",
         payload={"note_id": note.id},
         user_id=current_user.id,
         request_id=request_id,
+        # load_action_response_by_key scopes on tenant_id and every action table
+        # declares it NOT NULL, so a tenant-less caller 404s before this point.
+        tenant_id=note.tenant_id,
     )
     return ActionOwnerNoteRead(
         id=note.id,
@@ -1905,7 +2242,9 @@ async def get_action(
     if src_type == "incident":
         result = await db.execute(
             select(IncidentAction).where(
-                IncidentAction.id == action_id, IncidentAction.tenant_id == current_user.tenant_id
+                IncidentAction.id == action_id,
+                IncidentAction.tenant_id == current_user.tenant_id,
+                IncidentAction.deleted_at.is_(None),
             )
         )
         incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())
@@ -1929,7 +2268,9 @@ async def get_action(
     elif src_type == "complaint":
         result = await db.execute(
             select(ComplaintAction).where(
-                ComplaintAction.id == action_id, ComplaintAction.tenant_id == current_user.tenant_id
+                ComplaintAction.id == action_id,
+                ComplaintAction.tenant_id == current_user.tenant_id,
+                ComplaintAction.deleted_at.is_(None),
             )
         )
         complaint_action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
@@ -2015,7 +2356,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if src_type == "incident":
         result = await db.execute(
             select(IncidentAction).where(
-                IncidentAction.id == action_id, IncidentAction.tenant_id == current_user.tenant_id
+                IncidentAction.id == action_id,
+                IncidentAction.tenant_id == current_user.tenant_id,
+                IncidentAction.deleted_at.is_(None),
             )
         )
         action = cast(Optional[IncidentAction], result.scalar_one_or_none())
@@ -2031,7 +2374,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     elif src_type == "complaint":
         result = await db.execute(
             select(ComplaintAction).where(
-                ComplaintAction.id == action_id, ComplaintAction.tenant_id == current_user.tenant_id
+                ComplaintAction.id == action_id,
+                ComplaintAction.tenant_id == current_user.tenant_id,
+                ComplaintAction.deleted_at.is_(None),
             )
         )
         action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
@@ -2092,12 +2437,15 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             if capa_status is not None:
                 action.status = capa_status
                 if status_value in ("completed", "closed") and not action.completed_at:
-                    action.completed_at = datetime.now(timezone.utc)
+                    action.completed_at = _naive_utc_now()
                 elif status_value not in ("completed", "closed"):
                     action.completed_at = None
-        if action_data.assigned_to_email is not None:
-            new_owner_id = await _resolve_assignee_id_or_raise(
-                db, action_data.assigned_to_email, current_user.tenant_id
+        if action_data.owner_id is not None or action_data.assigned_to_email is not None:
+            new_owner_id = await _resolve_requested_owner(
+                db,
+                owner_id=action_data.owner_id,
+                assigned_to_email=action_data.assigned_to_email,
+                tenant_id=current_user.tenant_id,
             )
             action.assigned_to_id = new_owner_id
         if action_data.completion_notes is not None:
@@ -2123,9 +2471,12 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                 action.completed_at = datetime.now(timezone.utc)
             elif status_value != "completed":
                 action.completed_at = None
-        if action_data.assigned_to_email is not None:
-            new_owner_id = await _resolve_assignee_id_or_raise(
-                db, action_data.assigned_to_email, current_user.tenant_id
+        if action_data.owner_id is not None or action_data.assigned_to_email is not None:
+            new_owner_id = await _resolve_requested_owner(
+                db,
+                owner_id=action_data.owner_id,
+                assigned_to_email=action_data.assigned_to_email,
+                tenant_id=current_user.tenant_id,
             )
             action.owner_id = new_owner_id
         if action_data.completion_notes is not None:
@@ -2141,6 +2492,8 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                     break
                 except ValueError:
                     continue
+        if isinstance(action, CAPAAction):
+            action.due_date = _as_capa_naive(action.due_date)
 
     bridge_result = None
     if isinstance(action, CAPAAction) and action_data.status is not None:
@@ -2199,6 +2552,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             assigned_by_user_id=current_user.id,
             request_id=request_id,
             source_type=out.source_type,
+            tenant_id=action.tenant_id,
             reference_number=out.reference_number,
         )
 
@@ -2207,10 +2561,88 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         event_type="unified_action.updated",
         entity_type="unified_action",
         entity_id=out.action_key,
+        entity_name=out.reference_number or out.action_key,
         action="update",
         description=f"Updated unified action {out.reference_number or out.action_key}",
         payload=action_data.model_dump(exclude_none=True),
         user_id=current_user.id,
         request_id=request_id,
+        # The row this handler loaded, already scoped to current_user.tenant_id.
+        tenant_id=action.tenant_id,
     )
     return out
+
+
+@router.delete("/{action_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_action(
+    action_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("action:delete"))],
+    request_id: str = Depends(get_request_id),
+    source_type: str = Query(
+        ...,
+        description="Source discriminator: incident or complaint (PX-177 soft-delete)",
+    ),
+) -> None:
+    """Soft-delete an incident or complaint action (PX-177).
+
+    Sets deleted_at; list/get exclude the row. Other source_types are not
+    supported in this slice (near-miss/RTA/investigation remain follow-ups).
+    """
+    src_type = source_type.lower()
+    if src_type not in ("incident", "complaint"):
+        raise BadRequestError("Soft-delete currently supports source_type=incident|complaint only")
+
+    now = datetime.now(timezone.utc)
+    if src_type == "incident":
+        result = await db.execute(
+            select(IncidentAction).where(
+                IncidentAction.id == action_id,
+                IncidentAction.tenant_id == current_user.tenant_id,
+                IncidentAction.deleted_at.is_(None),
+            )
+        )
+        action = cast(Optional[IncidentAction], result.scalar_one_or_none())
+        if action is None:
+            raise NotFoundError("Action not found")
+        entity_name = action.reference_number
+        parent_id = action.incident_id
+        storage_kind = STORAGE_INCIDENT_ACTION
+    else:
+        result = await db.execute(
+            select(ComplaintAction).where(
+                ComplaintAction.id == action_id,
+                ComplaintAction.tenant_id == current_user.tenant_id,
+                ComplaintAction.deleted_at.is_(None),
+            )
+        )
+        action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
+        if action is None:
+            raise NotFoundError("Action not found")
+        entity_name = action.reference_number
+        parent_id = action.complaint_id
+        storage_kind = STORAGE_COMPLAINT_ACTION
+
+    action_key = action_key_for(storage_kind, action.id)
+    action.deleted_at = now
+    action.deleted_by_id = current_user.id
+
+    await record_audit_event(
+        db=db,
+        event_type="unified_action.deleted",
+        entity_type="unified_action",
+        entity_id=action_key,
+        entity_name=entity_name,
+        action="delete",
+        description=f"Soft-deleted {src_type} action {entity_name}",
+        payload={
+            "action_id": action_id,
+            "source_type": src_type,
+            "source_id": parent_id,
+            "soft_delete": True,
+        },
+        user_id=current_user.id,
+        request_id=request_id,
+        tenant_id=action.tenant_id,
+    )
+    await db.flush()

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useMemo } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft } from 'lucide-react'
 import {
@@ -17,10 +17,12 @@ import {
   employeePickerOptionLabel,
   sortEmployeesForPicker,
 } from './employeePickerUtils'
+import { TRAINING_CALENDAR_HREF, templatesMatchingInstrument } from '../auditInstrument'
 
 export default function InductionCreate() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
   const [engineers, setEngineers] = useState<EngineerProfile[]>([])
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
@@ -37,8 +39,19 @@ export default function InductionCreate() {
   const [location, setLocation] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
   const [notes, setNotes] = useState('')
+  const purposeTemplates = useMemo(
+    () => templatesMatchingInstrument(templates, 'induction'),
+    [templates],
+  )
+  const templatesEmpty = !templateLoadFailed && purposeTemplates.length === 0
+  const selectedTemplate = purposeTemplates.find((item) => String(item.id) === templateId)
+  const seededTemplateId = searchParams.get('templateId')
+  const seededWrongPurpose =
+    Boolean(seededTemplateId) &&
+    templates.some((item) => String(item.id) === seededTemplateId) &&
+    !purposeTemplates.some((item) => String(item.id) === seededTemplateId)
   const rosterEmpty = !loading && !rosterLoadFailed && engineers.length === 0
-  const requiredDataUnavailable = templateLoadFailed || rosterLoadFailed
+  const requiredDataUnavailable = templateLoadFailed || rosterLoadFailed || templatesEmpty
 
   useEffect(() => {
     const load = async () => {
@@ -71,6 +84,14 @@ export default function InductionCreate() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    const seeded = searchParams.get('templateId')
+    if (!seeded) return
+    if (purposeTemplates.some((item) => String(item.id) === seeded)) {
+      setTemplateId(seeded)
+    }
+  }, [purposeTemplates, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -149,16 +170,69 @@ export default function InductionCreate() {
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
                 required
-                disabled={templateLoadFailed}
+                disabled={templateLoadFailed || templatesEmpty}
+                aria-describedby={
+                  templateLoadFailed
+                    ? undefined
+                    : templatesEmpty
+                      ? 'inductioncreate-templates-empty'
+                      : seededWrongPurpose
+                        ? 'inductioncreate-template-wrong-purpose'
+                        : undefined
+                }
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
               >
                 <option value="">{t('workforce.common.select_template')}</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.audit_type})
+                {purposeTemplates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name} ({tpl.audit_type})
                   </option>
                 ))}
               </select>
+              {!templateLoadFailed && templatesEmpty && (
+                <p
+                  id="inductioncreate-templates-empty"
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="induction-create-templates-empty"
+                >
+                  {t('workforce.induction.templates_empty')}{' '}
+                  <Link
+                    to="/audit-templates/new?instrument=induction"
+                    className="text-primary underline underline-offset-2"
+                  >
+                    {t('workforce.induction.templates_empty_link')}
+                  </Link>
+                </p>
+              )}
+              {!templateLoadFailed && !templatesEmpty && seededWrongPurpose && (
+                <p
+                  id="inductioncreate-template-wrong-purpose"
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="induction-create-template-wrong-purpose"
+                >
+                  {t('workforce.induction.template_wrong_purpose')}
+                </p>
+              )}
+              {selectedTemplate ? (
+                <p
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="induction-create-cadence"
+                >
+                  {selectedTemplate.frequency
+                    ? t('workforce.induction.cadence_frequency', {
+                        frequency: selectedTemplate.frequency,
+                      })
+                    : t('workforce.induction.cadence_unset')}{' '}
+                  {t('workforce.induction.cadence_hint')}{' '}
+                  <Link
+                    to={TRAINING_CALENDAR_HREF}
+                    className="text-primary underline underline-offset-2"
+                    data-testid="induction-create-cadence-calendar"
+                  >
+                    {t('workforce.induction.cadence_calendar_link')}
+                  </Link>
+                </p>
+              ) : null}
             </div>
 
             <div>

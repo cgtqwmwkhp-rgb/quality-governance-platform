@@ -4,15 +4,17 @@ Workflow API Routes
 Features:
 - Workflow template management
 - Workflow instance operations
-- Approval management
-- Delegation configuration
-- Bulk actions
+
+Approvals, delegation and the approvals statistics tile used to live here and are
+gone; see the section comments below for what they did and what replaced them.
+Approvals are now read from the domains that hold them, by
+``src/api/routes/approvals.py``.
 """
 
 from datetime import datetime, timezone
-from typing import Annotated, List, Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, require_permission
@@ -36,30 +38,6 @@ class WorkflowStartRequest(BaseModel):
     entity_id: str
     context: Optional[dict] = None
     priority: str = "normal"
-
-
-class ApprovalResponse(BaseModel):
-    """Approval/Rejection response"""
-
-    notes: Optional[str] = None
-    reason: Optional[str] = None
-
-
-class BulkApprovalRequest(BaseModel):
-    """Bulk approval request"""
-
-    approval_ids: List[str]
-    notes: Optional[str] = None
-
-
-class DelegationRequest(BaseModel):
-    """Set delegation request"""
-
-    delegate_id: int
-    start_date: datetime
-    end_date: datetime
-    reason: Optional[str] = None
-    workflow_types: Optional[List[str]] = None
 
 
 class EscalationRequest(BaseModel):
@@ -182,62 +160,25 @@ async def cancel_workflow(
 
 
 # ============================================================================
-# APPROVAL ENDPOINTS
+# APPROVAL ENDPOINTS — removed by FR-APPROVALS-01
 # ============================================================================
-
-
-@router.get("/approvals/pending")
-async def get_pending_approvals(current_user: CurrentUser):
-    """Get pending approvals for current user."""
-    approvals = workflow_engine.get_pending_approvals(current_user.id)
-    return {"approvals": approvals, "total": len(approvals)}
-
-
-@router.post("/approvals/{approval_id}/approve")
-async def approve_request(
-    approval_id: str,
-    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
-    response: ApprovalResponse,
-):
-    """Approve an approval request."""
-    result = workflow_engine.approve(
-        approval_id=approval_id,
-        user_id=current_user.id,
-        notes=response.notes,
-    )
-    return result
-
-
-@router.post("/approvals/{approval_id}/reject")
-async def reject_request(
-    approval_id: str,
-    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
-    response: ApprovalResponse,
-):
-    """Reject an approval request."""
-    if not response.reason:
-        raise BadRequestError("Reason required for rejection")
-
-    result = workflow_engine.reject(
-        approval_id=approval_id,
-        user_id=current_user.id,
-        reason=response.reason,
-    )
-    return result
-
-
-@router.post("/approvals/bulk-approve")
-async def bulk_approve_requests(
-    request: BulkApprovalRequest,
-    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
-):
-    """Bulk approve multiple requests."""
-    result = workflow_engine.bulk_approve(
-        approval_ids=request.approval_ids,
-        user_id=current_user.id,
-        notes=request.notes,
-    )
-    return result
+#
+# Four endpoints stood here: `GET /approvals/pending`, `POST
+# /approvals/{id}/approve`, `POST /approvals/{id}/reject` and `POST
+# /approvals/bulk-approve`. All four spoke to `WorkflowTemplateEngine`, which
+# holds no state, so the queue was `[]` for every user forever and each write
+# returned `{"status": "approved"}` having recorded nothing. On a quality
+# management system the writes were the worse half: a permitted user could approve
+# a controlled document, be told it worked, and leave no decision anywhere.
+#
+# The replacement is a read model, not a second engine.
+# `GET /api/v1/approvals/my-decisions` reads the domains that actually hold
+# pending decisions, and names any it could not read. Recording a decision stays
+# with the owning domain — for controlled documents, `POST
+# /api/v1/document-control/approvals/{instance_id}/action`.
+#
+# `tests/integration/test_approvals_my_decisions.py` fails if any of the four
+# answers anything but 404 again.
 
 
 # ============================================================================
@@ -269,45 +210,20 @@ async def escalate_workflow(
 
 
 # ============================================================================
-# DELEGATION ENDPOINTS
+# DELEGATION ENDPOINTS — removed by FR-APPROVALS-01
 # ============================================================================
-
-
-@router.get("/delegations")
-async def get_my_delegations(current_user: CurrentUser):
-    """Get current user's delegations."""
-    delegations = workflow_engine.get_active_delegations(current_user.id)
-    return {"delegations": delegations}
-
-
-@router.post("/delegations")
-async def set_delegation(
-    request: DelegationRequest,
-    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
-):
-    """Set up out-of-office delegation."""
-    result = workflow_engine.set_delegation(
-        user_id=current_user.id,
-        delegate_id=request.delegate_id,
-        start_date=request.start_date,
-        end_date=request.end_date,
-        reason=request.reason,
-        workflow_types=request.workflow_types,
-    )
-    return result
-
-
-@router.delete("/delegations/{delegation_id}")
-async def cancel_delegation(
-    delegation_id: str,
-    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
-):
-    """Cancel a delegation."""
-    return {
-        "delegation_id": delegation_id,
-        "status": "cancelled",
-        "cancelled_at": datetime.now(timezone.utc).isoformat(),
-    }
+#
+# `GET /delegations` returned a literal invented record — "DEL-20260115001 /
+# Jane Smith / Annual leave", the same one for every caller of every tenant —
+# from `WorkflowTemplateEngine.get_active_delegations`. A user could read a
+# colleague's name off it and believe approval cover was arranged. `POST` and
+# `DELETE` matched: both returned a success dict and stored nothing.
+#
+# Not reimplemented here. Delegated approval is a real requirement and needs a
+# table, an audit trail and an answer for approvals already in flight; a read
+# model over domain queues is not where that decision gets made. Until then the
+# honest state of the product is that it has no delegation, which is what a 404
+# now says.
 
 
 # ============================================================================
@@ -339,19 +255,15 @@ async def route_entity(
 
 
 # ============================================================================
-# STATISTICS ENDPOINTS
+# STATISTICS ENDPOINTS — removed by FR-APPROVALS-01
 # ============================================================================
-
-
-@router.get("/stats")
-async def get_workflow_stats(current_user: CurrentUser):
-    """Get workflow statistics.
-
-    Scoped to the caller: `pending_approvals` counts the same queue returned by
-    `GET /approvals/pending` (PX-286). Metrics the engine cannot measure are
-    returned as null — never fabricated organisation-wide constants.
-
-    Clients that render the pending list alongside this tile should treat the
-    list length as authoritative if the two ever diverge.
-    """
-    return workflow_engine.get_workflow_stats(current_user.id)
+#
+# `GET /stats` reported every figure as null except `pending_approvals`, which it
+# counted from the queue removed above — so its one measured number was a
+# fabricated zero, and the honest nulls beside it made that zero look measured.
+# A tile reading "0 pending approvals" is the one statement this surface must
+# never make without having looked.
+#
+# The count now comes from `GET /api/v1/approvals/my-decisions`, where it is a
+# count of rows that were actually read, and any source that could not be read is
+# named beside it.

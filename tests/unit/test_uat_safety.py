@@ -19,51 +19,60 @@ from unittest.mock import MagicMock, patch
 class TestUATSafetyModeDetection(TestCase):
     """Tests for UAT mode configuration detection."""
 
+    # These tests read configuration out of the environment, so they must NOT use
+    # importlib.reload on src.core.config. Reloading rebinds the module-level
+    # `settings` object, while src.main and every module that did
+    # `from src.core.config import settings` keep a reference to the original —
+    # after which a later test patching `config.settings` patches an object the
+    # running app no longer reads. Constructing Settings() directly reads the same
+    # environment and leaves the shared singleton alone.
+
     def test_read_only_mode_detection(self):
         """is_uat_read_only returns True when UAT_MODE=READ_ONLY."""
         with patch.dict(os.environ, {"UAT_MODE": "READ_ONLY"}):
-            # Need to reimport to pick up new env var
-            from importlib import reload
+            from src.core.config import Settings
 
-            import src.core.config as config_module
-
-            reload(config_module)
-            self.assertTrue(config_module.settings.is_uat_read_only)
+            self.assertTrue(Settings().is_uat_read_only)
 
     def test_read_write_mode_detection(self):
         """is_uat_read_only returns False when UAT_MODE=READ_WRITE."""
         with patch.dict(os.environ, {"UAT_MODE": "READ_WRITE"}, clear=False):
-            from importlib import reload
+            from src.core.config import Settings
 
-            import src.core.config as config_module
-
-            # Clear cache and reload
-            config_module.get_settings.cache_clear()
-            reload(config_module)
-            self.assertFalse(config_module.settings.is_uat_read_only)
+            self.assertFalse(Settings().is_uat_read_only)
 
     def test_admin_user_list_parsing(self):
         """uat_admin_user_list correctly parses comma-separated list."""
         with patch.dict(os.environ, {"UAT_ADMIN_USERS": "user1,user2,user3"}):
-            from importlib import reload
+            from src.core.config import Settings
 
-            import src.core.config as config_module
-
-            config_module.get_settings.cache_clear()
-            reload(config_module)
-            admins = config_module.settings.uat_admin_user_list
-            self.assertEqual(admins, ["user1", "user2", "user3"])
+            self.assertEqual(Settings().uat_admin_user_list, ["user1", "user2", "user3"])
 
     def test_empty_admin_list(self):
         """uat_admin_user_list returns empty list when not set."""
         with patch.dict(os.environ, {"UAT_ADMIN_USERS": ""}):
-            from importlib import reload
+            from src.core.config import Settings
 
-            import src.core.config as config_module
+            self.assertEqual(Settings().uat_admin_user_list, [])
 
-            config_module.get_settings.cache_clear()
-            reload(config_module)
-            self.assertEqual(config_module.settings.uat_admin_user_list, [])
+    def test_mode_detection_does_not_rebind_module_settings_singleton(self):
+        """C-55: constructing Settings() must leave the live singleton identity alone.
+
+        The previous implementation called importlib.reload(src.core.config), which
+        rebound `config.settings` while src.main (and every `from src.core.config
+        import settings` site) kept the original object. Later patches of
+        `config.settings` then missed the app — notably
+        test_readyz_returns_503_when_redis_required_and_missing, which set
+        app_env on the new object while /readyz still read the old one.
+        """
+        import src.core.config as config_module
+
+        before = config_module.settings
+        with patch.dict(os.environ, {"UAT_MODE": "READ_ONLY"}):
+            from src.core.config import Settings
+
+            self.assertTrue(Settings().is_uat_read_only)
+        self.assertIs(config_module.settings, before)
 
 
 class TestOverrideHeaderValidation(TestCase):

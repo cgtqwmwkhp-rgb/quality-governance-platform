@@ -19,8 +19,7 @@ vi.mock('../../../contexts/ToastContext', () => ({
 }))
 
 vi.mock('../../../api/client', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../../api/client')>('../../../api/client')
+  const actual = await vi.importActual<typeof import('../../../api/client')>('../../../api/client')
   return {
     ...actual,
     evidenceAssetsApi: {
@@ -94,6 +93,26 @@ describe('CaseEvidencePanel', () => {
 
     await screen.findByText('No evidence uploaded yet')
     expect(screen.getByText('Upload evidence')).toBeInTheDocument()
+  })
+
+  it('lists against compliance_record when that is the source module', async () => {
+    vi.mocked(evidenceAssetsApi.list).mockResolvedValue(listResponse([]))
+
+    render(
+      <CaseEvidencePanel
+        sourceType="compliance_record"
+        sourceId={41}
+        enableUpload
+        testIdPrefix="compliance-record-41"
+      />,
+    )
+
+    await screen.findByTestId('compliance-record-41-evidence-panel')
+    expect(evidenceAssetsApi.list).toHaveBeenCalledWith({
+      source_module: 'compliance_record',
+      source_id: 41,
+      page_size: 50,
+    })
   })
 
   it('deletes evidence and refreshes the list', async () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
@@ -25,7 +25,7 @@ import AITemplateGenerator from '../components/AITemplateGenerator'
 import CheckChallengeCoach from '../components/auditChallenge/CheckChallengeCoach'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import { Badge } from '../components/ui/Badge'
-import { auditsApi, getApiErrorMessage, safetyInsightsApi } from '../api/client'
+import { auditsApi, safetyInsightsApi } from '../api/client'
 import type { AuditBuilderCasePrefill } from '../components/AITemplateGenerator'
 import type {
   AuditTemplate,
@@ -43,6 +43,19 @@ import {
   getUnpublishableQuestionIssues,
   remapConditionalLogicSourceIds,
 } from './audit-builder/templateHelpers'
+import {
+  buildSaveIssueModel,
+  firstIssueQuestionId,
+  fromPublishValidationErrors,
+  type SaveIssue,
+  type SaveIssueModel,
+} from './audit-builder/saveErrorModel'
+import {
+  BUILDER_SAVE_CONCURRENCY,
+  BUILDER_SAVE_REQUEST_CONFIG,
+  formatQuestionProgress,
+  runWithConcurrency,
+} from './audit-builder/saveConcurrency'
 import { QUESTION_TYPES } from './audit-builder/QuestionEditor'
 import SectionEditor from './audit-builder/SectionEditor'
 import TemplateHeader from './audit-builder/TemplateHeader'
@@ -55,6 +68,15 @@ import {
 } from './builderMapAssistHonesty'
 import { decideStandardLink, suggestStandardLinks } from './builderMapAssistApi'
 import type { MapW3StandardLink } from './mapW3StaleRescoreHonesty'
+import {
+  instrumentCtaKey,
+  instrumentCalendarHref,
+  instrumentRunHref,
+  parseInstrument,
+  parseInstrumentQuery,
+  parseInstrumentTag,
+  upsertInstrumentTag,
+} from './auditInstrument'
 
 const CATEGORIES = [
   { id: 'quality', label: 'Quality Management', icon: Award, color: 'blue' },
@@ -197,6 +219,7 @@ export default function AuditTemplateBuilder() {
   const caseIdParam = Number(searchParams.get('caseId') || searchParams.get('case_id') || '')
   const themeIdParam = Number(searchParams.get('themeId') || searchParams.get('theme_id') || '')
   const openAiParam = searchParams.get('ai') === '1' || searchParams.get('ai') === 'true'
+  const urlInstrument = parseInstrumentQuery(searchParams.get('instrument'))
   const seedCaseRefs: AuditBuilderCasePrefill[] | undefined =
     caseTypeParam && Number.isFinite(caseIdParam) && caseIdParam > 0
       ? [{ type: caseTypeParam, id: caseIdParam }]
@@ -250,14 +273,17 @@ export default function AuditTemplateBuilder() {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     createdBy: 'Current User',
-    tags: [],
+    tags: urlInstrument ? upsertInstrumentTag([], urlInstrument) : [],
     estimatedDuration: 60,
     isLocked: false,
   })
 
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder')
   const [isSaving, setIsSaving] = useState(false)
+  const [saveProgress, setSaveProgress] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveIssues, setSaveIssues] = useState<SaveIssue[] | null>(null)
+  const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
   const [backendId, setBackendId] = useState<number | null>(
     templateId && !isNaN(Number(templateId)) ? Number(templateId) : null,
@@ -270,6 +296,48 @@ export default function AuditTemplateBuilder() {
   const questionIdMap = useRef<Record<string, number>>({})
   const deletedSectionIds = useRef<number[]>([])
   const deletedQuestionIds = useRef<number[]>([])
+  const highlightClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearSaveIssues = () => {
+    setSaveError(null)
+    setSaveIssues(null)
+  }
+
+  const focusQuestionFromIssue = useCallback((questionId: string) => {
+    setActiveTab('builder')
+    setHighlightedQuestionId(questionId)
+    if (highlightClearTimer.current) clearTimeout(highlightClearTimer.current)
+    highlightClearTimer.current = setTimeout(() => {
+      setHighlightedQuestionId(null)
+      highlightClearTimer.current = null
+    }, 4000)
+    // Defer scroll until after tab/render so the node exists.
+    requestAnimationFrame(() => {
+      const safeId =
+        typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+          ? CSS.escape(questionId)
+          : questionId.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      const el = document.querySelector(`[data-question-id="${safeId}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [])
+
+  const applySaveFailure = useCallback(
+    (model: SaveIssueModel) => {
+      setSaveError(model.summary)
+      setSaveIssues(model.issues)
+      announce(model.summary, 'assertive')
+      const qid = firstIssueQuestionId(model)
+      if (qid) focusQuestionFromIssue(qid)
+    },
+    [announce, focusQuestionFromIssue],
+  )
+
+  useEffect(() => {
+    return () => {
+      if (highlightClearTimer.current) clearTimeout(highlightClearTimer.current)
+    }
+  }, [])
   const allQuestions = template.sections.flatMap((s) => s.questions)
   const validation = (() => {
     const questionErrors: Record<string, string[]> = {}
@@ -324,15 +392,20 @@ export default function AuditTemplateBuilder() {
         questionIdMap.current = {}
         deletedSectionIds.current = []
         deletedQuestionIds.current = []
-        setTemplate(mapApiToTemplate(data, sectionIdMap.current, questionIdMap.current))
+        const mapped = mapApiToTemplate(data, sectionIdMap.current, questionIdMap.current)
+        const rawTags = Array.isArray(data.tags)
+          ? data.tags.filter((tag: unknown): tag is string => typeof tag === 'string')
+          : []
+        const kind = urlInstrument ?? parseInstrument(rawTags)
+        setTemplate({ ...mapped, tags: upsertInstrumentTag(rawTags, kind) })
         setBackendId(data.id)
       } catch (error) {
-        setSaveError(getApiErrorMessage(error))
+        applySaveFailure(buildSaveIssueModel(error))
       } finally {
         setIsLoading(false)
       }
     })()
-  }, [templateId])
+  }, [templateId, applySaveFailure, urlInstrument])
 
   const updateSections = (fn: (ss: Section[]) => Section[]) =>
     setTemplate((prev) => ({ ...prev, sections: fn(prev.sections) }))
@@ -361,6 +434,13 @@ export default function AuditTemplateBuilder() {
     )
   }
   const handleUpdateQuestion = (sid: string, qid: string, updates: Partial<Question>) => {
+    if (highlightedQuestionId === qid) {
+      setHighlightedQuestionId(null)
+      if (highlightClearTimer.current) {
+        clearTimeout(highlightClearTimer.current)
+        highlightClearTimer.current = null
+      }
+    }
     const prior = template.sections
       .find((s) => s.id === sid)
       ?.questions.find((q) => q.id === qid)
@@ -462,13 +542,40 @@ export default function AuditTemplateBuilder() {
 
   const handleSave = async () => {
     if (!template.name.trim()) {
-      const msg = 'Template name is required'
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      const model = fromPublishValidationErrors(['Template name is required.'])
+      applySaveFailure(model)
       return
     }
+    const purpose =
+      urlInstrument ??
+      (backendId ? parseInstrument(template.tags) : parseInstrumentTag(template.tags))
+    if (!purpose) {
+      const model = fromPublishValidationErrors([
+        t(
+          'audit_templates.purpose_required',
+          'Choose a purpose before saving. Go back to the library and select Audit, Skills assessment, or Induction.',
+        ),
+      ])
+      applySaveFailure(model)
+      return
+    }
+    const stampedTags = upsertInstrumentTag(template.tags, purpose)
+    if (stampedTags.join('\0') !== (template.tags || []).join('\0')) {
+      setTemplate((prev) => ({ ...prev, tags: stampedTags }))
+    }
     setIsSaving(true)
-    setSaveError(null)
+    clearSaveIssues()
+    // Where the save had got to, for both the progress line and — if a request
+    // times out mid-save — the honest "this much is already saved" message.
+    const totalQuestions = template.sections.reduce((n, s) => n + s.questions.length, 0)
+    let savedQuestions = 0
+    let stage = 'template details'
+    const enterStage = (detail: string, uiLabel?: string) => {
+      stage = detail
+      setSaveProgress(uiLabel ?? `Saving ${detail}…`)
+    }
+    const questionStage = () => formatQuestionProgress(savedQuestions, totalQuestions)
+    enterStage(stage)
     try {
       const payload = {
         name: template.name,
@@ -478,34 +585,63 @@ export default function AuditTemplateBuilder() {
         passing_score: template.passThreshold,
         pass_threshold: template.passThreshold,
         estimated_duration: template.estimatedDuration,
+        tags: stampedTags,
       }
       let tid = backendId
-      if (tid) await auditsApi.updateTemplate(tid, payload)
+      if (tid) await auditsApi.updateTemplate(tid, payload, BUILDER_SAVE_REQUEST_CONFIG)
       else {
-        const { data } = await auditsApi.createTemplate(payload)
+        const { data } = await auditsApi.createTemplate(payload, BUILDER_SAVE_REQUEST_CONFIG)
         tid = data.id
         setBackendId(tid)
       }
 
       for (const [sIdx, section] of template.sections.entries()) {
+        enterStage(`section ${sIdx + 1} of ${template.sections.length}`)
         let sid = sectionIdMap.current[section.id]
         const sp = buildSectionPayload(section, sIdx)
-        if (sid) await auditsApi.updateSection(sid, sp)
+        if (sid) await auditsApi.updateSection(sid, sp, BUILDER_SAVE_REQUEST_CONFIG)
         else {
-          const { data } = await auditsApi.createSection(tid!, sp)
+          const { data } = await auditsApi.createSection(tid!, sp, BUILDER_SAVE_REQUEST_CONFIG)
           sid = data.id
           sectionIdMap.current[section.id] = sid
         }
-        for (const [qIdx, q] of section.questions.entries()) {
-          const qbid = questionIdMap.current[q.id]
-          if (qbid) await auditsApi.updateQuestion(qbid, buildQuestionPayload(q, qIdx))
-          else {
-            const { data } = await auditsApi.createQuestion(
-              tid!,
-              buildQuestionPayload(q, qIdx, sid),
-            )
-            questionIdMap.current[q.id] = data.id
-          }
+        // Questions in a section are independent rows with explicit sort_order,
+        // so a few can go at once; the section itself stays sequential because
+        // its id is what the question payloads point at.
+        const failure = await runWithConcurrency(
+          section.questions,
+          BUILDER_SAVE_CONCURRENCY,
+          async (q, qIdx) => {
+            const qbid = questionIdMap.current[q.id]
+            if (qbid) {
+              await auditsApi.updateQuestion(
+                qbid,
+                buildQuestionPayload(q, qIdx),
+                BUILDER_SAVE_REQUEST_CONFIG,
+              )
+            } else {
+              const { data } = await auditsApi.createQuestion(
+                tid!,
+                buildQuestionPayload(q, qIdx, sid),
+                BUILDER_SAVE_REQUEST_CONFIG,
+              )
+              questionIdMap.current[q.id] = data.id
+            }
+            savedQuestions += 1
+            enterStage(questionStage(), `Saving questions… ${questionStage()}`)
+          },
+        )
+        if (failure) {
+          const q = failure.item
+          applySaveFailure(
+            buildSaveIssueModel(failure.error, {
+              questionId: q.id,
+              sectionTitle: section.title || `Section ${sIdx + 1}`,
+              questionText: q.text,
+              progress: questionStage(),
+            }),
+          )
+          return
         }
       }
 
@@ -525,8 +661,25 @@ export default function AuditTemplateBuilder() {
           if (!changed) continue
           const qbid = questionIdMap.current[q.id]
           if (!qbid) continue
-          await auditsApi.updateQuestion(qbid, buildQuestionPayload({ ...q, conditionalLogicRules: remapped }, qIdx))
-          conditionalLogicUpdates.push({ sectionId: section.id, questionId: q.id, rules: remapped })
+          enterStage('conditional logic', 'Saving conditional logic…')
+          try {
+            await auditsApi.updateQuestion(
+              qbid,
+              buildQuestionPayload({ ...q, conditionalLogicRules: remapped }, qIdx),
+              BUILDER_SAVE_REQUEST_CONFIG,
+            )
+            conditionalLogicUpdates.push({ sectionId: section.id, questionId: q.id, rules: remapped })
+          } catch (questionError) {
+            applySaveFailure(
+              buildSaveIssueModel(questionError, {
+                questionId: q.id,
+                sectionTitle: section.title,
+                questionText: q.text,
+                progress: stage,
+              }),
+            )
+            return
+          }
         }
       }
       if (conditionalLogicUpdates.length > 0) {
@@ -545,52 +698,56 @@ export default function AuditTemplateBuilder() {
         )
       }
 
-      for (const deletedQuestionId of [...new Set(deletedQuestionIds.current)]) {
-        await auditsApi.deleteQuestion(deletedQuestionId)
+      const questionsToDelete = [...new Set(deletedQuestionIds.current)]
+      if (questionsToDelete.length > 0) {
+        enterStage('deleted questions', 'Removing deleted questions…')
+      }
+      for (const deletedQuestionId of questionsToDelete) {
+        await auditsApi.deleteQuestion(deletedQuestionId, BUILDER_SAVE_REQUEST_CONFIG)
       }
       deletedQuestionIds.current = []
 
-      for (const deletedSectionId of [...new Set(deletedSectionIds.current)]) {
-        await auditsApi.deleteSection(deletedSectionId)
+      const sectionsToDelete = [...new Set(deletedSectionIds.current)]
+      if (sectionsToDelete.length > 0) {
+        enterStage('deleted sections', 'Removing deleted sections…')
+      }
+      for (const deletedSectionId of sectionsToDelete) {
+        await auditsApi.deleteSection(deletedSectionId, BUILDER_SAVE_REQUEST_CONFIG)
       }
       deletedSectionIds.current = []
     } catch (error) {
-      const msg = getApiErrorMessage(error)
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      applySaveFailure(buildSaveIssueModel(error, { progress: stage }))
     } finally {
       setIsSaving(false)
+      setSaveProgress(null)
     }
   }
 
   const handlePublish = async () => {
     if (validation.hasBlockingPublishErrors) {
-      const msg =
-        validation.publishErrors.length === 1
-          ? validation.publishErrors[0]
-          : `Fix ${validation.publishErrors.length} validation issues before publishing.`
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      const firstQuestionId = Object.keys(validation.questionErrors)[0]
+      const model = fromPublishValidationErrors(validation.publishErrors, {
+        questionErrors: validation.questionErrors,
+        firstQuestionId,
+      })
+      applySaveFailure(model)
       setActiveTab('builder')
       setShowPublishDialog(false)
       return
     }
     if (!backendId) {
-      const msg = 'Please save the template before publishing'
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      const model = fromPublishValidationErrors(['Please save the template before publishing'])
+      applySaveFailure(model)
       return
     }
     setIsPublishing(true)
-    setSaveError(null)
+    clearSaveIssues()
     try {
       await auditsApi.publishTemplate(backendId)
       setTemplate((prev) => ({ ...prev, status: 'published' }))
       setShowPublishDialog(false)
     } catch (error) {
-      const msg = getApiErrorMessage(error)
-      setSaveError(msg)
-      announce(msg, 'assertive')
+      applySaveFailure(buildSaveIssueModel(error))
     } finally {
       setIsPublishing(false)
     }
@@ -601,6 +758,9 @@ export default function AuditTemplateBuilder() {
   const requiredQuestions = allQuestions.filter((q) => q.required).length
   const evidenceQuestions = allQuestions.filter((q) => q.evidenceRequired).length
   const mapCoverage = computeIsoClauseCoverage(allQuestions)
+  const purposeKind = urlInstrument ?? parseInstrument(template.tags)
+  const cadenceCalendarHref = instrumentCalendarHref(purposeKind)
+  const needsPurpose = !backendId && !urlInstrument && !parseInstrumentTag(template.tags)
 
   return (
     <div className="min-h-screen bg-background">
@@ -615,10 +775,13 @@ export default function AuditTemplateBuilder() {
         onBack={() => navigate('/audit-templates')}
         onSave={handleSave}
         isSaving={isSaving}
+        saveProgress={saveProgress}
         onPublish={() => setShowPublishDialog(true)}
         canPublish={!!backendId && template.status !== 'published'}
         onAIAssist={() => setShowAIAssist(true)}
         saveError={saveError}
+        saveIssues={saveIssues}
+        onShowSaveIssueQuestion={focusQuestionFromIssue}
       />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
@@ -628,6 +791,43 @@ export default function AuditTemplateBuilder() {
           </div>
         ) : (
           <>
+            {needsPurpose && (
+              <div
+                className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+                role="alert"
+                data-testid="audit-builder-purpose-required"
+              >
+                <p className="font-semibold">{t('audit_templates.purpose_required')}</p>
+                <button
+                  type="button"
+                  className="mt-3 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg"
+                  onClick={() => navigate('/audit-templates')}
+                >
+                  {t('audit_templates.title')}
+                </button>
+              </div>
+            )}
+            {template.status === 'published' && backendId ? (
+              <div className="mb-6 flex flex-wrap items-center gap-3" data-testid="audit-builder-run-cta">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90"
+                  onClick={() => navigate(instrumentRunHref(purposeKind, backendId))}
+                >
+                  {t(instrumentCtaKey(purposeKind))}
+                </button>
+                {cadenceCalendarHref ? (
+                  <button
+                    type="button"
+                    data-testid="audit-builder-cadence-calendar"
+                    className="flex items-center gap-2 px-4 py-2 border border-border bg-card text-foreground font-medium rounded-lg hover:border-primary/40"
+                    onClick={() => navigate(cadenceCalendarHref)}
+                  >
+                    {t('audit_builder.cta.open_training_calendar', 'Open training calendar')}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {validation.publishErrors.length > 0 && (
               <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p className="font-semibold">Template validation</p>
@@ -841,6 +1041,7 @@ export default function AuditTemplateBuilder() {
                         sectionValidationErrors={validation.sectionErrors[section.id] || []}
                         questionValidationErrors={validation.questionErrors}
                         allQuestions={allQuestions}
+                        highlightedQuestionId={highlightedQuestionId}
                       />
                     ))}
                     <button
@@ -1130,6 +1331,14 @@ export default function AuditTemplateBuilder() {
         isPublishing={isPublishing}
         templateName={template.name}
         error={saveError}
+        runHref={backendId ? instrumentRunHref(purposeKind, backendId) : undefined}
+        runCtaLabel={t(instrumentCtaKey(purposeKind))}
+        calendarHref={cadenceCalendarHref ?? undefined}
+        calendarCtaLabel={
+          cadenceCalendarHref
+            ? t('audit_builder.cta.open_training_calendar', 'Open training calendar')
+            : undefined
+        }
       />
 
       {showAIAssist && (

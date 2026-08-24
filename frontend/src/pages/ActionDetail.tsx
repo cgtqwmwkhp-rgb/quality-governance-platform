@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Copy,
   Download,
+  Eye,
   ExternalLink,
   Link2,
   Loader2,
@@ -37,8 +38,12 @@ import {
 } from '../components/ui/Select'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
+import { EvidenceAssetPreviewDialog } from '../components/EvidenceAssetPreviewDialog'
+import { Entity360Strip } from '../components/graph/Entity360Strip'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath, parseActionDetailId } from './actionLinks'
+import { resolveActionAssignee } from './actionsDisplayHelpers'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 /** Matches `ActionOwnerNoteCreate.body` max_length on the API. */
@@ -131,6 +136,7 @@ export default function ActionDetail() {
   const [evidenceLoading, setEvidenceLoading] = useState(false)
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [evidenceSort, setEvidenceSort] = useState<'uploaded' | 'name'>('uploaded')
+  const [previewAsset, setPreviewAsset] = useState<EvidenceAsset | null>(null)
   const [copyFlash, setCopyFlash] = useState<'key' | 'link' | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const notesListRef = useRef<HTMLUListElement>(null)
@@ -361,7 +367,7 @@ export default function ActionDetail() {
   const downloadAsset = async (assetId: number) => {
     setInlineMessage(null)
     try {
-      const res = await evidenceAssetsApi.getSignedUrl(assetId)
+      const res = await evidenceAssetsApi.getSignedUrl(assetId, undefined, 'attachment')
       window.open(res.data.signed_url, '_blank', 'noopener,noreferrer')
     } catch (e: unknown) {
       setInlineMessage({
@@ -443,7 +449,14 @@ export default function ActionDetail() {
   const titleDirty = titleDraft.trim() !== (action.title || '').trim()
   const dueDirty = dueDraft !== dueDateInputValue(action.due_date)
   const isCapa = action.action_key.startsWith('capa:') || action.source_type === 'capa'
-  const sourceLink = getActionSourceLink(action.source_type, action.source_id)
+  const capaIdMatch = /^capa:(\d+)$/.exec(action.action_key)
+  const capaEntityId = capaIdMatch ? Number(capaIdMatch[1]) : null
+  const sourceLink = getActionSourceLink(
+    action.source_type,
+    action.source_id,
+    action.source_reference,
+  )
+  const currentOwner = resolveActionAssignee(action)
 
   return (
     <div className="space-y-6 p-4 max-w-3xl mx-auto animate-fade-in">
@@ -455,6 +468,12 @@ export default function ActionDetail() {
           </Link>
         </Button>
       </div>
+
+      {capaEntityId != null && Number.isFinite(capaEntityId) ? (
+        <div data-testid="action-detail-connections">
+          <Entity360Strip entityType="capa" entityId={capaEntityId} requiresSatellites />
+        </div>
+      ) : null}
 
       <div>
         <div className="flex flex-wrap items-center gap-2">
@@ -798,7 +817,18 @@ export default function ActionDetail() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        aria-label={`Preview ${a.title || a.original_filename || 'attachment'}`}
+                        data-testid={`action-evidence-preview-${a.id}`}
+                        onClick={() => setPreviewAsset(a)}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         aria-label={`Download ${a.title || a.original_filename || 'attachment'}`}
+                        data-testid={`action-evidence-download-${a.id}`}
                         onClick={() => downloadAsset(a.id)}
                       >
                         <Download className="w-4 h-4" />
@@ -908,6 +938,22 @@ export default function ActionDetail() {
             <p className="text-xs text-muted-foreground mt-1">
               Responsible person email (optional)
             </p>
+            <p
+              className="text-xs mt-1"
+              data-testid="action-detail-current-owner"
+              data-assignee-state={currentOwner.state}
+            >
+              <span className="text-muted-foreground">Current owner: </span>
+              <span
+                className={
+                  currentOwner.state === 'assigned'
+                    ? 'font-medium text-foreground'
+                    : 'italic text-muted-foreground'
+                }
+              >
+                {currentOwner.label}
+              </span>
+            </p>
             {isCapa && emailConfigured === false ? (
               <div
                 className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
@@ -954,24 +1000,41 @@ export default function ActionDetail() {
                 }
               }}
             >
-              <Input
-                id="action-detail-assignee"
-                name="email"
-                type="email"
-                placeholder="user@company.com"
-                className="flex-1"
-                value={assigneeDraft}
-                onChange={(e) => setAssigneeDraft(e.target.value)}
-                aria-label="Assignee owner responsible"
-                data-testid="action-detail-assignee"
-              />
-              <Button type="submit" variant="secondary" disabled={saving} aria-label="Assign owner">
+              <div className="flex-1 min-w-0">
+                <span className="sr-only" id="action-detail-assignee-label">
+                  Assignee owner responsible
+                </span>
+                <EngineerPeoplePicker
+                  valueLabel={assigneeDraft}
+                  requireLogin
+                  onChange={(selection) =>
+                    setAssigneeDraft(selection?.user?.email || selection?.label || '')
+                  }
+                  placeholder="Search active employees…"
+                  testId="action-detail-assignee"
+                  className="w-full"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={saving || !assigneeDraft.trim()}
+                aria-label="Assign owner"
+              >
                 Assign
               </Button>
             </form>
           </div>
         </CardContent>
       </Card>
+
+      <EvidenceAssetPreviewDialog
+        asset={previewAsset}
+        open={previewAsset !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewAsset(null)
+        }}
+      />
     </div>
   )
 }

@@ -134,6 +134,7 @@ class TestSearchServiceSearch:
             "_search_audits",
             "_search_actions",
             "_search_documents",
+            "_search_document_content",
         ):
             setattr(service, method, AsyncMock(return_value=[]))
 
@@ -180,6 +181,7 @@ class TestSearchServiceSearch:
             "_search_audits",
             "_search_actions",
             "_search_documents",
+            "_search_document_content",
         ):
             setattr(service, method, AsyncMock(return_value=[]))
         service._search_incidents = AsyncMock(return_value=items)
@@ -222,6 +224,7 @@ class TestSearchServiceSearch:
             "_search_audits",
             "_search_actions",
             "_search_documents",
+            "_search_document_content",
         ):
             setattr(service, method, AsyncMock(return_value=[]))
         service._search_incidents = AsyncMock(return_value=items)
@@ -254,6 +257,7 @@ class TestSearchServiceSearch:
             "_search_audits",
             "_search_actions",
             "_search_documents",
+            "_search_document_content",
         ):
             setattr(service, method, AsyncMock(return_value=[]))
         service._search_incidents = AsyncMock(return_value=items)
@@ -296,6 +300,7 @@ class TestSearchServiceSearch:
             "_search_audits",
             "_search_actions",
             "_search_documents",
+            "_search_document_content",
         ):
             setattr(service, method, AsyncMock(return_value=[]))
         service._search_incidents = AsyncMock(return_value=items)
@@ -347,6 +352,7 @@ class TestSearchServiceSearch:
             "_search_audits",
             "_search_actions",
             "_search_documents",
+            "_search_document_content",
         ):
             setattr(service, method, AsyncMock(return_value=[]))
         service._search_incidents = AsyncMock(return_value=items)
@@ -367,6 +373,7 @@ class TestSearchServiceSearch:
             "_search_audits",
             "_search_actions",
             "_search_documents",
+            "_search_document_content",
         ):
             setattr(service, method, AsyncMock(return_value=[]))
 

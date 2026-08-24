@@ -81,7 +81,7 @@ Full persona definitions: [`docs/user-journeys/personas-and-journeys.md`](../use
 - **Success Metrics**: RTA reporting latency; action closure rate; repeat collision rate per vehicle/driver.
 - **Journey Reference**: Journey 1 — Incident Reporting (P1), RTA variant
 - **API Surface**: `src/api/routes/rtas.py` — CRUD endpoints, actions (`POST /{id}/actions`), running sheet, status transitions.
-- **Data Entities**: `RoadTrafficCollision`, `RTAAction` (`src/domain/models/rta.py`); `RTAAnalysis` (`src/domain/models/rta_analysis.py`).
+- **Data Entities**: `RoadTrafficCollision`, `RTAAction` (`src/domain/models/rta.py`).
 - **Dependencies**: Evidence Assets, Employee Portal, Driver Profiles, Vehicle Registry, Notifications, Audit Trail.
 - **Status**: Active
 
@@ -141,7 +141,7 @@ Full persona definitions: [`docs/user-journeys/personas-and-journeys.md`](../use
 - **Success Metrics**: Audit completion time; finding-to-CAPA conversion rate; audit programme coverage; template reuse rate.
 - **Journey Reference**: Journey 2 — Audit Lifecycle (P2)
 - **API Surface**: `src/api/routes/audits.py` — Audit runs CRUD, sections, questions, responses, findings; `src/api/routes/audit_templates.py` — Template CRUD, versioning, archiving; scoring and statistics endpoints.
-- **Data Entities**: `AuditRun`, `AuditTemplate`, `AuditSection`, `AuditQuestion`, `AuditResponse`, `AuditFinding` (`src/domain/models/audit.py`, `src/domain/models/audit_template.py`).
+- **Data Entities**: `AuditRun`, `AuditTemplate`, `AuditSection`, `AuditQuestion`, `AuditResponse`, `AuditFinding`, `TemplateVersion` — all declared in `src/domain/models/audit.py`. (A second, never-migrated set of the same names in `src/domain/models/audit_template.py` was deleted for C-70; no entity in this module was ever served from it.)
 - **Dependencies**: CAPA, Evidence Assets, Standards Library, Compliance Evidence, Digital Signatures, Audit Trail, Notifications.
 - **Status**: Active
 
@@ -828,6 +828,25 @@ Full persona definitions: [`docs/user-journeys/personas-and-journeys.md`](../use
 - **Data Entities**: `DriverProfile` (`src/domain/models/driver_profile.py`); `Asset` (`src/domain/models/asset.py`); `LOLER` (`src/domain/models/loler.py`).
 - **Dependencies**: Vehicle Checklists, User Management, Notifications.
 - **Status**: Active
+
+---
+
+### 42. Compliance Schedule
+
+- **Domain**: Statutory & Premises Compliance
+- **Problem**: Organisation and location-level obligations (FRA, fire drills, EICR, LEV, insurance, GDPR review, etc.) have no schedule of record; Certificates/ScheduledAudits shelves have no create path and must not be extended.
+- **Primary Persona(s)**: P2 (Quality Auditor), P3 (Risk Manager), P4 (System Administrator)
+- **Key User Stories**:
+  - As a compliance manager, I can see Current / Due soon / Overdue obligations for each premises (never "Expired").
+  - As a facilities manager, I can complete a fire drill or FRA and keep a durable occurrence record.
+  - As an auditor, I can evidence missed occurrences and link CAPA (Wave 2).
+- **Success Metrics**: Statutory overdue count; missed-occurrence rate; time-to-file evidence into the Governance Library.
+- **Journey Reference**: Journey 2 — Compliance Oversight (P2)
+- **API Surface**: Wave 1 — `GET/POST /api/v1/compliance-schedule/...` (`src/api/routes/compliance_schedule.py`). Flag defaults off.
+- **Data Entities**: `ComplianceRequirementTemplate`, `ComplianceRequirement`, `ComplianceRecord` (`src/domain/models/compliance_schedule.py`).
+- **Dependencies**: Locations, Evidence Assets, Document Library (filing Wave 2), CAPA (Wave 2), Notifications (Wave 2), Reference Numbers (CSR/CRC), Feature Flags (kill switch).
+- **Status**: Wave 0 foundations (flag default off)
+- **Note**: Certificates and ScheduledAudits remain read-only shelves with no create path; do not build Certificate POST here.
 
 ---
 

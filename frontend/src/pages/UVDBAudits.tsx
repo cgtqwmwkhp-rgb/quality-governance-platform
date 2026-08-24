@@ -57,6 +57,8 @@ import {
   UVDB_SECTIONS,
   buildUvdbBoardAlignment,
   formatUvdbAverageKpi,
+  gateUvdbSectionScoreForDisplay,
+  uvdbPendingScoreExclusionCopy,
   parseUvdbSection,
   type UvdbSectionId,
 } from './uvdbHelpers'
@@ -99,6 +101,9 @@ interface ScoreBreakdownEntry {
   max_score: number | null
   percentage: number | null
   score_source?: ScoreSource | null
+  assessed?: boolean
+  excluded_from_qualification?: boolean
+  exclusion_reason?: string | null
 }
 
 interface UVDBAuditDetail {
@@ -136,6 +141,9 @@ interface SectionScoreData {
   percentage: number | null
   audit_reference: string | null
   score_source?: ScoreSource | null
+  assessed?: boolean
+  excluded_from_qualification?: boolean
+  exclusion_reason?: string | null
 }
 
 interface UVDBContentCoverage {
@@ -258,7 +266,7 @@ function NotScored({ testId, compact = false }: { testId?: string; compact?: boo
 
 function ScoreBar({ percentage }: { percentage: number }) {
   const color =
-    percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-red-500'
+    percentage >= 80 ? 'bg-foreground/70' : percentage >= 50 ? 'bg-amber-500' : 'bg-destructive'
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
       <div
@@ -390,10 +398,10 @@ function AuditDetailPanel({
               <div
                 className={`h-full rounded-full transition-all ${
                   detail.percentage_score >= 80
-                    ? 'bg-emerald-500'
+                    ? 'bg-foreground/70'
                     : detail.percentage_score >= 50
                       ? 'bg-amber-500'
-                      : 'bg-red-500'
+                      : 'bg-destructive'
                 }`}
                 style={{ width: `${Math.min(detail.percentage_score, 100)}%` }}
               />
@@ -438,7 +446,8 @@ function AuditDetailPanel({
           {breakdown.length > 0 ? (
             <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
               {breakdown.map((item, index) => {
-                const pct = item.percentage
+                const excluded = item.excluded_from_qualification === true || item.assessed === false
+                const pct = excluded ? null : item.percentage
                 return (
                   <div key={`breakdown-${index}`} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
@@ -446,11 +455,18 @@ function AuditDetailPanel({
                         {String(item.label || `Section ${index + 1}`)}
                       </span>
                       <span className="text-muted-foreground whitespace-nowrap">
-                        {item.score ?? '—'} / {item.max_score ?? '—'}
+                        {excluded ? 'Excluded' : `${item.score ?? '—'} / ${item.max_score ?? '—'}`}
                       </span>
                     </div>
                     {pct != null ? (
                       <ScoreBar percentage={pct} />
+                    ) : excluded ? (
+                      <p
+                        className="text-xs text-muted-foreground"
+                        data-testid={`uvdb-breakdown-excluded-${index}`}
+                      >
+                        {uvdbPendingScoreExclusionCopy(item.exclusion_reason)}
+                      </p>
                     ) : (
                       <NotScored testId={`uvdb-breakdown-not-scored-${index}`} compact />
                     )}
@@ -1041,19 +1057,19 @@ export default function UVDBAudits() {
 
   const getSectionColor = (number: string) => {
     const colors: Record<string, string> = {
-      '1': 'bg-blue-500',
-      '2': 'bg-blue-500',
-      '3': 'bg-orange-500',
-      '4': 'bg-orange-500',
-      '5': 'bg-orange-500',
-      '6': 'bg-orange-500',
-      '7': 'bg-orange-500',
-      '8': 'bg-emerald-500',
-      '9': 'bg-emerald-500',
-      '10': 'bg-emerald-500',
-      '11': 'bg-emerald-500',
-      '12': 'bg-purple-500',
-      '13': 'bg-purple-500',
+      '1': 'bg-slate-600',
+      '2': 'bg-slate-600',
+      '3': 'bg-stone-500',
+      '4': 'bg-stone-500',
+      '5': 'bg-stone-500',
+      '6': 'bg-stone-500',
+      '7': 'bg-stone-500',
+      '8': 'bg-zinc-600',
+      '9': 'bg-zinc-600',
+      '10': 'bg-zinc-600',
+      '11': 'bg-zinc-600',
+      '12': 'bg-neutral-600',
+      '13': 'bg-neutral-600',
       '14': 'bg-warning',
       '15': 'bg-muted-foreground',
     }
@@ -1062,16 +1078,16 @@ export default function UVDBAudits() {
 
   if (loadState === 'setup_required' && setupRequired) {
     return (
-      <div className="min-h-screen bg-background text-foreground p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
-              <Award className="w-8 h-8 text-warning" />
-              {t('uvdb.title')}
-            </h1>
-            <p className="text-muted-foreground">{t('uvdb.subtitle')}</p>
+      <div className="space-y-6 animate-fade-in p-6 bg-background text-foreground min-h-screen">
+        <header className="flex items-center gap-4 mb-2">
+          <div className="p-3 bg-muted rounded-xl">
+            <Award className="w-8 h-8 text-foreground" />
           </div>
-        </div>
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">{t('uvdb.title')}</h1>
+            <p className="text-muted-foreground mt-1">{t('uvdb.subtitle')}</p>
+          </div>
+        </header>
         <SetupRequiredPanel
           response={setupRequired}
           onRetry={() => {
@@ -1083,17 +1099,19 @@ export default function UVDBAudits() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
-            <Award className="w-8 h-8 text-warning" />
-            {t('uvdb.title')}
-          </h1>
-          <p className="text-muted-foreground">{t('uvdb.subtitle')}</p>
+    <div className="space-y-6 animate-fade-in p-6 bg-background text-foreground min-h-screen">
+      {/* Header — aligned to Planet Mark muted shell (no full-bleed primary hero) */}
+      <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-muted rounded-xl">
+            <Award className="w-8 h-8 text-foreground" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">{t('uvdb.title')}</h1>
+            <p className="text-muted-foreground mt-1">{t('uvdb.subtitle')}</p>
+          </div>
         </div>
-        <div className="flex flex-col gap-3 mt-4 md:mt-0 md:items-end">
+        <div className="flex flex-col gap-3 lg:items-end">
           <DownstreamHandoffLinks
             auditRef={auditRefFromQuery || audits[0]?.audit_reference}
             importReviewPath={
@@ -1101,15 +1119,12 @@ export default function UVDBAudits() {
               getImportReviewPath(audits[0]?.audit_run_id, audits[0]?.import_job_id)
             }
           />
-          <button
-            onClick={handleOpenCreateAuditForm}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
-          >
+          <Button type="button" onClick={handleOpenCreateAuditForm} className="gap-2">
             <Plus className="w-4 h-4" />
             {t('uvdb.new_audit')}
-          </button>
+          </Button>
         </div>
-      </div>
+      </header>
 
       {reconciliationStatus !== 'idle' ? (
         <div
@@ -1251,61 +1266,59 @@ export default function UVDBAudits() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingAudit}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
-                >
+                <Button type="submit" disabled={isCreatingAudit}>
                   {isCreatingAudit ? 'Creating audit...' : 'Create Audit'}
-                </button>
+                </Button>
               </div>
             </div>
           </form>
         </div>
       ) : null}
 
-      {/* Protocol Info Banner */}
-      <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-primary-foreground mb-1">
-              {dashboard?.protocol_name || t('uvdb.protocol_ref')}
-            </h2>
-            <p className="text-primary-foreground/80">
-              {dashboard
-                ? t('uvdb.protocol_version_target', { version: dashboard.protocol_version })
-                : t('uvdb.protocol_version_target', { version: '—' })}
-            </p>
-            {dashboard?.content_coverage?.status === 'partial' ? (
-              <div
-                className="mt-3 max-w-3xl rounded-lg bg-primary-foreground/10 px-4 py-2 text-sm text-primary-foreground/90"
-                data-testid="uvdb-protocol-partial-honesty"
-              >
-                {t('uvdb.protocol_partial_honesty', {
-                  loaded: dashboard.content_coverage.loaded_sections.length,
-                  total: dashboard.content_coverage.total_sections,
-                })}
+      {/* Protocol summary — Card shell (Planet Mark-aligned; no primary gradient wash) */}
+      <Card data-testid="uvdb-protocol-summary">
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 space-y-2">
+              <h2 className="text-xl font-semibold text-foreground">
+                {dashboard?.protocol_name || t('uvdb.protocol_ref')}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {dashboard
+                  ? t('uvdb.protocol_version_target', { version: dashboard.protocol_version })
+                  : t('uvdb.protocol_version_target', { version: '—' })}
+              </p>
+              {dashboard?.content_coverage?.status === 'partial' ? (
+                <div
+                  className="mt-2 max-w-3xl rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm text-muted-foreground"
+                  data-testid="uvdb-protocol-partial-honesty"
+                >
+                  {t('uvdb.protocol_partial_honesty', {
+                    loaded: dashboard.content_coverage.loaded_sections.length,
+                    total: dashboard.content_coverage.total_sections,
+                  })}
+                </div>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-3 gap-4 sm:gap-6 shrink-0">
+              <div className="rounded-lg border border-border bg-surface/50 px-4 py-3 text-center">
+                <div className="text-2xl font-bold text-foreground">{loadedSectionCount}</div>
+                <div className="text-xs text-muted-foreground mt-1">{t('uvdb.sections_loaded')}</div>
               </div>
-            ) : null}
-          </div>
-          <div className="mt-4 md:mt-0 flex items-center gap-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">{loadedSectionCount}</div>
-              <div className="text-primary-foreground/80 text-sm">{t('uvdb.sections_loaded')}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">{totalMaxScore}</div>
-              <div className="text-primary-foreground/80 text-sm">{t('uvdb.max_score')}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">
-                {dashboard?.active_audits ?? 0}
+              <div className="rounded-lg border border-border bg-surface/50 px-4 py-3 text-center">
+                <div className="text-2xl font-bold text-foreground">{totalMaxScore}</div>
+                <div className="text-xs text-muted-foreground mt-1">{t('uvdb.max_score')}</div>
               </div>
-              <div className="text-primary-foreground/80 text-sm">Active audits</div>
+              <div className="rounded-lg border border-border bg-surface/50 px-4 py-3 text-center">
+                <div className="text-2xl font-bold text-foreground">
+                  {dashboard?.active_audits ?? 0}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">Active audits</div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Always-visible list controls (also used on Audit history tab) */}
       <div
@@ -1377,7 +1390,7 @@ export default function UVDBAudits() {
             className={cn(
               'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap',
               section === id
-                ? 'bg-primary text-primary-foreground shadow-sm'
+                ? 'bg-card text-foreground shadow-sm border border-border'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -1407,15 +1420,16 @@ export default function UVDBAudits() {
             {errorClass === ErrorClass.NOT_FOUND && t('uvdb.error_not_found')}
             {(errorClass === ErrorClass.UNKNOWN || !errorClass) && t('uvdb.error_unknown')}
           </p>
-          <button
+          <Button
+            type="button"
             onClick={() => {
               loadData()
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+            className="gap-2"
           >
             <RefreshCw className="w-4 h-4" />
             {t('uvdb.try_again')}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -1425,7 +1439,7 @@ export default function UVDBAudits() {
           {section === 'scores' && (
             <div className="space-y-6" data-testid="uvdb-section-scores">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Qualification performance
                 </p>
                 <h2 className="mt-1 text-2xl font-bold text-foreground">Scores and audit health</h2>
@@ -1494,7 +1508,7 @@ export default function UVDBAudits() {
                     standard: 'ISO 9001:2015',
                     titleKey: 'uvdb.quality',
                     icon: Shield,
-                    color: 'bg-blue-500',
+                    color: 'bg-slate-600',
                     sections: '1.1, 2.1-2.5, 12-13',
                     showPendingPdfNote: false,
                   },
@@ -1502,7 +1516,7 @@ export default function UVDBAudits() {
                     standard: 'ISO 14001:2015',
                     titleKey: 'uvdb.environmental',
                     icon: Leaf,
-                    color: 'bg-emerald-500',
+                    color: 'bg-zinc-600',
                     sections: '1.3, 8-11, 15',
                     showPendingPdfNote: true,
                   },
@@ -1510,7 +1524,7 @@ export default function UVDBAudits() {
                     standard: 'ISO 45001:2018',
                     titleKey: 'uvdb.ohs',
                     icon: HardHat,
-                    color: 'bg-orange-500',
+                    color: 'bg-stone-500',
                     sections: '1.2, 3-7, 14, 15',
                     showPendingPdfNote: true,
                   },
@@ -1518,7 +1532,7 @@ export default function UVDBAudits() {
                     standard: 'ISO 27001:2022',
                     titleKey: 'uvdb.info_security',
                     icon: Lock,
-                    color: 'bg-purple-500',
+                    color: 'bg-neutral-600',
                     sections: '2.3',
                     showPendingPdfNote: false,
                   },
@@ -1705,7 +1719,14 @@ export default function UVDBAudits() {
                   {sections.map((section) => {
                     const Icon = getSectionIcon(section.number)
                     const bgColor = getSectionColor(section.number)
-                    const scoreData = sectionScores[section.number]
+                    const rawScoreData = sectionScores[section.number]
+                    const scoreData = gateUvdbSectionScoreForDisplay(
+                      rawScoreData,
+                      section.content_status,
+                    )
+                    const isExcluded =
+                      Boolean(scoreData?.excluded_from_qualification) ||
+                      section.content_status === 'pending_protocol_pdf'
                     const isExpanded = expandedSection === section.number
                     const questions = sectionQuestions[section.number]
                     const isLoadingQuestions = loadingSectionQuestions === section.number
@@ -1729,7 +1750,7 @@ export default function UVDBAudits() {
                               <Icon className="w-6 h-6 text-white" />
                             </div>
                             <div className="flex flex-col items-end gap-1 text-right">
-                              {scoreData ? (
+                              {scoreData && !isExcluded ? (
                                 <>
                                   <div className="text-2xl font-bold text-success">
                                     {scoreData.score ?? '—'}
@@ -1749,6 +1770,16 @@ export default function UVDBAudits() {
                                   )}
                                   <ScoreProvenanceBadge source={scoreData.score_source} />
                                 </>
+                              ) : isExcluded ? (
+                                <>
+                                  <NotScored
+                                    testId={`uvdb-section-${section.number}-not-scored`}
+                                    compact
+                                  />
+                                  <div className="text-xs text-muted-foreground">
+                                    Excluded from qualification
+                                  </div>
+                                </>
                               ) : (
                                 <>
                                   <div className="text-2xl font-bold text-card-foreground">
@@ -1762,21 +1793,18 @@ export default function UVDBAudits() {
                             </div>
                           </div>
 
-                          {scoreData?.percentage != null && (
+                          {scoreData?.percentage != null && !isExcluded && (
                             <div className="mb-3">
                               <ScoreBar percentage={scoreData.percentage} />
                             </div>
                           )}
 
-                          {scoreData?.score_source === 'imported' &&
-                          section.content_status === 'pending_protocol_pdf' ? (
+                          {isExcluded ? (
                             <p
-                              className="mb-3 rounded border border-info/30 bg-info/10 px-2 py-1.5 text-xs text-info"
-                              data-testid={`uvdb-section-${section.number}-imported-note`}
+                              className="mb-3 rounded border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning"
+                              data-testid={`uvdb-section-${section.number}-excluded-note`}
                             >
-                              Score read from the imported report. This section&apos;s protocol
-                              questions are not loaded, so the figure has not been verified against
-                              UVDB scoring in this system.
+                              {uvdbPendingScoreExclusionCopy(scoreData?.exclusion_reason)}
                             </p>
                           ) : null}
 
@@ -1809,15 +1837,7 @@ export default function UVDBAudits() {
                               {Object.keys(section.iso_mapping).map((iso) => (
                                 <span
                                   key={iso}
-                                  className={`px-2 py-0.5 rounded text-xs ${
-                                    iso === '9001'
-                                      ? 'bg-blue-500/20 text-blue-400'
-                                      : iso === '14001'
-                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                        : iso === '45001'
-                                          ? 'bg-orange-500/20 text-orange-400'
-                                          : 'bg-purple-500/20 text-purple-400'
-                                  }`}
+                                  className="px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground border border-border"
                                 >
                                   {iso}
                                 </span>
@@ -1910,13 +1930,14 @@ export default function UVDBAudits() {
                     Search and status filters sit above the section tabs. This list shows synced
                     UVDB protocol audits only.
                   </p>
-                  <button
+                  <Button
+                    type="button"
                     onClick={handleOpenCreateAuditForm}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors shrink-0"
+                    className="gap-2 shrink-0"
                   >
                     <Plus className="w-4 h-4" />
                     {t('uvdb.new_audit')}
-                  </button>
+                  </Button>
                 </div>
                 {auditRefFromQuery && audits.length === 0 ? (
                   <div
@@ -2157,28 +2178,28 @@ export default function UVDBAudits() {
                           <td className="px-4 py-3 text-foreground">{row.uvdb_text}</td>
                           <td className="px-4 py-3 text-center">
                             {row.iso_9001.length > 0 && (
-                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                              <span className="px-2 py-1 bg-muted text-muted-foreground border border-border rounded text-xs">
                                 {row.iso_9001.join(', ')}
                               </span>
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
                             {row.iso_14001.length > 0 && (
-                              <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
+                              <span className="px-2 py-1 bg-muted text-muted-foreground border border-border rounded text-xs">
                                 {row.iso_14001.join(', ')}
                               </span>
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
                             {row.iso_45001.length > 0 && (
-                              <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs">
+                              <span className="px-2 py-1 bg-muted text-muted-foreground border border-border rounded text-xs">
                                 {row.iso_45001.join(', ')}
                               </span>
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
                             {row.iso_27001.length > 0 && (
-                              <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">
+                              <span className="px-2 py-1 bg-muted text-muted-foreground border border-border rounded text-xs">
                                 {row.iso_27001.join(', ')}
                               </span>
                             )}

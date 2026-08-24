@@ -48,7 +48,6 @@ import {
   actionsApi,
   evidenceAssetsApi,
   Action,
-  UserSearchResult,
   getApiErrorMessage,
   CreateFromRecordError,
 } from '../api/client'
@@ -57,6 +56,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
 import { Input } from '../components/ui/Input'
+import { PersonNameField } from '../components/PersonNameField'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { Switch } from '../components/ui/Switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
@@ -85,16 +86,17 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
-import { UserEmailSearch } from '../components/UserEmailSearch'
 import { getCapaLink } from '../components/investigations/handoffLinks'
 import { CaseCapaActionsPanel } from '../components/case/CaseCapaActionsPanel'
+import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
+import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 const SUPPORTED_EVIDENCE_MIME_PREFIXES = ['image/', 'video/']
 const SUPPORTED_EVIDENCE_MIME_TYPES = ['application/pdf']
 
 export default function RTADetail() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -111,6 +113,7 @@ export default function RTADetail() {
   const [creating, setCreating] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [editForm, setEditForm] = useState<RTAUpdate>({})
 
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
@@ -197,6 +200,7 @@ export default function RTADetail() {
       is_riddor_reportable: data.is_riddor_reportable,
       asset_id: data.asset_id ?? null,
       driver_name: data.driver_name,
+      driver_id: data.driver_id,
       driver_statement: data.driver_statement,
       driver_injured: data.driver_injured,
       driver_injury_details: data.driver_injury_details,
@@ -257,18 +261,35 @@ export default function RTADetail() {
     }
   }
 
+  const handleCloseCase = async (payload: { lessons_learnt?: string }) => {
+    if (!rta) return
+    const response = await rtasApi.update(rta.id, {
+      status: 'closed',
+      lessons_learnt: payload.lessons_learnt,
+    })
+    setRta(response.data)
+    populateEditForm(response.data)
+    toast.success(t('caseClosure.closed', 'Case closed'))
+  }
+
+  const handleReopenCase = async () => {
+    if (!rta) return
+    try {
+      const response = await rtasApi.update(rta.id, { status: CASE_REOPEN_STATUS.rta })
+      setRta(response.data)
+      populateEditForm(response.data)
+      toast.success(t('caseClosure.reopened', 'Case reopened'))
+    } catch (err) {
+      trackError(err, { component: 'RTADetail', action: 'reopenRta' })
+      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
+    }
+  }
+
   const handleSaveEdit = async () => {
     if (!rta) return
-    const { confirmCloseWithoutLessons } = await import('../lib/lessonsCloseGate')
-    if (
-      !confirmCloseWithoutLessons({
-        nextStatus: editForm.status,
-        previousStatus: rta.status,
-        lessons: editForm.lessons_learnt,
-      })
-    ) {
-      return
-    }
+    // Choosing Closed in Edit routes through the one close path: save the rest
+    // of the edit, then hand the status change to the summary dialog.
+    const closingFromEdit = !isCaseClosed('rta', rta.status) && isCaseClosed('rta', editForm.status)
     setSaving(true)
     try {
       const payload: RTAUpdate = {
@@ -286,10 +307,17 @@ export default function RTADetail() {
             ? { witnesses: editWitnesses }
             : undefined,
       }
+      // Omit unchanged status so no-op edits never hit transition validation.
+      if (payload.status === rta.status || closingFromEdit) {
+        delete payload.status
+      }
       const response = await rtasApi.update(rta.id, payload)
       setRta(response.data)
       setIsEditing(false)
       toast.success('Changes saved')
+      if (closingFromEdit) {
+        setShowCloseDialog(true)
+      }
     } catch (err) {
       trackError(err, { component: 'RTADetail', action: 'saveEdit' })
       toast.error(getApiErrorMessage(err))
@@ -454,9 +482,6 @@ export default function RTADetail() {
     }
   }
 
-  const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
-    setActionForm({ ...actionForm, assigned_to: email })
-  }
 
   const ACTION_STATUS_OPTIONS = [
     { value: 'open', label: 'Open', className: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
@@ -644,6 +669,17 @@ export default function RTADetail() {
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />{t('edit')}
               </Button>
+              <CaseLifecycleControls
+                caseType="rta"
+                caseId={rta.id}
+                status={rta.status}
+                onClose={handleCloseCase}
+                onReopen={handleReopenCase}
+                onOpenActions={() => navigate(capaHref)}
+                closeDialogOpen={showCloseDialog}
+                onCloseDialogOpenChange={setShowCloseDialog}
+                testIdPrefix="rta"
+              />
               <Button
                 variant="outline"
                 data-testid="rta-audit-this-collision"
@@ -1182,8 +1218,36 @@ export default function RTADetail() {
               {isEditing ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="rta-d1-name" className="text-sm font-medium text-muted-foreground">Driver Name</label>
-                    <Input id="rta-d1-name" value={editForm.driver_name || ''} onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })} className="mt-1" />
+                    <PersonNameField
+                      id="rta-d1-name"
+                      mode="hybrid"
+                      lang={i18n.language}
+                      label="Driver Name"
+                      value={
+                        editForm.driver_name
+                          ? {
+                              displayName: editForm.driver_name,
+                              engineerId: editForm.driver_id ?? null,
+                            }
+                          : null
+                      }
+                      onChange={(next) =>
+                        setEditForm((prev) => {
+                          const updated: RTAUpdate = {
+                            ...prev,
+                            driver_name: next?.displayName ?? '',
+                          }
+                          if (next?.engineerId != null) {
+                            updated.driver_id = next.engineerId
+                          } else {
+                            delete updated.driver_id
+                          }
+                          return updated
+                        })
+                      }
+                      testId="rta-edit-driver-name"
+                      className="mt-0"
+                    />
                   </div>
                   <div className="flex items-center gap-3 pt-6">
                     <Switch id="rta-d1-injured" checked={editForm.driver_injured || false} onCheckedChange={(c) => setEditForm({ ...editForm, driver_injured: c })} />
@@ -1482,7 +1546,23 @@ export default function RTADetail() {
               <label htmlFor="rta-action-title" className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.action_title_required')}</label>
               <Input id="rta-action-title" value={actionForm.title} onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })} placeholder={t('rtas.detail.action_title_placeholder')} required />
             </div>
-            <UserEmailSearch label={t('rtas.detail.assign_to')} value={actionForm.assigned_to} onChange={handleAssigneeChange} placeholder={t('rtas.detail.search_by_email')} required />
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-foreground">
+                {t('rtas.detail.assign_to')}
+              </span>
+              <EngineerPeoplePicker
+                valueLabel={actionForm.assigned_to}
+                requireLogin
+                onChange={(selection) =>
+                  setActionForm({
+                    ...actionForm,
+                    assigned_to: selection?.user?.email || selection?.label || '',
+                  })
+                }
+                placeholder={t('rtas.detail.search_employees', 'Search active employees…')}
+                testId="rta-action-assignee-picker"
+              />
+            </div>
             <div>
               <label htmlFor="rta-action-priority" className="block text-sm font-medium text-foreground mb-1">{t('common.priority')}</label>
               <Select value={actionForm.priority} onValueChange={(v) => setActionForm({ ...actionForm, priority: v })}>

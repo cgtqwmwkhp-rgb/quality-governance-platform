@@ -461,6 +461,14 @@ class AuditResponse(Base, TimestampMixin):
     # Notes
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Multi-tenancy — required; inherited from audit_runs via run_id, never from
+    # the caller. The column has existed in the database since
+    # 20260308_add_tenant_id_to_all_models but was never declared here, so no
+    # write path ever populated it. Declared with no migration in this step:
+    # the database column stays NULLABLE and pre-existing NULL rows stay
+    # readable (SQLAlchemy does not validate nullability on load).
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+
     # Relationships
     run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="responses")
 

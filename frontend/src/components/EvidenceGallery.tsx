@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { evidenceAssetsApi, type EvidenceAsset } from '../api/client'
 import { cn } from '../helpers/utils'
+import { canPreviewInApp, DocumentPreview } from './DocumentPreview'
 import { Button } from './ui/Button'
 import {
   Dialog,
@@ -44,8 +45,12 @@ type Props = {
   enableUpload?: boolean
   uploadSourceModule?: string
   uploadSourceId?: number
-  /** Called after every upload attempt completes (success or partial failure) so the caller can refetch. */
-  onUploadComplete?: () => void | Promise<void>
+  /**
+   * Called after every upload attempt completes (success or partial failure) so the
+   * caller can refetch. Optional result lists asset ids that uploaded successfully —
+   * callers that ignore the argument keep working.
+   */
+  onUploadComplete?: (result?: { uploadedAssetIds: number[] }) => void | Promise<void>
   uploadLabel?: string
   uploadAccept?: string
   maxFileSizeBytes?: number
@@ -59,6 +64,9 @@ const isImage = (asset: EvidenceAsset) => asset.content_type.startsWith('image/'
 
 const assetLabel = (asset: EvidenceAsset) =>
   asset.title || asset.original_filename || `Evidence #${asset.id}`
+
+const assetNeedsInlinePreview = (asset: EvidenceAsset) =>
+  canPreviewInApp(asset.content_type, asset.original_filename || asset.title)
 
 const isSupportedFileType = (file: File, prefixes: string[], types: string[]) =>
   prefixes.some((prefix) => file.type.startsWith(prefix)) || types.includes(file.type)
@@ -95,15 +103,17 @@ export function EvidenceGallery({
   const uploadReady = enableUpload && !!uploadSourceModule && uploadSourceId != null
   const canShowDelete = !!onDelete && canDelete
 
+  // Thumbnails: prefetch inline URLs for images only (grid tiles).
   useEffect(() => {
     let cancelled = false
     const images = assets.filter(isImage)
-    const imageIds = new Set(images.map((asset) => asset.id))
+    const assetIds = new Set(assets.map((asset) => asset.id))
 
+    // Drop URLs/failures for assets that left the list; keep non-image lightbox URLs.
     setPreviewUrls((current) =>
-      Object.fromEntries(Object.entries(current).filter(([id]) => imageIds.has(Number(id)))),
+      Object.fromEntries(Object.entries(current).filter(([id]) => assetIds.has(Number(id)))),
     )
-    setPreviewFailures((current) => new Set([...current].filter((id) => imageIds.has(id))))
+    setPreviewFailures((current) => new Set([...current].filter((id) => assetIds.has(id))))
 
     void Promise.all(
       images.map(async (asset) => {
@@ -111,6 +121,12 @@ export function EvidenceGallery({
           const response = await evidenceAssetsApi.getSignedUrl(asset.id, undefined, 'inline')
           if (!cancelled) {
             setPreviewUrls((current) => ({ ...current, [asset.id]: response.data.signed_url }))
+            setPreviewFailures((current) => {
+              if (!current.has(asset.id)) return current
+              const next = new Set(current)
+              next.delete(asset.id)
+              return next
+            })
           }
         } catch {
           if (!cancelled) {
@@ -124,6 +140,32 @@ export function EvidenceGallery({
       cancelled = true
     }
   }, [assets])
+
+  // Lightbox: ensure an inline URL for any Tier 1/2 previewable selection (PDF, video, audio, text).
+  useEffect(() => {
+    if (!selectedAsset || !assetNeedsInlinePreview(selectedAsset)) return
+    if (previewUrls[selectedAsset.id] || previewFailures.has(selectedAsset.id)) return
+
+    let cancelled = false
+    const assetId = selectedAsset.id
+
+    void (async () => {
+      try {
+        const response = await evidenceAssetsApi.getSignedUrl(assetId, undefined, 'inline')
+        if (!cancelled) {
+          setPreviewUrls((current) => ({ ...current, [assetId]: response.data.signed_url }))
+        }
+      } catch {
+        if (!cancelled) {
+          setPreviewFailures((current) => new Set(current).add(assetId))
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [previewFailures, previewUrls, selectedAsset])
 
   const moveSelection = useCallback((direction: -1 | 1) => {
     setSelectedAssetId((currentId) => {
@@ -184,6 +226,7 @@ export function EvidenceGallery({
     setUploadError(null)
     setUploading(true)
     const failures: string[] = []
+    const uploadedAssetIds: number[] = []
     try {
       for (const file of files) {
         if (!isSupportedFileType(file, allowedMimePrefixes, allowedMimeTypes)) {
@@ -195,12 +238,15 @@ export function EvidenceGallery({
           continue
         }
         try {
-          await evidenceAssetsApi.upload(file, {
+          const response = await evidenceAssetsApi.upload(file, {
             source_module: uploadSourceModule,
             source_id: uploadSourceId,
             title: file.name,
             visibility: 'internal_customer',
           })
+          if (typeof response.data?.id === 'number') {
+            uploadedAssetIds.push(response.data.id)
+          }
         } catch {
           failures.push(`${file.name} could not be uploaded.`)
         }
@@ -208,7 +254,7 @@ export function EvidenceGallery({
       if (failures.length > 0) {
         setUploadError(failures.join(' '))
       }
-      await onUploadComplete?.()
+      await onUploadComplete?.({ uploadedAssetIds })
     } finally {
       setUploading(false)
     }
@@ -344,23 +390,16 @@ export function EvidenceGallery({
               <DialogDescription>{selectedAsset.content_type}</DialogDescription>
             </DialogHeader>
             <div className="relative flex min-h-64 items-center justify-center overflow-hidden rounded-lg bg-muted">
-              {isImage(selectedAsset) && selectedPreviewUrl ? (
-                <img
-                  src={selectedPreviewUrl}
+              {selectedAsset && assetNeedsInlinePreview(selectedAsset) ? (
+                <DocumentPreview
+                  url={selectedPreviewUrl}
+                  contentType={selectedAsset.content_type}
+                  fileName={selectedAsset.original_filename || selectedAsset.title}
                   alt={assetLabel(selectedAsset)}
-                  className="max-h-[60vh] max-w-full object-contain"
+                  loading={!selectedPreviewUrl && !selectedPreviewFailed}
+                  loadFailed={selectedPreviewFailed}
+                  className="w-full"
                 />
-              ) : isImage(selectedAsset) ? (
-                <div className="p-8 text-center text-sm text-muted-foreground">
-                  {selectedPreviewFailed ? (
-                    <>
-                      <ImageOff className="mx-auto mb-2 h-10 w-10" aria-hidden="true" />
-                      Preview unavailable. You can still download this file.
-                    </>
-                  ) : (
-                    <>Loading preview…</>
-                  )}
-                </div>
               ) : (
                 <div className="p-8 text-center text-sm text-muted-foreground">
                   <FileText className="mx-auto mb-2 h-10 w-10" aria-hidden="true" />

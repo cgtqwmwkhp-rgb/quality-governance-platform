@@ -23,6 +23,13 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
+from tests._dsn_guard import assert_test_database_is_local  # noqa: E402
+
+# Checked before the DSN is used for anything, because src.main below opens an
+# engine at import time. setdefault means an exported DATABASE_URL wins, so this
+# is the point at which a shell still pointing at a live deployment is caught.
+assert_test_database_is_local()
+
 _DEFAULT_SQLITE_DB_PATH = Path(tempfile.gettempdir()) / f"qgp-test-integration-{os.getpid()}.db"
 _DEFAULT_INTEGRATION_DATABASE_URL = f"sqlite+aiosqlite:///{_DEFAULT_SQLITE_DB_PATH}"
 
@@ -104,6 +111,17 @@ class _MockUser:
 # Permission sets
 # ---------------------------------------------------------------------------
 
+# Every token here must appear in ENFORCED_PERMISSIONS
+# (src/domain/authz/catalogue.py); tests/unit/test_permission_catalogue.py fails
+# if one does not. Fourteen tokens were removed when that guard was added because
+# no code path checks them — four audit_template:* tokens whose routes are gated
+# on audit:* instead, plus a set of :read/:delete tokens for endpoints that are
+# gated by authentication or by CurrentSuperuser rather than by a permission.
+# Granting a token nothing ever asks for changed no test outcome, under either
+# this file's substring matching or the real exact-membership check in
+# User.has_permission. This list is intentionally still a subset of the
+# catalogue: it is one admin persona, not the full admin grant. The proposed full
+# grant is ADMIN_ROLE_PERMISSIONS in the catalogue module.
 _ADMIN_PERMS = ",".join(
     [
         "incident:create",
@@ -119,7 +137,6 @@ _ADMIN_PERMS = ",".join(
         "rta:update",
         "rta:delete",
         "policy:create",
-        "policy:read",
         "policy:update",
         "policy:delete",
         "action:create",
@@ -127,28 +144,23 @@ _ADMIN_PERMS = ",".join(
         "action:update",
         "action:delete",
         "capa:create",
-        "capa:read",
         "capa:update",
-        "capa:delete",
         "investigation:create",
-        "investigation:read",
         "investigation:update",
         "investigation:approve_customer_omit",
         "document:create",
         "document:read",
         "document:update",
+        "document:confirm_edge",
         "engineer:create",
-        "engineer:read",
         "engineer:update",
         "assessment:create",
-        "assessment:read",
         "assessment:update",
         "audit:create",
         "audit:read",
         "audit:update",
         "audit:delete",
         "standard:create",
-        "standard:read",
         "standard:update",
         "risk:create",
         "risk:read",
@@ -156,10 +168,11 @@ _ADMIN_PERMS = ",".join(
         "near_miss:create",
         "near_miss:read",
         "near_miss:update",
-        "audit_template:create",
-        "audit_template:read",
-        "audit_template:update",
-        "audit_template:delete",
+        "compliance_schedule:read",
+        "compliance_schedule:create",
+        "compliance_schedule:update",
+        "job:read",
+        "job:author",
     ]
 )
 
@@ -456,6 +469,21 @@ async def _seed_default_data():
         async with engine.begin() as conn:
             await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
             await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 2))"))
+            # Explicit id=1 inserts (e.g. get_or_create_default_template) leave the serial
+            # behind; without this, the next ORM insert collides on investigation_templates_pkey.
+            # Same class of hazard for audit_templates when tests mix API creates and ORM seeds.
+            await conn.execute(
+                text(
+                    "SELECT setval('investigation_templates_id_seq', "
+                    "GREATEST(COALESCE((SELECT MAX(id) FROM investigation_templates), 1), 1))"
+                )
+            )
+            await conn.execute(
+                text(
+                    "SELECT setval('audit_templates_id_seq', "
+                    "GREATEST(COALESCE((SELECT MAX(id) FROM audit_templates), 1), 1))"
+                )
+            )
 
     yield
 
@@ -767,3 +795,217 @@ def pytest_collection_modifyitems(config, items):
     New quarantine entries must include a valid future expiry date.
     """
     pass
+
+
+# ---------------------------------------------------------------------------
+#  Policy-acknowledgment honesty suites: a database with a genuinely absent table
+# ---------------------------------------------------------------------------
+# Named ``ack_scratch`` rather than ``scratch`` because two migration-repair
+# suites already define a local fixture called ``scratch``; a conftest fixture of
+# that name would be shadowed in some modules and not others, which is exactly
+# the sort of thing nobody notices until it misleads them.
+
+
+@pytest.fixture
+async def ack_scratch(tmp_path):
+    """A database carrying the app's declared schema, owned by one test.
+
+    See ``tests/integration/_policy_ack_scratch`` for why the shared harness
+    cannot be used to observe a missing table.
+    """
+    import src.domain.models  # noqa: F401  — registers models on Base.metadata
+    from src.infrastructure.database import Base
+    from tests.integration._policy_ack_scratch import ScratchDatabase, drop_scratch_database, make_scratch_engine
+
+    engine, created_name = await make_scratch_engine(tmp_path)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    try:
+        yield ScratchDatabase(engine)
+    finally:
+        await engine.dispose()
+        if created_name is not None:
+            await drop_scratch_database(created_name)
+
+
+# ---------------------------------------------------------------------------
+#  Document-control disclosure suite: a database missing the seven tables
+#  production is missing
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def doc_control_scratch(tmp_path):
+    """A database carrying the app's declared schema, owned by one test.
+
+    See ``tests/integration/_document_control_scratch`` for why the shared
+    harness cannot be used: it runs ``create_all``, which supplies exactly the
+    tables production lacks.
+    """
+    import src.domain.models  # noqa: F401  — registers models on Base.metadata
+    from src.infrastructure.database import Base
+    from tests.integration._document_control_scratch import ScratchDatabase, drop_scratch_database, make_scratch_engine
+
+    engine, created_name = await make_scratch_engine(tmp_path)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    scratch = ScratchDatabase(engine)
+    await scratch.seed_tenant_and_user()
+
+    try:
+        yield scratch
+    finally:
+        await engine.dispose()
+        if created_name is not None:
+            await drop_scratch_database(created_name)
+
+
+@pytest.fixture
+async def doc_control_scratch_client(doc_control_scratch):
+    """An authenticated client whose requests read the scratch database."""
+    from src.infrastructure.database import get_db
+    from src.main import app
+    from tests.integration._document_control_scratch import TENANT_ID, USER_ID
+
+    async def _get_scratch_db():
+        async with doc_control_scratch.sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _get_scratch_db
+    token = _generate_test_jwt(user_id=str(USER_ID), tenant_id=TENANT_ID, role="admin")
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+# ---------------------------------------------------------------------------
+#  A database whose schema has genuinely drifted from the models (C-7, C-53)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def drifted_scratch():
+    """A database this test owns, whose schema can be made to disagree with the ORM.
+
+    See ``tests/integration/_fabricated_zero_scratch`` for why the shared harness
+    structurally cannot host this: it runs ``create_all``, so its schema always
+    matches the models and a count can never fail.
+    """
+    import src.domain.models  # noqa: F401  — registers models on Base.metadata
+    from src.infrastructure.database import Base
+    from tests.integration._fabricated_zero_scratch import drop_drifted_database, is_postgres, make_drifted_engine
+
+    if not is_postgres(os.environ.get("DATABASE_URL", "")):
+        pytest.skip(
+            "schema drift can only be induced on PostgreSQL: SQLite's DROP COLUMN "
+            "support is version-dependent and it does not abort the transaction, "
+            "which is half of what these tests measure. Set DATABASE_URL to "
+            "PostgreSQL (CI does)."
+        )
+
+    engine, created_name = await make_drifted_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    from tests.integration._fabricated_zero_scratch import DriftedDatabase
+
+    scratch = DriftedDatabase(engine)
+    await scratch.seed_tenant_and_user()
+
+    try:
+        yield scratch
+    finally:
+        await engine.dispose()
+        await drop_drifted_database(created_name)
+
+
+@pytest.fixture
+async def drifted_scratch_client(drifted_scratch):
+    """An authenticated client whose requests read the drifted database."""
+    from src.infrastructure.database import get_db
+    from src.main import app
+    from tests.integration._fabricated_zero_scratch import TENANT_ID, USER_ID
+
+    async def _get_drifted_db():
+        async with drifted_scratch.sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _get_drifted_db
+    token = _generate_test_jwt(user_id=str(USER_ID), tenant_id=TENANT_ID, role="admin")
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+# ---------------------------------------------------------------------------
+#  A database the migrations built and create_all never touched
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def alembic_only_schema():
+    """The schema a deployment actually gets, for one test session.
+
+    Session-scoped because it costs one ``alembic upgrade head``. Synchronous
+    because a session-scoped async fixture would outlive the function-scoped event
+    loop this repository configures.
+
+    See ``tests/integration/_alembic_only_schema`` for why the shared harness and
+    the ``doc_control_scratch`` harness both structurally cannot answer the
+    question this fixture exists for.
+    """
+    import sqlalchemy as sa
+
+    from tests.integration import _alembic_only_schema as harness
+
+    url = os.environ["DATABASE_URL"]
+    if not harness.is_postgres(url):
+        pytest.skip(
+            "the migration chain is PostgreSQL-only, so a SQLite run cannot build "
+            "the schema a deployment gets. Set DATABASE_URL to PostgreSQL (CI does)."
+        )
+
+    schema = harness.build(url)
+    try:
+        yield schema
+    finally:
+        schema.engine.dispose()
+        harness.drop(url, sa.engine.make_url(schema.url).database)
+
+
+@pytest.fixture
+async def ack_scratch_client(ack_scratch):
+    """An authenticated client whose requests read the scratch database."""
+    from src.infrastructure.database import get_db
+    from src.main import app
+    from tests.integration._policy_ack_scratch import TENANT_ID, USER_ID
+
+    async def _get_scratch_db():
+        async with ack_scratch.sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _get_scratch_db
+    token = _generate_test_jwt(user_id=str(USER_ID), tenant_id=TENANT_ID, role="admin")
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_db, None)

@@ -42,6 +42,7 @@ from src.domain.models.form_config import Contract, FormField, FormStep, FormTem
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.form_config_service import FormConfigService
+from src.domain.services.lookup_enum_contract import ensure_enum_backed_code
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -181,6 +182,7 @@ async def create_form_template(
         event_type="form_template.created",
         entity_type="form_template",
         entity_id=template.id,
+        entity_name=template.name,
         action="created",
         user_id=current_user.id,
         payload={"name": template.name, "form_type": template.form_type},
@@ -283,6 +285,7 @@ async def update_form_template(
         event_type="form_template.updated",
         entity_type="form_template",
         entity_id=template.id,
+        entity_name=template.name,
         action="updated",
         user_id=current_user.id,
         payload=update_data,
@@ -336,6 +339,7 @@ async def delete_form_template(
         event_type="form_template.deleted",
         entity_type="form_template",
         entity_id=template.id,
+        entity_name=template.name,
         action="deleted",
         user_id=current_user.id,
         payload={"name": template.name},
@@ -661,6 +665,7 @@ async def create_contract(
         event_type="contract.created",
         entity_type="contract",
         entity_id=contract.id,
+        entity_name=contract.name,
         action="created",
         user_id=current_user.id,
         payload={"name": contract.name, "code": contract.code},
@@ -727,6 +732,7 @@ async def update_contract(
         event_type="contract.updated",
         entity_type="contract",
         entity_id=contract.id,
+        entity_name=contract.name,
         action="updated",
         user_id=current_user.id,
         payload=update_data,
@@ -762,6 +768,7 @@ async def delete_contract(
         event_type="contract.deleted",
         entity_type="contract",
         entity_id=contract.id,
+        entity_name=contract.name,
         action="deleted",
         user_id=current_user.id,
         payload={"name": contract.name},
@@ -921,6 +928,7 @@ async def create_lookup_option(
     """Create a new lookup option."""
     # Path category is authoritative (body category may be omitted by Admin UI).
     data.category = category
+    ensure_enum_backed_code(category, data.code)
 
     option = LookupOption(
         category=category,
@@ -963,6 +971,8 @@ async def update_lookup_option(
         raise NotFoundError(f"Lookup option {option_id} not found in category '{category}'")
 
     update_data = data.model_dump(exclude_unset=True)
+    if isinstance(update_data.get("code"), str):
+        ensure_enum_backed_code(category, update_data["code"])
     for field, value in update_data.items():
         setattr(option, field, value)
 

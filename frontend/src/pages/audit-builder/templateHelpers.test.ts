@@ -5,11 +5,14 @@ import {
   EXECUTABLE_QUESTION_TYPES,
   UNSUPPORTED_PUBLISH_QUESTION_TYPES,
   buildApplicabilityRulesPayload,
+  clauseTokensFromApi,
   getUnpublishableQuestionIssues,
   isPublishableQuestionType,
   mapAISectionsToLocal,
+  parseClauseTokens,
   remapConditionalLogicSourceIds,
 } from './templateHelpers'
+import type { Question } from './types'
 
 describe('templateHelpers', () => {
   it('exposes publishable type guardrails aligned with PR-A backend', () => {
@@ -128,6 +131,38 @@ describe('templateHelpers', () => {
         allowed_types: ['document'],
       },
     })
+    expect(payload).not.toHaveProperty('risk_category')
+  })
+
+  it('sends risk_category when set and omits it when empty', () => {
+    const withRisk = buildQuestionPayload(
+      {
+        id: 'q-risk',
+        text: 'Risked question',
+        type: 'yes_no',
+        required: true,
+        weight: 1,
+        evidenceRequired: false,
+        failureTriggersAction: false,
+        riskLevel: 'high',
+      },
+      0,
+    )
+    expect(withRisk).toMatchObject({ risk_category: 'high' })
+
+    const withoutRisk = buildQuestionPayload(
+      {
+        id: 'q-no-risk',
+        text: 'Plain question',
+        type: 'yes_no',
+        required: true,
+        weight: 1,
+        evidenceRequired: false,
+        failureTriggersAction: false,
+      },
+      0,
+    )
+    expect(withoutRisk).not.toHaveProperty('risk_category')
   })
 
   it('maps criticality and conditional_logic from backend questions', () => {
@@ -347,5 +382,139 @@ describe('templateHelpers', () => {
       sort_order: 2,
       applicability_rules: { assessment_modes: ['spot_check'], asset_type_ids: null },
     })
+  })
+})
+
+/**
+ * PX-425a: the ISO Clause box used to reach neither `regulatory_reference` nor
+ * `clause_ids`, so every question-generated finding was born without a clause
+ * token and the standards matrix could not join it to a cell.
+ */
+describe('builder ISO Clause → clause tokens (PX-425a)', () => {
+  const baseQuestion: Question = {
+    id: 'q-clause',
+    text: 'Is design change control evidenced?',
+    type: 'yes_no',
+    required: true,
+    weight: 1,
+    evidenceRequired: false,
+    failureTriggersAction: true,
+  }
+
+  it('parses the free-text box into trimmed, de-duplicated tokens', () => {
+    expect(parseClauseTokens('9001-8.5.1')).toEqual(['9001-8.5.1'])
+    expect(parseClauseTokens(' 7.2 , 8.5.1 ;\n9001-9.1 ')).toEqual(['7.2', '8.5.1', '9001-9.1'])
+    expect(parseClauseTokens('7.2, 7.2, 7.2')).toEqual(['7.2'])
+    expect(parseClauseTokens('Clause 7.2')).toEqual(['Clause 7.2'])
+    expect(parseClauseTokens('')).toEqual([])
+    expect(parseClauseTokens('   ')).toEqual([])
+    expect(parseClauseTokens(undefined)).toEqual([])
+    expect(parseClauseTokens(null)).toEqual([])
+  })
+
+  it('does not invent a framework prefix for a bare clause number', () => {
+    expect(parseClauseTokens('8.5.1')).toEqual(['8.5.1'])
+  })
+
+  it('sends the clause on both surfaces the backend reads', () => {
+    const payload = buildQuestionPayload({ ...baseQuestion, isoClause: '9001-8.5.1' }, 0, 5)
+    expect(payload.clause_ids).toEqual(['9001-8.5.1'])
+    expect(payload.regulatory_reference).toBe('9001-8.5.1')
+  })
+
+  it('sends explicit nulls when the box is empty so clearing it clears the mapping', () => {
+    const payload = buildQuestionPayload({ ...baseQuestion, isoClause: '  ' }, 0)
+    expect(payload.clause_ids).toBeNull()
+    expect(payload.regulatory_reference).toBeNull()
+
+    const never = buildQuestionPayload(baseQuestion, 0)
+    expect(never.clause_ids).toBeNull()
+    expect(never.regulatory_reference).toBeNull()
+  })
+
+  it('carries pre-existing integer catalogue ids through a save alongside new tokens', () => {
+    const payload = buildQuestionPayload(
+      { ...baseQuestion, isoClause: '8.5.1', clauseCatalogIds: [42] },
+      0,
+    )
+    expect(payload.clause_ids).toEqual([42, '8.5.1'])
+  })
+
+  it('keeps catalogue ids when the author clears the clause text', () => {
+    const payload = buildQuestionPayload({ ...baseQuestion, clauseCatalogIds: [42] }, 0)
+    expect(payload.clause_ids).toEqual([42])
+  })
+
+  it('splits token strings from catalogue ids when reading a question back', () => {
+    expect(clauseTokensFromApi(['9001-8.5.1', 42, '', '  '])).toEqual(['9001-8.5.1'])
+    expect(clauseTokensFromApi(null)).toEqual([])
+  })
+
+  it('round-trips a question mapped only by clause_ids without wiping the tokens', () => {
+    const template = mapApiToTemplate(
+      {
+        id: 3,
+        name: 'ISO 9001 mock audit',
+        version: 1,
+        is_published: false,
+        created_at: '2026-08-19T00:00:00Z',
+        sections: [
+          {
+            id: 1,
+            title: 'Operation',
+            weight: 1,
+            sort_order: 0,
+            questions: [
+              {
+                id: 1,
+                question_text: 'Is design change control evidenced?',
+                question_type: 'yes_no',
+                clause_ids: ['9001-8.5.1', 42],
+              },
+            ],
+          },
+        ],
+      },
+      {},
+      {},
+    )
+
+    const question = template.sections[0].questions[0]
+    expect(question.isoClause).toBe('9001-8.5.1')
+    expect(question.clauseCatalogIds).toEqual([42])
+    expect(buildQuestionPayload(question, 0).clause_ids).toEqual([42, '9001-8.5.1'])
+  })
+
+  it('prefers regulatory_reference over stored tokens when both exist', () => {
+    const template = mapApiToTemplate(
+      {
+        id: 4,
+        name: 'ISO 9001 mock audit',
+        version: 1,
+        is_published: false,
+        created_at: '2026-08-19T00:00:00Z',
+        sections: [
+          {
+            id: 1,
+            title: 'Operation',
+            weight: 1,
+            sort_order: 0,
+            questions: [
+              {
+                id: 1,
+                question_text: 'Q',
+                question_type: 'yes_no',
+                regulatory_reference: '9001-8.5.1',
+                clause_ids: ['9001-8.5.1'],
+              },
+            ],
+          },
+        ],
+      },
+      {},
+      {},
+    )
+    expect(template.sections[0].questions[0].isoClause).toBe('9001-8.5.1')
+    expect(template.sections[0].questions[0].clauseCatalogIds).toBeUndefined()
   })
 })

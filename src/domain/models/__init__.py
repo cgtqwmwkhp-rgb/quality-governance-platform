@@ -65,6 +65,17 @@ from src.domain.models.competence_gap import (
 )
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
+from src.domain.models.compliance_schedule import (
+    ComplianceFilingStatus,
+    ComplianceOcrDraftStatus,
+    ComplianceOcrFilingStatus,
+    ComplianceRecord,
+    ComplianceRecordOutcome,
+    ComplianceRequirement,
+    ComplianceRequirementTemplate,
+    ComplianceScheduleAnchor,
+    ComplianceScheduleOcrDraft,
+)
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
@@ -104,8 +115,11 @@ from src.domain.models.document_control import (
     ObsoleteDocumentRecord,
 )
 
+# Doc Graph (ADR-0021 Wave 0)
+from src.domain.models.document_graph import DocumentEdge, DocumentEdgeMethod, DocumentEdgeStatus, DocumentEdgeType
+
 # Governance Library taxonomy (Wave W0)
-from src.domain.models.document_library import DocumentCategory, DocumentTag, PelDocRefCounter
+from src.domain.models.document_library import DocumentCategory, DocumentFunction, DocumentTag, PelDocRefCounter
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 from src.domain.models.engineer import (
     CompetencyLifecycleState,
@@ -196,6 +210,17 @@ from src.domain.models.iso27001 import (
     StatementOfApplicability,
     SupplierSecurityAssessment,
 )
+
+# Job Lifecycle (ADR-0022 / JL-1)
+from src.domain.models.job_lifecycle import (
+    JobCell,
+    JobCellDocument,
+    JobCellLink,
+    JobLane,
+    JobStep,
+    JobType,
+    JobTypeBaseline,
+)
 from src.domain.models.legal_hold import LegalHoldStatus, MatterLegalHold
 
 # Governance Library review packs (Wave W3)
@@ -252,7 +277,9 @@ from src.domain.models.safety_insight import (
     SafetyInsightTheme,
     SafetyInsightThemeCase,
 )
+from src.domain.models.sso_provisioning import SSOProvisioningMatchBasis, SSOProvisioningRequest, SSOProvisioningStatus
 from src.domain.models.standard import Clause, Control, Standard
+from src.domain.models.standards_alignment import AlignmentEdge, AlignmentVerdict, MatrixVersion, MatrixVersionStatus
 from src.domain.models.tenant import Tenant, TenantInvitation, TenantUser
 from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.models.training_matrix import (
@@ -299,6 +326,11 @@ __all__ = [
     "Standard",
     "Clause",
     "Control",
+    # Standards alignment matrix (5064)
+    "MatrixVersion",
+    "MatrixVersionStatus",
+    "AlignmentEdge",
+    "AlignmentVerdict",
     # Audit models
     "Asset",
     "AssetAssignmentEvent",
@@ -318,6 +350,18 @@ __all__ = [
     "ComplianceEvidenceLink",
     "EvidenceLinkMethod",
     "EvidenceLinkStatus",
+    "ComplianceRequirementTemplate",
+    "ComplianceRequirement",
+    "ComplianceRecord",
+    "ComplianceScheduleAnchor",
+    "ComplianceFilingStatus",
+    "ComplianceRecordOutcome",
+    "ComplianceOcrDraftStatus",
+    "ComplianceOcrFilingStatus",
+    "ComplianceScheduleOcrDraft",
+    "SSOProvisioningRequest",
+    "SSOProvisioningStatus",
+    "SSOProvisioningMatchBasis",
     "AiDecisionLog",
     "DocumentDiscussionMessage",
     "DocumentDiscussionThread",
@@ -409,10 +453,24 @@ __all__ = [
     "DocumentTrainingLink",
     "DocumentAccessLog",
     "ObsoleteDocumentRecord",
-    # Governance Library taxonomy (Wave W0)
+    # Governance Library taxonomy (Wave W0) + function axis (WA-2 / ADR-0023)
     "DocumentCategory",
+    "DocumentFunction",
     "DocumentTag",
     "PelDocRefCounter",
+    # Doc Graph (ADR-0021 Wave 0)
+    "DocumentEdge",
+    "DocumentEdgeType",
+    "DocumentEdgeStatus",
+    "DocumentEdgeMethod",
+    # Job Lifecycle (ADR-0022 / JL-1)
+    "JobType",
+    "JobLane",
+    "JobStep",
+    "JobCell",
+    "JobCellDocument",
+    "JobCellLink",
+    "JobTypeBaseline",
     # Governance Library review packs (Wave W3)
     "LibraryReviewPack",
     "LibraryRegulatoryFinding",

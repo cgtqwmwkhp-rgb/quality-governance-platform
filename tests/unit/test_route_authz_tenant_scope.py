@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -86,6 +87,25 @@ async def test_audit_service_list_runs_sql_exact_tenant_only():
 
     for stmt in captured:
         _assert_exact_tenant_sql(_sql(stmt), 42)
+
+
+@pytest.mark.asyncio
+async def test_audit_service_list_runs_q_sql_exact_tenant_and_ilike():
+    captured: list = []
+
+    async def _execute(stmt):
+        captured.append(stmt)
+        return _FakeResult(0)
+
+    service = AuditService(db=SimpleNamespace(execute=_execute))
+    await service.list_runs(42, page=1, page_size=20, q="Wickford")
+
+    assert captured, "expected count + page queries"
+    for stmt in captured:
+        sql = _sql(stmt)
+        _assert_exact_tenant_sql(sql, 42)
+        assert "LIKE" in sql
+        assert "WICKFORD" in sql
 
 
 @pytest.mark.asyncio
@@ -392,6 +412,393 @@ async def test_rtas_list_requires_tenant_for_non_superuser():
     assert exc.value.status_code == 403
 
 
+# ---------------------------------------------------------------------------
+# Superuser twins of the list endpoints above (B-13 siblings)
+#
+# `list_near_misses`, `list_rtas`, `list_complaints` and `list_risks` each
+# guarded the tenant filter with an inline `if not current_user.is_superuser:`,
+# which is the same defect B-13 fixed on the incident register expressed a
+# different way: the register spanned every tenant while the executive
+# dashboard tile beside it (`complaints.register_total`, `rtas.total`) stayed
+# scoped to the caller's own, so the two surfaces described different
+# populations. `list_risks` has no dashboard twin to contradict, but `risks`
+# is a FORCE-RLS table of C3-confidential rows whose policies are inert under
+# the application's `rolbypassrls` connection, so the route predicate is the
+# only thing scoping the read at all.
+#
+# Access to a single cross-tenant record by id is untouched on every one of
+# them — only the enumeration is withdrawn.
+# ---------------------------------------------------------------------------
+
+
+def _superuser(tenant_id: int | None) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=2,
+        email="root@test.example.com",
+        is_superuser=True,
+        tenant_id=tenant_id,
+        has_permission=lambda *_: True,
+    )
+
+
+class _CountThenRowsResult:
+    """One result object that answers both the count query and the page query."""
+
+    def __init__(self, count: int = 0):
+        self._count = count
+
+    def scalar(self):
+        return self._count
+
+    def scalar_one(self):
+        return self._count
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return []
+
+
+def _capturing_db() -> tuple[SimpleNamespace, list]:
+    statements: list = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return _CountThenRowsResult()
+
+    return SimpleNamespace(execute=AsyncMock(side_effect=execute)), statements
+
+
+@pytest.mark.asyncio
+async def test_near_miss_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import near_miss as near_miss_routes
+
+    db, statements = _capturing_db()
+
+    await near_miss_routes.list_near_misses(
+        db=db,
+        current_user=_superuser(77),
+        page=1,
+        page_size=20,
+        status_filter=None,
+        priority=None,
+        contract=None,
+        reporter_email=None,
+        asset_id=None,
+        ids=None,
+    )
+
+    assert statements, "expected count + page queries"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_near_miss_list_requires_tenant_for_a_superuser():
+    from src.api.routes import near_miss as near_miss_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await near_miss_routes.list_near_misses(
+            db=db,
+            current_user=_superuser(None),
+            page=1,
+            page_size=20,
+            status_filter=None,
+            priority=None,
+            contract=None,
+            reporter_email=None,
+            asset_id=None,
+            ids=None,
+        )
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_rtas_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import rtas as rtas_routes
+
+    db, statements = _capturing_db()
+
+    await rtas_routes.list_rtas(
+        db=db,
+        current_user=_superuser(77),
+        request_id="req-superuser-rta-list",
+        page=1,
+        page_size=10,
+        severity=None,
+        status_filter=None,
+        reporter_email=None,
+        asset_id=None,
+        ids=None,
+    )
+
+    assert statements, "expected count + page queries"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_rtas_list_requires_tenant_for_a_superuser():
+    from src.api.routes import rtas as rtas_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await rtas_routes.list_rtas(
+            db=db,
+            current_user=_superuser(None),
+            request_id="req-superuser-rta-list",
+            page=1,
+            page_size=10,
+            severity=None,
+            status_filter=None,
+            reporter_email=None,
+            asset_id=None,
+            ids=None,
+        )
+    # 403 must survive the broad `except Exception` that turns query faults into
+    # 500/503 in this handler, so assert the code rather than just the raise.
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_complaints_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import complaints as complaints_routes
+
+    db, statements = _capturing_db()
+
+    await complaints_routes.list_complaints(
+        db=db,
+        current_user=_superuser(77),
+        request_id="req-superuser-complaint-list",
+        page=1,
+        page_size=20,
+        status_filter=None,
+        complainant_email=None,
+        owner=None,
+        ids=None,
+    )
+
+    assert statements, "expected count + page queries"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_complaints_list_requires_tenant_for_a_superuser():
+    from src.api.routes import complaints as complaints_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await complaints_routes.list_complaints(
+            db=db,
+            current_user=_superuser(None),
+            request_id="req-superuser-complaint-list",
+            page=1,
+            page_size=20,
+            status_filter=None,
+            complainant_email=None,
+            owner=None,
+            ids=None,
+        )
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+def _capturing_db_with_scalar() -> tuple[SimpleNamespace, list]:
+    """`list_risks` counts through `db.scalar` and pages through `db.execute`."""
+    statements: list = []
+
+    async def scalar(statement):
+        statements.append(statement)
+        return 0
+
+    async def execute(statement):
+        statements.append(statement)
+        return _CountThenRowsResult()
+
+    return (
+        SimpleNamespace(scalar=AsyncMock(side_effect=scalar), execute=AsyncMock(side_effect=execute)),
+        statements,
+    )
+
+
+@pytest.mark.asyncio
+async def test_risks_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    await risks_routes.list_risks(
+        db=db,
+        current_user=_superuser(77),
+        page=1,
+        page_size=20,
+        search=None,
+        category=None,
+        status_filter=None,
+        risk_level=None,
+        owner_id=None,
+    )
+
+    assert len(statements) == 2, "expected the count query and the page query"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_risks_list_requires_tenant_for_a_superuser():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    with pytest.raises(HTTPException) as exc:
+        await risks_routes.list_risks(
+            db=db,
+            current_user=_superuser(None),
+            page=1,
+            page_size=20,
+            search=None,
+            category=None,
+            status_filter=None,
+            risk_level=None,
+            owner_id=None,
+        )
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_risks_list_ignores_a_superuser_flag_on_every_other_filter():
+    """The other query parameters must not reopen the bypass.
+
+    `search`, `category`, `status`, `risk_level` and `owner_id` each append a
+    predicate after the tenant filter. Exercising them together pins that none
+    of them rebuilds the statement from an unscoped `select(Risk)` — a plausible
+    way for the leak to return once the conditional is gone.
+    """
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    await risks_routes.list_risks(
+        db=db,
+        current_user=_superuser(77),
+        page=1,
+        page_size=20,
+        search="pump",
+        category="operational",
+        status_filter="open",
+        risk_level="high",
+        owner_id=5,
+    )
+
+    assert len(statements) == 2
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+# ---------------------------------------------------------------------------
+# The aggregates beside the register (B-13 follow-up to #1513)
+#
+# `get_risk_statistics` and `get_risk_matrix` kept the bypass #1513 removed from
+# `list_risks`, spelled `tf = true()` rather than as a skipped filter call. A
+# tenant-bound superuser therefore paged a scoped register and read every
+# tenant's totals in the statistics and matrix beside it, so the two surfaces
+# answered the same question differently.
+#
+# Both handlers thread one predicate through several statements, so every
+# statement they execute is asserted rather than a nominated one: an eighth
+# sub-query added later without the predicate is the way this leak returns.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_risk_statistics_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db()
+
+    await risks_routes.get_risk_statistics(db=db, current_user=_superuser(77))
+
+    assert len(statements) == 7, "every statistics sub-query must be accounted for"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_risk_statistics_requires_tenant_for_a_superuser():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await risks_routes.get_risk_statistics(db=db, current_user=_superuser(None))
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_risk_matrix_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db()
+
+    await risks_routes.get_risk_matrix(db=db, current_user=_superuser(77))
+
+    assert len(statements) == 1
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_risk_matrix_requires_tenant_for_a_superuser():
+    from src.api.routes import risks as risks_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await risks_routes.get_risk_matrix(db=db, current_user=_superuser(None))
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+def test_risk_aggregate_routes_never_branch_on_superuser():
+    """Neither aggregate may read `is_superuser` at all.
+
+    The behavioural tests above pin what the current statements do; this pins
+    the shape, because the bypass was originally written as `tf = true()` and
+    would be just as easy to reintroduce as an unfiltered `select` guarded by a
+    fresh conditional. `list_risks` is pinned by
+    `test_list_route_tenant_filters_are_never_reached_conditionally` instead —
+    it applies the shared helper, which these two cannot, because one predicate
+    is reused across several differently-shaped aggregate statements.
+    """
+    from src.api.routes import risks
+
+    for handler in (risks.get_risk_statistics, risks.get_risk_matrix):
+        source = inspect.getsource(handler)
+        # Substring rather than AST here: the flag was read two ways across
+        # these routes (`current_user.is_superuser` and a `getattr` string),
+        # and only one of those is an attribute node.
+        assert "is_superuser" not in source, (
+            f"{handler.__name__} reads is_superuser; the aggregates must describe "
+            "the same population as the register list for every caller"
+        )
+        tree = ast.parse(source)
+        conditional = [node for node in ast.walk(tree) if isinstance(node, ast.If)]
+        assert not any(
+            "require_tenant_id" in ast.dump(node) for node in conditional
+        ), f"{handler.__name__} demands a tenant only on some path"
+        assert "require_tenant_id" in ast.dump(tree), f"{handler.__name__} no longer demands a tenant at all"
+
+
 def test_apply_tenant_filter_pattern_on_models():
     """Sanity: shared helper exact-match SQL for models used by fixed routes."""
     for model, tid in ((AuditTemplate, 1), (AuditRun, 2), (AuditFinding, 3), (Risk, 4), (IncidentRunningSheetEntry, 5)):
@@ -426,6 +833,11 @@ def test_route_source_guards_drop_null_inclusive_list_patterns():
 
     src = inspect.getsource(documents._scope_stmt_to_current_tenant)
     assert "require_tenant_id" in src
+    # This assertion is the one the B-13 documents fix added: the helper used to
+    # demand a tenant *and* return the statement unscoped for a superuser, so
+    # the `require_tenant_id` check above passed while the library list and the
+    # stats panel spanned every tenant.
+    assert "is_superuser" not in src
 
     src = inspect.getsource(complaints.list_complaints)
     assert "require_tenant_id" in src
@@ -444,7 +856,370 @@ def test_route_source_guards_drop_null_inclusive_list_patterns():
     assert "tenant_id.is_(None)" not in src
 
 
+def test_list_route_tenant_filters_are_never_reached_conditionally():
+    """`apply_tenant_filter` must sit at the top level of these four handlers.
+
+    A behavioural guard alone would let the bypass come back spelled another
+    way, so the shape is asserted too. Written against the AST rather than the
+    source text because these routes already expressed the same bypass two ways
+    (`current_user.is_superuser` and `getattr(current_user, "is_superuser", ...)`),
+    and a third spelling would slip past a substring check.
+
+    Only the filter call is pinned, not `require_tenant_id`: the RTA and
+    complaint handlers legitimately call that a second time inside the
+    `reporter_email` / `complainant_email` branch, to fail closed before writing
+    the audit row for an email-targeted search.
+
+    `risks.list_risks` is pinned here rather than in its own test so that the
+    set of registers under this rule is one list: a fifth one added later is a
+    one-line change here, and forgetting it is visible in the diff.
+    """
+    from src.api.routes import complaints, near_miss, risks, rtas
+
+    for handler in (near_miss.list_near_misses, rtas.list_rtas, complaints.list_complaints, risks.list_risks):
+        tree = ast.parse(inspect.getsource(handler))
+        conditional = [node for node in ast.walk(tree) if isinstance(node, ast.If)]
+        assert not any(
+            "apply_tenant_filter" in ast.dump(node) for node in conditional
+        ), f"{handler.__name__} filters by tenant inside a conditional; the register must be scoped for every caller"
+        assert "apply_tenant_filter" in ast.dump(tree), f"{handler.__name__} no longer filters by tenant at all"
+
+
 def test_require_tenant_id_still_403():
     with pytest.raises(HTTPException) as exc:
         require_tenant_id(None)
     assert exc.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# The document library (B-13 sibling of the registers above)
+#
+# `documents._scope_stmt_to_current_tenant` returned the statement unscoped for
+# a superuser, so `GET /api/v1/documents/` and `GET /api/v1/documents/stats/
+# overview` spanned every tenant — the same defect as the registers, hidden one
+# level down in a shared helper rather than written inline in the handler.
+#
+# The helper now scopes unconditionally and a second, separately named helper
+# carries the by-id exemption, so the two capabilities cannot be confused: the
+# strict one is what every enumerating and aggregating surface reaches, and the
+# lenient one has exactly one caller.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_documents_list_scopes_a_superuser_to_their_own_tenant():
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    await documents_routes.list_documents(db=db, current_user=_superuser(77), page=1, page_size=20)
+
+    assert len(statements) == 2, "expected the count query and the page query"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_documents_list_requires_tenant_for_a_superuser():
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    with pytest.raises(HTTPException) as exc:
+        await documents_routes.list_documents(db=db, current_user=_superuser(None), page=1, page_size=20)
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_documents_list_ignores_a_superuser_flag_on_every_filter():
+    """The query parameters must not reopen the bypass.
+
+    Each filter appends a predicate after the tenant filter, and `search` adds
+    an `OR` group of its own. Exercising them together pins that none of them
+    rebuilds the statement from an unscoped `select(Document)`.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db_with_scalar()
+
+    await documents_routes.list_documents(
+        db=db,
+        current_user=_superuser(77),
+        page=1,
+        page_size=20,
+        search="pump",
+        document_type="policy",
+        category="safety",
+        category_id=3,
+        site_location_id=4,
+        department="hseq",
+        status="approved",
+        is_indexed=True,
+    )
+
+    assert len(statements) == 2
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_document_stats_scope_a_superuser_to_their_own_tenant():
+    """Every sub-query is asserted, not a nominated one.
+
+    The overview builds five statements across two tables (`documents` and
+    `document_chunks`); a sixth added later without the helper is the way this
+    leak returns.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db()
+
+    await documents_routes.get_document_stats(db=db, current_user=_superuser(77))
+
+    assert len(statements) == 5, "every stats sub-query must be accounted for"
+    for stmt in statements:
+        _assert_exact_tenant_sql(_sql(stmt), 77)
+
+
+@pytest.mark.asyncio
+async def test_document_stats_require_tenant_for_a_superuser():
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _capturing_db()
+
+    with pytest.raises(HTTPException) as exc:
+        await documents_routes.get_document_stats(db=db, current_user=_superuser(None))
+    assert exc.value.status_code == 403
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+@pytest.mark.asyncio
+async def test_documents_by_id_lookup_keeps_the_superuser_exemption():
+    """The capability this change must NOT take away.
+
+    Withdrawing enumeration while leaving single-record administration intact is
+    the whole shape of B-13. Without this test a later tidy-up that pointed
+    `_get_document_or_404` at the strict helper would look like an improvement.
+    """
+    from src.api.routes import documents as documents_routes
+
+    statements: list = []
+    document = SimpleNamespace(id=5, tenant_id=999, access_level=None, category_id=None)
+
+    async def execute(statement):
+        statements.append(statement)
+        return SimpleNamespace(scalar_one_or_none=lambda: document)
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=execute))
+
+    loaded = await documents_routes._get_document_or_404(db, 5, _superuser(77))
+
+    assert loaded is document
+    # The selected column list names TENANT_ID on every row, so only the
+    # predicate is examined.
+    where = " ".join(_sql(statements[0]).split()).split(" WHERE ", 1)[1]
+    assert "TENANT_ID" not in where, "a superuser must still reach one document in any tenant by id"
+
+
+def test_documents_tenant_scope_helper_never_branches_on_a_superuser():
+    """Pin the shape as well as the behaviour.
+
+    The bypass lived in this helper for every caller at once, so a conditional
+    reappearing here is worth catching directly rather than only through the
+    handlers that happen to be exercised above. Asserted two ways because the
+    flag is read as an attribute in some routes and through a `getattr` string
+    in others, and only one of those is an attribute node.
+    """
+    from src.api.routes import documents
+
+    source = inspect.getsource(documents._scope_stmt_to_current_tenant)
+    assert "is_superuser" not in source
+    tree = ast.parse(source)
+    assert not [node for node in ast.walk(tree) if isinstance(node, ast.If)]
+    assert "require_tenant_id" in ast.dump(tree)
+
+    # The exemption is allowed to exist, but only where it is named as one.
+    lenient = inspect.getsource(documents._scope_stmt_to_tenant_unless_superuser)
+    assert "is_superuser" in lenient
+    by_id = inspect.getsource(documents._get_document_or_404)
+    assert "_scope_stmt_to_tenant_unless_superuser" in by_id
+
+
+# ---------------------------------------------------------------------------
+# Semantic search (the third documents surface, follow-up to the two above)
+#
+# `GET /api/v1/documents/search/semantic` spanned every tenant for a superuser
+# on two layers at once, which is why it was left out of the list/stats change:
+#
+#   1. the Pinecone metadata filter skipped `tenant_id` entirely for a
+#      superuser, so another tenant's chunk text came back as `content_preview`;
+#   2. the per-hit `_get_document_or_404` took the by-id exemption, which is
+#      right for a document the caller named and wrong for a set of ids the
+#      index chose.
+#
+# Both are closed here. The by-id exemption itself is untouched — it is opted
+# out of at this one call site, and `test_documents_by_id_lookup_keeps_the_
+# superuser_exemption` above still pins the default.
+# ---------------------------------------------------------------------------
+
+
+def _semantic_search_db() -> tuple[SimpleNamespace, list]:
+    """A db that records the per-hit lookup statements and finds no row.
+
+    Returning nothing models the cross-tenant hit: once the lookup is scoped,
+    the row a foreign vector names is not visible, and the handler must drop the
+    hit rather than 404 the whole response.
+    """
+    statements: list = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return SimpleNamespace(scalar_one_or_none=lambda: None)
+
+    return (
+        SimpleNamespace(execute=AsyncMock(side_effect=execute), add=MagicMock(), commit=AsyncMock()),
+        statements,
+    )
+
+
+def _fake_vector_service(monkeypatch, matches: list[dict]) -> list:
+    """Patch VectorSearchService and capture the metadata filter it is given."""
+    from src.api.routes import documents as documents_routes
+
+    filters: list = []
+
+    async def search(query, top_k=10, filter_dict=None):
+        filters.append(filter_dict)
+        return matches
+
+    monkeypatch.setattr(
+        documents_routes,
+        "VectorSearchService",
+        lambda: SimpleNamespace(search=AsyncMock(side_effect=search)),
+    )
+    return filters
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_scopes_the_vector_filter_for_a_superuser(monkeypatch):
+    """Layer 1: the tenant key must be on the Pinecone filter for every caller.
+
+    This is the layer no SQL predicate can stand in for — `content_preview` and
+    `heading` are read straight off the vector metadata, so an unfiltered query
+    puts another tenant's document text in the response body whether or not the
+    row behind it is ever loaded.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, _ = _semantic_search_db()
+    filters = _fake_vector_service(monkeypatch, [])
+
+    await documents_routes.semantic_search(
+        db=db, current_user=_superuser(77), q="pump maintenance", top_k=10, document_type=None
+    )
+
+    assert filters == [{"tenant_id": {"$eq": 77}}]
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_keeps_the_document_type_filter_alongside_the_tenant_filter(monkeypatch):
+    """The optional filter must be added to the tenant filter, not replace it.
+
+    The original built `filter_dict` from `document_type` first and then merged
+    the tenant key in, so the merge order is worth pinning: a rewrite that
+    assigns rather than adds is how the tenant key goes missing again.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, _ = _semantic_search_db()
+    filters = _fake_vector_service(monkeypatch, [])
+
+    await documents_routes.semantic_search(
+        db=db, current_user=_superuser(77), q="pump maintenance", top_k=10, document_type="policy"
+    )
+
+    assert filters == [{"tenant_id": {"$eq": 77}, "document_type": {"$eq": "policy"}}]
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_scopes_the_per_hit_lookup_for_a_superuser(monkeypatch):
+    """Layer 2: the hit lookup is scoped even though the by-id lookup is not.
+
+    A vector's `tenant_id` metadata can disagree with the row it names —
+    reassigning a document's tenant does not re-upsert its vectors — so the
+    filter above is not on its own sufficient. The hit is dropped, not 404'd:
+    the orphan-tolerance the endpoint already had must survive the scoping.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _semantic_search_db()
+    _fake_vector_service(monkeypatch, [{"metadata": {"document_id": 5, "content_preview": "foreign"}, "score": 0.9}])
+
+    response = await documents_routes.semantic_search(
+        db=db, current_user=_superuser(77), q="pump maintenance", top_k=10, document_type=None
+    )
+
+    assert statements, "the hit must be resolved against the database"
+    _assert_exact_tenant_sql(_sql(statements[0]), 77)
+    assert response.total == 0
+    assert response.results == []
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_requires_tenant_for_a_superuser(monkeypatch):
+    """A tenantless superuser gets the same 403 the library list gives them.
+
+    Asserted before the vector call as well as before the database, because the
+    embedding request is billed and nothing downstream of it could be scoped.
+    """
+    from src.api.routes import documents as documents_routes
+
+    db, statements = _semantic_search_db()
+    filters = _fake_vector_service(monkeypatch, [])
+
+    with pytest.raises(HTTPException) as exc:
+        await documents_routes.semantic_search(
+            db=db, current_user=_superuser(None), q="pump maintenance", top_k=10, document_type=None
+        )
+
+    assert exc.value.status_code == 403
+    assert not filters, "a tenantless caller must not reach the vector store"
+    assert not statements, "a tenantless caller must not reach the database"
+
+
+def test_semantic_search_demands_a_tenant_outside_the_orphan_handler():
+    """The 403 must be raised where the handler cannot swallow it.
+
+    The per-hit loop catches `HTTPException` so an orphaned vector cannot fail
+    the whole response. That makes placement load-bearing rather than stylistic:
+    if `require_tenant_id` were only reached through the lookup inside the loop,
+    a tenantless caller's 403 would be caught there and downgraded to an empty
+    200 — a fail-open dressed as no results.
+    """
+    from src.api.routes import documents as documents_routes
+
+    tree = ast.parse(inspect.getsource(documents_routes.semantic_search))
+    handlers = [node for node in ast.walk(tree) if isinstance(node, (ast.Try, ast.If, ast.For))]
+    assert not any(
+        "require_tenant_id" in ast.dump(node) for node in handlers
+    ), "require_tenant_id must be reached unconditionally, outside the loop that swallows HTTPException"
+    assert "require_tenant_id" in ast.dump(tree), "semantic_search no longer demands a tenant at all"
+
+
+def test_semantic_search_never_branches_on_a_superuser():
+    """Pin the shape: neither layer may consult the flag again.
+
+    Both leaks were spelled as `if not current_user.is_superuser`, one guarding
+    the filter and one implied by the default the lookup was called with, so the
+    opt-out is asserted positively as well.
+    """
+    from src.api.routes import documents as documents_routes
+
+    source = inspect.getsource(documents_routes.semantic_search)
+    assert (
+        "is_superuser" not in source
+    ), "semantic_search reads is_superuser; the vector filter must be applied for every caller"
+    assert (
+        "allow_superuser_cross_tenant=False" in source
+    ), "the per-hit lookup must opt out of the by-id exemption; ids from the index are not ids the caller named"

@@ -79,6 +79,7 @@ class EvidenceService:
             EvidenceSourceModule.CERTIFICATE.value: "src.domain.models.compliance_automation:Certificate",
             EvidenceSourceModule.ASSESSMENT.value: "src.domain.models.assessment:AssessmentRun",
             EvidenceSourceModule.INDUCTION.value: "src.domain.models.induction:InductionRun",
+            EvidenceSourceModule.COMPLIANCE_RECORD.value: "src.domain.models.compliance_schedule:ComplianceRecord",
             # ACTION uses polymorphic action_key strings — skip existence probe.
             EvidenceSourceModule.ACTION.value: None,
         }

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Idempotently (re)seed the Governance Library taxonomy (Wave W0).
+"""Idempotently (re)seed the Governance Library taxonomy (Wave W0, WA-2).
 
 Loads specs/governance-library/taxonomy.json into `document_categories` +
-`document_tags` + `pel_doc_ref_counters`. Safe to run repeatedly — an admin
-re-running this after a taxonomy.json edit will never duplicate rows, and
+`document_tags`, and specs/governance-library/functions.json into
+`document_functions` + `pel_doc_ref_counters` (one counter per function since
+WA-2 / ADR-0023). Safe to run repeatedly — an admin re-running this after a
+spec edit will never duplicate rows, never reset an existing PEL counter, and
 06.04 (O-Licence & Tachograph) is always re-forced inactive regardless of
 what the JSON says (see `document_category_seed_data.DEACTIVATED_TAXONOMY_IDS`).
 
@@ -27,7 +29,9 @@ async def _run() -> None:
         print(
             "[seed_document_categories] categories: "
             f"{result.categories_created} created, {result.categories_updated} updated "
-            f"(total {result.total_categories}); tags: {result.tags_created} created, "
+            f"(total {result.total_categories}); functions: {result.functions_created} created, "
+            f"{result.functions_updated} updated (total {result.total_functions}); "
+            f"tags: {result.tags_created} created, "
             f"{result.tags_updated} updated (total {result.total_tags}); "
             f"counters: {result.counters_created} created"
         )

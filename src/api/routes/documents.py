@@ -15,14 +15,16 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.dependencies.partner import partner_readable
 from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
-from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
+from src.domain.exceptions import ValidationError as DomainValidationError
 from src.domain.models.document import (
     Document,
     DocumentAnnotation,
@@ -41,7 +43,11 @@ from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_campaign_service import DocumentCampaignService
-from src.domain.services.document_category_service import allocate_pel_doc_ref
+from src.domain.services.document_category_service import (
+    allocate_pel_doc_ref,
+    coerce_cascade_level,
+    resolve_function_code,
+)
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_library_campaign_offer_service import (
@@ -55,14 +61,27 @@ from src.domain.services.document_library_filing_service import (
     find_duplicate_approved_candidates,
     load_filing_category,
 )
-from src.domain.services.document_library_lifecycle_service import approve_document, reject_review, submit_for_review
+from src.domain.services.document_library_lifecycle_service import (
+    approve_document,
+    issue_document,
+    reject_review,
+    submit_for_review,
+)
 from src.domain.services.document_version_service import (
     assert_library_metadata_editable,
     document_version_service,
     parse_filename_version_hint,
 )
+from src.domain.services.gkb_control_library_link import (
+    control_state_for_documents,
+    write_library_decision_through_to_control,
+)
+from src.domain.services.href_registry import document_href
 from src.domain.services.index_job_service import IndexJobService, dispatch_index_job, vector_index_configured
+from src.domain.services.legal_hold_enforcement import assert_document_not_held, held_document_ids
+from src.domain.services.library_rules import assert_access_level_required, assert_filename_grammar_if_pel_prefixed
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.file_validation import validate_upload as shared_validate_upload
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
 
@@ -89,10 +108,21 @@ class DocumentResponse(BaseModel):
     category: Optional[str]
     category_id: Optional[int] = None
     pel_doc_ref: Optional[str] = None
+    # NS-1 cascade level 1-5. Projected as its own field rather than left for
+    # the client to slice out of `pel_doc_ref`: legacy references are unbanded,
+    # and a document can carry a level before it carries a reference.
+    cascade_level: Optional[int] = None
     site_location_id: Optional[int] = None
     access_level: Optional[str] = None
     is_statutory: bool = False
     retention_until: Optional[datetime] = None
+    # CUT-1 / R19 — retention as a number of years with a basis, so a reader can
+    # see why a document is kept until that date (or why no date exists yet).
+    # `retention_anchor` names the event the years run from: issue, supersede,
+    # event (one QGP does not hold a date for) or indefinite.
+    retention_years: Optional[int] = None
+    retention_anchor: Optional[str] = None
+    retention_basis: Optional[str] = None
     duplicate_warning: bool = False
     duplicate_warning_detail: Optional[list] = None
     department: Optional[str]
@@ -117,12 +147,31 @@ class DocumentResponse(BaseModel):
     review_date: Optional[datetime] = None
     effective_date: Optional[datetime] = None
 
+    # Next-review working notes (survive on published rows; not a version bump).
+    review_notes: Optional[str] = None
+
     # Computed: latest published tip DocumentVersion.published_at for this document.
     live_at: Optional[datetime] = None
 
     # Batched User join on list — no N+1 (see list_documents).
     created_by_id: Optional[int] = None
     created_by_name: Optional[str] = None
+
+    # WA-1 / L-05b — Detail deep-link from href_registry (always set for filed docs).
+    # Optional in schema so OpenAPI treats the additive field as non-breaking.
+    href: str = ""
+
+    # WC-1 / L-01d — control state folded onto the one Register (D1). Derived from
+    # the anchored `controlled_documents` row; `null` means the document is not
+    # under control, which is why it is not flattened to a string like "draft".
+    controlled_document_id: Optional[int] = None
+    control_status: Optional[str] = None
+
+    # WC-1 / L-40 — legal-hold scope and the live verdict from
+    # `matter_legal_holds`. `legal_hold_active` is read per request rather than
+    # stored, so it cannot go stale against a hold that was released.
+    legal_matter_reference: Optional[str] = None
+    legal_hold_active: bool = False
 
     class Config:
         from_attributes = True
@@ -171,6 +220,8 @@ def _document_to_response(
     *,
     created_by_name: Optional[str] = None,
     live_at: Optional[datetime] = None,
+    control_state: Optional[tuple[int, str]] = None,
+    legal_hold_active: bool = False,
 ) -> DocumentResponse:
     """Serialize a document row without failing the whole list on legacy JSON shapes."""
     return DocumentResponse(
@@ -185,10 +236,14 @@ def _document_to_response(
         category=document.category,
         category_id=getattr(document, "category_id", None),
         pel_doc_ref=getattr(document, "pel_doc_ref", None),
+        cascade_level=getattr(document, "cascade_level", None),
         site_location_id=getattr(document, "site_location_id", None),
         access_level=getattr(document, "access_level", None),
         is_statutory=bool(getattr(document, "is_statutory", False)),
         retention_until=getattr(document, "retention_until", None),
+        retention_years=getattr(document, "retention_years", None),
+        retention_anchor=getattr(document, "retention_anchor", None),
+        retention_basis=getattr(document, "retention_basis", None),
         duplicate_warning=bool(getattr(document, "duplicate_warning", False)),
         duplicate_warning_detail=_coerce_json_list(getattr(document, "duplicate_warning_detail", None)),
         department=document.department,
@@ -210,9 +265,15 @@ def _document_to_response(
         expiry_date=getattr(document, "expiry_date", None),
         review_date=getattr(document, "review_date", None),
         effective_date=getattr(document, "effective_date", None),
+        review_notes=getattr(document, "review_notes", None),
         live_at=live_at,
         created_by_id=getattr(document, "created_by_id", None),
         created_by_name=created_by_name,
+        href=document_href(document.id),
+        controlled_document_id=control_state[0] if control_state else None,
+        control_status=control_state[1] if control_state else None,
+        legal_matter_reference=getattr(document, "legal_matter_reference", None),
+        legal_hold_active=legal_hold_active,
     )
 
 
@@ -227,6 +288,9 @@ class DocumentUploadResponse(BaseModel):
     index_job_id: Optional[int] = None
     filename_version_hint: Optional[str] = None
     pel_doc_ref: Optional[str] = None
+    # NS-1 — echoed back so the caller can see the band its reference landed
+    # in without re-parsing the reference string.
+    cascade_level: Optional[int] = None
     duplicate_warning: bool = False
     duplicate_warning_detail: Optional[list] = None
 
@@ -295,6 +359,10 @@ class DisposalCandidateResponse(BaseModel):
     title: str
     status: str
     retention_until: datetime
+    # CUT-1 — the policy this date was calculated from, read off the document.
+    retention_years: Optional[int] = None
+    retention_anchor: Optional[str] = None
+    retention_basis: Optional[str] = None
     category_retention_rule: Optional[str] = None
 
 
@@ -340,7 +408,13 @@ class SearchResponse(BaseModel):
 
 
 class AnnotationCreate(BaseModel):
-    """Create annotation request."""
+    """Create annotation request.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the annotation being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     page_number: Optional[int] = None
     section_id: Optional[str] = None
@@ -389,13 +463,19 @@ class LibraryVersionCreate(BaseModel):
 
 
 class LibraryDocumentPatch(BaseModel):
-    """Patch library metadata on draft/working rows without a version bump."""
+    """Patch library metadata without a version bump.
+
+    Title/description/dates remain draft/working-only. ``review_notes`` may be
+    updated on published rows so operators can capture context for the next
+    review without opening a revision.
+    """
 
     title: Optional[str] = None
     description: Optional[str] = None
     expiry_date: Optional[datetime] = None
     review_date: Optional[datetime] = None
     effective_date: Optional[datetime] = None
+    review_notes: Optional[str] = None
 
 
 class LibraryRejectRequest(BaseModel):
@@ -410,6 +490,19 @@ class LibraryLifecycleResponse(BaseModel):
     document_id: int
     status: str
     message: str
+
+
+class LibraryIssueRequest(BaseModel):
+    """Northern Star W6 / NS-WF issue (approved → issued).
+
+    ``review_cycle_months`` / ``review_cycle_basis`` are optional here only
+    because a document may already state them; R20 refuses the issue when
+    neither the document nor the request supplies both. Nothing defaults them.
+    """
+
+    version_id: Optional[int] = None
+    review_cycle_months: Optional[int] = None
+    review_cycle_basis: Optional[str] = None
 
 
 class LibraryVersionResponse(BaseModel):
@@ -501,11 +594,30 @@ class ExtractedDocumentContent:
 
 
 def _scope_stmt_to_current_tenant(stmt, tenant_column, current_user: CurrentUser):
-    """Apply tenant scoping unless the caller is a superuser; require tenant for others."""
-    if current_user.is_superuser:
-        return stmt
+    """Scope a statement to the caller's own tenant — every caller, superuser included.
+
+    This is the helper the surfaces that enumerate or aggregate the library use
+    (``list_documents``, ``get_document_stats``). It deliberately never reads the
+    superuser flag: a tenantless caller gets the same 403 a tenantless
+    non-superuser already got rather than the whole estate.
+
+    Single-record administration keeps its exemption through
+    :func:`_scope_stmt_to_tenant_unless_superuser`.
+    """
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     return stmt.where(tenant_column == tenant_id)
+
+
+def _scope_stmt_to_tenant_unless_superuser(stmt, tenant_column, current_user: CurrentUser):
+    """Scope a single-record lookup, letting a superuser reach one row in any tenant.
+
+    Only ``_get_document_or_404`` uses this. Opening, editing and approving one
+    named document across tenants is the administrative capability B-13 keeps;
+    listing and counting the estate is not.
+    """
+    if bool(getattr(current_user, "is_superuser", False)):
+        return stmt
+    return _scope_stmt_to_current_tenant(stmt, tenant_column, current_user)
 
 
 async def _taxonomy_id_for_document(db: DbSession, document: Document) -> str | None:
@@ -525,10 +637,26 @@ async def _get_document_or_404(
     current_user: CurrentUser,
     *,
     enforce_acl: bool = True,
+    allow_superuser_cross_tenant: bool = True,
 ) -> Document:
-    """Load a document visible to the current user or raise 404."""
+    """Load a document visible to the current user or raise 404.
+
+    A superuser may reach one named document in any tenant by default — the
+    by-id exemption B-13 keeps for every register, and what opening, editing and
+    approving a single cross-tenant record depends on.
+
+    ``allow_superuser_cross_tenant=False`` withdraws that for the one caller
+    that reaches this in a loop over hits it did not name: ``semantic_search``.
+    Resolving a set of ids the caller never chose is enumeration wearing a by-id
+    lookup's clothes, so it takes the strict helper instead. Callers that pass
+    ``False`` must have already reached ``require_tenant_id`` themselves — see
+    the note in ``semantic_search`` about the 403 being swallowed otherwise.
+    """
     query = select(Document).where(Document.id == document_id)
-    query = _scope_stmt_to_current_tenant(query, Document.tenant_id, current_user)
+    if allow_superuser_cross_tenant:
+        query = _scope_stmt_to_tenant_unless_superuser(query, Document.tenant_id, current_user)
+    else:
+        query = _scope_stmt_to_current_tenant(query, Document.tenant_id, current_user)
     result = await db.execute(query)
     document = result.scalar_one_or_none()
     if not document:
@@ -565,6 +693,26 @@ async def _log_library_access(
 def _safe_filename(filename: Optional[str]) -> str:
     """Prevent path traversal within storage keys."""
     return (filename or "unnamed").replace("/", "_").replace("\\", "_")
+
+
+async def _validate_library_upload(file: UploadFile) -> tuple[str, bytes, FileType, str]:
+    """Shared upload≡revise validation via ``file_validation.validate_upload``.
+
+    Returns ``(display_name, content, file_type, safe_filename)``.
+    """
+    sanitized_name, content, _verdict = await shared_validate_upload(file)
+    _, ext = sanitized_name.rsplit(".", 1) if "." in sanitized_name else ("", "")
+    ext = ext.lower()
+    try:
+        file_type = FileType(ext)
+    except ValueError as exc:
+        raise BadRequestError(f"Unsupported file type: {ext}. Supported: {[f.value for f in FileType]}") from exc
+    safe_filename = _safe_filename(sanitized_name)
+    display_name = file.filename or safe_filename
+    return display_name, content, file_type, safe_filename
+
+
+_CLEAN_SCAN = "clean"
 
 
 def _coerce_extraction(result: ServiceExtractedDocumentContent) -> ExtractedDocumentContent:
@@ -736,6 +884,34 @@ def _index_job_response(job: IndexJob) -> IndexJobResponse:
     )
 
 
+def _validated_document_access_level(access_level: Optional[str]) -> str:
+    """Apply the Northern Star default and translate R26 failures for the API."""
+    if access_level is None:
+        access_level = "all_staff"
+    try:
+        return assert_access_level_required(access_level)
+    except DomainValidationError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+
+def _optional_coerce_cascade_level(cascade_level: Optional[int]) -> Optional[int]:
+    """Validate cascade_level when provided; leave unset levels unset."""
+    if cascade_level is None:
+        return None
+    try:
+        return coerce_cascade_level(cascade_level)
+    except DomainValidationError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+
+def _assert_upload_filename_grammar(file_name: str) -> None:
+    """R32: PEL-prefixed filenames must match Northern Star grammar."""
+    try:
+        assert_filename_grammar_if_pel_prefixed(file_name)
+    except DomainValidationError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+
 # =============================================================================
 # UPLOAD & CREATE
 # =============================================================================
@@ -757,14 +933,34 @@ async def upload_document(
     department: str = Form(None),
     sensitivity: str = Form("internal"),
     category_id: Optional[int] = Form(None),
+    function_code: Optional[str] = Form(None),
+    cascade_level: Optional[int] = Form(None),
     site_location_id: Optional[int] = Form(None),
 ):
     """Upload and process a new document.
 
     `category_id` (Governance Library taxonomy, Wave W0) is optional and
-    separate from the legacy free-text `category` string: when provided, a
-    `pel_doc_ref` (PEL-<SECTION>-<SUB>-<SEQ>) is atomically allocated
-    alongside the existing `reference_number` (DOC-YYYY-####).
+    separate from the legacy free-text `category` string.
+
+    `function_code` (WA-2 / ADR-0023) is the *owning function* — a different
+    axis from the category, and the one the PEL reference is drawn from.
+
+    `cascade_level` (NS-1 / Northern Star v6) is the document's level in the
+    cascade, 1 Manual through 5 Form/Register/Record. It is the band the
+    reference is drawn from, so supplying `function_code` **requires** it: a
+    reference cannot be issued into a band nobody chose, and it cannot be
+    re-banded afterwards because it is immutable. Supplying `cascade_level`
+    on its own is allowed — a document may record its level before its
+    function is confirmed.
+
+    When both are supplied a `pel_doc_ref` (`PEL-<FUNCTION>-<BAND><SEQ>`, e.g.
+    `PEL-HSEQ-3001`) is atomically allocated alongside the existing
+    `reference_number` (DOC-YYYY-####), and the reference, the function and
+    the level are then fixed. When no function code is supplied the document
+    is still created, with no PEL reference: the function is confirmed by a
+    filer, never inferred, because a mis-filed reference cannot be corrected
+    in place.
+
     `site_location_id` binds the document to an existing `Location`
     (site/workshop) — no separate Site table.
     """
@@ -777,35 +973,21 @@ async def upload_document(
     # via FastAPI's request pipeline (e.g. in unit tests) — normalize with an
     # `isinstance` check rather than `is not None` so both call styles behave.
     category_id = category_id if isinstance(category_id, int) else None
+    function_code = function_code if isinstance(function_code, str) else None
+    cascade_level = cascade_level if isinstance(cascade_level, int) and not isinstance(cascade_level, bool) else None
     site_location_id = site_location_id if isinstance(site_location_id, int) else None
+
+    # Validated before the file is read so a bad level costs nothing, and
+    # before the function is resolved so the caller gets the level complaint
+    # rather than an unrelated one.
+    cascade_level = _optional_coerce_cascade_level(cascade_level)
 
     if site_location_id is not None and await db.get(Location, site_location_id) is None:
         raise BadRequestError(f"Location {site_location_id} not found")
 
-    # Validate file type
-    file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
-    try:
-        file_type = FileType(file_ext)
-    except ValueError:
-        raise BadRequestError(f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}")
-
-    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-
-    # Read file content
-    content = await file.read()
+    file_name, content, file_type, safe_filename = await _validate_library_upload(file)
+    _assert_upload_filename_grammar(file_name)
     file_size = len(content)
-
-    if file_size == 0:
-        raise BadRequestError("Uploaded file is empty")
-
-    if file_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size ({file_size // (1024*1024)}MB) exceeds maximum allowed size (50MB).",
-        )
-
-    safe_filename = _safe_filename(file.filename)
-    file_name = file.filename or safe_filename
     file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{safe_filename}"
 
     try:
@@ -813,15 +995,39 @@ async def upload_document(
 
         filing_category = None
         pel_doc_ref: Optional[str] = None
+        function_id: Optional[int] = None
         access_level: Optional[str] = None
         is_statutory = False
         duplicate_warning = False
         duplicate_warning_detail: Optional[list] = None
         initial_status = DocumentStatus.PROCESSING
 
+        # Resolved before the category branch so an unknown code fails the
+        # upload rather than creating a document whose reference silently went
+        # missing. Category and Function are independent axes (ADR-0023) — a
+        # function may be confirmed with or without a taxonomy category.
+        filing_function = await resolve_function_code(db, function_code)
+        if filing_function is not None:
+            if cascade_level is None:
+                # NS-1: the band digit *is* the level, so there is no reference
+                # to issue until the filer says which level this document sits
+                # at. Refusing beats defaulting — a defaulted band prints an
+                # immutable reference that misplaces the document in the
+                # cascade, and R05 makes correcting it a full reissue.
+                raise BadRequestError(
+                    "cascade_level is required when function_code is supplied: "
+                    "the PEL reference is banded by cascade level (1 Manual, "
+                    "2 Policy, 3 Procedure/Standard, 4 SOP/RAMS/Assessment, "
+                    "5 Form/Register/Record) and cannot be re-banded once issued."
+                )
+            function_id = filing_function.id
+            try:
+                pel_doc_ref = await allocate_pel_doc_ref(db, filing_function.id, cascade_level)
+            except DomainValidationError as exc:
+                raise BadRequestError(str(exc)) from exc
+
         if category_id is not None:
             filing_category = await load_filing_category(db, category_id)
-            pel_doc_ref = await allocate_pel_doc_ref(db, category_id)
             defaults = filing_defaults_for_category(filing_category)
             access_level = defaults.access_level
             is_statutory = defaults.is_statutory
@@ -845,6 +1051,11 @@ async def upload_document(
                     }
                     for d in dupes
                 ]
+
+        # R26 (W4): every created document carries an access level. Taxonomy
+        # defaults supply it when a category is chosen; otherwise all_staff is
+        # the Northern Star default rather than leaving NULL (silent gap).
+        access_level = _validated_document_access_level(access_level)
 
         # Create document record
         doc = Document(
@@ -870,11 +1081,14 @@ async def upload_document(
             reference_number=reference_number,
             category_id=category_id,
             pel_doc_ref=pel_doc_ref,
+            function_id=function_id,
+            cascade_level=cascade_level,
             site_location_id=site_location_id,
             access_level=access_level,
             is_statutory=is_statutory,
             duplicate_warning=duplicate_warning,
             duplicate_warning_detail=duplicate_warning_detail,
+            malware_scan_status=_CLEAN_SCAN,
             created_by_id=current_user.id,
             tenant_id=current_user.tenant_id,
         )
@@ -949,6 +1163,7 @@ async def upload_document(
             index_job_id=index_job.id if index_job else None,
             filename_version_hint=hint.label if hint else None,
             pel_doc_ref=getattr(doc, "pel_doc_ref", None),
+            cascade_level=getattr(doc, "cascade_level", None),
             duplicate_warning=bool(getattr(doc, "duplicate_warning", False)),
             duplicate_warning_detail=_coerce_json_list(getattr(doc, "duplicate_warning_detail", None)),
             message=(
@@ -957,7 +1172,9 @@ async def upload_document(
         )
     except HTTPException:
         raise
-    except BadRequestError:
+    except (BadRequestError, DomainValidationError, NotFoundError):
+        # Band exhaustion / inactive function / missing counter must surface as
+        # domain responses (422/404), not the broad upload 500 catch-all.
         raise
     except Exception as exc:
         logger.exception("Document upload failed unexpectedly")
@@ -1129,6 +1346,7 @@ async def execute_disposal_queue(
             event_type="document_library.disposed",
             entity_type="document",
             entity_id=",".join(map(str, disposed_ids)),
+            entity_name=f"{len(disposed_ids)} retention-due library document(s)",
             action="delete",
             description=f"Hard-disposed {len(disposed_ids)} retention-due library document(s)",
             payload={
@@ -1155,7 +1373,7 @@ async def execute_disposal_queue(
 @router.get("/", response_model=DocumentListResponse)
 async def list_documents(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
@@ -1167,7 +1385,17 @@ async def list_documents(
     status: Optional[str] = None,
     is_indexed: Optional[bool] = None,
 ):
-    """List documents with filtering and pagination."""
+    """List documents with filtering and pagination.
+
+    Requires ``document:read``, the staff-level token of the library permission
+    model in :mod:`src.domain.services.document_library_rbac`. Per-document ACL
+    narrowing still applies below on top of it.
+
+    Scoped to the caller's own tenant for every caller, superuser included
+    (B-13). ``get_document`` keeps its superuser exemption, so one named
+    cross-tenant document can still be opened by id; only enumerating the
+    library is withdrawn.
+    """
 
     query = select(Document).where(Document.is_active == True)
     query = _scope_stmt_to_current_tenant(query, Document.tenant_id, current_user)
@@ -1180,6 +1408,7 @@ async def list_documents(
                 Document.title.ilike(search_filter),
                 Document.description.ilike(search_filter),
                 Document.reference_number.ilike(search_filter),
+                Document.pel_doc_ref.ilike(search_filter),
                 Document.file_name.ilike(search_filter),
             )
         )
@@ -1259,12 +1488,26 @@ async def list_documents(
         )
         live_at_by_doc = {row[0]: row[1] for row in version_rows.all() if row[1] is not None}
 
+    # WC-1 — control state and hold verdict, one query each for the whole page.
+    control_state_by_doc: dict[int, tuple[int, str]] = {}
+    held_ids: set[int] = set()
+    if visible:
+        list_tenant_id = require_tenant_id(current_user.tenant_id)
+        control_state_by_doc = await control_state_for_documents(
+            db,
+            tenant_id=list_tenant_id,
+            document_ids=doc_ids,
+        )
+        held_ids = await held_document_ids(db, tenant_id=list_tenant_id, documents=visible)
+
     return DocumentListResponse(
         items=[
             _document_to_response(
                 d,
                 created_by_name=created_by_names.get(d.created_by_id) if d.created_by_id is not None else None,
                 live_at=live_at_by_doc.get(d.id),
+                control_state=control_state_by_doc.get(d.id),
+                legal_hold_active=d.id in held_ids,
             )
             for d in visible
         ],
@@ -1275,7 +1518,11 @@ async def list_documents(
     )
 
 
-@router.get("/{document_id}", response_model=DocumentResponse)
+@router.get(
+    "/{document_id}",
+    response_model=DocumentResponse,
+    openapi_extra=partner_readable("documents:read"),
+)
 async def get_document(
     document_id: int,
     db: DbSession,
@@ -1291,7 +1538,21 @@ async def get_document(
     await _log_library_access(db, document, current_user, "view")
     await db.commit()
 
-    return _document_to_response(document)
+    # Scoped by the document's own tenant, not the caller's: a superuser may open
+    # one named row across tenants (B-13), and its control record and hold live in
+    # that row's tenant rather than in theirs.
+    control_state = await control_state_for_documents(
+        db,
+        tenant_id=document.tenant_id,
+        document_ids=[document.id],
+    )
+    held = await held_document_ids(db, tenant_id=document.tenant_id, documents=[document])
+
+    return _document_to_response(
+        document,
+        control_state=control_state.get(document.id),
+        legal_hold_active=document.id in held,
+    )
 
 
 @router.patch("/{document_id}", response_model=DocumentResponse)
@@ -1301,9 +1562,27 @@ async def patch_document_metadata(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("document:update"))],
 ):
-    """Update title/description on draft/working rows without opening a new version."""
+    """Update library metadata without opening a new version.
+
+    Content fields (title/description/dates) require a draft/working status.
+    ``review_notes`` alone may be saved on published/approved rows for the
+    next-review working pad.
+    """
     document = await _get_document_or_404(db, document_id, current_user)
-    assert_library_metadata_editable(document.status)
+    await assert_document_not_held(db, document, action="edited")
+
+    content_touch = any(
+        value is not None
+        for value in (
+            payload.title,
+            payload.description,
+            payload.expiry_date,
+            payload.review_date,
+            payload.effective_date,
+        )
+    )
+    if content_touch:
+        assert_library_metadata_editable(document.status)
 
     if payload.title is not None:
         title = payload.title.strip()
@@ -1318,40 +1597,33 @@ async def patch_document_metadata(
         document.review_date = payload.review_date
     if payload.effective_date is not None:
         document.effective_date = payload.effective_date
+    if payload.review_notes is not None:
+        notes = payload.review_notes.strip()
+        document.review_notes = notes or None
 
     await db.commit()
     await db.refresh(document)
-    return _document_to_response(document)
+    control_state = await control_state_for_documents(
+        db,
+        tenant_id=document.tenant_id,
+        document_ids=[document.id],
+    )
+    return _document_to_response(document, control_state=control_state.get(document.id))
 
 
 async def _read_and_validate_revision_file(
     file: UploadFile,
 ) -> tuple[bytes, str, FileType, str]:
-    """Validate an uploaded revision file and return content + metadata."""
-    file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
-    try:
-        file_type = FileType(file_ext)
-    except ValueError:
-        raise BadRequestError(f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}")
-
-    content = await file.read()
-    file_size = len(content)
-    if file_size == 0:
-        raise BadRequestError("Uploaded file is empty")
-
-    max_file_size = 50 * 1024 * 1024
-    if file_size > max_file_size:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size ({file_size // (1024 * 1024)}MB) exceeds maximum allowed size (50MB).",
-        )
-
-    safe_filename = _safe_filename(file.filename)
-    file_name = file.filename or safe_filename
+    """Validate an uploaded revision file — same gate as create upload."""
+    file_name, content, file_type, safe_filename = await _validate_library_upload(file)
     return content, file_name, file_type, safe_filename
 
 
-@router.get("/{document_id}/signed-url", response_model=DocumentSignedUrlResponse)
+@router.get(
+    "/{document_id}/signed-url",
+    response_model=DocumentSignedUrlResponse,
+    openapi_extra=partner_readable("documents:read"),
+)
 async def get_document_signed_url(
     document_id: int,
     db: DbSession,
@@ -1361,6 +1633,14 @@ async def get_document_signed_url(
 ):
     """Get a signed document URL for inline viewing or download."""
     document = await _get_document_or_404(db, document_id, current_user)
+    scan_status = getattr(document, "malware_scan_status", None) or _CLEAN_SCAN
+    if scan_status != _CLEAN_SCAN:
+        raise ConflictError(
+            "Document is not available for download until malware scan is clean.",
+            code="MALWARE_SCAN_PENDING",
+            details={"malware_scan_status": scan_status},
+        )
+
     document.download_count += 1
     document.last_accessed_at = datetime.now(timezone.utc)
     await _log_library_access(
@@ -1433,6 +1713,12 @@ async def create_document_version(
 ):
     """Open a revision draft with optional new file upload + re-index."""
     document = await _get_document_or_404(db, document_id, current_user)
+    # Ahead of the upload below, not only inside `create_library_version`: the blob
+    # is written before the service is reached, so relying on the service guard
+    # alone leaves an orphaned object behind every refused revision of a held
+    # document. Both checks stay — the service one is the chokepoint every caller
+    # goes through, this one keeps the refusal free of side effects.
+    await assert_document_not_held(db, document, action="revised")
 
     file_name: str | None = None
     file_path: str | None = None
@@ -1464,6 +1750,7 @@ async def create_document_version(
             ) from exc
         document.file_type = file_type
         document.mime_type = file.content_type
+        document.malware_scan_status = _CLEAN_SCAN
 
     version = await document_version_service.revise_library(
         db,
@@ -1534,12 +1821,39 @@ async def approve_document_version(
 ):
     """Approve under-review document (no self-approve); supersedes prior PEL ref matches."""
     document = await _get_document_or_404(db, document_id, current_user, enforce_acl=False)
-    await approve_document(
+    version = await approve_document(
         db,
         document,
         approved_by_id=current_user.id,
         version_id=version_id,
     )
+    # WC-1 / L-01d — the anchored control record moves in the same transaction, so
+    # Document Control can no longer report `draft` for a document the Register
+    # has approved. Deliberately outside the try/except below: a KB indexing hop
+    # may fail without unsaying the approval, but two registers disagreeing about
+    # whether a document is approved is not something to log and carry on from.
+    await write_library_decision_through_to_control(
+        db,
+        document,
+        library_status="approved",
+        version_number=version.version_number,
+        actor_id=current_user.id,
+        actor_name=getattr(current_user, "full_name", None) or getattr(current_user, "email", None),
+    )
+    try:
+        from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle
+
+        await run_library_publish_lifecycle(
+            db=db,
+            library_document=document,
+            new_version=version.version_number,
+            user=current_user,
+        )
+    except Exception:
+        logger.exception(
+            "Governed KB publish lifecycle failed after library approve for document %s",
+            document_id,
+        )
     await db.commit()
     await db.refresh(document)
     versions = await document_version_service.list_library_versions(
@@ -1627,12 +1941,54 @@ async def publish_document_version(
 ):
     """Publish working draft; supersede prior published tip (immutable)."""
     document = await _get_document_or_404(db, document_id, current_user)
-    await document_version_service.publish_library(
+
+    # X-1: when Entity360 is on, server ImpactBundle must be complete — never
+    # allow a silent publish-available path over degraded sources.
+    if settings.entity_360_enabled:
+        from fastapi import HTTPException
+
+        from src.domain.services.entity_360 import build_impact_bundle, publish_blocked_detail
+
+        impact = await build_impact_bundle(
+            db=db,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+            document_id=document_id,
+            user=current_user,
+        )
+        if not impact.get("complete") or not impact.get("can_publish"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=publish_blocked_detail(impact),
+            )
+
+    version = await document_version_service.publish_library(
         db,
         document,
         published_by_id=current_user.id,
         version_id=version_id,
     )
+    await write_library_decision_through_to_control(
+        db,
+        document,
+        library_status="published",
+        version_number=version.version_number,
+        actor_id=current_user.id,
+        actor_name=getattr(current_user, "full_name", None) or getattr(current_user, "email", None),
+    )
+    try:
+        from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle
+
+        await run_library_publish_lifecycle(
+            db=db,
+            library_document=document,
+            new_version=version.version_number,
+            user=current_user,
+        )
+    except Exception:
+        logger.exception(
+            "Governed KB publish lifecycle failed after library publish for document %s",
+            document_id,
+        )
     try:
         campaign_service = DocumentCampaignService(db)
         await campaign_service.spawn_reack_campaign(
@@ -1647,6 +2003,107 @@ async def publish_document_version(
             exc_info=True,
         )
     await db.commit()
+    versions = await document_version_service.list_library_versions(
+        db,
+        document_id,
+        tenant_id=getattr(current_user, "tenant_id", None),
+        is_superuser=bool(getattr(current_user, "is_superuser", False)),
+    )
+    serialized = [document_version_service.serialize_library_version(v) for v in versions]
+    return LibraryVersionHistoryResponse(
+        document_id=document.id,
+        current_version=document.version,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
+        published_version=next((v["version_number"] for v in serialized if v["status"] == "published"), None),
+        working_version=next((v["version_number"] for v in serialized if v["status"] == "draft"), None),
+        versions=[LibraryVersionResponse(**v) for v in serialized],
+    )
+
+
+@router.post("/{document_id}/issue", response_model=LibraryVersionHistoryResponse)
+async def issue_document_version(
+    document_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    payload: LibraryIssueRequest | None = None,
+):
+    """Northern Star W6 / NS-WF: issue an approved document (approved → issued).
+
+    The governed route to live. Unlike ``/publish`` it refuses anything that is
+    not already approved and applies the pack's issue-time blocks (R07, R10, R11,
+    R14 approval leg, R18, R20, R22, R23). It produces no rendition and claims
+    none: R15's footer stamping needs a rendering pipeline that does not exist.
+    """
+    document = await _get_document_or_404(db, document_id, current_user)
+    request = payload or LibraryIssueRequest()
+
+    # X-1: the same gate the publish path carries — never put a document live
+    # over a degraded impact view when Entity360 is on.
+    if settings.entity_360_enabled:
+        from fastapi import HTTPException
+
+        from src.domain.services.entity_360 import build_impact_bundle, publish_blocked_detail
+
+        impact = await build_impact_bundle(
+            db=db,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+            document_id=document_id,
+            user=current_user,
+        )
+        if not impact.get("complete") or not impact.get("can_publish"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=publish_blocked_detail(impact),
+            )
+
+    version = await issue_document(
+        db,
+        document,
+        issued_by_id=current_user.id,
+        version_id=request.version_id,
+        review_cycle_months=request.review_cycle_months,
+        review_cycle_basis=request.review_cycle_basis,
+    )
+    # Outside the try/except below for the same reason as approve: an indexing
+    # hop may fail without unsaying the issue, but two registers disagreeing
+    # about whether a document is live is not something to log and carry on from.
+    await write_library_decision_through_to_control(
+        db,
+        document,
+        library_status="published",
+        version_number=version.version_number,
+        actor_id=current_user.id,
+        actor_name=getattr(current_user, "full_name", None) or getattr(current_user, "email", None),
+    )
+    try:
+        from src.domain.services.gkb_publish_lifecycle import run_library_publish_lifecycle
+
+        await run_library_publish_lifecycle(
+            db=db,
+            library_document=document,
+            new_version=version.version_number,
+            user=current_user,
+        )
+    except Exception:
+        logger.exception(
+            "Governed KB publish lifecycle failed after library issue for document %s",
+            document_id,
+        )
+    try:
+        campaign_service = DocumentCampaignService(db)
+        await campaign_service.spawn_reack_campaign(
+            document_id=document_id,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+            actor_id=current_user.id,
+        )
+    except Exception:  # noqa: BLE001 — issue must not fail on the re-ack hook
+        logger.warning(
+            "spawn_reack_campaign failed after library issue for document %s",
+            document_id,
+            exc_info=True,
+        )
+    await db.commit()
+    await db.refresh(document)
     versions = await document_version_service.list_library_versions(
         db,
         document_id,
@@ -1688,28 +2145,120 @@ async def spawn_reack_campaign(
 # =============================================================================
 
 
-@router.get("/search/semantic", response_model=SearchResponse)
+@router.get(
+    "/search/content",
+    response_model=SearchResponse,
+    openapi_extra=partner_readable("documents:read"),
+)
+async def search_document_content(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+    q: str = Query(..., min_length=1, max_length=200),
+    top_k: int = Query(10, ge=1, le=50),
+):
+    """Full-text search over document chunk body text (RBAC-scoped)."""
+    import time
+
+    from src.domain.services.search_service import SearchService
+
+    start_time = time.time()
+    service = SearchService(db)
+    hits = await service._search_document_content(q, current_user, request_id=None)
+    if top_k < len(hits):
+        hits = hits[:top_k]
+
+    results = [
+        SearchResult(
+            document_id=int(item.entity_id or 0),
+            reference_number=item.id,
+            title=item.title,
+            score=float(item.relevance) / 100.0,
+            chunk_preview=item.description,
+            page_number=None,
+            heading=None,
+        )
+        for item in hits
+        if item.entity_id is not None
+    ]
+    latency_ms = int((time.time() - start_time) * 1000)
+
+    log = DocumentSearchLog(
+        query=q,
+        query_type="content_fts",
+        result_count=len(results),
+        result_document_ids=[r.document_id for r in results],
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        latency_ms=latency_ms,
+    )
+    db.add(log)
+    await db.commit()
+
+    return SearchResponse(
+        query=q,
+        results=results,
+        total=len(results),
+        latency_ms=latency_ms,
+    )
+
+
+@router.get(
+    "/search/semantic",
+    response_model=SearchResponse,
+    openapi_extra=partner_readable("documents:read"),
+)
 async def semantic_search(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
     q: str = Query(..., min_length=3),
     top_k: int = Query(10, ge=1, le=50),
     document_type: Optional[str] = None,
 ):
-    """Semantic search across documents using AI embeddings."""
+    """Semantic search across documents using AI embeddings.
+
+    Gated on ``document:read``, the token ``list_documents`` and
+    ``search_document_content`` already require. It was left on bare
+    authentication, so a caller with no library permission at all could reach
+    the whole non-restricted library of their tenant by phrase — the two
+    sibling surfaces refuse that, and the per-hit ACL below does not stand in
+    for it: ``user_can_read_library_document`` returns True for an ``all_staff``
+    document without consulting any permission.
+
+    Scoped to the caller's own tenant for every caller, superuser included
+    (B-13). This is an enumeration surface like ``list_documents``: the caller
+    supplies a phrase, not an id, so the same withdrawal applies. ``get_document``
+    keeps its superuser exemption, so one named cross-tenant document can still
+    be opened by id.
+
+    Two layers scope it, and both are load-bearing. The Pinecone metadata filter
+    below is what stops another tenant's chunk text reaching the response as a
+    ``content_preview``, and it is the only thing that can — the vector store is
+    the source of those strings, not the database. The SQL predicate on the
+    per-hit lookup is what catches a hit whose ``tenant_id`` metadata is stale
+    against the row it names, which is reachable today: reassigning a document's
+    tenant does not re-upsert its vectors.
+    """
 
     import time
 
     start_time = time.time()
 
+    # No superuser bypass on the vector filter (B-13). Resolved before the
+    # embedding call so a tenantless caller gets the 403 the library list
+    # already gives them rather than paying for a query no filter can scope.
+    #
+    # This call also has to happen out here rather than only inside the loop
+    # below: the loop swallows HTTPException to skip orphaned hits, so a 403
+    # raised per-hit would be caught and downgraded to an empty 200.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+
     vector_service = VectorSearchService()
 
-    # Build filter
-    filter_dict: Optional[dict[str, Any]] = None
+    # Build filter. Indexing writes tenant_id as an int (index_job_service
+    # upserts `document.tenant_id or 0`), so the $eq operand is an int too.
+    filter_dict: dict[str, Any] = {"tenant_id": {"$eq": tenant_id}}
     if document_type:
-        filter_dict = {"document_type": {"$eq": document_type}}
-    if not current_user.is_superuser:
-        filter_dict = {**(filter_dict or {}), "tenant_id": {"$eq": current_user.tenant_id}}
+        filter_dict["document_type"] = {"$eq": document_type}
 
     # Search vectors
     matches = await vector_service.search(q, top_k=top_k, filter_dict=filter_dict)
@@ -1731,8 +2280,13 @@ async def semantic_search(
             # Get document info. Vectors can outlive their SQL row (hard delete,
             # tenant reassignment, ACL change) — orphaned hits must be skipped,
             # never allowed to 404/500 the whole search response.
+            #
+            # allow_superuser_cross_tenant=False: these ids come from the index,
+            # not from the caller, so the by-id exemption would hand a superuser
+            # back exactly the cross-tenant enumeration the vector filter above
+            # just withdrew, on any hit whose metadata disagrees with its row.
             try:
-                doc = await _get_document_or_404(db, doc_id, current_user)
+                doc = await _get_document_or_404(db, doc_id, current_user, allow_superuser_cross_tenant=False)
             except (NotFoundError, HTTPException):
                 doc = None
 
@@ -1849,7 +2403,11 @@ async def get_document_stats(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get document library statistics."""
+    """Get document library statistics.
+
+    Scoped to the caller's own tenant for every caller, superuser included, so
+    these totals describe the same population ``list_documents`` pages through.
+    """
 
     # Total documents
     total_query = _scope_stmt_to_current_tenant(select(func.count(Document.id)), Document.tenant_id, current_user)

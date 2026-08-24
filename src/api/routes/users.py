@@ -21,6 +21,8 @@ from src.api.schemas.user import (
 )
 from src.api.utils.errors import api_error
 from src.core.security import get_password_hash
+from src.domain.authz import describe_stored_permissions
+from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import Role, User
 from src.domain.services.feature_flag_service import FeatureFlagService
 
@@ -48,6 +50,33 @@ async def _ensure_user_management_enabled(db: DbSession) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.CONFIGURATION_ERROR, "User management is currently unavailable"),
         )
+
+
+async def _resolve_new_user_tenant(db: DbSession, requested_tenant_id: Optional[int], creator: User) -> int:
+    """Resolve which tenant a newly created user belongs to.
+
+    A user stored with ``tenant_id`` NULL is locked out of the entire product:
+    ``_resolve_user_tenant_context`` fails closed in production, so every request
+    answers 403 ``TENANT_ACCESS_DENIED``. The admin create form does not send a
+    tenant, so inherit the creating account's rather than persisting an account
+    that cannot be used. An explicit tenant still wins, so cross-tenant creation
+    by a superuser is unaffected.
+    """
+    resolved = requested_tenant_id if requested_tenant_id is not None else creator.tenant_id
+    if resolved is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "tenant_id is required: the account creating this user has no tenant to inherit",
+            ),
+        )
+    if await db.scalar(select(Tenant.id).where(Tenant.id == resolved)) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, f"Tenant {resolved} does not exist"),
+        )
+    return int(resolved)
 
 
 # ============== User Endpoints ==============
@@ -143,6 +172,37 @@ async def list_users(
     )
 
 
+async def _resolve_roles_for_tenant(db: DbSession, role_ids: list[int], tenant_id: int) -> list[Role]:
+    """Load the requested roles, refusing any that belong to a different tenant.
+
+    ``Role.name`` is globally unique and some authorisation reads role *names* without
+    re-checking tenancy — ``routes/engineers.py:_is_workforce_manager`` treats any role
+    named ``admin`` or ``supervisor`` as workforce management. Assigning one organisation's
+    ``supervisor`` row to another organisation's user would therefore grant authority in
+    the wrong place. A role with a NULL ``tenant_id`` is global and stays assignable.
+    """
+    result = await db.execute(select(Role).where(Role.id.in_(role_ids)))
+    roles = list(result.scalars().all())
+
+    missing = sorted(set(role_ids) - {role.id for role in roles})
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, f"Unknown role ids: {missing}"),
+        )
+
+    foreign = sorted(role.id for role in roles if role.tenant_id is not None and role.tenant_id != tenant_id)
+    if foreign:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                f"Roles {foreign} belong to a different organisation and cannot be assigned",
+            ),
+        )
+    return roles
+
+
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
@@ -166,6 +226,8 @@ async def create_user(
             detail=api_error(ErrorCode.VALIDATION_ERROR, "Password is required for local accounts"),
         )
 
+    resolved_tenant_id = await _resolve_new_user_tenant(db, user_data.tenant_id, current_user)
+
     # Create user
     user = User(
         email=normalized_email,
@@ -177,38 +239,42 @@ async def create_user(
         phone=user_data.phone,
         is_active=user_data.is_active,
         is_superuser=user_data.is_superuser,
-        tenant_id=user_data.tenant_id,
+        tenant_id=resolved_tenant_id,
     )
 
     # Assign roles if provided
     if user_data.role_ids:
-        result = await db.execute(select(Role).where(Role.id.in_(user_data.role_ids)))
-        roles = result.scalars().all()
+        roles = await _resolve_roles_for_tenant(db, list(user_data.role_ids), resolved_tenant_id)
         user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-001
 
     db.add(user)
+    await db.flush()
+
+    # Tenancy is recorded in two places and both are read: ``users.tenant_id`` is what
+    # ``_resolve_user_tenant_context`` admits a request on, while ``tenant_users`` is what
+    # the tenant member list reports. Writing only one leaves the two disagreeing, which
+    # is how accounts end up admitted but invisible to the organisation that owns them.
+    db.add(TenantUser(tenant_id=resolved_tenant_id, user_id=user.id, is_active=True, is_primary=True))
 
     # Best-in-class: Person record always exists for a login seat (never writes PAMS).
-    if user.tenant_id is not None:
-        from src.domain.services.engineer_user_link_service import ensure_engineer_for_user_async
+    from src.domain.services.engineer_user_link_service import ensure_engineer_for_user_async
 
-        await db.flush()
-        try:
-            await ensure_engineer_for_user_async(db, user, tenant_id=user.tenant_id)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=api_error(ErrorCode.VALIDATION_ERROR, str(exc)),
-            ) from exc
-        except IntegrityError as exc:
-            logger.warning("ensure_engineer_for_user failed on create user=%s", normalized_email, exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=api_error(
-                    ErrorCode.VALIDATION_ERROR,
-                    "Unable to provision workforce person record for this user",
-                ),
-            ) from exc
+    try:
+        await ensure_engineer_for_user_async(db, user, tenant_id=resolved_tenant_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, str(exc)),
+        ) from exc
+    except IntegrityError as exc:
+        logger.warning("ensure_engineer_for_user failed on create user=%s", normalized_email, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Unable to provision workforce person record for this user",
+            ),
+        ) from exc
 
     await db.commit()
     # Re-load with roles: async lazy-load of relationships after refresh → MissingGreenlet 500 (ACT-051).
@@ -391,6 +457,65 @@ async def create_role(
     return RoleResponse.model_validate(role)
 
 
+def _reject_edit_of_role_with_invalid_stored_permissions(role: Role, update_data: dict) -> None:
+    """Refuse to edit a role whose stored permissions this API would now reject.
+
+    Rows predate any validation, so some hold a wildcard, an uncatalogued token,
+    or a PostgreSQL array literal that the permission check reads lossily. Three
+    things could happen when one of those is edited, and only one of them is
+    honest:
+
+    * Rewrite the stored value to a canonical form. Rejected outright — it
+      silently changes which permissions a role grants, which is a privilege
+      change nobody asked for and nobody would see.
+    * Validate only the incoming field and let the bad row through untouched.
+      Rejected because it lets a defective access-control record be edited and
+      timestamped, which reads afterwards as though someone reviewed it.
+    * Fail the edit, and say exactly what is wrong and what to send. Chosen.
+
+    The escape hatch is that supplying ``permissions`` replaces the bad value:
+    that request has already been validated by the schema, so the fix goes
+    through while an unrelated edit does not.
+
+    Note this cannot rescue a role with ``is_system_role`` set — the caller
+    rejects those earlier with a 400 — so a defective system role still has to be
+    corrected by an operator outside this API.
+    """
+    if "permissions" in update_data:
+        return
+
+    defect = describe_stored_permissions(role.permissions)
+    if defect is None:
+        return
+
+    logger.warning(
+        "Refused edit of role id=%s name=%s: stored permissions are invalid (%s)",
+        role.id,
+        role.name,
+        defect.encoding,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=api_error(
+            ErrorCode.VALIDATION_ERROR,
+            f"Role {role.id} ('{role.name}') cannot be edited because its stored permissions are "
+            f"invalid: {defect.message}. The permission check currently reads it as "
+            f"{list(defect.tokens_seen)!r}. Resend this request including a valid 'permissions' "
+            "JSON array to correct the role and apply your other changes at the same time; "
+            "editing it without fixing the permissions is refused rather than silently rewriting "
+            "the stored value.",
+            details={
+                "role_id": role.id,
+                "stored_encoding": defect.encoding,
+                "tokens_currently_effective": list(defect.tokens_seen),
+                "wildcard_tokens": list(defect.wildcard_tokens),
+                "reserved_tokens": list(defect.reserved_tokens),
+                "unknown_tokens": list(defect.unknown_tokens),
+            },
+        ),
+    )
+
+
 @router.patch("/roles/{role_id}", response_model=RoleResponse)
 async def update_role(
     role_id: int,
@@ -416,6 +541,8 @@ async def update_role(
         )
 
     update_data = role_data.model_dump(exclude_unset=True)
+    _reject_edit_of_role_with_invalid_stored_permissions(role, update_data)
+
     for field, value in update_data.items():
         setattr(role, field, value)
 

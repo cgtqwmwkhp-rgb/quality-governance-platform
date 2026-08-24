@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import {
   workforceApi,
@@ -22,10 +22,12 @@ import {
   fetchTemplateStandardsCoverage,
   type BuilderStandardsCoverage,
 } from '../builderMapAssistApi'
+import { TRAINING_CALENDAR_HREF, templatesMatchingInstrument } from '../auditInstrument'
 
 export default function AssessmentCreate() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
   const [engineers, setEngineers] = useState<EngineerProfile[]>([])
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
@@ -43,6 +45,17 @@ export default function AssessmentCreate() {
   const [scheduledDate, setScheduledDate] = useState('')
   const [notes, setNotes] = useState('')
   const [mapCoverage, setMapCoverage] = useState<BuilderStandardsCoverage | null>(null)
+  const purposeTemplates = useMemo(
+    () => templatesMatchingInstrument(templates, 'skills'),
+    [templates],
+  )
+  const templatesEmpty = !templateLoadFailed && purposeTemplates.length === 0
+  const selectedTemplate = purposeTemplates.find((item) => String(item.id) === templateId)
+  const seededTemplateId = searchParams.get('templateId')
+  const seededWrongPurpose =
+    Boolean(seededTemplateId) &&
+    templates.some((item) => String(item.id) === seededTemplateId) &&
+    !purposeTemplates.some((item) => String(item.id) === seededTemplateId)
 
   useEffect(() => {
     const load = async () => {
@@ -74,6 +87,14 @@ export default function AssessmentCreate() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    const seeded = searchParams.get('templateId')
+    if (!seeded) return
+    if (purposeTemplates.some((item) => String(item.id) === seeded)) {
+      setTemplateId(seeded)
+    }
+  }, [purposeTemplates, searchParams])
 
   useEffect(() => {
     if (!templateId) {
@@ -120,7 +141,7 @@ export default function AssessmentCreate() {
   }
 
   const rosterEmpty = !loading && engineers.length === 0 && !rosterLoadFailed
-  const requiredDataUnavailable = templateLoadFailed || rosterLoadFailed
+  const requiredDataUnavailable = templateLoadFailed || rosterLoadFailed || templatesEmpty
 
   if (loading) {
     return (
@@ -210,14 +231,22 @@ export default function AssessmentCreate() {
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
                 required
-                disabled={templateLoadFailed}
-                aria-describedby={templateLoadFailed ? 'assessmentcreate-templates-unavailable' : undefined}
+                disabled={templateLoadFailed || templatesEmpty}
+                aria-describedby={
+                  templateLoadFailed
+                    ? 'assessmentcreate-templates-unavailable'
+                    : templatesEmpty
+                      ? 'assessmentcreate-templates-empty'
+                      : seededWrongPurpose
+                        ? 'assessmentcreate-template-wrong-purpose'
+                        : undefined
+                }
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
               >
                 <option value="">{t('workforce.common.select_template')}</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.audit_type})
+                {purposeTemplates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name} ({tpl.audit_type})
                   </option>
                 ))}
               </select>
@@ -230,6 +259,50 @@ export default function AssessmentCreate() {
                   Templates could not be loaded. Reload the page before creating an assessment.
                 </p>
               )}
+              {!templateLoadFailed && templatesEmpty && (
+                <p
+                  id="assessmentcreate-templates-empty"
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="assessment-create-templates-empty"
+                >
+                  {t('workforce.assessments.templates_empty')}{' '}
+                  <Link
+                    to="/audit-templates/new?instrument=skills"
+                    className="text-primary underline underline-offset-2"
+                  >
+                    {t('workforce.assessments.templates_empty_link')}
+                  </Link>
+                </p>
+              )}
+              {!templateLoadFailed && !templatesEmpty && seededWrongPurpose && (
+                <p
+                  id="assessmentcreate-template-wrong-purpose"
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="assessment-create-template-wrong-purpose"
+                >
+                  {t('workforce.assessments.template_wrong_purpose')}
+                </p>
+              )}
+              {selectedTemplate ? (
+                <p
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="assessment-create-cadence"
+                >
+                  {selectedTemplate.frequency
+                    ? t('workforce.assessments.cadence_frequency', {
+                        frequency: selectedTemplate.frequency,
+                      })
+                    : t('workforce.assessments.cadence_unset')}{' '}
+                  {t('workforce.assessments.cadence_hint')}{' '}
+                  <Link
+                    to={TRAINING_CALENDAR_HREF}
+                    className="text-primary underline underline-offset-2"
+                    data-testid="assessment-create-cadence-calendar"
+                  >
+                    {t('workforce.assessments.cadence_calendar_link')}
+                  </Link>
+                </p>
+              ) : null}
             </div>
 
             <div>

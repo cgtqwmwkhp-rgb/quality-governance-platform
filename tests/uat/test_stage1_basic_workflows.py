@@ -53,15 +53,15 @@ class TestEmployeePortalWorkflows:
         assert data["reference_number"].startswith("COMP-")
 
     @pytest.mark.asyncio
-    async def test_uat_003_submit_anonymous_report(self, client, anonymous_report):
-        """UAT-003: Employee can submit an anonymous report."""
+    async def test_uat_003_submit_anonymous_report_rejected(self, client, anonymous_report):
+        """UAT-003 / PX-312: anonymous portal submissions are not available."""
         response = await client.post("/api/v1/portal/reports/", json=anonymous_report)
 
-        assert response.status_code == 201
-        data = response.json()
-        assert data["success"] is True
-        # Anonymous reports still get tracking codes
-        assert "tracking_code" in data
+        assert response.status_code == 422
+        body = response.json()
+        error = body.get("error") or body.get("detail") or {}
+        message = error.get("message", "") if isinstance(error, dict) else str(error)
+        assert "anonymous" in message.lower()
 
     @pytest.mark.asyncio
     async def test_uat_004_track_report_by_reference(self, client, valid_incident_report):
@@ -511,16 +511,27 @@ class TestWorkflowApprovalWorkflows:
 
     @pytest.mark.asyncio
     async def test_uat_044_get_pending_approvals_requires_auth(self, client):
-        """UAT-044: Getting pending approvals requires authentication."""
-        response = await client.get("/api/v1/workflows/approvals/pending")
+        """UAT-044: Getting outstanding decisions requires authentication.
+
+        Was `/api/v1/workflows/approvals/pending`, deleted in FR-APPROVALS-01
+        because it answered every authenticated caller with an empty queue. The
+        replacement is per-user by construction, which makes authentication the
+        whole point of the check rather than a formality.
+        """
+        response = await client.get("/api/v1/approvals/my-decisions")
 
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_uat_045_approve_request_requires_auth(self, client):
-        """UAT-045: Approving requests requires authentication."""
+        """UAT-045: Recording an approval requires authentication.
+
+        Pointed at `/api/v1/workflows/approvals/{id}/approve` until
+        FR-APPROVALS-01. That endpoint recorded nothing, so the requirement it was
+        pinning did not matter; this one writes to the investigation.
+        """
         response = await client.post(
-            "/api/v1/workflows/approvals/test-approval-id/approve",
+            "/api/v1/investigations/1/approve",
             json={"notes": "Approved"},
         )
 

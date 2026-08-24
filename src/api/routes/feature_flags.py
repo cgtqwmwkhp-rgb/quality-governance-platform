@@ -33,6 +33,12 @@ async def list_feature_flags(
     """List all feature flags."""
     service = FeatureFlagService(db)
     try:
+        # Seed notify toggles so admin UI can flip them without a migration.
+        from src.domain.services.compliance_schedule_notify_flags import ensure_compliance_schedule_notify_flags
+        from src.domain.services.incident_notify_flags import ensure_incident_notify_flags
+
+        await ensure_compliance_schedule_notify_flags(db)
+        await ensure_incident_notify_flags(db)
         flags = await service.list_flags()
     except ProgrammingError:
         logger.exception("GET /feature-flags failed — feature_flags table unavailable")
@@ -89,7 +95,31 @@ async def get_feature_flag(
     db: DbSession,
     current_user: CurrentUser,
 ) -> FeatureFlagResponse:
-    """Get a specific feature flag by key."""
+    """Get a specific feature flag by key.
+
+    Compliance Schedule / Incident notify keys are seeded on read so Admin
+    Notification Settings can toggle them without first hitting the paginated
+    list endpoint.
+    """
+    from src.domain.services.compliance_schedule_notify_flags import NOTIFY_FLAG_KEYS as CS_NOTIFY_FLAG_KEYS
+    from src.domain.services.compliance_schedule_notify_flags import ensure_compliance_schedule_notify_flags
+    from src.domain.services.incident_notify_flags import NOTIFY_FLAG_KEYS as INCIDENT_NOTIFY_FLAG_KEYS
+    from src.domain.services.incident_notify_flags import ensure_incident_notify_flags
+
+    if key in CS_NOTIFY_FLAG_KEYS or key in INCIDENT_NOTIFY_FLAG_KEYS:
+        try:
+            if key in CS_NOTIFY_FLAG_KEYS:
+                await ensure_compliance_schedule_notify_flags(db)
+            if key in INCIDENT_NOTIFY_FLAG_KEYS:
+                await ensure_incident_notify_flags(db)
+        except ProgrammingError:
+            logger.exception("GET /feature-flags/%s seed failed — feature_flags table unavailable", key)
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Feature flag not found"),
+            ) from None
+
     service = FeatureFlagService(db)
     flag = await service._get_flag(key)
     if not flag:
@@ -107,7 +137,30 @@ async def update_feature_flag(
     db: DbSession,
     current_user: CurrentSuperuser,
 ) -> FeatureFlagResponse:
-    """Update a feature flag (admin only)."""
+    """Update a feature flag (admin only).
+
+    Seed CS / Incident notify keys first so a fresh DB can persist toggles from
+    Notification Settings without a prior list call.
+    """
+    from src.domain.services.compliance_schedule_notify_flags import NOTIFY_FLAG_KEYS as CS_NOTIFY_FLAG_KEYS
+    from src.domain.services.compliance_schedule_notify_flags import ensure_compliance_schedule_notify_flags
+    from src.domain.services.incident_notify_flags import NOTIFY_FLAG_KEYS as INCIDENT_NOTIFY_FLAG_KEYS
+    from src.domain.services.incident_notify_flags import ensure_incident_notify_flags
+
+    if key in CS_NOTIFY_FLAG_KEYS or key in INCIDENT_NOTIFY_FLAG_KEYS:
+        try:
+            if key in CS_NOTIFY_FLAG_KEYS:
+                await ensure_compliance_schedule_notify_flags(db)
+            if key in INCIDENT_NOTIFY_FLAG_KEYS:
+                await ensure_incident_notify_flags(db)
+        except ProgrammingError:
+            logger.exception("PATCH /feature-flags/%s seed failed — feature_flags table unavailable", key)
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Feature flag not found"),
+            ) from None
+
     service = FeatureFlagService(db)
     update_data = data.model_dump(exclude_unset=True, by_alias=False)
 

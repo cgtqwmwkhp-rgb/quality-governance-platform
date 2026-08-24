@@ -14,6 +14,7 @@ import { createRiskRegisterApi } from './riskRegisterClient'
 import { createNotificationsApi } from './notificationsClient'
 import { createInvestigationsApi } from './investigationsClient'
 import { createActionsApi } from './actionsClient'
+import { createApprovalsApi } from './approvalsClient'
 import { createIncidentsApi } from './incidentsClient'
 import { createPoliciesApi } from './policiesClient'
 import { createRtasApi } from './rtasClient'
@@ -22,13 +23,34 @@ import { createSafetyInsightsApi } from './safetyInsightsClient'
 import { createAuditChallengeApi } from './auditChallengeClient'
 import { createComplaintsApi } from './complaintsClient'
 import { createNearMissesApi } from './nearMissesClient'
+import { createComplianceScheduleApi } from './complianceScheduleClient'
+import { createComplianceScheduleFraOcrApi } from './complianceScheduleFraOcrClient'
+import { createDocumentGraphApi } from './documentGraphClient'
+import { createEntity360Api } from './entity360Client'
+import { createJobLifecycleApi } from './jobLifecycleClient'
+import { createCaseClosureApi } from './caseClosureClient'
 import { createRisksApi } from './risksClient'
 import { createStandardsApi } from './standardsClient'
+import { createStandardsCellAggregateApi } from './standardsCellAggregateClient'
 import { createAuditsApi } from './auditsClient'
 import { createWorkforceApi } from './workforceClient'
 import { createEngineersApi } from './engineersClient'
 import { createPlanetMarkApi } from './planetMarkClient'
 import { humaniseCodedText } from '../helpers/displayLabels'
+import {
+  WRITE_METHODS,
+  classifyWriteTimeoutDisposition,
+  isTimeoutOrAbortError,
+} from './timeoutClassification'
+
+// Timeout classification lives in its own module so UI code (e.g. the audit
+// builder's save error model) can reuse it without importing this file's axios
+// instance and store wiring. Re-exported here for existing callers.
+export {
+  classifyWriteTimeoutDisposition,
+  isMaybeCommittedTimeout,
+  isTimeoutOrAbortError,
+} from './timeoutClassification'
 import { createUvdbApi } from './uvdbClient'
 import { createUsersApi } from './usersClient'
 import { createWorkflowsApi } from './workflowsClient'
@@ -94,8 +116,6 @@ const UPLOAD_TIMEOUT_MS = 120000
 // Extended timeout for import processing (5 minutes)
 // PDF extraction + OCR + dual AI analysis (Mistral + Gemini) runs synchronously
 const PROCESSING_TIMEOUT_MS = 300000
-
-const WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 
 /**
  * Resolve per-request timeout. Preserves explicit caller overrides (e.g. uploads).
@@ -198,6 +218,19 @@ export function classifyLoginError(error: unknown): LoginErrorCode {
 
 // ============ Bounded Error Classes for API Responses ============
 // Universal error classification for all API calls
+
+/**
+ * Codes meaning "a table this feature needs is not in this deployment".
+ *
+ * `MEASUREMENT_UNAVAILABLE` is the read case ("we could not look"),
+ * `FEATURE_NOT_PROVISIONED` the write case ("nothing was recorded"). Both arrive
+ * as 503 but neither clears on retry, which is why they are exempted from the
+ * "Server error:" prefix and from any copy inviting the user to try again.
+ */
+export const UNPROVISIONED_ERROR_CODES: ReadonlySet<string> = new Set([
+  'MEASUREMENT_UNAVAILABLE',
+  'FEATURE_NOT_PROVISIONED',
+])
 
 export enum ErrorClass {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
@@ -571,17 +604,6 @@ interface ClassifiedAxiosError extends AxiosError {
   maybeCommitted?: boolean
 }
 
-/** Timeout / AbortController cancel (axios ECONNABORTED / CanceledError). */
-export function isTimeoutOrAbortError(error: {
-  code?: string
-  message?: string
-  name?: string
-}): boolean {
-  if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') return true
-  if (error.name === 'CanceledError' || error.name === 'AbortError') return true
-  return typeof error.message === 'string' && error.message.toLowerCase().includes('timeout')
-}
-
 /**
  * Whether a transport failure should drive OfflineIndicator via connectionStatus.
  * PX-029: timeout/abort while navigator.onLine must NOT mark the app Offline.
@@ -599,31 +621,6 @@ export function shouldMarkConnectionDisconnected(error: {
     return false
   }
   return true
-}
-
-/**
- * Classify write-timeout disposition for UX. POST (and other mutations) that
- * time out are maybe-committed — reconcile/list before retrying; Idempotency-Key
- * makes a deliberate retry safe, but blind retry is discouraged.
- */
-export function classifyWriteTimeoutDisposition(
-  error: { code?: string; message?: string; name?: string },
-  method?: string,
-): 'maybe_committed' | 'safe_retry_read' | 'not_timeout' {
-  if (!isTimeoutOrAbortError(error)) return 'not_timeout'
-  const m = (method ?? 'get').toLowerCase()
-  if (WRITE_METHODS.has(m) && m !== 'delete') {
-    // DELETE is usually idempotent; POST/PUT/PATCH creates/updates may have landed.
-    return 'maybe_committed'
-  }
-  if (m === 'delete') return 'maybe_committed'
-  return 'safe_retry_read'
-}
-
-export function isMaybeCommittedTimeout(
-  error: { code?: string; message?: string; name?: string; config?: { method?: string } },
-): boolean {
-  return classifyWriteTimeoutDisposition(error, error.config?.method) === 'maybe_committed'
 }
 
 api.interceptors.response.use(
@@ -691,8 +688,7 @@ api.interceptors.response.use(
 
       ;(error as ClassifiedAxiosError).classifiedMessage = 'Session expired. Please sign in again.'
     } else if (status === 403) {
-      ;(error as ClassifiedAxiosError).classifiedMessage =
-        "You don't have permission to perform this action."
+      ;(error as ClassifiedAxiosError).classifiedMessage = forbiddenMessageFor(error)
     } else if (status === 409) {
       const data409 = error.response?.data as Record<string, unknown> | undefined
       if (data409?.error_class === 'UAT_WRITE_BLOCKED') {
@@ -727,9 +723,19 @@ api.interceptors.response.use(
       const serverMsg =
         (errorEnvelope?.['message'] as string | undefined) ||
         (data500?.['detail'] as string | undefined)
-      ;(error as ClassifiedAxiosError).classifiedMessage = serverMsg
-        ? `Server error: ${serverMsg}`
-        : 'Server error. Please try again later.'
+      const code = errorEnvelope?.['code'] as string | undefined
+      if (serverMsg && code && UNPROVISIONED_ERROR_CODES.has(code)) {
+        // Not a fault: a table this feature reads or writes is not in the
+        // deployment. Prefixing "Server error:" would frame a feature that was
+        // never built as something that broke and might come back, and the
+        // server's own wording already says which table and that retrying will
+        // not help. Passed through verbatim for that reason.
+        ;(error as ClassifiedAxiosError).classifiedMessage = serverMsg
+      } else {
+        ;(error as ClassifiedAxiosError).classifiedMessage = serverMsg
+          ? `Server error: ${serverMsg}`
+          : 'Server error. Please try again later.'
+      }
     } else if (isTimeoutOrAbortError(error)) {
       const method = error.config?.method
       const maybeCommitted =
@@ -756,6 +762,48 @@ api.interceptors.response.use(
 /** Strip Python enum reprs and other coded tokens from a server-composed message. */
 function presentServerErrorMessage(raw: string): string {
   return humaniseCodedText(raw)
+}
+
+/**
+ * Read the server's error code out of the unified envelope.
+ *
+ * Returns null when there is no envelope, so a caller can tell "the server did
+ * not name a code" from "the server named a code I do not handle".
+ */
+export function getApiErrorCode(error: unknown): string | null {
+  if (!axios.isAxiosError(error)) return null
+  const data = error.response?.data as Record<string, unknown> | undefined
+  const envelope = data?.['error']
+  if (envelope && typeof envelope === 'object') {
+    const code = (envelope as Record<string, unknown>)['code']
+    if (typeof code === 'string' && code.trim()) return code
+  }
+  return null
+}
+
+/**
+ * The message for a 403, which is two different failures wearing one status code.
+ *
+ * A user whose account carries no tenant is refused by ``_resolve_user_tenant_context``
+ * on every request, including endpoints that check no permission at all. Telling them
+ * they lack permission is both untrue and unactionable — there is no permission to
+ * grant, and the fix is an administrator assigning their organisation.
+ */
+export function forbiddenMessageFor(error: unknown): string {
+  if (getApiErrorCode(error) === 'TENANT_ACCESS_DENIED') {
+    return (
+      'Your account is not linked to an organisation yet, so it cannot load any data. ' +
+      'This is an account setup issue rather than a permissions one — ask an administrator ' +
+      'to assign your organisation.'
+    )
+  }
+  return "You don't have permission to perform this action."
+}
+
+/** True when a failure is a missing table rather than something that went wrong. */
+export function isUnprovisionedError(error: unknown): boolean {
+  const code = getApiErrorCode(error)
+  return code !== null && UNPROVISIONED_ERROR_CODES.has(code)
 }
 
 /**
@@ -979,6 +1027,7 @@ export interface Control {
 // ============ Action Types (extracted: actionsClient.ts) ============
 export type {
   Action,
+  ActionListResponse,
   ActionsSummary,
   ActionsViewCounts,
   ActionCreate,
@@ -986,6 +1035,11 @@ export type {
   ActionOwnerNote,
   ActionOwnerNoteListResponse,
 } from './actionsClient'
+// `actionsAreComplete` / `describeUnavailableSources` are deliberately NOT
+// re-exported here. They are pure functions, and this module is the axios barrel
+// that page tests replace wholesale with `vi.mock('../../api/client', factory)`.
+// Anything imported from here has to be restated in every such factory or it
+// arrives as undefined at runtime. Import them from './actionsClient' directly.
 
 // ============ API Functions ============
 export const authApi = {
@@ -1019,6 +1073,47 @@ export const complaintsApi = createComplaintsApi(api)
 
 // ============ Near Misses API (extracted: nearMissesClient.ts) ============
 export const nearMissesApi = createNearMissesApi(api)
+
+// ============ Compliance Schedule API ============
+export const complianceScheduleApi = createComplianceScheduleApi(api)
+export const complianceScheduleFraOcrApi = createComplianceScheduleFraOcrApi(api)
+
+// ============ Doc Graph API (ADR-0021 — not the Golden Thread) ============
+export const documentGraphApi = createDocumentGraphApi(api)
+export type {
+  CreateDocumentEdgePayload,
+  CitationStalenessResponse,
+  CitationStalenessStatus,
+  ClauseDocumentFreshness,
+  ClauseDocumentFreshnessItem,
+  ClauseDocumentsResponse,
+  DocumentEdge,
+  DocumentEdgeMethod,
+  DocumentEdgeStatus,
+  DocumentEdgeType,
+  HeuristicProposeResponse,
+} from './documentGraphClient'
+
+// ============ Entity360 API (conveyor X-1 — shared hop / ImpactBundle) ============
+export const entity360Api = createEntity360Api(api)
+export type {
+  Entity360Bundle,
+  Entity360Hop,
+  Entity360SourceStatus,
+  ImpactBundle,
+} from './entity360Client'
+
+// ============ Job Lifecycle API (JL-1 / JL-2 / ADR-0022) ============
+export const jobLifecycleApi = createJobLifecycleApi(api)
+export type {
+  JobCell,
+  JobLane,
+  JobStep,
+  JobType,
+} from './jobLifecycleClient'
+
+// ============ Case closure validation (shared by the four registers) ============
+export const caseClosureApi = createCaseClosureApi(api)
 
 // ============ Policies API (extracted: policiesClient.ts) ============
 export const policiesApi = createPoliciesApi(api)
@@ -1085,6 +1180,11 @@ export const standardsApi = createStandardsApi(api)
 
 // ============ Actions API (extracted: actionsClient.ts) ============
 export const actionsApi = createActionsApi(api)
+
+// ============ Approvals read model (approvalsClient.ts) ============
+// Read-only: decisions are recorded by the domain that raised them, so there is
+// no approve/reject here.
+export const approvalsApi = createApprovalsApi(api)
 
 export type {
   CarbonReportingYear,
@@ -1478,6 +1578,8 @@ export interface CrossStandardMappingRecord {
   annex_sl_element?: string | null
 }
 
+export const standardsCellAggregateApi = createStandardsCellAggregateApi(api)
+
 export const complianceApi = {
   listClauses: (standard?: string, search?: string) => {
     const sp = new URLSearchParams()
@@ -1541,12 +1643,16 @@ export const complianceApi = {
     includeNonconformity?: boolean
     includeSoa?: boolean
     organizationName?: string
+    frameworks?: string[]
   }) => {
     const sp = new URLSearchParams()
     if (params?.standard) sp.set('standard', params.standard)
     if (params?.includeNonconformity) sp.set('include_nonconformity', 'true')
     if (params?.includeSoa === false) sp.set('include_soa', 'false')
     if (params?.organizationName) sp.set('organization_name', params.organizationName)
+    for (const id of params?.frameworks ?? []) {
+      if (id) sp.append('frameworks', id)
+    }
     const qs = sp.toString()
     return api.get<Record<string, unknown>>(`/api/v1/compliance/audit-pack${qs ? `?${qs}` : ''}`)
   },
@@ -1665,11 +1771,18 @@ export const complianceAutomationApi = {
     name: string
     certificate_type: string
     entity_type: string
-    entity_id: string
+    /**
+     * Scoping key inside the tenant. Omitted for an organisation-level
+     * accreditation, where the server supplies the tenant's own id — the browser
+     * has no tenant id to send.
+     */
+    entity_id?: string
     entity_name?: string
+    reference_number?: string
     issuing_body?: string
     issue_date: string
     expiry_date: string
+    reminder_days?: number
     is_critical?: boolean
     notes?: string
   }) => api.post<unknown>('/api/v1/compliance-automation/certificates', data),
@@ -1724,13 +1837,53 @@ export const complianceAutomationApi = {
   },
   submitRiddor: (incidentId: number) =>
     api.post<unknown>(`/api/v1/compliance-automation/riddor/submit/${incidentId}`),
+  getStandardsDigests: (params?: { due_soon_days?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.due_soon_days) sp.set('due_soon_days', String(params.due_soon_days))
+    const qs = sp.toString()
+    return api.get<Record<string, unknown>>(
+      `/api/v1/compliance-automation/standards-digests${qs ? `?${qs}` : ''}`,
+    )
+  },
 }
 
 // ============ IMS Dashboard API ============
 
+export interface IMSCellFrameworkMeter {
+  framework: string
+  axis_source: 'alignment' | 'requirement_catalogue' | string
+  cells: number
+  covered: number
+  partial: number
+  gap: number
+  unknown: number
+  cert_count: number
+  open_nc_cells: number
+}
+
+export interface IMSCellOverview {
+  tracked_count: number
+  matrix_loaded: boolean
+  matrix_version: string | null
+  totals: {
+    covered: number
+    partial: number
+    gap: number
+    unknown: number
+    cells: number
+  }
+  frameworks: IMSCellFrameworkMeter[]
+  scan_truncated: boolean
+  scan_truncated_sources: string[]
+  honesty: string
+  error?: string
+}
+
 export interface IMSDashboardResponse {
   generated_at: string
   overall_compliance: number
+  cell_overview?: IMSCellOverview | null
+  cell_overview_error?: string
   standards: {
     standard_id: number
     standard_code: string
@@ -2256,7 +2409,17 @@ export const evidenceAssetsApi = {
 
 export interface GlobalSearchResultRecord {
   id: string
-  type: 'incident' | 'rta' | 'complaint' | 'near_miss' | 'risk' | 'audit' | 'action' | 'document'
+  type:
+    | 'incident'
+    | 'rta'
+    | 'complaint'
+    | 'near_miss'
+    | 'risk'
+    | 'audit'
+    | 'action'
+    | 'document'
+    | 'document_content'
+    | 'compliance_requirement'
   title: string
   description: string
   module: string
@@ -2266,6 +2429,10 @@ export interface GlobalSearchResultRecord {
   highlights: string[]
   entity_id?: number | null
   path?: string | null
+  /** Chunk section heading when the API provides it */
+  heading?: string | null
+  /** Chunk page when the API provides it (else FE may parse from path) */
+  page_number?: number | null
 }
 
 export interface GlobalSearchResponse {
@@ -2278,13 +2445,7 @@ export interface GlobalSearchResponse {
 }
 
 // ============ Workflows API (extracted: workflowsClient.ts) ============
-export type {
-  WorkflowApprovalRecord,
-  WorkflowInstanceRecord,
-  WorkflowTemplateRecord,
-  WorkflowDelegationRecord,
-  WorkflowStatsResponse,
-} from './workflowsClient'
+export type { WorkflowInstanceRecord, WorkflowTemplateRecord } from './workflowsClient'
 export const workflowsApi = createWorkflowsApi(api)
 
 // ============ Executive Dashboard ============
@@ -2391,6 +2552,20 @@ export interface ExecutiveDashboardData {
     title: string
     triggered_at: string
   }[]
+  /**
+   * Compliance Schedule obligations from the same get_stats SSOT as
+   * GET /api/v1/compliance-schedule/stats. `null`/absent when the module is
+   * closed to this caller (flag, kill switch, or missing read permission).
+   * When present with available=false, the register could not be read.
+   */
+  compliance_schedule?: {
+    available: boolean
+    total_active: number | null
+    current: number | null
+    due_soon: number | null
+    overdue: number | null
+    href?: string
+  } | null
 }
 
 export const executiveDashboardApi = {
@@ -2401,7 +2576,10 @@ export const executiveDashboardApi = {
       health_score: number | null
       health_status: string
       open_incidents: number
-      pending_actions: number
+      /** Open incidents + open complaints. Moves with case volume, not with action closure. */
+      open_cases: number
+      /** Actions still owed. `null` means unreadable, NOT none outstanding (C-66). */
+      pending_actions: number | null
       overdue_items: number
       kri_alerts: number
     }>('/api/v1/executive-dashboard/summary'),

@@ -253,7 +253,7 @@ use one or more of these mixins, which add standard columns:
 | assigned_to_id | Integer | FK → `users.id` |
 | processing_restricted | Boolean | GDPR Art. 18 |
 
-**Check constraints:** status in (REPORTED, UNDER_REVIEW, ACTION_REQUIRED, IN_PROGRESS, CLOSED); priority in (LOW, MEDIUM, HIGH, CRITICAL).
+**Check constraints:** status in (reported, under_investigation, pending_actions, actions_in_progress, pending_review, closed) — the incident lifecycle, aligned by `20260910_nm_status_align`, which is also the first migration to create `ck_near_misses_status` on a deployed database; priority in (LOW, MEDIUM, HIGH, CRITICAL).
 
 ---
 
@@ -570,7 +570,7 @@ These tables are children of the main entities above:
 | `workflow_instances` | `workflow_templates.id` | Running workflow instances |
 | `workflow_steps` | `workflow_instances.id` | Step execution records |
 | `approval_requests` | `workflow_steps.id` | Individual approval tasks |
-| `escalation_rules` | `workflow_templates.id` | Auto-escalation config |
+| `escalation_rules_config` | `workflow_templates.id` | Auto-escalation config |
 | `escalation_logs` | `workflow_instances.id` | Escalation event records |
 | `mentions` | `users.id` | @mention tracking |
 | `assignments` | `users.id` | Entity assignment tracking |

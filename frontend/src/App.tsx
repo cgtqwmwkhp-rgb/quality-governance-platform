@@ -12,7 +12,10 @@ import {
   getValidPlatformToken,
   establishPlatformSession,
   clearAuthState,
+  clearReturnPath,
+  consumeReturnPath,
   revokeSession,
+  stashReturnPath,
 } from './utils/auth'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
 import { isAIIntelligenceRouteEnabled } from './config/aiIntelligenceRoute'
@@ -36,10 +39,11 @@ const InvestigationDetail = lazy(() => import('./pages/InvestigationDetail'))
 const InvestigationTemplateBuilder = lazy(
   () => import('./pages/investigation-builder/InvestigationTemplateBuilder'),
 )
-const Standards = lazy(() => import('./pages/Standards'))
 const Actions = lazy(() => import('./pages/Actions'))
 const ActionDetail = lazy(() => import('./pages/ActionDetail'))
 const Documents = lazy(() => import('./pages/Documents'))
+const DocumentStructureMap = lazy(() => import('./pages/DocumentStructureMap'))
+const JobLifecycle = lazy(() => import('./pages/JobLifecycle'))
 const DocumentDetail = lazy(() => import('./pages/DocumentDetail'))
 const DocumentControl = lazy(() => import('./pages/DocumentControl'))
 const MyReading = lazy(() => import('./pages/MyReading'))
@@ -61,6 +65,8 @@ const PortalWork = lazy(() => import('./pages/PortalWork'))
 const PortalReading = lazy(() => import('./pages/PortalReading'))
 const PortalMyTools = lazy(() => import('./pages/PortalMyTools'))
 const PortalMyVan = lazy(() => import('./pages/PortalMyVan'))
+const PortalFireDrill = lazy(() => import('./pages/PortalFireDrill'))
+const PortalJobCycles = lazy(() => import('./pages/PortalJobCycles'))
 const PortalIncidentForm = lazy(() => import('./pages/PortalIncidentForm'))
 const PortalRTAForm = lazy(() => import('./pages/PortalRTAForm'))
 const PortalNearMissForm = lazy(() => import('./pages/PortalNearMissForm'))
@@ -77,15 +83,15 @@ const ComplianceEvidence = lazy(() => import('./pages/ComplianceEvidence'))
 const AdvancedAnalytics = lazy(() => import('./pages/AdvancedAnalytics'))
 const DashboardBuilder = lazy(() => import('./pages/DashboardBuilder'))
 const ReportGenerator = lazy(() => import('./pages/ReportGenerator'))
-const WorkflowCenter = lazy(() => import('./pages/WorkflowCenter'))
 const ComplianceAutomation = lazy(() => import('./pages/ComplianceAutomation'))
+const ComplianceSchedule = lazy(() => import('./pages/ComplianceSchedule'))
+const ComplianceScheduleDetail = lazy(() => import('./pages/ComplianceScheduleDetail'))
 const RiskRegister = lazy(() => import('./pages/RiskRegister'))
 const RiskProfile = lazy(() => import('./pages/RiskProfile'))
 const IMSDashboard = lazy(() => import('./pages/IMSDashboard'))
 const AIIntelligence = lazy(() => import('./pages/AIIntelligence'))
 const UVDBAudits = lazy(() => import('./pages/UVDBAudits'))
 const PlanetMark = lazy(() => import('./pages/PlanetMark'))
-const AssuranceCertShelf = lazy(() => import('./pages/AssuranceCertShelf'))
 const CustomerAudits = lazy(() => import('./pages/CustomerAudits'))
 const DigitalSignatures = lazy(() => import('./pages/DigitalSignatures'))
 const VehicleChecklists = lazy(() => import('./pages/VehicleChecklists'))
@@ -100,9 +106,7 @@ const WorkforceTraining = lazy(() => import('./pages/workforce/Training'))
 const WorkforceTrainingExecution = lazy(() => import('./pages/workforce/TrainingExecution'))
 const WorkforceEngineers = lazy(() => import('./pages/workforce/Engineers'))
 const WorkforceEngineerProfile = lazy(() => import('./pages/workforce/EngineerProfile'))
-const WorkforceCalendar = lazy(() => import('./pages/workforce/Calendar'))
 const WorkforceCompetencyDashboard = lazy(() => import('./pages/workforce/CompetencyDashboard'))
-const CompetenceGaps = lazy(() => import('./pages/CompetenceGaps'))
 const PortalNotFound = lazy(() => import('./pages/PortalNotFound'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
@@ -193,6 +197,45 @@ function RedirectToRiskRegister() {
   return <Navigate to={`/risk-register${search}`} replace />
 }
 
+/**
+ * Absorb Standards into /compliance (Wave 1 PR-A programme shell).
+ * Preserves query params (e.g. code/clause) and defaults view=matrix.
+ */
+function RedirectStandardsToCompliance() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  if (!params.get('view')) params.set('view', 'matrix')
+  const qs = params.toString()
+  return <Navigate to={`/compliance${qs ? `?${qs}` : ''}`} replace />
+}
+
+/**
+ * Send an unauthenticated visitor to sign in, remembering where they were
+ * heading (PX-179).
+ *
+ * Stashing during render is safe here: the value is derived purely from the
+ * current location and writing it twice (StrictMode) stores the same string.
+ * Doing it in an effect would be too late — `<Navigate>` is a child, so its
+ * effect would fire first.
+ */
+function RedirectToLogin() {
+  const { pathname, search } = useLocation()
+  stashReturnPath(`${pathname}${search}`)
+  return <Navigate to="/login" replace />
+}
+
+/**
+ * Put the user back where the session ended, falling back to the dashboard.
+ *
+ * The target is resolved once per mount: `consumeReturnPath()` clears the
+ * stash as it reads, so calling it straight from render would lose the
+ * destination on any re-render that beats the navigation.
+ */
+function PostLoginRedirect() {
+  const [target] = useState(() => consumeReturnPath() ?? '/dashboard')
+  return <Navigate to={target} replace />
+}
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getValidPlatformToken()))
   const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
@@ -200,7 +243,7 @@ function App() {
   // Keep the access JWT warm for long sessions (e.g. tablet auditors who
   // can sit on the questionnaire for >30 min between API calls without
   // realising the access token has expired).
-  useSessionKeepalive({ enabled: isAuthenticated })
+  const session = useSessionKeepalive({ enabled: isAuthenticated })
 
   // When the service worker reports a 401/403 from a fetch it intercepted,
   // trigger a silent token refresh instead of waiting for the next axios
@@ -222,6 +265,9 @@ function App() {
   const handleLogout = async () => {
     await revokeSession()
     clearAuthState()
+    // Signing out deliberately is not a session loss: drop the return path
+    // clearAuthState() just recorded so the next sign-in starts clean.
+    clearReturnPath()
     useNotificationStore.getState().clearAll()
     setIsAuthenticated(false)
   }
@@ -273,6 +319,9 @@ function App() {
               <Route path="reading" element={<PortalReading />} />
               <Route path="tools" element={<PortalMyTools />} />
               <Route path="van" element={<PortalMyVan />} />
+              <Route path="fire-drill" element={<PortalFireDrill />} />
+              <Route path="job-cycles" element={<PortalJobCycles />} />
+              <Route path="job-cycles/:jobTypeId" element={<PortalJobCycles />} />
               <Route path="help" element={<PortalHelp />} />
               <Route path="*" element={<PortalNotFound />} />
             </Route>
@@ -281,11 +330,7 @@ function App() {
             <Route
               path="/login"
               element={
-                isAuthenticated ? (
-                  <Navigate to="/dashboard" replace />
-                ) : (
-                  <Login onLogin={handleLogin} />
-                )
+                isAuthenticated ? <PostLoginRedirect /> : <Login onLogin={handleLogin} />
               }
             />
 
@@ -297,9 +342,14 @@ function App() {
               path="/"
               element={
                 isAuthenticated ? (
-                  <Layout onLogout={handleLogout} />
+                  <Layout
+                    onLogout={handleLogout}
+                    sessionExpiryImminent={session.expiryImminent}
+                    sessionExtending={session.extending}
+                    onExtendSession={() => void session.extendSession()}
+                  />
                 ) : (
-                  <Navigate to="/login" replace />
+                  <RedirectToLogin />
                 )
               }
             >
@@ -340,14 +390,19 @@ function App() {
                   element={<InvestigationTemplateBuilder />}
                 />
                 <Route path="investigations/:id" element={<InvestigationDetail />} />
-                <Route path="standards" element={<Standards />} />
+                <Route path="standards" element={<RedirectStandardsToCompliance />} />
                 <Route path="actions" element={<Actions />} />
                 <Route path="actions/item" element={<LegacyActionItemRedirect />} />
                 <Route path="actions/:id" element={<ActionDetail />} />
                 <Route path="compliance" element={<ComplianceEvidence />} />
                 <Route path="uvdb" element={<UVDBAudits />} />
                 <Route path="planet-mark" element={<PlanetMark />} />
-                <Route path="assurance/certificates" element={<AssuranceCertShelf />} />
+                {/* The certificate shelf is a view of the Compliance Schedule; this
+                    keeps existing bookmarks and deep links landing on it. */}
+                <Route
+                  path="assurance/certificates"
+                  element={<Navigate to="/compliance-schedule?view=certificates" replace />}
+                />
                 <Route path="customer-audits" element={<CustomerAudits />} />
                 <Route path="signatures" element={<DigitalSignatures />} />
               </Route>
@@ -374,6 +429,10 @@ function App() {
                     </RequireRole>
                   }
                 />
+                <Route path="documents/structure" element={<DocumentStructureMap />} />
+                <Route path="job-lifecycle" element={<JobLifecycle />} />
+                <Route path="job-lifecycle/steps/:stepId" element={<JobLifecycle />} />
+                <Route path="job-lifecycle/cycles/:jobTypeId" element={<JobLifecycle />} />
                 <Route path="documents/:id" element={<DocumentDetail />} />
                 <Route path="document-control" element={<DocumentControl />} />
                 <Route path="my-reading" element={<MyReading />} />
@@ -449,13 +508,12 @@ function App() {
                     </RequireRole>
                   }
                 />
+                {/* The workforce calendar duplicated /calendar with less coverage: the
+                    unified feed already loads assessment and induction runs as "training"
+                    events. Bookmarks land on that feed pre-filtered to training. */}
                 <Route
                   path="workforce/calendar"
-                  element={
-                    <RequireRole allowed={['admin', 'supervisor']}>
-                      <WorkforceCalendar />
-                    </RequireRole>
-                  }
+                  element={<Navigate to="/calendar?types=training" replace />}
                 />
                 <Route
                   path="workforce/dashboard"
@@ -465,13 +523,12 @@ function App() {
                     </RequireRole>
                   }
                 />
+                {/* Competence gaps had no home of its own: gaps are raised by the
+                    Knowledge Exchange evidence hook and only become work once they
+                    are a CAPA, so the register folds into Actions on that source. */}
                 <Route
                   path="workforce/competence-gaps"
-                  element={
-                    <RequireRole allowed={['admin', 'supervisor']}>
-                      <CompetenceGaps />
-                    </RequireRole>
-                  }
+                  element={<Navigate to="/actions?sourceType=competence_gap" replace />}
                 />
               </Route>
 
@@ -479,8 +536,13 @@ function App() {
               <Route element={<RouteErrorBoundary />}>
                 <Route path="users" element={<Navigate to="/admin/users" replace />} />
                 <Route path="audit-trail" element={<AuditTrail />} />
-                <Route path="workflows" element={<WorkflowCenter />} />
+                {/* Workflow Center is frozen: the engine persisted nothing, so the page
+                    could only ever render an empty queue. Bookmarks land on the live
+                    action queue until FR-APPROVALS-01 ships a real approvals surface. */}
+                <Route path="workflows" element={<Navigate to="/actions?view=mine" replace />} />
                 <Route path="compliance-automation" element={<ComplianceAutomation />} />
+                <Route path="compliance-schedule" element={<ComplianceSchedule />} />
+                <Route path="compliance-schedule/:id" element={<ComplianceScheduleDetail />} />
                 <Route path="risk-register" element={<RiskRegister />} />
                 <Route path="risk-register/:riskId" element={<RiskProfile />} />
                 <Route path="ims" element={<IMSDashboard />} />

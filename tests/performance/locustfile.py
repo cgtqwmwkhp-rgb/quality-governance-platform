@@ -253,21 +253,40 @@ class QGPUser(HttpUser):
         """Get portal statistics."""
         self.client.get("/api/v1/portal/stats/", headers=self.auth_headers)
 
+    # 201 is the only correct answer to a valid submission. 429 is allowed because
+    # portal endpoints are rate limited at 30 req/min per client and a load test
+    # against a non-TESTING host legitimately hits that; CI runs with TESTING=1 and
+    # never does. Nothing else is accepted — a 4xx here is either a broken payload
+    # in this task or a regression on the public intake path, and either way it must
+    # spend the error budget visibly rather than be tolerated.
+    SUBMIT_EXPECTED_STATUSES = frozenset({201, 429})
+
     @task(4)
     def submit_quick_report(self):
         """Submit a quick report via portal."""
+        # PX-312: anonymous portal submissions are hard-off. Named submissions
+        # must carry reporter_name / complainant_name (ACT-025).
         report_data = {
             "report_type": random.choice(["incident", "complaint"]),
             "title": f"Test Report {random_string(8)}",
             "description": "This is a test report submitted during load testing.",
             "severity": random.choice(["low", "medium", "high"]),
-            "is_anonymous": random.choice([True, False]),
+            "is_anonymous": False,
+            "reporter_name": f"Load Test Reporter {random.randint(1, 100)}",
         }
-        self.client.post(
+        with self.client.post(
             "/api/v1/portal/reports/",
             json=report_data,
             name="/api/v1/portal/reports/",
-        )
+            catch_response=True,
+        ) as response:
+            if response.status_code in self.SUBMIT_EXPECTED_STATUSES:
+                response.success()
+            else:
+                response.failure(
+                    f"portal submission should be accepted with 201 "
+                    f"(or 429 when rate limited), got {response.status_code}: {response.text[:400]}"
+                )
 
     # PX-315 gave the track endpoint one status per failure mode. This task
     # sends a junk 12-character code, and a valid code is a 24-hex-character
@@ -386,10 +405,16 @@ class AdminUser(HttpUser):
         )
 
     @task(2)
-    def get_workflow_stats(self):
-        """Get workflow statistics."""
+    def get_my_decisions(self):
+        """Read the decisions outstanding for this user.
+
+        Replaces a task against `/api/v1/workflows/stats`, deleted in
+        FR-APPROVALS-01. This one is the load-test that matters more anyway: the
+        old endpoint computed its figures from an empty in-memory dict, so it
+        measured nothing but FastAPI, while this reads three domains per call.
+        """
         self.client.get(
-            "/api/v1/workflows/stats",
+            "/api/v1/approvals/my-decisions",
             headers=self.auth_headers,
         )
 

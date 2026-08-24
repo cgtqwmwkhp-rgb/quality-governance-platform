@@ -18,8 +18,14 @@ from src.domain.exceptions import ValidationError
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
-from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
+from src.domain.models.rta import RoadTrafficCollision, RTAStatus
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.rta_severity import derive_portal_rta_severity, interpret_rta_injury_answer
+from src.domain.services.shared_severity import (
+    map_portal_severity,
+    near_miss_priority_for_severity,
+    normalize_portal_severity,
+)
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -63,14 +69,8 @@ def _hash_tracking_code(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
 
-def _map_severity(severity: str) -> tuple:
-    severity_map = {
-        "low": (IncidentSeverity.LOW, ComplaintPriority.LOW),
-        "medium": (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM),
-        "high": (IncidentSeverity.HIGH, ComplaintPriority.HIGH),
-        "critical": (IncidentSeverity.CRITICAL, ComplaintPriority.CRITICAL),
-    }
-    return severity_map.get(severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM))
+def _map_severity(severity: str) -> tuple[IncidentSeverity, ComplaintPriority]:
+    return map_portal_severity(severity)
 
 
 def _get_status_label(status: str) -> str:
@@ -216,13 +216,14 @@ class PortalService:
 
     async def _submit_rta(self, data: dict, is_anonymous: bool, tracking_code: str) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "rta", RoadTrafficCollision)
-        rta_severity_map = {
-            "low": RTASeverity.DAMAGE_ONLY,
-            "medium": RTASeverity.MINOR_INJURY,
-            "high": RTASeverity.SERIOUS_INJURY,
-            "critical": RTASeverity.FATAL,
-        }
-        rta_severity = rta_severity_map.get(data.get("severity", "low").lower(), RTASeverity.DAMAGE_ONLY)
+        # data["severity"] is the portal's triage word and says nothing about human
+        # harm, so it must not choose an RTASeverity. Injury evidence decides.
+        raw_submission = data.get("reporter_submission")
+        submission: dict[str, Any] = raw_submission if isinstance(raw_submission, dict) else {}
+        rta_severity = derive_portal_rta_severity(
+            driver_injured=interpret_rta_injury_answer(submission.get("driver_injured")),
+            third_party_injured=interpret_rta_injury_answer(submission.get("third_party_injured")),
+        )
 
         display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
         rta = RoadTrafficCollision(
@@ -255,13 +256,7 @@ class PortalService:
 
     async def _submit_near_miss(self, data: dict, is_anonymous: bool, tracking_code: str) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "near_miss", NearMiss)
-        priority_map = {
-            "low": "LOW",
-            "medium": "MEDIUM",
-            "high": "HIGH",
-            "critical": "CRITICAL",
-        }
-        priority = priority_map.get(data.get("severity", "medium").lower(), "MEDIUM")
+        priority = near_miss_priority_for_severity(data.get("severity", "medium"))
 
         display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
         raw_submission = data.get("reporter_submission")
@@ -275,9 +270,9 @@ class PortalService:
             location=data.get("location") or "Not specified",
             event_date=datetime.now(timezone.utc),
             description=data["description"],
-            potential_severity=data.get("severity", "medium").lower(),
+            potential_severity=normalize_portal_severity(data.get("severity", "medium")),
             is_hipo=is_hipo,
-            status="REPORTED",
+            status="reported",
             priority=priority,
             tenant_id=self.tenant_id,
             source_form_id="portal_near_miss_v1",
@@ -438,7 +433,7 @@ class PortalService:
                 "icon": "⚠️",
             }
         ]
-        if near_miss.status != "REPORTED":
+        if near_miss.status != "reported":
             timeline.append(
                 {
                     "date": near_miss.updated_at.isoformat(),

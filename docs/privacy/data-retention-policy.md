@@ -24,8 +24,14 @@ This policy defines how long categories of records are retained in QGP, the lega
 | **Vehicle checks / driver profiles** | Aligned to fleet policy (often 6–7 years for safety evidence) | Legitimate interest / legal obligation | Anonymise driver links where possible; purge obsolete checks |
 | **Witness statements / photos** | Follows parent incident / case | As per incident retention | Delete with parent record or redact in place |
 | **Tokens / session artefacts** | Operational minimum (hours–days) | Security | Automated cleanup (e.g. token blacklist housekeeping) |
+| **Web Push delivery logs** (`NotificationLog`, table `notification_logs`) | **90 days** | Legitimate interest (delivery diagnostics) | Hard delete by `created_at` in `run_data_retention`. Delivery telemetry for browser push, not the in-app `notifications` table, which nothing purges. The table has **no `tenant_id`**, so it cannot be excluded by a tenant-scoped legal hold; a `created_at` of NULL is never matched by the cutoff and so is never purged |
+| **Library document vectors held by a third-party index** (Pinecone `qgp-documents`: embeddings + verbatim 200-char chunk previews + tenant/document identifiers) | No independent horizon — follows the source library document | Legitimate interest (search / evidence retrieval) | Delete by vector ID on reindex supersession (`IndexJobService.delete_pending_stale_vectors`) or library disposal (`document_library_disposal_service`). **A failed delete is logged as an error and not retried**, so third-party erasure is not currently guaranteed by code |
 
 > **Legal basis** column is indicative — each controller must confirm against legal advice and the ROPA.
+
+> **Third-party retention.** The vector-index row above is the only record class in this policy held
+> **outside** platform infrastructure. Its region and transfer safeguard are not established in this
+> repository — see [`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md) §2.0a.
 
 ---
 
@@ -80,6 +86,7 @@ For records **beyond active operational retention** but still within legal hold 
 | **Audit trail** | High-risk disposal actions should generate `AuditLogEntry` rows (action e.g. `retention_purge`) **before** destructive steps where feasible. |
 | **Export hash** | Pre-disposal exports recorded in `audit_log_exports.file_hash` provide evidence of what left the system. |
 | **Monitoring** | Alert on retention job failures or zero-run streaks; quarterly sample verification of row counts vs policy. |
+| **Third-party index (gap)** | Vector deletions in the Pinecone index are best-effort: failures are logged (`Stale vector cleanup incomplete…`) but not retried or reconciled. There is no verification that content deleted from PostgreSQL has left the vendor index. |
 
 ---
 
@@ -89,12 +96,43 @@ For records **beyond active operational retention** but still within legal hold 
 
 | Layer | Source of truth | Behaviour today |
 | --- | --- | --- |
-| **Policy defaults** | `src/core/retention_config.py` (`RetentionPolicy.soft_delete_first=True`) | Entity retention horizons (incidents/complaints/near_misses/audit_runs/audit_logs) prefer soft-delete before hard purge |
+| **Policy defaults** | `src/core/retention_config.py` (`RetentionPolicy.soft_delete_first=True`) | Entity retention horizons (incidents/complaints/near_misses/audit_runs/audit_logs) prefer soft-delete before hard purge. `run_data_retention` now *reads* this: a rule governed by a policy takes its horizon from here rather than restating it, and is **refused a hard `DELETE`** while `soft_delete_first` holds |
 | **Scheduler** | Celery Beat `run-data-retention` → `cleanup_tasks.run_data_retention` | Daily 02:00 UTC; must not purge rows under an active hold |
 | **Legal hold (required)** | Record an active hold for affected tenant / matter references through `matter_legal_holds` / `POST /api/v1/legal-holds` | **Schema/API LIVE:** tenant-scoped matter hold SSOT; **gap:** retention workers do not yet consult it, so operators must still pause affected purge jobs |
 | **Evidence** | Pre-disposal `AuditLogEntry` + `AuditLogExport.file_hash` | Required before destructive steps where feasible |
 
 **Scope boundary:** The hold register records and releases tenant-scoped instructions (`matter_reference` is generic because QGP has no canonical legal-matter model). It does not claim a legal assessment, automatically relabel existing evidence, or prevent every purge until workers consume active holds.
+
+### What the nightly sweep does and does not purge
+
+`run_data_retention` purges exactly two tables: `notification_logs` (90 days) and
+`token_blacklist` (expired). Both are operational artefacts that no retention policy
+governs, and `cleanup_expired_tokens` is a stub, so this rule is the only thing that ever
+clears the blacklist.
+
+Four statutory tables — `incidents`, `complaints`, `near_misses` and `audit_log_entries` —
+are declared as rules but **held**, because their policies carry `soft_delete_first` and
+this sweep has no soft-delete phase. Holding them is not a gap to be closed by enabling
+them. Each needs all of the following first, and none exists today:
+
+- A horizon approved by the DPO. §7 already requires DPO approval to *shorten* a period,
+  and the code previously carried 365 days against 2555/2555/1825 — a shortening of exactly
+  that kind. Note also that §2 gives complaints **3 years** while
+  `src/core/retention_config.py` gives 2555 days; the two disagree and a person must settle
+  it. The number is currently only logged, never acted on.
+- Legal-hold consultation, which today cannot be finer than "skip the whole tenant", since
+  `matter_legal_holds` has no link to an individual case and the rules are estate-wide
+  `DELETE` statements with no `tenant_id` predicate.
+- A pre-disposal `AuditLogEntry` per §6. The sweep writes none, so a purge would be
+  untraceable — and the audit trail, RCA analyses and evidence link to these records by
+  `entity_type`/`entity_id` with no foreign key, so a hard delete leaves them dangling.
+- `deleted_at` columns on `near_misses` and `road_traffic_collisions`, which
+  `20260904_case_soft_delete` gave only to `incidents` and `complaints`. For those two,
+  soft-delete-first is currently unimplementable without a migration.
+
+`road_traffic_collisions` has **no entry in `src/core/retention_config.py` at all**, so it
+has no declared horizon to honour and carries no rule. §2 says 6 years; until that is
+recorded as a policy, nothing purges RTAs and nothing should.
 
 ---
 

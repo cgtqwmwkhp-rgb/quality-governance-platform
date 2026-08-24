@@ -24,15 +24,33 @@ import {
   Brain,
   Zap,
   Megaphone,
+  GitBranch,
+  Check,
+  Clock,
+  AlertCircle,
+  Circle,
 } from 'lucide-react'
 import api, { documentCampaignApi, getApiErrorMessage, type CampaignComplianceRow } from '../api/client'
 import { toast } from '../contexts/ToastContext'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/Dialog'
+import { DocumentCreateRelationshipsStep } from './DocumentCreateRelationshipsStep'
+import { DocumentFilingControlStub } from './DocumentFilingControlStub'
+import { DocumentFilingFunctionStep } from './DocumentFilingFunctionStep'
+import { DocumentFilingRelatedPlaceholder } from './DocumentFilingRelatedPlaceholder'
+import { DocumentFilingWizardChrome } from './DocumentFilingWizardChrome'
+import {
+  appendOptionalCascadeLevel,
+  appendOptionalFunctionCode,
+  DOCUMENT_FILING_STEP_DESC_KEYS,
+  DOCUMENT_FILING_STEP_TITLE_KEYS,
+  type DocumentFilingWizardStep,
+} from './documentFilingWizard'
 import {
   Select,
   SelectContent,
@@ -45,10 +63,20 @@ import {
 import { cn } from '../helpers/utils'
 import { LibraryShell } from './LibraryShell'
 import {
+  setLibraryDocumentDragData,
+  shouldEnableLibraryDocumentDrag,
+} from '../components/graph/documentGraphDndHelpers'
+import {
   buildDocumentDownstreamView,
   buildDocumentsExceptionsHref,
   DOCUMENT_CONTROL_GOLDEN_THREAD_PATH,
 } from './documentsDownstreamHelpers'
+import {
+  documentRegisterPrimaryRef,
+  documentRegisterStatusTone,
+  resolveDocumentRegisterHref,
+  type DocumentRegisterStatusIcon,
+} from './documentsRegisterHelpers'
 import { CampaignRing } from './CampaignRing'
 import { complianceRowByDocumentId } from './documentCampaignHelpers'
 
@@ -73,6 +101,10 @@ interface Document {
   file_size: number
   document_type: string
   category?: string
+  /** Governance Library PEL when allocated (Register lead identifier). */
+  pel_doc_ref?: string | null
+  /** Detail deep-link from server href_registry (WA-1 / L-05b). */
+  href?: string | null
   department?: string
   sensitivity: string
   status: string
@@ -185,21 +217,38 @@ const FILE_ICONS: Record<string, typeof FileText> = {
   txt: FileText,
 }
 
-const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'indexed':
-      return 'resolved'
-    case 'approved':
-      return 'success'
-    case 'processing':
-      return 'in-progress'
-    case 'pending':
-      return 'submitted'
-    case 'failed':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
+const STATUS_ICONS: Record<DocumentRegisterStatusIcon, typeof Check> = {
+  check: Check,
+  clock: Clock,
+  loader: Loader2,
+  alert: AlertCircle,
+  dot: Circle,
+}
+
+function RegisterStatusBadge({
+  status,
+  className,
+}: {
+  status: string
+  className?: string
+}) {
+  const tone = documentRegisterStatusTone(status)
+  const Icon = STATUS_ICONS[tone.icon]
+  return (
+    <Badge
+      variant={tone.variant}
+      className={cn('gap-1', className)}
+      data-testid="documents-register-status"
+      data-status={tone.label}
+      aria-label={`Status: ${tone.label}`}
+    >
+      <Icon
+        className={cn('h-3 w-3 shrink-0', tone.icon === 'loader' && 'animate-spin')}
+        aria-hidden="true"
+      />
+      <span>{tone.label}</span>
+    </Badge>
+  )
 }
 
 export default function Documents() {
@@ -207,15 +256,32 @@ export default function Documents() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const documentGraphEnabled = useFeatureFlag('document_graph')
+  const dndProposeEnabled = useFeatureFlag('document_graph_dnd_propose')
+  const structureMapEnabled = useFeatureFlag('document_graph_structure_map')
+  const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
+  const libraryDragEnabled = shouldEnableLibraryDocumentDrag(dndProposeEnabled)
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  // Master Document Register defaults to list (L-05); grid remains available.
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
   const deferredSearch = useDeferredValue(searchTerm)
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  /** WD-1 filing wizard phase inside the existing upload modal (not a twin app). */
+  const [filingWizardStep, setFilingWizardStep] = useState<DocumentFilingWizardStep>('file')
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
+  const [selectedFunctionCode, setSelectedFunctionCode] = useState<string | null>(null)
+  // NS-1 — the band the PEL reference is drawn from. Required with a function.
+  const [selectedCascadeLevel, setSelectedCascadeLevel] = useState<number | null>(null)
+  const [uploadRelationshipDoc, setUploadRelationshipDoc] = useState<{
+    id: number
+    title: string
+  } | null>(null)
+  const [relationshipBusy, setRelationshipBusy] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -461,6 +527,18 @@ export default function Documents() {
     searchInputRef.current?.focus()
   }, [])
 
+  const handleLibraryDocDragStart = useCallback(
+    (event: React.DragEvent, doc: { id: number; title: string; reference_number?: string }) => {
+      if (!libraryDragEnabled) return
+      setLibraryDocumentDragData(event.dataTransfer, {
+        documentId: doc.id,
+        title: doc.title,
+        reference: doc.reference_number ?? null,
+      })
+    },
+    [libraryDragEnabled],
+  )
+
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -471,17 +549,30 @@ export default function Documents() {
     }
   }
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      await handleFileUpload(e.dataTransfer.files[0])
+      beginFilingWithFile(e.dataTransfer.files[0])
     }
   }
 
-  const handleFileUpload = async (file: File) => {
+  /** Stage the file and open Function confirm (L-18) before calling upload. */
+  const beginFilingWithFile = (file: File) => {
+    setUploadError(null)
+    setPendingUploadFile(file)
+    setSelectedFunctionCode(null)
+    setSelectedCascadeLevel(null)
+    setFilingWizardStep('function')
+  }
+
+  const handleFileUpload = async (
+    file: File,
+    functionCode: string | null = null,
+    cascadeLevel: number | null = null,
+  ) => {
     setUploading(true)
     setUploadProgress(0)
     setUploadError(null)
@@ -491,6 +582,8 @@ export default function Documents() {
     formData.append('title', file.name.replace(/\.[^/.]+$/, ''))
     formData.append('document_type', 'other')
     formData.append('sensitivity', 'internal')
+    appendOptionalFunctionCode(formData, functionCode)
+    appendOptionalCascadeLevel(formData, cascadeLevel)
 
     let progressInterval: ReturnType<typeof setInterval> | undefined
     try {
@@ -505,10 +598,13 @@ export default function Documents() {
 
       setUploadProgress(100)
       toast.success('Document uploaded')
+      const uploadedId = response.data.id as number
+      const uploadedTitle =
+        (response.data.title as string) || file.name.replace(/\.[^/.]+$/, '')
       setUploadDownstreamNotice({
-        id: response.data.id as number,
+        id: uploadedId,
         reference_number: response.data.reference_number as string,
-        title: (response.data.title as string) || file.name.replace(/\.[^/.]+$/, ''),
+        title: uploadedTitle,
         status: (response.data.status as string) || 'processing',
       })
 
@@ -518,15 +614,41 @@ export default function Documents() {
         page,
         filterCategory === ALL_CATEGORIES_VALUE ? undefined : filterCategory,
       )
-      setShowUploadModal(false)
+      // Always continue the filing spine: Related (real or honest placeholder) then
+      // Bring-under-control stub. Do not invent a second Register.
+      setPendingUploadFile(null)
+      setSelectedFunctionCode(null)
+      setSelectedCascadeLevel(null)
+      setUploadRelationshipDoc({ id: uploadedId, title: uploadedTitle })
+      setFilingWizardStep('related')
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'upload' })
       reportFailure(err, setUploadError)
+      // Stay on Function so the filer can retry or go back without losing the file.
+      setFilingWizardStep('function')
     } finally {
       if (progressInterval) clearInterval(progressInterval)
       setUploading(false)
       setUploadProgress(0)
     }
+  }
+
+  const closeUploadModal = () => {
+    // Block dismiss while the file is uploading or an edge create is in flight
+    // so Skip/Done/X cannot unmount the step mid-request (Bugbot).
+    if (uploading || relationshipBusy) return
+    setShowUploadModal(false)
+    setFilingWizardStep('file')
+    setPendingUploadFile(null)
+    setSelectedFunctionCode(null)
+    setSelectedCascadeLevel(null)
+    setUploadRelationshipDoc(null)
+    setRelationshipBusy(false)
+    setUploadError(null)
+  }
+
+  const advanceFromRelatedStep = () => {
+    setFilingWizardStep('control')
   }
 
   const resolveSignedUrl = useCallback(async (documentId: number, download = true) => {
@@ -599,13 +721,38 @@ export default function Documents() {
         activeView="documents"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {structureMapEnabled ? (
+              <Button variant="outline" asChild>
+                <Link to="/documents/structure" data-testid="documents-structure-map-cta">
+                  <GitBranch size={18} className="mr-2" />
+                  {t('nav.document_structure_map', { defaultValue: 'Structure map' })}
+                </Link>
+              </Button>
+            ) : null}
+            {jobLifecycleEnabled ? (
+              <Button variant="outline" asChild>
+                <Link to="/job-lifecycle" data-testid="documents-job-lifecycle-cta">
+                  <GitBranch size={18} className="mr-2" />
+                  {t('nav.job_lifecycle', { defaultValue: 'Job lifecycle' })}
+                </Link>
+              </Button>
+            ) : null}
             <Button variant="outline" asChild>
               <Link to="/documents/campaigns" data-testid="documents-campaigns-cta">
                 <Megaphone size={18} className="mr-2" />
                 {t('nav.document_campaigns', { defaultValue: 'Document campaigns' })}
               </Link>
             </Button>
-            <Button onClick={() => setShowUploadModal(true)}>
+            <Button
+              onClick={() => {
+                setUploadRelationshipDoc(null)
+                setPendingUploadFile(null)
+                setSelectedFunctionCode(null)
+                setFilingWizardStep('file')
+                setUploadError(null)
+                setShowUploadModal(true)
+              }}
+            >
               <Upload size={20} />
               {t('documents.upload')}
             </Button>
@@ -1002,22 +1149,40 @@ export default function Documents() {
             filteredDocuments.map((doc) => {
               const FileIcon = getFileIcon(doc.file_type)
               const campaignRow = campaignComplianceByDoc.get(doc.id)
+              const registerRef = documentRegisterPrimaryRef(doc)
+              const registerHref = resolveDocumentRegisterHref(doc)
               return (
                 <Card
                   key={doc.id}
                   hoverable
-                  onClick={() => navigate(`/documents/${doc.id}`)}
-                  className="p-5 cursor-pointer"
+                  onClick={() => navigate(registerHref)}
+                  className={cn('p-5 cursor-pointer', libraryDragEnabled && 'cursor-grab active:cursor-grabbing')}
+                  draggable={libraryDragEnabled}
+                  onDragStart={
+                    libraryDragEnabled
+                      ? (event) => handleLibraryDocDragStart(event, doc)
+                      : undefined
+                  }
+                  data-testid={
+                    libraryDragEnabled
+                      ? `documents-library-drag-${doc.id}`
+                      : undefined
+                  }
                 >
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
                     <FileIcon className="w-6 h-6 text-primary" />
                   </div>
 
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="font-mono text-xs text-primary">{doc.reference_number}</span>
-                    <Badge variant={getStatusVariant(doc.status) as any} className="text-[10px]">
-                      {doc.status}
-                    </Badge>
+                    <span className="font-mono text-xs text-primary" data-testid={`documents-register-pel-${doc.id}`}>
+                      {registerRef.lead}
+                    </span>
+                    {registerRef.secondary ? (
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {registerRef.secondary}
+                      </span>
+                    ) : null}
+                    <RegisterStatusBadge status={doc.status} className="text-[10px]" />
                     {campaignRow ? <CampaignRing documentId={doc.id} row={campaignRow} size={22} /> : null}
                   </div>
                   <h2 className="font-semibold text-foreground truncate mb-1 text-base">{doc.title}</h2>
@@ -1049,6 +1214,15 @@ export default function Documents() {
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border">
                     <span>{formatFileSize(doc.file_size)}</span>
                     <div className="flex items-center gap-3">
+                      <Link
+                        to={registerHref}
+                        data-testid={`documents-register-hyperlink-${doc.id}`}
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        {t('documents.table.open')}
+                      </Link>
                       <span className="flex items-center gap-1">
                         <Eye className="w-3 h-3" />
                         {doc.view_count}
@@ -1076,25 +1250,56 @@ export default function Documents() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px]">
+            <table className="w-full min-w-[960px]" data-testid="documents-register-table">
+              <caption className="sr-only">{t('documents.table.caption')}</caption>
               <thead>
                 <tr className="border-b border-border">
-                  <th className="sticky left-0 z-10 bg-card px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="sticky left-0 z-10 w-[22rem] max-w-[22rem] bg-card px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.document')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
+                    {t('documents.table.pel')}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
+                    {t('documents.table.hyperlink')}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('common.status')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.review_expiry')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.campaign')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.uploaded_by')}
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  <th
+                    scope="col"
+                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  >
                     {t('documents.table.views')}
                   </th>
                 </tr>
@@ -1102,7 +1307,7 @@ export default function Documents() {
               <tbody className="divide-y divide-border">
                 {filteredDocuments.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8" data-testid="documents-empty">
+                    <td colSpan={8} className="px-6 py-8" data-testid="documents-empty">
                       <EmptyState
                         icon={<Search className="w-8 h-8 text-muted-foreground" />}
                         title={
@@ -1139,20 +1344,41 @@ export default function Documents() {
                   const campaignRow = campaignComplianceByDoc.get(doc.id)
                   const reviewLabel = formatGovernanceDate(doc.review_date)
                   const expiryLabel = formatGovernanceDate(doc.expiry_date)
+                  const registerRef = documentRegisterPrimaryRef(doc)
+                  const registerHref = resolveDocumentRegisterHref(doc)
                   return (
                     <tr
                       key={doc.id}
-                      onClick={() => navigate(`/documents/${doc.id}`)}
-                      className="cursor-pointer hover:bg-surface"
+                      onClick={() => navigate(registerHref)}
+                      className={cn(
+                        'cursor-pointer hover:bg-surface',
+                        libraryDragEnabled && 'cursor-grab active:cursor-grabbing',
+                      )}
+                      draggable={libraryDragEnabled}
+                      onDragStart={
+                        libraryDragEnabled
+                          ? (event) => handleLibraryDocDragStart(event, doc)
+                          : undefined
+                      }
+                      data-testid={
+                        libraryDragEnabled
+                          ? `documents-library-drag-row-${doc.id}`
+                          : undefined
+                      }
                     >
-                      <td className="sticky left-0 z-10 bg-card px-6 py-4">
-                        <div className="flex items-center gap-3">
+                      <td className="sticky left-0 z-10 w-[22rem] max-w-[22rem] overflow-hidden bg-card px-6 py-4">
+                        <div className="flex min-w-0 items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                             <FileIcon className="w-5 h-5 text-primary" />
                           </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-medium text-foreground truncate">{doc.title}</p>
+                          <div className="min-w-0 overflow-hidden">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <p
+                                className="min-w-0 truncate font-medium text-foreground"
+                                title={doc.title}
+                              >
+                                {doc.title}
+                              </p>
                               <span className="text-xs text-muted-foreground font-mono shrink-0">
                                 v{doc.version}
                               </span>
@@ -1162,28 +1388,69 @@ export default function Documents() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground font-mono">
-                              {doc.reference_number}
+                            <p
+                              className="truncate text-xs font-mono text-muted-foreground"
+                              title={
+                                registerRef.hasPel
+                                  ? registerRef.secondary ?? undefined
+                                  : registerRef.lead
+                              }
+                            >
+                              {registerRef.hasPel ? registerRef.secondary : registerRef.lead}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(doc.status) as any}>{doc.status}</Badge>
+                      <td className="max-w-[12rem] overflow-hidden px-6 py-4">
+                        <span
+                          className="block max-w-[12rem] truncate font-mono text-xs text-primary"
+                          data-testid={`documents-register-pel-${doc.id}`}
+                          title={registerRef.hasPel ? registerRef.lead : undefined}
+                        >
+                          {registerRef.hasPel ? registerRef.lead : '—'}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-muted-foreground">
+                      <td
+                        className="px-6 py-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Link
+                          to={registerHref}
+                          data-testid={`documents-register-hyperlink-${doc.id}`}
+                          aria-label={t('documents.table.open_aria', {
+                            ref: registerRef.lead,
+                            title: doc.title,
+                          })}
+                          className="inline-flex items-center gap-1 rounded-sm text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                          {t('documents.table.open')}
+                        </Link>
+                      </td>
+                      <td className="overflow-hidden px-6 py-4">
+                        <RegisterStatusBadge status={doc.status} />
+                      </td>
+                      <td className="max-w-[12rem] overflow-hidden px-6 py-4 text-xs text-muted-foreground">
                         {reviewLabel || expiryLabel ? (
-                          <div className="space-y-0.5">
+                          <div className="min-w-0 space-y-0.5">
                             {reviewLabel && (
                               <div
-                                className={cn(isPastDue(doc.review_date) && 'font-medium text-warning')}
+                                className={cn(
+                                  'truncate',
+                                  isPastDue(doc.review_date) && 'font-medium text-warning',
+                                )}
+                                title={`${t('documents.table.review_short')}: ${reviewLabel}`}
                               >
                                 {t('documents.table.review_short')}: {reviewLabel}
                               </div>
                             )}
                             {expiryLabel && (
                               <div
-                                className={cn(isPastDue(doc.expiry_date) && 'font-medium text-destructive')}
+                                className={cn(
+                                  'truncate',
+                                  isPastDue(doc.expiry_date) && 'font-medium text-destructive',
+                                )}
+                                title={`${t('documents.table.expiry_short')}: ${expiryLabel}`}
                               >
                                 {t('documents.table.expiry_short')}: {expiryLabel}
                               </div>
@@ -1193,14 +1460,17 @@ export default function Documents() {
                           <span>—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="overflow-hidden px-6 py-4">
                         {campaignRow ? (
                           <CampaignRing documentId={doc.id} row={campaignRow} size={28} />
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                      <td
+                        className="max-w-[14rem] truncate px-6 py-4 text-sm text-muted-foreground"
+                        title={doc.created_by_name || undefined}
+                      >
                         {doc.created_by_name || '—'}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{doc.view_count}</td>
@@ -1214,76 +1484,148 @@ export default function Documents() {
         </Card>
       )}
 
-      {/* Upload Modal */}
+      {/* Upload / filing wizard modal (WD-1 spine on existing upload surface) */}
       <Dialog
         open={showUploadModal}
-        onOpenChange={(open) => !uploading && setShowUploadModal(open)}
+        onOpenChange={(open) => {
+          if (open) {
+            setShowUploadModal(true)
+            setFilingWizardStep('file')
+            setPendingUploadFile(null)
+            setSelectedFunctionCode(null)
+            setUploadRelationshipDoc(null)
+            return
+          }
+          closeUploadModal()
+        }}
       >
         <DialogContent
-          className={cn(dragActive && 'border-primary bg-primary/5')}
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
+          className={cn(
+            dragActive && filingWizardStep === 'file' && 'border-primary bg-primary/5',
+          )}
+          onDragEnter={filingWizardStep === 'file' ? handleDrag : undefined}
+          onDragLeave={filingWizardStep === 'file' ? handleDrag : undefined}
+          onDragOver={filingWizardStep === 'file' ? handleDrag : undefined}
+          onDrop={filingWizardStep === 'file' ? handleDrop : undefined}
+          onInteractOutside={(event) => {
+            if (uploading || relationshipBusy) event.preventDefault()
+          }}
+          onEscapeKeyDown={(event) => {
+            if (uploading || relationshipBusy) event.preventDefault()
+          }}
         >
           <DialogHeader>
-            <DialogTitle>{t('documents.upload')}</DialogTitle>
-            <DialogDescription>Upload governance evidence for durable storage and semantic indexing.</DialogDescription>
+            <DocumentFilingWizardChrome step={filingWizardStep} />
+            <DialogTitle>{t(DOCUMENT_FILING_STEP_TITLE_KEYS[filingWizardStep])}</DialogTitle>
+            <DialogDescription>
+              {t(DOCUMENT_FILING_STEP_DESC_KEYS[filingWizardStep])}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="py-4">
-            {uploadError && !uploading ? (
-              <div
-                role="alert"
-                className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                data-testid="documents-upload-error"
-              >
-                {uploadError}
-              </div>
-            ) : null}
-            {uploading ? (
-              <div className="text-center py-8">
-                <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
-                <p className="text-foreground mb-2">{t('documents.processing')}</p>
-                <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
+            {filingWizardStep === 'related' && uploadRelationshipDoc ? (
+              documentGraphEnabled ? (
+                <DocumentCreateRelationshipsStep
+                  documentId={uploadRelationshipDoc.id}
+                  documentTitle={uploadRelationshipDoc.title}
+                  onDone={advanceFromRelatedStep}
+                  onBusyChange={setRelationshipBusy}
+                />
+              ) : (
+                <DocumentFilingRelatedPlaceholder
+                  documentTitle={uploadRelationshipDoc.title}
+                  onContinue={advanceFromRelatedStep}
+                />
+              )
+            ) : filingWizardStep === 'control' ? (
+              <DocumentFilingControlStub onDone={closeUploadModal} />
+            ) : filingWizardStep === 'function' && pendingUploadFile ? (
+              <>
+                {uploadError && !uploading ? (
                   <div
-                    className="h-full bg-gradient-brand transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
+                    role="alert"
+                    className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                    data-testid="documents-upload-error"
+                  >
+                    {uploadError}
+                  </div>
+                ) : null}
+                {uploading ? (
+                  <div className="text-center py-8" data-testid="documents-filing-uploading">
+                    <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
+                    <p className="text-foreground mb-2">{t('documents.processing')}</p>
+                    <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-brand transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {t('documents.filing.uploading_hint')}
+                    </p>
+                  </div>
+                ) : (
+                  <DocumentFilingFunctionStep
+                    fileName={pendingUploadFile.name}
+                    busy={uploading}
+                    selectedCode={selectedFunctionCode}
+                    onSelectedCodeChange={setSelectedFunctionCode}
+                    selectedCascadeLevel={selectedCascadeLevel}
+                    onSelectedCascadeLevelChange={setSelectedCascadeLevel}
+                    onBack={() => {
+                      setPendingUploadFile(null)
+                      setSelectedFunctionCode(null)
+                      setSelectedCascadeLevel(null)
+                      setUploadError(null)
+                      setFilingWizardStep('file')
+                    }}
+                    onConfirm={(functionCode, cascadeLevel) => {
+                      void handleFileUpload(pendingUploadFile, functionCode, cascadeLevel)
+                    }}
                   />
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Storing file, then extracting metadata and indexing…
-                </p>
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  'border-2 border-dashed rounded-2xl p-12 text-center transition-colors',
-                  dragActive
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-muted-foreground',
                 )}
-              >
-                <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  PDF, Word, Excel, CSV, Markdown, Text, or images (max 50 MB)
-                </p>
-                <label>
-                  <Button asChild>
-                    <span className="cursor-pointer">
-                      <Plus size={16} />
-                      {t('documents.browse_files')}
-                    </span>
-                  </Button>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.md,.txt,.png,.jpg,.jpeg"
-                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-                  />
-                </label>
-              </div>
+              </>
+            ) : (
+              <>
+                {uploadError && !uploading ? (
+                  <div
+                    role="alert"
+                    className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                    data-testid="documents-upload-error"
+                  >
+                    {uploadError}
+                  </div>
+                ) : null}
+                <div
+                  className={cn(
+                    'border-2 border-dashed rounded-2xl p-12 text-center transition-colors',
+                    dragActive
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-muted-foreground',
+                  )}
+                  data-testid="documents-filing-file-step"
+                >
+                  <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    PDF, Word, Excel, CSV, Markdown, Text, or images (max 50 MB)
+                  </p>
+                  <label>
+                    <Button asChild>
+                      <span className="cursor-pointer">
+                        <Plus size={16} />
+                        {t('documents.browse_files')}
+                      </span>
+                    </Button>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.md,.txt,.png,.jpg,.jpeg"
+                      onChange={(e) => e.target.files?.[0] && beginFilingWithFile(e.target.files[0])}
+                    />
+                  </label>
+                </div>
+              </>
             )}
           </div>
         </DialogContent>
@@ -1395,9 +1737,7 @@ export default function Documents() {
                   </Card>
                   <Card className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">Status</p>
-                    <Badge variant={getStatusVariant(selectedDocument.status) as any}>
-                      {selectedDocument.status}
-                    </Badge>
+                    <RegisterStatusBadge status={selectedDocument.status} />
                   </Card>
                   <Card className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">Sensitivity</p>

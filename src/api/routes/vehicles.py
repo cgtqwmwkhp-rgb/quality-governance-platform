@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -356,6 +356,14 @@ async def update_vehicle(
 
 
 class DefectCAPARequest(BaseModel):
+    """Create a CAPA from a vehicle defect.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the CAPA being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     defect_id: int
 
 
@@ -407,6 +415,14 @@ async def create_capa_from_defect(
 
 
 class AllocationRequest(BaseModel):
+    """Allocate a vehicle to a driver.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the allocation proceeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     vehicle_reg: str
     driver_profile_id: int
     force: bool = False
@@ -437,6 +453,14 @@ async def allocate_vehicle(
 
 
 class BatchGateRequest(BaseModel):
+    """Batch vehicle compliance-gate check.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     vehicle_regs: list[str]
 
 

@@ -312,3 +312,13 @@ summary:
   p0_actions: 11
   p1_actions: 12
   p2_actions: 4
+  "compliance.schedule.title": "Compliance Schedule"
+  "compliance.schedule.status.current": "Current"
+  "compliance.schedule.status.due_soon": "Due soon"
+  "compliance.schedule.status.overdue": "Overdue"
+  "compliance.schedule.activate": "Activate"
+  "compliance.schedule.complete.cta": "Record completion"
+  "compliance.schedule.complete.submit": "Complete occurrence"
+  "nav.compliance_schedule": "Compliance Schedule"
+  "compliance.automation.audits.handoff_note": "Monitoring shows scheduled and in-progress audit runs only. Organisation/location obligations live in Compliance Schedule."
+  "compliance.automation.audits.open_compliance_schedule": "Open Compliance Schedule"

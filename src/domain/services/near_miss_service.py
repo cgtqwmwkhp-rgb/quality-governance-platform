@@ -6,7 +6,7 @@ Raises domain exceptions instead of HTTPException.
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -19,7 +19,16 @@ from src.domain.exceptions import StateTransitionError
 from src.domain.models.form_config import Contract
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_NEAR_MISS,
+    apply_close_stamps,
+    assert_case_can_close,
+    clear_close_stamps,
+    is_closed_status,
+    resolve_case_tenant_id,
+)
 from src.domain.services.contract_resolve import assert_tenant_contract, resolve_contract_id_by_code
+from src.domain.services.incident_service import INCIDENT_TRANSITIONS
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -67,19 +76,59 @@ async def resolve_near_miss_contract(
     return resolved_contract_id, resolved_contract
 
 
+# Derived, not restated: a near miss and an incident are the same lifecycle over
+# a different kind of event, and N-2 aligned them so the two registers cannot
+# answer "what may I do from here?" differently. Reading the edges off
+# INCIDENT_TRANSITIONS means a future change to that lifecycle reaches near
+# misses too, instead of leaving the copy here to rot the way the uppercase map
+# it replaced did.
+#
+# The keys are plain strings because ``near_misses.status`` is a VARCHAR, not a
+# PostgreSQL enum. That difference is deliberate and is what keeps the stricter
+# unknown-label behaviour below working.
+NEAR_MISS_TRANSITIONS: dict[str, set[str]] = {
+    current.value: {target.value for target in targets} for current, targets in INCIDENT_TRANSITIONS.items()
+}
+
+
+def validate_near_miss_transition(current: Any, target: Any) -> None:
+    """Validate a status transition for a near miss.
+
+    Raises StateTransitionError if the transition is not allowed.
+    Same-status updates are a no-op (PATCH edit forms always re-send status).
+
+    An unrecognised label has no allowed edges at all and is refused — unlike
+    ``validate_incident_transition``, which waves a value it cannot coerce to
+    ``IncidentStatus`` through. Near misses can afford the stricter rule
+    precisely because the column is a VARCHAR: nothing at the database layer
+    stops a bad label being written, so this is the only place that can refuse
+    one. Casing is not normalised here either; the request schema's pattern is
+    what refuses a legacy uppercase label, at the API boundary, with a 422.
+
+    Lifted out of ``NearMissService.update_near_miss`` so the closure gate can
+    ask the same question the write path asks, instead of holding a second copy
+    of this map.
+    """
+    current_raw = str(getattr(current, "value", current))
+    target_raw = str(getattr(target, "value", target))
+    if current_raw == target_raw:
+        return
+    allowed = NEAR_MISS_TRANSITIONS.get(current_raw, set())
+    if target_raw not in allowed:
+        raise StateTransitionError(
+            f"Cannot transition from '{current_raw}' to '{target_raw}'",
+            details={"allowed": sorted(allowed)},
+        )
+
+
 class NearMissService:
     """Handles near-miss CRUD, reference number generation, and status transitions."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    VALID_TRANSITIONS: dict[str, set[str]] = {
-        "REPORTED": {"UNDER_REVIEW", "CLOSED"},
-        "UNDER_REVIEW": {"ACTION_REQUIRED", "IN_PROGRESS", "CLOSED"},
-        "ACTION_REQUIRED": {"IN_PROGRESS", "CLOSED"},
-        "IN_PROGRESS": {"CLOSED", "ACTION_REQUIRED"},
-        "CLOSED": set(),
-    }
+    # Kept as a class attribute for callers that still reach for it.
+    VALID_TRANSITIONS: dict[str, set[str]] = NEAR_MISS_TRANSITIONS
 
     async def create_near_miss(
         self,
@@ -110,7 +159,7 @@ class NearMissService:
         near_miss = NearMiss(
             **payload,
             reference_number=reference_number,
-            status="REPORTED",
+            status="reported",
             priority="MEDIUM",
             tenant_id=tenant_id,
             created_by_id=user_id,
@@ -125,11 +174,13 @@ class NearMissService:
             event_type="near_miss.created",
             entity_type="near_miss",
             entity_id=str(near_miss.id),
+            entity_name=near_miss.reference_number,
             action="create",
             description=f"Near Miss {near_miss.reference_number} reported",
             payload=data.model_dump(mode="json"),
             user_id=user_id,
             request_id=request_id,
+            tenant_id=near_miss.tenant_id,
         )
 
         await self.db.commit()
@@ -140,15 +191,23 @@ class NearMissService:
 
         return near_miss
 
-    async def get_near_miss(self, near_miss_id: int, tenant_id: int | None) -> NearMiss:
+    async def get_near_miss(
+        self, near_miss_id: int, tenant_id: int | None, *, skip_tenant_check: bool = False
+    ) -> NearMiss:
         """Fetch a single near miss by ID.
+
+        Args:
+            near_miss_id: Primary key.
+            tenant_id: Tenant scope (ignored when skip_tenant_check is True).
+            skip_tenant_check: If True, bypasses tenant isolation (superuser).
 
         Raises:
             LookupError: If the near miss is not found.
         """
-        result = await self.db.execute(
-            select(NearMiss).where(NearMiss.id == near_miss_id, NearMiss.tenant_id == tenant_id)
-        )
+        query = select(NearMiss).where(NearMiss.id == near_miss_id)
+        if not skip_tenant_check:
+            query = query.where(NearMiss.tenant_id == tenant_id)
+        result = await self.db.execute(query)
         near_miss = result.scalar_one_or_none()
         if near_miss is None:
             raise LookupError(f"Near miss with ID {near_miss_id} not found")
@@ -199,6 +258,7 @@ class NearMissService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> NearMiss:
         """Partially update a near miss.
 
@@ -208,23 +268,36 @@ class NearMissService:
             LookupError: If the near miss is not found.
             ValueError: If contract_id is supplied but not owned by the tenant.
         """
-        near_miss = await self.get_near_miss(near_miss_id, tenant_id)
+        near_miss = await self.get_near_miss(near_miss_id, tenant_id, skip_tenant_check=skip_tenant_check)
         old_status = near_miss.status
         update_dict = data.model_dump(exclude_unset=True)
         new_status = update_dict.get("status")
-        if new_status and new_status != old_status:
-            allowed = self.VALID_TRANSITIONS.get(old_status, set())
-            if new_status not in allowed:
-                raise StateTransitionError(
-                    f"Cannot transition from '{old_status}' to '{new_status}'",
-                    details={"allowed": sorted(allowed)},
-                )
+        was_closed = is_closed_status(CASE_TYPE_NEAR_MISS, old_status)
+        closing = False
+        if new_status:
+            validate_near_miss_transition(old_status, new_status)
+            closing = not was_closed and is_closed_status(CASE_TYPE_NEAR_MISS, new_status)
 
+        if closing:
+            # Gate before any mutation so a refused close leaves the session clean.
+            await assert_case_can_close(
+                self.db,
+                case_type=CASE_TYPE_NEAR_MISS,
+                case=near_miss,
+                tenant_id=resolve_case_tenant_id(near_miss),
+                lessons_learnt=(
+                    update_dict["lessons_learnt"] if "lessons_learnt" in update_dict else near_miss.lessons_learnt
+                ),
+            )
+
+        # Guard against the near miss's tenant (not the caller's) so a cross-tenant
+        # editor with skip_tenant_check cannot attach their own tenant's contract.
+        contract_tenant_id = near_miss.tenant_id if near_miss.tenant_id is not None else tenant_id
         resolved_contract_display: Optional[str] = None
         if "contract_id" in update_dict and update_dict["contract_id"] is not None:
             _, resolved_contract_display = await resolve_near_miss_contract(
                 self.db,
-                tenant_id=tenant_id,
+                tenant_id=contract_tenant_id,
                 contract_id=update_dict["contract_id"],
                 contract=None,
             )
@@ -233,23 +306,26 @@ class NearMissService:
         if resolved_contract_display:
             near_miss.contract = resolved_contract_display
 
-        if "status" in update_data:
-            if update_data["status"] == "CLOSED" and near_miss.closed_at is None:
-                near_miss.closed_at = datetime.now(timezone.utc)
-                near_miss.closed_by_id = user_id
+        reopening = was_closed and not is_closed_status(CASE_TYPE_NEAR_MISS, near_miss.status)
+        if closing:
+            update_data.update(apply_close_stamps(near_miss, user_id=user_id))
+        elif reopening:
+            update_data.update(clear_close_stamps(near_miss))
 
         if "assigned_to_id" in update_data and near_miss.assigned_at is None:
             near_miss.assigned_at = datetime.now(timezone.utc)
 
         near_miss.updated_by_id = user_id
 
+        lifecycle = "closed" if closing else "reopened" if reopening else "updated"
         await record_audit_event(
             db=self.db,
-            event_type="near_miss.updated",
+            event_type=f"near_miss.{lifecycle}",
             entity_type="near_miss",
             entity_id=str(near_miss.id),
+            entity_name=near_miss.reference_number,
             action="update",
-            description=f"Near Miss {near_miss.reference_number} updated",
+            description=f"Near Miss {near_miss.reference_number} {lifecycle}",
             payload={
                 "updates": update_data,
                 "old_status": old_status,
@@ -257,12 +333,18 @@ class NearMissService:
             },
             user_id=user_id,
             request_id=request_id,
+            # The record's own tenant, not the tenant_id argument: callers pass
+            # None with skip_tenant_check=True, and the row still has an owner.
+            tenant_id=near_miss.tenant_id,
         )
 
         await self.db.commit()
         await self.db.refresh(near_miss)
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "near_miss")
+        # The row's tenant, not the caller's: a cross-tenant edit has to evict the
+        # register the record actually appears in.
+        cache_tenant_id = near_miss.tenant_id if near_miss.tenant_id is not None else tenant_id
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "near_miss")
         track_metric("near_miss.mutation", 1)
 
         return near_miss
@@ -274,30 +356,36 @@ class NearMissService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> None:
         """Delete a near miss.
 
         Raises:
             LookupError: If the near miss is not found.
         """
-        near_miss = await self.get_near_miss(near_miss_id, tenant_id)
+        near_miss = await self.get_near_miss(near_miss_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         await record_audit_event(
             db=self.db,
             event_type="near_miss.deleted",
             entity_type="near_miss",
             entity_id=str(near_miss.id),
+            entity_name=near_miss.reference_number,
             action="delete",
             description=f"Near Miss {near_miss.reference_number} deleted",
             payload={"reference_number": near_miss.reference_number},
             user_id=user_id,
             request_id=request_id,
+            tenant_id=near_miss.tenant_id,
         )
 
+        # Capture the owner before delete/commit can expire ORM attributes. A
+        # superuser may be deleting a record owned by a different tenant.
+        cache_tenant_id = near_miss.tenant_id if near_miss.tenant_id is not None else tenant_id
         await self.db.delete(near_miss)
         await self.db.commit()
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "near_miss")
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "near_miss")
         track_metric("near_miss.mutation", 1)
 
     async def list_investigations(
@@ -306,6 +394,7 @@ class NearMissService:
         *,
         tenant_id: int | None,
         params: PaginationInput,
+        skip_tenant_check: bool = False,
     ):
         """List investigations linked to a near miss.
 
@@ -314,7 +403,7 @@ class NearMissService:
         """
         from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-        await self.get_near_miss(near_miss_id, tenant_id)
+        await self.get_near_miss(near_miss_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         query = (
             select(InvestigationRun)

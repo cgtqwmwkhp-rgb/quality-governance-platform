@@ -1,0 +1,132 @@
+name: Deploy Drift Detector
+
+# Answers one question the deploy workflows cannot: is what is RUNNING what was MERGED?
+#
+# deploy-production.yml already verifies runtime identity thoroughly — it polls
+# /api/v1/meta/version with bounded retries until build_sha matches the release SHA. But
+# that check lives *inside* a deploy, so it only ever reports on a deploy that got far
+# enough to run it. When no deploy runs, or one fails before that step, nothing looks at
+# production at all.
+#
+# That is not hypothetical. On 2026-08-05 three merged PRs sat undeployed for roughly an
+# hour: two production deploys failed at the release gate (correctly — staging had not
+# finished) so the identity check never executed, and nothing anywhere reported that
+# production was serving a commit from an hour earlier. It was found by a human probing
+# the endpoint by hand. Earlier the same day main sat undeployed for ~50 minutes for a
+# different reason, with the same silence.
+#
+# So this runs on a clock instead of on a deploy, and compares the deployed build_sha
+# against the head of main.
+
+on:
+  schedule:
+    # Every 30 minutes. Deploys take ~20, so this cannot miss a stall for long, and the
+    # grace window below stops it firing during a legitimate in-flight deploy.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      grace_minutes:
+        description: 'Minutes a commit may remain undeployed before this is drift'
+        required: false
+        default: '45'
+
+permissions:
+  contents: read
+
+jobs:
+  detect-drift:
+    name: Compare deployed build_sha against main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          # Need the commit timestamp to know whether a mismatch has had time to resolve.
+          fetch-depth: 1
+
+      - name: Compare each environment against main
+        env:
+          # Deliberately not `secrets.*` inline in the script: an unset secret would
+          # otherwise silently become an empty URL that curl fails on, which would read as
+          # drift rather than as a misconfigured workflow.
+          STAGING_APP: ${{ secrets.AZURE_WEBAPP_NAME }}
+          PROD_APP: ${{ secrets.PROD_AZURE_WEBAPP_NAME }}
+          GRACE_MINUTES: ${{ github.event.inputs.grace_minutes || '45' }}
+        run: |
+          set -euo pipefail
+
+          MAIN_SHA=$(git rev-parse HEAD)
+          MAIN_EPOCH=$(git show -s --format=%ct HEAD)
+          NOW_EPOCH=$(date +%s)
+          AGE_MINUTES=$(( (NOW_EPOCH - MAIN_EPOCH) / 60 ))
+
+          echo "main HEAD  : $MAIN_SHA"
+          echo "committed  : $AGE_MINUTES minutes ago"
+          echo "grace      : $GRACE_MINUTES minutes"
+          echo ""
+
+          if [ -z "${STAGING_APP:-}" ] || [ -z "${PROD_APP:-}" ]; then
+            echo "::error title=Drift detector misconfigured::AZURE_WEBAPP_NAME or PROD_AZURE_WEBAPP_NAME is unset, so no environment could be probed."
+            exit 1
+          fi
+
+          DRIFTED=0
+
+          # Reports drift for one environment. Deliberately does not exit, so a stalled
+          # production is still reported when staging is also behind.
+          check_env() {
+            local label="$1" app="$2"
+            local url="https://${app}.azurewebsites.net/api/v1/meta/version"
+            # Per-environment file. A shared one would let a failed probe read the previous
+            # environment's payload and report its SHA under this environment's name.
+            local meta="/tmp/meta_${label}.json"
+            local status deployed built
+
+            # `-w` already prints 000 when curl cannot connect; the fallback is only here so
+            # that curl's non-zero exit does not abort the script under `set -e`. Assigning
+            # over the top of it keeps the status from reading as "000000".
+            status=$(curl -s -o "$meta" -w '%{http_code}' --max-time 20 "$url") || status="000"
+            if [ "$status" != "200" ]; then
+              # Unreachable is not drift, and must not be reported as drift — but it is
+              # not health either, so say so and fail.
+              echo "::error title=$label unreachable::/api/v1/meta/version answered HTTP $status, so the deployed commit could not be established."
+              DRIFTED=1
+              return
+            fi
+
+            deployed=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('build_sha',''))" "$meta" 2>/dev/null || echo "")
+            built=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('build_time','unknown'))" "$meta" 2>/dev/null || echo "unknown")
+
+            if [ -z "$deployed" ]; then
+              echo "::error title=$label reports no build_sha::The endpoint answered 200 but carried no build_sha, so identity cannot be checked at all."
+              DRIFTED=1
+              return
+            fi
+
+            if [ "$deployed" = "$MAIN_SHA" ]; then
+              echo "✅ $label is current ($deployed, built $built)"
+              return
+            fi
+
+            if [ "$AGE_MINUTES" -lt "$GRACE_MINUTES" ]; then
+              # A mismatch here is the normal state during a deploy. Reporting it would
+              # train everyone to ignore this workflow, which is worse than not having it.
+              echo "⏳ $label is behind main, but the commit is only ${AGE_MINUTES}m old (grace ${GRACE_MINUTES}m) — a deploy is probably in flight."
+              echo "     deployed=$deployed built=$built"
+              return
+            fi
+
+            echo "::error title=$label is running a stale commit::deployed=$deployed (built $built) but main has been $MAIN_SHA for ${AGE_MINUTES} minutes. A merge is not live. Check whether the deploy ran at all — a deploy that never started reports nothing."
+            DRIFTED=1
+          }
+
+          check_env "Staging" "$STAGING_APP"
+          check_env "Production" "$PROD_APP"
+
+          echo ""
+          if [ "$DRIFTED" -ne 0 ]; then
+            echo "Drift detected. This workflow deliberately fails so it is visible without anyone reading a log."
+            exit 1
+          fi
+          echo "No drift: every environment is serving main."

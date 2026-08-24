@@ -15,6 +15,7 @@ import { test, expect, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { inDeclarationOrder, pageAuditStore } from '../utils/audit-entries';
 
 // Types
 interface PageEntry {
@@ -63,8 +64,20 @@ function loadPages(): PageEntry[] {
   return allPages.filter(p => p.criticality === 'P0' || p.criticality === 'P1');
 }
 
-// Test storage for aggregation
-const pageAuditResults: PageAuditResult[] = [];
+/**
+ * Record a page's outcome.
+ *
+ * This group runs in `mode: 'parallel'`, and playwright.config.ts sets
+ * `fullyParallel: true` with `workers: 2` in CI — two worker *processes*. A
+ * module-level array plus a single `afterAll` therefore gave each worker its own
+ * partial view of the run, both wrote the same artifact path, and the last
+ * writer won: 18 entries were reported for 36 declared P0/P1 pages. Each page
+ * now writes its own file and the merge reads the directory. See
+ * utils/audit-entries.ts.
+ */
+function recordResult(result: PageAuditResult): void {
+  pageAuditStore.write(result.pageId, result);
+}
 
 // Auth helper — uses addInitScript to inject token before any page JS runs,
 // avoiding SSO redirects that break the navigate-then-evaluate approach.
@@ -147,7 +160,7 @@ test.describe('Page Load Audit', () => {
         if (!authReady && pageEntry.auth !== 'anon') {
           result.result = 'SKIP';
           result.error_message = `Auth type ${pageEntry.auth} not configured`;
-          pageAuditResults.push(result);
+          recordResult(result);
           test.skip(true, result.error_message);
           return;
         }
@@ -163,10 +176,15 @@ test.describe('Page Load Audit', () => {
           }
         });
         
-        // Navigate and measure
+        // Navigate and measure.
+        // networkidle is flaky on SWA (analytics/keepalive can keep the network busy on a
+        // healthy SPA). The app-shell visibility assertion below is the real gate and is
+        // unchanged. Note that load_time_ms/timing_bucket are now measured to
+        // domcontentloaded rather than to network silence: they are recorded for reporting
+        // only and are not asserted against any threshold, so no check is weakened.
         const startTime = Date.now();
         const response = await page.goto(pageEntry.route, {
-          waitUntil: 'networkidle',
+          waitUntil: 'domcontentloaded',
           timeout: 30000,
         });
         const loadTime = Date.now() - startTime;
@@ -211,7 +229,7 @@ test.describe('Page Load Audit', () => {
         result.error_message = error.message?.slice(0, 200) || 'Unknown error';
       }
       
-      pageAuditResults.push(result);
+      recordResult(result);
       
       // Assert for test framework
       expect(result.result).toBe('PASS');
@@ -219,17 +237,34 @@ test.describe('Page Load Audit', () => {
   }
 });
 
-// Write results after all tests
+/**
+ * Merge the per-page entry files into the artifact the aggregator reads.
+ *
+ * Runs in every worker, and reads the directory rather than this process's own
+ * results, so the last worker to finish emits the complete set however the run
+ * was split across workers or retries.
+ */
 test.afterAll(async () => {
-  const outputPath = path.join(__dirname, '../results/page_audit.json');
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, JSON.stringify({
+  fs.mkdirSync(path.dirname(pageAuditStore.outputPath), { recursive: true });
+
+  const results = inDeclarationOrder(
+    pageAuditStore.readAll<PageAuditResult>(),
+    pages.map(p => p.pageId),
+    r => r.pageId,
+  );
+
+  fs.writeFileSync(pageAuditStore.outputPath, JSON.stringify({
     audit_type: 'page_load',
     timestamp: new Date().toISOString(),
-    total_pages: pageAuditResults.length,
-    passed: pageAuditResults.filter(r => r.result === 'PASS').length,
-    failed: pageAuditResults.filter(r => r.result === 'FAIL').length,
-    skipped: pageAuditResults.filter(r => r.result === 'SKIP').length,
-    results: pageAuditResults,
+    // How many entries the registry asked for, as opposed to how many arrived.
+    // A worker whose results were overwritten leaves no entry to classify, so
+    // the loss is invisible to per-entry accounting; the aggregator holds the
+    // gate when this count is not met.
+    expected_entries: pages.length,
+    total_pages: results.length,
+    passed: results.filter(r => r.result === 'PASS').length,
+    failed: results.filter(r => r.result === 'FAIL').length,
+    skipped: results.filter(r => r.result === 'SKIP').length,
+    results,
   }, null, 2));
 });

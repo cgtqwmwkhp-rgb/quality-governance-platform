@@ -46,6 +46,8 @@ class CAPASource(str, PyEnum):
     INVESTIGATION = "investigation"
     NEAR_MISS = "near_miss"
     RTA = "rta"
+    COMPLIANCE_RECORD = "compliance_record"
+    FRA_OCR = "fra_ocr"
 
 
 def _enum_values(enum_cls: type[PyEnum]) -> list[str]:

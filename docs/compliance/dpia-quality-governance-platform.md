@@ -40,9 +40,9 @@ risk scoring meets the Article 35(3) threshold.
 | Dimension | Scope |
 |-----------|-------|
 | System | Quality Governance Platform (QGP) — production environment |
-| Deployment | Azure App Service (UK South) + Azure Static Web Apps |
+| Deployment | Azure App Service (**West Europe**) + Azure Static Web Apps — corrected 2026-07-28, see §2.2a |
 | Database | Azure PostgreSQL Flexible Server (UK South) |
-| Blob Storage | Azure Blob Storage (UK South) — evidence files |
+| Blob Storage | Azure Blob Storage (**West Europe**) — evidence files at rest |
 | Data subjects | Employees, contractors, witnesses, site visitors, complaint submitters |
 | Tenants | Multi-tenant: each tenant is an independent organisation |
 | Processing activities | Incident reporting, audit management, CAPA, risk register, compliance, complaints |
@@ -82,21 +82,45 @@ touching `src/domain/models/`. Latest evidence: `docs/evidence/pii-inventory-202
 Employee/Contractor
      │
      ▼
- QGP Portal (Azure SWA, UK South)
+ QGP Portal (Azure SWA / qgp-frontend, West Europe)
      │  HTTPS / Azure AD auth
      ▼
- QGP API (Azure App Service, UK South)
+ QGP API + Celery worker/beat (Azure App Service, West Europe)
      │                    │
      ▼                    ▼
 PostgreSQL DB        Azure Blob Storage
-(UK South)           (UK South, evidence files)
+(UK South)           (West Europe, evidence files at rest)
      │
      ▼
-Azure Log Analytics / Azure Monitor
-(UK South, operational logs — anonymised user IDs only)
+Application Insights / Azure Monitor
+(West Europe, operational logs — anonymised user IDs only)
 ```
 
-No personal data leaves the UK South Azure region except:
+### 2.2a Hosting regions — corrected 2026-07-28
+
+This DPIA previously described all platform components as UK South. That was inaccurate.
+Verified by Azure CLI resource enumeration of the live subscription by the accountable owner on
+2026-07-28, and consistent with
+[`../adr/ADR-0019-production-hosting-isolation-and-region.md`](../adr/ADR-0019-production-hosting-isolation-and-region.md):
+
+| Purpose | Region |
+|---------|--------|
+| Application processing (API, Celery worker, beat), frontend | **West Europe** (Netherlands) |
+| **Uploaded documents / evidence at rest** | **West Europe** |
+| Secrets (Key Vault), Application Insights telemetry | **West Europe** |
+| Primary database (`psql-qgp-prod`), cache (`redis-qgp-prod`), container registry | UK South |
+| Azure AI Document Intelligence (`qgp-docintel`) | UK South |
+
+No personal data leaves the **UK/EEA** by way of platform hosting: West Europe is in the EEA, so
+**no third-country transfer arises and no SCC or UK IDTA is engaged by this split.** What the split
+does mean is that a statement of "UK hosting" is false for application processing and for uploaded
+documents at rest — see [`gdpr-compliance.md`](gdpr-compliance.md) §7.1 for the customer-statement
+consequence. Known infrastructure defect, scheduled for remediation by IT after UAT with UK South
+co-location as the target (`docs/run026-IT-HANDOVER-infrastructure-package.md`, Item 3).
+
+Personal data does leave the UK/EEA through the **AI processors** in
+[`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §2.0a, whose regions are unestablished — that, not
+hosting, is the live transfer question. Other than that:
 - Azure AD authentication tokens (Microsoft-managed, EEA adequacy decision applies)
 - OpenTelemetry traces to Azure Monitor (user IDs only, no PII in trace attributes)
 
@@ -136,14 +160,22 @@ Each data category processed is necessary for the stated purpose:
 | R03 | Data retention beyond permitted period | 2 | 3 | 6 | Automated retention enforcement (`retention-automation-evidence.md`), quarterly audit | 2 |
 | R04 | Data subject rights request not fulfilled | 2 | 3 | 6 | DSR workflow in admin panel; 30-day SLA tracked in CAPA | 2 |
 | R05 | Breach notification delay > 72 hours | 2 | 4 | 8 | Incident response runbook (`INCIDENT_TEMPLATE.md`), Azure Monitor alerts | 3 |
-| R06 | Third-party processor non-compliance | 2 | 4 | 8 | Azure DPA in place; no other sub-processors outside Microsoft | 3 |
+| R06 | Third-party processor non-compliance | 2 | 4 | 8 | Azure DPA in place. **Correction (2026-07-28): there are sub-processors outside Microsoft.** Mistral, Google Gemini, Anthropic, OpenAI, Voyage AI and Pinecone are live in production and no vendor DPA artifact is on file — see [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §2.0a | **Re-score required** |
 | R07 | Accidental exposure via API (misconfigured endpoint) | 2 | 4 | 8 | OpenAPI contract tests, DAST advisory scan, Schemathesis property tests (CI) | 3 |
-| R08 | AI/GenSpark processing of PII without consent | 1 | 5 | 5 | GenSpark API called with anonymised finding IDs only; no PII in prompt | 1 |
+| R08 | AI processing of PII | 1 | 5 | 5 | **Correction (2026-07-28): "anonymised finding IDs only; no PII in prompt" is not accurate for current code.** Library document text (≤50k chars), incident descriptions and case reference numbers are transmitted to the shared AI client (Anthropic, or OpenAI / Genspark by precedence) — see [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §3.2–§3.3 | **Re-score required** |
 
 ### 4.2 Overall Risk Conclusion
 
 Residual risk scores are all ≤ 4 (Low–Medium). The processing can proceed. No residual High risks remain
 after mitigation. Continued monitoring via Azure Monitor alerts and quarterly DPIA review is required.
+
+> **Superseded in part (2026-07-28).** This conclusion predates disclosure of the AI processors that
+> are live in production. R06 and R08 above need re-scoring, and the companion DPIA
+> [`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) v2.0 §8 states a **High, unaccepted** residual risk
+> for AI transfers — including a persistent transfer of document-derived content to a vendor-hosted
+> vector index (Pinecone) whose region is not established. The "no residual High risks" statement
+> therefore does not hold for third-party AI processing until the controller/DPO decides on that
+> residual.
 
 ---
 
@@ -192,9 +224,13 @@ with the ICO under Article 36 UK GDPR. Supervisory authority consultation is not
 | Transfer | Recipient | Mechanism | Safeguard |
 |----------|-----------|-----------|-----------|
 | Azure AD tokens | Microsoft (EEA) | Standard contract | EEA adequacy decision (UK–EU) |
-| No other transfers | — | — | All processing UK South |
+| Application processing + uploaded documents at rest | Microsoft Azure **West Europe** (Netherlands) | Microsoft DPA | EEA — **not a third-country transfer**; no SCC/IDTA engaged (verified 2026-07-28, §2.2a) |
+| Library document content and case free text | Anthropic, OpenAI, Voyage AI, **Pinecone** (retains), Mistral, Google Gemini | **None established** | **Unestablished** — no vendor DPA / SCC / UK IDTA artifact in repo ([`dpia-ocr-ai-import.md`](dpia-ocr-ai-import.md) §2.0a) |
 
-No personal data is transferred to countries without an adequacy decision or equivalent safeguard.
+~~No personal data is transferred to countries without an adequacy decision or equivalent safeguard.~~
+**Corrected 2026-07-28.** That statement no longer holds: content is transmitted to AI processors
+whose processing locations are unestablished, so an adequacy or safeguard position cannot be claimed
+for them. Platform hosting remains entirely UK/EEA — across two regions, UK South and West Europe.
 
 ---
 
@@ -285,8 +321,9 @@ the evidence a DPO needs so sign-off can complete without further engineering in
 - [ ] Section 1–8 technical content reviewed against live processing
 - [ ] Soft-delete-first + matter-level legal-hold status understood (SSOT above; schema flags may still be Planned)
 - [ ] Special-category / RIDDOR flows accepted or conditioned
-- [ ] Residual risks accepted or conditioned (including OCR/AI Medium residual in companion DPIA)
-- [ ] Sub-processor list on privacy LIVE endpoints reviewed (Azure / optional Mistral / Gemini)
+- [ ] Residual risks accepted or conditioned (including the **High, unaccepted** AI-transfer residual in companion DPIA v2.0 §8)
+- [ ] Sub-processor list on privacy LIVE endpoints reviewed (Azure infrastructure; Azure DI; Mistral; Gemini; Anthropic; OpenAI; Voyage AI; **Pinecone — retains content**; Genspark / Perplexity if keyed)
+- [ ] R06 and R08 re-scored against the disclosed processor set
 - [ ] Art. 30 stub + [`article-30-ropa-checklist.md`](article-30-ropa-checklist.md) accepted as interim **or** full ROPA commissioned
 - [ ] Section 9 DPO name / date / decision / signature completed by DPO (not engineering)
 - [ ] EA-03 deliverable written to `docs/evidence/dpo-signoff-YYYY-Q?.md` and tracker updated

@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Save, CheckCircle, Sparkles } from 'lucide-react'
 import { IconButton } from '../../components/ui/IconButton'
+import SaveIssueBanner from './SaveIssueBanner'
+import type { SaveIssue } from './saveErrorModel'
 
 export interface TemplateHeaderProps {
   templateName: string
@@ -13,10 +15,15 @@ export interface TemplateHeaderProps {
   onBack: () => void
   onSave: () => void
   isSaving: boolean
+  /** How far a save in progress has got, e.g. "Saving questions… 6 of 19 saved". */
+  saveProgress?: string | null
   onPublish: () => void
   canPublish: boolean
   onAIAssist: () => void
+  /** Legacy summary string; prefer saveIssues when available. */
   saveError: string | null
+  saveIssues?: SaveIssue[] | null
+  onShowSaveIssueQuestion?: (questionId: string) => void
 }
 
 export default function TemplateHeader({
@@ -30,12 +37,16 @@ export default function TemplateHeader({
   onBack,
   onSave,
   isSaving,
+  saveProgress = null,
   onPublish,
   canPublish,
   onAIAssist,
   saveError,
+  saveIssues = null,
+  onShowSaveIssueQuestion,
 }: TemplateHeaderProps) {
   const { t } = useTranslation()
+  const showBanner = (saveIssues && saveIssues.length > 0) || !!saveError
 
   return (
     <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border">
@@ -102,33 +113,56 @@ export default function TemplateHeader({
               {t('audit_builder.ai_assist')}
             </button>
 
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onPublish}
-                  disabled={!canPublish}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-opacity disabled:opacity-50"
+            <div className="flex items-center gap-2">
+              {isSaving && saveProgress ? (
+                <span
+                  className="text-xs text-muted-foreground"
+                  data-testid="save-progress"
+                  aria-live="polite"
                 >
-                  <CheckCircle className="w-4 h-4" />
-                  Publish
-                </button>
-                <button
-                  onClick={onSave}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-opacity disabled:opacity-50"
-                >
-                  {isSaving ? (
-                    <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
-                  {t('audit_builder.save')}
-                </button>
-              </div>
-              {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
+                  {saveProgress}
+                </span>
+              ) : null}
+              <button
+                onClick={onPublish}
+                disabled={!canPublish}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-opacity disabled:opacity-50"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Publish
+              </button>
+              <button
+                onClick={onSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-opacity disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {t('audit_builder.save')}
+              </button>
             </div>
           </div>
         </div>
+        {showBanner && (
+          <div className="mt-3">
+            {saveIssues && saveIssues.length > 0 ? (
+              <SaveIssueBanner
+                summary={saveError || `Fix ${saveIssues.length} issue(s), then try again.`}
+                issues={saveIssues}
+                onShowQuestion={onShowSaveIssueQuestion}
+              />
+            ) : (
+              saveError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {saveError}
+                </p>
+              )
+            )}
+          </div>
+        )}
       </div>
     </header>
   )

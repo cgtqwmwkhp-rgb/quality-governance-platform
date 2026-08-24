@@ -316,9 +316,21 @@ class TestAuditRunCreate:
             external_audit_type="planet_mark",
             source_origin="certification",
             assurance_scheme="Planet Mark",
+            external_reference="PM-CERT-001",
         )
         assert run.external_audit_type == "planet_mark"
         assert run.source_origin == "certification"
+        assert run.external_reference == "PM-CERT-001"
+
+    def test_planet_mark_import_requires_external_reference(self):
+        """FR-DEDUP-02: Planet Mark intakes need a stable certificate / client id."""
+        with pytest.raises(ValidationError):
+            AuditRunCreate(
+                template_id=1,
+                external_audit_type="planet_mark",
+                source_origin="certification",
+                assurance_scheme="Planet Mark",
+            )
 
     def test_external_import_rejects_invalid_source_origin(self):
         """Test source_origin rejects values outside the bounded contract."""

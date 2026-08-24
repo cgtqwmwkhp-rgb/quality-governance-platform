@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearAuthState,
+  clearReturnPath,
   clearTokens,
+  consumeReturnPath,
   establishPlatformSession,
   getPlatformRefreshToken,
   getPlatformToken,
   hasToken,
+  isSafeReturnPath,
+  peekReturnPath,
   revokeSession,
+  stashReturnPath,
 } from './auth'
 
 afterEach(() => {
@@ -96,5 +101,70 @@ describe('auth token helpers', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
     await expect(revokeSession()).resolves.toBeUndefined()
     expect(getPlatformToken()).toBe('tok')
+  })
+})
+
+// PX-179: an expired session used to dump the user on /login with no way back
+// to what they were doing.
+describe('session return path', () => {
+  it('round-trips an app-relative path, including its query string', () => {
+    stashReturnPath('/audits/42/execute?tab=questions')
+    expect(peekReturnPath()).toBe('/audits/42/execute?tab=questions')
+    expect(consumeReturnPath()).toBe('/audits/42/execute?tab=questions')
+  })
+
+  it('consumes once, so a re-render cannot replay a stale destination', () => {
+    stashReturnPath('/risk-register')
+    expect(consumeReturnPath()).toBe('/risk-register')
+    expect(consumeReturnPath()).toBeNull()
+  })
+
+  it('refuses destinations that would leave the origin', () => {
+    // Protocol-relative and absolute URLs are the classic open-redirect
+    // payloads: //evil.example resolves to https://evil.example.
+    for (const hostile of [
+      '//evil.example/phish',
+      '/\\evil.example',
+      'https://evil.example',
+      'javascript:alert(1)',
+      'dashboard',
+    ]) {
+      expect(isSafeReturnPath(hostile)).toBe(false)
+      stashReturnPath(hostile)
+      expect(peekReturnPath()).toBeNull()
+    }
+  })
+
+  it('refuses login surfaces, which would bounce the user in a loop', () => {
+    for (const loop of ['/login', '/portal/login', '/reset-password?token=x']) {
+      expect(isSafeReturnPath(loop)).toBe(false)
+      stashReturnPath(loop)
+      expect(peekReturnPath()).toBeNull()
+    }
+  })
+
+  it('clearAuthState records where the session was lost', () => {
+    window.history.pushState({}, '', '/audits/7/execute?q=1')
+    establishPlatformSession('tok', 'ref')
+
+    clearAuthState()
+
+    expect(getPlatformToken()).toBeNull()
+    expect(peekReturnPath()).toBe('/audits/7/execute?q=1')
+  })
+
+  it('does not record a return path when the session is lost on the login page', () => {
+    window.history.pushState({}, '', '/login')
+    establishPlatformSession('tok', 'ref')
+
+    clearAuthState()
+
+    expect(peekReturnPath()).toBeNull()
+  })
+
+  it('clearReturnPath drops the stash for a deliberate sign-out', () => {
+    stashReturnPath('/dashboard')
+    clearReturnPath()
+    expect(peekReturnPath()).toBeNull()
   })
 })

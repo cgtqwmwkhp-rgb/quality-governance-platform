@@ -22,8 +22,10 @@ describe('createIncidentsApi', () => {
     const incidents = createIncidentsApi(api as never)
     incidents.get(9)
     incidents.update(9, { status: 'closed' })
+    incidents.delete(9)
     expect(api.get).toHaveBeenCalledWith('/api/v1/incidents/9')
     expect(api.patch).toHaveBeenCalledWith('/api/v1/incidents/9', { status: 'closed' })
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/incidents/9')
   })
 
   it('running-sheet helpers match OpenAPI nested paths', () => {

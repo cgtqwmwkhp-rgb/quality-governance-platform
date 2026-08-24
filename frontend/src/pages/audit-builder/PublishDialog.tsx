@@ -15,6 +15,10 @@ export interface PublishDialogProps {
   isPublishing: boolean
   templateName: string
   error?: string | null
+  runHref?: string
+  runCtaLabel?: string
+  calendarHref?: string
+  calendarCtaLabel?: string
 }
 
 export default function PublishDialog({
@@ -24,6 +28,10 @@ export default function PublishDialog({
   isPublishing,
   templateName,
   error,
+  runHref,
+  runCtaLabel,
+  calendarHref,
+  calendarCtaLabel,
 }: PublishDialogProps) {
   const { t } = useTranslation()
 
@@ -47,8 +55,11 @@ export default function PublishDialog({
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             Are you sure you want to publish{' '}
-            <strong>&quot;{templateName || 'Untitled'}&quot;</strong>? Once published, this template
-            will be available for audit scheduling.
+            <strong>&quot;{templateName || 'Untitled'}&quot;</strong>?{' '}
+            {t(
+              'audit_builder.publish_available',
+              'Once published, this template will be available for the matching run type.',
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -85,6 +96,26 @@ export default function PublishDialog({
             Publish
           </button>
         </div>
+        {runHref && runCtaLabel ? (
+          <p className="text-xs text-muted-foreground text-center">
+            After publish:{' '}
+            <a href={runHref} className="text-primary underline-offset-2 hover:underline">
+              {runCtaLabel}
+            </a>
+            {calendarHref && calendarCtaLabel ? (
+              <>
+                {' · '}
+                <a
+                  href={calendarHref}
+                  className="text-primary underline-offset-2 hover:underline"
+                  data-testid="audit-builder-publish-cadence-calendar"
+                >
+                  {calendarCtaLabel}
+                </a>
+              </>
+            ) : null}
+          </p>
+        ) : null}
       </DialogContent>
     </Dialog>
   )

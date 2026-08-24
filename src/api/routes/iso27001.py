@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func, select, text
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -209,6 +209,14 @@ class SupplierAssessmentCreate(BaseModel):
 
 
 class AccessControlCreate(BaseModel):
+    """Create an ISO 27001 access-control record.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the record being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     user_id: int
     user_name: str = Field(..., min_length=1, max_length=255)
     user_email: Optional[str] = None
@@ -1143,6 +1151,14 @@ async def create_access_control(
 
 
 class BCPCreate(BaseModel):
+    """Create a business continuity plan.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(..., min_length=3, max_length=255)
     description: str = Field(..., min_length=10)
     scope: str = Field(..., min_length=5)
@@ -1165,6 +1181,14 @@ class BCPCreate(BaseModel):
 
 
 class BCPUpdate(BaseModel):
+    """Partial update for a business continuity plan.
+
+    ``extra="forbid"`` so unknown body fields fail loudly instead of being
+    silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = Field(None, min_length=3, max_length=255)
     description: Optional[str] = None
     scope: Optional[str] = None

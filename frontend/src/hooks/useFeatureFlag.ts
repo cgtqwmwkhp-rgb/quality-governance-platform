@@ -5,9 +5,16 @@
  * 1. Window.__FEATURE_FLAGS__ (injected at runtime)
  * 2. localStorage overrides (for testing)
  * 3. Default values
+ *
+ * "Injected at runtime" was aspirational until FeatureFlagProvider existed —
+ * nothing populated `window.__FEATURE_FLAGS__`, so every flag fell through to its
+ * default. The provider now fills it from `GET /api/v1/meta/features` and bumps a
+ * context version so mounted consumers re-read. Resolution order is unchanged,
+ * and a consumer rendered outside the provider behaves exactly as it did before.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
+import { FeatureFlagContext } from '../contexts/FeatureFlagContext'
 
 // Feature flag definitions with defaults
 const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
@@ -16,6 +23,40 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
 
   // CUJ 5.4: Bow-tie UI remains hidden until backed by production data
   risk_bowtie: false,
+
+  // Compliance Schedule (Wave 1) — opener mirrors COMPLIANCE_SCHEDULE_ENABLED
+  compliance_schedule: false,
+
+  // Wave 3 FRA / PAS79 OCR ingest — mirrors COMPLIANCE_SCHEDULE_FRA_OCR_ENABLED
+  compliance_schedule_fra_ocr: false,
+
+  // Slice 6: FRA OCR confirm → risk proposal (operator likelihood/impact)
+  compliance_schedule_fra_ocr_risk: false,
+
+  // Track C: AI regulatory-basis assist (requires CS open + this flag)
+  compliance_schedule_regulatory_ai: false,
+
+  // Doc Graph (ADR-0021) — openers mirror DOCUMENT_GRAPH_*_ENABLED settings
+  document_graph: false,
+  document_graph_heuristic_propose: false,
+  document_graph_impact_propagation: false,
+  document_graph_llm_propose: false,
+  // X-0 programme flags — pre-registered default-off (later slices)
+  document_graph_thread_ambient: false,
+  document_graph_map_view: false,
+  document_graph_dnd_propose: false,
+  document_graph_structure_map: false,
+  graph_coach: false,
+  entity_360: false,
+  entity_360_satellites: false,
+  job_lifecycle: false,
+  job_cell_links: false,
+
+  // PlantEx Assist disclosure pair — mirrors AI_COPILOT_ENABLED and
+  // AI_COPILOT_INFERENCE_ENABLED. Both default closed so the panel understates what
+  // it is until the backend has said otherwise (see components/copilot/copilotDisclosure).
+  ai_copilot: false,
+  ai_copilot_inference: false,
 
   // Other feature flags can be added here
   portal_offline_mode: false,
@@ -66,6 +107,9 @@ function getFeatureFlagValue(flagName: string): boolean {
  * Supports localStorage overrides for testing.
  */
 export function useFeatureFlag(flagName: string): boolean {
+  // Only the change signal comes from context; the value still comes from
+  // getFeatureFlagValue, so precedence is defined in exactly one place.
+  const { version } = useContext(FeatureFlagContext)
   const [isEnabled, setIsEnabled] = useState(() => getFeatureFlagValue(flagName))
 
   useEffect(() => {
@@ -81,7 +125,7 @@ export function useFeatureFlag(flagName: string): boolean {
 
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
-  }, [flagName])
+  }, [flagName, version])
 
   return isEnabled
 }

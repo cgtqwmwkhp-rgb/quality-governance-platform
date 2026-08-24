@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   ShieldAlert,
   Info,
+  Layers,
 } from 'lucide-react'
 import { BrandMarkTile } from '../components/BrandMark'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
@@ -31,6 +32,7 @@ import {
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { cn } from '../helpers/utils'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { countOpenAssignedActions } from '../utils/portalHonestyHelpers'
 import { isGapStatus } from './workforce/trainingMatrix/trainingMatrixBoardHelpers'
 
@@ -82,6 +84,7 @@ function vanHomeSubtitle(summary: PortalMyCompliance['van_summary']): string {
 
 export default function Portal() {
   const navigate = useNavigate()
+  const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
   const { user, logout } = usePortalAuth()
   const { announce } = useLiveAnnouncer()
   const [pendingCampaignCount, setPendingCampaignCount] = useState(0)
@@ -438,6 +441,32 @@ export default function Portal() {
             </div>
             <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
           </button>
+
+          {/* Job cycles — read-only nested packs (JL-UX-W5) */}
+          {jobLifecycleEnabled ? (
+            <button
+              data-testid="portal-job-cycles-btn"
+              type="button"
+              onClick={() => navigate('/portal/job-cycles')}
+              className={cn(
+                'w-full flex items-center gap-4 p-4 rounded-2xl transition-all group text-left',
+                'bg-card hover:bg-muted/40 border border-border hover:border-primary/30 cursor-pointer',
+              )}
+            >
+              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                <Layers className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                  Job cycles
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Open nested process packs read-only
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+            </button>
+          ) : null}
 
           {/* Secondary Action: Track Status */}
           <button

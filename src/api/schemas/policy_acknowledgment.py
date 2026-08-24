@@ -1,9 +1,9 @@
 """Policy Acknowledgment API Schemas."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AcknowledgmentRequirementBase(BaseModel):
@@ -25,9 +25,13 @@ class AcknowledgmentRequirementBase(BaseModel):
 
 
 class AcknowledgmentRequirementCreate(AcknowledgmentRequirementBase):
-    """Schema for creating an acknowledgment requirement."""
+    """Schema for creating an acknowledgment requirement.
 
-    pass
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the requirement being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AcknowledgmentRequirementResponse(BaseModel):
@@ -101,7 +105,13 @@ class PolicyAcknowledgmentListResponse(BaseModel):
 
 
 class RecordAcknowledgmentRequest(BaseModel):
-    """Request to record an acknowledgment."""
+    """Request to record an acknowledgment.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the acknowledgment being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     quiz_score: Optional[int] = None
     acceptance_statement: Optional[str] = None
@@ -109,7 +119,13 @@ class RecordAcknowledgmentRequest(BaseModel):
 
 
 class AssignAcknowledgmentRequest(BaseModel):
-    """Request to assign acknowledgments to users."""
+    """Request to assign acknowledgments to users.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of assignments proceeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     user_ids: List[int]
     policy_version: Optional[str] = None
@@ -161,8 +177,8 @@ class LogDocumentReadRequest(BaseModel):
     device_type: Optional[str] = None
 
 
-class ComplianceDashboardResponse(BaseModel):
-    """Schema for compliance dashboard."""
+class ComplianceDashboardMetrics(BaseModel):
+    """Counts that were actually read from the database."""
 
     total_assignments: int
     completed: int
@@ -170,3 +186,32 @@ class ComplianceDashboardResponse(BaseModel):
     overdue: int
     completion_rate: float
     overdue_rate: float
+
+
+class MeasuredComplianceDashboard(BaseModel):
+    """A real measurement. Every count in ``metrics`` came from a query that ran."""
+
+    measurement: Literal["measured"] = "measured"
+    metrics: ComplianceDashboardMetrics
+
+
+class UnmeasurableComplianceDashboard(BaseModel):
+    """No measurement was possible, so this variant carries no numbers at all.
+
+    ``metrics`` is absent rather than zeroed or nulled: a caller reading
+    ``body["metrics"]["completion_rate"]`` raises instead of receiving a 0 that
+    would be indistinguishable from "nobody has acknowledged anything".
+    """
+
+    measurement: Literal["unmeasurable"] = "unmeasurable"
+    reason: str
+    missing_tables: List[str]
+
+
+# Discriminated, so the two states are distinguished by the payload's shape rather
+# than by a sentinel value a consumer can coerce. There is deliberately no variant
+# that carries both a number and a "this is not a real number" flag.
+ComplianceDashboardResponse = Annotated[
+    Union[MeasuredComplianceDashboard, UnmeasurableComplianceDashboard],
+    Field(discriminator="measurement"),
+]

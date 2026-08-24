@@ -29,6 +29,7 @@ import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
+import { PersonNameField } from '../components/PersonNameField'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
 import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
@@ -95,10 +96,9 @@ function freshComplaintForm(): ComplaintCreate {
 
 function isComplaintCreateDirty(
   form: ComplaintCreate,
-  extras: { subjectEmail: string; pendingFiles: File[]; selectedCustomerCode: string },
+  extras: { pendingFiles: File[]; selectedCustomerCode: string },
 ): boolean {
   if (extras.pendingFiles.length > 0) return true
-  if (extras.subjectEmail.trim()) return true
   if (extras.selectedCustomerCode.trim()) return true
   if (form.title.trim() || form.description.trim()) return true
   if (
@@ -153,7 +153,7 @@ function buildComplaintsListSearch(params: {
 export default function Complaints() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const registerLabels = useCaseRegisterLabels()
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [loading, setLoading] = useState(true)
@@ -191,9 +191,9 @@ export default function Complaints() {
     { value: 'high', label: t('priority.high') },
     { value: 'medium', label: t('priority.medium') },
     { value: 'low', label: t('priority.low') },
+    { value: 'negligible', label: t('priority.negligible') },
   ]
   const [priorityOptions, setPriorityOptions] = useState(defaultPriorityOptions)
-  const [subjectEmail, setSubjectEmail] = useState('')
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
 
   useEffect(() => {
@@ -431,7 +431,6 @@ export default function Complaints() {
 
   const resetCreateForm = () => {
     setPendingFiles([])
-    setSubjectEmail('')
     setFormError(null)
     setSelectedCustomerCode('')
     setFormData(freshComplaintForm())
@@ -439,7 +438,7 @@ export default function Complaints() {
 
   const requestCloseCreateModal = (): boolean => {
     if (
-      isComplaintCreateDirty(formData, { subjectEmail, pendingFiles, selectedCustomerCode }) &&
+      isComplaintCreateDirty(formData, { pendingFiles, selectedCustomerCode }) &&
       !window.confirm(t('complaints.dialog.discard_confirm', 'Discard unsaved complaint details?'))
     ) {
       return false
@@ -1063,47 +1062,30 @@ export default function Complaints() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-foreground">
-                  {t('complaints.form.about_staff', 'Who is the complaint about (staff)')}
-                </label>
-                <EngineerPeoplePicker
-                  valueLabel={subjectEmail}
-                  requireLogin={false}
-                  onChange={(selection) => {
-                    setSubjectEmail(selection?.label || '')
-                    setFormData({
-                      ...formData,
-                      subject_user_id: selection?.user?.id ?? null,
-                      subject_name:
-                        selection?.label ||
-                        selection?.user?.full_name ||
-                        formData.subject_name ||
-                        '',
-                    })
-                  }}
+                <PersonNameField
+                  id="complaints-subject-name"
+                  mode="hybrid"
+                  lang={i18n.language}
+                  label={t('complaints.form.about_staff', 'Who is the complaint about (staff)')}
                   placeholder={t(
                     'complaints.form.about_staff_placeholder',
-                    'Search employees (login optional)…',
+                    'Search employees or type a name…',
                   )}
-                  testId="complaint-subject-picker"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="complaints-subject-name"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('complaints.form.about_name', 'About (name if not a staff user)')}
-                </label>
-                <Input
-                  id="complaints-subject-name"
-                  type="text"
-                  value={formData.subject_name || ''}
-                  onChange={(e) => setFormData({ ...formData, subject_name: e.target.value })}
-                  placeholder={t(
-                    'complaints.form.about_name_placeholder',
-                    'Person or team the complaint concerns',
-                  )}
+                  value={
+                    formData.subject_name
+                      ? { displayName: formData.subject_name, engineerId: null }
+                      : null
+                  }
+                  onChange={(next) =>
+                    setFormData({
+                      ...formData,
+                      // subject_user_id is a login user FK; PersonNameField only exposes
+                      // engineerId (roster PK) — drop engineerId and clear the user FK.
+                      subject_user_id: null,
+                      subject_name: next?.displayName ?? '',
+                    })
+                  }
+                  testId="complaint-subject-name-field"
                 />
               </div>
             </div>

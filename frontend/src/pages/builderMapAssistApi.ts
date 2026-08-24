@@ -56,22 +56,23 @@ function normalizeLink(row: Record<string, unknown>, fallbackQuestionId?: string
 }
 
 /**
- * Build IMS Standards deep-link for an Assist ISO ref like `9001-7.2` or `7.2`.
- * Opens /standards with standard code + clause search for inspection prep.
+ * Build Standards programme deep-link for an Assist ISO ref like `9001-7.2` or `7.2`.
+ * Opens /compliance matrix shell with standard code + clause for inspection prep.
  */
 export function standardsHrefForIsoRef(refId: string): string {
   const raw = (refId || '').trim()
   const sp = new URLSearchParams()
+  sp.set('view', 'matrix')
   const prefixed = raw.match(/^(9001|14001|45001|27001|22000)[-:](.+)$/i)
   if (prefixed) {
     const codeNum = prefixed[1]
     const clause = prefixed[2].trim()
     sp.set('code', `ISO${codeNum}`)
     sp.set('clause', clause)
-    return `/standards?${sp.toString()}`
+    return `/compliance?${sp.toString()}`
   }
   if (raw) sp.set('clause', raw)
-  return `/standards?${sp.toString()}`
+  return `/compliance?${sp.toString()}`
 }
 
 export async function suggestStandardLinks(

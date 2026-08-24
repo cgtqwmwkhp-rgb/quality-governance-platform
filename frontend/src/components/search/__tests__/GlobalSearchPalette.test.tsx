@@ -20,7 +20,29 @@ vi.mock('../../../contexts/ToastContext', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, fallback?: string) => fallback ?? _key,
+    t: (
+      key: string,
+      fallbackOrOpts?: string | Record<string, unknown>,
+      maybeOpts?: Record<string, unknown>,
+    ) => {
+      const opts =
+        typeof fallbackOrOpts === 'object' && fallbackOrOpts !== null
+          ? fallbackOrOpts
+          : maybeOpts
+      let template =
+        typeof fallbackOrOpts === 'string'
+          ? fallbackOrOpts
+          : typeof opts?.defaultValue === 'string'
+            ? opts.defaultValue
+            : key
+      if (opts) {
+        for (const [name, value] of Object.entries(opts)) {
+          if (name === 'defaultValue') continue
+          template = template.replaceAll(`{{${name}}}`, String(value))
+        }
+      }
+      return template
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -143,5 +165,157 @@ describe('GlobalSearchPalette', () => {
     )
     expect(screen.getByText('503 Service Unavailable')).toBeInTheDocument()
     expect(screen.queryByText('No results found')).not.toBeInTheDocument()
+  })
+
+  it('renders document_content snippets with highlights, page, and honest suppression', async () => {
+    mockInterpret.mockResolvedValue({
+      data: {
+        q: 'extinguisher',
+        module: null,
+        status: null,
+        date_from: null,
+        date_to: null,
+        navigate: null,
+        label: null,
+        source: 'keyword',
+      },
+    })
+    mockSearch.mockResolvedValue({
+      data: {
+        total: 2,
+        query: 'extinguisher',
+        facets: { modules: { 'Document Content': 2 } },
+        results: [
+          {
+            id: 'DOC-9',
+            type: 'document_content',
+            title: 'Fire Safety Policy',
+            description: 'Keep a <b>extinguisher</b> on every floor',
+            module: 'Document Content',
+            status: 'published',
+            date: '2026-03-20T10:00:00Z',
+            relevance: 88,
+            highlights: ['extinguisher'],
+            entity_id: 9,
+            path: '/documents/9?chunk=44&page=3',
+            heading: 'Portable extinguishers',
+          },
+          {
+            id: 'DOC-10',
+            type: 'document_content',
+            title: 'Restricted HR Briefing',
+            description: '',
+            module: 'Document Content',
+            status: 'published',
+            date: '2026-03-21T10:00:00Z',
+            relevance: 70,
+            highlights: ['snippet_suppressed'],
+            entity_id: 10,
+            path: '/documents/10?chunk=2&page=1',
+          },
+        ],
+      },
+    })
+
+    const user = userEvent.setup()
+    const GlobalSearchPalette = (await import('../GlobalSearchPalette')).default
+
+    render(
+      <MemoryRouter>
+        <GlobalSearchPalette open onOpenChange={vi.fn()} />
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Toggle filters/i }))
+    expect(screen.getByRole('button', { name: 'Document body' })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText(/Search incidents/i), {
+      target: { value: 'extinguisher' },
+    })
+    await user.click(screen.getByRole('button', { name: /^Search$/ }))
+
+    expect(await screen.findByText('Fire Safety Policy')).toBeInTheDocument()
+    expect(screen.getByTestId('search-result-heading')).toHaveTextContent('Portable extinguishers')
+    const pages = screen.getAllByTestId('search-result-page')
+    expect(pages[0]).toHaveTextContent('Page 3')
+    expect(pages.some((el) => el.textContent === 'Page 1')).toBe(true)
+
+    const snippet = screen.getByTestId('search-snippet')
+    expect(snippet).toHaveTextContent('Keep a extinguisher on every floor')
+    expect(snippet.querySelector('mark')).toHaveTextContent('extinguisher')
+    expect(snippet.textContent).not.toContain('<b>')
+
+    expect(screen.getByText('Restricted HR Briefing')).toBeInTheDocument()
+    expect(screen.getByTestId('search-snippet-suppressed')).toHaveTextContent(
+      'Snippet hidden for confidential or restricted content.',
+    )
+    expect(screen.queryByText(/salary|confidential salary/i)).not.toBeInTheDocument()
+
+    const moduleLabels = screen.getAllByText('Document body')
+    expect(moduleLabels.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('offers a Compliance chip and deep-links a compliance obligation hit', async () => {
+    mockInterpret.mockResolvedValue({
+      data: {
+        q: 'fire risk',
+        module: null,
+        status: null,
+        date_from: null,
+        date_to: null,
+        navigate: null,
+        label: null,
+        source: 'keyword',
+      },
+    })
+    mockSearch.mockResolvedValue({
+      data: {
+        total: 1,
+        query: 'fire risk',
+        facets: { modules: { 'Compliance Schedule': 1 } },
+        results: [
+          {
+            id: 'CSR-2026-0001',
+            type: 'compliance_requirement',
+            title: 'Fire Risk Assessment',
+            description: 'Annual FRA for the Wickford depot',
+            module: 'Compliance Schedule',
+            status: 'due_soon',
+            date: '2026-09-01',
+            relevance: 91,
+            highlights: ['fire'],
+            entity_id: 5,
+            path: '/compliance-schedule/5',
+          },
+        ],
+      },
+    })
+
+    const user = userEvent.setup()
+    const GlobalSearchPalette = (await import('../GlobalSearchPalette')).default
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route path="/compliance-schedule/:id" element={<div>Obligation detail</div>} />
+          <Route path="*" element={<GlobalSearchPalette open onOpenChange={vi.fn()} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Toggle filters/i }))
+    expect(screen.getByRole('button', { name: 'Compliance' })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText(/Search incidents/i), {
+      target: { value: 'fire risk' },
+    })
+    await user.click(screen.getByRole('button', { name: /^Search$/ }))
+
+    expect(await screen.findByText('Fire Risk Assessment')).toBeInTheDocument()
+    expect(screen.getByText('CSR-2026-0001')).toBeInTheDocument()
+    expect(screen.getByText('due soon')).toBeInTheDocument()
+
+    await user.click(screen.getByText('Fire Risk Assessment'))
+    expect(await screen.findByText('Obligation detail')).toBeInTheDocument()
   })
 })

@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import ComplaintDetail from '../ComplaintDetail'
+import ComplaintDetail, { describeComplaintResponseSla } from '../ComplaintDetail'
 
 const mockNavigate = vi.fn()
 const mockToastError = vi.fn()
@@ -454,5 +454,154 @@ describe('ComplaintDetail', () => {
     expect(screen.getByTestId('complaint-detail-sla-not-configured')).toHaveTextContent(
       'No response SLA on this record',
     )
+  })
+
+  it('PX-210: shows the stored deadline once a response SLA exists', async () => {
+    client.complaintsApi.get.mockResolvedValue({
+      data: {
+        ...complaintRecord,
+        response_sla_hours: 48,
+        response_due_at: '2026-03-12T08:30:00Z',
+        first_response_at: null,
+        response_sla_state: 'pending',
+      },
+    })
+
+    renderPage()
+
+    const panel = await screen.findByTestId('complaint-detail-response-sla')
+    expect(panel).toHaveTextContent('48-hour response SLA')
+    expect(screen.queryByTestId('complaint-detail-sla-not-configured')).not.toBeInTheDocument()
+  })
+
+  it('PX-210: a late response reads as a breach, not as a met deadline', async () => {
+    client.complaintsApi.get.mockResolvedValue({
+      data: {
+        ...complaintRecord,
+        response_sla_hours: 24,
+        response_due_at: '2026-03-11T08:30:00Z',
+        first_response_at: '2026-03-14T08:30:00Z',
+        response_sla_state: 'breached',
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('complaint-detail-response-sla')).toHaveTextContent(
+      'Response missed the SLA',
+    )
+  })
+
+  it('PX-210: saving unrelated edits does not resend the SLA and re-derive the deadline', async () => {
+    client.complaintsApi.get.mockResolvedValue({
+      data: {
+        ...complaintRecord,
+        status: 'acknowledged',
+        response_sla_hours: 48,
+        response_due_at: '2026-03-12T08:30:00Z',
+        response_sla_state: 'pending',
+      },
+    })
+    client.complaintsApi.update.mockResolvedValue({ data: complaintRecord })
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'edit' }))
+    const resolution = screen.getByTestId('complaint-resolution-summary')
+    await userEvent.clear(resolution)
+    await userEvent.type(resolution, 'Visit rebooked.')
+    await userEvent.click(screen.getByTestId('complaint-save-edit'))
+
+    await waitFor(() => {
+      expect(client.complaintsApi.update).toHaveBeenCalled()
+    })
+    const payload = client.complaintsApi.update.mock.calls[0][1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('response_sla_hours')
+  })
+
+  it('PX-210: changing the agreed SLA does reach the API', async () => {
+    client.complaintsApi.get.mockResolvedValue({
+      data: {
+        ...complaintRecord,
+        status: 'acknowledged',
+        response_sla_hours: 48,
+        response_due_at: '2026-03-12T08:30:00Z',
+        response_sla_state: 'pending',
+      },
+    })
+    client.complaintsApi.update.mockResolvedValue({ data: complaintRecord })
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'edit' }))
+    const slaInput = screen.getByTestId('complaint-response-sla-hours')
+    await userEvent.clear(slaInput)
+    await userEvent.type(slaInput, '24')
+    await userEvent.click(screen.getByTestId('complaint-save-edit'))
+
+    await waitFor(() => {
+      expect(client.complaintsApi.update).toHaveBeenCalled()
+    })
+    const payload = client.complaintsApi.update.mock.calls[0][1] as Record<string, unknown>
+    expect(payload.response_sla_hours).toBe(24)
+  })
+})
+
+describe('describeComplaintResponseSla', () => {
+  const base = {
+    response_sla_hours: null,
+    response_due_at: null,
+    first_response_at: null,
+    response_sla_state: null,
+  }
+
+  it('reads an unanswered past deadline as overdue against the reader clock', () => {
+    const view = describeComplaintResponseSla(
+      {
+        ...base,
+        response_sla_hours: 24,
+        response_due_at: '2026-03-11T08:30:00Z',
+        response_sla_state: 'pending',
+      },
+      new Date('2026-03-12T00:00:00Z'),
+    )
+    expect(view.tone).toBe('destructive')
+    expect(view.headline).toMatch(/overdue/i)
+  })
+
+  it('does not call a deadline overdue before it arrives', () => {
+    const view = describeComplaintResponseSla(
+      {
+        ...base,
+        response_sla_hours: 24,
+        response_due_at: '2026-03-11T08:30:00Z',
+        response_sla_state: 'pending',
+      },
+      new Date('2026-03-10T00:00:00Z'),
+    )
+    expect(view.tone).toBe('warning')
+    expect(view.headline).toMatch(/due/i)
+  })
+
+  it('says nothing is stored rather than inventing a met deadline', () => {
+    const view = describeComplaintResponseSla({ ...base, response_sla_state: 'not_configured' })
+    expect(view.configured).toBe(false)
+    expect(view.tone).toBe('muted')
+  })
+
+  it('still describes a record served by a build that predates the SLA fields', () => {
+    const view = describeComplaintResponseSla({
+      response_sla_hours: 24,
+      response_due_at: '2026-03-11T08:30:00Z',
+      first_response_at: null,
+      response_sla_state: undefined as never,
+    })
+    expect(view.configured).toBe(true)
   })
 })

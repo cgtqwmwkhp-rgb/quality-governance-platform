@@ -12,7 +12,7 @@ import logging
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func, select
@@ -26,6 +26,8 @@ from src.api.schemas.evidence_asset import (
     EvidenceAssetUpdate,
     EvidenceAssetUploadResponse,
 )
+from src.api.utils.errors import api_error
+from src.api.utils.evidence_disposition import resolve_evidence_signed_url_disposition
 from src.core.config import settings
 from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
 from src.domain.models.evidence_asset import (
@@ -36,6 +38,7 @@ from src.domain.models.evidence_asset import (
     EvidenceVisibility,
 )
 from src.domain.models.user import User
+from src.domain.services.library_file_home_link import link_evidence_asset, promote_evidence_asset
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
@@ -98,6 +101,7 @@ async def validate_source_exists(
         EvidenceSourceModule.AUDIT.value: "src.domain.models.audit:AuditRun",
         EvidenceSourceModule.ACTION.value: None,  # Actions are polymorphic, skip validation
         EvidenceSourceModule.CERTIFICATE.value: "src.domain.models.compliance_automation:Certificate",
+        EvidenceSourceModule.COMPLIANCE_RECORD.value: "src.domain.models.compliance_schedule:ComplianceRecord",
     }
 
     model_path = source_models.get(source_module)
@@ -488,29 +492,6 @@ async def list_evidence_assets(
     )
 
 
-@router.get("/{asset_id}", response_model=EvidenceAssetResponse)
-async def get_evidence_asset(
-    asset_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get a specific evidence asset by ID."""
-    query = select(EvidenceAsset).where(
-        EvidenceAsset.id == asset_id,
-        EvidenceAsset.tenant_id == current_user.tenant_id,
-        EvidenceAsset.deleted_at.is_(None),
-    )
-    result = await db.execute(query)
-    asset = result.scalar_one_or_none()
-
-    if not asset:
-        raise NotFoundError(
-            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
-        )
-
-    return _evidence_asset_response(asset)
-
-
 @router.patch("/{asset_id}", response_model=EvidenceAssetResponse)
 async def update_evidence_asset(
     asset_id: int,
@@ -534,6 +515,14 @@ async def update_evidence_asset(
 
     # Update fields
     update_data = asset_data.model_dump(exclude_unset=True)
+
+    # WI-2 / L-32 — document_id is a Register link, not free metadata, so it is
+    # pulled out of the generic assignment loop below. That loop writes whatever
+    # the schema carries straight onto the model, which for an FK would store an
+    # id belonging to another tenant without ever looking at it.
+    link_document = "document_id" in update_data
+    document_id = update_data.pop("document_id", None)
+
     for field, value in update_data.items():
         if field == "visibility" and value is not None:
             setattr(asset, field, EvidenceVisibility(value))
@@ -541,6 +530,23 @@ async def update_evidence_asset(
             setattr(asset, field, EvidenceRetentionPolicy(value))
         else:
             setattr(asset, field, value)
+
+    if link_document:
+        outcome = await link_evidence_asset(
+            db,
+            asset,
+            tenant_id=current_user.tenant_id,
+            document_id=document_id,
+        )
+        if outcome.is_error:
+            raise HTTPException(
+                status_code=422,
+                detail=api_error(
+                    outcome.status.name,
+                    outcome.detail or "Register document link could not be established",
+                    details={"asset_id": asset_id, "document_id": document_id},
+                ),
+            )
 
     asset.updated_by_id = current_user.id
 
@@ -631,6 +637,50 @@ async def link_asset_to_investigation(
     return asset
 
 
+@router.post("/{asset_id}/promote-to-library", response_model=dict)
+async def promote_asset_to_library(
+    asset_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("evidence:update"))],
+) -> dict[str, Any]:
+    """Link this asset to the Register document it already is (WI-2 / L-32).
+
+    The match path: a link is written only when the same content hash or the
+    identical blob path is already on the Register in this tenant. Nothing is
+    inserted into ``documents``, so an asset the Register has never seen comes
+    back ``unmatched`` and is left exactly as it was — a promote is not an upload.
+
+    The outcome is returned rather than swallowed: ``unmatched`` and ``ambiguous``
+    are both "no link", and a steward needs to know which, because the second one
+    means the Register already holds two candidates.
+    """
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise NotFoundError(
+            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
+        )
+
+    outcome = await promote_evidence_asset(db, asset, tenant_id=current_user.tenant_id)
+    if outcome.written:
+        asset.updated_by_id = current_user.id
+        await db.commit()
+
+    return {
+        "asset_id": asset_id,
+        "document_id": outcome.document_id,
+        "status": outcome.status.value,
+        "method": outcome.method.value if outcome.method else None,
+        "detail": outcome.detail,
+    }
+
+
 @router.get("/{asset_id}/signed-url")
 async def get_signed_download_url(
     asset_id: int,
@@ -639,14 +689,17 @@ async def get_signed_download_url(
     expires_in: int = Query(3600, ge=60, le=86400, description="URL expiry in seconds (1min to 24hrs)"),
     disposition: Literal["attachment", "inline"] = Query(
         "attachment",
-        description="Content disposition; inline is available only for images",
+        description=(
+            "Content disposition; inline is honoured only for preview-safe types "
+            "(image/*, application/pdf, video/*, audio/*)"
+        ),
     ),
 ):
     """Get a signed URL for downloading or previewing an evidence asset.
 
-    Returns a time-limited signed URL for secure download. Image assets may be
-    requested inline for authenticated browser previews; all other assets are
-    served as attachments.
+    Returns a time-limited signed URL for secure download. Preview-safe assets
+    (images, PDF, video, audio) may be requested inline for authenticated browser
+    previews; all other assets are served as attachments even if inline is asked.
     """
     # Get asset — scoped to tenant
     query = select(EvidenceAsset).where(
@@ -664,9 +717,7 @@ async def get_signed_download_url(
     from src.infrastructure.storage import storage_service
 
     filename = asset.original_filename or "download"
-    effective_disposition = (
-        "inline" if disposition == "inline" and (asset.content_type or "").startswith("image/") else "attachment"
-    )
+    effective_disposition = resolve_evidence_signed_url_disposition(disposition, asset.content_type)
     content_disposition = f'{effective_disposition}; filename="{filename}"'
     signed_url = storage_service().get_signed_url(
         storage_key=asset.storage_key,
@@ -737,3 +788,39 @@ async def download_file_direct(
         headers["Content-Disposition"] = cd
 
     return Response(content=content, media_type=content_type, headers=headers)
+
+
+# =============================================================================
+# Single-segment catch-all — MUST stay last in this module
+# =============================================================================
+#
+# ``GET /{asset_id}`` matches any single path segment, so FastAPI's
+# declaration-order routing makes it answer every sibling literal declared below
+# it — ``/download`` used to land here and get rejected with a 422
+# ``path -> asset_id`` int-parsing error while still appearing in the OpenAPI
+# document. Any new single-segment literal GET on this router must be declared
+# ABOVE this route.
+# ``tests/integration/test_route_shadowing_guard.py`` enforces this repo-wide.
+
+
+@router.get("/{asset_id}", response_model=EvidenceAssetResponse)
+async def get_evidence_asset(
+    asset_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a specific evidence asset by ID."""
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise NotFoundError(
+            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
+        )
+
+    return _evidence_asset_response(asset)

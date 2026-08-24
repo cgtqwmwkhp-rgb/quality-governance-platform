@@ -59,6 +59,10 @@ import {
   investigationsApi,
   notificationsApi,
 } from '../api/client'
+// Straight from the module, not via the `api/client` barrel: these are pure and
+// the barrel is what page tests stub out for network isolation.
+import { actionsAreComplete, describeUnavailableSources } from '../api/actionsClient'
+import { NeedsMyDecisionPanel } from '../components/NeedsMyDecisionPanel'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
 import { toast } from '../contexts/ToastContext'
 import {
@@ -70,8 +74,13 @@ import {
 } from './actionsViewScope'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath } from './actionLinks'
-import { formatActionSourceRef } from './actionsDisplayHelpers'
+import {
+  formatActionSourceRef,
+  resolveActionAssignee,
+  type ActionAssigneeDisplay,
+} from './actionsDisplayHelpers'
 import { isSafeReturnTo } from '../helpers/knowledgeExceptionsLinks'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
@@ -149,6 +158,7 @@ function classifyError(error: unknown): ApiError {
 interface Action extends Omit<ApiAction, 'owner_email'> {
   source_ref: string
   assignee?: string
+  assigneeDisplay: ActionAssigneeDisplay
 }
 
 function isTerminalActionStatus(status: string | undefined): boolean {
@@ -182,6 +192,8 @@ type SourceTypeFilter =
   | 'capa_incident'
   | 'capa_complaint'
   | 'regulatory_watch'
+  | 'compliance_record'
+  | 'competence_gap'
 type SortMode = 'newest' | 'due_first'
 
 // Form state type for creating actions
@@ -234,6 +246,7 @@ export default function Actions() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -264,6 +277,12 @@ export default function Actions() {
   const [viewCountsUnavailable, setViewCountsUnavailable] = useState(false)
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [serverFilterError, setServerFilterError] = useState<string | null>(null)
+  /**
+   * Sources the server could not read on the last list call. Non-empty means the
+   * register below is incomplete by an unknown amount, so the count and the empty
+   * state both stop being trustworthy and have to say so (C-53).
+   */
+  const [unavailableSources, setUnavailableSources] = useState<string[]>([])
   const createReturnTo = useMemo(() => {
     const raw = searchParams.get('returnTo')
     return isSafeReturnTo(raw) ? raw : null
@@ -347,16 +366,20 @@ export default function Actions() {
   }, [searchParams, setSearchParams])
 
   // Transform API response to UI model
-  const transformAction = (apiAction: ApiAction): Action => ({
-    ...apiAction,
-    source_ref: formatActionSourceRef({
-      source_type: apiAction.source_type,
-      source_id: apiAction.source_id,
-      source_reference: apiAction.source_reference,
-      source_title: apiAction.source_title,
-    }),
-    assignee: apiAction.assigned_to_email || apiAction.owner_email || undefined,
-  })
+  const transformAction = (apiAction: ApiAction): Action => {
+    const assigneeDisplay = resolveActionAssignee(apiAction)
+    return {
+      ...apiAction,
+      source_ref: formatActionSourceRef({
+        source_type: apiAction.source_type,
+        source_id: apiAction.source_id,
+        source_reference: apiAction.source_reference,
+        source_title: apiAction.source_title,
+      }),
+      assignee: assigneeDisplay.name,
+      assigneeDisplay,
+    }
+  }
 
   // Fetch actions from API with stable ordering (server returns created_at desc).
   // My Work / Overdue / My overdue are server-scoped via assigned_to + overdue.
@@ -364,6 +387,7 @@ export default function Actions() {
     setLoading(true)
     setError(null)
     setServerFilterError(null)
+    setUnavailableSources([])
 
     if (actionsViewRequiresIdentity(viewMode) && currentUserId == null) {
       const msg = t(
@@ -391,6 +415,9 @@ export default function Actions() {
       )
       const transformedActions = (response.data.items ?? []).map(transformAction)
       setActions(transformedActions)
+      setUnavailableSources(
+        actionsAreComplete(response.data) ? [] : (response.data.unavailable_sources ?? []),
+      )
     } catch (err) {
       console.error('Failed to load actions:', err)
       const classified = classifyError(err)
@@ -749,6 +776,16 @@ export default function Actions() {
         </Button>
       </div>
 
+      {/*
+        Decisions outstanding for this user, read from the domains that hold them
+        (FR-APPROVALS-01). Above the register because an approval blocking someone
+        else is more urgent than the caller's own action list, and because the
+        surface it replaces — /workflows/approvals/pending — showed every user an
+        empty queue forever. It fetches independently: a failure here must not take
+        the register down, and vice versa.
+      */}
+      <NeedsMyDecisionPanel />
+
       {error && !actionsViewUsesServerFilter(viewMode) ? (
         <div
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4"
@@ -1022,6 +1059,15 @@ export default function Actions() {
             <SelectItem value="capa_incident">CAPA (incident-linked)</SelectItem>
             <SelectItem value="capa_complaint">CAPA (complaint-linked)</SelectItem>
             <SelectItem value="regulatory_watch">Regulatory watch</SelectItem>
+            {/* Retired /workforce/competence-gaps redirects here. Without the option the
+                trigger would read "All Sources" while the register was still filtered. */}
+            <SelectItem value="competence_gap">Competence gaps</SelectItem>
+            {/* Offered only where the module is on, for the same reason the nav
+                entry is: with the flag off no compliance record can exist, so
+                the option could only ever return an empty register. */}
+            {complianceScheduleEnabled || sourceTypeFilter === 'compliance_record' ? (
+              <SelectItem value="compliance_record">Compliance schedule</SelectItem>
+            ) : null}
           </SelectContent>
         </Select>
 
@@ -1070,6 +1116,34 @@ export default function Actions() {
         >
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>{serverFilterError}</span>
+        </div>
+      ) : null}
+
+      {/*
+        Only when rows came back. With an empty list the unreadable empty state
+        below carries the same message in the place the user is already looking,
+        and saying it twice trains people to skim past it.
+      */}
+      {unavailableSources.length > 0 && sortedActions.length > 0 ? (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-warning"
+          data-testid="actions-partial-sources"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            {/*
+              The source names are rendered as their own node rather than
+              interpolated into the sentence. They are data, not prose: keeping
+              them outside the translated string means they still appear if a
+              locale is missing this key or drops the placeholder.
+            */}
+            <strong className="font-semibold">{describeUnavailableSources(unavailableSources)}</strong>{' '}
+            {t(
+              'actions.partial_sources',
+              'could not be read, so this register is incomplete. Actions from those sources are missing from the list and from the counts above.',
+            )}
+          </span>
         </div>
       ) : null}
 
@@ -1205,15 +1279,36 @@ export default function Actions() {
       {/* Actions List — dense single-column rows */}
       <div>
         {sortedActions.length === 0 ? (
-          <EmptyState
-            icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
-            title={t('actions.empty.title')}
-            description={
-              filterStatus !== 'all' || viewMode !== 'all'
-                ? t('actions.empty.filter_hint')
-                : t('actions.empty.subtitle')
-            }
-          />
+          /*
+           * "No actions" and "we could not read the actions" look identical to a
+           * user and mean opposite things, so when any source failed the empty
+           * state must not claim the register is clear (C-53).
+           */
+          unavailableSources.length > 0 ? (
+            // Wrapper carries the test id: EmptyState does not forward unknown
+            // props, and TS does not flag hyphenated JSX attributes, so passing
+            // data-testid to it would have compiled and rendered nothing.
+            <div data-testid="actions-empty-unreadable">
+              <EmptyState
+                icon={<AlertCircle className="w-8 h-8 text-warning" />}
+                title={t('actions.unreadable.title', 'Actions could not be loaded')}
+                description={`${describeUnavailableSources(unavailableSources)} — ${t(
+                  'actions.unreadable.subtitle',
+                  'this is not an empty register. We cannot tell you how many actions are outstanding. Please report this.',
+                )}`}
+              />
+            </div>
+          ) : (
+            <EmptyState
+              icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
+              title={t('actions.empty.title')}
+              description={
+                filterStatus !== 'all' || viewMode !== 'all'
+                  ? t('actions.empty.filter_hint')
+                  : t('actions.empty.subtitle')
+              }
+            />
+          )
         ) : (
           <div
             className="overflow-hidden rounded-xl border border-border bg-card divide-y divide-border"
@@ -1223,7 +1318,7 @@ export default function Actions() {
               const overdue = isOverdue(action.due_date, action.display_status)
               const isOpen = expandedKey === action.action_key
               const sourceLink =
-                getActionSourceLink(action.source_type, action.source_id) ||
+                getActionSourceLink(action.source_type, action.source_id, action.source_reference) ||
                 getComplaintSourceLink(action.source_type, action.source_id)
               const hasAuditLinks =
                 action.source_type === 'audit_finding' &&
@@ -1231,8 +1326,11 @@ export default function Actions() {
                 action.audit_run_id > 0
               const moreCount = hasAuditLinks ? 2 : 0
               const detailPanelId = `actions-detail-${action.action_key}`
+              const assignee = action.assigneeDisplay
               const assigneeLabel =
-                action.assignee || t('actions.list.unassigned', 'Unassigned')
+                assignee.state === 'unassigned'
+                  ? t('actions.list.unassigned', 'Unassigned')
+                  : assignee.label
               const showFindingLoopCta =
                 action.source_type === 'audit_finding' &&
                 Number.isFinite(action.source_id) &&
@@ -1304,9 +1402,10 @@ export default function Actions() {
                         <span
                           className={cn(
                             'inline-flex items-center gap-1 truncate',
-                            !action.assignee && 'italic opacity-80',
+                            assignee.state !== 'assigned' && 'italic opacity-80',
                           )}
                           data-testid={`actions-row-assignee-${action.action_key}`}
+                          data-assignee-state={assignee.state}
                         >
                           <User className="h-3 w-3 shrink-0" aria-hidden="true" />
                           {assigneeLabel}
@@ -1439,12 +1538,17 @@ export default function Actions() {
                           {t('actions.detail.type', 'Type')}:{' '}
                           <span className="font-medium text-foreground">{action.action_type}</span>
                         </span>
-                        <span data-testid={`actions-detail-assignee-${action.action_key}`}>
+                        <span
+                          data-testid={`actions-detail-assignee-${action.action_key}`}
+                          data-assignee-state={assignee.state}
+                        >
                           {t('actions.detail.assignee', 'Assignee')}:{' '}
                           <span
                             className={cn(
                               'font-medium',
-                              action.assignee ? 'text-foreground' : 'italic text-muted-foreground',
+                              assignee.state === 'assigned'
+                                ? 'text-foreground'
+                                : 'italic text-muted-foreground',
                             )}
                           >
                             {assigneeLabel}

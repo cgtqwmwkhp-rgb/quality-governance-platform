@@ -36,12 +36,14 @@ import {
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/Tooltip'
-import { auditsApi, getApiErrorMessage, riskRegisterApi } from '../api/client'
+import { auditsApi, getApiErrorMessage, riskRegisterApi, type UserSearchResult } from '../api/client'
 import type { RiskRegisterImportReport } from '../api/riskRegisterClient'
 import { toast } from '../contexts/ToastContext'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { cn } from '../helpers/utils'
 import { formatDisplayDate, NOT_PROVIDED } from '../helpers/formatters'
+import { UserEmailSearch } from '../components/UserEmailSearch'
+import { PersonNameField } from '../components/PersonNameField'
 import {
   RiskHeatMap,
   type HeatMapData as InteractiveHeatMapData,
@@ -308,7 +310,10 @@ export default function RiskRegister() {
   const [rejectNotes, setRejectNotes] = useState('')
   const [acceptDialogOpen, setAcceptDialogOpen] = useState(false)
   const [acceptTargetId, setAcceptTargetId] = useState<number | null>(null)
-  const [acceptOwnerDraft, setAcceptOwnerDraft] = useState('')
+  /** assign = save owner only; accept = save owner then accept into live register */
+  const [ownerDialogIntent, setOwnerDialogIntent] = useState<'assign' | 'accept'>('accept')
+  const [acceptOwnerQuery, setAcceptOwnerQuery] = useState('')
+  const [acceptOwnerUser, setAcceptOwnerUser] = useState<UserSearchResult | null>(null)
   const [triageSubmitting, setTriageSubmitting] = useState(false)
   const [linkedAuditTargets, setLinkedAuditTargets] = useState<Record<string, LinkedAuditTarget>>({})
   const [filterSearch, setFilterSearch] = useState(searchParams.get('q') || '')
@@ -740,17 +745,21 @@ export default function RiskRegister() {
     }
   }
 
-  const openAcceptDialog = (riskId: number) => {
+  const openOwnerDialog = (riskId: number, intent: 'assign' | 'accept') => {
     const risk = risks.find((r) => r.id === riskId)
     setAcceptTargetId(riskId)
-    setAcceptOwnerDraft(risk?.risk_owner_name?.trim() || '')
+    setOwnerDialogIntent(intent)
+    setAcceptOwnerQuery(risk?.risk_owner_name?.trim() || '')
+    setAcceptOwnerUser(null)
     setAcceptDialogOpen(true)
   }
 
   const closeAcceptDialog = () => {
     setAcceptDialogOpen(false)
     setAcceptTargetId(null)
-    setAcceptOwnerDraft('')
+    setOwnerDialogIntent('accept')
+    setAcceptOwnerQuery('')
+    setAcceptOwnerUser(null)
   }
 
   const requestAcceptImportTriage = (risk: Risk) => {
@@ -758,25 +767,40 @@ export default function RiskRegister() {
       void resolveImportTriage(risk.id, 'accept')
       return
     }
-    openAcceptDialog(risk.id)
+    openOwnerDialog(risk.id, 'accept')
   }
 
-  const confirmAcceptWithOwner = async () => {
+  const requestAssignOwner = (risk: Risk) => {
+    openOwnerDialog(risk.id, 'assign')
+  }
+
+  const confirmOwnerDialog = async () => {
     if (acceptTargetId == null) return
-    const ownerName = acceptOwnerDraft.trim()
-    if (!ownerName) {
-      toast.error('Assign an owner before accepting this import-sourced risk.')
+    if (!acceptOwnerUser) {
+      toast.error(
+        ownerDialogIntent === 'accept'
+          ? 'Search and select an owner before accepting this import-sourced risk.'
+          : 'Search and select an owner to assign.',
+      )
       return
+    }
+    const ownerPayload = {
+      risk_owner_id: acceptOwnerUser.id,
+      risk_owner_name: acceptOwnerUser.full_name || acceptOwnerUser.email,
     }
     try {
       setTriageSubmitting(true)
-      await riskRegisterApi.updateOwner(acceptTargetId, { risk_owner_name: ownerName })
-      await riskRegisterApi.resolveSuggestionTriage(acceptTargetId, { decision: 'accept' })
+      await riskRegisterApi.updateOwner(acceptTargetId, ownerPayload)
+      if (ownerDialogIntent === 'accept') {
+        await riskRegisterApi.resolveSuggestionTriage(acceptTargetId, { decision: 'accept' })
+        toast.success(t('risk_register.import_triage_toast_accept'))
+      } else {
+        toast.success('Owner assigned')
+      }
       closeAcceptDialog()
       await loadRisks()
-      toast.success(t('risk_register.import_triage_toast_accept'))
     } catch (err) {
-      console.error('Import triage accept with owner failed:', err)
+      console.error('Import triage owner dialog failed:', err)
       toast.error(getApiErrorMessage(err) || t('risk_register.import_triage_toast_error'))
     } finally {
       setTriageSubmitting(false)
@@ -1817,9 +1841,17 @@ export default function RiskRegister() {
                         type="button"
                         className="flex items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted"
                         data-testid={`risk-owner-edit-${risk.id}`}
-                        aria-label={`Open profile to edit owner for ${risk.reference}`}
+                        aria-label={
+                          !risk.risk_owner_name && registerMode === 'import_triage'
+                            ? `Assign owner for ${risk.reference}`
+                            : `Open profile to edit owner for ${risk.reference}`
+                        }
                         onClick={(e) => {
                           e.stopPropagation()
+                          if (!risk.risk_owner_name && registerMode === 'import_triage') {
+                            requestAssignOwner(risk)
+                            return
+                          }
                           openRiskProfile(risk.id)
                         }}
                       >
@@ -2031,17 +2063,16 @@ export default function RiskRegister() {
                 data-testid="risk-detail-description"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="risk-detail-owner">Owner name</Label>
-              <Input
-                id="risk-detail-owner"
-                value={ownerDraft}
-                onChange={(e) => setOwnerDraft(e.target.value)}
-                placeholder="e.g. Jane Smith"
-                disabled={detailSaving}
-                data-testid="risk-detail-owner"
-              />
-            </div>
+            <PersonNameField
+              id="risk-detail-owner"
+              mode="hybrid"
+              label="Owner name"
+              value={ownerDraft ? { displayName: ownerDraft, engineerId: null } : null}
+              onChange={(next) => setOwnerDraft(next?.displayName ?? '')}
+              placeholder="Search employees or type a name…"
+              disabled={detailSaving}
+              testId="risk-detail-owner"
+            />
             <div className="space-y-1.5">
               <Label htmlFor="risk-detail-category">Category</Label>
               <select
@@ -2158,38 +2189,50 @@ export default function RiskRegister() {
         }}
       >
         <DialogContent
-          className="sm:max-w-md"
+          className="sm:max-w-md overflow-visible"
           data-testid="risk-import-accept-dialog"
           onEscapeKeyDown={(e) => triageSubmitting && e.preventDefault()}
           onPointerDownOutside={(e) => triageSubmitting && e.preventDefault()}
         >
           <DialogHeader>
-            <DialogTitle>Assign owner to accept</DialogTitle>
+            <DialogTitle>
+              {ownerDialogIntent === 'accept' ? 'Assign owner to accept' : 'Assign owner'}
+            </DialogTitle>
             <DialogDescription>
-              Import-sourced risks cannot enter the live register unassigned. Name an owner, then accept.
+              {ownerDialogIntent === 'accept'
+                ? 'Import-sourced risks cannot enter the live register unassigned. Search and select an owner, then accept.'
+                : 'Search and select a user to allocate as risk owner. You can accept into the live register afterwards.'}
             </DialogDescription>
           </DialogHeader>
-          <Label htmlFor="import-triage-accept-owner">Owner</Label>
-          <Input
-            id="import-triage-accept-owner"
-            value={acceptOwnerDraft}
-            onChange={(e) => setAcceptOwnerDraft(e.target.value)}
-            maxLength={255}
-            placeholder="Owner name"
-            disabled={triageSubmitting}
-            data-testid="risk-import-accept-owner"
-          />
+          <div data-testid="risk-import-accept-owner">
+            <UserEmailSearch
+              label="Owner"
+              required
+              value={acceptOwnerQuery}
+              placeholder="Search by name or email…"
+              onChange={(email, user) => {
+                setAcceptOwnerQuery(email)
+                setAcceptOwnerUser(user ?? null)
+              }}
+            />
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="secondary" onClick={closeAcceptDialog} disabled={triageSubmitting}>
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={() => void confirmAcceptWithOwner()}
-              disabled={triageSubmitting || !acceptOwnerDraft.trim()}
+              onClick={() => void confirmOwnerDialog()}
+              disabled={triageSubmitting || !acceptOwnerUser}
               data-testid="risk-import-accept-confirm"
             >
-              {triageSubmitting ? 'Accepting…' : 'Assign & accept'}
+              {triageSubmitting
+                ? ownerDialogIntent === 'accept'
+                  ? 'Accepting…'
+                  : 'Saving…'
+                : ownerDialogIntent === 'accept'
+                  ? 'Assign & accept'
+                  : 'Assign owner'}
             </Button>
           </DialogFooter>
         </DialogContent>

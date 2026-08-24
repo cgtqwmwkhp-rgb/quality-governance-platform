@@ -3,7 +3,7 @@
 # P0 workflows must complete successfully for production readiness
 
 version: "1.0"
-last_updated: "2026-07-26"
+last_updated: "2026-08-06"
 
 # ==============================================================================
 # P0 CRITICAL WORKFLOWS - Must Pass for Production
@@ -35,19 +35,10 @@ p0_workflows:
       # correct against everything the repository defines: the incident template's
       # first step declares a field named `contract`
       # (frontend/src/pages/PortalDynamicForm.tsx, FALLBACK_TEMPLATES.incident) and
-      # DynamicFormRenderer emits `data-testid="field-${field.name}"`. There is no
-      # form-template seed in the repo — the live template is authored through the
-      # admin form builder and stored in the database — so a rename made there
-      # cannot be detected from source.
-      #
-      # The 2026-07-25 gate failure was NOT a rename. The workflow artifact shows
-      # the page requested the template and `lookup/customers` and then stopped,
-      # never requesting `workforce_roles` or `medical_assistance` — the
-      # early-return branch PortalDynamicForm takes when the customers lookup
-      # rejects, in which case no template renders and no field of any name exists.
-      # The page-audit artifact from the same run shows the API host returning 503
-      # to the frontend throughout. Fix the environment first; only then is a
-      # remaining failure here evidence about the field itself.
+      # DynamicFormRenderer emits `data-testid="field-contract"` for contract /
+      # customer / client pickers. Wait for `[data-testid=portal-form-ready]`
+      # before this step — the 5s field wait used to expire while the page was
+      # still on the loading spinner (LIVE SHA e4771f9, run 31880826656).
       - stepId: 4
         action: "Fill first form step (contract)"
         form_fields:
@@ -346,6 +337,30 @@ p1_workflows:
       - GET /api/v1/search
     max_duration_seconds: 20
 
+  # Compliance Schedule register
+  - workflowId: compliance-schedule
+    name: "Admin Views Compliance Schedule"
+    description: "Admin navigates to the compliance schedule obligation register"
+    criticality: P1
+    auth_type: jwt_admin
+    steps:
+      - stepId: 1
+        action: "Navigate to compliance schedule"
+        route: /compliance-schedule
+        exit_criteria: "Compliance schedule page loads"
+
+      - stepId: 2
+        action: "Verify register surface"
+        selector: "[data-testid='compliance-schedule-page']"
+        exit_criteria: "Page root visible with list, empty state, or catalogue"
+
+    success_terminal_state: "Compliance schedule register rendered"
+    recovery_path: "Error banner if API fails"
+    expected_apis:
+      - GET /api/v1/compliance-schedule/requirements
+      - GET /api/v1/compliance-schedule/stats
+    max_duration_seconds: 20
+
 # ==============================================================================
 # P2 OPTIONAL WORKFLOWS - Can Degrade
 # ==============================================================================
@@ -393,7 +408,7 @@ p2_workflows:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_workflows: 11
+  total_workflows: 12
   p0_workflows: 5
-  p1_workflows: 4
+  p1_workflows: 5
   p2_workflows: 2

@@ -107,12 +107,27 @@ def test_flag_defaults_to_off():
     assert settings.ai_copilot_enabled is False
 
 
-def test_production_refuses_even_when_the_flag_is_set(client: TestClient, monkeypatch):
-    """Production is never eligible, mirroring the frontend gate — an env var cannot open it."""
-    monkeypatch.setattr(settings, "ai_copilot_enabled", True)
+def test_production_refuses_while_the_flag_is_unset(client: TestClient, monkeypatch):
+    """Deploying to production must not open the surface on its own.
+
+    Production is eligible on the same terms as any other environment, so the thing
+    worth pinning is that eligibility still costs an explicit AI_COPILOT_ENABLED.
+    """
+    monkeypatch.setattr(settings, "ai_copilot_enabled", False)
     monkeypatch.setattr(settings, "app_env", "production")
 
     assert client.get(f"{COPILOT_PREFIX}/actions").status_code == 404
+
+
+def test_production_opens_only_when_the_flag_is_set(client: TestClient, monkeypatch):
+    """The operator opt-in reaches production too — the guard stops 404ing and auth takes over."""
+    monkeypatch.setattr(settings, "ai_copilot_enabled", True)
+    monkeypatch.setattr(settings, "app_env", "production")
+
+    response = client.get(f"{COPILOT_PREFIX}/actions")
+
+    assert response.status_code in {401, 403}, f"expected an auth challenge, got {response.status_code}"
+    assert "create_incident" not in response.text
 
 
 @pytest.mark.parametrize("method,path,body", COPILOT_REQUESTS)
@@ -195,13 +210,14 @@ def test_authenticated_routes_reach_auth_when_enabled(client: TestClient, copilo
     "flag,app_env,expected",
     [
         (False, "development", False),
+        (False, "staging", False),
         (False, "production", False),
-        (True, "production", False),
+        (True, "production", True),
         (True, "staging", True),
         (True, "development", True),
     ],
 )
-def test_copilot_is_enabled_requires_opt_in_outside_production(monkeypatch, flag, app_env, expected):
+def test_copilot_is_enabled_requires_explicit_opt_in_in_every_environment(monkeypatch, flag, app_env, expected):
     from src.domain.services.copilot_service import copilot_is_enabled
 
     monkeypatch.setattr(settings, "ai_copilot_enabled", flag)
@@ -218,4 +234,4 @@ async def test_service_refuses_to_generate_when_disabled(monkeypatch):
     service = copilot_service_module.CopilotService(db=None)
 
     with pytest.raises(copilot_service_module.CopilotDisabledError):
-        await service.send_message(session_id=1, content="what is our risk summary?", user_id=1)
+        await service.send_message(session_id=1, content="what is our risk summary?", user_id=1, tenant_id=1)

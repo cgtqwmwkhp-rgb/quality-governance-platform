@@ -19,6 +19,13 @@ class _FakeResult:
         return self._value
 
 
+def _stub_auth_audit(monkeypatch) -> AsyncMock:
+    """Avoid real AuditLogEntry writes in route unit tests."""
+    audit = AsyncMock()
+    monkeypatch.setattr(auth_routes, "_record_auth_audit", audit)
+    return audit
+
+
 @pytest.mark.asyncio
 async def test_login_embeds_user_roles_in_access_token(monkeypatch):
     user = types.SimpleNamespace(
@@ -27,6 +34,8 @@ async def test_login_embeds_user_roles_in_access_token(monkeypatch):
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
+        tenant_id=7,
+        full_name="David Harris",
         roles=[types.SimpleNamespace(name="admin")],
         last_login=None,
     )
@@ -36,6 +45,7 @@ async def test_login_embeds_user_roles_in_access_token(monkeypatch):
         refresh=AsyncMock(),
     )
     monkeypatch.setattr("src.domain.services.auth_service.verify_password", lambda _plain, _hashed: True)
+    audit = _stub_auth_audit(monkeypatch)
 
     response = await login(
         LoginRequest(email="david.harris@plantexpand.com", password="secret"),
@@ -47,6 +57,8 @@ async def test_login_embeds_user_roles_in_access_token(monkeypatch):
     assert payload["role"] == "admin"
     assert payload["roles"] == ["admin"]
     assert payload["is_superuser"] is False
+    audit.assert_awaited_once()
+    assert audit.await_args.args[2] == "login"
 
 
 @pytest.mark.asyncio
@@ -83,6 +95,8 @@ async def test_login_allows_explicit_production_break_glass(monkeypatch):
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
+        tenant_id=7,
+        full_name="David Harris",
         roles=[],
         last_login=None,
     )
@@ -97,6 +111,7 @@ async def test_login_allows_explicit_production_break_glass(monkeypatch):
         types.SimpleNamespace(is_production=True, allow_local_password_login=True),
     )
     monkeypatch.setattr("src.domain.services.auth_service.verify_password", lambda _plain, _hashed: True)
+    _stub_auth_audit(monkeypatch)
 
     response = await login(LoginRequest(email="david.harris@plantexpand.com", password="secret"), db)
 
@@ -138,6 +153,7 @@ async def test_token_exchange_embeds_existing_user_roles(monkeypatch):
         full_name="David Harris",
         is_active=True,
         is_superuser=False,
+        tenant_id=7,
         roles=[types.SimpleNamespace(name="admin"), types.SimpleNamespace(name="supervisor")],
         azure_oid="abc",
         department=None,
@@ -154,6 +170,7 @@ async def test_token_exchange_embeds_existing_user_roles(monkeypatch):
         "src.domain.services.auth_service.extract_user_info_from_azure_token",
         lambda _payload: {"email": "david.harris@plantexpand.com", "oid": "abc", "name": "David Harris"},
     )
+    audit = _stub_auth_audit(monkeypatch)
 
     response = await exchange_azure_token(
         AzureTokenExchangeRequest(id_token="azure-token"),
@@ -165,3 +182,38 @@ async def test_token_exchange_embeds_existing_user_roles(monkeypatch):
     assert payload["role"] == "admin"
     assert payload["roles"] == ["admin", "supervisor"]
     assert payload["is_superuser"] is False
+    audit.assert_awaited_once()
+    assert audit.await_args.args[2] == "login"
+
+
+@pytest.mark.asyncio
+async def test_record_auth_audit_skips_without_tenant(monkeypatch):
+    logged = AsyncMock()
+    monkeypatch.setattr(auth_routes.AuditLogService, "log_auth", logged)
+    user = types.SimpleNamespace(id=1, email="a@b.com", full_name="A", tenant_id=None)
+
+    await auth_routes._record_auth_audit(AsyncMock(), user, "login")
+
+    logged.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_record_auth_audit_writes_log_auth(monkeypatch):
+    logged = AsyncMock()
+
+    class _FakeALS:
+        def __init__(self, _db):
+            pass
+
+        log_auth = logged
+
+    monkeypatch.setattr(auth_routes, "AuditLogService", _FakeALS)
+    user = types.SimpleNamespace(id=1, email="a@b.com", full_name="A", tenant_id=9)
+
+    await auth_routes._record_auth_audit(AsyncMock(), user, "logout")
+
+    logged.assert_awaited_once()
+    kwargs = logged.await_args.kwargs
+    assert kwargs["tenant_id"] == 9
+    assert kwargs["action"] == "logout"
+    assert kwargs["user_id"] == 1

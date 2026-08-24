@@ -13,12 +13,13 @@ from sqlalchemy.exc import IntegrityError
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.case_closure import CaseClosureValidationResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
-from src.domain.exceptions import BadRequestError, StateTransitionError
+from src.domain.exceptions import BadRequestError
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.api_idempotency_service import (
@@ -27,6 +28,12 @@ from src.domain.services.api_idempotency_service import (
     complete_idempotent_create,
 )
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_NEAR_MISS,
+    evaluate_case_closure,
+    resolve_case_tenant_id,
+    validation_to_payload,
+)
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.near_miss_risk_links import (
     append_linked_risk_id,
@@ -142,7 +149,7 @@ async def create_near_miss(
     near_miss = NearMiss(
         **payload,
         reference_number=reference_number,
-        status="REPORTED",
+        status="reported",
         priority="MEDIUM",
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
@@ -157,11 +164,13 @@ async def create_near_miss(
         event_type="near_miss.created",
         entity_type="near_miss",
         entity_id=str(near_miss.id),
+        entity_name=near_miss.reference_number,
         action="create",
         description=f"Near Miss {near_miss.reference_number} reported",
         payload=data.model_dump(mode="json"),
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=near_miss.tenant_id,
     )
 
     await complete_idempotent_create(
@@ -213,9 +222,13 @@ async def list_near_misses(
 
     query = select(NearMiss)
 
-    if not current_user.is_superuser:
-        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-        query = apply_tenant_filter(query, NearMiss, tenant_id)
+    # No superuser bypass on the register list (B-13). The dashboard aggregates
+    # that count near misses are tenant-scoped for every caller, so a list that
+    # spanned tenants for a superuser described a different population from the
+    # numbers shown beside it. Opening, updating or deleting one cross-tenant
+    # record by id is still available; enumerating the estate is not.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    query = apply_tenant_filter(query, NearMiss, tenant_id)
 
     # Apply filters — non-admin users can only filter by their own email
     if reporter_email:
@@ -276,7 +289,17 @@ async def update_near_miss(
     current_user: Annotated[User, Depends(require_permission("near_miss:update"))],
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
-    """Update a near miss."""
+    """Update a near miss.
+
+    Superusers are exempted from the tenant filter here for the same reason they
+    are on ``_get_near_miss_or_404``: a screen that opens a record must also be
+    able to save it, or the Close dialog offers a close that returns 404. The
+    register list no longer carries that exemption (B-13), so the record has to
+    be reached by id rather than found by browsing.
+
+    StateTransitionError propagates to the global domain handler so the closure
+    gate codes reach the client instead of collapsing into a bare 409 string.
+    """
     service = NearMissService(db)
     try:
         near_miss = await service.update_near_miss(
@@ -285,11 +308,10 @@ async def update_near_miss(
             user_id=current_user.id,
             tenant_id=current_user.tenant_id,
             request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Near miss not found"))
-    except StateTransitionError as e:
-        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise BadRequestError(str(e))
 
@@ -307,22 +329,37 @@ async def delete_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
+    service = NearMissService(db)
+    try:
+        await service.delete_near_miss(
+            near_miss_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Near Miss with ID {near_miss_id} not found"),
+        )
+
+
+@router.get("/{near_miss_id}/closure-validation", response_model=CaseClosureValidationResponse)
+async def get_near_miss_closure_validation(
+    near_miss_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
+):
+    """Report whether this near miss can be closed, and why not if it cannot."""
     near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
-
-    await record_audit_event(
-        db=db,
-        event_type="near_miss.deleted",
-        entity_type="near_miss",
-        entity_id=str(near_miss.id),
-        action="delete",
-        description=f"Near Miss {near_miss.reference_number} deleted",
-        payload={"reference_number": near_miss.reference_number},
-        user_id=current_user.id,
-        request_id=request_id,
+    validation = await evaluate_case_closure(
+        db,
+        case_type=CASE_TYPE_NEAR_MISS,
+        case=near_miss,
+        tenant_id=resolve_case_tenant_id(near_miss),
     )
-
-    await db.delete(near_miss)
-    await db.commit()
+    return validation_to_payload(validation)
 
 
 @router.get("/{near_miss_id}/investigations", response_model=dict)
@@ -425,11 +462,13 @@ async def add_near_miss_running_sheet_entry(
         event_type="near_miss.runner_sheet_entry.created",
         entity_type="near_miss",
         entity_id=str(near_miss.id),
+        entity_name=near_miss.reference_number,
         action="create",
         description=f"Runner-sheet entry added to near miss {near_miss.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=near_miss.tenant_id,
     )
 
     await db.commit()
@@ -469,11 +508,15 @@ async def delete_near_miss_running_sheet_entry(
         event_type="near_miss.runner_sheet_entry.deleted",
         entity_type="near_miss",
         entity_id=str(near_miss.id),
+        entity_name=near_miss.reference_number,
         action="delete",
         description=f"Runner-sheet entry deleted from near miss {near_miss.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        # The parent case, whose tenant_id is NOT NULL. The entry's own column is
+        # nullable, so the parent is the reliable owner.
+        tenant_id=near_miss.tenant_id,
     )
 
     await db.delete(entry)
@@ -555,6 +598,7 @@ async def raise_risk_from_near_miss(
         )
 
     severity_impact = {
+        "negligible": 1,
         "low": 2,
         "medium": 3,
         "high": 4,
@@ -603,6 +647,7 @@ async def raise_risk_from_near_miss(
             event_type="near_miss.risk_raised",
             entity_type="near_miss",
             entity_id=str(near_miss.id),
+            entity_name=near_miss.reference_number,
             action="create",
             description=f"Risk {risk.reference} raised from near miss {near_miss.reference_number}",
             payload={"risk_id": risk.id, "risk_reference": risk.reference},

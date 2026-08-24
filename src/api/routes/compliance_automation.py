@@ -15,7 +15,8 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.exceptions import NotFoundError
+from src.api.schemas.compliance_automation import CertificateCreate
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.user import User
 from src.domain.services.assurance_cert_shelf_service import AssuranceCertShelfService
 from src.domain.services.compliance_automation_service import ComplianceAutomationService
@@ -145,6 +146,44 @@ async def list_certificates(
         expiring_within_days=expiring_within_days,
     )
     return {"certificates": certificates, "total": len(certificates)}
+
+
+@router.post("/certificates", response_model=dict, status_code=201)
+async def add_certificate(
+    payload: CertificateCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+):
+    """Register a certificate on the compliance expiry register.
+
+    The register had a read surface and no writer, so the only way a dated
+    certificate could reach it was a hand-written SQL insert, and the framework
+    countdown on the standards matrix stayed at "No dated cert" (PX-427).
+    """
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        # Not an assert: a NULL tenant_id on this table reads back as visible to
+        # every tenant, and `python -O` strips asserts.
+        raise BadRequestError("Tenant context required")
+
+    service = ComplianceAutomationService(db)
+    response = await service.create_certificate(
+        tenant_id=tenant_id,
+        name=payload.name,
+        certificate_type=payload.certificate_type,
+        reference_number=payload.reference_number,
+        entity_type=payload.entity_type,
+        entity_id=payload.entity_id,
+        entity_name=payload.entity_name,
+        issuing_body=payload.issuing_body,
+        issue_date=payload.issue_date,
+        expiry_date=payload.expiry_date,
+        reminder_days=payload.reminder_days,
+        is_critical=payload.is_critical,
+        notes=payload.notes,
+    )
+    await db.commit()
+    return response
 
 
 @router.get("/certificates/shelf")
@@ -318,3 +357,27 @@ async def submit_riddor(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     await db.commit()
     return response
+
+
+@router.get("/standards-digests")
+async def get_standards_digests(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:read"))],
+    due_soon_days: int = 30,
+):
+    """Standards hygiene digests for Monitoring (SG-F-05 / SG-F-06).
+
+    Read-model only — freshness, ingest backlog, NC-by-clause + recurrence, and
+    cert-expiry board composed from live SoRs. Does not change the auto-confirm gate.
+    """
+    from src.domain.services.standards_digest_service import StandardsDigestService
+
+    if due_soon_days < 1 or due_soon_days > 365:
+        raise BadRequestError("due_soon_days must be between 1 and 365")
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+
+    service = StandardsDigestService(db)
+    return await service.build(tenant_id=tenant_id, due_soon_days=due_soon_days)

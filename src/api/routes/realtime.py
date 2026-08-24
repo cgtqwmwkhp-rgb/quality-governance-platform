@@ -1,6 +1,16 @@
 """
 Real-Time WebSocket API Routes
 
+WJ-0 / L-35a: In-memory presence/notifications only. The `collaborative_*`
+CRDT tables, their service and the frontend hook that targeted a never-built
+`/realtime/collab/{document_id}` handler were dropped by
+`20261101_lib_wj0_drop`. Do not add that handler back.
+
+This router is deliberately untouched by that demolition: `presence`,
+`online-users`, `stats` and `broadcast` all answer from the in-memory
+`connection_manager`, never from the dropped `user_presence` table. Its
+keep-or-cut decision belongs with NotificationCenter / useWebSocket, separately.
+
 Features:
 - WebSocket connection handling
 - Real-time notifications

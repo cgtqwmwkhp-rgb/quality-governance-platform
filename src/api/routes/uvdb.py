@@ -15,7 +15,7 @@ from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
@@ -33,6 +33,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
+from src.domain.services.library_file_home_link import normalise_documents_presented
 from src.domain.services.uvdb_protocol_export_service import build_protocol_export, build_protocol_structure_payload
 from src.domain.services.uvdb_service import (
     build_section_title_index,
@@ -42,9 +43,65 @@ from src.domain.services.uvdb_service import (
     resolve_score_source,
 )
 from src.domain.uvdb.protocol_b2_v118 import PROTOCOL_VERSION, UVDB_B2_SECTIONS, build_content_coverage
+from src.domain.uvdb.scoring_policy import (
+    apply_section_score_policy,
+    apply_section_scores_policy,
+    build_assessability_index,
+    policy_adjusted_audit_percentage,
+    qualification_percentage_from_sections,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+_PROTOCOL_TITLE_INDEX = build_section_title_index(UVDB_B2_SECTIONS)
+_PROTOCOL_BY_NUMBER = build_assessability_index(UVDB_B2_SECTIONS)
+
+
+def _policy_adjust_percentage(stored: Optional[float], section_scores: Any) -> tuple[Optional[float], dict[str, Any]]:
+    """Recompute qualification % excluding pending-empty protocol sections (PX-255)."""
+    return policy_adjusted_audit_percentage(
+        stored_percentage=stored,
+        section_scores_raw=section_scores,
+        protocol_sections=UVDB_B2_SECTIONS,
+        match_section=match_protocol_section,
+        normalise_entry=lambda entry: normalise_section_score(entry, audit_reference=None, score_source=None),
+        title_index=_PROTOCOL_TITLE_INDEX,
+    )
+
+
+def _apply_breakdown_policy(
+    breakdown: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Exclude pending-empty sections from audit score breakdown entries."""
+    out: list[dict[str, Any]] = []
+    for entry in breakdown:
+        label = str(entry.get("label") or "")
+        number = match_protocol_section(
+            label,
+            valid_section_numbers=[str(s["number"]) for s in UVDB_B2_SECTIONS],
+            title_index=_PROTOCOL_TITLE_INDEX,
+        )
+        protocol = _PROTOCOL_BY_NUMBER.get(number) if number else None
+        content_status = str((protocol or {}).get("content_status") or "loaded")
+        # Unmapped labels are not pending protocol shells — leave them visible
+        # as report figures with assessed unknown rather than inventing a gate.
+        if protocol is None:
+            tagged = dict(entry)
+            tagged.setdefault("assessed", True)
+            tagged.setdefault("excluded_from_qualification", False)
+            tagged.setdefault("exclusion_reason", None)
+            out.append(tagged)
+            continue
+        out.append(
+            apply_section_score_policy(
+                entry,
+                content_status=content_status,
+                mode="exclude",
+                protocol_section=protocol,
+            )
+        )
+    return out
 
 
 # UVDB B2 protocol structure lives in src/domain/uvdb/protocol_b2_v118.py (SSOT).
@@ -54,6 +111,14 @@ logger = logging.getLogger(__name__)
 
 
 class AuditCreate(BaseModel):
+    """Create a UVDB audit.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the audit being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     company_name: str = Field(..., min_length=3, max_length=255)
     company_id: Optional[str] = None
     audit_type: str = Field(default="B2")
@@ -63,6 +128,14 @@ class AuditCreate(BaseModel):
 
 
 class AuditUpdate(BaseModel):
+    """Update a UVDB audit.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the audit being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     status: Optional[str] = None
     total_score: Optional[float] = None
     audit_notes: Optional[str] = None
@@ -75,6 +148,9 @@ class ResponseCreate(BaseModel):
     site_response: Optional[int] = Field(None, ge=0, le=3)
     sub_question_responses: Optional[dict] = None
     evidence_provided: Optional[str] = None
+    # WI-2 / L-32 — stored as a {document_id, label} projection over Register
+    # documents.id. Legacy element shapes (a title, a bare id, a dict) are still
+    # accepted on the way in and converted; see normalise_documents_presented.
     documents_presented: Optional[list] = None
     finding_type: Optional[str] = None
     finding_description: Optional[str] = None
@@ -306,6 +382,7 @@ async def list_audits(
     items = []
     for a in audits:
         run_id, job_id = links.get(a.audit_reference, (None, None))
+        adjusted, policy_meta = _policy_adjust_percentage(a.percentage_score, a.section_scores)
         items.append(
             {
                 "id": a.id,
@@ -314,9 +391,12 @@ async def list_audits(
                 "audit_type": a.audit_type,
                 "audit_date": a.audit_date.isoformat() if a.audit_date else None,
                 "status": a.status,
-                "percentage_score": a.percentage_score,
+                # Qualification % excludes pending-empty sections (PX-255).
+                "percentage_score": adjusted,
+                "report_percentage_score": a.percentage_score,
+                "score_policy": policy_meta,
                 "score_source": resolve_score_source(
-                    a.percentage_score,
+                    adjusted,
                     import_job_id=job_id,
                     provenance_resolved=links_resolved,
                 ),
@@ -402,20 +482,23 @@ async def get_audit(
         logger.debug("Could not resolve source document for audit %s", audit_id)
         provenance_resolved = False
 
-    score_source = resolve_score_source(
-        audit.percentage_score,
-        import_job_id=import_job_id,
-        provenance_resolved=provenance_resolved,
-    )
     entry_source = resolve_provenance(import_job_id=import_job_id, provenance_resolved=provenance_resolved)
 
     scores = audit.section_scores or {}
     raw_breakdown = scores.get("sections", []) if isinstance(scores, dict) else []
-    score_breakdown = [
-        normalise_section_score(entry, audit_reference=audit.audit_reference, score_source=entry_source)
-        for entry in raw_breakdown
-        if isinstance(entry, dict)
-    ]
+    score_breakdown = _apply_breakdown_policy(
+        [
+            normalise_section_score(entry, audit_reference=audit.audit_reference, score_source=entry_source)
+            for entry in raw_breakdown
+            if isinstance(entry, dict)
+        ]
+    )
+    adjusted, policy_meta = _policy_adjust_percentage(audit.percentage_score, audit.section_scores)
+    score_source = resolve_score_source(
+        adjusted,
+        import_job_id=import_job_id,
+        provenance_resolved=provenance_resolved,
+    )
 
     return {
         "id": audit.id,
@@ -429,7 +512,9 @@ async def get_audit(
         "lead_auditor": audit.lead_auditor,
         "total_score": audit.total_score,
         "max_possible_score": audit.max_possible_score,
-        "percentage_score": audit.percentage_score,
+        "percentage_score": adjusted,
+        "report_percentage_score": audit.percentage_score,
+        "score_policy": policy_meta,
         "score_source": score_source,
         "section_scores": audit.section_scores,
         "score_breakdown": score_breakdown,
@@ -494,15 +579,36 @@ async def create_response(
     if not audit:
         raise NotFoundError("Audit not found")
 
+    payload = response_data.model_dump()
+
+    # WI-2 / L-32 — project documents_presented onto {document_id, label} here
+    # rather than in a data migration, because resolving an id needs a tenant and
+    # only the request knows one. Links resolve against the caller's tenant only
+    # when the audit belongs to it; on a mismatch every element keeps its label
+    # and carries no id, so one tenant's Register reference can never be written
+    # onto another tenant's audit.
+    link_tenant_id = getattr(current_user, "tenant_id", None)
+    if audit.tenant_id is not None and audit.tenant_id != link_tenant_id:
+        link_tenant_id = None
+    payload["documents_presented"] = await normalise_documents_presented(
+        db,
+        tenant_id=link_tenant_id,
+        elements=payload.get("documents_presented"),
+    )
+
     response = UVDBAuditResponse(
         audit_id=audit_id,
-        **response_data.model_dump(),
+        **payload,
     )
     db.add(response)
     await db.commit()
     await db.refresh(response)
 
-    return {"id": response.id, "message": "Response recorded"}
+    return {
+        "id": response.id,
+        "message": "Response recorded",
+        "documents_presented": response.documents_presented,
+    }
 
 
 @router.get("/audits/{audit_id}/responses", response_model=dict)
@@ -531,6 +637,10 @@ async def get_audit_responses(
                 "site_response": r.site_response,
                 "finding_type": r.finding_type,
                 "finding_description": r.finding_description,
+                # WI-2 — the {document_id, label} projection is only useful if a
+                # reader can see which elements actually reached the Register.
+                # An element with a label and a null id is unfiled, not missing.
+                "documents_presented": r.documents_presented,
             }
             for r in responses
         ],
@@ -723,11 +833,33 @@ async def get_section_scores(
             continue
         sections_map[number] = normalised
 
+    # PX-255: exclude / clear pending-empty protocol sections so they cannot
+    # inflate the qualification picture with imported PDF figures.
+    sections_map = apply_section_scores_policy(
+        sections_map,
+        protocol_sections=UVDB_B2_SECTIONS,
+        mode="exclude",
+    )
+    qualification = qualification_percentage_from_sections(sections_map)
+    excluded = [number for number, entry in sections_map.items() if entry.get("excluded_from_qualification")]
+
     return {
         "sections": sections_map,
         "unmapped_sections": unmapped,
         "audit_reference": latest.audit_reference,
         "score_source": score_source,
+        "qualification_percentage": qualification,
+        "excluded_section_numbers": excluded,
+        "score_policy": {
+            "policy_applied": True,
+            "mode": "exclude",
+            "excluded_section_numbers": excluded,
+            "included_section_numbers": [
+                number
+                for number, entry in sections_map.items()
+                if not entry.get("excluded_from_qualification") and entry.get("percentage") is not None
+            ],
+        },
     }
 
 
@@ -758,16 +890,16 @@ async def get_uvdb_dashboard(
     )
     completed_audits = completed_result.scalar()
 
-    score_filters = [
-        UVDBAudit.status == "completed",
-        UVDBAudit.percentage_score.isnot(None),
-        *tenant_filter,
-    ]
-    avg_result = await db.execute(select(func.avg(UVDBAudit.percentage_score)).where(*score_filters))
-    avg_score = avg_result.scalar()
-
-    scored_result = await db.execute(select(func.count()).select_from(UVDBAudit).where(*score_filters))
-    scored_audits = scored_result.scalar() or 0
+    # PX-255: average policy-adjusted qualification scores so pending-empty
+    # imported section figures cannot fabricate a headline 99%.
+    completed_rows = await db.execute(select(UVDBAudit).where(UVDBAudit.status == "completed", *tenant_filter))
+    adjusted_scores: list[float] = []
+    for row in completed_rows.scalars().all():
+        adjusted, _meta = _policy_adjust_percentage(row.percentage_score, row.section_scores)
+        if adjusted is not None:
+            adjusted_scores.append(float(adjusted))
+    avg_score = round(sum(adjusted_scores) / len(adjusted_scores), 1) if adjusted_scores else None
+    scored_audits = len(adjusted_scores)
 
     coverage = build_content_coverage()
 
@@ -778,7 +910,7 @@ async def get_uvdb_dashboard(
             "completed_audits": completed_audits,
             # None, not 0.0 — completed audits with no recorded score are not
             # an average of zero, and an empty population is not 100%.
-            "average_score": round(float(avg_score), 1) if avg_score is not None else None,
+            "average_score": avg_score,
             "scored_audits": scored_audits,
         },
         "protocol": {

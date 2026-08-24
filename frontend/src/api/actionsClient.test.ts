@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createActionsApi } from './actionsClient'
+import { actionsAreComplete, createActionsApi, describeUnavailableSources } from './actionsClient'
 
 function mockApi() {
   return {
@@ -49,6 +49,7 @@ describe('createActionsApi', () => {
     actions.get(3, 'capa')
     actions.getByKey('capa:3')
     actions.update(3, 'capa', { status: 'completed' })
+    actions.delete(7, 'incident')
     actions.listOwnerNotes('capa:3', 50)
     actions.appendOwnerNote('capa:3', 'done')
     expect(api.get).toHaveBeenCalledWith('/api/v1/actions/3?source_type=capa')
@@ -56,10 +57,52 @@ describe('createActionsApi', () => {
     expect(api.patch).toHaveBeenCalledWith('/api/v1/actions/3?source_type=capa', {
       status: 'completed',
     })
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/actions/7?source_type=incident')
     expect(api.get).toHaveBeenCalledWith('/api/v1/actions/by-key/notes?key=capa%3A3&limit=50')
     expect(api.post).toHaveBeenCalledWith('/api/v1/actions/by-key/notes', {
       key: 'capa:3',
       body: 'done',
     })
+  })
+})
+
+/**
+ * The client half of C-53. A server that reports partial failure is only useful if
+ * the client stops rendering "no actions" for it, and the register's empty state is
+ * the single most misleading surface in the product when it is wrong: it says the
+ * work is done.
+ */
+describe('actionsAreComplete', () => {
+  it('treats an explicit false as incomplete', () => {
+    expect(actionsAreComplete({ sources_complete: false })).toBe(false)
+  })
+
+  it('treats an explicit true as complete', () => {
+    expect(actionsAreComplete({ sources_complete: true })).toBe(true)
+  })
+
+  it('treats an absent field as complete', () => {
+    // A server that does not publish completeness predates the field. Defaulting
+    // the other way would put a permanent "this register is incomplete" warning on
+    // every page during a rolling deploy, and a warning that is always on is a
+    // warning nobody reads.
+    expect(actionsAreComplete({})).toBe(true)
+  })
+})
+
+describe('describeUnavailableSources', () => {
+  it('names sources in language an operator can act on', () => {
+    expect(describeUnavailableSources(['capa', 'incident'])).toBe('CAPA actions, incident actions')
+  })
+
+  it('passes an unrecognised source through rather than dropping it', () => {
+    // A new action store added server-side must still be reported, even before
+    // this map learns its name. Silence is the failure mode being fixed.
+    expect(describeUnavailableSources(['brand_new_store'])).toBe('brand_new_store')
+  })
+
+  it('returns an empty string for nothing unavailable', () => {
+    expect(describeUnavailableSources([])).toBe('')
+    expect(describeUnavailableSources(undefined)).toBe('')
   })
 })

@@ -25,6 +25,7 @@ from src.domain.services.form_publish_validation import (
     validate_form_template_publishable,
 )
 from src.domain.services.lookup_defaults_seed import count_active_lookup_options
+from src.domain.services.lookup_enum_contract import ensure_enum_backed_code
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -177,6 +178,7 @@ class FormConfigService:
             event_type="form_template.created",
             entity_type="form_template",
             entity_id=template.id,
+            entity_name=template.name,
             action="created",
             user_id=user_id,
             payload={"name": template.name, "form_type": template.form_type},
@@ -234,6 +236,7 @@ class FormConfigService:
             event_type="form_template.updated",
             entity_type="form_template",
             entity_id=template.id,
+            entity_name=template.name,
             action="updated",
             user_id=user_id,
             payload=update_data,
@@ -292,6 +295,7 @@ class FormConfigService:
             event_type="form_template.published",
             entity_type="form_template",
             entity_id=template.id,
+            entity_name=template.name,
             action="published",
             user_id=user_id,
             payload={"published_at": template.published_at.isoformat()},
@@ -317,6 +321,7 @@ class FormConfigService:
             event_type="form_template.deleted",
             entity_type="form_template",
             entity_id=template.id,
+            entity_name=template.name,
             action="deleted",
             user_id=user_id,
             payload={"name": template.name},
@@ -518,6 +523,7 @@ class FormConfigService:
             event_type="contract.created",
             entity_type="contract",
             entity_id=contract.id,
+            entity_name=contract.name,
             action="created",
             user_id=user_id,
             payload={"name": contract.name, "code": contract.code},
@@ -561,6 +567,7 @@ class FormConfigService:
             event_type="contract.updated",
             entity_type="contract",
             entity_id=contract.id,
+            entity_name=contract.name,
             action="updated",
             user_id=user_id,
             payload=update_data,
@@ -586,6 +593,7 @@ class FormConfigService:
             event_type="contract.deleted",
             entity_type="contract",
             entity_id=contract.id,
+            entity_name=contract.name,
             action="deleted",
             user_id=user_id,
             payload={"name": contract.name},
@@ -706,6 +714,8 @@ class FormConfigService:
         # Path category is authoritative (body may omit category).
         data.category = category  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
 
+        ensure_enum_backed_code(category, str(data.code))
+
         # tenant_id is not optional decoration: list_lookup_options filters on
         # ``LookupOption.tenant_id == tenant_id`` and ``NULL = 1`` is never true
         # in SQL, so an option written without it can never be read back.
@@ -744,6 +754,11 @@ class FormConfigService:
         option = result.scalar_one_or_none()
         if not option:
             raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+        if hasattr(data, "model_dump"):
+            incoming_code = data.model_dump(exclude_unset=True).get("code")
+            if isinstance(incoming_code, str):
+                ensure_enum_backed_code(category, incoming_code)
 
         apply_updates(option, data, set_updated_at=False)
 

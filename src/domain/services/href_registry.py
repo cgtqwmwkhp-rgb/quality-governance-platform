@@ -1,0 +1,170 @@
+"""Central SPA deep-link path builders for Entity360 / Doc Graph hops.
+
+Call sites must never string-build hop ``href`` values — use these helpers
+(or thin wrappers that delegate here). Generalises the risk ``case_type_href``
+pattern so every module shares one registry.
+"""
+
+from __future__ import annotations
+
+from typing import Callable, Mapping
+
+# ---------------------------------------------------------------------------
+# Entity path builders (registry)
+# ---------------------------------------------------------------------------
+
+_ENTITY_PATHS: dict[str, Callable[[int], str]] = {
+    "document": lambda entity_id: f"/documents/{entity_id}",
+    "risk": lambda entity_id: f"/risk-register/{entity_id}",
+    "incident": lambda entity_id: f"/incidents/{entity_id}",
+    "near_miss": lambda entity_id: f"/near-misses/{entity_id}",
+    "rta": lambda entity_id: f"/rtas/{entity_id}",
+    "complaint": lambda entity_id: f"/complaints/{entity_id}",
+    "capa": lambda entity_id: f"/actions/{entity_id}",
+    "action": lambda entity_id: f"/actions/{entity_id}",
+    # clause ids are catalogue strings (e.g. "9001-7.2") — use clause_evidence_href
+    "job_step": lambda entity_id: f"/job-lifecycle/steps/{entity_id}",
+    "job_type": lambda entity_id: f"/job-lifecycle/cycles/{entity_id}",
+    "evidence_link": lambda entity_id: f"/compliance/evidence?link={entity_id}",
+}
+
+
+def register_href(entity_type: str, builder: Callable[[int], str]) -> None:
+    """Register or replace a path builder (tests / future producers)."""
+    key = entity_type.strip().lower()
+    if not key:
+        raise ValueError("entity_type must be non-empty")
+    _ENTITY_PATHS[key] = builder
+
+
+def href_for(entity_type: str, entity_id: int) -> str:
+    """Return the SPA deep-link for ``(entity_type, entity_id)``.
+
+    Unknown types fall back to ``/{type}/{id}`` so hops remain navigable without
+    inventing parallel string builders at call sites.
+    """
+    key = entity_type.strip().lower()
+    builder = _ENTITY_PATHS.get(key)
+    if builder is not None:
+        return builder(entity_id)
+    return f"/{key}/{entity_id}"
+
+
+def document_href(document_id: int) -> str:
+    """SPA deep-link for a library document."""
+    return href_for("document", document_id)
+
+
+def risk_href(risk_id: int) -> str:
+    """SPA deep-link for an enterprise risk."""
+    return href_for("risk", risk_id)
+
+
+def case_type_href(case_type: str, case_id: int) -> str:
+    """Deep-link path for a case_risk_links case_type (compat wrapper)."""
+    return href_for(case_type, case_id)
+
+
+def job_type_href(job_type_id: int) -> str:
+    """SPA deep-link for a JL job cycle (JobType) — nesting drill-in target."""
+    return href_for("job_type", job_type_id)
+
+
+def audit_finding_href(*, run_id: int, finding_id: int | None = None) -> str:
+    """Deep-link into an audit run execute surface for a finding.
+
+    Finding id is reserved for future deep anchors; today the execute page is
+    the stable navigation target used by risk upstream.
+    """
+    _ = finding_id
+    return f"/audits/{run_id}/execute"
+
+
+def assessment_run_href(run_id: str | int) -> str:
+    """Deep-link into a workforce assessment run execute surface.
+
+    Assessment run ids are opaque strings (e.g. ``asm-run-5``) so they cannot
+    use the int ``_ENTITY_PATHS`` map — same pattern as ``audit_finding_href``.
+    """
+    from urllib.parse import quote
+
+    key = str(run_id or "").strip()
+    if not key:
+        raise ValueError("run_id must be non-empty")
+    return f"/workforce/assessments/{quote(key, safe='')}/execute"
+
+
+def induction_run_href(run_id: str | int) -> str:
+    """Deep-link into a workforce induction run execute surface."""
+    from urllib.parse import quote
+
+    key = str(run_id or "").strip()
+    if not key:
+        raise ValueError("run_id must be non-empty")
+    return f"/workforce/training/{quote(key, safe='')}/execute"
+
+
+def clause_evidence_href(clause_id: str) -> str:
+    """Deep-link into Compliance Evidence filtered to a catalogue clause id.
+
+    Clause ids are strings (e.g. ``9001-7.2``); they cannot use the int
+    ``_ENTITY_PATHS`` map — same pattern as ``audit_finding_href``.
+    """
+    from urllib.parse import quote
+
+    key = (clause_id or "").strip()
+    if not key:
+        raise ValueError("clause_id must be non-empty")
+    return f"/compliance/evidence?clause={quote(key, safe='')}"
+
+
+def registered_entity_types() -> frozenset[str]:
+    """Known entity types with dedicated builders (excluding fallback)."""
+    return frozenset(_ENTITY_PATHS.keys())
+
+
+def registry_snapshot() -> Mapping[str, Callable[[int], str]]:
+    """Read-only view of builders (tests)."""
+    return dict(_ENTITY_PATHS)
+
+
+def absolute_href(path: str | None) -> str | None:
+    """Turn an SPA-relative ``action_url`` into an absolute frontend URL for email.
+
+    Security: only ``http(s)://`` absolutes and paths starting with ``/`` are
+    accepted. ``javascript:`` / ``data:`` / bare hosts are rejected so a
+    DB-sourced ``action_url`` cannot become an unsafe ``<a href>``.
+    """
+    if path is None:
+        return None
+    raw = str(path).strip()
+    if not raw:
+        return None
+    lowered = raw.lower()
+    if lowered.startswith("https://") or lowered.startswith("http://"):
+        return raw
+    if not raw.startswith("/"):
+        return None
+    from src.core.config import settings
+
+    base = (getattr(settings, "frontend_url", None) or "").strip().rstrip("/")
+    if not base:
+        return None
+    return f"{base}{raw}"
+
+
+__all__ = [
+    "absolute_href",
+    "assessment_run_href",
+    "audit_finding_href",
+    "case_type_href",
+    "clause_evidence_href",
+    "document_href",
+    "href_for",
+    "induction_run_href",
+    "job_type_href",
+    "register_href",
+    "registered_entity_types",
+    "registry_snapshot",
+    "risk_href",
+]

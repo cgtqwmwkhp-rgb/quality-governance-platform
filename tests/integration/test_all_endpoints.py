@@ -383,7 +383,7 @@ class TestPortalEndpoints:
 
     def test_submit_report(self, client):
         """POST /api/portal/report or /api/portal/reports/ submits report."""
-        # Try actual endpoint first
+        # Try actual endpoint first (identified — anonymous is hard-off, PX-312)
         response = client.post(
             "/api/v1/portal/reports/",
             json={
@@ -391,7 +391,8 @@ class TestPortalEndpoints:
                 "title": "Integration Test Portal Report",
                 "description": "Created by integration test",
                 "severity": "low",
-                "is_anonymous": True,
+                "is_anonymous": False,
+                "reporter_name": "Integration Tester",
             },
         )
         # Accept success, validation failure, or explicit configuration failure.
@@ -403,7 +404,8 @@ class TestPortalEndpoints:
                     "title": "Integration Test Portal Report",
                     "description": "Created by integration test",
                     "severity": "low",
-                    "is_anonymous": True,
+                    "is_anonymous": False,
+                    "reporter_name": "Integration Tester",
                 },
             )
         assert response.status_code in [200, 201, 404, 422, 503]
@@ -904,15 +906,23 @@ class TestWorkflowEndpoints:
         assert "instances" in payload
         assert "total" in payload
 
-    def test_workflow_pending_approvals(self, client, auth_headers):
-        """GET /api/workflows/approvals/pending returns the live approvals surface."""
+    def test_my_decisions_surface(self, client, auth_headers):
+        """GET /api/v1/approvals/my-decisions returns the live decisions surface.
+
+        Replaces `test_workflow_pending_approvals`, whose docstring called
+        `/workflows/approvals/pending` "the live approvals surface" while it
+        returned `[]` to every user from an engine that stored nothing
+        (FR-APPROVALS-01).
+        """
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/v1/workflows/approvals/pending", headers=auth_headers)
+        response = client.get("/api/v1/approvals/my-decisions", headers=auth_headers)
         assert response.status_code == 200
         payload = response.json()
-        assert "approvals" in payload
-        assert "total" in payload
+        assert "items" in payload
+        # The flag is the contract: an empty `items` means nothing only when this
+        # is true.
+        assert "sources_complete" in payload
 
 
 class TestGlobalSearchEndpoints:

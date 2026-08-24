@@ -13,10 +13,11 @@
  * PII-SAFE: No form data captured. Only button presence and outcomes.
  */
 
-import { test, expect, Page, Request } from '@playwright/test';
+import { test, expect, Locator, Page, Request } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { buttonAuditStore, inDeclarationOrder } from '../utils/audit-entries';
 
 // Types
 interface ButtonEntry {
@@ -85,8 +86,51 @@ function loadPageRoute(pageId: string): string | null {
   return page?.route || null;
 }
 
-// Test storage
-const buttonAuditResults: ButtonAuditResult[] = [];
+/**
+ * Record a button's outcome.
+ *
+ * Written to its own file the moment the test ends rather than pushed to a
+ * module-level array: Playwright retires a worker after a failure and retries in
+ * a fresh process, so an in-memory array loses everything the previous process
+ * held. See utils/audit-entries.ts.
+ */
+function recordResult(result: ButtonAuditResult): void {
+  buttonAuditStore.write(`${result.pageId}::${result.actionId}`, result);
+}
+
+/**
+ * How long to let the app render before concluding a button is absent.
+ *
+ * `page.goto(..., { waitUntil: 'domcontentloaded' })` returns when the HTML has
+ * parsed, and `frontend/index.html` ships `<div id="root"></div>` empty, so the
+ * app-shell wait that follows resolves the moment React paints anything at all
+ * into that div — a layout frame, a nav, a skeleton, a Suspense fallback. The
+ * button being audited belongs to a route-level component that mounts after its
+ * chunk loads and, on most pages, after its first data fetch resolves. This
+ * budget is what covers that gap. The fallback selector gets a shorter one:
+ * by the time the primary wait has expired the app has long since rendered.
+ */
+const PRIMARY_SELECTOR_TIMEOUT_MS = 10000;
+const FALLBACK_SELECTOR_TIMEOUT_MS = 5000;
+
+/**
+ * Wait for an element to become visible, and report whether it did.
+ *
+ * `isVisible()` is an immediate check — it answers for the instant it is called
+ * and never retries — so calling it straight after navigation races the app's
+ * first render and reports a button that is about to appear as one that is not
+ * there. `waitFor` retries until the timeout, which is the pattern
+ * page-audit.spec.ts already uses for the app root. A genuine absence still
+ * fails: the wait expires and this returns false.
+ */
+async function waitForVisible(locator: Locator, timeout: number): Promise<boolean> {
+  try {
+    await locator.waitFor({ state: 'visible', timeout });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Admin sidebar navigation is organised into collapsible hubs. A hub's links are
@@ -168,7 +212,26 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
 const buttons = loadButtons();
 
 test.describe('Button Wiring Audit', () => {
-  test.describe.configure({ mode: 'serial' }); // Serial to avoid state conflicts
+  // 'default', not 'serial'. Under 'serial' the first failure skips every
+  // remaining test in the group, and portal-home::navigate-to-report is declared
+  // first — so one unrendered button silently took the other 21 registry entries
+  // with it, and the artifact carried 1 of 22 declared buttons while the report
+  // printed "P0 coverage complete". A gate cannot report on buttons it never
+  // clicked.
+  //
+  // 'default' keeps what 'serial' was chosen for — declaration order, one page
+  // driven at a time, no two tests racing the same staging state — while letting
+  // each button be measured on its own merits. Results are written per entry
+  // rather than accumulated in memory, because Playwright retires a worker after
+  // a failure and the remaining tests then run in a new process.
+  test.describe.configure({ mode: 'default' });
+
+  // The default 30s budget was set when the button lookup was an immediate
+  // check that could not wait. It now waits up to 10s for the primary selector
+  // and 5s for a fallback, on top of a navigation allowed 30s, so the budget has
+  // to cover the waits it asks for. Nothing is asserted against this number; it
+  // exists so a slow render fails as a slow render rather than as a test timeout.
+  test.setTimeout(60000);
   
   for (const buttonEntry of buttons) {
     test(`[${buttonEntry.criticality}] ${buttonEntry.pageId}::${buttonEntry.actionId}`, async ({ page }) => {
@@ -189,7 +252,7 @@ test.describe('Button Wiring Audit', () => {
         if (!route) {
           result.result = 'SKIP';
           result.error_message = 'Page route not found';
-          buttonAuditResults.push(result);
+          recordResult(result);
           return;
         }
         
@@ -197,7 +260,7 @@ test.describe('Button Wiring Audit', () => {
         if (route.includes(':')) {
           result.result = 'SKIP';
           result.error_message = 'Parameterized route - requires test data';
-          buttonAuditResults.push(result);
+          recordResult(result);
           return;
         }
         
@@ -206,12 +269,24 @@ test.describe('Button Wiring Audit', () => {
         if (!authReady) {
           result.result = 'SKIP';
           result.error_message = 'Auth not configured';
-          buttonAuditResults.push(result);
+          recordResult(result);
           return;
         }
         
-        // Navigate to page
-        await page.goto(route, { waitUntil: 'networkidle', timeout: 30000 });
+        // Navigate to page.
+        //
+        // networkidle is flaky on SWA (analytics/keepalive/long-poll can keep the network
+        // busy on a perfectly healthy SPA), so it is deliberately not used here — see
+        // frontend/tests/e2e/staging-verification.spec.ts.
+        //
+        // What the change to domcontentloaded also did, and what its comment wrongly
+        // denied, is remove the only thing that was waiting for the app to render. The
+        // app-shell wait below is not "the real gate": frontend/index.html:24 ships
+        // `<div id="root"></div>` empty, so this resolves the moment React's first paint
+        // gives that div a box — before any route-level component, and therefore before
+        // any audited button, has mounted. The real precondition is the target element
+        // itself, and it is now waited for where it is looked up (waitForVisible below).
+        await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
         
         // Open the containing sidebar hub for nav links (10-hub IA)
@@ -221,7 +296,7 @@ test.describe('Button Wiring Audit', () => {
         
         // Try to find button with primary selector
         let button = page.locator(buttonEntry.selector).first();
-        let buttonVisible = await button.isVisible().catch(() => false);
+        let buttonVisible = await waitForVisible(button, PRIMARY_SELECTOR_TIMEOUT_MS);
         if (buttonVisible) {
           result.matched_selector = buttonEntry.selector;
         }
@@ -229,7 +304,7 @@ test.describe('Button Wiring Audit', () => {
         // Try fallback selector if primary not found
         if (!buttonVisible && buttonEntry.fallback_selector) {
           button = page.locator(buttonEntry.fallback_selector).first();
-          buttonVisible = await button.isVisible().catch(() => false);
+          buttonVisible = await waitForVisible(button, FALLBACK_SELECTOR_TIMEOUT_MS);
           if (buttonVisible) {
             result.matched_selector = buttonEntry.fallback_selector;
           }
@@ -242,7 +317,7 @@ test.describe('Button Wiring Audit', () => {
           if (buttonEntry.criticality === 'P1') {
             result.result = 'SKIP';
             result.error_message = 'P1 button not visible - may be conditional';
-            buttonAuditResults.push(result);
+            recordResult(result);
             return;
           }
           
@@ -258,7 +333,7 @@ test.describe('Button Wiring Audit', () => {
           result.outcome_observed = true;
           result.outcome_type = 'disabled';
           result.result = 'PASS';
-          buttonAuditResults.push(result);
+          recordResult(result);
           return;
         }
         
@@ -333,7 +408,7 @@ test.describe('Button Wiring Audit', () => {
         result.error_message = error.message?.slice(0, 200) || 'Unknown error';
       }
       
-      buttonAuditResults.push(result);
+      recordResult(result);
       
       // Assert for test framework
       expect(result.result).toBe('PASS');
@@ -341,18 +416,35 @@ test.describe('Button Wiring Audit', () => {
   }
 });
 
-// Write results after all tests
+/**
+ * Merge the per-button entry files into the artifact the aggregator reads.
+ *
+ * Runs in every worker, and reads the directory rather than this process's own
+ * results, so the last worker to finish emits the complete set however the run
+ * was split across workers or retries.
+ */
 test.afterAll(async () => {
-  const outputPath = path.join(__dirname, '../results/button_audit.json');
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, JSON.stringify({
+  fs.mkdirSync(path.dirname(buttonAuditStore.outputPath), { recursive: true });
+
+  const results = inDeclarationOrder(
+    buttonAuditStore.readAll<ButtonAuditResult>(),
+    buttons.map(b => `${b.pageId}::${b.actionId}`),
+    r => `${r.pageId}::${r.actionId}`,
+  );
+
+  fs.writeFileSync(buttonAuditStore.outputPath, JSON.stringify({
     audit_type: 'button_wiring',
     timestamp: new Date().toISOString(),
-    total_buttons: buttonAuditResults.length,
-    passed: buttonAuditResults.filter(r => r.result === 'PASS').length,
-    failed: buttonAuditResults.filter(r => r.result === 'FAIL').length,
-    skipped: buttonAuditResults.filter(r => r.result === 'SKIP').length,
-    noop_buttons: buttonAuditResults.filter(r => !r.outcome_observed && r.clicked).length,
-    results: buttonAuditResults,
+    // How many entries the registry asked for, as opposed to how many arrived.
+    // A crashed worker, an aborted suite or an overwritten artifact drops entries
+    // silently, and a missing entry cannot be classified — it simply leaves the
+    // denominator. The aggregator holds the gate when this count is not met.
+    expected_entries: buttons.length,
+    total_buttons: results.length,
+    passed: results.filter(r => r.result === 'PASS').length,
+    failed: results.filter(r => r.result === 'FAIL').length,
+    skipped: results.filter(r => r.result === 'SKIP').length,
+    noop_buttons: results.filter(r => !r.outcome_observed && r.clicked).length,
+    results,
   }, null, 2));
 });

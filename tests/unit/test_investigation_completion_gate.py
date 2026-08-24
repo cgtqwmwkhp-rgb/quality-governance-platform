@@ -80,7 +80,7 @@ async def test_collect_readiness_reasons_flags_empty_summary_on_complete_gate():
             db,
             investigation=inv,
             investigation_id=7,
-            tenant_id=1,
+            current_user=SimpleNamespace(id=11, tenant_id=1),
             gate="complete",
         )
 
@@ -111,7 +111,7 @@ async def test_collect_readiness_reasons_adds_status_not_complete_for_close_gate
             db,
             investigation=inv,
             investigation_id=7,
-            tenant_id=1,
+            current_user=SimpleNamespace(id=11, tenant_id=1),
             gate="close",
         )
 
@@ -138,6 +138,88 @@ async def test_patch_completed_rejects_when_summary_incomplete():
     err = exc_info.value
     assert err.code == "CLOSURE_VALIDATION_FAILED"
     assert ClosureReasonCode.MISSING_FINDINGS in err.details["reasons"]
+
+
+@pytest.mark.asyncio
+async def test_patch_completed_rejects_without_lead_and_start():
+    """PX-133 / w4-px133: Complete must not succeed with no lead and no start."""
+    inv = _investigation(
+        status=InvestigationStatus.DRAFT,
+        started_at=None,
+        assigned_to_user_id=None,
+        data={"findings": "Wet floor", "conclusion": "Mop more often"},
+    )
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=inv)
+    db.execute = AsyncMock(return_value=result)
+
+    with (
+        patch(
+            "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
+            AsyncMock(return_value=[]),
+        ),
+        patch.object(
+            InvestigationService,
+            "validate_closure",
+            AsyncMock(return_value=_empty_validation()),
+        ),
+    ):
+        with pytest.raises(BadRequestError) as exc_info:
+            await update_investigation(
+                request=MagicMock(headers={"X-Request-ID": "req-no-lead-start"}),
+                investigation_id=7,
+                investigation_data=InvestigationRunUpdate(status="completed"),
+                db=db,
+                current_user=SimpleNamespace(id=11, tenant_id=1, is_superuser=False),
+            )
+
+    err = exc_info.value
+    assert err.code == "CLOSURE_VALIDATION_FAILED"
+    assert ClosureReasonCode.INVESTIGATION_NOT_STARTED in err.details["reasons"]
+    assert ClosureReasonCode.LEAD_INVESTIGATOR_NOT_ASSIGNED in err.details["reasons"]
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_approve_rejects_without_lead_and_start():
+    """Approve must use the same complete gate — cannot bypass via /approve (PX-133)."""
+    from src.api.routes.investigations import approve_investigation
+
+    inv = _investigation(
+        status=InvestigationStatus.IN_PROGRESS,
+        started_at=None,
+        assigned_to_user_id=None,
+        data={"findings": "Wet floor", "conclusion": "Mop more often"},
+    )
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=inv)
+    db.execute = AsyncMock(return_value=result)
+
+    with (
+        patch(
+            "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
+            AsyncMock(return_value=[]),
+        ),
+        patch.object(
+            InvestigationService,
+            "validate_closure",
+            AsyncMock(return_value=_empty_validation()),
+        ),
+    ):
+        with pytest.raises(BadRequestError) as exc_info:
+            await approve_investigation(
+                investigation_id=7,
+                db=db,
+                current_user=SimpleNamespace(id=11, tenant_id=1, is_superuser=False),
+                approved=True,
+            )
+
+    assert exc_info.value.code == "CLOSURE_VALIDATION_FAILED"
+    assert ClosureReasonCode.INVESTIGATION_NOT_STARTED in exc_info.value.details["reasons"]
+    assert ClosureReasonCode.LEAD_INVESTIGATOR_NOT_ASSIGNED in exc_info.value.details["reasons"]
+    db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio

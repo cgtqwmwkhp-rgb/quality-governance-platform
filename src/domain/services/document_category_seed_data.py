@@ -9,12 +9,16 @@ only — no ORM/session imports, so it is safe for both the sync migration
 context and the async service context to import.
 
 See ``specs/governance-library/README.md`` for the decisions this data
-encodes (06.04 deactivated; ISO standards tags dropped).
+encodes (06.04 deactivated; ISO standards tags dropped). Machine-readable
+retention comes from ``library_steward_retention`` — accepted steward decisions
+first, the CUT-1 prose grammar second.
 """
 
 import json
 from pathlib import Path
 from typing import Any, TypedDict
+
+from src.domain.services.library_steward_retention import resolve_category_retention
 
 # Level-2 taxonomy_id values that must always seed inactive.
 # 06.04 = "O-Licence & Tachograph" (HGV operator-licence compliance) —
@@ -23,8 +27,16 @@ DEACTIVATED_TAXONOMY_IDS = frozenset({"06.04"})
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 TAXONOMY_JSON_PATH = _REPO_ROOT / "specs" / "governance-library" / "taxonomy.json"
+FUNCTIONS_JSON_PATH = _REPO_ROOT / "specs" / "governance-library" / "functions.json"
 
 EXPECTED_CATEGORY_COUNT = 86
+
+# Northern Star v6 / ADR-0023 amendment: 12 active codes (CTR+SVC, no OPS) plus
+# withdrawn OPS kept inactive so issued PEL-OPS-#### rows stay resolvable (R29).
+# Asserted on every seed run so a bad edit to functions.json fails the seed
+# rather than quietly changing which prefixes the business can ever issue —
+# a PEL reference is immutable once allocated.
+EXPECTED_FUNCTION_COUNT = 13
 
 
 class TagSeedRow(TypedDict):
@@ -66,6 +78,28 @@ TAG_SEED: list[TagSeedRow] = [
 ]
 
 
+def machine_readable_retention(taxonomy_id: str | None, retention_rule: str | None) -> dict[str, Any]:
+    """CUT-1 / STEWARD-14 — the category's `retention_years` + `retention_anchor`.
+
+    A steward decision for this `taxonomy_id` wins; otherwise the prose is read
+    by the CUT-1 grammar. `retention_rule` itself is never rewritten — it is the
+    governance authority and the R19 basis, and a second hand-maintained copy of
+    the same decision beside it is the parallel home F-7 §4 forbids.
+
+    A rule with no steward decision that the grammar refuses leaves both columns
+    NULL. That category is still a Citation cutover blocker, and NULL is never a
+    disposal candidate, so the conservative outcome of unreadable prose stays
+    "keep".
+    """
+    decision = resolve_category_retention(taxonomy_id, retention_rule)
+    if decision.policy is None:
+        return {"retention_years": None, "retention_anchor": None}
+    return {
+        "retention_years": decision.policy.years,
+        "retention_anchor": decision.policy.anchor.value,
+    }
+
+
 def load_taxonomy_categories(taxonomy_path: Path | None = None) -> list[dict[str, Any]]:
     """Parse taxonomy.json into row dicts keyed to `DocumentCategory` columns.
 
@@ -73,12 +107,18 @@ def load_taxonomy_categories(taxonomy_path: Path | None = None) -> list[dict[str
     "04.04"); `active` is forced False for `DEACTIVATED_TAXONOMY_IDS`
     regardless of what taxonomy.json says, so re-seeding never silently
     reactivates a category the business has deliberately retired.
+
+    `retention_years` / `retention_anchor` are projected here rather than left to
+    the caller, so the one row-building function answers for every
+    `DocumentCategory` column it is named for and the seed cannot drift from the
+    accepted steward decisions.
     """
     path = taxonomy_path or TAXONOMY_JSON_PATH
     raw = json.loads(path.read_text(encoding="utf-8"))
     rows: list[dict[str, Any]] = []
     for cat in raw["categories"]:
         taxonomy_id = cat["id"]
+        retention_rule = cat.get("retention_rule")
         rows.append(
             {
                 "taxonomy_id": taxonomy_id,
@@ -93,9 +133,42 @@ def load_taxonomy_categories(taxonomy_path: Path | None = None) -> list[dict[str
                 "access_note": cat.get("access_note"),
                 "suggested_owner_role": cat.get("suggested_owner_role"),
                 "review_cycle": cat.get("review_cycle"),
-                "retention_rule": cat.get("retention_rule"),
+                "retention_rule": retention_rule,
                 "typical_contents": cat.get("typical_contents"),
                 "active": taxonomy_id not in DEACTIVATED_TAXONOMY_IDS,
+                **machine_readable_retention(taxonomy_id, retention_rule),
+            }
+        )
+    return rows
+
+
+def load_library_functions(functions_path: Path | None = None) -> list[dict[str, Any]]:
+    """Parse functions.json into row dicts keyed to `DocumentFunction` columns.
+
+    ADR-0023: the reference prefix encodes the owning *function*, not the
+    category, so this list is what every `PEL-<CODE>-<SEQ>` reference the
+    business will ever issue is drawn from. Codes are upper-cased and
+    duplicate codes raise — a duplicate would give two functions one counter
+    and let the same reference be issued twice.
+    """
+    path = functions_path or FUNCTIONS_JSON_PATH
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for fn in raw["functions"]:
+        code = str(fn["code"]).strip().upper()
+        if not code:
+            raise ValueError("functions.json contains a function with an empty code")
+        if code in seen:
+            raise ValueError(f"functions.json contains duplicate function code {code!r}")
+        seen.add(code)
+        rows.append(
+            {
+                "code": code,
+                "name": fn["name"],
+                "description": fn.get("description"),
+                "sort_order": fn["sort_order"],
+                "active": bool(fn.get("active", True)),
             }
         )
     return rows

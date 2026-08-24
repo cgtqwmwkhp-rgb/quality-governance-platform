@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # =============================================================================
 # Engineer Groups
@@ -131,6 +131,10 @@ class CampaignResponse(BaseModel):
     """Document campaign response."""
 
     id: int
+    reference_number: Optional[str] = Field(
+        None,
+        description="Stored CAM-YYYY-NNNN reference (PX-222). Null only on rows predating the backfill.",
+    )
     document_id: int
     quiz_draft_id: Optional[int] = None
     title: Optional[str] = None
@@ -272,6 +276,14 @@ class QuizSubmitResponse(BaseModel):
 
 
 class CompleteAssignmentRequest(BaseModel):
+    """Request to complete a document-campaign assignment.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of completion succeeding while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     acceptance_statement: str = Field(..., min_length=1)
     signature_data: Optional[str] = None
     signature_disposition: Optional[str] = None
@@ -318,6 +330,7 @@ class ReminderDefaultsUpdateRequest(BaseModel):
 
 class ComplianceSummaryItem(BaseModel):
     campaign_id: int
+    reference_number: Optional[str] = None
     document_id: int
     document_title: str
     title: Optional[str] = None
@@ -404,6 +417,14 @@ class QuestionInboxResponse(BaseModel):
 
 
 class AskAssignmentQuestionRequest(BaseModel):
+    """Request to ask a question on a document-campaign assignment.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the question being accepted while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     title: Optional[str] = None
     body: str = Field(..., min_length=1)
 
@@ -418,6 +439,14 @@ class QuestionThreadResponse(BaseModel):
 
 
 class QuestionReplyRequest(BaseModel):
+    """Request to reply on a document-campaign question thread.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the reply being accepted while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     body: str = Field(..., min_length=1)
 
 

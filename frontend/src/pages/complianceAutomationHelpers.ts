@@ -1,6 +1,7 @@
 /** Pure helpers for Compliance Automation / Monitoring page — exported for unit tests. */
 
 import type { AuditRun } from '../api/client'
+import { STANDARDS_MATRIX_FRAMEWORKS } from './compliance/standardsMatrixFilters'
 
 export type MonitoringAuditRunStatus = 'scheduled' | 'overdue' | 'in_progress'
 
@@ -237,4 +238,310 @@ export function summariseCertificateShelf(
     else if (expiry.getTime() - now.getTime() <= windowMs) expiringSoon += 1
   }
   return { tracked: certs.length, expiringSoon, expired }
+}
+
+// ---------------------------------------------------------------------------
+// Standards health digests (Wave 3 PR-F3) — tolerant readers
+// ---------------------------------------------------------------------------
+
+export interface StandardsDigestNcRow {
+  framework: string | null
+  clauseNumber: string
+  clauseKey: string
+  openNcCount: number
+  closedNcCount: number
+  recurrence: boolean
+  latestNcAt: string | null
+  clausePath: string | null
+  findingsPath: string
+}
+
+export interface StandardsDigestFreshness {
+  trackedDocumentLinks: number
+  current: number
+  stale: number
+  unpinned: number
+  unknown: number
+  staleRate: number | null
+  scanTruncated: boolean
+  staleItems: Array<{
+    evidenceLinkId: number | null
+    clauseId: string | null
+    framework: string | null
+    clauseNumber: string
+    documentId: number | null
+    title: string | null
+    tipVersionNumber: string | null
+    clausePath: string | null
+    documentPath: string | null
+  }>
+}
+
+export interface StandardsDigestBacklog {
+  total: number
+  byStatus: Record<string, number>
+  byLinkMethod: Record<string, number>
+  operationalSignals: number
+  conformanceCandidates: number
+  oldestAgeDays: number | null
+  scanTruncated: boolean
+  autoConfirmThreshold: number
+  autoConfirmRule: string
+  inboxPath: string
+  byClause: Array<{
+    clauseId: string
+    framework: string | null
+    clauseNumber: string
+    count: number
+    inboxPath: string
+  }>
+}
+
+export interface StandardsDigestCertExpiry {
+  tracked: number
+  valid: number
+  dueSoon: number
+  expired: number
+  unknown: number
+  shelfPath: string
+  byScheme: Array<{
+    scheme: string
+    kind: string
+    tracked: number
+    dueSoon: number
+    expired: number
+  }>
+  soonest: Array<{
+    shelfKey: string | null
+    name: string
+    scheme: string
+    kind: string
+    expiryDate: string | null
+    readinessStatus: string
+    daysRemaining: number | null
+    isCritical: boolean
+    detailPath: string
+  }>
+}
+
+export interface StandardsDigest {
+  generatedAt: string | null
+  dueSoonDays: number
+  freshness: StandardsDigestFreshness
+  ingestBacklog: StandardsDigestBacklog
+  nonconformity: {
+    openNcTotal: number
+    openNcWithoutClauseToken: number
+    clausesWithOpenNc: number
+    unattributedOpenNc: number
+    recurringClauses: number
+    clausesWithNcHistory: number
+    recurrenceRate: number | null
+    scanTruncated: boolean
+    byClause: StandardsDigestNcRow[]
+  }
+  certExpiry: StandardsDigestCertExpiry
+  sorNote: string | null
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function asNullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+export function formatDigestRate(rate: number | null): string {
+  if (rate === null || Number.isNaN(rate)) return '—'
+  return `${(rate * 100).toFixed(1)}%`
+}
+
+export function standardsDigestFrameworkLabel(framework: string | null): string {
+  if (framework == null || framework === '') return 'Unattributed'
+  const match = STANDARDS_MATRIX_FRAMEWORKS.find((fw) => fw.id === framework)
+  return match?.label ?? framework
+}
+
+export function digestStalePinsLabel(freshness: StandardsDigestFreshness): string {
+  if (freshness.trackedDocumentLinks === 0) return '—'
+  return String(freshness.stale)
+}
+
+export function countStandardsDigestBacklog(digest: StandardsDigest | null): number {
+  return digest?.ingestBacklog.total ?? 0
+}
+
+export function standardsDigestClauseHref(row: {
+  framework: string | null
+  clauseNumber: string
+  clausePath?: string | null
+}): string {
+  if (row.clausePath) return row.clausePath
+  if (row.framework && row.clauseNumber) {
+    return `/compliance?code=${encodeURIComponent(row.framework)}&clause=${encodeURIComponent(row.clauseNumber)}`
+  }
+  return '/compliance'
+}
+
+export function mapStandardsDigest(raw: unknown): StandardsDigest | null {
+  if (!raw || typeof raw !== 'object') return null
+  const root = asRecord(raw)
+  const freshness = asRecord(root.freshness)
+  const backlog = asRecord(root.ingest_backlog)
+  const nc = asRecord(root.nonconformity)
+  const certs = asRecord(root.cert_expiry)
+
+  const staleItems = Array.isArray(freshness.stale_items)
+    ? freshness.stale_items.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const row = asRecord(item)
+        return [
+          {
+            evidenceLinkId: asNullableNumber(row.evidence_link_id),
+            clauseId: typeof row.clause_id === 'string' ? row.clause_id : null,
+            framework: typeof row.framework === 'string' ? row.framework : null,
+            clauseNumber: asString(row.clause_number),
+            documentId: asNullableNumber(row.document_id),
+            title: typeof row.title === 'string' ? row.title : null,
+            tipVersionNumber: typeof row.tip_version_number === 'string' ? row.tip_version_number : null,
+            clausePath: typeof row.clause_path === 'string' ? row.clause_path : null,
+            documentPath: typeof row.document_path === 'string' ? row.document_path : null,
+          },
+        ]
+      })
+    : []
+
+  const ncRows: StandardsDigestNcRow[] = Array.isArray(nc.by_clause)
+    ? nc.by_clause.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const row = asRecord(item)
+        return [
+          {
+            framework: typeof row.framework === 'string' ? row.framework : null,
+            clauseNumber: asString(row.clause_number),
+            clauseKey: asString(row.clause_key),
+            openNcCount: asNumber(row.open_nc_count),
+            closedNcCount: asNumber(row.closed_nc_count),
+            recurrence: Boolean(row.recurrence),
+            latestNcAt: typeof row.latest_nc_at === 'string' ? row.latest_nc_at : null,
+            clausePath: typeof row.clause_path === 'string' ? row.clause_path : null,
+            findingsPath: asString(row.findings_path, '/audits?view=findings'),
+          },
+        ]
+      })
+    : []
+
+  const backlogClauses = Array.isArray(backlog.by_clause)
+    ? backlog.by_clause.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const row = asRecord(item)
+        return [
+          {
+            clauseId: asString(row.clause_id),
+            framework: typeof row.framework === 'string' ? row.framework : null,
+            clauseNumber: asString(row.clause_number),
+            count: asNumber(row.count),
+            inboxPath: asString(row.inbox_path, '/knowledge-exceptions'),
+          },
+        ]
+      })
+    : []
+
+  const byScheme = Array.isArray(certs.by_scheme)
+    ? certs.by_scheme.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const row = asRecord(item)
+        return [
+          {
+            scheme: asString(row.scheme, 'unknown'),
+            kind: asString(row.kind, 'scheme_shelf'),
+            tracked: asNumber(row.tracked),
+            dueSoon: asNumber(row.due_soon),
+            expired: asNumber(row.expired),
+          },
+        ]
+      })
+    : []
+
+  const soonest = Array.isArray(certs.soonest)
+    ? certs.soonest.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const row = asRecord(item)
+        return [
+          {
+            shelfKey: typeof row.shelf_key === 'string' ? row.shelf_key : null,
+            name: asString(row.name, 'Certificate'),
+            scheme: asString(row.scheme, 'unknown'),
+            kind: asString(row.kind, 'scheme_shelf'),
+            expiryDate: typeof row.expiry_date === 'string' ? row.expiry_date : null,
+            readinessStatus: asString(row.readiness_status, 'unknown'),
+            daysRemaining: asNullableNumber(row.days_remaining),
+            isCritical: Boolean(row.is_critical),
+            detailPath: asString(row.detail_path, '/compliance-schedule?view=certificates'),
+          },
+        ]
+      })
+    : []
+
+  return {
+    generatedAt: typeof root.generated_at === 'string' ? root.generated_at : null,
+    dueSoonDays: asNumber(root.due_soon_days, CERT_EXPIRY_WINDOW_DAYS),
+    freshness: {
+      trackedDocumentLinks: asNumber(freshness.tracked_document_links),
+      current: asNumber(freshness.current),
+      stale: asNumber(freshness.stale),
+      unpinned: asNumber(freshness.unpinned),
+      unknown: asNumber(freshness.unknown),
+      staleRate: asNullableNumber(freshness.stale_rate),
+      scanTruncated: Boolean(freshness.scan_truncated),
+      staleItems,
+    },
+    ingestBacklog: {
+      total: asNumber(backlog.total),
+      byStatus: asRecord(backlog.by_status) as Record<string, number>,
+      byLinkMethod: asRecord(backlog.by_link_method) as Record<string, number>,
+      operationalSignals: asNumber(backlog.operational_signals),
+      conformanceCandidates: asNumber(backlog.conformance_candidates),
+      oldestAgeDays: asNullableNumber(backlog.oldest_age_days),
+      scanTruncated: Boolean(backlog.scan_truncated),
+      autoConfirmThreshold: asNumber(backlog.auto_confirm_threshold, 0.98),
+      autoConfirmRule: asString(
+        backlog.auto_confirm_rule,
+        'Machine confirm requires confidence ≥ 0.98 and EXACT alignment.',
+      ),
+      inboxPath: asString(backlog.inbox_path, '/knowledge-exceptions'),
+      byClause: backlogClauses,
+    },
+    nonconformity: {
+      openNcTotal: asNumber(nc.open_nc_total),
+      openNcWithoutClauseToken: asNumber(nc.open_nc_without_clause_token),
+      clausesWithOpenNc: asNumber(nc.clauses_with_open_nc),
+      unattributedOpenNc: asNumber(nc.unattributed_open_nc),
+      recurringClauses: asNumber(nc.recurring_clauses),
+      clausesWithNcHistory: asNumber(nc.clauses_with_nc_history),
+      recurrenceRate: asNullableNumber(nc.recurrence_rate),
+      scanTruncated: Boolean(nc.scan_truncated),
+      byClause: ncRows,
+    },
+    certExpiry: {
+      tracked: asNumber(certs.tracked),
+      valid: asNumber(certs.valid),
+      dueSoon: asNumber(certs.due_soon),
+      expired: asNumber(certs.expired),
+      unknown: asNumber(certs.unknown),
+      shelfPath: asString(certs.shelf_path, '/compliance-schedule?view=certificates'),
+      byScheme,
+      soonest,
+    },
+    sorNote: typeof root.sor_note === 'string' ? root.sor_note : null,
+  }
 }

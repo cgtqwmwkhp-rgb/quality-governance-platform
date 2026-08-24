@@ -8,6 +8,7 @@
  * - link_audit.json
  * - button_audit.json
  * - workflow_audit.json
+ * - a11y_audit.json
  *
  * Outputs:
  * - ux_coverage.json (machine-readable)
@@ -38,6 +39,14 @@
  *   - execution rate: P0 entries that produced PASS or FAIL, over P0 entries in
  *     scope (i.e. excluding explicitly waived entries)
  *   - pass rate:      P0 entries that passed, over P0 entries that executed
+ *
+ * UNMEASURED ENTRIES (C-51):
+ * An entry that never reached the artifact is caught by the declared-entry
+ * counts (see completenessShortfall). An entry that reached the artifact having
+ * measured nothing is a separate absence, and it only arises in the link audit,
+ * whose entries carry link counts rather than a P0/P1 result and so are never
+ * classified per-entry. Such a page reports zero dead links, which is what a
+ * clean page reports. It is now named and held; see unmeasuredLinkPages.
  *
  * WAIVERS:
  * An entry is excluded from the execution denominator only if it carries BOTH
@@ -129,6 +138,13 @@ function emptyCoverage() {
  * arrive — a worker crashed, a serial suite aborted, the file was truncated —
  * the missing entries are invisible to the per-entry accounting below, because
  * there is no entry to classify. Returns a hold reason, or null.
+ *
+ * An audit that declares no count cannot be checked: `Number(undefined)` is NaN
+ * and this returns null. That is an opt-in, not a safety net. Only the workflow
+ * audit used to declare a count, so the button audit could emit 1 entry for its
+ * 22 registry buttons and the page audit 18 for its 36, and this guard passed
+ * both in silence while the report printed "P0 coverage complete". All four
+ * audits now declare it.
  */
 function completenessShortfall(audit, label) {
   if (!audit) return null;
@@ -138,6 +154,39 @@ function completenessShortfall(audit, label) {
   if (actual >= expected) return null;
   return `The ${label} audit produced ${actual} of ${expected} declared entries; ` +
     `${expected - actual} produced no result at all.`;
+}
+
+/**
+ * Link audit pages that recorded no link evidence at all.
+ *
+ * The link audit is the one audit whose entries are never classified by
+ * `record()` below: they carry link counts, not a P0/P1 result, so the only
+ * thing they contribute to the verdict is `total_dead`. A page that could not be
+ * audited contributes zero dead links — which is byte-for-byte what a clean page
+ * contributes. #1441 stopped such a page vanishing from the artifact by
+ * recording `skipped_reason`; nothing then read that field, so the surviving
+ * entry still satisfied the declared-count guard and still reported clean.
+ *
+ * Derived from the entries themselves rather than the audit's own
+ * `pages_skipped` scalar, because the entries are what the completeness guard
+ * checks.
+ */
+function unmeasuredLinkPages(linkAudit) {
+  return entriesOf(linkAudit)
+    .filter(entry => typeof entry.skipped_reason === 'string' && entry.skipped_reason.trim().length > 0)
+    .map(entry => ({
+      type: 'link',
+      id: entry.source_page || entry.route || 'unknown',
+      reason: entry.skipped_reason.trim(),
+    }));
+}
+
+// Hold reasons are flattened onto one line for GITHUB_OUTPUT, so a run that
+// skipped every page must not push the rest of the reasons off the summary. The
+// full list is always in the report.
+function nameSome(ids, limit = 10) {
+  if (ids.length <= limit) return ids.join(', ');
+  return `${ids.slice(0, limit).join(', ')} and ${ids.length - limit} more`;
 }
 
 function percentage(numerator, denominator) {
@@ -168,7 +217,7 @@ function summariseCriticality(tally) {
  * coverage document plus the hold reasons that decided the verdict. No IO, so
  * it can be unit tested directly.
  */
-function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = {}) {
+function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit, a11yAudit } = {}) {
   let p0Fails = 0;
   let p1Fails = 0;
   let p2Fails = 0;
@@ -298,6 +347,21 @@ function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = 
     }
   }
 
+  // Process a11y audit (C-50)
+  if (a11yAudit) {
+    entriesOf(a11yAudit).forEach(r => {
+      record(r, 'a11y', entry => ({
+        id: entry.pageId,
+        route: entry.route,
+        error: entry.error_message || (
+          entry.result === 'FAIL'
+            ? `${entry.violations_critical || 0} critical, ${entry.violations_serious || 0} serious`
+            : undefined
+        ),
+      }));
+    });
+  }
+
   // Calculate score
   let score = SCORE_START;
   score -= p1Fails * P1_PENALTY;
@@ -311,12 +375,31 @@ function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = 
   // The gate may only clear if the P0 coverage was actually exercised. Zero P0
   // entries in scope means the run proved nothing, which is not a pass.
   const holdReasons = [];
+  // Every audit, including the link audit: its entries are not classified
+  // per-entry below (they carry link counts, not a P0/P1 result), so a page that
+  // never reached its artifact is invisible to the accounting above and simply
+  // contributes nothing to total_dead — which reads exactly like a clean page.
   const shortfalls = [
     completenessShortfall(pageAudit, 'page'),
+    completenessShortfall(linkAudit, 'link'),
     completenessShortfall(buttonAudit, 'button'),
     completenessShortfall(workflowAudit, 'workflow'),
+    completenessShortfall(a11yAudit, 'a11y'),
   ].filter(Boolean);
   holdReasons.push(...shortfalls);
+
+  // A page that arrived but was never measured is the same absence of evidence
+  // as a page that never arrived, so it is held on the same footing.
+  const unmeasured = unmeasuredLinkPages(linkAudit);
+  if (unmeasured.length > 0) {
+    const declared = Number(linkAudit.expected_entries);
+    const inScope = Number.isFinite(declared) ? declared : entriesOf(linkAudit).length;
+    holdReasons.push(
+      `The link audit recorded no link evidence for ${unmeasured.length} of ${inScope} pages ` +
+      `(${nameSome(unmeasured.map(entry => entry.id))}); zero dead links on a page that was ` +
+      `never audited is not a clean page.`
+    );
+  }
 
   if (p0Coverage.expected === 0) {
     holdReasons.push(
@@ -372,6 +455,7 @@ function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = 
     coverage_complete: coverageComplete,
     hold_reasons: holdReasons,
     completeness_shortfalls: shortfalls,
+    unmeasured_entries: unmeasured,
     summary: {
       total_passed: totalPassed,
       total_failed: totalFailed,
@@ -413,6 +497,11 @@ function computeCoverage({ pageAudit, linkAudit, buttonAudit, workflowAudit } = 
         skipped: workflowAudit.skipped,
         dead_ends: workflowAudit.dead_ends?.length || 0,
       } : null,
+      a11y: a11yAudit ? {
+        passed: a11yAudit.passed,
+        failed: a11yAudit.failed,
+        skipped: a11yAudit.skipped,
+      } : null,
     },
     failures: failureDetails,
     not_executed: notExecuted,
@@ -431,6 +520,7 @@ function aggregate() {
     linkAudit: loadJson('link_audit.json'),
     buttonAudit: loadJson('button_audit.json'),
     workflowAudit: loadJson('workflow_audit.json'),
+    a11yAudit: loadJson('a11y_audit.json'),
   });
 
   const p0 = coverage.p0_coverage;
@@ -473,6 +563,12 @@ function aggregate() {
       console.log('\n   Entries that did not execute:');
       coverage.not_executed.forEach(entry => {
         console.log(`   - [${entry.criticality}] ${entry.type} ${entry.id}: ${entry.reason}`);
+      });
+    }
+    if (coverage.unmeasured_entries.length > 0) {
+      console.log('\n   Entries that produced no measurement:');
+      coverage.unmeasured_entries.forEach(entry => {
+        console.log(`   - ${entry.type} ${entry.id}: ${entry.reason}`);
       });
     }
     if (coverage.waivers.length > 0) {
@@ -536,6 +632,20 @@ function generateMarkdown(coverage) {
     lines.push('|------|----|-------------|-----------------|--------|');
     coverage.not_executed.forEach(entry => {
       lines.push(`| ${entry.type} | ${entry.id} | ${entry.criticality} | ${entry.recorded_result} | ${String(entry.reason).slice(0, 80)} |`);
+    });
+    lines.push('');
+  }
+
+  if (coverage.unmeasured_entries.length > 0) {
+    lines.push('## Pages With No Link Evidence');
+    lines.push('');
+    lines.push('These pages produced a link audit entry but no measurement, so their');
+    lines.push('zero dead links say nothing about the page.');
+    lines.push('');
+    lines.push('| Type | ID | Reason |');
+    lines.push('|------|----|--------|');
+    coverage.unmeasured_entries.forEach(entry => {
+      lines.push(`| ${entry.type} | ${entry.id} | ${String(entry.reason).slice(0, 80)} |`);
     });
     lines.push('');
   }
@@ -616,6 +726,16 @@ function generateMarkdown(coverage) {
     lines.push(`- Failed: ${coverage.audits.workflow.failed}`);
     lines.push(`- Skipped: ${coverage.audits.workflow.skipped}`);
     lines.push(`- Dead Ends: ${coverage.audits.workflow.dead_ends}`);
+    lines.push('');
+  }
+
+  // A11y audit
+  if (coverage.audits.a11y) {
+    lines.push('### Accessibility Audit (axe-core)');
+    lines.push('');
+    lines.push(`- Passed: ${coverage.audits.a11y.passed}`);
+    lines.push(`- Failed: ${coverage.audits.a11y.failed}`);
+    lines.push(`- Skipped: ${coverage.audits.a11y.skipped}`);
     lines.push('');
   }
 

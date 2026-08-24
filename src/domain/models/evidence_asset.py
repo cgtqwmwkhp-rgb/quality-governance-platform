@@ -49,6 +49,7 @@ class EvidenceSourceModule(str, enum.Enum):
     INDUCTION = "induction"
     CERTIFICATE = "certificate"
     ASSET = "asset"
+    COMPLIANCE_RECORD = "compliance_record"
 
 
 class EvidenceVisibility(str, enum.Enum):
@@ -111,6 +112,19 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
     # Optional secondary linkage (e.g., evidence from NearMiss also linked to Investigation)
     linked_investigation_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("investigation_runs.id"), nullable=True, index=True
+    )
+
+    # Library link (WI-2 / L-32) — set only when this case asset has been filed
+    # to the Register, either by a steward naming the document or by a proven
+    # content match. Most assets are case-scoped and legitimately never carry
+    # one, so NULL means "not filed to the Library", not "unknown". The case
+    # store (`storage_key` above) stays the read path for the investigation
+    # until the F-3 allowlist shrink retires it.
+    document_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("documents.id", ondelete="SET NULL", name="fk_evidence_assets_document_id"),
+        nullable=True,
+        index=True,
     )
 
     # Metadata

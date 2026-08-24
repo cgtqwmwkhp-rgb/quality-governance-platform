@@ -18,6 +18,7 @@ import api, {
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { PersonNameField } from '../components/PersonNameField'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -98,7 +99,7 @@ function buildRtasListSearch(params: { ids: string }): string {
 }
 
 export default function RTAs() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const registerLabels = useCaseRegisterLabels()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -546,30 +547,47 @@ export default function RTAs() {
               </FormField>
             </div>
 
-            <FormField {...createForm.fieldProps('driver_name')}>
+            <FormField {...createForm.fieldProps('driver_name')} nativeControl={false}>
               {(control) => (
-                <Input
-                  {...control}
-                  type="text"
-                  value={formData.driver_name || ''}
-                  onChange={(e) => updateForm({ driver_name: e.target.value })}
+                <PersonNameField
+                  id={control.id}
+                  mode="hybrid"
+                  lang={i18n.language}
+                  value={
+                    formData.driver_name
+                      ? { displayName: formData.driver_name, engineerId: null }
+                      : null
+                  }
+                  onChange={(next) =>
+                    // RTACreate has driver_name only (no driver_id) — drop engineerId.
+                    updateForm({ driver_name: next?.displayName ?? '' })
+                  }
                   placeholder={t('rtas.form.placeholder.driver_name')}
+                  testId="rta-create-driver-name"
                 />
               )}
             </FormField>
 
-            <FormField {...createForm.fieldProps('reporter_name')}>
+            <FormField {...createForm.fieldProps('reporter_name')} nativeControl={false}>
               {(control) => (
-                <Input
-                  {...control}
-                  type="text"
-                  value={formData.reporter_name || ''}
-                  onChange={(e) => updateForm({ reporter_name: e.target.value })}
+                <PersonNameField
+                  id={control.id}
+                  mode="hybrid"
+                  lang={i18n.language}
+                  value={
+                    formData.reporter_name
+                      ? { displayName: formData.reporter_name, engineerId: null }
+                      : null
+                  }
+                  onChange={(next) =>
+                    // No reporter engineer/user FK on RTACreate — drop engineerId.
+                    updateForm({ reporter_name: next?.displayName ?? '' })
+                  }
                   placeholder={t(
                     'rtas.form.placeholder.reporter_name',
                     'Who is reporting this collision…',
                   )}
-                  data-testid="rta-create-reporter-name"
+                  testId="rta-create-reporter-name"
                 />
               )}
             </FormField>

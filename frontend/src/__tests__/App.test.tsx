@@ -27,9 +27,9 @@ vi.mock('../services/errorTracker', () => ({
   trackComponentError: vi.fn(),
 }))
 
-// detectEnvironment is reached via Layout -> aiCopilotDemo. Without it the
-// authenticated tree throws into the ErrorBoundary and every assertion below
-// would pass against an error screen rather than the real app.
+// The authenticated tree reaches apiBase. Without this mock it throws into the
+// ErrorBoundary and every assertion below would pass against an error screen
+// rather than the real app.
 vi.mock('../config/apiBase', () => ({
   API_BASE_URL: 'http://localhost:3000',
   detectEnvironment: () => 'production',
@@ -114,7 +114,6 @@ vi.mock('../pages/ComplianceEvidence', () => ({ default: () => <div>ComplianceEv
 vi.mock('../pages/AdvancedAnalytics', () => ({ default: () => <div>AdvancedAnalytics</div> }))
 vi.mock('../pages/DashboardBuilder', () => ({ default: () => <div>DashboardBuilder</div> }))
 vi.mock('../pages/ReportGenerator', () => ({ default: () => <div>ReportGenerator</div> }))
-vi.mock('../pages/WorkflowCenter', () => ({ default: () => <div>WorkflowCenter</div> }))
 vi.mock('../pages/ComplianceAutomation', () => ({ default: () => <div>ComplianceAutomation</div> }))
 vi.mock('../pages/RiskRegister', () => ({ default: () => <div>RiskRegister</div> }))
 vi.mock('../pages/IMSDashboard', () => ({ default: () => <div>IMSDashboard</div> }))
@@ -136,7 +135,6 @@ vi.mock('../pages/workforce/TrainingExecution', () => ({
 }))
 vi.mock('../pages/workforce/Engineers', () => ({ default: () => <div>Engineers</div> }))
 vi.mock('../pages/workforce/EngineerProfile', () => ({ default: () => <div>EngineerProfile</div> }))
-vi.mock('../pages/workforce/Calendar', () => ({ default: () => <div>Calendar</div> }))
 vi.mock('../pages/workforce/CompetencyDashboard', () => ({
   default: () => <div>CompetencyDashboard</div>,
 }))
@@ -153,9 +151,68 @@ vi.mock('../pages/admin/PartnerWebhooks', () => ({ default: () => <div>PartnerWe
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
     window.history.pushState({}, '', '/')
     isAIIntelligenceRouteEnabledMock.mockReset()
     isAIIntelligenceRouteEnabledMock.mockReturnValue(false)
+  })
+
+  // PX-179: an expired session dropped the user on /login with no route back
+  // to the work they were in the middle of.
+  it('remembers where an unauthenticated visitor was headed', async () => {
+    window.history.pushState({}, '', '/help?topic=audits')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    expect(sessionStorage.getItem('auth_return_path')).toBe('/help?topic=audits')
+  })
+
+  it('returns the user to where the session ended once they sign back in', async () => {
+    sessionStorage.setItem('auth_return_path', '/help')
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/login')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(await screen.findByText('StaffHelp')).toBeInTheDocument()
+    // Consumed, so a later sign-in starts from the dashboard again.
+    expect(sessionStorage.getItem('auth_return_path')).toBeNull()
+  })
+
+  it('falls back to the dashboard when there is nothing to return to', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/login')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(await screen.findByTestId('dashboard-page')).toBeInTheDocument()
+  })
+
+  it('ignores a return path that would redirect off-origin', async () => {
+    sessionStorage.setItem('auth_return_path', '//evil.example/phish')
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/login')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(await screen.findByTestId('dashboard-page')).toBeInTheDocument()
   })
 
   it('renders login page when no token in localStorage', async () => {
@@ -221,6 +278,70 @@ describe('App', () => {
 
     expect(screen.queryByText('AIIntelligence')).not.toBeInTheDocument()
     expect(window.location.pathname).toBe('/ai-intelligence/insights')
+  })
+
+  it('sends a bookmarked /workflows to the live action queue', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/workflows')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(window.location.pathname).toBe('/actions')
+    expect(window.location.search).toBe('?view=mine')
+    expect(screen.getByText('Actions')).toBeInTheDocument()
+  })
+
+  // FR-WFFORCE-CAL-01: the workforce grid duplicated /calendar, which already
+  // carries assessment and induction runs as training events.
+  it('sends a bookmarked /workforce/calendar to the unified calendar feed', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/workforce/calendar')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(window.location.pathname).toBe('/calendar')
+    expect(window.location.search).toBe('?types=training')
+    expect(screen.getByText('CalendarView')).toBeInTheDocument()
+  })
+
+  // FR-WF-CG-01: the competence gap board is folded into Actions on that source.
+  it('sends a bookmarked /workforce/competence-gaps to the Actions register', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/workforce/competence-gaps')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(window.location.pathname).toBe('/actions')
+    expect(window.location.search).toBe('?sourceType=competence_gap')
+    expect(screen.getByText('Actions')).toBeInTheDocument()
+  })
+
+  // Wave 1 PR-A: Standards absorbed into /compliance programme shell.
+  it('sends a bookmarked /standards URL to /compliance and preserves query params', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/standards?code=ISO9001&clause=7.2')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(window.location.pathname).toBe('/compliance')
+    expect(window.location.search).toBe('?code=ISO9001&clause=7.2&view=matrix')
+    expect(screen.getByText('ComplianceEvidence')).toBeInTheDocument()
   })
 
   it('serves /ai-intelligence on direct navigation when the flag is on', async () => {

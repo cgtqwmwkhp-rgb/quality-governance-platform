@@ -24,6 +24,9 @@ class _FakeUploadFile:
     async def read(self) -> bytes:
         return self._content
 
+    async def seek(self, offset: int) -> None:
+        return None
+
 
 class _FakeScalarResult:
     def __init__(self, values):

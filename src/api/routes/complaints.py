@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.case_closure import CaseClosureValidationResponse
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
@@ -19,7 +20,13 @@ from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.models.user import User
-from src.domain.services.audit_service import record_audit_event
+from src.domain.services.audit_service import NO_SINGLE_ENTITY, record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_COMPLAINT,
+    evaluate_case_closure,
+    resolve_case_tenant_id,
+    validation_to_payload,
+)
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.complaint_risk_links import (
     append_linked_risk_id,
@@ -228,11 +235,18 @@ async def list_complaints(
 
         # AUDIT: Log email filter usage for security monitoring
         # Note: We log the filter type but NOT the raw email (privacy compliance)
+        #
+        # Fail closed when the caller has no tenant membership. audit_log_entries
+        # .tenant_id is NOT NULL, so this access cannot be recorded without one,
+        # and an email-targeted search across complainants is precisely what this
+        # row exists to police.
+        audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
             event_type="complaint.list_filtered",
             entity_type="complaint",
             entity_id="*",  # Wildcard - listing operation
+            entity_name=NO_SINGLE_ENTITY,
             action="list",
             description="Complaint list accessed with email filter",
             payload={
@@ -243,14 +257,20 @@ async def list_complaints(
             },
             user_id=current_user.id,
             request_id=request_id,
+            tenant_id=audit_tenant_id,
         )
 
     try:
         query = select(Complaint)
 
-        if not current_user.is_superuser:
-            tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-            query = apply_tenant_filter(query, Complaint, tenant_id)
+        # No superuser bypass on the register list (B-13). The executive
+        # dashboard's complaint `register_total` is tenant-scoped for every
+        # caller, so a list that spanned tenants for a superuser reported a
+        # total the tile beside it could not reconcile with. Reading, updating
+        # or deleting one cross-tenant complaint by id is still available;
+        # enumerating the estate is not.
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        query = apply_tenant_filter(query, Complaint, tenant_id)
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -372,6 +392,56 @@ async def update_complaint(
         return complaint
     except LookupError:
         raise NotFoundError(f"Complaint {complaint_id} not found")
+
+
+@router.delete("/{complaint_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_complaint(
+    complaint_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("complaint:delete"))],
+    request_id: str = Depends(get_request_id),
+) -> None:
+    """Soft-delete a complaint (PX-177).
+
+    Sets deleted_at; list/get exclude the row. Requires complaint:delete.
+    """
+    svc = ComplaintService(db)
+    try:
+        await svc.delete_complaint(
+            complaint_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Complaint {complaint_id} not found")
+
+
+@router.get("/{complaint_id}/closure-validation", response_model=CaseClosureValidationResponse)
+async def get_complaint_closure_validation(
+    complaint_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("complaint:read"))],
+):
+    """Report whether this complaint can be closed, and why not if it cannot."""
+    svc = ComplaintService(db)
+    try:
+        complaint = await svc.get_complaint(
+            complaint_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Complaint {complaint_id} not found")
+
+    validation = await evaluate_case_closure(
+        db,
+        case_type=CASE_TYPE_COMPLAINT,
+        case=complaint,
+        tenant_id=resolve_case_tenant_id(complaint),
+    )
+    return validation_to_payload(validation)
 
 
 @router.get("/{complaint_id}/investigations", response_model=dict)
@@ -509,11 +579,13 @@ async def add_complaint_running_sheet_entry(
         event_type="complaint.runner_sheet_entry.created",
         entity_type="complaint",
         entity_id=str(complaint.id),
+        entity_name=complaint.reference_number,
         action="create",
         description=f"Runner-sheet entry added to complaint {complaint.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=complaint.tenant_id,
     )
 
     await db.commit()
@@ -558,11 +630,15 @@ async def delete_complaint_running_sheet_entry(
         event_type="complaint.runner_sheet_entry.deleted",
         entity_type="complaint",
         entity_id=str(complaint.id),
+        entity_name=complaint.reference_number,
         action="delete",
         description=f"Runner-sheet entry deleted from complaint {complaint.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        # The parent case, whose tenant_id is NOT NULL. The entry's own column is
+        # nullable, so the parent is the reliable owner.
+        tenant_id=complaint.tenant_id,
     )
 
     await db.delete(entry)
@@ -642,6 +718,7 @@ async def raise_risk_from_complaint(
         raise NotFoundError(f"Complaint {complaint_id} not found")
 
     priority_impact = {
+        "negligible": 1,
         "low": 2,
         "medium": 3,
         "high": 4,
@@ -685,6 +762,7 @@ async def raise_risk_from_complaint(
             event_type="complaint.risk_raised",
             entity_type="complaint",
             entity_id=str(complaint.id),
+            entity_name=complaint.reference_number,
             action="create",
             description=f"Risk {risk.reference} raised from complaint {complaint.reference_number}",
             payload={"risk_id": risk.id, "risk_reference": risk.reference},

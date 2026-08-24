@@ -5,7 +5,7 @@
 # P2 = Nice to have, can degrade gracefully
 
 version: "1.0"
-last_updated: "2026-07-09"
+last_updated: "2026-08-10"
 
 # ==============================================================================
 # PUBLIC ROUTES (No Authentication)
@@ -19,6 +19,33 @@ public_routes:
     expected_empty_state: "Login form visible"
     expected_degraded_state: null
     description: "Employee portal SSO login"
+
+  # C-61: both password-recovery routes were absent from this registry, which the
+  # link audit uses as its list of valid routes. The only dead end and the only
+  # P1 failure the gate reported was "login -> /forgot-password", flagged
+  # "Route not in registry" — a false positive: frontend/src/App.tsx declares
+  # both routes, both page components exist, and both carry en/cy strings.
+  # Registered as P1 rather than P0: /login is the P0 journey, this is the
+  # recovery path around it, and the P0 denominator is what hard-fails the gate,
+  # so raising it is the repo owner's triage call rather than a side effect of
+  # fixing a false positive.
+  - pageId: forgot-password
+    route: /forgot-password
+    auth: anon
+    criticality: P1
+    component: ForgotPassword
+    expected_empty_state: "Email entry form visible"
+    expected_degraded_state: null
+    description: "Staff password reset request (pre-auth)"
+
+  - pageId: reset-password
+    route: /reset-password
+    auth: anon
+    criticality: P1
+    component: ResetPassword
+    expected_empty_state: "Invalid-token message when no token is present in the query string"
+    expected_degraded_state: null
+    description: "Staff password reset confirmation from emailed link (pre-auth)"
 
 # ==============================================================================
 # PORTAL ROUTES (SSO Authentication - Employee Self-Service)
@@ -87,6 +114,54 @@ portal_routes:
     expected_degraded_state: null
     description: "Track submitted reports"
 
+  - pageId: portal-track-detail
+    route: /portal/track/:referenceNumber
+    auth: portal_sso
+    criticality: P1
+    component: PortalTrack
+    expected_empty_state: null
+    expected_degraded_state: "Not found messaging if reference missing"
+    description: "Track a specific report by reference number"
+
+  # C-61 (continued): nested /portal children were misread as absent from App.tsx in
+  # #1451 residuals (flat scrape). They are mounted under path="/portal" with real
+  # page components and are linked from Portal home, Dashboard, and My Day.
+  - pageId: portal-work
+    route: /portal/work
+    auth: portal_sso
+    criticality: P1
+    component: PortalWork
+    expected_empty_state: "Work / training tiles with empty assignments"
+    expected_degraded_state: null
+    description: "Employee portal work and training surface"
+
+  - pageId: portal-reading
+    route: /portal/reading
+    auth: portal_sso
+    criticality: P1
+    component: PortalReading
+    expected_empty_state: "No reading assignments message"
+    expected_degraded_state: null
+    description: "Employee portal campaign reading assignments"
+
+  - pageId: portal-tools
+    route: /portal/tools
+    auth: portal_sso
+    criticality: P1
+    component: PortalMyTools
+    expected_empty_state: "My tools compliance empty state"
+    expected_degraded_state: null
+    description: "Employee portal personal tool compliance"
+
+  - pageId: portal-van
+    route: /portal/van
+    auth: portal_sso
+    criticality: P1
+    component: PortalMyVan
+    expected_empty_state: "My van checks empty state"
+    expected_degraded_state: null
+    description: "Employee portal personal van checks"
+
   - pageId: portal-help
     route: /portal/help
     auth: portal_sso
@@ -95,6 +170,27 @@ portal_routes:
     expected_empty_state: "Help content and FAQ visible"
     expected_degraded_state: null
     description: "Portal help and FAQ"
+
+  # C-61 residual: legacy portal report forms still mounted under /portal for
+  # compat. Registered P2 (David TRIAGE remainder) so link audit does not treat
+  # them as missing; keep-vs-remove remains a separate product call.
+  - pageId: portal-report-incident-legacy
+    route: /portal/report/incident-legacy
+    auth: portal_sso
+    criticality: P2
+    component: PortalIncidentForm
+    expected_empty_state: "Legacy incident report form visible"
+    expected_degraded_state: null
+    description: "Legacy portal incident report form (compat)"
+
+  - pageId: portal-report-near-miss-static
+    route: /portal/report/near-miss-static
+    auth: portal_sso
+    criticality: P2
+    component: PortalNearMissForm
+    expected_empty_state: "Legacy near-miss report form visible"
+    expected_degraded_state: null
+    description: "Legacy portal near-miss report form (compat)"
 
 # ==============================================================================
 # ADMIN ROUTES (JWT Authentication - Staff/Admin)
@@ -370,6 +466,24 @@ admin_routes:
     expected_degraded_state: null
     description: "Compliance automation"
 
+  - pageId: compliance-schedule
+    route: /compliance-schedule
+    auth: jwt_admin
+    criticality: P2
+    component: ComplianceSchedule
+    expected_empty_state: "No active requirements; catalogue activate available"
+    expected_degraded_state: "Hidden when compliance_schedule feature flag is off"
+    description: "Organisation/location Compliance Schedule register"
+
+  - pageId: compliance-schedule-detail
+    route: /compliance-schedule/:id
+    auth: jwt_admin
+    criticality: P2
+    component: ComplianceScheduleDetail
+    expected_empty_state: "Requirement detail with empty occurrence records"
+    expected_degraded_state: "Hidden when compliance_schedule feature flag is off"
+    description: "Compliance Schedule requirement detail and completion"
+
   - pageId: risk-register
     route: /risk-register
     auth: jwt_admin
@@ -482,10 +596,10 @@ admin_routes:
     route: /workforce/calendar
     auth: jwt_admin
     criticality: P2
-    component: Calendar
-    expected_empty_state: "Calendar grid visible"
+    component: Navigate
+    expected_empty_state: null
     expected_degraded_state: null
-    description: "Workforce calendar"
+    description: "Retired duplicate → /calendar?types=training"
 
   - pageId: analytics-dashboards
     route: /analytics/dashboards
@@ -523,6 +637,186 @@ admin_routes:
     expected_degraded_state: null
     description: "Form configuration list"
 
+  # C-61 (continued): eight staff nav routes declared in frontend/src/App.tsx and linked
+  # from Layout.tsx were absent from this registry, which the link audit uses as its
+  # allowlist. UX gate run 30523733146 reported 17 "Route not in registry" dead ends
+  # (× P1 penalty → score 0 HOLD) despite P0 37/37 and clean a11y after #1443/#1445.
+  # Each route has a page component and nav/tests; registered as P1 rather than P0 to
+  # keep the P0 denominator stable — important staff workflows, not core login/incident
+  # journeys.
+  - pageId: safety-assets
+    route: /safety-assets
+    auth: jwt_admin
+    criticality: P1
+    component: SafetyAssetRegister
+    expected_empty_state: "Asset register board with empty or zero-count hero bands"
+    expected_degraded_state: null
+    description: "Safety asset register and compliance board"
+
+  - pageId: customer-audits
+    route: /customer-audits
+    auth: jwt_admin
+    criticality: P1
+    component: CustomerAudits
+    expected_empty_state: "Customer audit programme list or empty state"
+    expected_degraded_state: null
+    description: "Customer audit programme hub"
+
+  - pageId: my-reading
+    route: /my-reading
+    auth: jwt_admin
+    criticality: P1
+    component: MyReading
+    expected_empty_state: "Reading queue with no assigned documents"
+    expected_degraded_state: null
+    description: "Staff document reading and acknowledgement queue"
+
+  - pageId: my-compliance
+    route: /my-compliance
+    auth: jwt_admin
+    criticality: P1
+    component: MyCompliancePassport
+    expected_empty_state: "Compliance passport sections with no assignments"
+    expected_degraded_state: null
+    description: "Staff compliance passport summary"
+
+  - pageId: analytics-hs-performance
+    route: /analytics/hs-performance
+    auth: jwt_admin
+    criticality: P1
+    component: HsPerformance
+    expected_empty_state: "H&S KPI summary with zero or placeholder metrics"
+    expected_degraded_state: null
+    description: "Health and safety performance KPI dashboard"
+
+  - pageId: analytics-safety-insights
+    route: /analytics/safety-insights
+    auth: jwt_admin
+    criticality: P1
+    component: SafetyInsightsAnalyst
+    expected_empty_state: "Safety insights analyst with no runs yet"
+    expected_degraded_state: "AI features unavailable banner when clustering is disabled"
+    description: "Safety insights analyst workspace"
+
+  - pageId: knowledge-exceptions
+    route: /knowledge-exceptions
+    auth: jwt_admin
+    criticality: P1
+    component: KnowledgeExceptions
+    expected_empty_state: "AI knowledge exceptions inbox with no items"
+    expected_degraded_state: null
+    description: "Knowledge bank exception review inbox"
+
+  - pageId: document-control
+    route: /document-control
+    auth: jwt_admin
+    criticality: P1
+    component: DocumentControl
+    expected_empty_state: "Controlled document library empty state"
+    expected_degraded_state: "Unprovisioned-module disclosure when backend tables are absent"
+    description: "Advanced document control library and workflows"
+
+  # Residual after #1446: HsPerformance links to /admin/hs-reporting-hours (also in Layout
+  # admin nav and AdminDashboard). App.tsx mounts HsReportingHours; gate run 30532211043
+  # scored 90 CANARY with this single remaining "Route not in registry" dead end.
+  - pageId: admin-hs-reporting-hours
+    route: /admin/hs-reporting-hours
+    auth: jwt_admin
+    criticality: P1
+    component: HsReportingHours
+    expected_empty_state: "H&S reporting hours table with default or empty period rows"
+    expected_degraded_state: null
+    description: "Admin editor for H&S reporting-period hours used by KPI rates"
+
+
+  # C-61 residual after #1446/#1448: Layout admin nav, AdminDashboard tiles, and
+  # hub deep-links still target real App.tsx routes that PAGE_REGISTRY omitted.
+  # Census (tip faff5a38): each route below is declared in frontend/src/App.tsx with
+  # an existing page component and is linked from Layout and/or AdminDashboard /
+  # Complaints / SafetyAssetRegister / asset-health tiles. Registered as P1 (not P0)
+  # so the P0 denominator stays stable. Navigate-only aliases are registered as P2
+  # further below (not skipped). Nested /portal children are handled separately (#1484).
+  - pageId: admin-users
+    route: /admin/users
+    auth: jwt_admin
+    criticality: P1
+    component: AdminUserManagement
+    expected_empty_state: "User management table with no users or empty search"
+    expected_degraded_state: "Feature-disabled message when admin user management flag is off"
+    description: "Admin user and role management"
+
+  - pageId: admin-lookups
+    route: /admin/lookups
+    auth: jwt_admin
+    criticality: P1
+    component: LookupTables
+    expected_empty_state: "Lookup category list with no options in the selected category"
+    expected_degraded_state: null
+    description: "Admin lookup tables for intake and register dropdowns"
+
+  - pageId: admin-hseq-inbox
+    route: /admin/hseq-inbox
+    auth: jwt_admin
+    criticality: P1
+    component: HsecQuestionInbox
+    expected_empty_state: "HSEQ question inbox with no pending engineer questions"
+    expected_degraded_state: null
+    description: "HSEQ inbox for answering engineer questions on assigned reads"
+
+  - pageId: admin-notifications
+    route: /admin/notifications
+    auth: jwt_admin
+    criticality: P1
+    component: NotificationSettings
+    expected_empty_state: "Notification settings form with defaults"
+    expected_degraded_state: null
+    description: "Admin email and alert notification settings"
+
+  - pageId: admin-partner-webhooks
+    route: /admin/partner-webhooks
+    auth: jwt_admin
+    criticality: P1
+    component: PartnerWebhooks
+    expected_empty_state: "Partner webhook subscriptions list empty"
+    expected_degraded_state: null
+    description: "Partner event webhook subscription management"
+
+  - pageId: admin-library-roles
+    route: /admin/library-roles
+    auth: jwt_admin
+    criticality: P1
+    component: LibraryRoles
+    expected_empty_state: "Library role facets with defaults"
+    expected_degraded_state: null
+    description: "Document library role facets and restricted category gates"
+
+  - pageId: admin-engineer-groups
+    route: /admin/engineer-groups
+    auth: jwt_admin
+    criticality: P1
+    component: EngineerGroups
+    expected_empty_state: "Engineer campaign audience groups empty"
+    expected_degraded_state: null
+    description: "Campaign audience engineer groups for HSEQ launches"
+
+  - pageId: workforce-competence-gaps
+    route: /workforce/competence-gaps
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Retired orphan → /actions?sourceType=competence_gap"
+
+  - pageId: safety-assets-analytics
+    route: /safety-assets/analytics
+    auth: jwt_admin
+    criticality: P1
+    component: AssetHealthAnalytics
+    expected_empty_state: "Asset health analytics with zero-series charts"
+    expected_degraded_state: null
+    description: "Safety asset health analytics deep-link from hub tiles"
+
   - pageId: admin-contracts
     route: /admin/contracts
     auth: jwt_admin
@@ -541,11 +835,290 @@ admin_routes:
     expected_degraded_state: null
     description: "System settings"
 
+  # C-61 Navigate-only aliases (tip 60442106 / #1481): App.tsx mounts honest
+  # <Navigate replace> redirects for golden-thread UAT legacy staff URLs. Register
+  # as P2 so the UX link audit does not treat bookmark/compat paths as missing
+  # registry entries. Canonical targets already registered above. Does not overlap
+  # #1484 nested portal page components.
+  - pageId: alias-capa
+    route: /capa
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /actions?sourceType=capa"
+
+  - pageId: alias-my-work
+    route: /my-work
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /actions?view=mine"
+
+  - pageId: alias-evidence
+    route: /evidence
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /compliance"
+
+  - pageId: alias-knowledge-bank
+    route: /knowledge-bank
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /documents"
+
+  - pageId: alias-exceptions
+    route: /exceptions
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /knowledge-exceptions"
+
+  - pageId: alias-admin-campaign-compliance
+    route: /admin/campaign-compliance
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /documents/campaigns"
+
+  - pageId: alias-admin-hsec-inbox
+    route: /admin/hsec-inbox
+    auth: jwt_admin
+    criticality: P2
+    component: Navigate
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy alias → /admin/hseq-inbox"
+
+  # C-61 residual after #1484/#1486 (tip 129f5715): detail / execute / builder
+  # App.tsx routes still absent from PAGE_REGISTRY. David TRIAGE 29/07: admin /
+  # safety-critical surfaces at P1, remainder at P2; P0 denominator unchanged.
+  # Catch-alls (/, /*, /portal/*, /risks/*) deliberately omitted.
+  - pageId: safety-asset-detail
+    route: /safety-assets/:id
+    auth: jwt_admin
+    criticality: P1
+    component: SafetyAssetDetail
+    expected_empty_state: "Asset not found messaging"
+    expected_degraded_state: null
+    description: "Safety asset detail"
+
+  - pageId: audit-execute
+    route: /audits/:auditId/execute
+    auth: jwt_admin
+    criticality: P1
+    component: AuditExecution
+    expected_empty_state: "Audit run load failure messaging"
+    expected_degraded_state: null
+    description: "Staff audit execution"
+
+  - pageId: audit-mobile
+    route: /audits/:auditId/mobile
+    auth: jwt_admin
+    criticality: P1
+    component: AuditExecution
+    expected_empty_state: "Audit run load failure messaging"
+    expected_degraded_state: null
+    description: "Mobile audit execution"
+
+  - pageId: audit-import-review
+    route: /audits/:auditId/import-review
+    auth: jwt_admin
+    criticality: P1
+    component: AuditImportReview
+    expected_empty_state: "No imported findings to review"
+    expected_degraded_state: null
+    description: "Audit import review"
+
+  - pageId: admin-forms-new
+    route: /admin/forms/new
+    auth: jwt_admin
+    criticality: P1
+    component: FormBuilder
+    expected_empty_state: "Empty form builder canvas"
+    expected_degraded_state: null
+    description: "Create admin dynamic form template"
+
+  - pageId: admin-forms-edit
+    route: /admin/forms/:templateId
+    auth: jwt_admin
+    criticality: P1
+    component: FormBuilder
+    expected_empty_state: "Form template not found messaging"
+    expected_degraded_state: null
+    description: "Edit admin dynamic form template"
+
+  - pageId: workforce-assessment-new
+    route: /workforce/assessments/new
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceAssessmentCreate
+    expected_empty_state: "New assessment setup form"
+    expected_degraded_state: null
+    description: "Create workforce assessment"
+
+  - pageId: workforce-assessment-execute
+    route: /workforce/assessments/:id/execute
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceAssessmentExecution
+    expected_empty_state: "Assessment not found messaging"
+    expected_degraded_state: null
+    description: "Execute workforce assessment"
+
+  - pageId: workforce-training-new
+    route: /workforce/training/new
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceInductionCreate
+    expected_empty_state: "New training setup form"
+    expected_degraded_state: null
+    description: "Create workforce training record"
+
+  - pageId: workforce-training-execute
+    route: /workforce/training/:id/execute
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceTrainingExecution
+    expected_empty_state: "Training not found messaging"
+    expected_degraded_state: null
+    description: "Execute workforce training"
+
+  - pageId: workforce-engineer-detail
+    route: /workforce/engineers/:id
+    auth: jwt_admin
+    criticality: P1
+    component: WorkforceEngineerProfile
+    expected_empty_state: "Engineer not found messaging"
+    expected_degraded_state: null
+    description: "Workforce engineer detail"
+
+  - pageId: risk-register-profile
+    route: /risk-register/:riskId
+    auth: jwt_admin
+    criticality: P1
+    component: RiskProfile
+    expected_empty_state: "Risk not found messaging"
+    expected_degraded_state: null
+    description: "Enterprise risk profile"
+
+  - pageId: action-detail
+    route: /actions/:id
+    auth: jwt_admin
+    criticality: P2
+    component: ActionDetail
+    expected_empty_state: "Action not found messaging"
+    expected_degraded_state: null
+    description: "Action detail"
+
+  - pageId: actions-item-legacy
+    route: /actions/item
+    auth: jwt_admin
+    criticality: P2
+    component: LegacyActionItemRedirect
+    expected_empty_state: null
+    expected_degraded_state: null
+    description: "Legacy action item redirect"
+
+  - pageId: document-detail
+    route: /documents/:id
+    auth: jwt_admin
+    criticality: P2
+    component: DocumentDetail
+    expected_empty_state: "Document not found messaging"
+    expected_degraded_state: null
+    description: "Document detail"
+
+  - pageId: investigation-detail
+    route: /investigations/:id
+    auth: jwt_admin
+    criticality: P2
+    component: InvestigationDetail
+    expected_empty_state: "Investigation not found messaging"
+    expected_degraded_state: null
+    description: "Investigation detail"
+
+  - pageId: investigation-template-builder
+    route: /investigations/templates/builder
+    auth: jwt_admin
+    criticality: P2
+    component: InvestigationTemplateBuilder
+    expected_empty_state: "Investigation template builder canvas"
+    expected_degraded_state: null
+    description: "Investigation template builder hub"
+
+  - pageId: investigation-template-builder-new
+    route: /investigations/templates/builder/new
+    auth: jwt_admin
+    criticality: P2
+    component: InvestigationTemplateBuilder
+    expected_empty_state: "Empty investigation template builder"
+    expected_degraded_state: null
+    description: "Create investigation template"
+
+  - pageId: investigation-template-builder-edit
+    route: /investigations/templates/builder/:templateId/edit
+    auth: jwt_admin
+    criticality: P2
+    component: InvestigationTemplateBuilder
+    expected_empty_state: "Investigation template not found messaging"
+    expected_degraded_state: null
+    description: "Edit investigation template"
+
+  - pageId: audit-template-new
+    route: /audit-templates/new
+    auth: jwt_admin
+    criticality: P2
+    component: AuditTemplateBuilder
+    expected_empty_state: "Empty audit template builder"
+    expected_degraded_state: null
+    description: "Create audit template"
+
+  - pageId: audit-template-edit
+    route: /audit-templates/:templateId/edit
+    auth: jwt_admin
+    criticality: P2
+    component: AuditTemplateBuilder
+    expected_empty_state: "Audit template not found messaging"
+    expected_degraded_state: null
+    description: "Edit audit template"
+
+  - pageId: audits-analytics
+    route: /audits/analytics
+    auth: jwt_admin
+    criticality: P2
+    component: AuditAnalytics
+    expected_empty_state: "Audit analytics with zero scores"
+    expected_degraded_state: null
+    description: "Audit analytics"
+
+  - pageId: staff-help
+    route: /help
+    auth: jwt_admin
+    criticality: P2
+    component: StaffHelp
+    expected_empty_state: "Staff help content visible"
+    expected_degraded_state: null
+    description: "Staff help (distinct from /portal/help)"
+
 # ==============================================================================
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 58
+  total_routes: 117
   p0_routes: 12
-  p1_routes: 24
-  p2_routes: 22
+  p1_routes: 60
+  p2_routes: 45

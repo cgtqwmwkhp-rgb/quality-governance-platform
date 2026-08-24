@@ -15,7 +15,11 @@ import { AsyncState, ErrorState } from '../components/ui/async'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { resolveIncidentDetailTab } from './incidentStandardsTab'
 import { displayIncidentText } from './incidentTextDisplay'
-import { confirmCloseWithoutLessons } from '../lib/lessonsCloseGate'
+import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
+import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { Entity360Strip } from '../components/graph/Entity360Strip'
+import { IncidentFraSignificantChangePanel } from './IncidentFraSignificantChangePanel'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -102,6 +106,7 @@ import {
   linkedRiskDisplayLabel,
 } from '../components/register/caseRegisterHonesty'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
+import { PersonNameField } from '../components/PersonNameField'
 import { AssetPicker } from '../components/AssetPicker'
 import { getCapaLink } from '../components/investigations/handoffLinks'
 import {
@@ -162,6 +167,16 @@ const FALLBACK_EMERGENCY_OPTIONS = [
   { value: 'recovery', label: 'Recovery' },
 ]
 
+/** Portal submissions may store yes/no flags as strings; only real affirmatives count. */
+function submissionFlaggedInjury(value: unknown): boolean {
+  if (value === true || value === 1) return true
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase()
+    return v === 'yes' || v === 'true' || v === '1'
+  }
+  return false
+}
+
 function buildIncidentEditForm(data: Incident): IncidentUpdate {
   return {
     title: displayIncidentText(data.title),
@@ -193,7 +208,8 @@ function buildIncidentEditForm(data: Incident): IncidentUpdate {
 }
 
 export default function IncidentDetail() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
   const { id } = useParams<{ id: string }>()
   const routeIncidentId = id && /^\d+$/.test(id) ? Number(id) : null
   const navigate = useNavigate()
@@ -217,6 +233,7 @@ export default function IncidentDetail() {
   const [witnessesDraft, setWitnessesDraft] = useState<CaseWitnessesValue | null>(null)
   const [savingWitnesses, setSavingWitnesses] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [witnessSaveError, setWitnessSaveError] = useState<string | null>(null)
   const [careFieldsTouched, setCareFieldsTouched] = useState({
     medical: false,
@@ -457,21 +474,16 @@ export default function IncidentDetail() {
 
   const handleSaveEdit = async () => {
     if (!incident) return
-    if (
-      !confirmCloseWithoutLessons({
-        nextStatus: editForm.status,
-        previousStatus: incident.status,
-        lessons: editForm.lessons_learnt,
-      })
-    ) {
-      return
-    }
+    // Choosing Closed in Edit routes through the one close path: save the rest
+    // of the edit, then hand the status change to the summary dialog.
+    const closingFromEdit =
+      !isCaseClosed('incident', incident.status) && isCaseClosed('incident', editForm.status)
     setSaving(true)
     setSaveError(null)
     try {
       // Omit unchanged status so no-op edits never hit transition validation.
       const payload: IncidentUpdate = { ...editForm }
-      if (payload.status === incident.status) {
+      if (payload.status === incident.status || closingFromEdit) {
         delete payload.status
       }
       // Only send care fields when the editor touched them so unrelated saves
@@ -488,6 +500,9 @@ export default function IncidentDetail() {
       setCareFieldsTouched({ medical: false, emergency: false })
       setIsEditing(false)
       toast.success(t('incidents.detail.save_success', 'Incident updated'))
+      if (closingFromEdit) {
+        setShowCloseDialog(true)
+      }
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'updateIncident' })
       const message = getApiErrorMessage(
@@ -498,6 +513,32 @@ export default function IncidentDetail() {
       toast.error(message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCloseCase = async (payload: { lessons_learnt?: string }) => {
+    if (!incident) return
+    const response = await incidentsApi.update(incident.id, {
+      status: 'closed',
+      lessons_learnt: payload.lessons_learnt,
+    })
+    setIncident(response.data)
+    setEditForm(buildIncidentEditForm(response.data))
+    toast.success(t('caseClosure.closed', 'Case closed'))
+  }
+
+  const handleReopenCase = async () => {
+    if (!incident) return
+    try {
+      const response = await incidentsApi.update(incident.id, {
+        status: CASE_REOPEN_STATUS.incident,
+      })
+      setIncident(response.data)
+      setEditForm(buildIncidentEditForm(response.data))
+      toast.success(t('caseClosure.reopened', 'Case reopened'))
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'reopenIncident' })
+      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
     }
   }
 
@@ -936,6 +977,12 @@ export default function IncidentDetail() {
         />
       )}
 
+      {incident.id != null && Number.isFinite(incident.id) ? (
+        <div data-testid="incident-detail-connections">
+          <Entity360Strip entityType="incident" entityId={incident.id} requiresSatellites />
+        </div>
+      ) : null}
+
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex items-start gap-4">
@@ -1005,6 +1052,17 @@ export default function IncidentDetail() {
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
               </Button>
+              <CaseLifecycleControls
+                caseType="incident"
+                caseId={incident.id}
+                status={incident.status}
+                onClose={handleCloseCase}
+                onReopen={handleReopenCase}
+                onOpenActions={() => navigate(capaHref)}
+                closeDialogOpen={showCloseDialog}
+                onCloseDialogOpenChange={setShowCloseDialog}
+                testIdPrefix="incident"
+              />
               <CaseCapaHeaderButton
                 sourceType="incident"
                 actionsCount={actionsLoadFailed ? 0 : actions.length}
@@ -1060,6 +1118,12 @@ export default function IncidentDetail() {
           {witnessSaveError}
         </FormNotice>
       ) : null}
+
+      <IncidentFraSignificantChangePanel
+        key={incident.id}
+        incident={incident}
+        flagEnabled={complianceScheduleEnabled}
+      />
 
       <CaseSummaryRail
         items={[
@@ -1493,18 +1557,26 @@ export default function IncidentDetail() {
                           </div>
                         </div>
                         <div>
-                          <label
-                            htmlFor="incident-people-involved"
-                            className="text-sm font-medium text-muted-foreground"
-                          >
-                            {t('incidents.detail.people_involved', 'Person involved')}
-                          </label>
-                          <Input
+                          <PersonNameField
                             id="incident-people-involved"
                             className="mt-1"
-                            value={editForm.people_involved || ''}
-                            onChange={(e) =>
-                              setEditForm({ ...editForm, people_involved: e.target.value })
+                            mode="hybrid"
+                            lang={i18n?.language}
+                            label={t('incidents.detail.people_involved', 'Person involved')}
+                            testId="incident-people-involved"
+                            value={
+                              (editForm.people_involved ?? '').trim()
+                                ? {
+                                    displayName: editForm.people_involved ?? '',
+                                    engineerId: null,
+                                  }
+                                : null
+                            }
+                            onChange={(next) =>
+                              setEditForm({
+                                ...editForm,
+                                people_involved: next?.displayName ?? '',
+                              })
                             }
                           />
                         </div>
@@ -1757,7 +1829,9 @@ export default function IncidentDetail() {
                     <div>
                       <p className="text-sm text-muted-foreground">Impact</p>
                       <p className="font-medium text-foreground">
-                        {incidentSubmission?.has_injuries ? 'Injury reported' : 'No injury flagged'}
+                        {submissionFlaggedInjury(incidentSubmission?.has_injuries)
+                          ? 'Injury reported'
+                          : 'No injury flagged'}
                       </p>
                       <p className="text-xs text-muted-foreground">{medicalAssistance}</p>
                     </div>

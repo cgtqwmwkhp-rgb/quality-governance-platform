@@ -1,0 +1,307 @@
+{
+  "spec_ref": "qgp-requirement-axes",
+  "version_label": "1.0",
+  "notes": [
+    "Keys are derived as {framework}-{clause_number} via TrapGuard.clause_key \u2014 never authored.",
+    "UVDB axis is derived at runtime from src.domain.uvdb.protocol_b2_v118.UVDB_B2_SECTIONS (not duplicated here).",
+    "ISO 22301 lives in ALL_CLAUSES, not this file.",
+    "Alignment edition rows win on key collision (IIP 3 / IIP 7).",
+    "No Constructionline axis."
+  ],
+  "axes": {
+    "ce": {
+      "standard_code": "CYBER_ESSENTIALS",
+      "source_ref": "NCSC Cyber Essentials Requirements for IT Infrastructure",
+      "source_url": "https://www.ncsc.gov.uk/cyberessentials/overview",
+      "source_version": "current",
+      "numbering_source": "platform",
+      "content_status": "loaded",
+      "rows": [
+        {
+          "clause_number": "firewalls",
+          "title": "Firewalls",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "secure_configuration",
+          "title": "Secure configuration",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "user_access_control",
+          "title": "User access control",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "malware_protection",
+          "title": "Malware protection",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "patch_management",
+          "title": "Security update management",
+          "level": 1,
+          "content_status": "loaded"
+        }
+      ]
+    },
+    "cep": {
+      "standard_code": "CYBER_ESS_PLUS",
+      "source_ref": "NCSC Cyber Essentials Plus test specification",
+      "source_url": "https://www.ncsc.gov.uk/cyberessentials/overview",
+      "source_version": "current",
+      "numbering_source": "platform",
+      "content_status": "loaded",
+      "rows": [
+        {
+          "clause_number": "firewalls",
+          "title": "Firewalls (Plus verified)",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "secure_configuration",
+          "title": "Secure configuration (Plus verified)",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "user_access_control",
+          "title": "User access control (Plus verified)",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "malware_protection",
+          "title": "Malware protection (Plus verified)",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "patch_management",
+          "title": "Security update management (Plus verified)",
+          "level": 1,
+          "content_status": "loaded"
+        }
+      ]
+    },
+    "chas": {
+      "standard_code": "CHAS_CAS",
+      "source_ref": "Common Assessment Standard (CAS) question themes \u2014 provisional until publisher pin",
+      "source_url": "https://www.chas.co.uk/",
+      "source_version": "provisional",
+      "numbering_source": "platform",
+      "content_status": "provisional",
+      "rows": [
+        {
+          "clause_number": "CHAS 1",
+          "title": "Organisation identity and contact",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "CHAS 2",
+          "title": "Health and safety policy and arrangements",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "CHAS 3",
+          "title": "Risk assessment and method statements",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "CHAS 4",
+          "title": "Training, competence and supervision",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "CHAS 5",
+          "title": "Incident reporting and investigation",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "CHAS 6",
+          "title": "Work equipment and plant",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "CHAS 7",
+          "title": "Subcontractor and supply-chain control",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "CHAS 8",
+          "title": "Monitoring, audit and continual improvement",
+          "level": 1,
+          "content_status": "provisional"
+        }
+      ]
+    },
+    "ssip": {
+      "standard_code": "SSIP_CORE",
+      "source_ref": "SSIP Core Criteria themes \u2014 provisional until publisher pin",
+      "source_url": "https://ssip.org.uk/",
+      "source_version": "provisional",
+      "numbering_source": "platform",
+      "content_status": "provisional",
+      "rows": [
+        {
+          "clause_number": "SSIP 1",
+          "title": "Health and safety policy",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "SSIP 2",
+          "title": "Arrangements for planning and organising",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "SSIP 3",
+          "title": "Risk assessment",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "SSIP 4",
+          "title": "Training and competence",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "SSIP 5",
+          "title": "Workforce engagement",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "SSIP 6",
+          "title": "Accident and incident investigation",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "SSIP 7",
+          "title": "Monitoring and review",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "SSIP 8",
+          "title": "CDM / construction duties where applicable",
+          "level": 1,
+          "content_status": "provisional"
+        }
+      ]
+    },
+    "iip": {
+      "standard_code": "IIP_2018",
+      "source_ref": "We invest in people \u2014 Standard indicators",
+      "source_url": "https://www.investorsinpeople.com/",
+      "source_version": "2018-framework",
+      "numbering_source": "source",
+      "content_status": "loaded",
+      "rows": [
+        {
+          "clause_number": "IIP 1",
+          "title": "Leading and inspiring people",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "IIP 2",
+          "title": "Living the organisation's values and behaviours",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "IIP 3",
+          "title": "Empowering and involving people",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "IIP 4",
+          "title": "Managing performance",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "IIP 5",
+          "title": "Recognising and rewarding high performance",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "IIP 6",
+          "title": "Structuring work",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "IIP 7",
+          "title": "Building capability",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "IIP 8",
+          "title": "Delivering continuous improvement",
+          "level": 1,
+          "content_status": "loaded"
+        },
+        {
+          "clause_number": "IIP 9",
+          "title": "Creating sustainable success",
+          "level": 1,
+          "content_status": "loaded"
+        }
+      ]
+    },
+    "pm": {
+      "standard_code": "PLANET_MARK",
+      "source_ref": "Planet Mark certification themes (from governed knowledge PLANET_MARK_THEMES)",
+      "source_url": "https://www.planetmark.com/",
+      "source_version": "GHG-themes",
+      "numbering_source": "platform",
+      "content_status": "provisional",
+      "rows": [
+        {
+          "clause_number": "scope1",
+          "title": "Scope 1 direct emissions",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "scope2",
+          "title": "Scope 2 purchased energy",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "scope3",
+          "title": "Scope 3 value-chain emissions",
+          "level": 1,
+          "content_status": "provisional"
+        },
+        {
+          "clause_number": "reduction",
+          "title": "Carbon reduction plan and targets",
+          "level": 1,
+          "content_status": "provisional"
+        }
+      ]
+    }
+  }
+}

@@ -5,8 +5,8 @@ import math
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field, model_validator
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,8 +29,8 @@ from src.api.schemas.investigation import (
     SourceRecordItem,
     SourceRecordsResponse,
 )
-from src.api.utils.tenant import require_tenant_id
-from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, TenantAccessError, ValidationError
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
@@ -64,6 +64,36 @@ class ClosureReasonCode:
     MISSING_CONCLUSION = "MISSING_CONCLUSION"
 
 
+async def _validate_investigation_user_ref(
+    db: AsyncSession,
+    user_id: int,
+    tenant_id: int | None,
+    *,
+    field_name: str,
+) -> User:
+    """Ensure an investigation assignee/reviewer id is an active user in-tenant (PX-168b).
+
+    PATCH previously ``setattr`` the id with no existence or tenancy check — the same
+    hole actions closed for ``owner_id``. Clearing the field (``None``) is allowed by
+    the caller and never reaches this helper.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise BadRequestError(
+            f"No active user found with id {user_id}",
+            code="INVESTIGATION_USER_NOT_FOUND",
+            details={"field": field_name, "user_id": user_id},
+        )
+    if tenant_id is not None and user.tenant_id != tenant_id:
+        raise BadRequestError(
+            f"User {user_id} is not in this tenant",
+            code="INVESTIGATION_USER_WRONG_TENANT",
+            details={"field": field_name, "user_id": user_id, "tenant_id": tenant_id},
+        )
+    return user
+
+
 def _missing_items_to_payload(validation: Any) -> list[dict]:
     """Serialize named closure blockers, tolerating older result shapes."""
     payload: list[dict] = []
@@ -84,7 +114,15 @@ def _missing_items_to_payload(validation: Any) -> list[dict]:
 
 
 def _user_can_access_investigation(user: Any, investigation: InvestigationRun) -> bool:
-    """Authorization helper for investigation-scoped read endpoints."""
+    """Named-involvement check for investigation-scoped read endpoints.
+
+    This answers "may this caller see this run *within their own tenant*". It is
+    deliberately tenant-blind: ``_assert_investigation_tenant`` establishes the
+    tenant first, so ``investigations:view_all`` here means every investigation
+    in the caller's tenant, which is what its siblings in the four case
+    registers mean (``rta:view_all`` and friends are only ever consulted after a
+    tenant-scoped fetch, to widen a reporter-email restriction).
+    """
     if getattr(user, "is_superuser", False):
         return True
     has_permission = getattr(user, "has_permission", None)
@@ -99,15 +137,86 @@ def _user_can_access_investigation(user: Any, investigation: InvestigationRun) -
     }
 
 
+def _assert_investigation_tenant(investigation: InvestigationRun, current_user: Any) -> int:
+    """Refuse any by-id access to a run outside the caller's tenant; return that tenant.
+
+    Every route that reaches an ``InvestigationRun`` by id must pass through
+    here, read or write. Before this existed the read path selected by bare id
+    and then asked only about roles, so a holder of ``investigations:view_all``
+    could read another tenant's run, and the write path checked nothing beyond
+    its permission gate.
+
+    Investigations are tenant-local, including for app superusers, so there is
+    deliberately no superuser branch:
+
+    * ``investigation_runs`` carries a FORCE RLS ``tenant_isolation`` policy
+      (20260222_add_rls_policies, 20260710_force_rls) whose USING clause is
+      ``tenant_id = current_setting('app.current_tenant_id')`` with no superuser
+      exemption. Per ``TenantContextMiddleware``, an app superuser with a tenant
+      still gets that GUC bound to *their own* tenant; cross-tenant admin is a
+      BYPASSRLS database-role capability, not an application flag.
+    * #1389's ``resolve_investigation_closure_scope`` already refuses a
+      superuser's cross-tenant closure. A read or write that crossed where the
+      close refuses would be #1382's B-2 read/write asymmetry in reverse.
+    * The investigation paths that were already scoped —
+      ``CAPAService.create_capa_for_investigation``,
+      ``link_asset_to_investigation`` (SEC-01), ``from-record``,
+      ``source-coverage`` — all scope unconditionally. Unlike the four case
+      registers there is no ``skip_tenant_check`` idiom anywhere in the
+      investigation services to honour.
+
+    A run whose ``tenant_id`` is missing is refused rather than guessed at: the
+    column is NOT NULL, so such a row is corrupt and no caller can be shown to
+    be entitled to it.
+    """
+    caller_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    record_tenant_id = getattr(investigation, "tenant_id", None)
+    if record_tenant_id is None or int(record_tenant_id) != int(caller_tenant_id):
+        logger.warning(
+            "investigation_cross_tenant_access_refused",
+            extra={
+                "investigation_id": getattr(investigation, "id", None),
+                "reference_number": getattr(investigation, "reference_number", None),
+                "record_tenant_id": record_tenant_id,
+                "caller_tenant_id": caller_tenant_id,
+            },
+        )
+        raise TenantAccessError(
+            "This investigation belongs to another organisation.",
+            details={"investigation_id": getattr(investigation, "id", None)},
+        )
+    return caller_tenant_id
+
+
+async def _load_investigation_or_404(investigation_id: int, db: AsyncSession) -> InvestigationRun:
+    """Fetch a run by id with no authorization. Callers must gate what they get back.
+
+    Split out only so ``add_comment`` can report a corrupt (tenant-less) run
+    under its own write-specific reason before authorizing against it.
+    """
+    result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == investigation_id))
+    investigation = result.scalar_one_or_none()
+    if not investigation:
+        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
+    return investigation
+
+
 async def _get_investigation_or_404(
     investigation_id: int,
     db: AsyncSession,
     current_user: Any,
 ) -> InvestigationRun:
-    """Load investigation and enforce not-found semantics for unauthorized users."""
-    result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == investigation_id))
-    investigation = result.scalar_one_or_none()
-    if not investigation or not _user_can_access_investigation(current_user, investigation):
+    """Load a run, refusing another tenant's outright and hiding the rest as 404.
+
+    Order matters: a cross-tenant run is refused under the shared
+    ``TENANT_ACCESS_DENIED`` code #1389 introduced, *before* roles are consulted,
+    so no permission can be mistaken for a licence to leave the tenant. Only
+    then does a run the caller is not named on become a 404, which is the
+    existing in-tenant contract these endpoints are documented and tested for.
+    """
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    _assert_investigation_tenant(investigation, current_user)
+    if not _user_can_access_investigation(current_user, investigation):
         raise NotFoundError(f"Investigation with ID {investigation_id} not found")
     return investigation
 
@@ -145,18 +254,28 @@ async def _collect_readiness_reasons(
     *,
     investigation: InvestigationRun,
     investigation_id: int,
-    tenant_id: int,
+    current_user: Any,
     gate: str,
 ) -> tuple[list[str], list, list]:
     """Collect completion/closure readiness reasons (shared by GET + PATCH gates).
 
     ``gate`` is ``complete`` (status → completed) or ``close`` (status → closed).
     Returns ``(reasons, open_work, missing_items)``.
+
+    The probe scope is derived from the run here, at the one point both the GET
+    and the PATCH gate pass through, rather than being handed in by each caller —
+    that is what stops the two from ever being given different tenants.
     """
     from src.domain.services.investigation_closure_helpers import (
         CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
         collect_summary_readiness_blockers,
         fetch_open_work_for_investigation,
+        resolve_investigation_closure_scope,
+    )
+
+    tenant_id = resolve_investigation_closure_scope(
+        investigation,
+        caller_tenant_id=getattr(current_user, "tenant_id", None),
     )
 
     reasons: list[str] = []
@@ -254,14 +373,14 @@ async def _collect_closure_reasons(
     *,
     investigation: InvestigationRun,
     investigation_id: int,
-    tenant_id: int,
+    current_user: Any,
 ) -> tuple[list[str], list]:
     """Collect closure readiness reasons (same contract as GET /closure-validation)."""
     reasons, open_work, _missing = await _collect_readiness_reasons(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
+        current_user=current_user,
         gate="close",
     )
     return reasons, open_work
@@ -280,12 +399,11 @@ async def _ensure_investigation_ready_for_status(
     """Raise BadRequestError(400) when the run cannot reach completed/closed."""
     from src.domain.services.investigation_closure_helpers import open_work_to_payload
 
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     reasons, open_work, missing_items = await _collect_readiness_reasons(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
+        current_user=current_user,
         gate=gate,
     )
     reasons, open_work, override_meta = _apply_open_work_override(
@@ -806,6 +924,76 @@ async def get_investigation_packs(
 
 
 @router.get(
+    "/{investigation_id:int}/packs/{pack_id:int}/pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}, "description": "Branded customer pack PDF"}},
+)
+async def download_customer_pack_pdf(
+    investigation_id: int,
+    pack_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Response:
+    """Render a previously generated customer pack as a branded PDF (PX-143).
+
+    Renders the stored, already-redacted pack payload — this endpoint never
+    re-reads the investigation, so it cannot leak content the pack omitted.
+    """
+    from src.domain.models.tenant import Tenant
+    from src.domain.services.investigation_pack_pdf import InvestigationPackPdfService
+
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+
+    result = await db.execute(
+        select(InvestigationCustomerPack).where(
+            InvestigationCustomerPack.id == pack_id,
+            InvestigationCustomerPack.investigation_id == investigation_id,
+        )
+    )
+    pack = result.scalar_one_or_none()
+    if pack is None:
+        raise NotFoundError(f"Customer pack {pack_id} not found for investigation {investigation_id}")
+
+    organisation_name: Optional[str] = None
+    primary_color: Optional[str] = None
+    if investigation.tenant_id is not None:
+        tenant = await db.scalar(select(Tenant).where(Tenant.id == investigation.tenant_id))
+        if tenant is not None:
+            organisation_name = tenant.name
+            primary_color = tenant.primary_color
+
+    payload = {
+        "pack_uuid": pack.pack_uuid,
+        "audience": pack.audience.value if hasattr(pack.audience, "value") else str(pack.audience),
+        "investigation_reference": investigation.reference_number,
+        "investigation_title": investigation.title,
+        "generated_at": pack.created_at.isoformat() if pack.created_at else None,
+        "checksum_sha256": pack.checksum_sha256,
+        "content": pack.content,
+        "redaction_log": pack.redaction_log,
+        "included_assets": pack.included_assets,
+    }
+
+    service = InvestigationPackPdfService()
+    try:
+        pdf_bytes = service.build_pdf_bytes(
+            payload,
+            organisation_name=organisation_name,
+            primary_color=primary_color,
+        )
+    except RuntimeError as exc:
+        # Fail loudly rather than handing back an empty or half-rendered file.
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    filename = service.pdf_filename(investigation.reference_number, pack.pack_uuid)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
     "/{investigation_id:int}/closure-validation",
     response_model=InvestigationClosureValidationResponse,
 )
@@ -818,20 +1006,19 @@ async def get_closure_validation(
     from src.domain.services.investigation_closure_helpers import open_work_to_payload
 
     investigation = await _get_investigation_or_404(investigation_id, db, current_user)
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
 
     close_reasons, open_work, missing_items = await _collect_readiness_reasons(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
+        current_user=current_user,
         gate="close",
     )
     complete_reasons, _complete_open_work, complete_missing = await _collect_readiness_reasons(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
+        current_user=current_user,
         gate="complete",
     )
 
@@ -879,8 +1066,11 @@ async def list_investigations(
     """
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    # Build query
-    query = select(InvestigationRun)
+    # Build query, scoped to the caller's tenant. Fail-closed and unconditional:
+    # the register is tenant-local (see _assert_investigation_tenant), and a
+    # caller with no tenant must match nothing rather than everything.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    query = apply_tenant_filter(select(InvestigationRun), InvestigationRun, tenant_id)
 
     # Apply filters
     if entity_type is not None:
@@ -939,14 +1129,8 @@ async def get_investigation(
     """Get a specific investigation run by ID."""
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
-
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
     return await _investigation_to_response(db, investigation, tenant_id=tenant_id)
 
 
@@ -998,15 +1182,27 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
     """
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    # Get existing investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
+    # Get existing investigation. The tenant gate runs before anything is read
+    # off the record or written to it, so a refused edit leaves it untouched.
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
 
     update_data = investigation_data.model_dump(exclude_unset=True)
+
+    # PX-168b: refuse lead/reviewer ids that do not resolve to an active tenant user.
+    for field_name in ("assigned_to_user_id", "reviewer_user_id"):
+        if field_name not in update_data:
+            continue
+        candidate = update_data[field_name]
+        if candidate is None:
+            continue
+        await _validate_investigation_user_ref(
+            db,
+            int(candidate),
+            tenant_id,
+            field_name=field_name,
+        )
+
     override_meta: dict | None = None
     new_status = update_data.get("status")
     if new_status in {"completed", "closed"}:
@@ -1050,6 +1246,10 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
             setattr(investigation, "completed_at", datetime.utcnow())
         elif investigation_data.status == "closed" and not investigation.closed_at:
             setattr(investigation, "closed_at", datetime.utcnow())
+        elif investigation_data.status != "closed" and investigation.closed_at:
+            # Reopening: the closure stamp must not outlive the closed status,
+            # or a reopened run still reads as closed to every report.
+            setattr(investigation, "closed_at", None)
 
     # Promote lessons narrative onto the linked case when present and case field empty.
     raw_data = update_data.get("data") if "data" in update_data else investigation.data
@@ -1113,7 +1313,6 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
     await db.commit()
     await db.refresh(investigation)
 
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     return await _investigation_to_response(db, investigation, tenant_id=tenant_id)
 
 
@@ -1169,19 +1368,36 @@ async def create_investigation_from_record(
     # Parse source type enum
     source_type_enum = AssignedEntityType(source_type)
 
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+
     # === DUPLICATE CHECK: Return 409 if investigation already exists ===
-    existing_query = select(InvestigationRun).where(
-        InvestigationRun.assigned_entity_type == source_type_enum,
-        InvestigationRun.assigned_entity_id == source_id,
+    # Tenant-scoped: another tenant's investigation must never block this one.
+    existing_query = (
+        select(InvestigationRun)
+        .where(
+            InvestigationRun.assigned_entity_type == source_type_enum,
+            InvestigationRun.assigned_entity_id == source_id,
+            InvestigationRun.tenant_id == tenant_id,
+        )
+        .order_by(InvestigationRun.id.asc())
     )
     existing_result = await db.execute(existing_query)
-    existing_investigation = existing_result.scalar_one_or_none()
+    existing_investigation = existing_result.scalars().first()
 
     if existing_investigation:
-        raise ConflictError(f"An investigation already exists for this {source_type.replace('_', ' ')}")
+        raise ConflictError(
+            f"An investigation already exists for this {source_type.replace('_', ' ')}",
+            code="INV_ALREADY_EXISTS",
+            details={
+                "existing_investigation_id": int(existing_investigation.id),
+                "existing_reference_number": existing_investigation.reference_number,
+                "source_type": source_type,
+                "source_id": source_id,
+            },
+        )
 
-    # Get source record
-    record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id)
+    # Get source record (tenant-scoped — never investigate another tenant's record)
+    record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id, tenant_id=tenant_id)
     if error:
         raise NotFoundError(error)
 
@@ -1235,7 +1451,7 @@ async def create_investigation_from_record(
         mapping_log=mapping_log,
         version=1,
         reference_number=reference_number,
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -1266,6 +1482,100 @@ async def create_investigation_from_record(
     await db.refresh(investigation)
 
     return investigation
+
+
+# Source registers that can be turned into an investigation. Keyed by AssignedEntityType value.
+_SOURCE_RECORD_MODELS: dict[str, str] = {
+    AssignedEntityType.ROAD_TRAFFIC_COLLISION.value: "src.domain.models.rta:RoadTrafficCollision",
+    AssignedEntityType.REPORTING_INCIDENT.value: "src.domain.models.incident:Incident",
+    AssignedEntityType.COMPLAINT.value: "src.domain.models.complaint:Complaint",
+    AssignedEntityType.NEAR_MISS.value: "src.domain.models.near_miss:NearMiss",
+}
+
+
+def _resolve_source_record_model(source_type: str) -> Optional[Any]:
+    """Import the ORM model backing a source register, or None when unsupported."""
+    model_path = _SOURCE_RECORD_MODELS.get(source_type)
+    if not model_path:
+        return None
+    module_path, class_name = model_path.split(":")
+    module = __import__(module_path, fromlist=[class_name])
+    return getattr(module, class_name)
+
+
+class SourceCoverageItem(BaseModel):
+    """Investigation coverage for a single source register."""
+
+    source_type: str
+    total: int
+    investigated: int
+    not_investigated: int
+
+
+class SourceCoverageResponse(BaseModel):
+    """How much of each source register actually has an investigation attached."""
+
+    items: list[SourceCoverageItem]
+    total: int
+    investigated: int
+    not_investigated: int
+
+
+@router.get("/source-coverage", response_model=SourceCoverageResponse)
+async def get_source_coverage(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> SourceCoverageResponse:
+    """Count source records with and without an investigation, per register.
+
+    Exists so the Investigations list can state plainly how many real incidents
+    (and other source records) have no investigation, instead of letting a short
+    list of test investigations imply the register is covered.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+
+    items: list[SourceCoverageItem] = []
+    for source_type in _SOURCE_RECORD_MODELS:
+        model_class = _resolve_source_record_model(source_type)
+        if model_class is None:
+            continue
+        entity_type = AssignedEntityType(source_type)
+
+        total = (
+            await db.scalar(select(func.count()).select_from(model_class).where(model_class.tenant_id == tenant_id))
+        ) or 0
+
+        investigated_ids = select(InvestigationRun.assigned_entity_id).where(
+            InvestigationRun.assigned_entity_type == entity_type,
+            InvestigationRun.tenant_id == tenant_id,
+            InvestigationRun.assigned_entity_id.isnot(None),
+        )
+        investigated = (
+            await db.scalar(
+                select(func.count())
+                .select_from(model_class)
+                .where(
+                    model_class.tenant_id == tenant_id,
+                    model_class.id.in_(investigated_ids),
+                )
+            )
+        ) or 0
+
+        items.append(
+            SourceCoverageItem(
+                source_type=source_type,
+                total=int(total),
+                investigated=int(investigated),
+                not_investigated=max(int(total) - int(investigated), 0),
+            )
+        )
+
+    return SourceCoverageResponse(
+        items=items,
+        total=sum(i.total for i in items),
+        investigated=sum(i.investigated for i in items),
+        not_investigated=sum(i.not_investigated for i in items),
+    )
 
 
 @router.get("/source-records", response_model=SourceRecordsResponse)
@@ -1308,24 +1618,14 @@ async def list_source_records(
     except ValueError:
         raise BadRequestError(f"Invalid source type: {source_type}")
 
-    # Import models dynamically based on source type
-    entity_models = {
-        AssignedEntityType.ROAD_TRAFFIC_COLLISION.value: "src.domain.models.rta:RoadTrafficCollision",
-        AssignedEntityType.REPORTING_INCIDENT.value: "src.domain.models.incident:Incident",
-        AssignedEntityType.COMPLAINT.value: "src.domain.models.complaint:Complaint",
-        AssignedEntityType.NEAR_MISS.value: "src.domain.models.near_miss:NearMiss",
-    }
-
-    model_path = entity_models.get(source_type)
-    if not model_path:
+    model_class = _resolve_source_record_model(source_type)
+    if model_class is None:
         raise BadRequestError(f"Source type {source_type} is not supported")
 
-    module_path, class_name = model_path.split(":")
-    module = __import__(module_path, fromlist=[class_name])
-    model_class = getattr(module, class_name)
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
 
-    # Build base query for source records
-    base_query = select(model_class)
+    # Build base query for source records (tenant-scoped)
+    base_query = select(model_class).where(model_class.tenant_id == tenant_id)
 
     # Apply search filter if provided
     if q:
@@ -1361,6 +1661,7 @@ async def list_source_records(
     inv_query = select(InvestigationRun).where(
         InvestigationRun.assigned_entity_type == source_type_enum,
         InvestigationRun.assigned_entity_id.in_(source_ids),
+        InvestigationRun.tenant_id == tenant_id,
     )
     inv_result = await db.execute(inv_query)
     existing_investigations = {inv.assigned_entity_id: inv for inv in inv_result.scalars().all()}
@@ -1429,12 +1730,8 @@ async def autosave_investigation(
     request_id = "N/A"
 
     # Get investigation with version check
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation {investigation_id} not found")
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    _assert_investigation_tenant(investigation, current_user)
 
     # Optimistic locking: check version
     if investigation.version != version:
@@ -1465,7 +1762,13 @@ async def autosave_investigation(
 
 
 class AddCommentRequest(BaseModel):
-    """Request body for adding a comment to an investigation."""
+    """Request body for adding a comment to an investigation.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the comment being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     content: str = Field(..., min_length=1, max_length=10000)
     body: Optional[str] = Field(None, exclude=True)
@@ -1503,16 +1806,22 @@ async def add_comment(
 
     request_id = "N/A"
 
-    # Validate investigation exists within the caller's tenant scope.
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    # Validate investigation exists within the caller's tenant scope. A caller
+    # with no tenant learns nothing about the record, so that is refused before
+    # it is even loaded. The record integrity check then keeps its own
+    # write-specific reason — this route has to copy the run's tenant onto a new
+    # row, so a run without one is a bad record rather than a bad caller — and
+    # cross-tenant refuses under the shared code, where it used to answer 404.
+    require_tenant_id(getattr(current_user, "tenant_id", None))
+    investigation = await _load_investigation_or_404(investigation_id, db)
     if investigation.tenant_id is None:
         raise ValidationError(
             "tenant_id is required to create an investigation comment",
             details={"investigation_id": investigation.id},
         )
-    if investigation.tenant_id != tenant_id:
-        raise NotFoundError(f"Investigation {investigation_id} not found")
+    _assert_investigation_tenant(investigation, current_user)
+    if not _user_can_access_investigation(current_user, investigation):
+        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
     # Validate parent comment if provided
     if payload.parent_comment_id:
@@ -1581,18 +1890,14 @@ async def approve_investigation(
     """Approve or reject an investigation.
 
     Moves investigation to COMPLETED (approved) or back to IN_PROGRESS (rejected).
+    Approval uses the same completion readiness gate as PATCH status=completed
+    (PX-133): lead + start (and remaining checklist) must already be satisfied.
     """
     from src.domain.services.investigation_service import InvestigationService
 
-    request_id = "N/A"
-
     # Get investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation {investigation_id} not found")
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
 
     # Check status allows approval
     if investigation.status not in (
@@ -1600,6 +1905,16 @@ async def approve_investigation(
         InvestigationStatus.IN_PROGRESS,
     ):
         raise BadRequestError(f"Cannot approve investigation in status {investigation.status.value}")
+
+    if approved:
+        # Same gate as PATCH → completed so approve cannot bypass lead/start checks.
+        await _ensure_investigation_ready_for_status(
+            db,
+            investigation=investigation,
+            investigation_id=investigation_id,
+            current_user=current_user,
+            gate="complete",
+        )
 
     old_status = investigation.status
 
@@ -1626,7 +1941,7 @@ async def approve_investigation(
         investigation.status.value if hasattr(investigation.status, "value") else str(investigation.status)
     )
 
-    # Create revision event
+    # Create revision event (PX-141 — approval/rejection timeline coverage)
     await InvestigationService.create_revision_event(
         db=db,
         investigation=investigation,
@@ -1640,7 +1955,7 @@ async def approve_investigation(
     await db.commit()
     await db.refresh(investigation)
 
-    return investigation
+    return await _investigation_to_response(db, investigation, tenant_id=tenant_id)
 
 
 @router.post(
@@ -1672,13 +1987,10 @@ async def generate_customer_pack(
     except ValueError:
         raise BadRequestError(f"Invalid audience: {audience}")
 
-    # Get investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation {investigation_id} not found")
+    # Get investigation. A pack is the exportable copy of the record, so this is
+    # a read of it and is gated exactly as the detail read is.
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    _assert_investigation_tenant(investigation, current_user)
 
     pending = InvestigationService.pending_customer_omits(investigation)
     if pending:

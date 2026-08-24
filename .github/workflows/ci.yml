@@ -15,7 +15,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Trojan Source Detection (Bidi/Invisible Unicode)
         run: |
@@ -75,7 +75,7 @@ jobs:
           EOF
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -84,6 +84,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Check code formatting (black)
@@ -110,10 +111,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Lint workflows
-        uses: rhysd/actionlint@v1.7.10
+        uses: rhysd/actionlint@v1.7.12
         with:
           args: >-
             -ignore "shellcheck reported issue in this script: SC2086:"
@@ -127,7 +128,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install jq
         run: |
@@ -144,10 +145,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
 
@@ -162,7 +163,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Check for forbidden configuration strings
         run: |
@@ -292,10 +293,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -304,6 +305,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run fail-fast proof tests (BLOCKING)
@@ -319,10 +321,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -331,6 +333,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run unit tests
@@ -339,7 +342,7 @@ jobs:
           # EG-05: updated to 48% after planet-mark route expansion (48.41% actual); full-suite 70% target in pyproject.toml
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           file: ./coverage.xml
           flags: unit
@@ -360,7 +363,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v7
@@ -419,10 +422,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -431,7 +434,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
           pip install cyclonedx-bom
 
       - name: Generate SBOM (CycloneDX)
@@ -466,54 +469,128 @@ jobs:
           echo "[OK] SBOM published to GitHub Release: sbom-latest (sha=${GITHUB_SHA::8})"
 
   lockfile-check:
-    name: Lockfile Freshness Check
+    name: Lockfile Validity Check
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: requirements.txt
 
-      - name: Install pip-tools
-        run: python -m pip install --upgrade pip pip-tools
+      - name: Install tooling
+        run: python -m pip install --upgrade pip pip-tools packaging
 
-      - name: Verify lockfile is fresh
+      # Blocking. Asserts the properties a lockfile exists to provide: every
+      # declared dependency resolved, every pin inside its declared range, every
+      # entry hash-verified. Deterministic — it reads two files in the repository
+      # and never contacts an index, so the same commit always gets the same answer.
+      - name: Verify lockfile is a valid lock for requirements.txt
+        run: python scripts/verify_lockfile.py
+
+      # Advisory only. This used to be the blocking check, and because 32 of the
+      # declared dependencies are ranges, pip-compile resolved them to whatever
+      # PyPI was serving at that moment — so any upstream release turned a
+      # perfectly good lockfile "stale" and failed every open pull request. It
+      # broke four times in one night on fastapi alone, and each unblock meant
+      # regenerating the lock inside an unrelated pull request, which is an
+      # unreviewed dependency bump riding along with a change about something
+      # else. Dependabot is the reviewed channel for upgrades. Keeping the
+      # comparison as a warning preserves the visibility without the false red.
+      - name: Report available upgrades (non-blocking)
+        continue-on-error: true
         run: |
-          if [ ! -f requirements.lock ]; then
-            echo "[FAIL] requirements.lock is required and missing."
-            echo "[INFO] Run: ./scripts/generate_lockfile.sh"
-            exit 1
+          pip-compile requirements.txt -o requirements.lock.check \
+            --no-header --strip-extras --allow-unsafe --generate-hashes --quiet
+          if diff -q requirements.lock requirements.lock.check > /dev/null 2>&1; then
+            echo "[OK] requirements.lock also matches the newest resolvable set."
+            exit 0
           fi
+          echo "[INFO] Newer versions are available within the declared ranges:"
+          diff requirements.lock requirements.lock.check \
+            | grep -E '^[<>].*==' | grep -v -- '--hash' | sort -u | head -40 || true
+          {
+            echo "### Dependency upgrades available"
+            echo ""
+            echo "The lockfile is valid, but newer versions exist inside the declared ranges."
+            echo "These are handled by Dependabot and are **not** a reason to regenerate the"
+            echo "lockfile inside an unrelated pull request."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-          pip-compile requirements.txt -o requirements.lock.check --no-header --strip-extras --allow-unsafe --generate-hashes --quiet
-          if ! diff -q requirements.lock requirements.lock.check > /dev/null 2>&1; then
-            echo "[WARN] requirements.lock has minor drift (likely upstream releases)."
-            echo "[INFO] Checking if only comment/hash changes (acceptable drift)..."
-            # Fail only if package names or versions differ (not just comments/hashes)
-            ADDED=$(diff requirements.lock requirements.lock.check | grep "^>" | grep -v "^>.*#" | grep -v "^> *--hash" | grep -c "==" || true)
-            REMOVED=$(diff requirements.lock requirements.lock.check | grep "^<" | grep -v "^<.*#" | grep -v "^< *--hash" | grep -c "==" || true)
-            if [ "$ADDED" -gt 0 ] || [ "$REMOVED" -gt 0 ]; then
-              echo "[FAIL] requirements.lock has package version changes. Run: ./scripts/generate_lockfile.sh"
-              diff requirements.lock requirements.lock.check || true
-              exit 1
-            fi
-            echo "[OK] requirements.lock drift is comment/hash only (acceptable)"
-          else
-            echo "[OK] requirements.lock is up to date"
-          fi
-
-  integration-tests:
-    name: Integration Tests
+  # Every job that needs the application's dependencies now installs
+  # requirements.lock, which is hash-pinned, so a given commit is tested against
+  # a dependency set that can be named. Before this, 23 jobs re-resolved the
+  # ranges in requirements.txt at job time: a new upstream release changed what
+  # every open pull request was tested against with no commit anywhere.
+  dependency-integrity:
+    name: Dependency Install Integrity
     runs-on: ubuntu-latest
-    
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      # Deliberately no pip cache. The point of this job is to prove the
+      # lockfile installs from scratch on the runner platform, and a warm cache
+      # would hide a package that has no wheel for linux/x86_64 + cpython 3.11.
+      - name: Install the locked runtime set
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+
+      - name: Record the dependency set this commit was tested against
+        run: |
+          python --version
+          pip --version
+          pip list --format=freeze > installed-from-lock.txt
+          echo "packages installed from the lockfile: $(wc -l < installed-from-lock.txt)"
+
+      # Reproduces the two-step install the test jobs use. Verified locally that
+      # layering the dev tooling uninstalls and upgrades nothing, but that was
+      # measured on macOS/arm64; this proves it on the platform CI actually runs.
+      - name: Layer the development tooling on top
+        run: pip install -r requirements-dev.txt
+
+      - name: Prove the installed environment still matches the lockfile
+        run: |
+          pytest tests/test_lockfile_environment_match.py \
+                 tests/test_dependency_workflow_pinning.py -v
+
+      # Release evidence: for an ISO-audited product "CI was green" has to be
+      # able to say green against what.
+      - name: Upload the installed dependency manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installed-dependency-manifest
+          path: installed-from-lock.txt
+          retention-days: 90
+
+  # Integration tests are sharded across matrix legs for wall-clock. Branch
+  # protection requires a check named exactly "Integration Tests". Matrix jobs
+  # would publish "Integration Tests (1)", "(2)", … and detach that required
+  # context — so shards use a different name, and a thin aggregator below keeps
+  # the exact required name and fails closed if any shard failed/cancelled.
+  integration-test-shards:
+    name: Integration Test Shard
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
     services:
       postgres:
         image: postgres:16
@@ -537,13 +614,13 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -552,6 +629,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run Alembic migrations
@@ -575,30 +653,184 @@ jobs:
         run: |
           python3 scripts/validate_quarantine.py
 
-      - name: Run integration tests
+      - name: Select shard files and run integration tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           REDIS_URL: redis://localhost:6379/0
           TESTING: "1"
+          SHARD: ${{ matrix.shard }}
+          SHARD_COUNT: "4"
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=43 --junit-xml=junit-integration.xml
-          # EG-05: maintained at 43% (actual integration coverage 43.48%; full-suite 70% target in pyproject.toml)
+          set -euo pipefail
+          # Deterministic round-robin over sorted test file paths — no pytest-split /
+          # xdist dependency. File count balance is even; runtime balance is unknown
+          # until the first sharded CI run.
+          mapfile -t ALL_FILES < <(find tests/integration -name 'test_*.py' | LC_ALL=C sort)
+          SELECTED=()
+          for i in "${!ALL_FILES[@]}"; do
+            if (( (i % SHARD_COUNT) + 1 == SHARD )); then
+              SELECTED+=("${ALL_FILES[$i]}")
+            fi
+          done
+          echo "Shard ${SHARD}/${SHARD_COUNT}: ${#SELECTED[@]} of ${#ALL_FILES[@]} files"
+          printf '  %s\n' "${SELECTED[@]}"
+          if [ "${#SELECTED[@]}" -eq 0 ]; then
+            echo "::error::Shard ${SHARD} selected zero test files"
+            exit 1
+          fi
+          # Per-shard coverage cannot meet the suite floor; the aggregator combines
+          # .coverage data and enforces --fail-under=43 (EG-05).
+          pytest "${SELECTED[@]}" -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=0 --junit-xml=junit-integration.xml
+          mv .coverage ".coverage.shard${SHARD}"
 
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
+      - name: Upload shard coverage data
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-integration-${{ matrix.shard }}
+          path: .coverage.shard${{ matrix.shard }}
+          # Dotfiles are omitted unless this is set — without it the aggregator
+          # sees zero coverage artifacts and fails EG-05 combine.
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+        if: always()
+
+      - name: Upload shard JUnit XML
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-integration-tests-${{ matrix.shard }}
+          path: junit-integration.xml
+          retention-days: 30
+          if-no-files-found: warn
+        if: always()
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [integration-test-shards]
+    # always() so the required check named "Integration Tests" still reports when
+    # shards fail (a skipped required check can read as success to branch protection).
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Download shard JUnit artifacts
+        if: always()
+        uses: actions/download-artifact@v8
+        with:
+          pattern: junit-integration-tests-*
+          merge-multiple: true
+          path: junit-shards
+
+      - name: Merge JUnit XML for quality-trend
+        if: always()
+        run: |
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import re
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          # XML 1.0 illegal controls (pytest failure text can embed them and break ET.parse)
+          _ILLEGAL = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+          def _load_root(path: Path) -> ET.Element | None:
+              raw = path.read_bytes()
+              for attempt, data in enumerate((raw, _ILLEGAL.sub("", raw.decode("utf-8", "replace")).encode("utf-8"))):
+                  try:
+                      return ET.fromstring(data)
+                  except ET.ParseError as exc:
+                      print(f"JUnit parse attempt {attempt + 1} failed for {path.name}: {exc}", file=sys.stderr)
+              print(f"Skipping unparseable JUnit shard {path.name}", file=sys.stderr)
+              return None
+
+          shard_dir = Path("junit-shards")
+          files = sorted(shard_dir.glob("*.xml")) if shard_dir.is_dir() else []
+          root = ET.Element("testsuites")
+          merged = 0
+          if not files:
+              print("No shard JUnit files found; writing empty aggregate", file=sys.stderr)
+          else:
+              for path in files:
+                  parsed = _load_root(path)
+                  if parsed is None:
+                      continue
+                  if parsed.tag == "testsuites":
+                      for child in list(parsed):
+                          root.append(child)
+                  else:
+                      root.append(parsed)
+                  merged += 1
+          ET.ElementTree(root).write("junit-integration.xml", encoding="UTF-8", xml_declaration=True)
+          print(f"Merged {merged}/{len(files)} JUnit file(s) -> junit-integration.xml")
+          PY
+
+      - name: Upload merged JUnit XML (Stage 2.0)
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-integration-tests
+          path: junit-integration.xml
+          retention-days: 30
+          if-no-files-found: warn
+        if: always()
+
+      - name: Download shard coverage data
+        if: always()
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-integration-*
+          merge-multiple: true
+          path: coverage-shards
+
+      - name: Combine coverage and enforce EG-05 floor
+        if: always()
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install 'coverage>=7'
+          shopt -s nullglob
+          files=(coverage-shards/.coverage.*)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No shard coverage data to combine"
+            echo "Downloaded tree:"
+            find coverage-shards -type f -print 2>/dev/null || echo "(coverage-shards missing)"
+            exit 1
+          fi
+          cp "${files[@]}" .
+          coverage combine
+          # EG-05: integration floor stays 43%. Do not use bare `coverage xml` here —
+          # it inherits pyproject fail_under=70 (full-suite target) and fails after a
+          # successful 47% combine. Keep the global 70 floor intact for other jobs.
+          coverage xml -o coverage.xml --fail-under=0
+          coverage report --fail-under=43
+
+      - name: Upload combined coverage reports
+        uses: codecov/codecov-action@v7
         with:
           file: ./coverage.xml
           flags: integration
           name: codecov-umbrella
         if: always()
 
-      - name: Upload JUnit XML (Stage 2.0)
-        uses: actions/upload-artifact@v7
-        with:
-          name: junit-integration-tests
-          path: junit-integration.xml
-          retention-days: 30
+      - name: Fail closed if any shard failed or was cancelled
         if: always()
+        run: |
+          set -euo pipefail
+          result="${{ needs.integration-test-shards.result }}"
+          echo "integration-test-shards result: ${result}"
+          if [ "${result}" != "success" ]; then
+            echo "::error::Integration Test Shard matrix did not succeed (result=${result}). Required check Integration Tests fails closed."
+            exit 1
+          fi
 
   security-scan:
     name: Security Scan
@@ -606,10 +838,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -618,6 +850,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
           pip install pip-audit
 
@@ -657,10 +890,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -669,7 +902,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
 
       - name: Verify application starts
         env:
@@ -685,10 +918,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -732,10 +965,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -744,6 +977,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run Alembic migrations
@@ -885,10 +1119,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -897,6 +1131,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run Alembic migrations
@@ -1025,10 +1260,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1037,6 +1272,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run Alembic migrations
@@ -1156,10 +1392,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1196,10 +1432,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1294,10 +1530,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1306,7 +1542,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
 
       - name: Generate current OpenAPI schema
         env:
@@ -1352,7 +1588,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Validate acceptance pack artifacts
         run: |
@@ -1364,7 +1600,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v7
@@ -1395,10 +1631,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1407,6 +1643,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
       - name: Run contract tests
@@ -1421,8 +1658,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
 
@@ -1430,7 +1667,7 @@ jobs:
     name: Secret Scanning (Gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v3
@@ -1468,10 +1705,10 @@ jobs:
           - 6379:6379
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1480,6 +1717,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
           pip install locust
 
@@ -1499,7 +1737,10 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key-minimum16chars
           JWT_SECRET_KEY: test-jwt-secret-min16chars
+          # TESTING=1 for test-mode startup; RATE_LIMIT_PROFILE=loadtest keeps
+          # rate-limit middleware on (raised ceilings) so Locust pays Redis cost (C-59).
           TESTING: "1"
+          RATE_LIMIT_PROFILE: loadtest
           APP_ENV: development
           DEFAULT_TENANT_ID: "1"
         run: |
@@ -1540,10 +1781,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -1561,7 +1802,7 @@ jobs:
         run: python3 scripts/governance/update_boundary_trend.py
 
       - name: Upload boundary report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: boundary-enforcement-report
@@ -1575,10 +1816,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -1591,10 +1832,10 @@ jobs:
     if: github.event_name == 'schedule'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1603,6 +1844,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
           pip install "mutmut<3"
 
@@ -1638,7 +1880,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Check for placeholder dates
         run: |
@@ -1674,10 +1916,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -1716,10 +1958,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1728,7 +1970,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
 
       - name: Apply migrations then check for drift
         env:
@@ -1739,7 +1981,79 @@ jobs:
           echo "=== Alembic Migration Drift Check ==="
           alembic upgrade head
           alembic check
-          echo "[OK] No migration drift detected"
+          echo "[OK] No migration drift SURVIVED THE FILTER."
+          echo "Read the suppression report above for what was detected and dropped;"
+          echo "the ratchet step below is what fails when that set grows."
+
+      # `alembic check` above passes with ~1060 autogenerate operations detected
+      # and filtered away, which for a long time was reported as "No migration
+      # drift detected". The deferral is deliberate and owned
+      # (docs/governance/alembic_check_excluded_tables.md); what was missing is
+      # any bound on it. This step publishes the suppressed inventory and fails
+      # when it grows: a table acquiring drift, an operation type, or a higher
+      # count than docs/governance/alembic_drift_baseline.json records.
+      #
+      # --database-url runs a second, unfiltered comparison. The table exclusion
+      # list works by dropping tables from the comparison before columns are
+      # compared at all, so drift on those 33 tables -- including the four
+      # AddColumnOp on soa_control_entries -- appears nowhere in the artifact the
+      # step above writes. Not measuring it is what let it stay unknown.
+      #
+      # if: always() so a failing `alembic check` still gets its drift reported
+      # rather than leaving the reader with only an exit code.
+      - name: Ratchet the suppressed migration drift
+        if: always()
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: |
+          echo "=== Suppressed Drift Ratchet ==="
+          python3 scripts/validate_alembic_drift_ratchet.py \
+            --inventory alembic-drift-inventory.json \
+            --database-url postgresql://postgres:testpass@localhost:5432/quality_governance_test \
+            --json alembic-drift-ratchet.json
+
+      - name: Upload drift ratchet report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: alembic-drift-ratchet
+          path: alembic-drift-ratchet.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      # This job is the only place in CI holding a database built by the
+      # migrations and nothing else. The integration job applies the chain too,
+      # but tests/integration/conftest.py then runs Base.metadata.create_all over
+      # it, which supplies any table or column the migrations did not -- so a
+      # missing-column condition is invisible there by the time any test runs.
+      #
+      # It also catches what `alembic check` above cannot: that step sets
+      # ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1, which strips AddColumnOp and
+      # CreateForeignKeyOp, precisely the two operations these drifts consist of.
+      # The filter is deferral of a real backlog (see
+      # docs/governance/alembic_check_excluded_tables.md), not a muted gate, and
+      # this narrows the part of it that breaks queries back into a hard failure.
+      - name: Verify declared columns exist and attribution is constrained
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: |
+          echo "=== Attribution and declared-column census (Run026) ==="
+          # pipefail, because the census signals failure through its exit code and
+          # bash would otherwise report tee's. A gate whose result is discarded by
+          # its own plumbing is worse than no gate.
+          set -o pipefail
+          python -m scripts.ops.run026.audit_attribution_schema --json \
+            | tee attribution-schema-census.json
+          echo "[OK] no absent declared columns, no unconstrained attribution columns"
+
+      - name: Upload attribution schema census
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: attribution-schema-census
+          path: attribution-schema-census.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload Alembic drift inventory
         uses: actions/upload-artifact@v7
@@ -1758,7 +2072,7 @@ jobs:
           python3 scripts/governance/generate_migration_reversibility_evidence.py
 
       - name: Upload migration reversibility evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: migration-reversibility-evidence
@@ -1771,7 +2085,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v7
@@ -1811,10 +2125,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1824,7 +2138,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements.lock
           alembic upgrade head
           PYTHONPATH="${{ github.workspace }}" uvicorn src.main:app --host 0.0.0.0 --port 8000 &
           # Startup pre-warms the OpenAPI schema (~5s), so a fixed sleep raced readiness
@@ -1872,10 +2186,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -1890,7 +2204,8 @@ jobs:
 
       - name: Check Python licenses
         run: |
-          pip install -r requirements.txt pip-licenses
+          pip install -r requirements.lock
+          pip install pip-licenses
           pip-licenses --fail-on="GPL-3.0-only;AGPL-3.0-only;SSPL-1.0" --format=json --output-file=python-licenses.json
           echo "[OK] Python license check passed"
 
@@ -1916,10 +2231,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -1940,10 +2255,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -1967,17 +2282,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.lock
 
       - name: Run schema constraint validation
         run: python3 scripts/validate_schema_constraints.py
@@ -1985,13 +2300,42 @@ jobs:
       - name: Forbid new owned nullable tenant_id (WCS C-01 Phase 1)
         run: python3 scripts/validate_tenant_id_not_null.py
 
+      # Library F-3 / L-49: fail parallel document homes, coverage/framework/scheme
+      # twins, documents-like free-text standards columns, and SPA document URLs
+      # built outside href_registry (baseline: docs/governance/library_anti_dupe_baseline.json).
+      - name: Library anti-dupe gate (F-3 / L-49)
+        run: python3 scripts/validate_library_anti_dupe.py
+
+      # Board B-10 / w4-extra-forbid: pin write-schema extra="forbid" coverage.
+      # Guard 2's KNOWN_LAX allowlist blocks unrecorded new open schemas; this
+      # ratchet additionally fails when the forbid floor falls or the open
+      # ceiling rises above docs/governance/write_schema_extra_forbid_baseline.json.
+      - name: Ratchet write-schema extra=forbid inventory (B-10)
+        run: python3 scripts/validate_write_schema_extra_forbid_ratchet.py
+
+      # Board w1-px155 / PX-155: pin audit-trail write coverage (wired vs silent
+      # record_audit_event sites, log_auth callers, product-module coverage).
+      - name: Ratchet audit-trail coverage inventory (w1-px155)
+        run: python3 scripts/validate_audit_trail_coverage_ratchet.py
+
+      # CIT-1 / ADR-0023 / F-7 §2: Citation (ATLAS) is retired as the retention
+      # authority for the library Register only while every filable category has an
+      # executable retention. STEWARD-14 cleared the last fourteen, so a taxonomy
+      # edit that re-opens a blocker — or a steward decision aimed at a taxonomy_id
+      # no category carries — now fails the build instead of quietly un-retiring
+      # Citation for that category.
+      - name: Citation cutover readiness gate (CIT-1)
+        env:
+          PYTHONPATH: .
+        run: python3 -m scripts.governance.library.citation_cutover_readiness --fail-on-blockers
+
   error-code-coverage:
     name: Error Code Test Coverage Gate (D14)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Verify every ErrorCode has ≥1 test reference
         run: python3 scripts/validate_error_code_coverage.py
@@ -2004,7 +2348,7 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
@@ -2045,10 +2389,10 @@ jobs:
           - 6379:6379
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -2057,6 +2401,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
           pip install schemathesis
 
@@ -2104,7 +2449,7 @@ jobs:
           echo "[OK] Schemathesis run complete"
 
       - name: Upload Schemathesis evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: schemathesis-api-property-tests
           path: |
@@ -2120,12 +2465,16 @@ jobs:
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    if: github.event_name != 'schedule'
-    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build, adr-lifecycle-check, registry-validation, schema-constraint-lint, error-code-coverage, schemathesis-api-tests]
+    # always() is load-bearing. Without it, any failed job in `needs` skips this one,
+    # and GitHub reports a skipped check as successful — so as a required check it would
+    # go green precisely when CI had failed. The terminal step below supplies the actual
+    # verdict now that the job runs unconditionally.
+    if: always() && github.event_name != 'schedule'
+    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, dependency-integrity, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build, adr-lifecycle-check, registry-validation, schema-constraint-lint, error-code-coverage, schemathesis-api-tests]
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Generate gate summary (Stage 2.0)
         run: |
@@ -2139,7 +2488,29 @@ jobs:
           retention-days: 90
         if: always()
 
-      - name: All checks passed
+      # Last step in the job so the gate summary above is always uploaded first, even
+      # when this fails. This is the step that makes the job's name honest.
+      - name: Verify every CI job succeeded
+        env:
+          # Passed via env rather than interpolated into the script, so the shell never
+          # sees raw expression output.
+          RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
+          set -euo pipefail
+          echo "Upstream job results: ${RESULTS}"
+
+          FAILED=0
+          for r in ${RESULTS}; do
+            case "$r" in
+              success|skipped) ;;
+              *) FAILED=1 ;;
+            esac
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more CI jobs failed or were cancelled. This gate reports the aggregate verdict, so it fails with them."
+            exit 1
+          fi
+
           echo "[OK] All CI checks passed successfully!"
           echo "The code is ready to be merged."

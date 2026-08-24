@@ -4,7 +4,7 @@ import logging
 from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.case_closure import CaseClosureValidationResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
@@ -19,15 +20,26 @@ from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
-from src.domain.models.incident import Incident, IncidentRunningSheetEntry
+from src.domain.models.incident import Incident, IncidentRunningSheetEntry, IncidentStatus
 from src.domain.models.user import User
 from src.domain.services.api_idempotency_service import (
     SCOPE_INCIDENT_CREATE,
     begin_idempotent_create,
     complete_idempotent_create,
 )
-from src.domain.services.audit_service import record_audit_event
+from src.domain.services.audit_service import NO_SINGLE_ENTITY, record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_INCIDENT,
+    evaluate_case_closure,
+    resolve_case_tenant_id,
+    validation_to_payload,
+)
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
+from src.domain.services.incident_fra_review import (
+    activate_or_link_fra_significant_change,
+    incident_suggests_fra_significant_change,
+    resolve_suggested_location_id,
+)
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
     create_enterprise_risk_from_incident,
@@ -71,9 +83,17 @@ async def _notify_case_owner_assignment(
     assigned_to_user_id: int,
     assigned_by_user_id: int,
     reference: str,
+    tenant_id: int | None = None,
 ) -> None:
-    """In-app assignment notify; never rewrite NotificationService — call site only."""
+    """In-app assignment notify; never rewrite NotificationService — call site only.
+
+    Gated by ``incident_owner_assignment_notify`` (default-off / missing → no send).
+    """
     try:
+        from src.domain.services.incident_notify_flags import assignment_notify_enabled
+
+        if not await assignment_notify_enabled(db, tenant_id=tenant_id):
+            return
         service = NotificationService(db)
         await service.create_assignment(
             entity_type=entity_type,
@@ -362,6 +382,7 @@ async def raise_risk_from_incident(
             event_type="incident.risk_raised",
             entity_type="incident",
             entity_id=str(incident.id),
+            entity_name=incident.reference_number,
             action="create",
             description=f"Risk {risk.reference} raised from incident {incident.reference_number}",
             payload={"risk_id": risk.id, "risk_reference": risk.reference},
@@ -433,6 +454,92 @@ async def raise_risk_from_incident(
     )
 
 
+class FraSignificantChangeRequest(BaseModel):
+    """Activate or link a site-scoped FRA after an incident significant change."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: int = Field(..., ge=1, description="Premises or office location id")
+
+
+class FraSignificantChangeResponse(BaseModel):
+    created: bool
+    requirement_id: int
+    reference_number: str
+    location_id: int
+    incident_id: int
+    suggested_location_id: Optional[int] = None
+    href: str
+
+
+async def _require_compliance_schedule_open_for_incident() -> None:
+    """404 when CS is disabled or kill-switched (same posture as CS routes)."""
+    from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_is_open as _domain_is_open
+    from src.infrastructure.database import async_session_maker
+
+    if not await _domain_is_open(async_session_maker):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance Schedule is not enabled in this environment.",
+        )
+
+
+@router.post(
+    "/{incident_id}/fra-significant-change",
+    response_model=FraSignificantChangeResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def fra_significant_change_from_incident(
+    incident_id: int,
+    body: FraSignificantChangeRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("compliance_schedule:create"))],
+    _cs_open: Annotated[None, Depends(_require_compliance_schedule_open_for_incident)],
+):
+    """Create or open a site FRA prompted by an incident significant change."""
+    if not current_user.has_permission("incident:read") and not current_user.is_superuser:
+        raise AuthorizationError("Permission 'incident:read' required")
+
+    svc = IncidentService(db)
+    try:
+        incident = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Incident {incident_id} not found")
+
+    if incident.status != IncidentStatus.CLOSED:
+        raise BadRequestError("Incident must be closed before creating an FRA significant change")
+
+    if not incident_suggests_fra_significant_change(incident):
+        raise BadRequestError("Incident does not indicate an FRA significant change")
+
+    tenant_id = incident.tenant_id or current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Incident has no tenant; cannot activate an FRA.")
+
+    suggested = await resolve_suggested_location_id(db, incident, tenant_id=tenant_id)
+    result = await activate_or_link_fra_significant_change(
+        db,
+        incident=incident,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        location_id=body.location_id,
+    )
+    requirement = result.requirement
+    return FraSignificantChangeResponse(
+        created=result.created,
+        requirement_id=requirement.id,
+        reference_number=requirement.reference_number,
+        location_id=requirement.location_id or body.location_id,
+        incident_id=incident.id,
+        suggested_location_id=suggested,
+        href=f"/compliance-schedule/{requirement.id}",
+    )
+
+
 @router.get("", response_model=IncidentListResponse, include_in_schema=False)
 @router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
@@ -488,11 +595,17 @@ async def list_incidents(
         if not await svc.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
             raise AuthorizationError("You can only view your own incidents")
 
+        # Fail closed when the caller has no tenant membership. audit_log_entries
+        # .tenant_id is NOT NULL, so this access cannot be recorded without one,
+        # and an email-targeted search across reporters is precisely what this row
+        # exists to police.
+        audit_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await record_audit_event(
             db=db,
             event_type="incident.list_filtered",
             entity_type="incident",
             entity_id="*",
+            entity_name=NO_SINGLE_ENTITY,
             action="list",
             description="Incident list accessed with email filter",
             payload={
@@ -503,6 +616,7 @@ async def list_incidents(
             },
             user_id=current_user.id,
             request_id=request_id,
+            tenant_id=audit_tenant_id,
         )
 
     try:
@@ -514,7 +628,6 @@ async def list_incidents(
             asset_id=asset_id,
             ids=id_list,
             search=search if isinstance(search, str) else None,
-            skip_tenant_check=current_user.is_superuser,
         )
         items: list[IncidentResponse] = []
         skipped = 0
@@ -646,6 +759,32 @@ async def list_incident_investigations(
     }
 
 
+@router.get("/{incident_id}/closure-validation", response_model=CaseClosureValidationResponse)
+async def get_incident_closure_validation(
+    incident_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("incident:read"))],
+):
+    """Report whether this incident can be closed, and why not if it cannot."""
+    svc = IncidentService(db)
+    try:
+        incident = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Incident {incident_id} not found")
+
+    validation = await evaluate_case_closure(
+        db,
+        case_type=CASE_TYPE_INCIDENT,
+        case=incident,
+        tenant_id=resolve_case_tenant_id(incident),
+    )
+    return validation_to_payload(validation)
+
+
 @router.get("/{incident_id}/running-sheet", response_model=list[RunningSheetEntryResponse])
 async def list_incident_running_sheet_entries(
     incident_id: int,
@@ -716,11 +855,13 @@ async def add_incident_running_sheet_entry(
         event_type="incident.runner_sheet_entry.created",
         entity_type="incident",
         entity_id=str(incident.id),
+        entity_name=incident.reference_number,
         action="create",
         description=f"Runner-sheet entry added to incident {incident.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        tenant_id=incident.tenant_id,
     )
 
     await db.commit()
@@ -765,11 +906,15 @@ async def delete_incident_running_sheet_entry(
         event_type="incident.runner_sheet_entry.deleted",
         entity_type="incident",
         entity_id=str(incident.id),
+        entity_name=incident.reference_number,
         action="delete",
         description=f"Runner-sheet entry deleted from incident {incident.reference_number}",
         payload={"entry_id": entry.id, "entry_type": entry.entry_type},
         user_id=current_user.id,
         request_id=request_id,
+        # The parent case, whose tenant_id is NOT NULL. The entry's own column is
+        # nullable, so the parent is the reliable owner.
+        tenant_id=incident.tenant_id,
     )
 
     await db.delete(entry)
@@ -821,6 +966,7 @@ async def update_incident(
                 assigned_to_user_id=updates["owner_id"],
                 assigned_by_user_id=current_user.id,
                 reference=incident.reference_number,
+                tenant_id=incident.tenant_id or current_user.tenant_id,
             )
             # NotificationService.create_assignment may commit or abort; re-load safely
             try:
@@ -849,9 +995,9 @@ async def delete_incident(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """
-    Delete an incident.
+    Soft-delete an incident (PX-177).
 
-    Requires authentication.
+    Sets deleted_at; list/get exclude the row. Requires incident:delete.
     """
     svc = IncidentService(db)
     try:

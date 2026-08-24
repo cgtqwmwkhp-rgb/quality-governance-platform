@@ -12,7 +12,6 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from src.domain.exceptions import ConflictError, ValidationError
 from src.domain.models.audit import AuditFinding, AuditRun, AuditStatus
 from src.domain.models.capa import CAPAAction, CAPASource
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.models.external_audit_import import (
     ExternalAuditDraft,
     ExternalAuditDraftStatus,
@@ -27,6 +26,7 @@ from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.uvdb_achilles import UVDBAudit
 from src.domain.services.audit_risk_gate import RISK_CREATING_FINDING_TYPES, should_create_risk
 from src.domain.services.audit_service import AuditService
+from src.domain.services.compliance_evidence_link_writer import apply_promotion_mapping
 from src.domain.services.planet_mark_service import SCOPE3_CATEGORIES, PlanetMarkService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -825,30 +825,17 @@ class ExternalAuditPromotionService:
         confidence: float | None,
     ) -> None:
         for clause_id in clause_ids:
-            existing = await self.db.execute(
-                select(ComplianceEvidenceLink).where(
-                    ComplianceEvidenceLink.tenant_id == tenant_id,
-                    ComplianceEvidenceLink.entity_type == "audit_finding",
-                    ComplianceEvidenceLink.entity_id == str(finding_id),
-                    ComplianceEvidenceLink.clause_id == clause_id,
-                )
+            await apply_promotion_mapping(
+                self.db,
+                tenant_id=tenant_id,
+                entity_type="audit_finding",
+                entity_id=str(finding_id),
+                clause_id=clause_id,
+                actor_id=user_id,
+                title=f"Imported audit evidence for finding {finding_id}",
+                notes=note,
+                confidence=confidence,
             )
-            link = existing.scalar_one_or_none()
-            if link is None:
-                link = ComplianceEvidenceLink(
-                    tenant_id=tenant_id,
-                    entity_type="audit_finding",
-                    entity_id=str(finding_id),
-                    clause_id=clause_id,
-                    created_by_id=user_id,
-                )
-                self.db.add(link)
-            else:
-                link.deleted_at = None
-            link.linked_by = EvidenceLinkMethod.AUTO
-            link.confidence = confidence
-            link.title = f"Imported audit evidence for finding {finding_id}"
-            link.notes = note
         await self.db.flush()
 
     async def _link_source_document_evidence(
@@ -861,28 +848,15 @@ class ExternalAuditPromotionService:
         title: str | None,
     ) -> None:
         for clause_id in clause_ids:
-            existing = await self.db.execute(
-                select(ComplianceEvidenceLink).where(
-                    ComplianceEvidenceLink.tenant_id == tenant_id,
-                    ComplianceEvidenceLink.entity_type == "document",
-                    ComplianceEvidenceLink.entity_id == str(asset_id),
-                    ComplianceEvidenceLink.clause_id == clause_id,
-                )
+            await apply_promotion_mapping(
+                self.db,
+                tenant_id=tenant_id,
+                entity_type="document",
+                entity_id=str(asset_id),
+                clause_id=clause_id,
+                actor_id=user_id,
+                title=title or f"Imported audit source document {asset_id}",
             )
-            link = existing.scalar_one_or_none()
-            if link is None:
-                link = ComplianceEvidenceLink(
-                    tenant_id=tenant_id,
-                    entity_type="document",
-                    entity_id=str(asset_id),
-                    clause_id=clause_id,
-                    created_by_id=user_id,
-                )
-                self.db.add(link)
-            else:
-                link.deleted_at = None
-            link.linked_by = EvidenceLinkMethod.AUTO
-            link.title = title or f"Imported audit source document {asset_id}"
         await self.db.flush()
 
     def _count_findings(self, drafts: list[ExternalAuditDraft]) -> tuple[int, int, int, int]:
@@ -1093,6 +1067,19 @@ class ExternalAuditPromotionService:
             )
         )
         uvdb_audit = result.scalar_one_or_none()
+        # FR-DEDUP-02 defensive: same Achilles supplier id must not mint a second
+        # catalogue row when the promoting run's reference differs from an older twin.
+        if uvdb_audit is None and (run.external_reference or "").strip():
+            company_id = (run.external_reference or "").strip()
+            by_company = await self.db.execute(
+                select(UVDBAudit).where(
+                    UVDBAudit.tenant_id == tenant_id,
+                    UVDBAudit.company_id == company_id,
+                )
+            )
+            uvdb_audit = by_company.scalar_one_or_none()
+            if uvdb_audit is not None and uvdb_audit.audit_reference != run.reference_number:
+                uvdb_audit.audit_reference = run.reference_number
         if uvdb_audit is None:
             uvdb_audit = UVDBAudit(
                 tenant_id=tenant_id,

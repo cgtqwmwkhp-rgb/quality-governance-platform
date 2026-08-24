@@ -1125,78 +1125,84 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       setUsingFallbackTemplate(false)
 
       try {
-        let loadedTemplate: FormTemplate | null = null
-        try {
-          loadedTemplate = await formTemplatesApi.getBySlug(formType)
-        } catch {
-          loadedTemplate = null
-        }
-        if (!cancelled) {
-          setUsingFallbackTemplate(!loadedTemplate)
-        }
-        const customersResult = await Promise.allSettled([lookupsApi.list('customers', true)])
+        // The template read and the three lookup reads are mutually independent —
+        // nothing here consumes another's result — so they are issued together.
+        // They used to be awaited one after another, which made the form's
+        // time-to-interactive the sum of four round trips against an API that is
+        // not fast.
+        const [templateOutcome, customersOutcome, rolesOutcome, medicalOutcome] =
+          await Promise.allSettled([
+            formTemplatesApi.getBySlug(formType),
+            lookupsApi.list('customers', true),
+            lookupsApi.list('workforce_roles', true),
+            lookupsApi.list('medical_assistance', true),
+          ])
         if (cancelled) return
-        const customersOutcome = customersResult[0]
-        if (customersOutcome.status === 'fulfilled') {
-          setCustomers(customersOutcome.value.items || [])
-        } else {
-          setCustomers([])
-          setError(
+
+        const loadedTemplate: FormTemplate | null =
+          templateOutcome.status === 'fulfilled' ? templateOutcome.value : null
+        const customerItems: LookupOption[] =
+          customersOutcome.status === 'fulfilled' ? customersOutcome.value.items || [] : []
+        const roleItems: LookupOption[] =
+          rolesOutcome.status === 'fulfilled' ? rolesOutcome.value.items || [] : []
+        const medicalItems: LookupOption[] =
+          medicalOutcome.status === 'fulfilled' ? medicalOutcome.value.items || [] : []
+
+        setUsingFallbackTemplate(!loadedTemplate)
+        setCustomers(customerItems)
+        setRoles(roleItems)
+        setMedicalAssistance(medicalItems)
+
+        const medicalOptions =
+          medicalItems.length > 0
+            ? medicalItems.map((item) => ({ value: item.code, label: item.label }))
+            : FALLBACK_MEDICAL_OPTIONS
+        const effectiveTemplate =
+          loadedTemplate || FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident
+
+        // A failed lookup must not strand the employee. This branch used to set
+        // `error` and return without ever calling setTemplate, so `template`
+        // stayed null and the `error || !template` guard below rendered a
+        // dead-end "Unable to Load Form" card offering only Go Back and Retry —
+        // on both P0 journeys that mount this component. The form is still
+        // usable without a customer catalogue: it renders, and the warning
+        // banner below names what is missing and who can fix it.
+        setTemplate(withMedicalAssistanceOptions(effectiveTemplate, medicalOptions))
+
+        const warnings = buildPortalCatalogWarnings(effectiveTemplate, {
+          customers: customerItems.length,
+          workforceRoles: roleItems.length,
+        })
+        // A rejected request and a genuinely empty catalogue are different
+        // problems; say which one happened rather than blaming an admin for a
+        // transport failure.
+        if (customersOutcome.status === 'rejected') {
+          warnings.unshift(
             getApiErrorMessage(
               customersOutcome.reason,
               'Customers unavailable — ask an admin to configure Admin → Lookups → Customers.',
             ),
           )
-          return
         }
-
-        let roleItems: LookupOption[] = []
-        try {
-          const workforce = await lookupsApi.list('workforce_roles', true)
-          roleItems = workforce.items || []
-        } catch {
-          roleItems = []
-        }
-        if (cancelled) return
-        setRoles(roleItems)
-
-        let medicalItems: LookupOption[] = []
-        try {
-          const medical = await lookupsApi.list('medical_assistance', true)
-          medicalItems = medical.items || []
-        } catch {
-          medicalItems = []
-        }
-        if (cancelled) return
-        setMedicalAssistance(medicalItems)
-        const medicalOptions =
-          medicalItems.length > 0
-            ? medicalItems.map((item) => ({ value: item.code, label: item.label }))
-            : FALLBACK_MEDICAL_OPTIONS
-        setTemplate(
-          withMedicalAssistanceOptions(
-            loadedTemplate || FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident,
-            medicalOptions,
-          ),
-        )
-
-        const warnings = buildPortalCatalogWarnings(
-          loadedTemplate || FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident,
-          {
-            customers: (customersOutcome.value.items || []).length,
-            workforceRoles: roleItems.length,
-          },
-        )
         setCatalogWarning(formatCatalogWarning(warnings))
       } catch (err) {
         if (cancelled) return
+        // Promise.allSettled cannot reject, so this only fires if post-processing
+        // throws (e.g. a malformed template). Degrade to the built-in form rather
+        // than dead-ending: setting `error` here as well as a template meant the
+        // template this branch installed was never rendered.
         console.error('Failed to load form configuration:', err)
         setUsingFallbackTemplate(true)
-        setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
         setCustomers([])
         setRoles([])
         setMedicalAssistance([])
-        setError(getApiErrorMessage(err, 'Could not load form catalogs from Admin.'))
+        const fallback = FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident
+        if (fallback) {
+          setTemplate(fallback)
+          setCatalogWarning(getApiErrorMessage(err, 'Could not load form catalogs from Admin.'))
+        } else {
+          setError(getApiErrorMessage(err, 'Could not load form catalogs from Admin.'))
+        }
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -1265,7 +1271,10 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div
+        className="min-h-screen bg-surface flex items-center justify-center"
+        data-testid="portal-form-loading"
+      >
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
           <p className="text-muted-foreground">{t('portal.loading_form')}</p>
@@ -1314,7 +1323,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       : FALLBACK_MEDICAL_OPTIONS
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface" data-testid="portal-form-ready">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">

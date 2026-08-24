@@ -622,10 +622,12 @@ class CompetenceGapService:
             event_type=action,
             entity_type="competence_gap_action",
             entity_id=str(gap.id),
+            entity_name=f"Competence gap on {gap.source_type} {gap.source_id}",
             action=action,
             description=f"Competence gap {action}",
             payload=payload,
             actor_user_id=actor_id,
+            tenant_id=tenant_id,
         )
 
     def _build_capa_description(self, gap: CompetenceGapAction) -> str:

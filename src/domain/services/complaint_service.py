@@ -5,6 +5,7 @@ Raises domain exceptions instead of HTTPException.
 """
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from pydantic import BaseModel
@@ -15,10 +16,18 @@ from sqlalchemy.orm import selectinload
 from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
-from src.domain.models.complaint import Complaint, ComplaintStatus
+from src.domain.models.complaint import Complaint, ComplaintAction, ComplaintStatus
 from src.domain.models.form_config import Contract
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_COMPLAINT,
+    apply_close_stamps,
+    assert_case_can_close,
+    clear_close_stamps,
+    is_closed_status,
+    resolve_case_tenant_id,
+)
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -41,8 +50,52 @@ COMPLAINT_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
     },
     ComplaintStatus.RESOLVED: {ComplaintStatus.CLOSED, ComplaintStatus.UNDER_INVESTIGATION},
     ComplaintStatus.ESCALATED: {ComplaintStatus.UNDER_INVESTIGATION, ComplaintStatus.CLOSED},
-    ComplaintStatus.CLOSED: set(),
+    # Reopen is a single controlled reverse edge, not a free jump back into the lifecycle.
+    ComplaintStatus.CLOSED: {ComplaintStatus.UNDER_INVESTIGATION},
 }
+
+
+# PX-210: statuses that can only be reached after the complainant has actually
+# been responded to, so entering one for the first time stamps first_response_at.
+# "pending_response" is deliberately absent — it means a response is still owed.
+RESPONDED_STATUSES: frozenset[ComplaintStatus] = frozenset(
+    {
+        ComplaintStatus.AWAITING_CUSTOMER,
+        ComplaintStatus.RESOLVED,
+        ComplaintStatus.CLOSED,
+    }
+)
+
+
+def _as_status(value) -> Optional[ComplaintStatus]:
+    """Coerce a status column value to its enum member, tolerating raw strings."""
+    if isinstance(value, ComplaintStatus):
+        return value
+    try:
+        return ComplaintStatus(getattr(value, "value", value))
+    except (ValueError, TypeError):
+        return None
+
+
+def resolve_response_due_at(
+    received_date: Optional[datetime],
+    response_sla_hours: Optional[int],
+    explicit_due_at: Optional[datetime],
+) -> Optional[datetime]:
+    """Work out the response deadline for a complaint.
+
+    An explicitly supplied date always wins; otherwise the deadline is the agreed
+    SLA measured from when the complaint was received. With no SLA and no explicit
+    date there is no deadline — the caller must keep saying so rather than
+    inventing one.
+    """
+    if explicit_due_at is not None:
+        return explicit_due_at
+    if response_sla_hours is None or received_date is None:
+        return None
+    if response_sla_hours <= 0:
+        return None
+    return received_date + timedelta(hours=response_sla_hours)
 
 
 def validate_complaint_transition(current: str, target: str) -> None:
@@ -88,6 +141,29 @@ class ComplaintService:
         if user is None or not user.is_active or user.tenant_id != tenant_id:
             raise ValueError(f"User with ID {subject_user_id} not found")
 
+    @staticmethod
+    def _apply_response_sla(complaint: Complaint, *, old_status, raw_update: dict) -> None:
+        """Keep the response deadline and first-response stamp consistent (PX-210).
+
+        Changing the agreed SLA re-derives the deadline from ``received_date``
+        unless the same request also supplies an explicit ``response_due_at`` —
+        including when the SLA is cleared, because a deadline derived from an SLA
+        that no longer exists is a deadline nobody agreed to.
+
+        ``first_response_at`` is stamped once, the first time the complaint reaches
+        a status that cannot be reached without having answered the complainant.
+        An explicit value in the request always wins.
+        """
+        if "response_sla_hours" in raw_update and "response_due_at" not in raw_update:
+            complaint.response_due_at = resolve_response_due_at(
+                complaint.received_date, complaint.response_sla_hours, None
+            )
+
+        if complaint.first_response_at is not None or "first_response_at" in raw_update:
+            return
+        if _as_status(complaint.status) in RESPONDED_STATUSES and _as_status(old_status) not in RESPONDED_STATUSES:
+            complaint.first_response_at = datetime.now(timezone.utc)
+
     async def create_complaint(
         self,
         *,
@@ -118,6 +194,12 @@ class ComplaintService:
             if subject_user_id is not None:
                 await self._assert_tenant_subject_user(int(subject_user_id), tenant_id)
 
+        data["response_due_at"] = resolve_response_due_at(
+            data.get("received_date"),
+            data.get("response_sla_hours"),
+            data.get("response_due_at"),
+        )
+
         ref_num = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
 
         complaint = Complaint(
@@ -136,6 +218,7 @@ class ComplaintService:
             event_type="complaint.created",
             entity_type="complaint",
             entity_id=str(complaint.id),
+            entity_name=complaint.reference_number,
             action="create",
             payload=complaint_data.model_dump(mode="json"),
             user_id=user_id,
@@ -158,7 +241,10 @@ class ComplaintService:
         Raises:
             LookupError: If not found.
         """
-        query = select(Complaint).where(Complaint.id == complaint_id)
+        query = select(Complaint).where(
+            Complaint.id == complaint_id,
+            Complaint.deleted_at.is_(None),
+        )
         if not skip_tenant_check:
             query = query.where(Complaint.tenant_id == tenant_id)
         result = await self.db.execute(query)
@@ -176,7 +262,11 @@ class ComplaintService:
         complainant_email: Optional[str] = None,
     ):
         """List complaints with pagination and optional filters."""
-        query = select(Complaint).options(selectinload(Complaint.actions)).where(Complaint.tenant_id == tenant_id)
+        query = (
+            select(Complaint)
+            .options(selectinload(Complaint.actions))
+            .where(Complaint.tenant_id == tenant_id, Complaint.deleted_at.is_(None))
+        )
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -206,19 +296,50 @@ class ComplaintService:
         old_status = complaint.status
 
         raw_update = complaint_data.model_dump(exclude_unset=True)
+        was_closed = is_closed_status(CASE_TYPE_COMPLAINT, old_status)
+        closing = False
         if "status" in raw_update:
             validate_complaint_transition(old_status, raw_update["status"])
+            closing = not was_closed and is_closed_status(CASE_TYPE_COMPLAINT, raw_update["status"])
 
-        update_data = apply_updates(complaint, complaint_data, set_updated_at=False)
+        if closing:
+            # Gate before any mutation so a refused close leaves the session clean.
+            # "resolved" stays ungated — it is a pre-close state, not closure.
+            await assert_case_can_close(
+                self.db,
+                case_type=CASE_TYPE_COMPLAINT,
+                case=complaint,
+                tenant_id=resolve_case_tenant_id(complaint),
+                lessons_learnt=(
+                    raw_update["lessons_learnt"] if "lessons_learnt" in raw_update else complaint.lessons_learnt
+                ),
+            )
+
+        apply_updates(complaint, complaint_data, set_updated_at=False)
+        self._apply_response_sla(complaint, old_status=old_status, raw_update=raw_update)
+
+        reopening = was_closed and not is_closed_status(CASE_TYPE_COMPLAINT, complaint.status)
+        if closing:
+            apply_close_stamps(complaint, user_id=user_id)
+        elif reopening:
+            clear_close_stamps(complaint)
+
+        # The audit entry lands in a JSON column, so the payload has to be
+        # JSON-native. apply_updates returns Python objects, which meant patching
+        # any date field on a complaint blew up on insert; create_complaint has
+        # always dumped in json mode for the same reason.
+        update_data = complaint_data.model_dump(exclude_unset=True, mode="json")
 
         await self.db.flush()
         await self.db.refresh(complaint)
 
+        lifecycle = "closed" if closing else "reopened" if reopening else "updated"
         await record_audit_event(
             db=self.db,
-            event_type="complaint.updated",
+            event_type=f"complaint.{lifecycle}",
             entity_type="complaint",
             entity_id=str(complaint.id),
+            entity_name=complaint.reference_number,
             action="update",
             payload={
                 "updates": update_data,
@@ -227,14 +348,75 @@ class ComplaintService:
             },
             user_id=user_id,
             request_id=request_id,
-            tenant_id=tenant_id,
+            # The record's own tenant, not the tenant_id argument: callers pass
+            # None with skip_tenant_check=True, and the row still has an owner.
+            tenant_id=complaint.tenant_id,
         )
 
         await self.db.flush()
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "complaints")
+        # The row's tenant, not the caller's: a cross-tenant edit has to evict the
+        # register the record actually appears in.
+        cache_tenant_id = complaint.tenant_id if complaint.tenant_id is not None else tenant_id
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "complaints")
 
         return complaint
+
+    async def delete_complaint(
+        self,
+        complaint_id: int,
+        *,
+        user_id: int,
+        tenant_id: int | None,
+        request_id: str | None = None,
+        skip_tenant_check: bool = False,
+    ) -> None:
+        """Soft-delete a complaint (PX-177).
+
+        Sets ``deleted_at`` / ``deleted_by_id`` and cascades soft-delete to child
+        complaint actions. List and get exclude deleted rows.
+
+        Raises:
+            LookupError: If the complaint is not found (or already deleted).
+        """
+        complaint = await self.get_complaint(complaint_id, tenant_id, skip_tenant_check=skip_tenant_check)
+        record_tenant_id = complaint.tenant_id
+        cache_tenant_id = record_tenant_id if record_tenant_id is not None else tenant_id
+        now = datetime.now(timezone.utc)
+
+        await record_audit_event(
+            db=self.db,
+            event_type="complaint.deleted",
+            entity_type="complaint",
+            entity_id=str(complaint.id),
+            entity_name=complaint.reference_number,
+            action="delete",
+            description=f"Complaint {complaint.reference_number} soft-deleted",
+            payload={
+                "complaint_id": complaint_id,
+                "reference_number": complaint.reference_number,
+                "soft_delete": True,
+            },
+            user_id=user_id,
+            request_id=request_id,
+            tenant_id=record_tenant_id,
+        )
+
+        complaint.deleted_at = now
+        complaint.deleted_by_id = user_id
+
+        child_q = select(ComplaintAction).where(
+            ComplaintAction.complaint_id == complaint.id,
+            ComplaintAction.deleted_at.is_(None),
+        )
+        child_result = await self.db.execute(child_q)
+        for action in child_result.scalars().all():
+            action.deleted_at = now
+            action.deleted_by_id = user_id
+
+        await self.db.flush()
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "complaints")
 
     def check_complainant_email_access(
         self,

@@ -10,37 +10,78 @@ on:
     - cron: '0 2 * * 0'
 
 jobs:
+  # NOTE: `name` is a required status check on main. Changing the string detaches the
+  # branch protection rule from this job, and every PR then blocks forever waiting for a
+  # context that no longer reports. Do not rename without updating branch protection.
+  #
+  # This job used to run `safety check --json ... || true`, which meant a REQUIRED gate
+  # named "Dependency Vulnerability Check" could not fail — it reported success no matter
+  # what was found. It has been repointed at the gap that actually existed.
+  #
+  # Python is already covered by a blocking gate: the required `Security Scan` job in
+  # ci.yml runs `pip-audit --strict` against requirements.lock with a dated waiver file.
+  # It also runs `safety` deliberately non-blocking, so dropping the duplicate deprecated
+  # `safety check` here loses no coverage. (`safety check` has been deprecated upstream
+  # since June 2024 and would be a poor thing to make blocking.)
+  #
+  # npm had no required vulnerability gate at all: the only `npm audit` in the repository
+  # lives inside `Frontend Tests`, which is not a required check. That is the hole this
+  # job now closes.
   dependency-check:
     name: Dependency Vulnerability Check
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Node
+        uses: actions/setup-node@v7
         with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: requirements.txt
+          node-version: '20'
 
-      - name: Install dependencies
+      - name: Audit production dependencies (blocking)
+        working-directory: frontend
         run: |
-          python -m pip install --upgrade pip
-          pip install safety bandit
+          set -euo pipefail
+          echo "=== npm audit: production dependencies, high and above ==="
+          # --package-lock-only: resolve from the committed lockfile without installing,
+          # so no package's install scripts run inside this gate.
+          # --omit=dev: these are the packages that reach users in the shipped bundle.
+          npm audit --package-lock-only --omit=dev --audit-level=high
+          echo "[OK] No high or critical vulnerabilities in production dependencies."
 
-      - name: Run Safety check
+      - name: Report development dependencies (advisory)
+        working-directory: frontend
+        if: always()
         run: |
-          pip install -r requirements.txt
-          safety check --json > safety-report.json || true
-          cat safety-report.json
+          set -uo pipefail
+          echo "=== npm audit: all scopes, including development ==="
+          # Advisory on purpose, and labelled as such rather than dressed up as a gate.
+          # Dev-scope packages do not ship, but they do execute on CI runners, so the
+          # findings are surfaced instead of hidden. Making this blocking is a follow-up
+          # that first requires clearing the known findings.
+          npm audit --package-lock-only --json > ../npm-audit-report.json || true
+          python3 - <<'PY'
+          import json
+          with open('../npm-audit-report.json') as fh:
+              data = json.load(fh)
+          totals = data.get('metadata', {}).get('vulnerabilities', {})
+          print(f"  totals (all scopes): {totals}")
+          for name, v in sorted(
+              data.get('vulnerabilities', {}).items(),
+              key=lambda kv: {'critical': 0, 'high': 1, 'moderate': 2, 'low': 3}.get(kv[1].get('severity'), 9),
+          ):
+              fix = v.get('fixAvailable')
+              fix_s = 'none' if fix is False else ('yes' if fix is True else f"{fix.get('name')}@{fix.get('version')}")
+              print(f"  {v.get('severity'):9} {name:32} fix: {fix_s}")
+          PY
 
-      - name: Upload Safety Report
+      - name: Upload npm audit report
         uses: actions/upload-artifact@v7
         with:
-          name: safety-report
-          path: safety-report.json
+          name: npm-audit-report
+          path: npm-audit-report.json
         if: always()
 
   code-security:
@@ -49,10 +90,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -87,16 +128,43 @@ jobs:
           path: bandit-report.json
         if: always()
 
+  # C-58: this job declared no database, so tests/security ran against no DSN at
+  # all. The suite authenticates by performing a real POST /api/v1/auth/login
+  # through TestClient; with nothing to log in to, ten tests called
+  # pytest.skip("Auth required") and the job reported success on
+  # "45 passed, 12 skipped, Failed: 0". The OWASP suite had never exercised its
+  # subject. Shape copied from the integration-tests job in ci.yml.
+  #
+  # The database is a throwaway of this job's own, and its name says so:
+  # tests/security/conftest.py refuses to run unless the DSN it resolves is both
+  # local and named as a test database, because this suite deliberately sends SQL
+  # injection, command injection, mass-assignment and path-traversal payloads at
+  # whatever database it is given.
   security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
-    
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: quality_governance_security_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -105,12 +173,38 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
           pip install -r requirements-dev.txt
 
+      - name: Run Alembic migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_security_test
+        run: |
+          alembic upgrade head
+          echo "[OK] Migrations applied to the disposable security-test database"
+
+      # SECURITY_TEST_DATABASE_URL, not DATABASE_URL: the suite's conftest reads
+      # only this variable and then overwrites DATABASE_URL with it, so an
+      # ambient DSN can never be inherited by tests that attempt injection.
       - name: Run Security Tests
+        env:
+          SECURITY_TEST_DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_security_test
         run: |
           pytest tests/security/ -v --tb=short --junit-xml=security-tests.xml
+
+      # The ratchet C-58 asks for: a skipped security test no longer counts as a
+      # pass. All ten of the previously-skipping OWASP tests pass against a
+      # seeded disposable database, so there is no longer a legitimate reason for
+      # them to skip.
+      #
+      # One documented exception: test_rate_limiting_on_login sends 15 failed
+      # logins, the login limiter answers 429, and that suite's own helper treats
+      # 429 as "auth backend unavailable" and skips — the skip is the rate
+      # limiter working. That is the only skip reason accepted here, and it is
+      # still printed.
+      - name: Refuse a skipped security test
+        if: always()
+        run: python3 scripts/governance/assert_security_tests_executed.py security-tests.xml
 
       - name: Upload Security Test Results
         uses: actions/upload-artifact@v7
@@ -129,14 +223,14 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Build Docker image
         run: docker build --no-cache -t qgp-backend:scan .
         working-directory: .
 
       - name: Run Trivy vulnerability gate
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'qgp-backend:scan'
           format: 'table'
@@ -145,7 +239,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Generate Trivy SARIF report
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'qgp-backend:scan'
           format: 'sarif'
@@ -166,7 +260,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -190,7 +284,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4

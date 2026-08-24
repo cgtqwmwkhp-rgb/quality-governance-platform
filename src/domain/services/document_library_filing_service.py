@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import or_, select
@@ -14,6 +14,15 @@ from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.models.document import Document
 from src.domain.models.document_library import DocumentCategory
 from src.domain.models.enums import DocumentStatus
+from src.domain.services.library_retention_policy import (
+    RetentionAnchor,
+    RetentionDecision,
+    RetentionPolicy,
+    policy_from_stored,
+    resolve_retention_rule,
+    retention_until_for,
+)
+from src.domain.services.library_rules import LIBRARY_ACCESS_LEVELS
 
 if TYPE_CHECKING:
     from src.domain.models.user import User
@@ -26,7 +35,6 @@ _APPROVED_STATUSES = (
     DocumentStatus.INDEXED,
 )
 _TITLE_NORMALIZE_RE = re.compile(r"[^\w\s]", re.UNICODE)
-_RETENTION_YEARS_RE = re.compile(r"(\d+)\s*years?", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -54,8 +62,14 @@ def is_statutory_taxonomy_id(taxonomy_id: str) -> bool:
 
 
 def map_category_access(default_access: Optional[str]) -> str:
+    """Category default → the one Library vocabulary, falling back to `all_staff`.
+
+    The allowed set is imported from ``library_rules`` (which owns R26) rather
+    than re-typed here: CUT-1 removed the second copy of these three literals so
+    a vocabulary change has one place to land.
+    """
     value = (default_access or "all_staff").strip().lower()
-    if value in {"all_staff", "managers", "restricted"}:
+    if value in LIBRARY_ACCESS_LEVELS:
         return value
     return "all_staff"
 
@@ -128,23 +142,127 @@ async def find_duplicate_approved_candidates(
     return matches
 
 
-def compute_retention_until(category: DocumentCategory, approved_at: datetime) -> Optional[datetime]:
-    """Best-effort retention_until from category retention_rule pick-list text."""
-    rule = (category.retention_rule or "").strip()
-    if not rule:
-        return None
-    if rule.lower() == "current":
-        return None
+def retention_policy_for_category(category: DocumentCategory) -> RetentionDecision:
+    """CUT-1 — read the category's machine-readable retention, else its prose.
 
-    match = _RETENTION_YEARS_RE.search(rule)
-    if not match:
-        return None
+    Prefers the columns the CUT-1 migration projected onto the category, so a
+    steward who resolves one of the fourteen unreadable rules by setting
+    ``retention_years`` / ``retention_anchor`` is obeyed immediately without
+    having to also rewrite the prose. Falls back to parsing ``retention_rule``
+    for categories created outside the seed.
+    """
+    stored = policy_from_stored(
+        retention_years=getattr(category, "retention_years", None),
+        retention_anchor=getattr(category, "retention_anchor", None),
+        retention_basis=getattr(category, "retention_rule", None),
+    )
+    if stored is not None:
+        return RetentionDecision(stored, stored.anchor.value)
+    return resolve_retention_rule(getattr(category, "retention_rule", None))
 
-    years = int(match.group(1))
-    if years <= 0:
-        return None
-    base = approved_at if approved_at.tzinfo else approved_at.replace(tzinfo=timezone.utc)
-    return base + timedelta(days=years * 365)
+
+def compute_retention_until(category: DocumentCategory, anchor_date: datetime) -> Optional[datetime]:
+    """Disposal date for this category's policy, measured from ``anchor_date``.
+
+    Which date to pass is the caller's decision, because the taxonomy contains
+    both kinds of rule: an issue-anchored ``"6 years"`` counts from approval,
+    while ``"Current + superseded 6 years"`` counts from the day the document was
+    superseded. ``approve_document`` therefore passes the approval date only for
+    issue-anchored policies, and ``supersede_prior_approved_by_pel_doc_ref``
+    passes the supersede date for supersede-anchored ones.
+
+    Returns ``None`` for an event-anchored or indefinite policy, and for a rule
+    the CUT-1 grammar refuses to read — none of those have a disposal date QGP
+    can calculate, and inventing one feeds a queue that hard-deletes files.
+    """
+    decision = retention_policy_for_category(category)
+    policy = decision.policy
+    if policy is None or policy.anchor is RetentionAnchor.ISSUE:
+        return retention_until_for(policy, issued_at=anchor_date)
+    if policy.anchor is RetentionAnchor.SUPERSEDE:
+        return retention_until_for(policy, superseded_at=anchor_date)
+    return None
+
+
+def apply_category_retention(document: Document, category: DocumentCategory, *, issued_at: datetime) -> None:
+    """Copy the category's retention policy onto the document at file time (F-7 §2).
+
+    After this the document answers for its own retention: the policy that was
+    in force when it was filed is on the row, so a later taxonomy edit cannot
+    silently re-date it. Only an issue-anchored policy gets a
+    ``retention_until`` here — a supersede-anchored clock has not started yet.
+
+    ``retention_until`` is *re-derived*, never left as it was. A document that is
+    re-approved after its category moved from ``"6 years"`` to
+    ``"Current + superseded 6 years"`` would otherwise keep the issue-anchored
+    date the old rule produced, which is earlier than the new rule allows — the
+    exact premature-disposal shape CUT-1 exists to close. Clearing it is the safe
+    direction: no date means no disposal candidate.
+    """
+    decision = retention_policy_for_category(category)
+    policy = decision.policy
+    document.retention_years = policy.years if policy else None
+    document.retention_anchor = policy.anchor.value if policy else None
+    document.retention_basis = policy.basis if policy else (category.retention_rule or None)
+    document.retention_until = (
+        retention_until_for(policy, issued_at=issued_at)
+        if policy is not None and policy.anchor is RetentionAnchor.ISSUE
+        else None
+    )
+
+
+def _stored_policy(document: Document) -> Optional[RetentionPolicy]:
+    return policy_from_stored(
+        retention_years=getattr(document, "retention_years", None),
+        retention_anchor=getattr(document, "retention_anchor", None),
+        retention_basis=getattr(document, "retention_basis", None),
+    )
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
+
+
+def supersede_retention_until(document: Document, superseded_at: datetime) -> Optional[datetime]:
+    """The document's disposal date once it leaves the live set — read, not written.
+
+    The Register row is the retention system of record (F-7 §2), so anything that
+    needs to know when a document may be destroyed asks this rather than keeping
+    its own clock. ``None`` means "not calculable", which is the keep direction:
+    an event-anchored or indefinite policy, a rule the CUT-1 grammar refused, or a
+    document that was filed before CUT-1 and carries no policy at all.
+
+    Never earlier than the date already on the row. A legacy row filed before
+    CUT-1 carries a ``retention_until`` computed from its approval date, which for
+    a supersede-anchored rule is too early; taking the later of the two repairs it
+    instead of honouring a date the governance rule never sanctioned.
+    """
+    current = _as_utc(getattr(document, "retention_until", None))
+    policy = _stored_policy(document)
+    if policy is None or policy.anchor is not RetentionAnchor.SUPERSEDE:
+        return current
+    candidate = retention_until_for(policy, superseded_at=_as_utc(superseded_at))
+    if candidate is None:
+        return current
+    if current is None or candidate > current:
+        return candidate
+    return current
+
+
+def apply_supersede_retention(document: Document, superseded_at: datetime) -> None:
+    """Write the supersede-anchored clock onto the row as it leaves the live set.
+
+    The only writer of ``retention_until`` on supersede. It writes exactly what
+    :func:`supersede_retention_until` resolves, and only when that is later than
+    the date already there — so a document is never made disposable sooner by
+    being superseded, and a policy that cannot start a clock leaves the row alone.
+    """
+    resolved = supersede_retention_until(document, superseded_at)
+    current = _as_utc(getattr(document, "retention_until", None))
+    if resolved is not None and (current is None or resolved > current):
+        document.retention_until = resolved
 
 
 def assert_library_read_access(
@@ -171,10 +289,16 @@ async def supersede_prior_approved_by_pel_doc_ref(
     tenant_id: int,
     pel_doc_ref: str,
     current_document_id: int,
+    superseded_at: Optional[datetime] = None,
 ) -> list[int]:
-    """Mark other approved library rows with the same PEL ref as superseded."""
+    """Mark other approved library rows with the same PEL ref as superseded.
+
+    This is the only place a library document reaches ``SUPERSEDED``, so it is
+    also where a supersede-anchored retention clock starts (CUT-1 / R19).
+    """
     if not pel_doc_ref:
         return []
+    superseded_at = superseded_at or datetime.now(timezone.utc)
 
     stmt = select(Document).where(
         Document.tenant_id == tenant_id,
@@ -191,5 +315,6 @@ async def supersede_prior_approved_by_pel_doc_ref(
     superseded_ids: list[int] = []
     for prior in result.scalars().all():
         prior.status = DocumentStatus.SUPERSEDED
+        apply_supersede_retention(prior, superseded_at)
         superseded_ids.append(prior.id)
     return superseded_ids

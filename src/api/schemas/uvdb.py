@@ -60,6 +60,9 @@ class AuditListItem(BaseModel):
     audit_date: Optional[str] = None
     status: Optional[str] = None
     percentage_score: Optional[float] = None
+    # Stored import/report figure before PX-255 pending-section exclusion.
+    report_percentage_score: Optional[float] = None
+    score_policy: Optional[Dict[str, Any]] = None
     # "imported" | "calculated" | "unknown"; None when the audit has no score.
     score_source: Optional[str] = None
     lead_auditor: Optional[str] = None
@@ -102,6 +105,8 @@ class GetAuditResponse(BaseModel):
     total_score: Optional[float] = None
     max_possible_score: Optional[float] = None
     percentage_score: Optional[float] = None
+    report_percentage_score: Optional[float] = None
+    score_policy: Optional[Dict[str, Any]] = None
     # "imported" | "calculated" | "unknown"; None when the audit has no score.
     score_source: Optional[str] = None
     section_scores: Any = None
@@ -143,6 +148,9 @@ class AuditResponseItem(BaseModel):
     site_response: Optional[int] = None
     finding_type: Optional[str] = None
     finding_description: Optional[str] = None
+    # WI-2 / L-32 — {document_id, label} projection over Register documents.id.
+    # A null document_id means the element is not filed to the Register yet.
+    documents_presented: Optional[List[Dict[str, Any]]] = None
 
 
 class GetAuditResponsesResponse(BaseModel):

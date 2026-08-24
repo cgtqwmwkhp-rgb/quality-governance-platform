@@ -15,12 +15,15 @@ from src.api.routes.global_search import router as search_router
 from src.api.routes.policy_acknowledgment import get_compliance_dashboard, get_my_pending_acknowledgments
 from src.api.routes.signatures import _format_request
 from src.api.schemas.evidence_asset import EvidenceAssetResponse
+from src.domain.error_codes import ErrorCode
+from src.domain.exceptions import MeasurementUnavailableError
 from src.domain.models.evidence_asset import (
     EvidenceAssetType,
     EvidenceRetentionPolicy,
     EvidenceSourceModule,
     EvidenceVisibility,
 )
+from src.domain.services.policy_acknowledgment import MeasuredCompliance, UnmeasurableCompliance
 
 
 def test_global_search_dual_mount_without_trailing_slash():
@@ -167,37 +170,91 @@ def test_format_request_with_empty_signers():
     assert payload["signers"] == []
 
 
-@pytest.mark.asyncio
-async def test_policy_ack_dashboard_fail_soft_on_missing_table():
+async def _dashboard_with_service(service) -> object:
     db = MagicMock()
     db.rollback = AsyncMock()
-
-    service = MagicMock()
-    service.get_compliance_dashboard = AsyncMock(side_effect=ProgrammingError("SELECT", {}, Exception("missing table")))
-
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
             "src.api.routes.policy_acknowledgment.PolicyAcknowledgmentService",
             lambda _db: service,
         )
-        response = await get_compliance_dashboard(
-            db=db,
-            current_user=SimpleNamespace(id=1, tenant_id=1),
-        )
-
-    assert response.total_assignments == 0
-    assert response.completion_rate == 0.0
-    db.rollback.assert_awaited_once()
+        return await get_compliance_dashboard(db=db, current_user=SimpleNamespace(id=1, tenant_id=1))
 
 
 @pytest.mark.asyncio
-async def test_policy_ack_my_pending_fail_soft_on_missing_table():
+async def test_policy_ack_dashboard_reports_unmeasurable_instead_of_zero():
+    """C-23 — an absent backing table must not be answered with 0% compliance.
+
+    This replaces ``test_policy_ack_dashboard_fail_soft_on_missing_table``, which
+    asserted ``total_assignments == 0`` and ``completion_rate == 0.0`` for exactly
+    this condition. That was the fabricated measurement: "0% acknowledged" and
+    "acknowledgment could not be measured" are different statements, and only the
+    second one was true. The assertions here are strictly stronger — the response
+    must carry no number at all, so nothing can be rendered as a percentage.
+
+    ``tests/integration/test_policy_ack_dashboard_honesty.py`` pins the same
+    contract against a database with the table genuinely dropped; this test keeps
+    the route's mapping covered without a database.
+    """
+    service = MagicMock()
+    service.get_compliance_dashboard = AsyncMock(
+        return_value=UnmeasurableCompliance(missing_tables=("policy_acknowledgments",))
+    )
+
+    response = await _dashboard_with_service(service)
+
+    assert response.measurement == "unmeasurable"
+    assert response.missing_tables == ["policy_acknowledgments"]
+    assert not hasattr(response, "metrics")
+    numeric = [
+        key
+        for key, value in response.model_dump().items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    ]
+    assert numeric == [], f"unmeasurable dashboard offered numbers: {numeric}"
+
+
+@pytest.mark.asyncio
+async def test_policy_ack_dashboard_still_reports_a_real_measurement():
+    service = MagicMock()
+    service.get_compliance_dashboard = AsyncMock(
+        return_value=MeasuredCompliance(
+            metrics={
+                "total_assignments": 4,
+                "completed": 1,
+                "pending": 3,
+                "overdue": 0,
+                "completion_rate": 25.0,
+                "overdue_rate": 0.0,
+            }
+        )
+    )
+
+    response = await _dashboard_with_service(service)
+
+    assert response.measurement == "measured"
+    assert response.metrics.total_assignments == 4
+    assert response.metrics.completion_rate == 25.0
+
+
+@pytest.mark.asyncio
+async def test_policy_ack_my_pending_refuses_to_answer_an_absent_table_with_an_empty_list():
+    """This test previously asserted the opposite, and the assertion was the defect.
+
+    It required ``items == []`` when the table was missing, which is the same
+    payload as a user with nothing to read. Correcting it rather than deleting it
+    keeps the missing-table case covered while reversing what the case is
+    required to produce.
+    """
     db = MagicMock()
     db.rollback = AsyncMock()
 
     service = MagicMock()
     service.get_user_pending_acknowledgments = AsyncMock(
-        side_effect=ProgrammingError("SELECT", {}, Exception("missing table"))
+        side_effect=MeasurementUnavailableError(
+            "policy_acknowledgments is absent from the database",
+            missing_tables=("policy_acknowledgments",),
+        )
     )
 
     with pytest.MonkeyPatch.context() as mp:
@@ -205,11 +262,33 @@ async def test_policy_ack_my_pending_fail_soft_on_missing_table():
             "src.api.routes.policy_acknowledgment.PolicyAcknowledgmentService",
             lambda _db: service,
         )
+        with pytest.raises(MeasurementUnavailableError) as raised:
+            await get_my_pending_acknowledgments(
+                db=db,
+                current_user=SimpleNamespace(id=1, tenant_id=1),
+            )
+
+    # 503 and a code of its own, so a client can tell "could not look" from a crash.
+    assert raised.value.http_status == 503
+    assert raised.value.code == ErrorCode.MEASUREMENT_UNAVAILABLE.value
+    assert raised.value.details["missing_tables"] == ["policy_acknowledgments"]
+
+
+@pytest.mark.asyncio
+async def test_policy_ack_my_pending_still_returns_a_real_empty_list():
+    """An empty queue that was actually read stays a plain 200 with no items."""
+    service = MagicMock()
+    service.get_user_pending_acknowledgments = AsyncMock(return_value=[])
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "src.api.routes.policy_acknowledgment.PolicyAcknowledgmentService",
+            lambda _db: service,
+        )
         response = await get_my_pending_acknowledgments(
-            db=db,
+            db=MagicMock(),
             current_user=SimpleNamespace(id=1, tenant_id=1),
         )
 
     assert response.items == []
     assert response.total == 0
-    db.rollback.assert_awaited_once()

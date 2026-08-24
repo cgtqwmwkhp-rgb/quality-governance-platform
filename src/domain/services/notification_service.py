@@ -10,6 +10,7 @@ Features:
 - Mention parsing and handling
 """
 
+import html
 import logging
 import re
 from datetime import datetime, timezone
@@ -27,6 +28,13 @@ from src.domain.models.notification import (
     NotificationPriority,
     NotificationType,
 )
+from src.domain.services.href_registry import absolute_href, assessment_run_href, induction_run_href
+from src.domain.services.notification_preferences import (
+    DEFAULT_QUIET_HOURS_TIMEZONE,
+    ChannelDecision,
+    PreferenceSnapshot,
+    filter_channels,
+)
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -34,6 +42,29 @@ logger = logging.getLogger(__name__)
 
 # Mention regex pattern: @[username] or @username
 MENTION_PATTERN = re.compile(r"@\[([^\]]+)\]|@(\w+)")
+
+
+def render_notification_email_html(
+    message: str,
+    action_url: str | None = None,
+    *,
+    cta_label: str = "Open in QGP",
+) -> str:
+    """Build HTML email body: escaped message + optional absolute deep-link CTA.
+
+    ``action_url`` may be SPA-relative (``/compliance-schedule/3``); only a
+    resolved ``http(s)`` absolute URL yields an ``<a href>``.
+    """
+    escaped = html.escape(message or "", quote=False)
+    parts = [
+        '<div style="white-space:pre-wrap;font-family:sans-serif;' f'font-size:14px;line-height:1.5">{escaped}</div>'
+    ]
+    absolute = absolute_href(action_url)
+    if absolute:
+        href = html.escape(absolute, quote=True)
+        label = html.escape(cta_label, quote=False)
+        parts.append(f'<p style="margin-top:16px"><a href="{href}">{label}</a></p>')
+    return "\n".join(parts)
 
 
 class NotificationService:
@@ -61,6 +92,7 @@ class NotificationService:
         sender_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
         channels: Optional[List[NotificationChannel]] = None,
+        tenant_id: Optional[int] = None,
     ) -> Notification:
         """
         Create and deliver a notification to a user.
@@ -76,13 +108,32 @@ class NotificationService:
             action_url: URL to navigate to on click
             sender_id: User who triggered the notification
             metadata: Additional data
-            channels: Specific channels to use (overrides preferences)
+            channels: Requested channels; still subject to category preferences
+                and quiet hours (FR-NOTIF-ADMIN-03)
+            tenant_id: Tenant scope for the notification row
 
         Returns:
             Created Notification object
         """
+        # Resolve delivery before the insert: extra_data is a plain JSON column,
+        # so the suppression audit trail has to be present at construction time
+        # rather than mutated in afterwards.
+        decision = await self._resolve_delivery_channels(user_id, notification_type, priority, channels)
+        delivery_channels = decision.allowed
+
+        extra_data: Dict[str, Any] = dict(metadata or {})
+        if decision.has_suppressions:
+            extra_data["suppressed_channels"] = dict(decision.suppressed)
+            logger.info(
+                "Notification preferences suppressed channels for user %s (%s): %s",
+                user_id,
+                notification_type.value,
+                decision.suppressed,
+            )
+
         # Create notification record
         notification = Notification(
+            tenant_id=tenant_id,
             user_id=user_id,
             type=notification_type,
             priority=priority,
@@ -92,7 +143,7 @@ class NotificationService:
             entity_id=entity_id,
             action_url=action_url,
             sender_id=sender_id,
-            extra_data=metadata or {},
+            extra_data=extra_data,
             delivered_channels=[],
         )
 
@@ -100,9 +151,6 @@ class NotificationService:
             self.db.add(notification)
             await self.db.commit()
             await self.db.refresh(notification)
-
-        # Determine delivery channels
-        delivery_channels = channels or await self._get_delivery_channels(user_id, notification_type, priority)
 
         # Deliver to each channel
         for channel in delivery_channels:
@@ -151,16 +199,22 @@ class NotificationService:
             notifications.append(notification)
         return notifications
 
-    async def _get_delivery_channels(
-        self,
-        user_id: int,
-        notification_type: NotificationType,
+    async def _load_preferences(self, user_id: int) -> Optional[NotificationPreference]:
+        """Load a user's stored notification preferences, if any."""
+        if not self.db:
+            return None
+        result = await self.db.execute(select(NotificationPreference).where(NotificationPreference.user_id == user_id))
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _channels_from_toggles(
+        prefs: Optional[NotificationPreference],
         priority: NotificationPriority,
     ) -> List[NotificationChannel]:
-        """Determine which channels to use based on preferences"""
+        """Channels the user's top-level channel toggles opt them in to."""
         channels = [NotificationChannel.IN_APP]  # Always in-app
 
-        # Critical notifications always go to all enabled channels
+        # Critical notifications always go to all channels
         if priority == NotificationPriority.CRITICAL:
             channels.extend(
                 [
@@ -171,25 +225,64 @@ class NotificationService:
             )
             return channels
 
-        # Get user preferences
-        if self.db:
-            result = await self.db.execute(
-                select(NotificationPreference).where(NotificationPreference.user_id == user_id)
-            )
-            prefs = result.scalar_one_or_none()
-
-            if prefs:
-                if prefs.email_enabled:
-                    channels.append(NotificationChannel.EMAIL)
-                if prefs.sms_enabled and priority in [
-                    NotificationPriority.CRITICAL,
-                    NotificationPriority.HIGH,
-                ]:
-                    channels.append(NotificationChannel.SMS)
-                if prefs.push_enabled:
-                    channels.append(NotificationChannel.PUSH)
+        if prefs:
+            if prefs.email_enabled:
+                channels.append(NotificationChannel.EMAIL)
+            if prefs.sms_enabled and priority in [
+                NotificationPriority.CRITICAL,
+                NotificationPriority.HIGH,
+            ]:
+                channels.append(NotificationChannel.SMS)
+            if prefs.push_enabled:
+                channels.append(NotificationChannel.PUSH)
 
         return channels
+
+    async def _resolve_delivery_channels(
+        self,
+        user_id: int,
+        notification_type: NotificationType,
+        priority: NotificationPriority,
+        requested: Optional[List[NotificationChannel]] = None,
+    ) -> ChannelDecision:
+        """Resolve the channels a notification may actually use.
+
+        Category preferences and quiet hours are applied to caller-supplied
+        ``requested`` channels as well as to channels derived from the user's
+        toggles. Callers pass explicit channels to say which channels a message
+        *suits* (in-app only for a status change, for example), not to claim the
+        user consented to being interrupted on them.
+        """
+        prefs = await self._load_preferences(user_id)
+        base_channels = requested if requested else self._channels_from_toggles(prefs, priority)
+        return filter_channels(
+            base_channels,
+            snapshot=PreferenceSnapshot.from_row(prefs),
+            notification_type=notification_type,
+            priority=priority,
+            tz_name=self._quiet_hours_timezone(),
+        )
+
+    @staticmethod
+    def _quiet_hours_timezone() -> Optional[str]:
+        """Deployment-wide timezone for interpreting stored quiet-hours bounds."""
+        try:
+            from src.core.config import get_settings
+
+            return get_settings().notification_quiet_hours_timezone
+        except Exception:  # pragma: no cover - settings must never break dispatch
+            logger.debug("Could not read quiet-hours timezone from settings; using module default")
+            return DEFAULT_QUIET_HOURS_TIMEZONE
+
+    async def _get_delivery_channels(
+        self,
+        user_id: int,
+        notification_type: NotificationType,
+        priority: NotificationPriority,
+    ) -> List[NotificationChannel]:
+        """Determine which channels to use based on preferences"""
+        decision = await self._resolve_delivery_channels(user_id, notification_type, priority)
+        return decision.allowed
 
     async def _deliver_in_app(self, notification: Notification):
         """Deliver notification via WebSocket"""
@@ -214,12 +307,16 @@ class NotificationService:
         if not recipient:
             raise ValueError(f"Cannot deliver email for user {notification.user_id}: missing recipient email")
 
+        html_body = render_notification_email_html(
+            notification.message or "",
+            getattr(notification, "action_url", None),
+        )
         try:
             send_email.delay(
                 recipient,
                 notification.title,
-                notification.message,
-                False,
+                html_body,
+                True,
             )
         except Exception as exc:
             raise RuntimeError(f"Failed to enqueue email for user {notification.user_id}: {exc}") from exc
@@ -439,6 +536,154 @@ class NotificationService:
                 "to_status": to_status,
             },
             channels=[NotificationChannel.IN_APP],
+        )
+
+    # ==================== Workforce Governance Dispatchers ====================
+    #
+    # Engineer-directed notifications deliberately carry no ``action_url``: every
+    # ``/workforce/**`` SPA route is gated by ``RequireRole(['admin','supervisor'])``,
+    # so a deep link would silently bounce an engineer back to ``/dashboard``.
+
+    ASSESSMENT_OUTCOME_MESSAGES = {
+        "pass": "Your competency assessment has been marked as PASS.",
+        "fail": "Your competency assessment has been marked as FAIL. CAPA actions will be generated.",
+        "conditional": "Your competency assessment has been marked as CONDITIONAL. Follow-up required.",
+    }
+
+    async def notify_assessment_complete(
+        self,
+        assessment_run_id: str,
+        engineer_user_id: Optional[int],
+        supervisor_id: int,
+        outcome: str,
+        tenant_id: Optional[int] = None,
+    ) -> List[Notification]:
+        """Notify the engineer and supervisor that a competency assessment completed."""
+        metadata = {"notification_type": "assessment_complete", "outcome": outcome}
+        created: List[Notification] = []
+
+        if engineer_user_id is not None:
+            created.append(
+                await self.create_notification(
+                    user_id=engineer_user_id,
+                    notification_type=NotificationType.AUDIT_COMPLETED,
+                    title="Assessment Complete",
+                    message=self.ASSESSMENT_OUTCOME_MESSAGES.get(
+                        outcome, f"Assessment completed with outcome: {outcome}"
+                    ),
+                    priority=NotificationPriority.MEDIUM,
+                    entity_type="assessment",
+                    entity_id=assessment_run_id,
+                    metadata=dict(metadata),
+                    tenant_id=tenant_id,
+                )
+            )
+
+        created.append(
+            await self.create_notification(
+                user_id=supervisor_id,
+                notification_type=NotificationType.AUDIT_COMPLETED,
+                title="Assessment Submitted",
+                message=f"Assessment {assessment_run_id} completed with outcome: {outcome}",
+                priority=NotificationPriority.MEDIUM,
+                entity_type="assessment",
+                entity_id=assessment_run_id,
+                action_url=assessment_run_href(assessment_run_id),
+                metadata=dict(metadata),
+                tenant_id=tenant_id,
+            )
+        )
+
+        logger.info("Notifications created for assessment %s", assessment_run_id)
+        return created
+
+    async def notify_induction_complete(
+        self,
+        induction_run_id: str,
+        engineer_user_id: Optional[int],
+        supervisor_id: int,
+        not_yet_competent_count: int,
+        tenant_id: Optional[int] = None,
+    ) -> List[Notification]:
+        """Notify the engineer and supervisor that an induction completed."""
+        metadata = {
+            "notification_type": "induction_complete",
+            "not_yet_competent_count": not_yet_competent_count,
+        }
+        created: List[Notification] = []
+
+        if engineer_user_id is not None:
+            if not_yet_competent_count > 0:
+                engineer_message = (
+                    f"Your induction has been completed with {not_yet_competent_count} item(s) marked as "
+                    "'Not Yet Competent'. CAPA actions will be generated."
+                )
+            else:
+                engineer_message = "Congratulations! Your induction has been completed successfully."
+            created.append(
+                await self.create_notification(
+                    user_id=engineer_user_id,
+                    notification_type=NotificationType.COMPLIANCE_ALERT,
+                    title="Induction Complete",
+                    message=engineer_message,
+                    priority=NotificationPriority.MEDIUM,
+                    entity_type="induction",
+                    entity_id=induction_run_id,
+                    metadata=dict(metadata),
+                    tenant_id=tenant_id,
+                )
+            )
+
+        if not_yet_competent_count > 0:
+            supervisor_message = (
+                f"Induction {induction_run_id} completed with {not_yet_competent_count} item(s) marked as "
+                "'Not Yet Competent'."
+            )
+        else:
+            supervisor_message = f"Induction {induction_run_id} completed successfully."
+
+        created.append(
+            await self.create_notification(
+                user_id=supervisor_id,
+                notification_type=NotificationType.COMPLIANCE_ALERT,
+                title="Induction Submitted",
+                message=supervisor_message,
+                priority=NotificationPriority.MEDIUM,
+                entity_type="induction",
+                entity_id=induction_run_id,
+                action_url=induction_run_href(induction_run_id),
+                metadata=dict(metadata),
+                tenant_id=tenant_id,
+            )
+        )
+
+        logger.info("Notification created for induction %s", induction_run_id)
+        return created
+
+    async def notify_competency_expiry(
+        self,
+        engineer_user_id: Optional[int],
+        asset_type_id: int,
+        days_until_expiry: int,
+        tenant_id: Optional[int] = None,
+    ) -> Optional[Notification]:
+        """Warn an engineer that a competency is about to expire."""
+        if engineer_user_id is None:
+            return None
+
+        return await self.create_notification(
+            user_id=engineer_user_id,
+            notification_type=NotificationType.CERTIFICATE_EXPIRING,
+            title="Competency Expiring Soon",
+            message=(
+                f"Your competency for asset type {asset_type_id} expires in "
+                f"{days_until_expiry} days. Please schedule a reassessment."
+            ),
+            priority=NotificationPriority.MEDIUM,
+            entity_type="competency",
+            entity_id=str(asset_type_id),
+            metadata={"notification_type": "competency_expiry_warning"},
+            tenant_id=tenant_id,
         )
 
     # ==================== Notification Management ====================

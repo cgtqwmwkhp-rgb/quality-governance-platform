@@ -1,10 +1,12 @@
 """Pydantic schemas for Authentication API."""
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
     """Schema for login request."""
+
+    model_config = ConfigDict(extra="forbid")
 
     email: EmailStr
     password: str = Field(..., min_length=1)
@@ -27,6 +29,8 @@ class RefreshTokenRequest(BaseModel):
 class PasswordChangeRequest(BaseModel):
     """Schema for password change request."""
 
+    model_config = ConfigDict(extra="forbid")
+
     current_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=8, max_length=100)
 
@@ -34,11 +38,15 @@ class PasswordChangeRequest(BaseModel):
 class PasswordResetRequest(BaseModel):
     """Schema for password reset request."""
 
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr
 
 
 class PasswordResetConfirm(BaseModel):
     """Schema for password reset confirmation."""
+
+    model_config = ConfigDict(extra="forbid")
 
     token: str
     new_password: str = Field(..., min_length=8, max_length=100)

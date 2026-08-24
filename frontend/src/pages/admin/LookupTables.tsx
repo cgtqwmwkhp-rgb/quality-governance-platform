@@ -29,6 +29,11 @@ import {
   WORKFORCE_ROLE_CODE_HINTS,
   workforceRoleHintCodes,
 } from './workforceRolesCatalog'
+import {
+  LOCATION_KIND_VALUES,
+  LOCATION_KIND_LABEL_KEYS,
+  type LocationKindValue,
+} from '../safetyAssets/locationKindLabels'
 
 const LOOKUP_CATEGORIES = [
   { key: 'incident_types', label: 'Incident Types' },
@@ -99,12 +104,18 @@ export default function LookupTables() {
   const [pendingBusyId, setPendingBusyId] = useState<string | null>(null)
   const [safetyCreateKind, setSafetyCreateKind] = useState<'asset_type' | 'location' | null>(null)
   const [safetyCreateName, setSafetyCreateName] = useState('')
+  const [safetyCreateLocationKind, setSafetyCreateLocationKind] =
+    useState<LocationKindValue>('site')
   const [safetyCreatePreview, setSafetyCreatePreview] = useState<{
     intent: string
     similar_matches: { id: number; name: string; score: number }[]
     blocked_exact_duplicate: boolean
   } | null>(null)
   const [safetyCreateBusy, setSafetyCreateBusy] = useState(false)
+  const [mergeItem, setMergeItem] = useState<SafetyLookupPendingItem | null>(null)
+  const [mergeTargets, setMergeTargets] = useState<{ id: number; name: string }[]>([])
+  const [mergeTargetsLoading, setMergeTargetsLoading] = useState(false)
+  const [mergeTargetId, setMergeTargetId] = useState<number | ''>('')
   const highlightPending = searchParams.get('pending') === 'safety'
 
   const visibleCategories =
@@ -336,11 +347,58 @@ export default function LookupTables() {
       toast.error(
         getApiErrorMessage(
           err,
-          'Could not reject lookup. If assets already reference it, merge into an approved lookup instead.',
+          'Could not reject lookup. If assets already reference it, use Merge into… to fold it into an approved lookup.',
         ),
       )
     } finally {
       setPendingBusyId(null)
+    }
+  }
+
+  const closeMergeDialog = () => {
+    setMergeItem(null)
+    setMergeTargets([])
+    setMergeTargetId('')
+    setMergeTargetsLoading(false)
+  }
+
+  const openMergeDialog = async (item: SafetyLookupPendingItem) => {
+    setMergeItem(item)
+    setMergeTargetId('')
+    setMergeTargets([])
+    setMergeTargetsLoading(true)
+    try {
+      if (item.kind === 'location') {
+        const res = await safetyAssetsApi.listLocations({
+          page: 1,
+          page_size: 500,
+          is_active: true,
+        })
+        setMergeTargets(
+          (res.data.items ?? [])
+            .filter((loc) => loc.id !== item.id)
+            .map((loc) => ({ id: loc.id, name: loc.name }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        )
+      } else {
+        const res = await safetyAssetsApi.listAssetTypes({
+          page: 1,
+          page_size: 500,
+          category: 'safety',
+          is_active: true,
+        })
+        setMergeTargets(
+          (res.data.items ?? [])
+            .filter((row) => row.id !== item.id)
+            .map((row) => ({ id: row.id, name: row.name }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        )
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not load merge targets'))
+      closeMergeDialog()
+    } finally {
+      setMergeTargetsLoading(false)
     }
   }
 
@@ -350,6 +408,7 @@ export default function LookupTables() {
     try {
       await safetyAssetsApi.mergeSafetyLookup(item.kind, item.id, targetId)
       toast.success(`Merged “${item.name}” into existing lookup`)
+      closeMergeDialog()
       await refreshPendingSafety()
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Could not merge lookup'))
@@ -389,13 +448,14 @@ export default function LookupTables() {
       } else {
         await safetyAssetsApi.createLocation({
           name: safetyCreateName.trim(),
-          kind: 'site',
+          kind: safetyCreateLocationKind,
           force,
         })
       }
       toast.success('Safety lookup created')
       setSafetyCreateKind(null)
       setSafetyCreateName('')
+      setSafetyCreateLocationKind('site')
       setSafetyCreatePreview(null)
       await refreshPendingSafety()
     } catch (err) {
@@ -447,6 +507,7 @@ export default function LookupTables() {
                 onClick={() => {
                   setSafetyCreateKind('location')
                   setSafetyCreateName('')
+                  setSafetyCreateLocationKind('site')
                   setSafetyCreatePreview(null)
                 }}
               >
@@ -507,6 +568,16 @@ export default function LookupTables() {
                       >
                         Reject
                       </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={pendingBusyId === busyKey}
+                        data-testid={`safety-pending-merge-into-${item.kind}-${item.id}`}
+                        onClick={() => void openMergeDialog(item)}
+                      >
+                        Merge into…
+                      </Button>
                       {top ? (
                         <Button
                           type="button"
@@ -529,11 +600,83 @@ export default function LookupTables() {
       </Card>
 
       <Dialog
+        open={mergeItem !== null}
+        onOpenChange={(open) => {
+          if (!open) closeMergeDialog()
+        }}
+      >
+        <DialogContent data-testid="safety-lookup-merge-dialog">
+          <DialogHeader>
+            <DialogTitle>
+              Merge “{mergeItem?.name}” into approved{' '}
+              {mergeItem?.kind === 'location' ? 'location' : 'asset type'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Assets that still reference this provisional lookup will be remapped to the target
+              you choose. The provisional row is then discarded.
+            </p>
+            {mergeTargetsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading approved lookups…</p>
+            ) : mergeTargets.length === 0 ? (
+              <p className="text-sm text-destructive" data-testid="safety-lookup-merge-empty">
+                No approved active {mergeItem?.kind === 'location' ? 'locations' : 'asset types'}{' '}
+                available. Approve a real lookup first, or Approve this row instead.
+              </p>
+            ) : (
+              <label className="block space-y-1 text-sm">
+                <span className="font-medium">Merge into</span>
+                <select
+                  value={mergeTargetId === '' ? '' : String(mergeTargetId)}
+                  onChange={(e) =>
+                    setMergeTargetId(e.target.value ? Number(e.target.value) : '')
+                  }
+                  aria-label="Merge target lookup"
+                  data-testid="safety-lookup-merge-target"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                >
+                  <option value="">Select an approved lookup…</option>
+                  {mergeTargets.map((target) => (
+                    <option key={target.id} value={target.id}>
+                      {target.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeMergeDialog}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                mergeItem == null ||
+                mergeTargetId === '' ||
+                mergeTargetsLoading ||
+                pendingBusyId === `${mergeItem.kind}:${mergeItem.id}`
+              }
+              data-testid="safety-lookup-merge-confirm"
+              onClick={() => {
+                if (mergeItem == null || mergeTargetId === '') return
+                void handleMergePending(mergeItem, mergeTargetId)
+              }}
+            >
+              Merge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={safetyCreateKind !== null}
         onOpenChange={(open) => {
           if (!open) {
             setSafetyCreateKind(null)
             setSafetyCreatePreview(null)
+            setSafetyCreateLocationKind('site')
           }
         }}
       >
@@ -544,6 +687,32 @@ export default function LookupTables() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {safetyCreateKind === 'location' ? (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="safety-create-location-kind"
+                  className="text-sm font-medium text-foreground"
+                >
+                  {t('admin.lookups.location_kind_label', 'Location kind')}
+                </label>
+                <select
+                  id="safety-create-location-kind"
+                  value={safetyCreateLocationKind}
+                  onChange={(e) =>
+                    setSafetyCreateLocationKind(e.target.value as LocationKindValue)
+                  }
+                  aria-label={t('admin.lookups.location_kind_label', 'Location kind')}
+                  data-testid="safety-create-location-kind"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                >
+                  {LOCATION_KIND_VALUES.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {t(LOCATION_KIND_LABEL_KEYS[kind].key, LOCATION_KIND_LABEL_KEYS[kind].fallback)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <Input
               value={safetyCreateName}
               onChange={(e) => void runSafetyCreatePreview(e.target.value)}

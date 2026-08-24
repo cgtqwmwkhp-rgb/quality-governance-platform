@@ -51,7 +51,6 @@ import {
   MicOff,
   Calendar,
   Clock,
-  User,
   Check,
   ChevronRight,
   ChevronLeft,
@@ -72,6 +71,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import { PersonNameField } from '../components/PersonNameField'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -143,10 +143,14 @@ interface ThirdParty {
 
 interface FormData {
   employeeName: string
+  /** UI-only roster link; never sent on portal submit. */
+  employeeEngineerId: number | null
   peVehicle: string
   peVehicleOther: string
   hasPassengers: boolean | null
   passengerDetails: string
+  driverInjured: boolean | null
+  driverInjuryDetails: string
   location: string
   accidentDate: string
   accidentTime: string
@@ -177,7 +181,14 @@ type Step = 1 | 2 | 3 | 4 | 5
 export function portalRtaCanProceed(step: Step, formData: FormData): boolean {
   switch (step) {
     case 1:
-      return !!formData.employeeName && !!formData.peVehicle && formData.hasPassengers !== null
+      // driverInjured is mandatory: an unanswered injury question used to be
+      // recorded as "nobody was hurt", which hides RIDDOR-reportable collisions.
+      return (
+        !!formData.employeeName &&
+        !!formData.peVehicle &&
+        formData.hasPassengers !== null &&
+        formData.driverInjured !== null
+      )
     case 2:
       return !!formData.location && !!formData.accidentType
     case 3:
@@ -192,7 +203,7 @@ export function portalRtaCanProceed(step: Step, formData: FormData): boolean {
 }
 
 export default function PortalRTAForm() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { user } = usePortalAuth()
   const [step, setStep] = useState<Step>(1)
@@ -214,10 +225,13 @@ export default function PortalRTAForm() {
 
   const [formData, setFormData] = useState<FormData>({
     employeeName: '',
+    employeeEngineerId: null,
     peVehicle: '',
     peVehicleOther: '',
     hasPassengers: null,
     passengerDetails: '',
+    driverInjured: null,
+    driverInjuryDetails: '',
     location: '',
     accidentDate: new Date().toISOString().split('T')[0],
     accidentTime: new Date().toTimeString().slice(0, 5),
@@ -338,7 +352,10 @@ Vehicle: ${formData.peVehicle === 'other' ? formData.peVehicleOther : formData.p
 Damage: ${formData.damageDescription}
 Weather: ${formData.weather || 'Not specified'}
 Road Conditions: ${formData.roadCondition || 'Not specified'}
-Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
+Drivable: ${formData.isDrivable ? 'Yes' : 'No'}
+Anyone injured in our vehicle: ${
+        formData.driverInjured === null ? 'Not answered' : formData.driverInjured ? 'Yes' : 'No'
+      }${formData.driverInjured && formData.driverInjuryDetails ? ` - ${formData.driverInjuryDetails}` : ''}${thirdPartiesDesc}`
 
       const reporterSubmission = {
         employee_name: formData.employeeName,
@@ -346,6 +363,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
         pe_vehicle_other: formData.peVehicleOther || null,
         has_passengers: formData.hasPassengers,
         passenger_details: formData.passengerDetails || null,
+        driver_injured: formData.driverInjured,
+        driver_injury_details: formData.driverInjuryDetails || null,
         location: formData.location,
         accident_date: formData.accidentDate,
         accident_time: formData.accidentTime,
@@ -496,28 +515,30 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
               <p className="text-muted-foreground text-sm">{t('portal.driver_vehicle_info')}</p>
             </div>
 
-            <div>
-              <label
-                htmlFor="portalrtaform-field-0"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('portal.your_name_label')} *
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="portalrtaform-field-0"
-                  data-testid="rta-employee-name"
-                  value={formData.employeeName}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, employeeName: e.target.value }))
-                  }
-                  placeholder={t('portal.full_name_placeholder')}
-                  className="pl-10"
-                  {...portalRequiredProps(true)}
-                />
-              </div>
-            </div>
+            <PersonNameField
+              id="portalrtaform-field-0"
+              testId="rta-employee-name"
+              mode="hybrid"
+              lang={i18n.language}
+              label={t('portal.your_name_label')}
+              placeholder={t('portal.full_name_placeholder')}
+              required
+              value={
+                formData.employeeName
+                  ? {
+                      displayName: formData.employeeName,
+                      engineerId: formData.employeeEngineerId,
+                    }
+                  : null
+              }
+              onChange={(next) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  employeeName: next?.displayName?.trim() ?? '',
+                  employeeEngineerId: next?.engineerId ?? null,
+                }))
+              }
+            />
 
             <FuzzySearchDropdown
               id="portalrtaform-field-pe-vehicle"
@@ -578,6 +599,58 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
                     setFormData((prev) => ({ ...prev, passengerDetails: e.target.value }))
                   }
                   placeholder={t('portal.passenger_placeholder')}
+                />
+              </div>
+            )}
+
+            <div>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.driver_injured', 'Were you or anyone in your vehicle injured?')} *
+              </span>
+              <div className="grid grid-cols-2 gap-3">
+                {[true, false].map((val) => (
+                  <button
+                    key={String(val)}
+                    type="button"
+                    data-testid={`rta-driver-injured-${val ? 'yes' : 'no'}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, driverInjured: val }))}
+                    className={cn(
+                      'px-4 py-3 rounded-xl border-2 font-medium transition-all',
+                      formData.driverInjured === val
+                        ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
+                    )}
+                  >
+                    {val ? t('common.yes', 'Yes') : t('common.no', 'No')}
+                  </button>
+                ))}
+              </div>
+              <p className="text-muted-foreground text-xs mt-2">
+                {t(
+                  'portal.driver_injured_hint',
+                  'Include any injury, however minor, and say if anyone was seen by a medic or taken to hospital.',
+                )}
+              </p>
+            </div>
+
+            {formData.driverInjured && (
+              <div>
+                <label
+                  htmlFor="portalrtaform-field-driver-injury"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.driver_injury_details', 'Injury details')}
+                </label>
+                <Input
+                  id="portalrtaform-field-driver-injury"
+                  value={formData.driverInjuryDetails}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, driverInjuryDetails: e.target.value }))
+                  }
+                  placeholder={t(
+                    'portal.driver_injury_placeholder',
+                    'e.g. neck and lower back pain, taken to hospital by ambulance',
+                  )}
                 />
               </div>
             )}

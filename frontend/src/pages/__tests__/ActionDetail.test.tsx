@@ -48,6 +48,57 @@ vi.mock('../../api/client', () => ({
     error instanceof Error ? error.message : fallback,
 }))
 
+
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({
+    testId = 'engineer-people-picker',
+    valueLabel = '',
+    onChange,
+  }: {
+    testId?: string
+    valueLabel?: string
+    onChange: (
+      selection: {
+        engineerId: number
+        label: string
+        hasLogin: boolean
+        user?: { id: number; email: string; full_name: string }
+      } | null,
+    ) => void
+  }) => (
+    <input
+      data-testid={testId}
+      aria-label="Assignee owner responsible"
+      value={valueLabel}
+      onChange={(e) =>
+        onChange({
+          engineerId: 1,
+          label: e.target.value,
+          hasLogin: true,
+          user: { id: 1, email: e.target.value, full_name: e.target.value },
+        })
+      }
+    />
+  ),
+}))
+
+vi.mock('../../components/graph/Entity360Strip', () => ({
+  Entity360Strip: ({
+    entityType,
+    entityId,
+    requiresSatellites,
+  }: {
+    entityType: string
+    entityId: number
+    requiresSatellites?: boolean
+  }) => (
+    <div data-testid="entity360-connections-strip">
+      {entityType}:{entityId}:{requiresSatellites ? 'sat' : 'core'}
+    </div>
+  ),
+}))
+
+
 const auditFindingAction = {
   id: 9,
   reference_number: 'ACT-0009',
@@ -170,6 +221,28 @@ describe('ActionDetail source deep-links', () => {
     expect(screen.getByRole('button', { name: /Assign/i })).toBeInTheDocument()
   })
 
+  it('mounts Entity360 Connections for capa keys only', async () => {
+    renderDetail('capa:9')
+    expect(await screen.findByTestId('action-detail-connections')).toBeInTheDocument()
+    expect(screen.getByTestId('entity360-connections-strip')).toHaveTextContent('capa:9:sat')
+  })
+
+  it('does not mount Entity360 Connections for non-capa action keys', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: {
+        ...auditFindingAction,
+        id: 3,
+        title: 'Cordon north gate',
+        action_key: 'incident_action:3',
+        source_type: 'incident',
+        source_id: 11,
+      },
+    })
+    renderDetail('incident_action:3')
+    expect(await screen.findByLabelText('Title')).toHaveValue('Cordon north gate')
+    expect(screen.queryByTestId('action-detail-connections')).not.toBeInTheDocument()
+  })
+
   it('shows SMTP honesty beside CAPA assignment when email is unconfigured', async () => {
     mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: false } })
 
@@ -195,5 +268,48 @@ describe('ActionDetail source deep-links', () => {
       'href',
       '/audits?view=findings&findingId=42',
     )
+  })
+})
+
+// PX-151: an owned action must not read as unowned just because no email resolved.
+describe('ActionDetail current owner (PX-151)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockListOwnerNotes.mockResolvedValue({ data: { items: [] } })
+    mockListEvidence.mockResolvedValue({ data: { items: [] } })
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
+  })
+
+  it('names the owner when the API resolved one', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: { ...auditFindingAction, owner_id: 42, assigned_to_email: 'lead@example.com' },
+    })
+
+    renderDetail()
+
+    const owner = await screen.findByTestId('action-detail-current-owner')
+    expect(owner).toHaveTextContent('lead@example.com')
+    expect(owner).toHaveAttribute('data-assignee-state', 'assigned')
+  })
+
+  it('does not claim Unassigned when an owner id exists without a resolved name', async () => {
+    mockGetByKey.mockResolvedValue({ data: { ...auditFindingAction, owner_id: 42 } })
+
+    renderDetail()
+
+    const owner = await screen.findByTestId('action-detail-current-owner')
+    expect(owner).not.toHaveTextContent('Unassigned')
+    expect(owner).toHaveTextContent('Assigned — owner name unavailable')
+    expect(owner).toHaveAttribute('data-assignee-state', 'assigned_unnamed')
+  })
+
+  it('says Unassigned when there is genuinely no owner', async () => {
+    mockGetByKey.mockResolvedValue({ data: { ...auditFindingAction } })
+
+    renderDetail()
+
+    const owner = await screen.findByTestId('action-detail-current-owner')
+    expect(owner).toHaveTextContent('Unassigned')
+    expect(owner).toHaveAttribute('data-assignee-state', 'unassigned')
   })
 })

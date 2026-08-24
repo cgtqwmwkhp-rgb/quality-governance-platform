@@ -32,6 +32,11 @@ class ComplaintType(str, enum.Enum):
     OTHER = "other"
 
 
+# One of the three fields the ``severity_levels`` lookup fills, so its members are
+# the shared severity set defined by IncidentSeverity (B-9). ``negligible`` was the
+# odd one out until then: the dropdown offered it, this enum did not have it, and
+# picking it returned 422. The docstring stays one line because FastAPI publishes it
+# as the OpenAPI description for the enum.
 class ComplaintPriority(str, enum.Enum):
     """Priority of complaint."""
 
@@ -39,6 +44,7 @@ class ComplaintPriority(str, enum.Enum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
+    NEGLIGIBLE = "negligible"
 
 
 class ComplaintStatus(str, enum.Enum):
@@ -67,7 +73,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
             name="ck_complaint_source_type",
         ),
         CheckConstraint(
-            "priority IN ('critical', 'high', 'medium', 'low')",
+            "priority IN ('critical', 'high', 'medium', 'low', 'negligible')",
             name="ck_complaints_priority",
         ),
         CheckConstraint(
@@ -104,6 +110,15 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     acknowledged_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     target_resolution_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Response SLA (PX-210). All three are nullable: a complaint with no agreed
+    # response SLA must read as "none stored" rather than as a met deadline.
+    # response_due_at is derived from received_date + response_sla_hours unless a
+    # caller supplies an explicit date; first_response_at records when the
+    # complainant was actually responded to.
+    response_sla_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Complainant details
     complainant_name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -174,12 +189,21 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     lessons_learnt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Soft delete (PX-177) — EvidenceAsset-style; list/get exclude deleted rows.
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     # Relationships
     actions: Mapped[List["ComplaintAction"]] = relationship(
         "ComplaintAction",
         back_populates="complaint",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def is_deleted(self) -> bool:
+        """True when this complaint has been soft-deleted."""
+        return self.deleted_at is not None
 
     def __repr__(self) -> str:
         return f"<Complaint(id={self.id}, ref='{self.reference_number}', type='{self.complaint_type}')>"
@@ -216,8 +240,17 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
     completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Soft delete (PX-177)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     # Relationships
     complaint: Mapped["Complaint"] = relationship("Complaint", back_populates="actions")
+
+    @property
+    def is_deleted(self) -> bool:
+        """True when this action has been soft-deleted."""
+        return self.deleted_at is not None
 
     def __repr__(self) -> str:
         return f"<ComplaintAction(id={self.id}, ref='{self.reference_number}', status='{self.status}')>"

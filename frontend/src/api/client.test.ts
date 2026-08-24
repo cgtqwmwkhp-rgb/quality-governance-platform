@@ -33,6 +33,7 @@ import api, {
   searchApi,
   evidenceAssetsApi,
   workflowsApi,
+  approvalsApi,
   executiveDashboardApi,
   formTemplatesApi,
   contractsApi,
@@ -42,6 +43,7 @@ import api, {
   externalAuditImportsApi,
   externalAuditRecordsApi,
 } from './client'
+import { BUILDER_SAVE_TIMEOUT_MS } from '../pages/audit-builder/saveConcurrency'
 
 function axiosErr(partial: {
   code?: string
@@ -117,6 +119,14 @@ describe('client pure helpers', () => {
     expect(resolveRequestTimeout('delete')).toBe(45000)
     expect(resolveRequestTimeout('post', 120000)).toBe(120000)
     expect(resolveRequestTimeout('get', 300000)).toBe(300000)
+  })
+
+  it('keeps the audit builder save override instead of the 45s write default', () => {
+    // FR-AUDIT-SAVE-01: multi-section builder saves need longer than 45s per
+    // request; every other write must keep the default.
+    expect(resolveRequestTimeout('patch', BUILDER_SAVE_TIMEOUT_MS)).toBe(BUILDER_SAVE_TIMEOUT_MS)
+    expect(resolveRequestTimeout('post', BUILDER_SAVE_TIMEOUT_MS)).toBe(BUILDER_SAVE_TIMEOUT_MS)
+    expect(BUILDER_SAVE_TIMEOUT_MS).not.toBe(resolveRequestTimeout('post'))
   })
 
   it('timeout/abort does not mark Offline when navigator.onLine is true', () => {
@@ -385,6 +395,7 @@ describe('client inline API surfaces', () => {
     complianceApi.getReport()
     complianceApi.downloadAuditPack({ includeNonconformity: true })
     complianceApi.downloadAuditPack()
+    complianceApi.downloadAuditPack({ frameworks: ['9001', '14001'] })
     complianceApi.listStandards()
     complianceApi.analyzeEvidence('text')
     complianceApi.getSoA('Acme')
@@ -393,6 +404,9 @@ describe('client inline API surfaces', () => {
       '/api/v1/compliance/audit-pack?include_nonconformity=true',
     )
     expect(api.get).toHaveBeenCalledWith('/api/v1/compliance/audit-pack')
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/compliance/audit-pack?frameworks=9001&frameworks=14001',
+    )
     crossStandardMappingsApi.list({
       source_standard: 'iso9001',
       target_standard: 'iso14001',
@@ -545,21 +559,13 @@ describe('client inline API surfaces', () => {
     evidenceAssetsApi.delete(1)
     evidenceAssetsApi.getSignedUrl(1, 60)
     evidenceAssetsApi.getSignedUrl(1)
-    workflowsApi.getPendingApprovals()
-    workflowsApi.approveRequest('a1', { notes: 'ok' })
-    workflowsApi.rejectRequest('a1', { reason: 'no' })
-    workflowsApi.bulkApprove(['a1', 'a2'], { notes: 'ok' })
     workflowsApi.listInstances({ status: 'active', entity_type: 'incident' })
     workflowsApi.listInstances()
     workflowsApi.listTemplates()
-    workflowsApi.getStats()
-    workflowsApi.getDelegations()
-    workflowsApi.setDelegation({
-      delegate_id: 2,
-      start_date: '2026-01-01',
-      end_date: '2026-02-01',
-    })
-    workflowsApi.cancelDelegation('d1')
+    // The approvals, delegation and stats methods were deleted with their
+    // endpoints (FR-APPROVALS-01). Outstanding decisions come from
+    // approvalsApi.myDecisions, which reads the domains that hold them.
+    approvalsApi.myDecisions()
     executiveDashboardApi.getDashboard(14)
     executiveDashboardApi.getSummary()
     executiveDashboardApi.getAlerts()

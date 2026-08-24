@@ -52,6 +52,7 @@ from src.domain.services.document_campaign_notifications import (
 )
 from src.domain.services.feature_flag_service import FeatureFlagService
 from src.domain.services.governance_service import GovernanceService
+from src.domain.services.reference_number import ReferenceNumberService
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +265,34 @@ class DocumentCampaignService:
 
     # ==================== Campaigns ====================
 
+    async def _mint_campaign_reference(self) -> str:
+        """Mint the stored ``CAM-YYYY-NNNN`` reference for a new campaign (PX-222).
+
+        Every surface reads this column instead of rebuilding a reference from the
+        surrogate id, which is what let the campaign panel and the compliance table
+        show two different references for the same campaign.
+        """
+        return await ReferenceNumberService.generate(self.db, "document_campaign", DocumentCampaign)
+
+    async def _resolve_tip_document_version_id(self, *, tenant_id: int, document_id: int) -> Optional[int]:
+        """Best-effort pin to the library tip version (published preferred, else approved)."""
+        from src.domain.services.document_version_service import document_version_service
+
+        try:
+            tip = await document_version_service.resolve_tip_library_version(
+                self.db,
+                document_id=document_id,
+                tenant_id=tenant_id,
+            )
+        except Exception:
+            logger.exception(
+                "tip document version resolve failed for document %s (tenant %s)",
+                document_id,
+                tenant_id,
+            )
+            return None
+        return tip.id if tip is not None else None
+
     async def create_campaign(
         self,
         *,
@@ -313,9 +342,16 @@ class DocumentCampaignService:
         if require_quiz and not quiz_questions:
             raise BadRequestError("require_quiz=true but no approved quiz draft found for this document")
 
-        campaign = DocumentCampaign(
+        document_version_id = await self._resolve_tip_document_version_id(
             tenant_id=tenant_id,
             document_id=document_id,
+        )
+
+        campaign = DocumentCampaign(
+            tenant_id=tenant_id,
+            reference_number=await self._mint_campaign_reference(),
+            document_id=document_id,
+            document_version_id=document_version_id,
             quiz_draft_id=quiz_draft_id,
             title=title,
             status=CampaignStatus.DRAFT,
@@ -1301,6 +1337,12 @@ class DocumentCampaignService:
 
         assignment.status = AssignmentStatus.COMPLETED
         assignment.completed_at = datetime.now(timezone.utc)
+        assignment.acknowledged_version_id = getattr(
+            campaign, "document_version_id", None
+        ) or await self._resolve_tip_document_version_id(
+            tenant_id=assignment.tenant_id,
+            document_id=campaign.document_id,
+        )
         assignment.acceptance_statement = acceptance_statement
         assignment.signature_data = signature_data if has_signature else None
         assignment.signature_disposition = resolved_disposition
@@ -1488,6 +1530,7 @@ class DocumentCampaignService:
             items.append(
                 {
                     "campaign_id": campaign.id,
+                    "reference_number": campaign.reference_number,
                     "document_id": campaign.document_id,
                     "document_title": document_title,
                     "title": campaign.title,
@@ -2518,7 +2561,12 @@ class DocumentCampaignService:
 
         campaign = DocumentCampaign(
             tenant_id=tenant_id,
+            reference_number=await self._mint_campaign_reference(),
             document_id=document_id,
+            document_version_id=await self._resolve_tip_document_version_id(
+                tenant_id=tenant_id,
+                document_id=document_id,
+            ),
             quiz_draft_id=source.quiz_draft_id,
             title=reack_title,
             status=CampaignStatus.DRAFT,

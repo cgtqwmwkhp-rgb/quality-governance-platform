@@ -3,10 +3,13 @@ import { portalRtaCanProceed } from '../PortalRTAForm'
 
 const step5Base = {
   employeeName: 'Alex Engineer',
+  employeeEngineerId: null,
   peVehicle: 'HV72ZUA',
   peVehicleOther: '',
   hasPassengers: false,
   passengerDetails: '',
+  driverInjured: false,
+  driverInjuryDetails: '',
   location: 'M4 J12',
   accidentDate: '2026-07-26',
   accidentTime: '09:30',
@@ -54,5 +57,13 @@ describe('portalRtaCanProceed — PX-277', () => {
   it('still gates earlier mandatory steps', () => {
     expect(portalRtaCanProceed(4, { ...step5Base, damageDescription: '' })).toBe(false)
     expect(portalRtaCanProceed(2, { ...step5Base, location: '' })).toBe(false)
+  })
+
+  it('requires an injury answer before leaving step 1', () => {
+    // An unanswered injury question was persisted as "nobody was hurt", which
+    // would hide a RIDDOR-reportable collision.
+    expect(portalRtaCanProceed(1, { ...step5Base, driverInjured: null })).toBe(false)
+    expect(portalRtaCanProceed(1, { ...step5Base, driverInjured: false })).toBe(true)
+    expect(portalRtaCanProceed(1, { ...step5Base, driverInjured: true })).toBe(true)
   })
 })

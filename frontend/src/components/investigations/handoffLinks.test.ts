@@ -7,6 +7,7 @@ import {
   getCapaLink,
   getInvestigationDetailHref,
   getInvestigationSourceLink,
+  parseComplianceRequirementId,
   resolveCapaHandoffMode,
 } from './handoffLinks'
 
@@ -81,6 +82,39 @@ describe('action source reverse deep-links', () => {
     expect(getActionSourceLink('incident', 0)).toBeNull()
     expect(getActionSourceLink('incident', null)).toBeNull()
     expect(getActionSourceLink(undefined, 5)).toBeNull()
+  })
+
+  it('sends a compliance action to its obligation, not to its occurrence', () => {
+    // source_id is the record (55); the page is the requirement (10).
+    expect(
+      getActionSourceLink('compliance_record', 55, 'compliance_requirement:10'),
+    ).toMatchObject({
+      href: '/compliance-schedule/10',
+      labelKey: 'actions.view_compliance_requirement',
+    })
+  })
+
+  it('offers no compliance link rather than a wrong one', () => {
+    // /compliance-schedule/55 is a real route: guessing here would open a
+    // different obligation, which is worse than not linking at all.
+    expect(getActionSourceLink('compliance_record', 55)).toBeNull()
+    expect(getActionSourceLink('compliance_record', 55, null)).toBeNull()
+    expect(getActionSourceLink('compliance_record', 55, 'CRC-2026-0001')).toBeNull()
+    expect(getActionSourceLink('compliance_record', 55, 'investigation:10')).toBeNull()
+    expect(getActionSourceLink('compliance_record', 55, 'compliance_requirement:0')).toBeNull()
+  })
+
+  it('ignores a compliance reference on any other source type', () => {
+    expect(getActionSourceLink('incident', 11, 'compliance_requirement:10')).toMatchObject({
+      href: '/incidents/11',
+    })
+  })
+
+  it('parses the obligation id out of the storage key', () => {
+    expect(parseComplianceRequirementId('compliance_requirement:10')).toBe(10)
+    expect(parseComplianceRequirementId('  compliance_requirement:7  ')).toBe(7)
+    expect(parseComplianceRequirementId('compliance_requirement:abc')).toBeNull()
+    expect(parseComplianceRequirementId(undefined)).toBeNull()
   })
 
   it('formats CAPA counts with residual honesty', () => {

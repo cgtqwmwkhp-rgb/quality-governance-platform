@@ -7,6 +7,7 @@ from src.api.routes import (
     ai_intelligence,
     ai_templates,
     analytics,
+    approvals,
     assessments,
     asset_health_analytics,
     asset_imports,
@@ -22,18 +23,22 @@ from src.api.routes import (
     complaints,
     compliance,
     compliance_automation,
+    compliance_schedule,
     copilot,
     cross_standard_mappings,
     dlq_admin,
     document_campaign,
     document_categories,
     document_control,
+    document_graph,
     documents,
     drivers,
     employee_portal,
     engineers,
+    entity_360,
     evidence_assets,
     executive_dashboard,
+    exports,
     external_audit_imports,
     external_audit_records,
     feature_flags,
@@ -51,11 +56,14 @@ from src.api.routes import (
     investigation_templates,
     investigations,
     iso27001,
+    job_lifecycle,
     kri,
     legal_holds,
     library_review,
     loler_inspections,
+    meta,
     near_miss,
+    notification_inventory,
     notifications,
     ocr_ops,
     partner_auth,
@@ -64,6 +72,8 @@ from src.api.routes import (
     policies,
     policy_acknowledgment,
     portal_compliance,
+    portal_fire_drill,
+    portal_job_lifecycle,
     privacy,
     push_notifications,
     rca_tools,
@@ -108,6 +118,10 @@ router.include_router(xml_import.router, prefix="/xml-import", tags=["XML Templa
 router.include_router(risks.router, prefix="/risks", tags=["Operational Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 router.include_router(actions.router, prefix="/actions", tags=["Actions"])
+# Read-only "needs my decision" aggregate over domain approval queues. Owns no
+# table: it reads the domains that raise the decisions. See
+# src/domain/services/approvals_read_model.py for why this is not an engine.
+router.include_router(approvals.router, prefix="/approvals", tags=["Approvals"])
 router.include_router(rtas.router, prefix="/rtas", tags=["Road Traffic Collisions"])
 router.include_router(
     investigation_templates.router,
@@ -118,12 +132,35 @@ router.include_router(investigations.router, prefix="/investigations", tags=["In
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
+router.include_router(
+    document_graph.router,
+    prefix="/document-graph",
+    tags=["Document Relationship Graph"],
+)
+router.include_router(
+    entity_360.router,
+    prefix="/entity-360",
+    tags=["Entity 360"],
+)
+router.include_router(
+    job_lifecycle.router,
+    prefix="/job-lifecycle",
+    tags=["Job Lifecycle"],
+)
+# Export Center — sync CSV catalog + download (PX-160). No export_jobs this wave.
+router.include_router(exports.router, prefix="/exports", tags=["Export Center"])
 # Governance Library taxonomy (Wave W0) — category tree + tag vocabulary
 router.include_router(document_categories.router, prefix="/document-categories", tags=["Governance Library Taxonomy"])
 router.include_router(library_review.router, prefix="/library-review", tags=["Governance Library Review"])
 router.include_router(global_search.router, prefix="/search", tags=["Global Search"])
 router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
 router.include_router(portal_compliance.router, prefix="/portal", tags=["Employee Portal"])
+router.include_router(portal_fire_drill.router, prefix="/portal", tags=["Employee Portal"])
+router.include_router(
+    portal_job_lifecycle.router,
+    prefix="/portal/job-lifecycle",
+    tags=["Employee Portal"],
+)
 router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])
 router.include_router(
     governed_knowledge.router,
@@ -147,6 +184,11 @@ router.include_router(
     compliance_automation.router,
     prefix="/compliance-automation",
     tags=["Compliance Automation"],
+)
+router.include_router(
+    compliance_schedule.router,
+    prefix="/compliance-schedule",
+    tags=["Compliance Schedule"],
 )
 # Enterprise Risk Register & AI Intelligence (Tier 1 & 2)
 router.include_router(risk_register.router, prefix="/risk-register", tags=["Enterprise Risk Register"])
@@ -182,7 +224,7 @@ router.include_router(
 # Planet Mark Carbon Management
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])
 # AI Copilot (Tier 2)
-router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
+router.include_router(copilot.router, prefix="/copilot", tags=["PlantEx Assist"])
 # Digital Signatures (Tier 2)
 router.include_router(signatures.router, prefix="/signatures", tags=["Digital Signatures"])
 # Multi-tenancy (Tier 1)
@@ -281,6 +323,8 @@ router.include_router(slo.router, prefix="/slo", tags=["SLO Metrics"])
 router.include_router(health.router, prefix="/health", tags=["Health"])
 # Canonical OCR / meta ops (alias; legacy remains under /health/meta)
 router.include_router(ocr_ops.router, prefix="/meta", tags=["Meta"])
+# Client feature-flag channel: what the frontend is allowed to render
+router.include_router(meta.router, prefix="/meta", tags=["Meta"])
 # GDPR data-subject rights (Art. 15 export, Art. 17 erasure)
 router.include_router(gdpr.router, tags=["GDPR"])
 # Public privacy contact + lifecycle capability flags (Path-to-10 S15)
@@ -289,6 +333,13 @@ router.include_router(privacy.router, tags=["Privacy"])
 router.include_router(legal_holds.router, prefix="/legal-holds", tags=["Legal Holds"])
 # Push Notification Service (VAPID web-push)
 router.include_router(push_notifications.router, prefix="/notifications/push", tags=["Push Notifications"])
+# Read-only inventory of what this deployment can actually notify. Mounted apart
+# from the notifications router so the reporting surface holds no dispatch path.
+router.include_router(
+    notification_inventory.router,
+    prefix="/notifications/inventory",
+    tags=["Notifications"],
+)
 # Vehicle Checklists (PAMS Integration)
 router.include_router(
     vehicle_checklists.router,

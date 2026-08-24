@@ -1,20 +1,61 @@
-"""Automatic CAPA generation from assessment and induction outcomes.
+"""Automatic CAPA generation from assessment, induction and compliance outcomes.
 
-When an assessment fails or an induction has "Not Yet Competent" items,
-this service auto-creates CAPA actions linked to the source run.
+When an assessment fails, an induction has "Not Yet Competent" items, a
+compliance obligation is closed with a failed check, or an operator confirms
+checked FRA OCR priority actions, this service creates CAPA actions linked to
+the source run, record, or draft.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
+from src.domain.models.compliance_schedule import ComplianceRecord, ComplianceRequirement
 from src.domain.services.reference_number import ReferenceNumberService
 
 logger = logging.getLogger(__name__)
+
+# ``source_id`` holds the occurrence (the record), because that is what makes one
+# failure distinct from the next and is therefore what deduplication has to key
+# on. The obligation the failure belongs to is the thing a reader wants to open,
+# so it travels in ``source_reference`` as a storage key rather than a display
+# string — the same shape as ``investigation:6``, which the Actions surfaces
+# already recognise as internal and refuse to print (isInternalSourceReference).
+COMPLIANCE_REQUIREMENT_SOURCE_PREFIX = "compliance_requirement"
+
+
+def compliance_requirement_source_reference(requirement_id: int) -> str:
+    """Storage key pointing a compliance CAPA back at its obligation."""
+    return f"{COMPLIANCE_REQUIREMENT_SOURCE_PREFIX}:{int(requirement_id)}"
+
+
+FRA_OCR_DRAFT_SOURCE_PREFIX = "fra_ocr_draft"
+
+
+def fra_ocr_draft_source_reference(draft_id: int) -> str:
+    """Storage key pointing a FRA OCR CAPA back at its draft."""
+    return f"{FRA_OCR_DRAFT_SOURCE_PREFIX}:{int(draft_id)}"
+
+
+def _naive_utc(value: datetime) -> datetime:
+    """Normalise to UTC, then drop the offset.
+
+    ``capa_actions.due_date`` is ``DateTime`` with no ``timezone=True``, so on
+    PostgreSQL it is TIMESTAMP WITHOUT TIME ZONE and asyncpg refuses an aware
+    datetime for it outright. SQLite accepts either, so a unit run against a
+    mocked or SQLite session cannot show the difference — only an integration run
+    on PostgreSQL does.
+
+    Converting before stripping matters: dropping the offset off a non-UTC aware
+    value would silently store a different instant.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class CAPAAutoService:
@@ -176,6 +217,102 @@ class CAPAAutoService:
         return created
 
     @staticmethod
+    async def create_from_compliance_record(
+        db: AsyncSession,
+        *,
+        record: ComplianceRecord,
+        requirement: ComplianceRequirement,
+        created_by_id: int,
+        now: Optional[datetime] = None,
+    ) -> CAPAAction:
+        """Raise the corrective action owed by a failed compliance check.
+
+        Takes the two rows rather than loose ids so tenancy is derived here from
+        the record itself and cross-checked against the obligation, instead of
+        being asserted by whichever caller happens to be writing. ``capa_actions``
+        is under ``tenant_isolation`` with FORCE, so a wrong tenant id would not
+        silently cross customers — it would fail the policy's WITH CHECK and
+        abort the completion. Refusing it in this frame says why.
+
+        Idempotent per occurrence: a second call for the same record returns the
+        CAPA already raised rather than a duplicate, matching the assessment and
+        induction paths.
+
+        Due dates run from wall-clock now, not from ``completed_at``. Historical
+        occurrences are entered against past due dates during onboarding, and
+        anchoring the CAPA to those would open it already overdue — an artefact
+        of when the data was typed rather than a real breach. They are stored
+        naive; see :func:`_naive_utc` for why the column leaves no choice.
+        """
+        tenant_id = record.tenant_id
+        if tenant_id is None:
+            raise ValueError("compliance record has no tenant; refusing to raise an untenanted CAPA")
+        if requirement.tenant_id != tenant_id:
+            raise ValueError(
+                f"compliance record {record.id} (tenant {tenant_id}) does not belong to "
+                f"requirement {requirement.id} (tenant {requirement.tenant_id})"
+            )
+        if record.requirement_id != requirement.id:
+            raise ValueError(
+                f"compliance record {record.id} belongs to requirement "
+                f"{record.requirement_id}, not {requirement.id}"
+            )
+        if record.id is None:
+            raise ValueError("compliance record must be flushed before a CAPA can reference it")
+
+        source_reference = compliance_requirement_source_reference(requirement.id)
+        existing = await CAPAAutoService._existing_action(
+            db,
+            source_type=CAPASource.COMPLIANCE_RECORD,
+            source_reference=source_reference,
+            source_id=record.id,
+            tenant_id=tenant_id,
+        )
+        if existing is not None:
+            return existing
+
+        statutory = bool(requirement.statutory)
+        priority = CAPAPriority.CRITICAL if statutory else CAPAPriority.HIGH
+        due_days = 7 if statutory else 30
+        clock = now or datetime.now(timezone.utc)
+
+        ref = await ReferenceNumberService.generate(db, "capa", CAPAAction)
+        capa = CAPAAction(
+            reference_number=ref,
+            title=f"Compliance Check Failed: {requirement.title[:200]}",
+            description=(
+                f"Occurrence of {requirement.reference_number} was closed with a FAILED check.\n\n"
+                f"Obligation: {requirement.title}\n"
+                f"Occurrence due: {record.due_date.isoformat()}\n"
+                f"Statutory: {'yes' if statutory else 'no'}\n"
+                f"Notes: {record.notes or 'None provided'}\n\n"
+                f"Compliance Record: {record.reference_number}"
+            ),
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            source_type=CAPASource.COMPLIANCE_RECORD,
+            source_id=record.id,
+            source_reference=source_reference,
+            priority=priority,
+            # The obligation owner is already refused unless they belong to this
+            # tenant (ComplianceScheduleService._assert_owner_in_tenant), so it is
+            # safe to carry through; unowned obligations leave the CAPA
+            # unassigned rather than parking it on whoever filed the record.
+            assigned_to_id=requirement.owner_id,
+            created_by_id=created_by_id,
+            due_date=_naive_utc(clock + timedelta(days=due_days)),
+            tenant_id=tenant_id,
+        )
+        db.add(capa)
+        logger.info(
+            "CAPA created for failed compliance check: record=%s requirement=%s tenant=%s",
+            record.reference_number,
+            requirement.reference_number,
+            tenant_id,
+        )
+        return capa
+
+    @staticmethod
     async def create_from_loler(
         db: AsyncSession,
         examination_id: int,
@@ -217,5 +354,123 @@ class CAPAAutoService:
             )
             db.add(capa)
             created.append(capa)
+
+        return created
+
+    @staticmethod
+    async def create_from_fra_ocr_actions(
+        db: AsyncSession,
+        *,
+        draft_id: int,
+        requirement: ComplianceRequirement,
+        actions: list,
+        created_by_id: int,
+        now: Optional[datetime] = None,
+    ) -> list:
+        """Raise CAPAs for operator-checked FRA OCR priority action rows.
+
+        The caller must already have filtered to the checked rows — this method
+        never invents actions from the OCR proposal. Empty ``actions`` returns
+        ``[]`` without touching the session.
+
+        Idempotent per ``(draft_id, action index)``: a second confirm of the same
+        draft/index returns the existing CAPA rather than a duplicate.
+        """
+        if not actions:
+            return []
+
+        tenant_id = requirement.tenant_id
+        if tenant_id is None:
+            raise ValueError("compliance requirement has no tenant; refusing untenanted FRA OCR CAPA")
+        if draft_id is None or int(draft_id) <= 0:
+            raise ValueError("FRA OCR draft id is required before CAPAs can reference it")
+
+        source_reference = fra_ocr_draft_source_reference(int(draft_id))
+        clock = now or datetime.now(timezone.utc)
+        priority_map = {
+            "high": CAPAPriority.HIGH,
+            "medium": CAPAPriority.MEDIUM,
+            "low": CAPAPriority.LOW,
+        }
+        due_days = {"high": 7, "medium": 30, "low": 60}
+        created: list = []
+
+        for action in actions:
+            if not isinstance(action, dict):
+                continue
+            raw_index = action.get("index")
+            if raw_index is None:
+                continue
+            try:
+                index = int(raw_index)
+            except (TypeError, ValueError):
+                continue
+            if index < 0:
+                continue
+            text_value = str(action.get("text") or "").strip()
+            if not text_value:
+                continue
+
+            existing = await CAPAAutoService._existing_action(
+                db,
+                source_type=CAPASource.FRA_OCR,
+                source_reference=source_reference,
+                source_id=index,
+                tenant_id=tenant_id,
+            )
+            if existing is not None:
+                created.append(existing)
+                continue
+
+            priority_key = str(action.get("priority_normalised") or "medium").lower()
+            priority = priority_map.get(priority_key, CAPAPriority.MEDIUM)
+
+            target_raw = action.get("target_date")
+            due_date: datetime
+            if target_raw:
+                if isinstance(target_raw, date) and not isinstance(target_raw, datetime):
+                    due_date = datetime(target_raw.year, target_raw.month, target_raw.day)
+                elif isinstance(target_raw, datetime):
+                    due_date = target_raw
+                elif isinstance(target_raw, str) and target_raw.strip():
+                    parsed = date.fromisoformat(target_raw.strip()[:10])
+                    due_date = datetime(parsed.year, parsed.month, parsed.day)
+                else:
+                    due_date = clock + timedelta(days=due_days.get(priority_key, 30))
+            else:
+                due_date = clock + timedelta(days=due_days.get(priority_key, 30))
+
+            ref = await ReferenceNumberService.generate(db, "capa", CAPAAction)
+            description = (
+                f"Priority action confirmed from FRA / PAS 79 OCR draft {draft_id}.\n\n"
+                f"Obligation: {requirement.reference_number} — {requirement.title}\n"
+                f"Action index: {index}\n"
+                f"Priority: {priority_key}\n\n"
+                f"{text_value}"
+            )
+            capa = CAPAAction(
+                reference_number=ref,
+                title=f"FRA Priority Action: {text_value[:200]}",
+                description=description,
+                capa_type=CAPAType.CORRECTIVE,
+                status=CAPAStatus.OPEN,
+                source_type=CAPASource.FRA_OCR,
+                source_id=index,
+                source_reference=source_reference,
+                priority=priority,
+                assigned_to_id=requirement.owner_id,
+                created_by_id=created_by_id,
+                due_date=_naive_utc(due_date),
+                tenant_id=tenant_id,
+            )
+            db.add(capa)
+            created.append(capa)
+            logger.info(
+                "CAPA created for FRA OCR draft=%s action_index=%s requirement=%s tenant=%s",
+                draft_id,
+                index,
+                requirement.reference_number,
+                tenant_id,
+            )
 
         return created

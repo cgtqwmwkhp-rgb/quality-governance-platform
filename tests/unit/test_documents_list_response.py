@@ -101,6 +101,19 @@ def test_document_to_response_serializes_governance_dates_and_batched_fields():
     assert response.live_at == live_at
 
 
+def test_document_to_response_projects_href_from_registry():
+    """WA-1 / L-05b: every filed doc gets Detail href via href_registry."""
+    response = _document_to_response(_sample_doc(id=11, pel_doc_ref="PEL-01-01-0003"))
+    assert response.href == "/documents/11"
+    assert response.pel_doc_ref == "PEL-01-01-0003"
+
+
+def test_document_to_response_href_never_blank_without_pel():
+    response = _document_to_response(_sample_doc(id=42, pel_doc_ref=None))
+    assert response.href == "/documents/42"
+    assert response.pel_doc_ref is None
+
+
 def test_document_upload_response_rejects_none_reference_number():
     """Guardrail: API contract requires a string reference (prod 500 root cause)."""
     try:

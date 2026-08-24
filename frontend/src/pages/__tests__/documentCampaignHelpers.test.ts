@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CampaignComplianceRow } from '../../api/documentCampaignClient'
 import {
   buildCampaignPayload,
+  campaignReference,
   campaignRingLabel,
   campaignRingPercent,
   campaignRingTone,
@@ -128,6 +129,46 @@ describe('campaign reference + UAT honesty (PX-222 / PX-221)', () => {
         created_at: '2026-01-01T00:00:00Z',
       }),
     ).toBe('CAM-2026-0016 · Policy read')
+  })
+
+  it('uses the stored reference in preference to anything rebuilt from the id', () => {
+    expect(
+      campaignReference(16, {
+        reference_number: 'CAM-2026-0004',
+        launched_at: '2026-01-10T00:00:00Z',
+        created_at: '2026-01-01T00:00:00Z',
+      }),
+    ).toBe('CAM-2026-0004')
+  })
+
+  it('falls back to the derived reference only while a campaign has none stored', () => {
+    expect(campaignReference(16, { reference_number: null, created_at: '2025-01-01T00:00:00Z' })).toBe(
+      'CAM-2025-0016',
+    )
+    expect(campaignReference(16, { reference_number: '   ', created_at: '2025-01-01T00:00:00Z' })).toBe(
+      'CAM-2025-0016',
+    )
+    expect(campaignReference(16, {})).toMatch(/^CAM-\d{4}-0016$/)
+  })
+
+  it('carries the stored reference through the list label the panels render', () => {
+    expect(
+      formatCampaignListLabel({
+        id: 16,
+        title: 'Policy read',
+        reference_number: 'CAM-2026-0004',
+        launched_at: '2026-01-10T00:00:00Z',
+        created_at: '2026-01-01T00:00:00Z',
+      }),
+    ).toBe('CAM-2026-0004 · Policy read')
+  })
+
+  it('no longer lets two surfaces disagree about a draft campaign', () => {
+    // The compliance table used to fall back to the *current* year for a draft
+    // while the panel used created_at, so the same campaign read differently.
+    const draft = { reference_number: 'CAM-2025-0009', launched_at: null, created_at: '2025-11-02T00:00:00Z' }
+    expect(campaignReference(9, draft)).toBe(campaignReference(9, { ...draft }))
+    expect(campaignReference(9, draft)).toBe('CAM-2025-0009')
   })
 
   it('flags UAT / thin-suite campaign artefacts without false positives', () => {

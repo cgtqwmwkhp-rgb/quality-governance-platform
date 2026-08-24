@@ -8,7 +8,7 @@ compatibility re-export at ``src.services.executive_dashboard``.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, cast
 
 from sqlalchemy import and_, func, or_, select
@@ -22,11 +22,13 @@ from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatu
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.policy_acknowledgment import AcknowledgmentStatus, PolicyAcknowledgment
-from src.domain.models.risk import Risk
+from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.rta import RTA, RTAStatus
 from src.domain.models.training_matrix import TrainingMatrixCell, TrainingMatrixImport
 from src.domain.models.workflow_rules import SLATracking
 from src.domain.services.asset_health_analytics_service import AssetHealthRow, aggregate_asset_health_kpis
+from src.domain.services.risk_service import register_active_clause, register_visibility_clause
+from src.domain.services.session_savepoint import SavepointScope, read_savepoint
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,8 @@ _EMPTY_RTA_SUMMARY: Dict[str, Any] = {
     "closed": 0,
 }
 _EMPTY_RISK_SUMMARY: Dict[str, Any] = {
+    # None (not 0): a failed summary must not look like an empty register (PX-226).
+    "register_total": None,
     "total_active": 0,
     "by_level": {},
     "high_critical": 0,
@@ -90,6 +94,18 @@ _EMPTY_SLA_SUMMARY: Dict[str, Any] = {
     "breached": 0,
     "compliance_rate": None,
 }
+_EMPTY_TRAINING_SUMMARY: Dict[str, Any] = {
+    # None (not 0) throughout: an unread matrix must not report a compliant
+    # workforce, and it must not report a wholly non-compliant one either. The
+    # counts are as unmeasured as the rate is, so none of them may be a number
+    # (C-7). ``measured_cells`` of None is what tells a caller the difference
+    # between this and a matrix that really holds no scored cells.
+    "measured_cells": None,
+    "compliant_cells": None,
+    "completion_rate": None,
+    "expiring_soon": None,
+    "overdue": None,
+}
 _EMPTY_AUDIT_SUMMARY: Dict[str, Any] = {
     "totals": 0,
     "completed": 0,
@@ -99,6 +115,34 @@ _EMPTY_AUDIT_SUMMARY: Dict[str, Any] = {
     "essential_compliance_pct": None,
     "incomplete_critical_count": 0,
 }
+# Days ahead that counts as "expiring soon" for the training headline. Matches the
+# 30-day horizon the training matrix UI uses for its amber band.
+TRAINING_EXPIRY_HORIZON_DAYS = 30
+
+
+def training_cell_is_scored(passed_on: Optional[date], expires_on: Optional[date]) -> bool:
+    """Whether a matrix cell carries enough information to be scored at all.
+
+    The denominator for every training compliance figure. A cell with neither a
+    pass date nor an expiry is an unpopulated requirement, not a failure, so
+    counting it as non-compliant would report a half-filled matrix as poor
+    training rather than as an incomplete matrix.
+    """
+    return passed_on is not None or expires_on is not None
+
+
+def training_cell_is_compliant(passed_on: Optional[date], expires_on: Optional[date], as_of: date) -> bool:
+    """Whether a scored cell is compliant at ``as_of``.
+
+    Passed, and either never expires or has not expired yet. ``expires_on ==
+    as_of`` is still compliant: the certificate is valid for the whole of its
+    expiry day.
+    """
+    if passed_on is None:
+        return False
+    return expires_on is None or expires_on >= as_of
+
+
 _TREND_SERIES = (
     "incidents_weekly",
     "complaints_weekly",
@@ -114,26 +158,125 @@ _EMPTY_TRENDS: Dict[str, Any] = {
 }
 
 
+def _assert_no_pending_writes(db: Any) -> None:
+    """Refuse construction when the shared session already holds uncommitted writes.
+
+    The service recovers from a failed sub-query so later tiles can still run.
+    Since C-8 that recovery is a savepoint unwind, which leaves writes staged
+    before the savepoint alone — but it still falls back to a full
+    ``Session.rollback()`` when the session cannot open a savepoint or the unwind
+    itself fails, and that would silently discard them. The fence stays: this is a
+    read-only path, so there is nothing here worth betting on the fallback never
+    firing.
+    """
+    pending = [
+        *(getattr(db, "new", None) or ()),
+        *(getattr(db, "dirty", None) or ()),
+        *(getattr(db, "deleted", None) or ()),
+    ]
+    if pending:
+        raise RuntimeError(
+            "ExecutiveDashboardService rolls its session back when a sub-query fails "
+            f"(_recover_session), which would silently discard {len(pending)} pending "
+            "write(s) already on this session. Construct it on a read-only path."
+        )
+
+
 class ExecutiveDashboardService:
     """Service for generating executive KPI dashboards."""
 
     def __init__(self, db: AsyncSession, *, tenant_id: Optional[int] = None):
+        _assert_no_pending_writes(db)
         self.db = db
         self.tenant_id = tenant_id
 
     def _tenant_filter(self, model: Any) -> Any:
-        """Return a tenant_id filter clause if tenant_id is set."""
-        if self.tenant_id is not None:
-            return model.tenant_id == self.tenant_id
-        return True  # noqa: E712  — SQLAlchemy literal
+        """Return tenant scope, excluding soft-deleted rows when the model has them.
 
-    async def _safe_call(self, coro, default):
-        """Run an async function, returning default on any DB error."""
+        Register lists filter ``deleted_at IS NULL``; dashboard aggregates must use
+        the same population or register_total / open counts drift (PX-177).
+        """
+        clauses: list[Any] = []
+        if self.tenant_id is not None:
+            clauses.append(model.tenant_id == self.tenant_id)
+        if hasattr(model, "deleted_at"):
+            clauses.append(model.deleted_at.is_(None))
+        if not clauses:
+            return True  # noqa: E712  — SQLAlchemy literal
+        if len(clauses) == 1:
+            return clauses[0]
+        return and_(*clauses)
+
+    async def _recover_session(self, scope: Optional[SavepointScope] = None) -> None:
+        """Put the transaction back into a usable state after a failed sub-query.
+
+        PostgreSQL aborts the whole transaction on the first failing statement
+        and refuses everything after it until the transaction ends. Swallowing
+        the error without unwinding therefore turns one broken aggregate into
+        a dashboard of zeros — every later tile reports "query failed" and falls
+        back to its empty default, which is indistinguishable from real data.
+
+        The unwind is a savepoint, not ``Session.rollback()`` (C-8). A full
+        rollback ends the request's whole transaction and expires every instance
+        in its identity map, including the ``current_user`` this service shares a
+        session with; reading an attribute off it afterwards emits a lazy refresh,
+        which over an async session raises MissingGreenlet. That is a 500 this
+        repository has already paid for — ``analytics.py`` still carries a
+        defensive ``tenant_id`` read from when it happened. Unwinding to the
+        savepoint ``_safe_call`` opened costs the failed aggregate and nothing
+        else. Same recovery as ``actions.py`` ``_read_savepoint`` (C-53).
+
+        The rollback survives as the fallback, for the two shapes where no
+        savepoint stands between the failure and the rest of the request: a
+        session that cannot open one, and an unwind that failed. Leaving those
+        unrecovered would trade a rare expired identity map for the guaranteed
+        page of zeros #1388 removed. ``_assert_no_pending_writes`` is what keeps
+        the fallback safe to take.
+        """
+        if scope is not None and scope.recovered:
+            return
         try:
-            return await coro
+            await self.db.rollback()
+        except Exception:  # pragma: no cover - the session is already unusable
+            logger.warning("Dashboard session rollback failed", exc_info=True)
+
+    async def _safe_call(self, coro, default, *, name: Optional[str] = None, unavailable: Optional[List[str]] = None):
+        """Run an async function inside a savepoint, returning default on any DB error.
+
+        The savepoint has to be opened before the statement that fails, so it is
+        taken here rather than inside ``_recover_session``: recovery cannot roll
+        back to a savepoint nobody took.
+
+        When ``name`` and ``unavailable`` are given, a failure records the
+        aggregate's name so the caller can tell "this could not be measured" from
+        "this measured nothing". Without that record the two are the same answer,
+        because most of the empty defaults below are legitimate values: an
+        ``audits`` default of ``totals: 0`` is exactly what a tenant with no audit
+        runs produces (C-7).
+
+        The alternative — making every count in every empty default ``None`` — was
+        rejected because it changes ``ExecutiveDashboardResponse``'s published
+        field types from ``integer`` to a nullable union, which the OpenAPI
+        compatibility gate classifies as a breaking change for existing clients.
+        A name on a list is additive and says the same thing.
+        """
+        scope: Optional[SavepointScope] = None
+        try:
+            async with read_savepoint(self.db) as scope:
+                return await coro
         except Exception as e:
             logger.warning("Dashboard query failed: %s", e)
+            await self._recover_session(scope)
+            if name is not None and unavailable is not None:
+                unavailable.append(name)
             return default
+        finally:
+            # Opening the savepoint can itself raise, in which case ``coro`` was
+            # never awaited and would otherwise warn on collection. Closing a
+            # coroutine that already ran is a no-op.
+            close = getattr(coro, "close", None)
+            if close is not None:
+                close()
 
     async def _avg_resolution_days(self, start_col: Any, end_col: Any, tf: Any) -> Optional[float]:
         """Mean days from event to closure over closed records with both timestamps.
@@ -153,31 +296,62 @@ class ExecutiveDashboardService:
     async def get_full_dashboard(
         self,
         period_days: int = 30,
+        *,
+        user: Any = None,
     ) -> Dict[str, Any]:
         """Get complete executive dashboard with all KPIs."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
+        # Names of the aggregates whose queries failed, so a consumer can report
+        # "unavailable" instead of publishing an empty default as a measurement.
+        # Same idea as ``_EMPTY_TRENDS["unavailable"]`` (PX-193), one level up.
+        unavailable: List[str] = []
+
         incident_summary = await self._safe_call(
             self._get_incident_summary(cutoff),
             dict(_EMPTY_INCIDENT_SUMMARY),
+            name="incidents",
+            unavailable=unavailable,
         )
         near_miss_summary = await self._safe_call(
             self._get_near_miss_summary(cutoff),
             dict(_EMPTY_NEAR_MISS_SUMMARY),
+            name="near_misses",
+            unavailable=unavailable,
         )
         complaint_summary = await self._safe_call(
             self._get_complaint_summary(cutoff),
             dict(_EMPTY_COMPLAINT_SUMMARY),
+            name="complaints",
+            unavailable=unavailable,
         )
-        rta_summary = await self._safe_call(self._get_rta_summary(cutoff), dict(_EMPTY_RTA_SUMMARY))
-        risk_summary = await self._safe_call(self._get_risk_summary(), dict(_EMPTY_RISK_SUMMARY))
-        kri_summary = await self._safe_call(self._get_kri_summary(), dict(_EMPTY_KRI_SUMMARY))
+        rta_summary = await self._safe_call(
+            self._get_rta_summary(cutoff), dict(_EMPTY_RTA_SUMMARY), name="rtas", unavailable=unavailable
+        )
+        risk_summary = await self._safe_call(
+            self._get_risk_summary(), dict(_EMPTY_RISK_SUMMARY), name="risks", unavailable=unavailable
+        )
+        kri_summary = await self._safe_call(
+            self._get_kri_summary(), dict(_EMPTY_KRI_SUMMARY), name="kris", unavailable=unavailable
+        )
         compliance_summary = await self._safe_call(
             self._get_compliance_summary(),
             dict(_EMPTY_COMPLIANCE_SUMMARY),
+            name="compliance",
+            unavailable=unavailable,
         )
-        sla_summary = await self._safe_call(self._get_sla_summary(), dict(_EMPTY_SLA_SUMMARY))
-        audit_summary = await self._safe_call(self._get_audit_summary(period_days), dict(_EMPTY_AUDIT_SUMMARY))
+        sla_summary = await self._safe_call(
+            self._get_sla_summary(), dict(_EMPTY_SLA_SUMMARY), name="sla_performance", unavailable=unavailable
+        )
+        audit_summary = await self._safe_call(
+            self._get_audit_summary(period_days),
+            dict(_EMPTY_AUDIT_SUMMARY),
+            name="audits",
+            unavailable=unavailable,
+        )
+        training_summary = await self._safe_call(
+            self._get_training_summary(), dict(_EMPTY_TRAINING_SUMMARY), name="training", unavailable=unavailable
+        )
 
         health_score = self._calculate_health_score(
             incident_summary,
@@ -189,9 +363,30 @@ class ExecutiveDashboardService:
             sla_summary,
         )
 
-        trends = await self._safe_call(self._get_trends(period_days), dict(_EMPTY_TRENDS))
-        alerts = await self._safe_call(self._get_active_alerts(), [])
-        safety_insights = await self._safe_call(self._get_safety_insights_summary(), {})
+        trends = await self._safe_call(
+            self._get_trends(period_days), dict(_EMPTY_TRENDS), name="trends", unavailable=unavailable
+        )
+        alerts = await self._safe_call(self._get_active_alerts(), [], name="alerts", unavailable=unavailable)
+        safety_insights = await self._safe_call(
+            self._get_safety_insights_summary(), {}, name="safety_insights", unavailable=unavailable
+        )
+
+        # None when closed to this caller; unavailable-shaped payload when open but unread.
+        compliance_schedule = None
+        if self._compliance_schedule_open_to(user):
+            compliance_schedule = await self._safe_call(
+                self._get_compliance_schedule_summary(),
+                {
+                    "available": False,
+                    "total_active": None,
+                    "current": None,
+                    "due_soon": None,
+                    "overdue": None,
+                    "href": "/compliance-schedule",
+                },
+                name="compliance_schedule",
+                unavailable=unavailable,
+            )
 
         # Ensure all sparkline series keys exist even if a partial trends dict is returned.
         trends = {**dict(_EMPTY_TRENDS), **trends}
@@ -209,9 +404,12 @@ class ExecutiveDashboardService:
             "compliance": compliance_summary,
             "sla_performance": sla_summary,
             "audits": audit_summary,
+            "training": training_summary,
             "trends": trends,
             "alerts": alerts,
             "safety_insights": safety_insights,
+            "compliance_schedule": compliance_schedule,
+            "unavailable": unavailable,
         }
 
     async def _get_safety_insights_summary(self) -> Dict[str, Any]:
@@ -240,6 +438,52 @@ class ExecutiveDashboardService:
             ],
             "ratios": (payload.get("ratios") or {}).get("corpus"),
             "href": "/analytics/safety-insights",
+        }
+
+    @staticmethod
+    def _compliance_schedule_open_to(user: Any) -> bool:
+        """Whether the Compliance Schedule tile may appear for this caller.
+
+        Mirrors search / meta features: deployment opener, subtract-only kill
+        switch (last known — no I/O on the shared dashboard session), and
+        ``compliance_schedule:read``. Closed means the field stays ``None`` so
+        clients omit the tile rather than publishing zeros.
+        """
+        from src.core.config import settings
+        from src.domain.services.compliance_schedule_kill_switch import compliance_schedule_kill_switch_last_known
+
+        if user is None:
+            return False
+        if not settings.compliance_schedule_enabled:
+            return False
+        if compliance_schedule_kill_switch_last_known():
+            return False
+        has_permission = getattr(user, "has_permission", None)
+        if not callable(has_permission):
+            return False
+        return bool(has_permission("compliance_schedule:read"))
+
+    async def _get_compliance_schedule_summary(self) -> Dict[str, Any]:
+        """Reuse ComplianceScheduleService.get_stats — same counts as GET /stats."""
+        if self.tenant_id is None:
+            return {
+                "available": False,
+                "total_active": None,
+                "current": None,
+                "due_soon": None,
+                "overdue": None,
+                "href": "/compliance-schedule",
+            }
+        from src.domain.services.compliance_schedule_service import ComplianceScheduleService
+
+        stats = await ComplianceScheduleService(self.db).get_stats(tenant_id=self.tenant_id)
+        return {
+            "available": True,
+            "total_active": stats["total_active"],
+            "current": stats["current"],
+            "due_soon": stats["due_soon"],
+            "overdue": stats["overdue"],
+            "href": "/compliance-schedule",
         }
 
     async def _get_incident_summary(self, cutoff: datetime) -> Dict[str, Any]:
@@ -470,33 +714,52 @@ class ExecutiveDashboardService:
         }
 
     async def _get_risk_summary(self) -> Dict[str, Any]:
-        """Get risk summary statistics."""
-        tf = self._tenant_filter(Risk)
+        """Get risk summary statistics from the Enterprise Risk Register.
 
-        total_result = await self.db.execute(select(func.count(Risk.id)).where(and_(tf, Risk.is_active == True)))
-        total = total_result.scalar() or 0
+        Reads ``EnterpriseRisk`` (``risks_v2``) — the store every risk-creating
+        path in the platform writes to — using the same tenant and triage
+        visibility predicates as ``GET /api/v1/risk-register/``. It previously
+        counted the operational ``Risk`` table, which only ``POST /api/v1/risks/``
+        ever writes, so the executive risk tile read an empty table while the
+        register showed a full population (PX-178).
 
-        level_counts = {}
-        for level in ["critical", "high", "medium", "low", "negligible"]:
-            count_result = await self.db.execute(
-                select(func.count(Risk.id)).where(
-                    and_(
-                        tf,
-                        Risk.is_active == True,
-                        Risk.risk_level == level,
-                    )
-                )
-            )
+        ``register_total`` is the whole visible register and reconciles exactly
+        with the register list total. ``total_active`` is the narrower
+        not-closed subset that ``/risk-register/summary`` reports and that the
+        health score consumes; the two are different populations on purpose and
+        are named for what they are (PX-223).
+        """
+        tf = self._tenant_filter(EnterpriseRisk)
+        vis = register_visibility_clause()
+
+        register_total = (
+            await self.db.execute(select(func.count(EnterpriseRisk.id)).where(and_(tf, vis)))
+        ).scalar() or 0
+
+        active = and_(tf, vis, register_active_clause())
+        total = (await self.db.execute(select(func.count(EnterpriseRisk.id)).where(active))).scalar() or 0
+
+        # Canonical 5x5 bands (RiskScoringEngine): low <=4, medium 5-9, high 10-16, critical >=17.
+        # `negligible` is retained at 0 so the by_level key set stays stable for consumers.
+        level_counts: Dict[str, int] = {"negligible": 0}
+        for level, clause in (
+            ("critical", EnterpriseRisk.residual_score >= 17),
+            ("high", EnterpriseRisk.residual_score.between(10, 16)),
+            ("medium", EnterpriseRisk.residual_score.between(5, 9)),
+            ("low", EnterpriseRisk.residual_score <= 4),
+        ):
+            count_result = await self.db.execute(select(func.count(EnterpriseRisk.id)).where(and_(active, clause)))
             level_counts[level] = count_result.scalar() or 0
 
-        avg_result = await self.db.execute(select(func.avg(Risk.risk_score)).where(and_(tf, Risk.is_active == True)))
+        avg_result = await self.db.execute(select(func.avg(EnterpriseRisk.residual_score)).where(active))
         avg_score = avg_result.scalar() or 0
 
         return {
+            "register_total": register_total,
             "total_active": total,
             "by_level": level_counts,
             "high_critical": level_counts.get("critical", 0) + level_counts.get("high", 0),
-            "average_score": round(avg_score, 1),
+            "average_score": round(float(avg_score), 1),
         }
 
     async def _get_kri_summary(self) -> Dict[str, Any]:
@@ -612,12 +875,19 @@ class ExecutiveDashboardService:
         unavailable: List[str],
         build: Callable[[], Awaitable[List[Dict[str, Any]]]],
     ) -> List[Dict[str, Any]]:
-        """Run one trend builder; on failure record the series and return []."""
+        """Run one trend builder; on failure record the series and return [].
+
+        Savepoint-scoped for the same reason as ``_safe_call``: five more series
+        run after this one and each is several statements (C-8).
+        """
+        scope: Optional[SavepointScope] = None
         try:
-            return await build()
+            async with read_savepoint(self.db) as scope:
+                return await build()
         except Exception:
             logger.exception("%s trend failed", name)
             unavailable.append(name)
+            await self._recover_session(scope)
             return []
 
     async def _trend_count_in_window(
@@ -695,12 +965,14 @@ class ExecutiveDashboardService:
             tool_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
         return tool_compliance_weekly
 
-    async def _trend_training_compliance_weekly(
-        self, week_windows: List[tuple[datetime, datetime, str]]
-    ) -> List[Dict[str, Any]]:
-        training_compliance_weekly: List[Dict[str, Any]] = []
+    async def _load_scored_training_cells(self) -> List[TrainingMatrixCell]:
+        """Scored cells of the tenant's most recent training matrix import.
+
+        Shared by the headline summary and the weekly sparkline so the two cannot
+        drift onto different denominators and contradict each other (C-7).
+        """
         if self.tenant_id is None:
-            return training_compliance_weekly
+            return []
         latest_imp = await self.db.execute(
             select(TrainingMatrixImport.id)
             .where(TrainingMatrixImport.tenant_id == self.tenant_id)
@@ -708,29 +980,59 @@ class ExecutiveDashboardService:
             .limit(1)
         )
         import_id = latest_imp.scalar_one_or_none()
-        cells: List[TrainingMatrixCell] = []
-        if import_id is not None:
-            cell_result = await self.db.execute(
-                select(TrainingMatrixCell).where(
-                    and_(
-                        TrainingMatrixCell.tenant_id == self.tenant_id,
-                        TrainingMatrixCell.import_id == import_id,
-                    )
+        if import_id is None:
+            return []
+        cell_result = await self.db.execute(
+            select(TrainingMatrixCell).where(
+                and_(
+                    TrainingMatrixCell.tenant_id == self.tenant_id,
+                    TrainingMatrixCell.import_id == import_id,
                 )
             )
-            cells = list(cell_result.scalars().all())
-        scored = [c for c in cells if c.passed_on is not None or c.expires_on is not None]
+        )
+        return [c for c in cell_result.scalars().all() if training_cell_is_scored(c.passed_on, c.expires_on)]
+
+    async def _get_training_summary(self) -> Dict[str, Any]:
+        """Point-in-time training compliance for the tenant's latest matrix import.
+
+        Returns the all-None shape when there is nothing to measure — no import,
+        or an import with no scored cell. That is deliberately the same shape a
+        failed query produces, because both are the same fact: we cannot say what
+        training compliance is. Before this existed, ``/analytics/kpis`` served a
+        hardcoded ``completion_rate`` of 0.0 whatever the matrix held (C-7).
+        """
+        scored = await self._load_scored_training_cells()
+        if not scored:
+            return dict(_EMPTY_TRAINING_SUMMARY)
+
+        as_of = datetime.now(timezone.utc).date()
+        horizon = as_of + timedelta(days=TRAINING_EXPIRY_HORIZON_DAYS)
+        compliant = sum(1 for c in scored if training_cell_is_compliant(c.passed_on, c.expires_on, as_of))
+        # Expired, not merely un-passed: an expiry in the past is a lapsed
+        # certificate, which is a different piece of work from one never taken.
+        overdue = sum(1 for c in scored if c.expires_on is not None and c.expires_on < as_of)
+        expiring_soon = sum(1 for c in scored if c.expires_on is not None and as_of <= c.expires_on < horizon)
+        return {
+            "measured_cells": len(scored),
+            "compliant_cells": compliant,
+            "completion_rate": percentage_or_none(compliant, len(scored), digits=1),
+            "expiring_soon": expiring_soon,
+            "overdue": overdue,
+        }
+
+    async def _trend_training_compliance_weekly(
+        self, week_windows: List[tuple[datetime, datetime, str]]
+    ) -> List[Dict[str, Any]]:
+        training_compliance_weekly: List[Dict[str, Any]] = []
+        if self.tenant_id is None:
+            return training_compliance_weekly
+        scored = await self._load_scored_training_cells()
         for _ws, week_end, label in week_windows:
             as_of = week_end.date()
             if not scored:
                 training_compliance_weekly.append({"week_start": label, "count": 0, "value": None})
                 continue
-            ok = 0
-            for cell in scored:
-                if cell.passed_on is None:
-                    continue
-                if cell.expires_on is None or cell.expires_on >= as_of:
-                    ok += 1
+            ok = sum(1 for cell in scored if training_cell_is_compliant(cell.passed_on, cell.expires_on, as_of))
             pct = round(100.0 * ok / len(scored), 1)
             training_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
         return training_compliance_weekly

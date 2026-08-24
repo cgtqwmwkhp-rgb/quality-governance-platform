@@ -86,11 +86,15 @@ async def test_disposal_execute_delegates_only_when_flag_enabled(monkeypatch):
 
     assert result.disposed_document_ids == [11]
     execute.assert_awaited_once()
+    # Still an exact whole-call assertion. ``entity_name`` is named here because a
+    # bulk disposal has no single record to name, and C-5 requires that case to be
+    # stated rather than left as a null indistinguishable from an omission.
     audit.assert_awaited_once_with(
         db=ANY,
         event_type="document_library.disposed",
         entity_type="document",
         entity_id="11",
+        entity_name="1 retention-due library document(s)",
         action="delete",
         description="Hard-disposed 1 retention-due library document(s)",
         payload={"actor_id": 42, "document_ids": [11], "count": 1},

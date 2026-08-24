@@ -9,7 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AssessmentRunCreate(BaseModel):
-    """Schema for creating an assessment run."""
+    """Schema for creating an assessment run.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the run being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     template_id: int
     engineer_id: int
@@ -22,7 +28,13 @@ class AssessmentRunCreate(BaseModel):
 
 
 class AssessmentRunUpdate(BaseModel):
-    """Schema for updating an assessment run."""
+    """Schema for updating an assessment run.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the run being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(None, max_length=300)
     location: Optional[str] = Field(None, max_length=200)
@@ -81,7 +93,13 @@ class AssessmentRunListResponse(BaseModel):
 
 
 class AssessmentResponseCreate(BaseModel):
-    """Schema for creating an assessment response."""
+    """Schema for creating an assessment response.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the response being saved while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     question_id: int
     verdict: Optional[str] = Field(None, pattern="^(competent|not_competent|na)$")
@@ -90,7 +108,13 @@ class AssessmentResponseCreate(BaseModel):
 
 
 class AssessmentResponseUpdate(BaseModel):
-    """Schema for updating an assessment response."""
+    """Schema for updating an assessment response.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the response being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     verdict: Optional[str] = Field(None, pattern="^(competent|not_competent|na)$")
     feedback: Optional[str] = None

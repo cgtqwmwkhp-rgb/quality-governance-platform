@@ -80,6 +80,11 @@ describe('knowledgeExceptionsHonesty — why detail', () => {
     expect(detail.isGeneric).toBe(true)
     expect(detail.lines.some((l) => l.includes('generic label'))).toBe(true)
   })
+
+  it('includes ingest gate_reason in why lines when logged', () => {
+    const detail = buildWhyDetail(baseLink({ gate_reason: 'below_threshold' }))
+    expect(detail.lines.some((l) => l === 'Ingest gate: below threshold')).toBe(true)
+  })
 })
 
 describe('knowledgeExceptionsHonesty — stable de-dupe', () => {
@@ -121,5 +126,15 @@ describe('knowledgeExceptionsHonesty — stable de-dupe', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].primary.status).toBe('confirmed')
     expect(rows[0].allocationKind).toBe('already_confirmed')
+  })
+
+  it('preserves server order while choosing the best primary within each group', () => {
+    const rows = dedupeKnowledgeExceptions([
+      baseLink({ id: 10, entity_id: 'first', confidence: 0.5 }),
+      baseLink({ id: 99, entity_id: 'second', confidence: 0.8 }),
+      baseLink({ id: 11, entity_id: 'first', confidence: 0.9 }),
+    ])
+
+    expect(rows.map((row) => row.primary.id)).toEqual([11, 99])
   })
 })

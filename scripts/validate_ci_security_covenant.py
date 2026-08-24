@@ -122,6 +122,95 @@ def check_critical_gate_softening(workflow_path: Path) -> List[str]:
     return errors
 
 
+# Every workflow that can set the container image on the production Web App. They must
+# share one concurrency group so only one of them writes production at a time.
+PRODUCTION_WRITERS = {
+    "deploy-production.yml": False,
+    "rollback-production.yml": True,
+    "provision-production.yml": False,
+}
+PRODUCTION_LOCK_GROUP = "deploy-production"
+
+
+def _top_level_concurrency(content: str) -> tuple:
+    """
+    Extract (group, cancel_in_progress) from a workflow's top-level concurrency block.
+
+    Returns (None, None) when the workflow declares no top-level concurrency.
+    """
+    block = re.search(r"(?m)^concurrency:\s*\n((?:[ \t]+\S.*\n?)+)", content)
+    if not block:
+        return None, None
+
+    body = block.group(1)
+    group_match = re.search(r"(?m)^\s+group:\s*(.+?)\s*$", body)
+    cancel_match = re.search(r"(?m)^\s+cancel-in-progress:\s*(true|false)\s*$", body)
+
+    group = group_match.group(1) if group_match else None
+    cancel = cancel_match.group(1) == "true" if cancel_match else None
+    return group, cancel
+
+
+def _group_joins_production_lock(group: str) -> bool:
+    """
+    True when a concurrency group actually joins the production lock.
+
+    A substring test is not good enough: 'deploy-production-provision' contains
+    'deploy-production' but is a different group, so a rename would pass unnoticed —
+    exactly the silent drift this check exists to catch. Plain groups must match
+    exactly. Expression groups (deploy-production.yml routes documentation-only runs
+    elsewhere) must offer the bare group as one of their quoted branches.
+    """
+    group = group.strip()
+    if "${{" in group:
+        return re.search(rf"'{re.escape(PRODUCTION_LOCK_GROUP)}'", group) is not None
+    return group.strip("\"'") == PRODUCTION_LOCK_GROUP
+
+
+def check_production_writer_lock(repo_root: Path) -> List[str]:
+    """
+    Enforce that all production writers share one concurrency group.
+
+    Drift here is silent: if one file's group is renamed and the others are not, no run
+    fails and no annotation appears — the workflows simply deploy concurrently again and
+    the last writer wins. Only the emergency rollback may preempt; a deploy must never
+    cancel a write that is already in flight.
+    """
+    errors = []
+    workflows_dir = repo_root / ".github" / "workflows"
+
+    for filename, expect_cancel in PRODUCTION_WRITERS.items():
+        path = workflows_dir / filename
+        if not path.exists():
+            errors.append(f"  ❌ {filename}: production writer is missing")
+            errors.append(f"     If it was renamed, update PRODUCTION_WRITERS in {Path(__file__).name}")
+            continue
+
+        group, cancel = _top_level_concurrency(path.read_text())
+
+        if group is None:
+            errors.append(f"  ❌ {filename}: writes production but declares no concurrency group")
+            errors.append(f"     Add a top-level `concurrency:` with group '{PRODUCTION_LOCK_GROUP}'")
+        elif not _group_joins_production_lock(group):
+            errors.append(f"  ❌ {filename}: concurrency group is not exactly '{PRODUCTION_LOCK_GROUP}'")
+            errors.append(f"     Found: {group}")
+            errors.append("     All production writers must share this group or the guard silently stops existing")
+
+        if cancel is None:
+            errors.append(f"  ❌ {filename}: concurrency block does not set cancel-in-progress")
+        elif cancel != expect_cancel:
+            errors.append(
+                f"  ❌ {filename}: cancel-in-progress is {str(cancel).lower()}, expected {str(expect_cancel).lower()}"
+            )
+            if expect_cancel:
+                errors.append("     The rollback must preempt: a pending run is cancelled by the next arrival,")
+                errors.append("     so queueing means an emergency rollback can silently never run.")
+            else:
+                errors.append("     Only the emergency rollback may preempt; a deploy must never kill a live write.")
+
+    return errors
+
+
 def main() -> int:
     """Main validation logic."""
     print("=" * 80)
@@ -162,6 +251,14 @@ def main() -> int:
             print(f"  ✅ No security violations detected")
 
         print()
+
+    print("Checking: production writer concurrency lock")
+    lock_errors = check_production_writer_lock(repo_root)
+    if lock_errors:
+        all_errors.extend(lock_errors)
+    else:
+        print(f"  ✅ All {len(PRODUCTION_WRITERS)} production writers share group '{PRODUCTION_LOCK_GROUP}'")
+    print()
 
     print("=" * 80)
     if all_errors:

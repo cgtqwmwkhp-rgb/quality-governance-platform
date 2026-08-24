@@ -13,6 +13,7 @@ import { test, expect, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { inDeclarationOrder, linkAuditStore } from '../utils/audit-entries';
 
 // Types
 interface PageEntry {
@@ -37,6 +38,13 @@ interface LinkAuditResult {
   dead_links: number;
   external_links: number;
   links: LinkResult[];
+  /**
+   * Why this page contributed no link evidence, when it did not.
+   *
+   * A page that skipped for want of a token used to leave the artifact
+   * altogether, which reads identically to a page with no dead links.
+   */
+  skipped_reason?: string;
 }
 
 // Load registry
@@ -57,8 +65,18 @@ function loadPages(): PageEntry[] {
     .filter(p => !p.route.includes(':'));
 }
 
-// Test storage for aggregation
-const linkAuditResults: LinkAuditResult[] = [];
+/**
+ * Record a page's link findings.
+ *
+ * This group runs in `mode: 'parallel'`, and playwright.config.ts sets
+ * `fullyParallel: true` with `workers: 2` in CI — two worker *processes*, each
+ * with its own copy of a module-level array, each `afterAll` writing the same
+ * artifact path, last writer winning. Each page now writes its own file and the
+ * merge reads the directory. See utils/audit-entries.ts.
+ */
+function recordResult(result: LinkAuditResult): void {
+  linkAuditStore.write(result.source_page, result);
+}
 
 // Auth helper — uses addInitScript to inject token before any page JS runs,
 // avoiding SSO redirects that break the navigate-then-evaluate approach.
@@ -175,20 +193,41 @@ test.describe('Link Audit', () => {
         // Setup auth
         const authReady = await setupAuth(page, pageEntry.auth);
         if (!authReady && pageEntry.auth !== 'anon') {
-          test.skip(true, `Auth type ${pageEntry.auth} not configured`);
+          // Record the skip before aborting. test.skip() throws, so a page that
+          // returned here left no entry at all — and an absent entry reads
+          // exactly like a page that was audited and had no dead links.
+          result.skipped_reason = `Auth type ${pageEntry.auth} not configured`;
+          recordResult(result);
+          test.skip(true, result.skipped_reason);
           return;
         }
         
-        // Navigate to page
+        // Navigate to page.
+        // networkidle is flaky on SWA (analytics/keepalive keep the network busy on a
+        // healthy SPA), so it is deliberately not used here. Do not restore it.
         await page.goto(pageEntry.route, {
-          waitUntil: 'networkidle',
+          waitUntil: 'domcontentloaded',
           timeout: 30000,
         });
-        
-        // Wait for app to render
-        await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
-        
-        // Extract all anchor tags
+
+        // C-56: wait for the route-content marker, not the empty shell.
+        //
+        // frontend/index.html ships `<div id="root"></div>` empty. Waiting for
+        // `#root > *` only proves React painted the shell (Layout / auth loader).
+        // Measured against a fake SPA whose shell paints immediately and whose
+        // route content mounts 1.5s later: that empty-shell snapshot recorded 0
+        // links on every page and reported a pass. The app now emits
+        // `[data-ux-route-content]` from AnimatedOutlet / PortalLayout / auth
+        // pages once the route body mounts. An empty shell never carries that
+        // attribute, so the wait times out and the page is recorded as a dead
+        // link (failure), not as 0 dead links (fabricated pass). Portal pages
+        // that legitimately have zero anchors still pass after the marker
+        // appears — requiring ≥1 anchor is not the honesty rule.
+        await page.locator('[data-ux-route-content]').first().waitFor({
+          state: 'attached',
+          timeout: 15000,
+        });
+
         const links = await page.locator('a[href]').all();
         
         for (const link of links) {
@@ -238,7 +277,7 @@ test.describe('Link Audit', () => {
         result.dead_links++;
       }
       
-      linkAuditResults.push(result);
+      recordResult(result);
       
       // Fail if there are dead links (excluding parameterized routes that may not resolve)
       const criticalDeadLinks = result.links.filter(
@@ -250,25 +289,43 @@ test.describe('Link Audit', () => {
   }
 });
 
-// Write results after all tests
+/**
+ * Merge the per-page entry files into the artifact the aggregator reads.
+ *
+ * Runs in every worker, and reads the directory rather than this process's own
+ * results, so the last worker to finish emits the complete set however the run
+ * was split across workers or retries.
+ */
 test.afterAll(async () => {
-  const outputPath = path.join(__dirname, '../results/link_audit.json');
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  
-  const totalValid = linkAuditResults.reduce((sum, r) => sum + r.valid_links, 0);
-  const totalDead = linkAuditResults.reduce((sum, r) => sum + r.dead_links, 0);
-  const totalExternal = linkAuditResults.reduce((sum, r) => sum + r.external_links, 0);
-  
-  fs.writeFileSync(outputPath, JSON.stringify({
+  fs.mkdirSync(path.dirname(linkAuditStore.outputPath), { recursive: true });
+
+  const results = inDeclarationOrder(
+    linkAuditStore.readAll<LinkAuditResult>(),
+    pages.map(p => p.pageId),
+    r => r.source_page,
+  );
+
+  const totalValid = results.reduce((sum, r) => sum + r.valid_links, 0);
+  const totalDead = results.reduce((sum, r) => sum + r.dead_links, 0);
+  const totalExternal = results.reduce((sum, r) => sum + r.external_links, 0);
+
+  fs.writeFileSync(linkAuditStore.outputPath, JSON.stringify({
     audit_type: 'link',
     timestamp: new Date().toISOString(),
-    total_pages_audited: linkAuditResults.length,
-    total_links: linkAuditResults.reduce((sum, r) => sum + r.total_links, 0),
+    // How many entries the registry asked for, as opposed to how many arrived.
+    // total_dead is the only number this audit contributes to the score, and an
+    // entry that never reached the artifact contributes nothing to it — so a lost
+    // page looks exactly like a clean one. The aggregator holds the gate when
+    // this count is not met.
+    expected_entries: pages.length,
+    total_pages_audited: results.length,
+    pages_skipped: results.filter(r => r.skipped_reason).length,
+    total_links: results.reduce((sum, r) => sum + r.total_links, 0),
     total_valid: totalValid,
     total_dead: totalDead,
     total_external: totalExternal,
-    results: linkAuditResults,
-    dead_end_map: linkAuditResults
+    results,
+    dead_end_map: results
       .flatMap(r => r.links.filter(l => l.status === 'dead'))
       .map(l => ({ source: l.source_page, href: l.href, error: l.error })),
   }, null, 2));

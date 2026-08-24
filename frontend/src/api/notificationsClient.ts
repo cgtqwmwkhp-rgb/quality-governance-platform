@@ -35,8 +35,8 @@ export interface NotificationPreferences {
   quiet_hours_enabled?: boolean
   quiet_hours_start?: string | null
   quiet_hours_end?: string | null
-  email_digest_enabled?: boolean
-  email_digest_frequency?: string
+  // `email_digest_*` columns are returned by the API but no digest job reads them,
+  // so they are not modelled here — nothing may render or send them as settings.
   category_preferences?: Record<string, NotificationCategoryChannels>
 }
 

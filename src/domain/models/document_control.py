@@ -100,7 +100,12 @@ class ControlledDocument(Base):
     linked_training_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Retention
-    retention_period_years: Mapped[int] = mapped_column(Integer, default=7)
+    #: CUT-1b — there is no `retention_period_years` here. Retention lives on the
+    #: Register row (`documents.retention_years` / `retention_anchor` /
+    #: `retention_until`, filed from the category under F-7 §2). A parallel
+    #: integer on the control record was a second system of record whose
+    #: SQLAlchemy `default=7` wrote Citation (ATLAS)'s flat seven years onto every
+    #: controlled document, whatever its category actually said.
     disposal_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Obsolete handling

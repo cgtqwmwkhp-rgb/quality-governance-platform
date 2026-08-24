@@ -59,12 +59,13 @@ interface NotificationPreferenceRow {
   inApp: boolean
 }
 
+// `weekly_summaries` is deliberately absent: no digest job exists to send a weekly
+// summary, so offering the toggle would promise delivery that never happens.
 const CATEGORY_IDS = [
   'high_priority_alerts',
   'action_reminders',
   'audit_notifications',
   'document_updates',
-  'weekly_summaries',
   'assignment_notifications',
 ] as const
 
@@ -75,7 +76,6 @@ const DEFAULT_CATEGORY_CHANNELS: Record<CategoryId, NotificationCategoryChannels
   action_reminders: { email: true, push: true, in_app: true },
   audit_notifications: { email: true, push: false, in_app: true },
   document_updates: { email: false, push: false, in_app: true },
-  weekly_summaries: { email: true, push: false, in_app: false },
   assignment_notifications: { email: true, push: true, in_app: true },
 }
 

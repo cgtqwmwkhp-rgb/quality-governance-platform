@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from sqlalchemy import or_, select
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.compliance_evidence import (
     ComplianceEvidenceLink,
+    EvidenceCoverKind,
     EvidenceLinkMethod,
     EvidenceLinkStatus,
     EvidenceSignalType,
@@ -27,10 +28,12 @@ from src.domain.models.standard import Clause, Standard
 from src.domain.models.uvdb_achilles import UVDBQuestion, UVDBSection
 from src.domain.services.document_ai_service import DocumentAIService, VectorSearchService
 from src.domain.services.iso_compliance_service import iso_compliance_service
+from src.domain.services.standards_ingest_gate import AutoConfirmDecision, StandardsAutoConfirmContext
+from src.domain.services.standards_ingest_gate import evaluate as evaluate_auto_confirm
 
 logger = logging.getLogger(__name__)
 
-AUTO_CONFIRM_THRESHOLD = 0.85
+AUTO_CONFIRM_THRESHOLD = 0.85  # regulatory_watch CAPA threshold — do NOT raise for Standards ingest
 STRICT_DOC_TYPES = frozenset({"rams", "coshh", "msds", "sds", "ram", "method_statement"})
 
 # Operational cases must never auto-confirm as conformance evidence.
@@ -101,6 +104,52 @@ class SchemeMapping:
     title: Optional[str] = None
 
 
+def expand_iso_exact_peers(mappings: list[SchemeMapping], guard: Any) -> list[SchemeMapping]:
+    """Propose ISO-family EXACT peers for already-matched ISO clauses (Int-W10).
+
+    Cases stay ``force_proposed``. Empty/unloaded guard → no expansion.
+    Never invents EXACT for CHAS/SSIP/CE/CEP/PM/UVDB/IiP.
+    """
+    from src.domain.services.standards_trap_guard import (
+        ISO_NUMBERING_FAMILY,
+        clause_number_from_token,
+        framework_from_clause_token,
+    )
+
+    if guard is None or not getattr(guard, "is_loaded", False):
+        return []
+    extra: list[SchemeMapping] = []
+    seen = {mapping.clause_id for mapping in mappings}
+    for mapping in mappings:
+        fw = framework_from_clause_token(mapping.clause_id)
+        if fw not in ISO_NUMBERING_FAMILY:
+            continue
+        clause = clause_number_from_token(mapping.clause_id)
+        if not clause:
+            continue
+        annotation = guard.annotate_cell(framework=fw, clause_number=clause)
+        for peer in annotation.get("peers") or []:
+            if str(peer.get("verdict") or "").strip().upper() != "EXACT":
+                continue
+            peer_fw = str(peer.get("framework") or "").strip().lower()
+            if peer_fw not in ISO_NUMBERING_FAMILY:
+                continue
+            peer_clause_id = str(peer.get("clause_key") or "").strip()
+            if not peer_clause_id or peer_clause_id in seen:
+                continue
+            seen.add(peer_clause_id)
+            extra.append(
+                SchemeMapping(
+                    clause_id=peer_clause_id,
+                    scheme=f"iso{peer_fw}",
+                    confidence=mapping.confidence,
+                    rationale=f"EXACT alignment peer of {mapping.clause_id}",
+                    title=mapping.title,
+                )
+            )
+    return extra
+
+
 @dataclass
 class RelatedDocumentHit:
     document_id: int
@@ -132,15 +181,30 @@ def resolve_link_status(
     doc_type: Optional[str],
     *,
     force_proposed: bool = False,
+    gate: Optional[Any] = None,
 ) -> tuple[EvidenceLinkStatus, bool]:
-    """Return (status, auto_applied) using AI-first threshold rules."""
+    """Return (status, auto_applied) for Standards ingest.
+
+    When ``gate`` is provided (an :class:`AutoConfirmDecision`), it is the sole
+    authority for machine confirmation. When ``gate`` is omitted the result is
+    always PROPOSED — fail-closed so the legacy 0.85 path cannot silently return.
+    ``AUTO_CONFIRM_THRESHOLD`` remains 0.85 for ``regulatory_watch_service`` only.
+    """
     if force_proposed:
         return EvidenceLinkStatus.PROPOSED, False
-    norm = _normalize_confidence(confidence)
-    doc_normalized = (doc_type or "").lower().replace("-", "_").replace(" ", "_")
-    if doc_normalized in STRICT_DOC_TYPES or norm < AUTO_CONFIRM_THRESHOLD:
+    if gate is None:
         return EvidenceLinkStatus.PROPOSED, False
-    return EvidenceLinkStatus.CONFIRMED, True
+    if getattr(gate, "auto_confirm", False):
+        return EvidenceLinkStatus.CONFIRMED, True
+    return EvidenceLinkStatus.PROPOSED, False
+
+
+@dataclass
+class MapDocumentResult:
+    """Document mapping outcome including auto-confirm gate tallies."""
+
+    links: list[ComplianceEvidenceLink]
+    gate_summary: dict[str, Any] = field(default_factory=dict)
 
 
 def classify_operational_signal(
@@ -222,45 +286,46 @@ class GovernedKnowledgeService:
         user: Any,
         force_proposed: bool = False,
         signal_type: Optional[EvidenceSignalType] = None,
-    ) -> ComplianceEvidenceLink:
+        gate_context: Optional[StandardsAutoConfirmContext] = None,
+    ) -> tuple[ComplianceEvidenceLink, str]:
+        decision = evaluate_auto_confirm(
+            confidence=mapping.confidence,
+            doc_type=doc_type,
+            clause_id=mapping.clause_id,
+            entity_type=entity_type,
+            force_proposed=force_proposed or entity_type in OPERATIONAL_ENTITY_TYPES,
+            context=gate_context,
+        )
         status, auto_applied = resolve_link_status(
             mapping.confidence,
             doc_type,
             force_proposed=force_proposed or entity_type in OPERATIONAL_ENTITY_TYPES,
+            gate=decision,
         )
 
-        existing_result = await db.execute(
-            select(ComplianceEvidenceLink).where(
-                ComplianceEvidenceLink.deleted_at.is_(None),
-                ComplianceEvidenceLink.tenant_id == tenant_id,
-                ComplianceEvidenceLink.entity_type == entity_type,
-                ComplianceEvidenceLink.entity_id == entity_id,
-                ComplianceEvidenceLink.clause_id == mapping.clause_id,
-            )
-        )
-        link = existing_result.scalar_one_or_none()
-        if link is None:
-            link = ComplianceEvidenceLink(
-                tenant_id=tenant_id,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                clause_id=mapping.clause_id,
-                created_by_id=getattr(user, "id", None),
-                created_by_email=getattr(user, "email", None),
-            )
-            db.add(link)
+        from src.domain.services.compliance_evidence_link_writer import apply_ingest_mapping
 
-        link.scheme = mapping.scheme
-        link.confidence = mapping.confidence
-        link.rationale = mapping.rationale
-        link.title = mapping.title
-        link.status = status
-        link.auto_applied = auto_applied
-        link.linked_by = EvidenceLinkMethod.AI
-        if signal_type is not None:
-            link.signal_type = signal_type.value
-        elif entity_type == "document" and not link.signal_type:
-            link.signal_type = EvidenceSignalType.EVIDENCE.value
+        resolved_signal = signal_type.value if signal_type is not None else None
+
+        link, human_preserved = await apply_ingest_mapping(
+            db,
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            clause_id=mapping.clause_id,
+            status=status,
+            auto_applied=auto_applied,
+            actor_id=getattr(user, "id", None),
+            actor_email=getattr(user, "email", None),
+            scheme=mapping.scheme,
+            confidence=mapping.confidence,
+            rationale=mapping.rationale,
+            title=mapping.title,
+            signal_type=resolved_signal,
+        )
+        if human_preserved:
+            status = link.status or EvidenceLinkStatus.CONFIRMED
+            auto_applied = False
 
         await self._log_ai_decision(
             db,
@@ -272,14 +337,17 @@ class GovernedKnowledgeService:
             auto_applied=auto_applied,
             payload={
                 "scheme": mapping.scheme,
-                "status": status.value,
+                "status": status.value if hasattr(status, "value") else str(status),
                 "rationale": mapping.rationale,
                 "doc_type": doc_type,
                 "signal_type": link.signal_type,
                 "source_entity_type": entity_type,
+                "gate_reason": decision.reason,
+                "gate_auto_confirm": decision.auto_confirm,
+                "human_confirmed_preserved": human_preserved,
             },
         )
-        return link
+        return link, decision.reason
 
     async def _map_iso_schemes(self, content: str) -> list[SchemeMapping]:
         mappings: list[SchemeMapping] = []
@@ -392,10 +460,15 @@ class GovernedKnowledgeService:
         doc_type: Optional[str],
         tenant_id: int,
         user: Any,
-    ) -> list[ComplianceEvidenceLink]:
+        *,
+        gate_context: Optional[StandardsAutoConfirmContext] = None,
+    ) -> MapDocumentResult:
         """Run ISO + UVDB + Planet Mark mapping and persist evidence links."""
         if not content or not content.strip():
-            return []
+            return MapDocumentResult(links=[], gate_summary={"threshold": 0.98, "matrix_loaded": False})
+
+        if gate_context is None:
+            gate_context = await StandardsAutoConfirmContext.for_tenant(db, tenant_id)
 
         all_mappings: list[SchemeMapping] = []
         all_mappings.extend(await self._map_iso_schemes(content))
@@ -403,12 +476,14 @@ class GovernedKnowledgeService:
         all_mappings.extend(self._map_planet_mark_schemes(content))
 
         links: list[ComplianceEvidenceLink] = []
+        counts_by_reason: dict[str, int] = {}
+        auto_confirmed = 0
         seen_clauses: set[str] = set()
         for mapping in all_mappings:
             if mapping.clause_id in seen_clauses:
                 continue
             seen_clauses.add(mapping.clause_id)
-            link = await self._persist_mapping(
+            link, reason = await self._persist_mapping(
                 db,
                 tenant_id=tenant_id,
                 entity_type="document",
@@ -417,16 +492,30 @@ class GovernedKnowledgeService:
                 doc_type=doc_type,
                 user=user,
                 signal_type=EvidenceSignalType.EVIDENCE,
+                gate_context=gate_context,
             )
             links.append(link)
+            counts_by_reason[reason] = counts_by_reason.get(reason, 0) + 1
+            if reason == "auto_confirmed":
+                auto_confirmed += 1
 
         logger.info(
-            "governed_kb.map_document document_id=%s tenant=%s links=%s",
+            "governed_kb.map_document document_id=%s tenant=%s links=%s auto_confirmed=%s",
             document_id,
             tenant_id,
             len(links),
+            auto_confirmed,
         )
-        return links
+        return MapDocumentResult(
+            links=links,
+            gate_summary={
+                "threshold": 0.98,
+                "matrix_loaded": gate_context.matrix_loaded,
+                "matrix_version": gate_context.matrix_version,
+                "auto_confirmed": auto_confirmed,
+                "counts_by_reason": counts_by_reason,
+            },
+        )
 
     async def scan_standard_against_kb(
         self,
@@ -481,7 +570,7 @@ class GovernedKnowledgeService:
                     rationale=f"KB reverse-scan match for: {query_text[:120]}",
                     title=query_text[:300],
                 )
-                link = await self._persist_mapping(
+                link, _reason = await self._persist_mapping(
                     db,
                     tenant_id=tenant_id,
                     entity_type="document",
@@ -556,8 +645,20 @@ class GovernedKnowledgeService:
             )
 
         all_mappings: list[SchemeMapping] = []
-        all_mappings.extend(await self._map_iso_schemes(content))
-        # UVDB / Planet Mark are scheme-specific; keep ISO primary for ops cases.
+        iso_mappings = await self._map_iso_schemes(content)
+        all_mappings.extend(iso_mappings)
+        try:
+            from src.domain.services.standards_trap_guard import TrapGuard
+
+            guard = await TrapGuard.for_tenant(db, tenant_id)
+            all_mappings.extend(expand_iso_exact_peers(iso_mappings, guard))
+        except Exception:
+            logger.exception(
+                "ISO EXACT peer expansion skipped for %s:%s",
+                entity_type,
+                entity_id,
+            )
+        # UVDB keyword match is complaint-only. Planet Mark is not mapped from ops cases.
         if entity_type == "complaint":
             all_mappings.extend(await self._map_uvdb_schemes(db, content, tenant_id))
 
@@ -569,7 +670,7 @@ class GovernedKnowledgeService:
             seen_clauses.add(mapping.clause_id)
             if assessment_statement and not mapping.rationale:
                 mapping.rationale = assessment_statement[:500]
-            link = await self._persist_mapping(
+            link, _reason = await self._persist_mapping(
                 db,
                 tenant_id=tenant_id,
                 entity_type=entity_type,
@@ -765,7 +866,8 @@ class GovernedKnowledgeService:
         )
         existing_links = list(existing_result.scalars().all())
 
-        fresh_mappings = await self.map_document_to_schemes(db, document_id, content, doc_type, tenant_id, user)
+        mapped = await self.map_document_to_schemes(db, document_id, content, doc_type, tenant_id, user)
+        fresh_mappings = mapped.links
         fresh_by_clause = {link.clause_id: link for link in fresh_mappings}
 
         for old_link in existing_links:

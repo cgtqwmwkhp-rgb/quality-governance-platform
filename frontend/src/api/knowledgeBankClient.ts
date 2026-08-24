@@ -19,6 +19,7 @@ export interface KnowledgeEvidenceLink {
   evidence_snippet?: string | null
   source_page?: number | null
   signal_type?: string | null
+  gate_reason?: string | null
   created_at: string
   created_by_email: string | null
 }
@@ -184,6 +185,9 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
       scheme?: string
       signalType?: string
       operationalOnly?: boolean
+      gateReason?: string
+      page?: number
+      pageSize?: number
     }) => {
       const sp = new URLSearchParams()
       if (params?.status) sp.set('status', params.status)
@@ -192,8 +196,21 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
       if (params?.scheme) sp.set('scheme', params.scheme)
       if (params?.signalType) sp.set('signal_type', params.signalType)
       if (params?.operationalOnly) sp.set('operational_only', 'true')
+      if (params?.gateReason) sp.set('gate_reason', params.gateReason)
+      if (params?.page && params.page > 1) sp.set('page', String(params.page))
+      if (params?.pageSize && params.pageSize !== 200) sp.set('page_size', String(params.pageSize))
       const qs = sp.toString()
-      return api.get<KnowledgeEvidenceLink[]>(`${base}/exceptions${qs ? `?${qs}` : ''}`)
+      return api.get<
+        | KnowledgeEvidenceLink[]
+        | {
+            items: KnowledgeEvidenceLink[]
+            page: number
+            page_size: number
+            truncated: boolean
+            has_next: boolean
+            has_prev: boolean
+          }
+      >(`${base}/exceptions${qs ? `?${qs}` : ''}`)
     },
 
     /** Inbound operational signal counts keyed by clause_id for a standard/scheme. */

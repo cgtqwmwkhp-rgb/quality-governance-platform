@@ -9,6 +9,9 @@ export const ASSURANCE_SOURCE_ACHILLES = 'achilles'
 /** Alias query param for the same Achilles / UVDB assurance slice. */
 export const ASSURANCE_SOURCE_UVDB = 'uvdb'
 
+/** Query param value for the Planet Mark assurance filter on `/audits`. */
+export const ASSURANCE_SOURCE_PLANET_MARK = 'planet_mark'
+
 /** Programme home for Customer Audits (thin shell; filtered board on Audits). */
 export const CUSTOMER_AUDITS_PROGRAMME_PATH = '/customer-audits'
 
@@ -20,6 +23,9 @@ export const ACHILLES_UVDB_AUDITS_PATH = `/audits?source=${ASSURANCE_SOURCE_ACHI
 
 /** Alias Audits URL using `source=uvdb` (same filter slice as Achilles). */
 export const UVDB_AUDITS_AUDITS_PATH = `/audits?source=${ASSURANCE_SOURCE_UVDB}`
+
+/** Canonical Audits URL for the Planet Mark assurance view (N1 locate). */
+export const PLANET_MARK_AUDITS_PATH = `/audits?source=${ASSURANCE_SOURCE_PLANET_MARK}`
 
 type CustomerAuditLike = Pick<AuditRun, 'source_origin' | 'assurance_scheme'> & {
   external_audit_type?: string
@@ -55,6 +61,22 @@ export function isAchillesUvdbAssuranceAudit(audit: AchillesUvdbAuditLike): bool
   return false
 }
 
+type PlanetMarkAuditLike = Pick<AuditRun, 'source_origin' | 'assurance_scheme'> & {
+  external_audit_type?: string
+}
+
+/** True when an audit run belongs to the Planet Mark assurance slice. */
+export function isPlanetMarkAssuranceAudit(audit: PlanetMarkAuditLike): boolean {
+  const type = (audit.external_audit_type || '').trim().toLowerCase()
+  if (type === 'planet_mark' || type.includes('planet mark')) return true
+
+  const scheme = (audit.assurance_scheme || '').trim().toLowerCase()
+  if (scheme.includes('planet mark') || scheme === 'planet_mark') return true
+
+  const origin = (audit.source_origin || '').trim().toLowerCase()
+  return origin === 'planet_mark' || origin === 'planet mark'
+}
+
 function isAchillesUvdbSource(source: string | null): boolean {
   return source === ASSURANCE_SOURCE_ACHILLES || source === ASSURANCE_SOURCE_UVDB
 }
@@ -69,6 +91,9 @@ export function filterAuditsByAssuranceSource(
   }
   if (isAchillesUvdbSource(source)) {
     return audits.filter(isAchillesUvdbAssuranceAudit)
+  }
+  if (source === ASSURANCE_SOURCE_PLANET_MARK) {
+    return audits.filter(isPlanetMarkAssuranceAudit)
   }
   return audits
 }
@@ -107,6 +132,17 @@ export function getUvdbRiskRegisterPath(auditRef?: string | null): string {
   return '/risk-register?triage=import'
 }
 
+/** Specialist scheme homes that enter from Standards, not as Compliance peer tabs. */
+export function isStandardsSchemePath(pathname: string): boolean {
+  const path = pathname.split('?')[0]
+  return (
+    path === '/uvdb' ||
+    path.startsWith('/uvdb/') ||
+    path === '/planet-mark' ||
+    path.startsWith('/planet-mark/')
+  )
+}
+
 /** Sidebar active-state helper — disambiguates `/audits` vs assurance filter queries. */
 export function navItemIsActive(itemPath: string, pathname: string, search = ''): boolean {
   const [targetPath, targetQuery = ''] = itemPath.split('?')
@@ -119,10 +155,16 @@ export function navItemIsActive(itemPath: string, pathname: string, search = '')
     ) {
       return true
     }
+    if (targetPath === '/compliance' && isStandardsSchemePath(pathname)) {
+      return true
+    }
     if (
       (itemPath === ACHILLES_UVDB_AUDITS_PATH || itemPath === UVDB_AUDITS_AUDITS_PATH) &&
       pathname === '/uvdb'
     ) {
+      return true
+    }
+    if (itemPath === PLANET_MARK_AUDITS_PATH && pathname === '/planet-mark') {
       return true
     }
     return false
@@ -144,7 +186,11 @@ export function navItemIsActive(itemPath: string, pathname: string, search = '')
 
   if (targetPath === '/audits' && pathname === '/audits') {
     const source = new URLSearchParams(search).get('source')
-    return source !== ASSURANCE_SOURCE_CUSTOMER && !isAchillesUvdbSource(source)
+    return (
+      source !== ASSURANCE_SOURCE_CUSTOMER &&
+      source !== ASSURANCE_SOURCE_PLANET_MARK &&
+      !isAchillesUvdbSource(source)
+    )
   }
 
   // Admin console is exact-only; child routes (/admin/users, /admin/forms, …) have their own items.

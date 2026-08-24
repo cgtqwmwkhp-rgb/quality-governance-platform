@@ -4,6 +4,14 @@ The queue is intentionally conservative: it only lists inactive lifecycle
 documents whose explicit ``retention_until`` date has passed. Category
 retention rules remain visible as provenance, but are not parsed into an
 automated deletion date.
+
+CUT-1 keeps that conservatism and makes it answerable: each candidate now also
+carries the machine-readable policy recorded on the document
+(``retention_years`` / ``retention_anchor`` / ``retention_basis``), so the
+reviewer can see *which rule* produced the date they are being asked to act on
+rather than inferring it from category prose that may have been edited since.
+A document whose category rule the CUT-1 grammar refuses to read has no
+``retention_until`` at all and therefore never reaches this queue.
 """
 
 from __future__ import annotations
@@ -23,6 +31,7 @@ from src.domain.models.document_library import DocumentCategory
 from src.domain.models.enums import DocumentStatus
 from src.domain.models.governed_knowledge import DocumentDiscussionThread, DocumentQuizDraft
 from src.domain.services.document_ai_service import VectorSearchService, document_chunk_vector_id
+from src.domain.services.legal_hold_enforcement import not_under_active_legal_hold
 from src.infrastructure.storage import storage_service
 
 logger = logging.getLogger(__name__)
@@ -45,6 +54,13 @@ class DisposalCandidate:
     title: str
     status: str
     retention_until: datetime
+    #: CUT-1 — the policy recorded on the document itself, which is what the
+    #: disposal date was actually calculated from (F-7 §2: the document is the
+    #: retention SoR once filed). The category rule below stays as provenance
+    #: only; it can have been edited since this document was filed.
+    retention_years: int | None
+    retention_anchor: str | None
+    retention_basis: str | None
     category_retention_rule: str | None
 
 
@@ -75,17 +91,27 @@ def _candidate_from_row(document: Document, retention_rule: str | None) -> Dispo
         title=document.title,
         status=str(status),
         retention_until=retention_until,
+        retention_years=getattr(document, "retention_years", None),
+        retention_anchor=getattr(document, "retention_anchor", None),
+        retention_basis=getattr(document, "retention_basis", None),
         category_retention_rule=retention_rule,
     )
 
 
 def _has_no_governance_dependants():
-    """SQL predicates that prevent disposal from severing governance provenance."""
+    """SQL predicates that prevent disposal from severing governance provenance.
+
+    The legal-hold predicate sits inside the same statement rather than beside it
+    as a separate check (WC-1 / L-40): a held document is then never a member of
+    the eligible set, so neither the preview nor the execute path can dispose one
+    by forgetting to ask.
+    """
     return (
         ~exists(select(DocumentCampaign.id).where(DocumentCampaign.document_id == Document.id)),
         ~exists(select(ControlledDocument.id).where(ControlledDocument.library_document_id == Document.id)),
         ~exists(select(DocumentDiscussionThread.id).where(DocumentDiscussionThread.document_id == Document.id)),
         ~exists(select(DocumentQuizDraft.id).where(DocumentQuizDraft.document_id == Document.id)),
+        not_under_active_legal_hold(),
     )
 
 

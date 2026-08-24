@@ -17,18 +17,35 @@ from typing import Annotated, Any, List, Optional
 import sqlalchemy
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceCoverKind,
+    EvidenceLinkMethod,
+    EvidenceLinkStatus,
+)
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
 from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
+from src.domain.services.compliance_evidence_link_writer import soft_delete_evidence_link, upsert_evidence_links
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
+from src.domain.services.scheme_evidence_service import (
+    loaded_scheme_id,
+    merge_scheme_into_iso_coverage,
+    scheme_audit_report,
+    scheme_clause_by_id,
+    scheme_clause_records,
+    scheme_coverage_payload,
+    scheme_labels,
+    scheme_standard_coverage,
+)
+from src.domain.services.standards_export_appendix import APPENDIX_VERSION, build_standards_export_appendix
 from src.infrastructure.monitoring.azure_monitor import get_tracer
 
 router = APIRouter()
@@ -56,6 +73,7 @@ _STANDARD_DB_MATCHERS: dict[ISOStandard, tuple[str, ...]] = {
     ISOStandard.ISO_14001: ("14001",),
     ISOStandard.ISO_45001: ("45001",),
     ISOStandard.ISO_27001: ("27001",),
+    ISOStandard.ISO_22301: ("22301",),
 }
 
 _STANDARD_DEFAULTS: dict[ISOStandard, dict[str, str]] = {
@@ -79,6 +97,11 @@ _STANDARD_DEFAULTS: dict[ISOStandard, dict[str, str]] = {
         "name": "Information Security Management System",
         "description": "Requirements for establishing, implementing, maintaining and continually improving an ISMS",
     },
+    ISOStandard.ISO_22301: {
+        "code": "ISO 22301:2019",
+        "name": "Business Continuity Management System",
+        "description": "Requirements for establishing, implementing, maintaining and continually improving a BCMS",
+    },
 }
 
 
@@ -88,6 +111,14 @@ _STANDARD_DEFAULTS: dict[ISOStandard, dict[str, str]] = {
 
 
 class AutoTagRequest(BaseModel):
+    """Auto-tag content against compliance clauses.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of tagging while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     content: str
     min_confidence: float = 30.0
     use_ai: bool = False
@@ -121,6 +152,8 @@ class EvidenceLinkRequest(BaseModel):
     confidence: Optional[float] = None
     title: Optional[str] = None
     notes: Optional[str] = None
+    # D15: relationship shape. Default evidences keeps legacy create semantics.
+    cover_kind: str = EvidenceCoverKind.EVIDENCES.value
 
 
 class EvidenceLinkResponse(BaseModel):
@@ -132,8 +165,13 @@ class EvidenceLinkResponse(BaseModel):
     confidence: Optional[float]
     title: Optional[str]
     notes: Optional[str]
+    document_version_id: Optional[int] = None
+    standard_edition: Optional[str] = None
+    cover_kind: str = EvidenceCoverKind.EVIDENCES.value
     created_at: str
     created_by_email: Optional[str]
+    confirmed_by_id: Optional[int] = None
+    confirmed_at: Optional[str] = None
 
 
 class ComplianceStandardResponse(BaseModel):
@@ -189,6 +227,13 @@ def _parse_standard_filter(standard: Optional[str]) -> Optional[ISOStandard]:
         raise BadRequestError(f"Invalid standard: {standard}")
 
 
+def _known_evidence_clause_id(clause_id: str) -> bool:
+    """ISO ALL_CLAUSES or a loaded scheme axis key (ce/cep/iip). Not CHAS/SSIP/PM/UVDB."""
+    if iso_compliance_service.get_clause(clause_id):
+        return True
+    return scheme_clause_by_id(clause_id) is not None
+
+
 def _match_standard_record(record: Standard) -> Optional[ISOStandard]:
     normalized = _normalize_standard_record(record.code, record.name, record.full_name)
     for iso_standard, matchers in _STANDARD_DB_MATCHERS.items():
@@ -208,26 +253,54 @@ def _match_ims_standard(value: Optional[str]) -> Optional[ISOStandard]:
 def _confirmed_provenance(
     link: ComplianceEvidenceLink,
 ) -> tuple[Optional[datetime], Optional[str]]:
-    """Best-effort confirmed_at/by without a dedicated confirm-actor column.
+    """Resolve confirmed_at / confirmed_by for serializers.
 
-    Returns (None, None) when the link is not confirmed. When confirmed,
-    uses updated_at (or created_at) as confirmed_at and created_by_email as
-    confirmed_by only when the link was auto-applied or manually created —
-    human Exceptions confirm currently leaves no actor stamp.
+    Prefer durable ``confirmed_by_id`` / ``confirmed_at`` (WI-1 / D15). Fall back
+    to the pre-column heuristic only when those are still null so historical
+    packs keep a best-effort actor without inventing one for AI auto-confirm.
     """
     link_status = link.effective_status if hasattr(link, "effective_status") else getattr(link, "status", None)
     status_value = None if link_status is None else getattr(link_status, "value", str(link_status))
     if status_value != EvidenceLinkStatus.CONFIRMED.value:
         return None, None
 
+    durable_at = getattr(link, "confirmed_at", None)
+    durable_by_id = getattr(link, "confirmed_by_id", None)
+    if durable_at is not None or durable_by_id is not None:
+        # Email is not stored on the confirmer FK; serializers that need an
+        # address keep using created_by_email only when it matches the confirmer.
+        confirmed_by = None
+        if durable_by_id is not None and durable_by_id == getattr(link, "created_by_id", None):
+            confirmed_by = link.created_by_email
+        elif durable_by_id is not None:
+            confirmed_by = f"user:{durable_by_id}"
+        return durable_at, confirmed_by
+
+    # Legacy heuristic (pre-WI-1 rows with no confirmer stamp).
     confirmed_at = link.updated_at or link.created_at
     if getattr(link, "auto_applied", False):
-        return confirmed_at, link.created_by_email
+        # AI auto-confirm must not invent a human confirmer.
+        return confirmed_at, None
     linked_by = link.linked_by.value if hasattr(link.linked_by, "value") else str(link.linked_by)
     if linked_by == EvidenceLinkMethod.MANUAL.value:
         return confirmed_at, link.created_by_email
-    # AI/auto proposed then human-confirmed: timestamp present, actor not stamped.
     return confirmed_at, None
+
+
+def _parse_cover_kind(raw: Optional[str]) -> EvidenceCoverKind:
+    value = (raw or EvidenceCoverKind.EVIDENCES.value).strip().lower()
+    try:
+        return EvidenceCoverKind(value)
+    except ValueError as exc:
+        raise BadRequestError(
+            f"Invalid cover_kind: {raw}. Expected one of: " f"{', '.join(m.value for m in EvidenceCoverKind)}"
+        ) from exc
+
+
+def _stamp_manual_confirmed(link: ComplianceEvidenceLink, user: User) -> None:
+    """Human create/confirm that lands confirmed must set durable confirmer."""
+    link.confirmed_by_id = getattr(user, "id", None)
+    link.confirmed_at = datetime.now(timezone.utc)
 
 
 def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
@@ -256,6 +329,9 @@ def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
 
 
 def _serialize_link(link: ComplianceEvidenceLink) -> EvidenceLinkResponse:
+    cover = getattr(link, "cover_kind", None)
+    cover_value = cover.value if isinstance(cover, EvidenceCoverKind) else (cover or EvidenceCoverKind.EVIDENCES.value)
+    confirmed_at = getattr(link, "confirmed_at", None)
     return EvidenceLinkResponse(
         id=link.id,
         entity_type=link.entity_type,
@@ -265,8 +341,13 @@ def _serialize_link(link: ComplianceEvidenceLink) -> EvidenceLinkResponse:
         confidence=link.confidence,
         title=link.title,
         notes=link.notes,
+        document_version_id=getattr(link, "document_version_id", None),
+        standard_edition=getattr(link, "standard_edition", None),
+        cover_kind=str(cover_value),
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
+        confirmed_by_id=getattr(link, "confirmed_by_id", None),
+        confirmed_at=confirmed_at.isoformat() if confirmed_at is not None else None,
     )
 
 
@@ -373,7 +454,21 @@ async def list_clauses(
     level: Optional[int] = Query(None, description="Filter by clause level (1=main, 2=sub)"),
     search: Optional[str] = Query(None, description="Search by keyword or clause number"),
 ):
-    """List all ISO clauses with optional filtering."""
+    """List ISO clauses and loaded scheme-axis rows (CE / CE+ / IiP)."""
+
+    scheme = loaded_scheme_id(standard)
+    if scheme:
+        rows = scheme_clause_records(scheme)
+        if search:
+            needle = search.strip().lower()
+            rows = [
+                c
+                for c in rows
+                if needle in c["title"].lower() or needle in c["clause_number"].lower() or needle in c["id"].lower()
+            ]
+        if level:
+            rows = [c for c in rows if c["level"] == level]
+        return [ClauseResponse(**c) for c in rows]
 
     std_enum = _parse_standard_filter(standard)
 
@@ -385,7 +480,7 @@ async def list_clauses(
     if level:
         clauses = [c for c in clauses if c.level == level]
 
-    return [
+    payload = [
         ClauseResponse(
             id=c.id,
             standard=c.standard.value,
@@ -398,11 +493,24 @@ async def list_clauses(
         )
         for c in clauses
     ]
+    if standard is None and not search:
+        payload.extend(ClauseResponse(**c) for c in scheme_clause_records())
+    elif search:
+        needle = search.strip().lower()
+        payload.extend(
+            ClauseResponse(**c)
+            for c in scheme_clause_records()
+            if needle in c["title"].lower() or needle in c["clause_number"].lower() or needle in c["id"].lower()
+        )
+    return payload
 
 
 @router.get("/clauses/{clause_id}", response_model=ClauseResponse)
 async def get_clause(clause_id: str, current_user: CurrentUser):
-    """Get a specific ISO clause by ID."""
+    """Get a specific ISO or loaded-scheme clause by ID."""
+    scheme_row = scheme_clause_by_id(clause_id)
+    if scheme_row:
+        return ClauseResponse(**scheme_row)
     clause = iso_compliance_service.get_clause(clause_id)
     if not clause:
         raise NotFoundError(f"Clause not found: {clause_id}")
@@ -448,14 +556,14 @@ async def link_evidence(
     current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """
-    Link an entity (document, audit, incident, etc.) to ISO clauses.
+    Link an entity (document, audit, incident, etc.) to a catalogue clause.
 
-    This creates the evidence mapping that shows which items satisfy
-    which ISO requirements.
+    Accepts ISO clause ids and loaded scheme keys (ce/cep/iip). Does not invent
+    CHAS/SSIP/PM/UVDB EXACT or accept provisional scheme keys.
     """
     # Validate clause IDs exist
     for clause_id in request.clause_ids:
-        if not iso_compliance_service.get_clause(clause_id):
+        if not _known_evidence_clause_id(clause_id):
             raise BadRequestError(f"Invalid clause ID: {clause_id}")
 
     try:
@@ -463,45 +571,29 @@ async def link_evidence(
     except ValueError as exc:
         raise BadRequestError(f"Invalid linked_by value: {request.linked_by}") from exc
 
-    existing_result = await db.execute(
-        select(ComplianceEvidenceLink).where(
-            ComplianceEvidenceLink.deleted_at.is_(None),
-            ComplianceEvidenceLink.tenant_id == current_user.tenant_id,
-            ComplianceEvidenceLink.entity_type == request.entity_type,
-            ComplianceEvidenceLink.entity_id == request.entity_id,
-            ComplianceEvidenceLink.clause_id.in_(request.clause_ids),
-        )
+    cover_kind = _parse_cover_kind(request.cover_kind)
+
+    # PR-C: this route no longer writes CEL rows itself. The sole writer owns D15
+    # confirmer hygiene and ADR-0021 version pinning for every caller.
+    result = await upsert_evidence_links(
+        db,
+        tenant_id=current_user.tenant_id,
+        entity_type=request.entity_type,
+        entity_id=request.entity_id,
+        clause_ids=request.clause_ids,
+        cover_kind=cover_kind,
+        link_method=link_method,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        confidence=request.confidence,
+        title=request.title,
+        notes=request.notes,
     )
-    existing_by_clause = {link.clause_id: link for link in existing_result.scalars().all()}
-
-    links_created: list[ComplianceEvidenceLink] = []
-    for clause_id in request.clause_ids:
-        link = existing_by_clause.get(clause_id)
-        if link is None:
-            link = ComplianceEvidenceLink(
-                tenant_id=current_user.tenant_id,
-                entity_type=request.entity_type,
-                entity_id=request.entity_id,
-                clause_id=clause_id,
-                created_by_id=current_user.id,
-                created_by_email=current_user.email,
-            )
-            db.add(link)
-
-        link.linked_by = link_method
-        link.confidence = request.confidence
-        link.title = request.title
-        link.notes = request.notes
-        links_created.append(link)
-
-    await db.commit()
-    for link in links_created:
-        await db.refresh(link)
 
     return {
         "status": "success",
-        "message": f"Upserted {len(links_created)} evidence link(s)",
-        "links": [item.model_dump() for item in [_serialize_link(link) for link in links_created]],
+        "message": f"Upserted {result.total} evidence link(s)",
+        "links": [item.model_dump() for item in [_serialize_link(link) for link in result.links]],
     }
 
 
@@ -532,19 +624,9 @@ async def delete_evidence_link(
     link_id: int, db: DbSession, current_user: Annotated[User, Depends(require_permission("audit:update"))]
 ):
     """Soft-delete an evidence link for the current tenant."""
-    result = await db.execute(
-        select(ComplianceEvidenceLink).where(
-            ComplianceEvidenceLink.id == link_id,
-            ComplianceEvidenceLink.deleted_at.is_(None),
-            ComplianceEvidenceLink.tenant_id == current_user.tenant_id,
-        )
-    )
-    link = result.scalar_one_or_none()
+    link = await soft_delete_evidence_link(db, tenant_id=current_user.tenant_id, link_id=link_id)
     if link is None:
         raise NotFoundError("Evidence link not found")
-
-    link.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
     return {"status": "deleted"}
 
 
@@ -558,10 +640,18 @@ async def get_compliance_coverage(
     Get compliance coverage statistics showing how many clauses
     have evidence linked to them.
     """
+    scheme = loaded_scheme_id(standard)
+    if scheme:
+        links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=None)
+        evidence_links = [_build_evidence_link_model(link) for link in links]
+        return scheme_coverage_payload(evidence_links, scheme)
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
     evidence_links = [_build_evidence_link_model(link) for link in links]
-    return iso_compliance_service.calculate_compliance_coverage(evidence_links, std_enum)
+    payload = iso_compliance_service.calculate_compliance_coverage(evidence_links, std_enum)
+    if std_enum is None:
+        payload = merge_scheme_into_iso_coverage(payload, evidence_links)
+    return payload
 
 
 @router.get("/gaps")
@@ -574,6 +664,11 @@ async def get_compliance_gaps(
     Get list of ISO clauses that have no evidence linked to them.
     These represent compliance gaps that need attention.
     """
+    scheme = loaded_scheme_id(standard)
+    if scheme:
+        links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=None)
+        coverage = scheme_coverage_payload([_build_evidence_link_model(link) for link in links], scheme)
+        return {"total_gaps": coverage["gaps"], "gap_clauses": coverage["gap_clauses"]}
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
     coverage = iso_compliance_service.calculate_compliance_coverage(
@@ -596,6 +691,13 @@ async def generate_compliance_report(
 
     Shows all clauses with their linked evidence and coverage status.
     """
+    scheme = loaded_scheme_id(standard)
+    if scheme:
+        links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=None)
+        models = [_build_evidence_link_model(link) for link in links]
+        report = scheme_audit_report(models, scheme, include_evidence_details=include_evidence)
+        report["persisted_evidence_links"] = len(links)
+        return report
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
     report = iso_compliance_service.generate_audit_report(
@@ -625,6 +727,13 @@ async def export_audit_pack(
         default=None,
         description="Organisation name for SoA (defaults to tenant name when omitted)",
     ),
+    frameworks: Optional[list[str]] = Query(
+        default=None,
+        description=(
+            "Matrix framework ids for the SoR appendix (repeatable). "
+            "Empty = full programme set (Constructionline out)."
+        ),
+    ),
 ):
     """
     Server-side ISO audit evidence pack with full CEL provenance.
@@ -633,6 +742,9 @@ async def export_audit_pack(
     signal_type, scheme/standard, clause_id, entity_type/id, status,
     confirmed_at/by when available). Operational nonconformity signals are
     excluded from conformance evidence by default and labelled honestly.
+
+    SG-D-05 adds ``standards_appendix`` — pointers into Findings, Actions,
+    evidence links, and the certificate shelf for the requested frameworks.
     """
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
@@ -666,6 +778,14 @@ async def export_audit_pack(
         organization_name=resolved_org,
     )
     pack["persisted_evidence_links"] = len(links)
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    pack["standards_appendix"] = await build_standards_export_appendix(
+        db,
+        tenant_id=tenant_id,
+        frameworks=frameworks,
+    )
 
     date_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     filename = f"iso-audit-pack-{date_stamp}.json"
@@ -677,6 +797,7 @@ async def export_audit_pack(
             "Content-Disposition": f'attachment; filename="{filename}"',
             "X-Audit-Pack-Version": str(pack.get("pack_version", "gkb-wl1-1.0")),
             "X-Audit-Pack-Nonconformity-Mode": pack["provenance_policy"]["nonconformity_mode"],
+            "X-Standards-Appendix-Version": APPENDIX_VERSION,
         },
     )
 
@@ -750,6 +871,348 @@ async def get_statement_of_applicability(
     return soa
 
 
+# =============================================================================
+# Standards cell aggregate (Wave 1 PR-B) — live graph read-model
+# =============================================================================
+
+
+@router.get("/cell-aggregate")
+async def get_standards_cell_aggregate(
+    db: DbSession,
+    current_user: CurrentUser,
+    framework: str = Query(..., min_length=1, description="Matrix framework id (e.g. 9001, uvdb)"),
+    clause: str = Query(..., min_length=1, description="Clause number (e.g. 4.1, 7.5)"),
+):
+    """Join findings, actions, risks, certs, evidence, and imported priors for one cell.
+
+    Cover gate: open NC / open action → verdict cannot be ``covered``.
+    Recurrence red-flag when an NC reappears after close on the same clause.
+    Mock audits are labelled honestly and still paint gaps. LIVE-08: read-model only.
+
+    Wave 2 PR-D: response includes ``exact_share`` preflight for EXACT peers.
+    AP-07: response also includes ``near_share`` preflight for ISO-family NEAR peers.
+    """
+    from src.domain.services.standards_cell_aggregate_service import StandardsCellAggregateService
+    from src.domain.services.standards_exact_share_service import ExactShareService
+    from src.domain.services.standards_near_share_service import NearShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    service = StandardsCellAggregateService(db)
+    result = await service.get_cell(
+        tenant_id=tenant_id,
+        framework=framework,
+        clause_number=clause,
+    )
+    payload = result.to_dict()
+    plan = await ExactShareService(db, aggregate=service).plan(
+        tenant_id=tenant_id,
+        framework=framework,
+        clause_number=clause,
+        source_cell=result,
+    )
+    payload["exact_share"] = plan.to_dict()
+    near_plan = await NearShareService(db, aggregate=service).plan(
+        tenant_id=tenant_id,
+        framework=framework,
+        clause_number=clause,
+        source_cell=result,
+    )
+    payload["near_share"] = near_plan.to_dict()
+    return payload
+
+
+@router.get("/cell-aggregate/matrix")
+async def get_standards_cell_aggregate_matrix(
+    db: DbSession,
+    current_user: CurrentUser,
+    frameworks: str = Query(..., description="Comma-separated matrix framework ids"),
+    clauses: str = Query(..., description="Comma-separated clause numbers"),
+):
+    """Batch verdicts for Standards matrix paint (same cover gate as cell-aggregate).
+
+    The cap exists to stop one request scanning the whole tenant, not to size the
+    matrix: the imported 5064 axis is 32 rows across 12 columns, and the old 200
+    ceiling rejected the **All** preset outright, so the shell fell back to a
+    degraded grid on exactly the tenants that had done the import.
+    """
+    from src.domain.services.standards_cell_aggregate_service import (
+        MATRIX_SUMMARY_MAX_CELLS,
+        StandardsCellAggregateService,
+    )
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    fw_list = [part.strip() for part in frameworks.split(",") if part.strip()]
+    clause_list = [part.strip() for part in clauses.split(",") if part.strip()]
+    if not fw_list or not clause_list:
+        raise BadRequestError("frameworks and clauses are required")
+    if len(fw_list) * len(clause_list) > MATRIX_SUMMARY_MAX_CELLS:
+        raise BadRequestError(f"Too many cells requested (max {MATRIX_SUMMARY_MAX_CELLS})")
+    service = StandardsCellAggregateService(db)
+    return await service.get_matrix_summary(
+        tenant_id=tenant_id,
+        frameworks=fw_list,
+        clause_numbers=clause_list,
+    )
+
+
+class ExactShareApplyRequest(BaseModel):
+    """Apply one source CEL row onto named EXACT peer frameworks."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_link_id: int
+    source_framework: str
+    source_clause: str
+    target_frameworks: list[str]
+    matrix_version_id: int
+
+
+class ExactShareUndoRequest(BaseModel):
+    """Soft-delete links created by a prior EXACT share apply."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    link_ids: list[int]
+    applied_at: datetime
+
+
+@router.post("/evidence/exact-share")
+async def apply_exact_share(
+    request: ExactShareApplyRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+):
+    """Create-only share of one conformance evidence link onto EXACT peer cells."""
+    from src.domain.services.standards_exact_share_service import ExactShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    return await ExactShareService(db).apply(
+        tenant_id=tenant_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        source_link_id=request.source_link_id,
+        source_framework=request.source_framework,
+        source_clause=request.source_clause,
+        target_frameworks=request.target_frameworks,
+        matrix_version_id=request.matrix_version_id,
+    )
+
+
+@router.post("/evidence/exact-share/undo")
+async def undo_exact_share(
+    request: ExactShareUndoRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+):
+    """Undo a prior EXACT share by soft-deleting the created link ids."""
+    from src.domain.services.standards_exact_share_service import ExactShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    return await ExactShareService(db).undo(
+        tenant_id=tenant_id,
+        link_ids=request.link_ids,
+        applied_at=request.applied_at,
+    )
+
+
+class NearShareApplyRequest(BaseModel):
+    """Apply one source CEL row onto named ISO NEAR peer frameworks."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_link_id: int
+    source_framework: str
+    source_clause: str
+    target_frameworks: list[str]
+    matrix_version_id: int
+
+
+class NearShareUndoRequest(BaseModel):
+    """Soft-delete links created by a prior NEAR share apply."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    link_ids: list[int]
+    applied_at: datetime
+
+
+@router.post("/evidence/near-share")
+async def apply_near_share(
+    request: NearShareApplyRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+):
+    """Create-only proposed share of one conformance link onto ISO NEAR peer cells."""
+    from src.domain.services.standards_near_share_service import NearShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    return await NearShareService(db).apply(
+        tenant_id=tenant_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        source_link_id=request.source_link_id,
+        source_framework=request.source_framework,
+        source_clause=request.source_clause,
+        target_frameworks=request.target_frameworks,
+        matrix_version_id=request.matrix_version_id,
+    )
+
+
+@router.post("/evidence/near-share/undo")
+async def undo_near_share(
+    request: NearShareUndoRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+):
+    """Undo a prior NEAR share by soft-deleting the created link ids."""
+    from src.domain.services.standards_near_share_service import NearShareService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+    return await NearShareService(db).undo(
+        tenant_id=tenant_id,
+        link_ids=request.link_ids,
+        applied_at=request.applied_at,
+    )
+
+
+# =============================================================================
+# Standards alignment matrix (Wave 2 PR-C) — imported PEL-HSEQ-5064 verdicts
+# =============================================================================
+
+
+class AlignmentImportRequest(BaseModel):
+    """Import request. Omitting ``payload`` uses the checked-in 5064 edition.
+
+    ``extra="forbid"`` so an unrecognised field returns 422 instead of being
+    silently dropped (PX-168).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    payload: Optional[dict[str, Any]] = None
+    accepted_tokens: Optional[list[str]] = None
+
+
+@router.get("/alignment/catalogue")
+async def get_alignment_catalogue(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:read"))],
+    framework: Optional[str] = Query(None, description="Filter rows to one framework id"),
+    verdict: Optional[str] = Query(None, description="Filter to EXACT|NEAR|DIFFERENT|UNIQUE"),
+):
+    """Alignment-aware clause rows for the Standards matrix axis.
+
+    Replaces the hardcoded catalogue the matrix shell shipped with in PR-A. When no
+    matrix edition has been imported this returns an empty ``rows`` list with
+    ``matrix_loaded: false``, and the shell falls back to its static axis rather
+    than rendering an empty grid.
+    """
+    from src.domain.services.standards_alignment_read_service import StandardsAlignmentReadService
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+
+    service = StandardsAlignmentReadService(db)
+    return await service.catalogue(
+        tenant_id=tenant_id,
+        framework=framework,
+        verdict=verdict,
+    )
+
+
+@router.post("/alignment/import/plan")
+async def plan_alignment_import(
+    request: AlignmentImportRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("standard:update"))],
+):
+    """Dry-run an alignment import: what would change, per clause pair.
+
+    Writes nothing. Each item carries a ``token`` which is handed back to
+    ``/alignment/import/apply`` to accept that specific change.
+    """
+    from src.domain.services.standards_alignment_import_service import (
+        AlignmentImportError,
+        StandardsAlignmentImportService,
+        load_payload,
+    )
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+
+    try:
+        payload = request.payload or load_payload()
+        service = StandardsAlignmentImportService(db)
+        plan = await service.plan(tenant_id=tenant_id, payload=payload)
+    except AlignmentImportError as exc:
+        raise BadRequestError(str(exc)) from exc
+    return plan.to_dict()
+
+
+@router.post("/alignment/import/apply")
+async def apply_alignment_import(
+    request: AlignmentImportRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("standard:create"))],
+):
+    """Apply the accepted subset of an alignment import as a new active edition.
+
+    ``accepted_tokens`` is the accept-each gate: a declined change keeps the
+    verdict the active edition already holds, and a declined removal keeps the
+    pair, so declining can never loosen a verdict. Applying the same payload with
+    the same acceptances twice writes nothing the second time.
+    """
+    from src.domain.services.standards_alignment_import_service import (
+        AlignmentImportError,
+        StandardsAlignmentImportService,
+        load_payload,
+    )
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Tenant context required")
+
+    try:
+        payload = request.payload or load_payload()
+        service = StandardsAlignmentImportService(db)
+        result = await service.apply(
+            tenant_id=tenant_id,
+            payload=payload,
+            accepted_tokens=request.accepted_tokens,
+            imported_by_id=current_user.id,
+        )
+        from src.domain.services.standards_matrix_rescore_service import maybe_rescore_after_apply
+
+        rescore = await maybe_rescore_after_apply(
+            db,
+            tenant_id=tenant_id,
+            created=result.created,
+            reactivated=result.reactivated,
+            matrix_version_id=result.matrix_version_id,
+            matrix_version_label=result.version_label,
+        )
+        await db.commit()
+    except AlignmentImportError as exc:
+        raise BadRequestError(str(exc)) from exc
+    body = result.to_dict()
+    body["rescore"] = rescore.to_dict() if rescore is not None else None
+    return body
+
+
 @router.get("/standards", response_model=list[ComplianceStandardResponse])
 async def list_standards(db: DbSession, current_user: CurrentUser):
     """List supported standards and bridge them to canonical DB-backed records."""
@@ -796,6 +1259,32 @@ async def list_standards(db: DbSession, current_user: CurrentUser):
                 canonical_data_degraded=canonical_data_message is not None,
                 canonical_data_message=canonical_data_message,
                 clause_count_breakdown=breakdown,
+            )
+        )
+
+    evidence_models = [_build_evidence_link_model(link) for link in links]
+    for fw in ("ce", "cep", "iip"):
+        labels = scheme_labels(fw)
+        rows = scheme_clause_records(fw)
+        cov = scheme_standard_coverage(evidence_models, fw)
+        response.append(
+            ComplianceStandardResponse(
+                id=fw,
+                code=labels["code"],
+                name=labels["name"],
+                description=labels["description"],
+                clause_count=len(rows),
+                db_standard_id=None,
+                db_standard_code=None,
+                db_standard_name=None,
+                db_clause_count=len(rows),
+                ims_requirement_count=0,
+                covered_clauses=cov.get("covered", 0) + cov.get("partial_coverage", 0),
+                coverage_percentage=cov.get("percentage", 0),
+                has_canonical_standard=True,
+                canonical_data_degraded=False,
+                canonical_data_message=None,
+                clause_count_breakdown={},
             )
         )
     return response

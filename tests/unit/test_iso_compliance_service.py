@@ -14,12 +14,15 @@ from src.domain.services.iso_compliance_service import (
 
 
 class TestISOStandardEnum:
-    def test_all_four_standards_exist(self) -> None:
+    def test_all_five_standards_exist(self) -> None:
         standards = {s.value for s in ISOStandard}
-        assert {"iso9001", "iso14001", "iso45001", "iso27001"} == standards
+        assert {"iso9001", "iso14001", "iso45001", "iso27001", "iso22301"} == standards
 
     def test_iso_27001_value(self) -> None:
         assert ISOStandard.ISO_27001 == "iso27001"
+
+    def test_iso_22301_value(self) -> None:
+        assert ISOStandard.ISO_22301 == "iso22301"
 
 
 class TestAllClausesCatalog:

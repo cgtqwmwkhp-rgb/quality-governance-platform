@@ -58,7 +58,6 @@ vi.mock('../../../utils/errorTracker', () => ({
 }))
 
 import EngineerProfile, {
-  competenceGapsEngineerHref,
   computeRequirementsMatch,
   roleKeyMatchesJobTitle,
 } from '../EngineerProfile'
@@ -162,12 +161,6 @@ describe('computeRequirementsMatch', () => {
       mandatoryMet: 0,
       percent: 0,
     })
-  })
-})
-
-describe('competenceGapsEngineerHref', () => {
-  it('deep-links competence gaps filtered by engineer', () => {
-    expect(competenceGapsEngineerHref(7)).toBe('/workforce/competence-gaps?engineer_id=7')
   })
 })
 
@@ -339,7 +332,7 @@ describe('EngineerProfile', () => {
     expect(screen.getByText(/asset types down/)).toBeInTheDocument()
   })
 
-  it('links to competence gaps filtered by engineer', async () => {
+  it('offers no competence gaps deep link now the register is folded into Actions', async () => {
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/7']}>
         <Routes>
@@ -348,8 +341,10 @@ describe('EngineerProfile', () => {
       </MemoryRouter>,
     )
 
-    const link = await screen.findByTestId('engineer-competence-gaps-link')
-    expect(link).toHaveAttribute('href', '/workforce/competence-gaps?engineer_id=7')
+    // Wait for the profile to render before asserting the link is absent, so this
+    // cannot pass against an empty tree.
+    expect(await screen.findByTestId('engineer-identity')).toBeInTheDocument()
+    expect(screen.queryByTestId('engineer-competence-gaps-link')).not.toBeInTheDocument()
   })
 })
 

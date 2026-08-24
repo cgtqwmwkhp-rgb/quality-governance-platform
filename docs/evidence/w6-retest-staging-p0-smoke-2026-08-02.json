@@ -1,0 +1,34 @@
+{
+  "tested_at": "2026-08-02T21:09:08Z",
+  "base_url": "https://qgp-staging-plantexpand.azurewebsites.net",
+  "frontend_url": "https://purple-water-03205fa03-staging.6.azurestaticapps.net",
+  "git_tip_sha": "49235c25680858cd352e3283753c72b4a1dfc690",
+  "staging_build_sha": "20b85514333eea4867eb031402936fe193962e69",
+  "staging_build_time": "2026-08-02T20:36:27Z",
+  "staging_vs_tip": "staging_one_pr_behind (missing #1527 C-24 IMS)",
+  "accounts_source": "~/Library/Application Support/qgp/staging-uat-accounts.txt",
+  "results": [
+    {"step": "GET /api/v1/meta/version", "status": 200, "build_sha": "20b85514333eea4867eb031402936fe193962e69"},
+    {"step": "login uat_employee", "status": 200, "token_present": true},
+    {"step": "login uat_manager", "status": 200, "token_present": true},
+    {"step": "login uat_viewer", "status": 200, "token_present": true},
+    {"step": "employee POST INC", "status": 201, "reference_number": "INC-2026-0056"},
+    {"step": "employee POST RTA", "status": 201, "reference_number": "RTA-2026-0006"},
+    {"step": "employee POST COMP", "status": 201, "reference_number": "COMP-2026-0021"},
+    {"step": "employee POST NM (with contract=OTHER)", "status": 201, "reference_number": "NM-2026-0005"},
+    {"step": "viewer POST INC", "status": 403},
+    {"step": "viewer POST RTA", "status": 403},
+    {"step": "viewer POST COMP", "status": 403},
+    {"step": "viewer POST NM", "status": 403},
+    {"step": "employee GET /documents/", "status": 403, "error": "Permission 'document:read' required"},
+    {"step": "manager GET /documents/", "status": 403, "error": "Permission 'document:read' required"},
+    {"step": "viewer GET /documents/", "status": 403, "error": "Permission 'document:read' required"},
+    {"step": "UI viewer login", "status": "ok", "landed": "/dashboard"}
+  ],
+  "regressions_vs_prior": [],
+  "notes": [
+    "NM without contract returns 422 value_error requiring contract_id or legacy contract code",
+    "UAT roles intentionally lack document:read; document list cell blocked by harness",
+    "Created records tagged [WALKAWAY-W6-RETEST-*] for later soft-delete"
+  ]
+}

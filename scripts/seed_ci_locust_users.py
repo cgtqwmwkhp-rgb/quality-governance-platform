@@ -16,6 +16,8 @@ from src.domain.models.user import Role, User
 from src.infrastructure.database import async_session_maker, engine
 
 # Wave 0 case-view gates require explicit :read for non-superusers (smoke/locust testuser).
+# action:read is required for GET /api/v1/approvals/my-decisions (FR-APPROVALS-01) and
+# the Actions personal work queue that panel sits beside — without it smoke returns 403.
 _CI_OPERATOR_PERMS = [
     "incident:create",
     "incident:read",
@@ -37,6 +39,7 @@ _CI_OPERATOR_PERMS = [
     "policy:read",
     "standard:read",
     "audit_template:read",
+    "action:read",
 ]
 
 

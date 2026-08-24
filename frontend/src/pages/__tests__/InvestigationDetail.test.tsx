@@ -102,7 +102,14 @@ vi.mock('../investigation/investigationReportHelpers', () => ({
     body: '{}',
     exportKind: 'manifest_stub',
   })),
+  packPdfFilename: vi.fn(() => 'investigation-report-INV-7-abcdef12.pdf'),
   triggerPackDownload: vi.fn(),
+  triggerPackPdfDownload: vi.fn(),
+}))
+
+vi.mock('../investigation/investigationDetailApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../investigation/investigationDetailApi')>()),
+  fetchCustomerPackPdf: vi.fn(),
 }))
 
 vi.mock('../../components/EngineerPeoplePicker', () => ({
@@ -240,7 +247,70 @@ describe('InvestigationDetail', () => {
     })
 
     const { toast } = await import('../../contexts/ToastContext')
-    expect(toast.success).toHaveBeenCalledWith('investigations.report.download_stub_success')
+    expect(toast.success).toHaveBeenCalledWith(
+      'Manifest stub downloaded — use PDF for the issuable document.',
+    )
+  })
+
+  // PX-143: the customer deliverable is a PDF, not a JSON payload.
+  it('downloads a real PDF for a stored pack from Report history', async () => {
+    const detailApi = await import('../investigation/investigationDetailApi')
+    const helpers = await import('../investigation/investigationReportHelpers')
+    const pdfBlob = new Blob(['%PDF-1.4'], { type: 'application/pdf' })
+    vi.mocked(detailApi.fetchCustomerPackPdf).mockResolvedValue(pdfBlob)
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    const pdfButton = await screen.findByTestId('investigation-pack-download-pdf-1')
+    fireEvent.click(pdfButton)
+
+    await waitFor(() => {
+      expect(detailApi.fetchCustomerPackPdf).toHaveBeenCalledWith(7, 1)
+    })
+    expect(helpers.triggerPackPdfDownload).toHaveBeenCalledWith(
+      pdfBlob,
+      'investigation-report-INV-7-abcdef12.pdf',
+    )
+  })
+
+  it('surfaces a PDF build failure instead of downloading an empty file', async () => {
+    const detailApi = await import('../investigation/investigationDetailApi')
+    const helpers = await import('../investigation/investigationReportHelpers')
+    vi.mocked(detailApi.fetchCustomerPackPdf).mockRejectedValue(new Error('PDF export unavailable'))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    fireEvent.click(await screen.findByTestId('investigation-pack-download-pdf-1'))
+
+    const { toast } = await import('../../contexts/ToastContext')
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('PDF export unavailable')
+    })
+    expect(helpers.triggerPackPdfDownload).not.toHaveBeenCalled()
+  })
+
+  // PX-144: the omit rule must not be stated as a raw permission constant.
+  it('states the omit approval requirement in plain language', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    const scope = await screen.findByTestId('investigation-hsg245-report-sections')
+    expect(scope).not.toHaveTextContent('investigation:approve_customer_omit')
+    expect(scope).toHaveTextContent('Approve leaving a section out of the customer pack')
   })
 
   it('renders generated pack checksums from the aligned API contract', async () => {
@@ -502,8 +572,41 @@ describe('InvestigationDetail', () => {
 
     fireEvent.click(screen.getByTestId('investigation-close-cta'))
 
+    // Close now goes through the summary dialog rather than firing immediately.
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-close-summary-dialog')).toBeInTheDocument()
+    })
+    expect(client.investigationsApi.update).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTestId('investigation-close-summary-confirm'))
+
     await waitFor(() => {
       expect(client.investigationsApi.update).toHaveBeenCalledWith(7, { status: 'closed' })
+    })
+  })
+
+  it('offers Reopen on a closed investigation and PATCHes status=under_review', async () => {
+    client.investigationsApi.get.mockResolvedValue({
+      data: { ...mockInvestigation, status: 'closed' },
+    })
+    client.investigationsApi.getClosureValidation.mockResolvedValue({
+      data: { can_close: true, reasons: [], open_work_count: 0, open_work: [] },
+    })
+    client.investigationsApi.update.mockResolvedValue({
+      data: { ...mockInvestigation, status: 'under_review' },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-reopen')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('investigation-reopen'))
+    fireEvent.click(await screen.findByTestId('investigation-reopen-confirm'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.update).toHaveBeenCalledWith(7, { status: 'under_review' })
     })
   })
 

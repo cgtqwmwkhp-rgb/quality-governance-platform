@@ -1,9 +1,16 @@
 """Pydantic schemas for Audit & Inspection API."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# A clause reference is either an integer catalogue id or a clause token string
+# ("7.2", "9001-8.5.1"). Imports, the template builder and the standards matcher
+# all speak tokens; only older rows hold catalogue ids. Write schemas must accept
+# both, because coercing a token to an int is impossible and dropping it leaves
+# the finding unjoinable to a matrix cell (PX-425a/b).
+ClauseRef = Union[int, str]
 
 # ============== Question Types & Options ==============
 
@@ -88,7 +95,7 @@ class AuditQuestionBase(BaseModel):
     conditional_logic: Optional[List[ConditionalLogicRule]] = Field(None, validation_alias="conditional_logic_json")
 
     # Standard mapping
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
 
     # Risk scoring
@@ -113,15 +120,25 @@ class AuditQuestionBase(BaseModel):
 
 
 class AuditQuestionCreate(AuditQuestionBase):
-    """Schema for creating an Audit Question."""
+    """Schema for creating an Audit Question.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the question being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     section_id: Optional[int] = None
 
 
 class AuditQuestionUpdate(BaseModel):
-    """Schema for updating an Audit Question."""
+    """Schema for updating an Audit Question.
 
-    model_config = ConfigDict(populate_by_name=True)
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the question being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     question_text: Optional[str] = Field(None, min_length=1, max_length=1000)
     question_type: Optional[str] = None
@@ -136,13 +153,18 @@ class AuditQuestionUpdate(BaseModel):
     max_value: Optional[float] = None
     evidence_requirements: Optional[EvidenceRequirement] = Field(None, validation_alias="evidence_requirements_json")
     conditional_logic: Optional[List[ConditionalLogicRule]] = Field(None, validation_alias="conditional_logic_json")
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
+    # Risk scoring (parity with AuditQuestionBase / Create / Response)
+    risk_category: Optional[str] = None
+    risk_weight: Optional[float] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
     guidance: Optional[str] = None
     criticality: Optional[str] = Field(None, pattern="^(essential|required|good_to_have)$")
-    regulatory_reference: Optional[str] = None
+    # max_length mirrors Create and the String(200) column: the builder now sends
+    # this on every save, so an overlong value would be a 500, not a 422.
+    regulatory_reference: Optional[str] = Field(None, max_length=200)
     guidance_notes: Optional[str] = None
     sign_off_required: Optional[bool] = None
     assessor_guidance: Optional[Dict[str, Any]] = Field(None, validation_alias="assessor_guidance_json")
@@ -186,7 +208,9 @@ class AuditQuestionResponse(BaseModel):
     max_length: Optional[int] = None
     evidence_requirements: Optional[Dict[str, Any]] = Field(None, validation_alias="evidence_requirements_json")
     conditional_logic: Optional[List[Any]] = Field(None, validation_alias="conditional_logic_json")
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
+    # Tokens as well as catalogue ids: a question saved with "9001-8.5.1" must be
+    # readable, not a 500 on GET template.
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
     risk_category: Optional[str] = None
     risk_weight: Optional[float] = None
@@ -234,15 +258,23 @@ class AuditSectionBase(BaseModel):
 
 
 class AuditSectionCreate(AuditSectionBase):
-    """Schema for creating an Audit Section."""
+    """Schema for creating an Audit Section.
 
-    pass
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the section being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class AuditSectionUpdate(BaseModel):
-    """Schema for updating an Audit Section."""
+    """Schema for updating an Audit Section.
 
-    model_config = ConfigDict(populate_by_name=True)
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the section being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -318,15 +350,23 @@ class AuditTemplateBase(BaseModel):
 
 
 class AuditTemplateCreate(AuditTemplateBase):
-    """Schema for creating an Audit Template."""
+    """Schema for creating an Audit Template.
 
-    pass
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the template being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class AuditTemplateUpdate(BaseModel):
-    """Schema for updating an Audit Template."""
+    """Schema for updating an Audit Template.
 
-    model_config = ConfigDict(populate_by_name=True)
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the template being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -487,7 +527,13 @@ class AuditRunBase(BaseModel):
 
 
 class AuditRunCreate(AuditRunBase):
-    """Schema for creating an Audit Run."""
+    """Schema for creating an Audit Run.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the run being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     template_id: int
     assigned_to_id: Optional[int] = None
@@ -508,11 +554,25 @@ class AuditRunCreate(AuditRunBase):
         if self.external_audit_type == "iso" and not (self.assurance_scheme or "").strip():
             raise ValueError("assurance_scheme is required when external_audit_type is 'iso'")
 
+        # Achilles / Planet Mark twins were created by re-importing without a stable
+        # supplier/report id. Require the id up front so FR-DEDUP-02 can refuse duplicates.
+        if self.external_audit_type in ("achilles_uvdb", "planet_mark") and not (self.external_reference or "").strip():
+            raise ValueError(
+                "external_reference is required when external_audit_type is "
+                f"'{self.external_audit_type}' (supplier / certificate id)"
+            )
+
         return self
 
 
 class AuditRunUpdate(BaseModel):
-    """Schema for updating an Audit Run."""
+    """Schema for updating an Audit Run.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the run being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(None, max_length=300)
     location: Optional[str] = None
@@ -639,13 +699,25 @@ class AuditResponseBase(BaseModel):
 
 
 class AuditResponseCreate(AuditResponseBase):
-    """Schema for creating an Audit Response."""
+    """Schema for creating an Audit Response.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the response being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     question_id: int
 
 
 class AuditResponseUpdate(BaseModel):
-    """Schema for updating an Audit Response."""
+    """Schema for updating an Audit Response.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the response being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     response_value: Optional[str] = None
     response_text: Optional[str] = None
@@ -693,7 +765,7 @@ class AuditFindingBase(BaseModel):
     )
 
     # Standard mapping
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json_legacy")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
 
     # Risk linkage
@@ -705,21 +777,31 @@ class AuditFindingBase(BaseModel):
 
 
 class AuditFindingCreate(AuditFindingBase):
-    """Schema for creating an Audit Finding."""
+    """Schema for creating an Audit Finding.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the finding being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     question_id: Optional[int] = None
 
 
 class AuditFindingUpdate(BaseModel):
-    """Schema for updating an Audit Finding."""
+    """Schema for updating an Audit Finding.
 
-    model_config = ConfigDict(populate_by_name=True)
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the finding being updated while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     severity: Optional[str] = None
     finding_type: Optional[str] = None
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
+    clause_ids: Optional[List[ClauseRef]] = Field(None, validation_alias="clause_ids_json_legacy")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
     risk_ids: Optional[List[int]] = Field(None, validation_alias="risk_ids_json")
     corrective_action_required: Optional[bool] = None
@@ -738,7 +820,13 @@ class FlagFindingRiskRequest(BaseModel):
 
 
 class CreateFindingCapaRequest(BaseModel):
-    """Optional overrides when creating a CAPA from an audit finding."""
+    """Optional overrides when creating a CAPA from an audit finding.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the CAPA being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = None

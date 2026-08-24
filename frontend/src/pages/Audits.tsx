@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Plus,
@@ -16,6 +16,7 @@ import {
   Play,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { parseInstrument } from './auditInstrument'
 import { buildActionDetailPath } from './actionLinks'
 import {
   auditsApi,
@@ -45,6 +46,7 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
+import { Entity360Strip } from '../components/graph/Entity360Strip'
 import {
   FindingLoopStatusRibbon,
   type CapaLoopLoadState,
@@ -61,8 +63,12 @@ import {
 } from '../components/ui/form'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
 import {
+  findingMatchesClause,
+  findingsEmptyNamesProgram,
+  formatFindingsTruncation,
   isOpenAuditFinding,
   resolveOpenFindingsKpi,
+  scopeFindingsToRunIds,
 } from './auditsFindingsModel'
 import { partitionAutomationTemplates } from './auditTemplateHonesty'
 import {
@@ -73,7 +79,17 @@ import {
   BOARD_STATUS_IDS,
   BOARD_WORK_LANES as BOARD_WORK_LANE_DEFS,
   PROGRAM_FILTER_CHIPS,
+  AUDITS_LIST_DENSITY_DEFAULT,
+  AUDITS_LIST_DENSITY_STORAGE_KEY,
+  auditRunIsScored,
+  auditsListCellClass,
+  parseAuditsListDensity,
+  type AuditsListDensity,
   classifyAuditProgram,
+  countDoNowAudits,
+  formatAuditsAverageScore,
+  isDoNowAuditStatus,
+  partitionClosedForBoard,
   type AuditProgram,
 } from './auditsBoardModel'
 
@@ -111,7 +127,8 @@ interface CreateAuditForm {
 }
 
 const BOARD_LANE_ICONS = {
-  do_now: Play,
+  planned: Calendar,
+  fieldwork: Play,
   review: Target,
   closed: CheckCircle2,
 } as const
@@ -192,11 +209,30 @@ function getStructuredErrorMessage(error: unknown): string | null {
   }
   if (detail && typeof detail === 'object') {
     const message = (detail as { message?: unknown }).message
+    const details = (detail as { details?: Record<string, unknown> }).details
+    const existingRef =
+      details && typeof details.existing_reference_number === 'string'
+        ? details.existing_reference_number
+        : null
     if (typeof message === 'string' && message.trim()) {
+      if (existingRef && !message.includes(existingRef)) {
+        return `${message} Existing run: ${existingRef}.`
+      }
       return message
     }
   }
   return null
+}
+
+function getExternalAuditConflictRunId(error: unknown): number | null {
+  const detail = (error as { response?: { data?: { detail?: unknown }; status?: number } })
+    ?.response
+  if (!detail || detail.status !== 409) return null
+  const body = detail.data?.detail
+  if (!body || typeof body !== 'object') return null
+  const details = (body as { details?: Record<string, unknown> }).details
+  const id = details?.existing_run_id
+  return typeof id === 'number' ? id : typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : null
 }
 
 function isExternalAuditImportRun(audit: AuditRun): boolean {
@@ -276,6 +312,7 @@ export default function Audits() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [audits, setAudits] = useState<AuditRun[]>([])
+  const [auditsTotal, setAuditsTotal] = useState<number | null>(null)
   const [findings, setFindings] = useState<AuditFinding[]>([])
   const [findingsTotal, setFindingsTotal] = useState<number | null>(null)
   const [openFindingsTotal, setOpenFindingsTotal] = useState<number | null>(null)
@@ -285,17 +322,31 @@ export default function Audits() {
   const urlView = searchParams.get('view') as ViewMode | null
   const urlFindingId = searchParams.get('findingId')
   const urlAssuranceSource = searchParams.get('source')
+  const urlClause = (searchParams.get('clause') || '').trim()
   const urlModal = searchParams.get('modal')
+  const urlTemplateId = searchParams.get('templateId')
   const customerAssuranceView = urlAssuranceSource === ASSURANCE_SOURCE_CUSTOMER
   const [viewMode, setViewMode] = useState<ViewMode>(
-    urlView === 'findings' || urlView === 'list' || urlView === 'kanban' ? urlView : 'kanban',
+    urlClause || urlView === 'findings'
+      ? 'findings'
+      : urlView === 'list' || urlView === 'kanban'
+        ? urlView
+        : 'kanban',
   )
   const highlightedFindingRef = useRef<HTMLDivElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const runSearchQ = useDeferredValue(searchTerm.trim())
   /** Hero band as dynamic filter — mirrors Risk Register KPI cards. */
   type HeroFilter = 'all' | 'in_progress' | 'completed' | 'scored' | 'open_findings'
   const [heroFilter, setHeroFilter] = useState<HeroFilter>('all')
   const [programFilter, setProgramFilter] = useState<AuditProgram | 'all'>('all')
+  const [listDensity, setListDensity] = useState<AuditsListDensity>(() => {
+    try {
+      return parseAuditsListDensity(localStorage.getItem(AUDITS_LIST_DENSITY_STORAGE_KEY))
+    } catch {
+      return AUDITS_LIST_DENSITY_DEFAULT
+    }
+  })
   const [modalMode, setModalMode] = useState<AuditModalMode>('schedule')
   const [showModal, setShowModal] = useState(false)
 
@@ -314,28 +365,51 @@ export default function Audits() {
   const [loopBusyFindingId, setLoopBusyFindingId] = useState<number | null>(null)
   const [loopAssigningFindingId, setLoopAssigningFindingId] = useState<number | null>(null)
   const importModalOpenedRef = useRef(false)
+  const scheduleFromQueryOpenedRef = useRef(false)
 
   const scopedAudits = useMemo(
     () => filterAuditsByAssuranceSource(audits, urlAssuranceSource),
     [audits, urlAssuranceSource],
   )
 
+  const programmeRunIds = useMemo(() => {
+    const source =
+      programFilter === 'all'
+        ? scopedAudits
+        : scopedAudits.filter((audit) => classifyAuditProgram(audit) === programFilter)
+    return new Set(source.map((audit) => audit.id))
+  }, [scopedAudits, programFilter])
+
+  const findingsScopedToSubset =
+    programFilter !== 'all' || customerAssuranceView || Boolean(urlClause)
+
   const scopedFindings = useMemo(() => {
-    if (!customerAssuranceView) return findings
-    const scopedIds = new Set(scopedAudits.map((audit) => audit.id))
-    return findings.filter((finding) => scopedIds.has(finding.run_id))
-  }, [findings, scopedAudits, customerAssuranceView])
+    let next = findings
+    if (programFilter !== 'all' || customerAssuranceView) {
+      next = scopeFindingsToRunIds(next, programmeRunIds)
+    }
+    if (urlClause) {
+      next = next.filter((finding) => findingMatchesClause(finding, urlClause))
+    }
+    return next
+  }, [findings, programmeRunIds, programFilter, customerAssuranceView, urlClause])
 
   const loadData = useCallback(async () => {
     setLoadError(null)
     try {
       const [auditsRes, findingsRes, openFindingsRes, templatesRes] = await Promise.allSettled([
-        auditsApi.listRuns(1, 100),
+        auditsApi.listRuns(1, 100, runSearchQ ? { q: runSearchQ } : undefined),
         auditsApi.listFindings(1, FINDINGS_PAGE_SIZE),
         auditsApi.listFindings(1, 1, undefined, 'open'),
         auditsApi.listTemplates(1, 100, { is_published: true }),
       ])
-      setAudits(auditsRes.status === 'fulfilled' ? auditsRes.value.data.items || [] : [])
+      if (auditsRes.status === 'fulfilled') {
+        setAudits(auditsRes.value.data.items || [])
+        setAuditsTotal(auditsRes.value.data.total ?? null)
+      } else {
+        setAudits([])
+        setAuditsTotal(null)
+      }
       if (findingsRes.status === 'fulfilled') {
         setFindings(findingsRes.value.data.items || [])
         setFindingsTotal(findingsRes.value.data.total ?? null)
@@ -357,6 +431,7 @@ export default function Audits() {
       if (import.meta.env.DEV) console.error('Failed to load audits:', err)
       setLoadError('Failed to load audit data. Please try again.')
       setAudits([])
+      setAuditsTotal(null)
       setFindings([])
       setFindingsTotal(null)
       setOpenFindingsTotal(null)
@@ -364,7 +439,7 @@ export default function Audits() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [runSearchQ])
 
   useEffect(() => {
     void loadData()
@@ -402,6 +477,11 @@ export default function Audits() {
     return () => cancelAnimationFrame(handle)
   }, [urlFindingId, loading, scopedFindings])
 
+  useEffect(() => {
+    if (!urlClause) return
+    setViewMode('findings')
+  }, [urlClause])
+
   // Load linked CAPA rows for the findings loop ribbon (graceful if Actions API unavailable).
   useEffect(() => {
     if (viewMode !== 'findings') return
@@ -418,6 +498,30 @@ export default function Audits() {
             if (!next[action.source_id]) {
               next[action.source_id] = action
             }
+          }
+        }
+        // PX-426: page 1 of 100 can miss an older CAPA. Do not raise page_size
+        // (cap 500). Resolve each loaded finding by source_id when absent.
+        const missingIds = findings
+          .map((finding) => finding.id)
+          .filter((id) => next[id] === undefined)
+        if (missingIds.length > 0) {
+          try {
+            const extras = await Promise.all(
+              missingIds.map((id) => actionsApi.list(1, 5, undefined, 'audit_finding', id)),
+            )
+            if (cancelled) return
+            extras.forEach((extra, index) => {
+              const findingId = missingIds[index]
+              for (const action of extra.data.items || []) {
+                if (action.source_id === findingId && !next[findingId]) {
+                  next[findingId] = action
+                  break
+                }
+              }
+            })
+          } catch (err) {
+            if (import.meta.env.DEV) console.error('Failed to load missing CAPAs', err)
           }
         }
         setCapaByFindingId(next)
@@ -498,7 +602,15 @@ export default function Audits() {
         assigned_to_email: email,
         priority: finding.severity === 'critical' || finding.severity === 'high' ? 'high' : 'medium',
       })
-      setCapaByFindingId((prev) => ({ ...prev, [finding.id]: created.data }))
+      let row = created.data
+      // Get-or-create returns the existing row as-is. Apply the typed assignee.
+      if (email && row.assigned_to_email !== email) {
+        const updated = await actionsApi.update(row.id, row.source_type, {
+          assigned_to_email: email,
+        })
+        row = { ...updated.data, assigned_to_email: email }
+      }
+      setCapaByFindingId((prev) => ({ ...prev, [finding.id]: row }))
       setCapaLoopLoadState('ready')
       showToast(t('audits.findings.loop.assign_success'), 'success')
     } catch (err) {
@@ -555,7 +667,9 @@ export default function Audits() {
 
   const scheduleTemplates = useMemo(() => {
     const nonIntake = templates.filter((template) => !isSystemIntakeTemplate(template))
-    return partitionAutomationTemplates(nonIntake).operational
+    return partitionAutomationTemplates(nonIntake).operational.filter(
+      (template) => parseInstrument(template.tags) === 'audit',
+    )
   }, [templates])
 
   const hiddenAutomationTemplateCount = useMemo(() => {
@@ -670,6 +784,37 @@ export default function Audits() {
     // PX-260: one-shot deep-link open; exclude handleOpenModal to avoid re-open loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, urlModal, searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (loading || scheduleFromQueryOpenedRef.current || !urlTemplateId) return
+    const id = Number(urlTemplateId)
+    if (!Number.isFinite(id) || id <= 0) return
+    const match =
+      latestPublishedTemplates.find((template) => template.id === id) ??
+      scheduleTemplates.find((template) => template.id === id)
+    if (!match) return
+    scheduleFromQueryOpenedRef.current = true
+    handleOpenModal('schedule')
+    const seeded = {
+      ...buildDefaultForm('schedule'),
+      template_id: match.id,
+      title: decodeHtmlEntities(match.name),
+    }
+    pristineFormRef.current = JSON.stringify(seeded)
+    setFormData(seeded)
+    const next = new URLSearchParams(searchParams)
+    next.delete('templateId')
+    setSearchParams(next, { replace: true })
+    // One-shot deep-link; exclude handleOpenModal to avoid re-open loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    loading,
+    urlTemplateId,
+    latestPublishedTemplates,
+    scheduleTemplates,
+    searchParams,
+    setSearchParams,
+  ])
 
   const selectedExternalAuditType = useMemo(
     () =>
@@ -865,6 +1010,12 @@ export default function Audits() {
     controlId: (name) => AUDIT_CONTROL_IDS[name],
     toErrorMessage: (err) => {
       if (import.meta.env.DEV) console.error('Failed to create audit:', err)
+      const conflictRunId = getExternalAuditConflictRunId(err)
+      if (conflictRunId != null) {
+        // Deep-link to the survivor instead of leaving the operator stuck on a failed create.
+        handleCloseModal()
+        navigate(`/audits/${conflictRunId}/import-review`)
+      }
       return (
         getStructuredErrorMessage(err) ||
         (modalMode === 'import'
@@ -919,20 +1070,27 @@ export default function Audits() {
     return counts
   }, [searchFilteredAudits])
 
-  const visibleProgramChips = useMemo(
-    () => PROGRAM_FILTER_CHIPS.filter((chip) => programCounts[chip.id] > 0),
-    [programCounts],
-  )
+  const visibleProgramChips = PROGRAM_FILTER_CHIPS
+  const listCellClass = auditsListCellClass(listDensity)
+
+  const persistListDensity = (next: AuditsListDensity) => {
+    setListDensity(next)
+    try {
+      localStorage.setItem(AUDITS_LIST_DENSITY_STORAGE_KEY, next)
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }
 
   const filteredAudits = useMemo(() => {
     switch (heroFilter) {
       case 'in_progress':
-        return programFilteredAudits.filter((a) => a.status === 'in_progress')
+        return programFilteredAudits.filter((a) => isDoNowAuditStatus(a.status))
       case 'completed':
         return programFilteredAudits.filter((a) => a.status === 'completed')
       case 'scored':
         return [...programFilteredAudits]
-          .filter((a) => a.score_percentage != null)
+          .filter(auditRunIsScored)
           .sort((a, b) => (a.score_percentage ?? 0) - (b.score_percentage ?? 0))
       case 'open_findings':
         return programFilteredAudits
@@ -941,7 +1099,13 @@ export default function Audits() {
     }
   }, [programFilteredAudits, heroFilter])
 
-  const getAuditsInLane = (statuses: readonly string[]) => {
+  const closedBoard = useMemo(
+    () => partitionClosedForBoard(filteredAudits),
+    [filteredAudits],
+  )
+
+  const getAuditsInLane = (laneId: string, statuses: readonly string[]) => {
+    if (laneId === 'closed') return closedBoard.visible
     return filteredAudits.filter((audit) => statuses.includes(audit.status))
   }
 
@@ -1027,16 +1191,16 @@ export default function Audits() {
   }
 
   // Hero counts stay search-aware but not hero-filter-aware (so tiles don't collapse when active).
+  const averageScore = formatAuditsAverageScore(programFilteredAudits)
   const stats = {
     total: programFilteredAudits.length,
-    inProgress: programFilteredAudits.filter((a) => a.status === 'in_progress').length,
+    doNow: countDoNowAudits(programFilteredAudits),
     completed: programFilteredAudits.filter((a) => a.status === 'completed').length,
-    avgScore:
-      programFilteredAudits
-        .filter((a) => a.score_percentage != null)
-        .reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) /
-      (programFilteredAudits.filter((a) => a.score_percentage != null).length || 1),
-    openFindings: resolveOpenFindingsKpi(scopedFindings, openFindingsTotal, findingsTotal),
+    avgScore: averageScore.value,
+    avgScoreCaption: averageScore.caption,
+    openFindings: resolveOpenFindingsKpi(scopedFindings, openFindingsTotal, findingsTotal, {
+      useServerTotalWhenTruncated: !findingsScopedToSubset,
+    }),
   }
   const openFindingsInScope = useMemo(
     () => scopedFindings.filter((finding) => isOpenAuditFinding(finding.status)),
@@ -1046,8 +1210,12 @@ export default function Audits() {
     heroFilter === 'open_findings'
       ? openFindingsInScope
       : scopedFindings
-  const findingsListTruncated =
-    findingsTotal != null && findingsTotal > scopedFindings.length
+  const findingsPageTruncated = findingsTotal != null && findingsTotal > findings.length
+  const findingsListTruncated = findingsScopedToSubset
+    ? findingsPageTruncated
+    : findingsTotal != null && findingsTotal > scopedFindings.length
+  const activeProgramChip = PROGRAM_FILTER_CHIPS.find((chip) => chip.id === programFilter)
+  const findingsEmptyProgram = findingsEmptyNamesProgram(programFilter)
   const linkedFindingExists =
     !urlFindingId || scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
   const executableAudit = scopedAudits.find(
@@ -1154,22 +1322,28 @@ export default function Audits() {
               key: 'all' as const,
               label: t('audits.stats.total'),
               value: stats.total,
+              caption: null as string | null,
               icon: ClipboardCheck,
               variant: 'info' as const,
               hint: 'Show all audits',
             },
             {
               key: 'in_progress' as const,
-              label: t('status.in_progress'),
-              value: stats.inProgress,
+              label: t('audits.stats.do_now', 'Do now'),
+              value: stats.doNow,
+              caption: null as string | null,
               icon: Clock,
               variant: 'warning' as const,
-              hint: 'Filter in-progress audits',
+              hint: t(
+                'audits.stats.do_now_hint',
+                'Filter scheduled and in-progress audits (Planned + Fieldwork)',
+              ),
             },
             {
               key: 'completed' as const,
               label: t('audits.stats.completed'),
               value: stats.completed,
+              caption: null as string | null,
               icon: CheckCircle2,
               variant: 'success' as const,
               hint: 'Filter completed audits',
@@ -1177,7 +1351,8 @@ export default function Audits() {
             {
               key: 'scored' as const,
               label: t('audits.stats.avg_score'),
-              value: `${(stats.avgScore ?? 0).toFixed(0)}%`,
+              value: stats.avgScore,
+              caption: stats.avgScoreCaption,
               icon: BarChart3,
               variant: 'primary' as const,
               hint: 'Show scored audits, worst first',
@@ -1186,6 +1361,7 @@ export default function Audits() {
               key: 'open_findings' as const,
               label: t('audits.stats.open_findings'),
               value: stats.openFindings,
+              caption: null as string | null,
               icon: AlertCircle,
               variant: 'destructive' as const,
               hint: 'Open findings view',
@@ -1197,6 +1373,15 @@ export default function Audits() {
             <button
               key={stat.key}
               type="button"
+              data-testid={
+                stat.key === 'scored'
+                  ? 'audits-kpi-avg-score'
+                  : stat.key === 'open_findings'
+                    ? 'audits-kpi-open-findings'
+                    : stat.key === 'in_progress'
+                      ? 'audits-kpi-do-now'
+                      : undefined
+              }
               onClick={() => applyHeroFilter(stat.key)}
               aria-pressed={active}
               title={stat.hint}
@@ -1221,6 +1406,14 @@ export default function Audits() {
               </div>
               <p className="text-2xl font-bold text-foreground tabular-nums">{stat.value}</p>
               <p className="text-sm text-muted-foreground">{stat.label}</p>
+              {stat.caption ? (
+                <p
+                  className="text-[11px] text-muted-foreground mt-1"
+                  data-testid={stat.key === 'scored' ? 'audits-kpi-avg-score-caption' : undefined}
+                >
+                  {stat.caption}
+                </p>
+              ) : null}
               {active && (
                 <p className="text-[11px] text-primary mt-1 font-medium">Filter on · click to clear</p>
               )}
@@ -1236,12 +1429,28 @@ export default function Audits() {
           type="text"
           placeholder={t('audits.search_placeholder')}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          data-testid="audits-search"
+          onChange={(e) => {
+            const next = e.target.value
+            setSearchTerm(next)
+            if (next.trim()) setViewMode('list')
+          }}
           className="pl-10"
         />
       </div>
 
-      {!customerAssuranceView && visibleProgramChips.length > 0 && (
+      {auditsTotal != null && auditsTotal > audits.length ? (
+        <div
+          className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+          role="status"
+          data-testid="audits-runs-truncated-banner"
+        >
+          Showing {audits.length} of {auditsTotal} runs
+          {runSearchQ ? ' matching this search.' : '. Open List to locate the loaded set.'}
+        </div>
+      ) : null}
+
+      {!customerAssuranceView && (
         <div
           className="flex flex-wrap gap-2"
           role="toolbar"
@@ -1314,9 +1523,9 @@ export default function Audits() {
         </div>
       ) : (
         viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {BOARD_WORK_LANES.map((lane) => {
-            const laneAudits = getAuditsInLane(lane.statuses)
+            const laneAudits = getAuditsInLane(lane.id, lane.statuses)
             return (
               <div key={lane.id} data-testid={`audits-board-lane-${lane.id}`}>
                 <div className="flex items-center gap-3 mb-4">
@@ -1337,7 +1546,8 @@ export default function Audits() {
                 </div>
 
                 <div className="space-y-3 min-h-[200px] bg-surface rounded-2xl p-3 border border-border">
-                  {laneAudits.length === 0 ? (
+                  {laneAudits.length === 0 &&
+                  !(lane.id === 'closed' && closedBoard.moreCount > 0) ? (
                     <div className="flex items-center justify-center h-32 text-muted-foreground">
                       <p className="text-sm text-center px-2">
                         {t('audits.board.lane_empty_column', `No ${lane.label.toLowerCase()} audits`, {
@@ -1373,14 +1583,15 @@ export default function Audits() {
                               v{audit.template_version}
                             </Badge>
                           </div>
-                          {audit.score_percentage != null && (
+                          {auditRunIsScored(audit) && (
                             <span
+                              data-testid={`audits-board-score-${audit.id}`}
                               className={cn(
                                 'text-sm font-bold',
-                                getScoreColor(audit.score_percentage),
+                                getScoreColor(audit.score_percentage ?? 0),
                               )}
                             >
-                              {audit.score_percentage.toFixed(0)}%
+                              {(audit.score_percentage ?? 0).toFixed(0)}%
                             </span>
                           )}
                         </div>
@@ -1417,7 +1628,7 @@ export default function Audits() {
                               <span>{new Date(audit.scheduled_date).toLocaleDateString()}</span>
                             </div>
                           )}
-                          {lane.id === 'do_now' &&
+                          {(lane.id === 'planned' || lane.id === 'fieldwork') &&
                           (audit.status === 'scheduled' || audit.status === 'in_progress') ? (
                             <Button
                               size="sm"
@@ -1462,6 +1673,16 @@ export default function Audits() {
                       </Card>
                     ))
                   )}
+                  {lane.id === 'closed' && closedBoard.moreCount > 0 ? (
+                    <button
+                      type="button"
+                      data-testid="audits-board-closed-more"
+                      className="w-full text-sm font-medium text-primary hover:underline py-2"
+                      onClick={() => setViewMode('list')}
+                    >
+                      {closedBoard.moreCount} more closed — open List
+                    </button>
+                  ) : null}
                 </div>
               </div>
             )
@@ -1474,32 +1695,61 @@ export default function Audits() {
       {viewMode === 'list' && (
         <Card>
           <CardContent className="p-0">
+            <div className="flex items-center justify-end gap-2 border-b border-border px-3 py-2">
+              <div
+                className="flex rounded-lg border border-border p-0.5"
+                role="radiogroup"
+                aria-label={t('audits.list.density', 'List density')}
+                data-testid="audits-list-density"
+              >
+                {(['comfort', 'compact'] as const).map((density) => (
+                  <button
+                    key={density}
+                    type="button"
+                    role="radio"
+                    aria-checked={listDensity === density}
+                    data-testid={`audits-list-density-${density}`}
+                    onClick={() => persistListDensity(density)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      listDensity === density
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {density === 'comfort'
+                      ? t('audits.list.density_comfort', 'Comfort')
+                      : t('audits.list.density_compact', 'Compact')}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.reference')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.title')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.location')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.template')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.status')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.score')}
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       {t('audits.table.date')}
                     </th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className={cn(listCellClass, 'text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider')}>
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>
@@ -1532,6 +1782,8 @@ export default function Audits() {
                         className="hover:bg-surface transition-colors cursor-pointer"
                         role="button"
                         tabIndex={0}
+                        data-testid="audits-list-row"
+                        data-density={listDensity}
                         onClick={() => navigate(getAuditWorkspacePath(audit))}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
@@ -1540,12 +1792,12 @@ export default function Audits() {
                           }
                         }}
                       >
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           <span className="font-mono text-sm text-primary">
                             {audit.reference_number}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           <p className="text-sm font-medium text-foreground truncate max-w-xs">
                             {audit.title || 'Untitled'}
                           </p>
@@ -1574,15 +1826,15 @@ export default function Audits() {
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-foreground">
+                        <td className={cn(listCellClass, 'text-sm text-foreground')}>
                           {audit.location || '-'}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           <Badge variant="secondary" className="text-xs">
                             v{audit.template_version}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={listCellClass}>
                           <Badge
                             variant={
                               audit.status === 'completed'
@@ -1597,23 +1849,23 @@ export default function Audits() {
                             {(audit.status as string).replace(/_/g, ' ')}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4">
-                          {audit.score_percentage != null ? (
+                        <td className={listCellClass}>
+                          {auditRunIsScored(audit) ? (
                             <span
-                              className={cn('font-bold', getScoreColor(audit.score_percentage))}
+                              className={cn('font-bold', getScoreColor(audit.score_percentage ?? 0))}
                             >
-                              {audit.score_percentage.toFixed(0)}%
+                              {(audit.score_percentage ?? 0).toFixed(0)}%
                             </span>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">
+                        <td className={cn(listCellClass, 'text-sm text-muted-foreground')}>
                           {audit.scheduled_date
                             ? new Date(audit.scheduled_date).toLocaleDateString()
                             : '-'}
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className={cn(listCellClass, 'text-right')}>
                           {isExternalAuditImportRun(audit) ||
                           audit.status === 'scheduled' ||
                           audit.status === 'in_progress' ? (
@@ -1660,15 +1912,40 @@ export default function Audits() {
       {/* Findings View */}
       {viewMode === 'findings' && (
         <div className="space-y-4">
+          {urlClause ? (
+            <div
+              className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex flex-wrap items-center justify-between gap-2"
+              role="status"
+              data-testid="audits-findings-clause-filter"
+            >
+              <span>
+                Filtering findings for clause {urlClause}. Open Findings KPI counts this
+                filter.
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="audits-findings-clause-clear"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams)
+                  next.delete('clause')
+                  setSearchParams(next, { replace: true })
+                }}
+              >
+                Clear clause
+              </Button>
+            </div>
+          ) : null}
           {findingsListTruncated ? (
             <div
               className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
               role="status"
               data-testid="audits-findings-truncated-banner"
             >
-              Showing {scopedFindings.length} of {findingsTotal} findings loaded — Open Findings KPI
-              uses the server total ({stats.openFindings}) so counts stay honest after new findings
-              are created.
+              {findingsScopedToSubset
+                ? `Showing ${scopedFindings.length} findings in this filter from the loaded page. Open Findings KPI counts those (${stats.openFindings}), not the tenant total.`
+                : formatFindingsTruncation(scopedFindings.length, findingsTotal ?? scopedFindings.length)}
             </div>
           ) : null}
           {urlFindingId && !linkedFindingExists && (
@@ -1698,14 +1975,24 @@ export default function Audits() {
             </div>
           )}
           {findingsForView.length === 0 ? (
-            <Card>
+            <Card data-testid="audits-findings-empty">
               <EmptyState
                 icon={<ClipboardCheck className="h-8 w-8 text-primary" />}
-                title={t('audits.findings.empty.title')}
+                title={
+                  findingsEmptyProgram && activeProgramChip
+                    ? t('audits.findings.empty.program_title', { program: activeProgramChip.label })
+                    : t('audits.findings.empty.title')
+                }
                 description={
                   heroFilter === 'open_findings'
-                    ? 'No open findings match this filter.'
-                    : t('audits.findings.empty.description')
+                    ? findingsEmptyProgram && activeProgramChip
+                      ? t('audits.findings.empty.program_open', { program: activeProgramChip.label })
+                      : 'No open findings match this filter.'
+                    : findingsEmptyProgram && activeProgramChip
+                      ? t('audits.findings.empty.program_description', {
+                          program: activeProgramChip.label,
+                        })
+                      : t('audits.findings.empty.description')
                 }
                 action={
                   <div className="flex flex-wrap justify-center gap-2">
@@ -1903,7 +2190,12 @@ export default function Audits() {
                         )}
                       </div>
                       {isHighlighted && (
-                        <div className="mt-4" data-testid={`finding-standards-${finding.id}`}>
+                        <div className="mt-4 space-y-3" data-testid={`finding-standards-${finding.id}`}>
+                          <Entity360Strip
+                            entityType="audit_finding"
+                            entityId={finding.id}
+                            requiresSatellites
+                          />
                           <StandardsAssessmentPanel
                             entityType="audit_finding"
                             entityId={finding.id}

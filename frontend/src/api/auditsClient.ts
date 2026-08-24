@@ -2,7 +2,7 @@
  * Audits API client extracted from `client.ts` (Path-to-10 FE lane).
  * Instantiated from `client.ts` with the shared axios instance to avoid cycles.
  */
-import type { AxiosInstance } from 'axios'
+import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 
 /** Minimal paginated shape used by audits list responses. */
 export interface PaginatedResponse<T> {
@@ -66,6 +66,8 @@ export interface AuditFinding {
   severity: string
   finding_type: string
   status: 'open' | 'in_progress' | 'pending_verification' | 'closed' | 'deferred'
+  /** Heterogeneous: integer catalog ids or import strings such as "7.2". */
+  clause_ids?: Array<number | string> | null
   corrective_action_required: boolean
   corrective_action_due_date?: string
   /** Linked enterprise risk ids (risks_v2) when escalated from this finding. */
@@ -110,6 +112,8 @@ export interface AuditTemplate {
   description?: string
   category?: string
   audit_type: string
+  /** Already on AuditTemplateResponse; list payload includes it. Not a new field. */
+  frequency?: string | null
   tags?: string[]
   version: number
   is_active: boolean
@@ -141,6 +145,7 @@ export interface AuditTemplateCreate {
   audit_type?: string
   scoring_method?: string
   passing_score?: number
+  tags?: string[]
 }
 
 export interface AuditTemplateUpdate {
@@ -150,6 +155,7 @@ export interface AuditTemplateUpdate {
   audit_type?: string
   scoring_method?: string
   passing_score?: number
+  tags?: string[]
   expected_updated_at?: string
 }
 
@@ -229,6 +235,7 @@ export interface AuditTemplateDetail {
   is_published: boolean
   is_active: boolean
   created_by_id?: number
+  tags?: string[]
   sections: AuditSection[]
   section_count: number
   question_count: number
@@ -306,6 +313,14 @@ export interface AuditQuestionCreate {
   positive_answer?: 'yes' | 'no'
   criticality?: QuestionCriticality
   conditional_logic?: ConditionalLogicRule[] | null
+  /**
+   * Clause tokens ("7.2", "9001-8.5.1") copied onto every finding this question
+   * generates, which is what joins the finding to a matrix cell. Integer
+   * catalogue ids from older rows ride through unchanged.
+   */
+  clause_ids?: Array<number | string> | null
+  /** Human-readable clause reference shown in the builder (max 200 chars). */
+  regulatory_reference?: string | null
 }
 
 export interface AuditQuestionUpdate {
@@ -332,6 +347,9 @@ export interface AuditQuestionUpdate {
   is_active?: boolean
   criticality?: QuestionCriticality
   conditional_logic?: ConditionalLogicRule[] | null
+  /** See `AuditQuestionCreate.clause_ids`. Null clears the mapping. */
+  clause_ids?: Array<number | string> | null
+  regulatory_reference?: string | null
 }
 
 export interface AuditSection {
@@ -377,6 +395,9 @@ export interface AuditQuestion {
   positive_answer?: 'yes' | 'no'
   criticality?: string
   conditional_logic?: ConditionalLogicRule[] | null
+  /** Heterogeneous: clause token strings or integer catalogue ids. */
+  clause_ids?: Array<number | string> | null
+  regulatory_reference?: string | null
   created_at: string
   updated_at: string
 }
@@ -561,10 +582,13 @@ export function createAuditsApi(api: AxiosInstance) {
     )
   },
   getTemplate: (id: number) => api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),
-  createTemplate: (data: AuditTemplateCreate) =>
-    api.post<AuditTemplate>('/api/v1/audits/templates', data),
-  updateTemplate: (id: number, data: AuditTemplateUpdate) =>
-    api.patch<AuditTemplate>(`/api/v1/audits/templates/${id}`, data),
+  // Template/section/question writes accept a per-request config so long
+  // multi-section builder saves can raise their own timeout without changing the
+  // 45s default every other write relies on.
+  createTemplate: (data: AuditTemplateCreate, config?: AxiosRequestConfig) =>
+    api.post<AuditTemplate>('/api/v1/audits/templates', data, config),
+  updateTemplate: (id: number, data: AuditTemplateUpdate, config?: AxiosRequestConfig) =>
+    api.patch<AuditTemplate>(`/api/v1/audits/templates/${id}`, data, config),
   publishTemplate: (id: number) =>
     api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/publish`),
   cloneTemplate: (id: number) => api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/clone`),
@@ -577,22 +601,31 @@ export function createAuditsApi(api: AxiosInstance) {
     api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/restore`),
 
   // Sections
-  createSection: (templateId: number, data: AuditSectionCreate) =>
-    api.post<AuditSection>(`/api/v1/audits/templates/${templateId}/sections`, data),
-  updateSection: (sectionId: number, data: AuditSectionUpdate) =>
-    api.patch<AuditSection>(`/api/v1/audits/sections/${sectionId}`, data),
-  deleteSection: (sectionId: number) => api.delete(`/api/v1/audits/sections/${sectionId}`),
+  createSection: (templateId: number, data: AuditSectionCreate, config?: AxiosRequestConfig) =>
+    api.post<AuditSection>(`/api/v1/audits/templates/${templateId}/sections`, data, config),
+  updateSection: (sectionId: number, data: AuditSectionUpdate, config?: AxiosRequestConfig) =>
+    api.patch<AuditSection>(`/api/v1/audits/sections/${sectionId}`, data, config),
+  deleteSection: (sectionId: number, config?: AxiosRequestConfig) =>
+    api.delete(`/api/v1/audits/sections/${sectionId}`, config),
 
   // Questions
-  createQuestion: (templateId: number, data: AuditQuestionCreate) =>
-    api.post<AuditQuestion>(`/api/v1/audits/templates/${templateId}/questions`, data),
-  updateQuestion: (questionId: number, data: AuditQuestionUpdate) =>
-    api.patch<AuditQuestion>(`/api/v1/audits/questions/${questionId}`, data),
-  deleteQuestion: (questionId: number) => api.delete(`/api/v1/audits/questions/${questionId}`),
+  createQuestion: (templateId: number, data: AuditQuestionCreate, config?: AxiosRequestConfig) =>
+    api.post<AuditQuestion>(`/api/v1/audits/templates/${templateId}/questions`, data, config),
+  updateQuestion: (questionId: number, data: AuditQuestionUpdate, config?: AxiosRequestConfig) =>
+    api.patch<AuditQuestion>(`/api/v1/audits/questions/${questionId}`, data, config),
+  deleteQuestion: (questionId: number, config?: AxiosRequestConfig) =>
+    api.delete(`/api/v1/audits/questions/${questionId}`, config),
 
   // Runs
-  listRuns: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?page=${page}&page_size=${pageSize}`),
+  listRuns: (page = 1, pageSize = 10, options?: { q?: string }) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    })
+    const q = options?.q?.trim()
+    if (q) params.set('q', q)
+    return api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?${params}`)
+  },
   createRun: (data: AuditRunCreate) => api.post<AuditRun>('/api/v1/audits/runs', data),
   getRun: (id: number) => api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
   getRunDetail: (id: number) => api.get<AuditRunDetail>(`/api/v1/audits/runs/${id}`),

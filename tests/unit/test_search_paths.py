@@ -13,6 +13,13 @@ def test_build_search_path_known_types():
     assert build_search_path("risk", 6) == "/risk-register/6"
     assert build_search_path("audit", 7) == "/audits"
     assert build_search_path("document", 9) == "/documents/9"
+    assert build_search_path("document_content", 9) == "/documents/9"
+    assert build_search_path("compliance_requirement", 8) == "/compliance-schedule/8"
+
+
+def test_build_search_path_document_content_deep_link():
+    assert build_search_path("document_content", 9, chunk_id=44, page_number=3) == "/documents/9?chunk=44&page=3"
+    assert build_search_path("document", 9, page_number=2) == "/documents/9?page=2"
 
 
 def test_build_search_path_audit_run_deep_link():

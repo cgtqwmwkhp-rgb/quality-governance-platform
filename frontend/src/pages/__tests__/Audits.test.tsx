@@ -57,6 +57,10 @@ vi.mock('react-i18next', () => ({
         'audits.findings.empty.title': 'No findings recorded yet',
         'audits.findings.empty.description':
           'Complete an audit or inspection to record findings and positive practices.',
+        'audits.findings.empty.program_title': 'No {{program}} findings',
+        'audits.findings.empty.program_description':
+          'No findings in {{program}} on the loaded page. Other programmes may still have follow-up.',
+        'audits.findings.empty.program_open': 'No open findings in {{program}}.',
         'audits.findings.actions.view_audits': 'View audits',
         'audits.findings.actions.open_audit': 'Open audit workspace',
         'audits.findings.deep_link_miss.title': 'Finding not found',
@@ -74,7 +78,8 @@ vi.mock('react-i18next', () => ({
         return translations[key] ?? options
       }
       const value = translations[key] ?? key
-      return options?.id ? value.replace('{{id}}', options.id) : value
+      if (!options) return value
+      return value.replace(/\{\{(\w+)\}\}/g, (_, name: string) => options[name] ?? `{{${name}}}`)
     },
     i18n: { language: 'en' },
   }),
@@ -532,7 +537,7 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
     })
   })
 
-  it('groups audits into Do now, Needs review, and Closed lanes', async () => {
+  it('groups audits into Planned, Fieldwork, Needs review, and Closed lanes', async () => {
     mockListRuns.mockResolvedValueOnce({
       data: {
         items: [
@@ -568,6 +573,7 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
             score_percentage: 92,
             source_origin: 'internal',
             created_at: '2026-07-12T10:10:00Z',
+            completed_at: new Date().toISOString(),
           },
         ],
         total: 3,
@@ -579,12 +585,13 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
 
     render(<Audits />)
 
-    expect(await screen.findByTestId('audits-board-lane-do_now')).toBeInTheDocument()
+    expect(await screen.findByTestId('audits-board-lane-planned')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-lane-fieldwork')).toBeInTheDocument()
     expect(screen.getByTestId('audits-board-lane-review')).toBeInTheDocument()
     expect(screen.getByTestId('audits-board-lane-closed')).toBeInTheDocument()
 
     expect(
-      within(screen.getByTestId('audits-board-lane-do_now')).getByText('Scheduled internal audit'),
+      within(screen.getByTestId('audits-board-lane-planned')).getByText('Scheduled internal audit'),
     ).toBeInTheDocument()
     expect(
       within(screen.getByTestId('audits-board-lane-review')).getByText('Imported UVDB intake'),
@@ -594,7 +601,7 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
     ).toBeInTheDocument()
 
     expect(
-      within(screen.getByTestId('audits-board-lane-do_now')).getByRole('button', { name: /^Start$/i }),
+      within(screen.getByTestId('audits-board-lane-planned')).getByRole('button', { name: /^Start$/i }),
     ).toBeInTheDocument()
 
     const reviewLane = screen.getByTestId('audits-board-lane-review')
@@ -670,7 +677,7 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
     })
   })
 
-  it('renders exactly three work lanes and never four equal status columns', async () => {
+  it('renders four named work lanes and never raw status column ids', async () => {
     mockListRuns.mockResolvedValueOnce({
       data: {
         items: [
@@ -704,16 +711,81 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
 
     render(<Audits />)
 
-    expect(await screen.findByTestId('audits-board-lane-do_now')).toBeInTheDocument()
+    expect(await screen.findByTestId('audits-board-lane-planned')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-lane-fieldwork')).toBeInTheDocument()
     expect(screen.getByTestId('audits-board-lane-review')).toBeInTheDocument()
     expect(screen.getByTestId('audits-board-lane-closed')).toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-do_now')).not.toBeInTheDocument()
     expect(screen.queryByTestId('audits-board-lane-scheduled')).not.toBeInTheDocument()
     expect(screen.queryByTestId('audits-board-lane-in_progress')).not.toBeInTheDocument()
 
-    const doNow = screen.getByTestId('audits-board-lane-do_now')
-    expect(within(doNow).getByText('Scheduled lane item')).toBeInTheDocument()
-    expect(within(doNow).getByText('In-progress lane item')).toBeInTheDocument()
-    expect(within(doNow).getByText('Do now')).toBeInTheDocument()
+    const planned = screen.getByTestId('audits-board-lane-planned')
+    const fieldwork = screen.getByTestId('audits-board-lane-fieldwork')
+    expect(within(planned).getByText('Scheduled lane item')).toBeInTheDocument()
+    expect(within(fieldwork).getByText('In-progress lane item')).toBeInTheDocument()
+    expect(within(planned).getByText('Planned')).toBeInTheDocument()
+    expect(within(fieldwork).getByText('Fieldwork')).toBeInTheDocument()
+    expect(within(planned).getByRole('button', { name: /^Start$/i })).toBeInTheDocument()
+    expect(within(fieldwork).getByRole('button', { name: /^Continue$/i })).toBeInTheDocument()
+  })
+
+  it('aligns the hero KPI count and filter with Planned + Fieldwork', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 1,
+            reference_number: 'AUD-00001',
+            template_id: 21,
+            template_version: 1,
+            title: 'Scheduled lane item',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+          {
+            id: 2,
+            reference_number: 'AUD-00002',
+            template_id: 21,
+            template_version: 1,
+            title: 'In-progress lane item',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:05:00Z',
+          },
+          {
+            id: 3,
+            reference_number: 'AUD-00003',
+            template_id: 21,
+            template_version: 1,
+            title: 'Closed lane item',
+            status: 'completed',
+            source_origin: 'internal',
+            score_percentage: 88,
+            max_score: 10,
+            created_at: '2026-07-12T10:10:00Z',
+            completed_at: new Date().toISOString(),
+          },
+        ],
+        total: 3,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    const kpi = await screen.findByTestId('audits-kpi-do-now')
+    expect(kpi).toHaveTextContent('2')
+    expect(kpi).toHaveTextContent('Do now')
+    expect(kpi).not.toHaveTextContent('In Progress')
+
+    fireEvent.click(kpi)
+    expect(await screen.findByText('Scheduled lane item')).toBeInTheDocument()
+    expect(screen.getByText('In-progress lane item')).toBeInTheDocument()
+    expect(screen.queryByText('Closed lane item')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-planned')).not.toBeInTheDocument()
   })
 
   it('shows all program chips when mixed programs load and clear restores the board', async () => {
@@ -752,6 +824,7 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
             assurance_scheme: 'Planet Mark',
             external_audit_type: 'planet_mark',
             created_at: '2026-07-12T12:00:00Z',
+            completed_at: new Date().toISOString(),
           },
           {
             id: 23,
@@ -790,6 +863,115 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
     expect(screen.getByText('UVDB intake')).toBeInTheDocument()
     expect(screen.getByText('Planet Mark intake')).toBeInTheDocument()
     expect(screen.getByText('Customer site')).toBeInTheDocument()
+  })
+
+  it('keeps aged-out Closed runs off the board and opens List from the more control', async () => {
+    const aged = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString()
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 31,
+            reference_number: 'AUD-2026-0056',
+            template_id: 21,
+            template_version: 2,
+            title: 'Aged Wickford close',
+            status: 'completed',
+            source_origin: 'internal',
+            created_at: aged,
+            completed_at: aged,
+          },
+          {
+            id: 32,
+            reference_number: 'AUD-2026-0057',
+            template_id: 21,
+            template_version: 3,
+            title: 'Field Engineer Internal Audit',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    const closedLane = await screen.findByTestId('audits-board-lane-closed')
+    expect(within(closedLane).queryByText('Aged Wickford close')).not.toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-closed-more')).toHaveTextContent(
+      '1 more closed — open List',
+    )
+
+    fireEvent.click(screen.getByTestId('audits-board-closed-more'))
+    expect(await screen.findByText('Aged Wickford close')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('switches to List when search is used so a specific run can be located', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 41,
+            reference_number: 'AUD-2026-0057',
+            template_id: 21,
+            template_version: 3,
+            title: 'Field Engineer Internal Audit',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+    expect(await screen.findByTestId('audits-board-lane-fieldwork')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('audits.search_placeholder'), {
+      target: { value: 'AUD-2026-0057' },
+    })
+
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('AUD-2026-0057')).toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-fieldwork')).not.toBeInTheDocument()
+  })
+
+  it('shows a truncation banner when more runs exist than the loaded page', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 51,
+            reference_number: 'AUD-00051',
+            template_id: 21,
+            template_version: 1,
+            title: 'Loaded run',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 240,
+        page: 1,
+        page_size: 100,
+        pages: 3,
+      },
+    })
+
+    render(<Audits />)
+    expect(await screen.findByTestId('audits-runs-truncated-banner')).toHaveTextContent(
+      'Showing 1 of 240 runs',
+    )
   })
 })
 
@@ -841,7 +1023,7 @@ describe('Audits board empty-state honesty', () => {
     expect(await screen.findByText('Scheduled safety audit')).toBeInTheDocument()
     const filterToolbar = screen.getByRole('toolbar', { name: 'Audit filters' })
     expect(within(filterToolbar).getByText('Total Audits')).toBeInTheDocument()
-    expect(within(filterToolbar).getByText('1')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-kpi-do-now')).toHaveTextContent('1')
     expect(screen.queryByText('No audits found')).not.toBeInTheDocument()
     expect(screen.queryByTestId('audits-board-empty')).not.toBeInTheDocument()
   })
@@ -858,6 +1040,7 @@ describe('Audits board empty-state honesty', () => {
             title: 'Completed audit',
             status: 'completed',
             created_at: '2026-07-12T10:00:00Z',
+            completed_at: new Date().toISOString(),
           },
         ],
         total: 1,
@@ -871,7 +1054,7 @@ describe('Audits board empty-state honesty', () => {
     await screen.findByText('Completed audit')
 
     const filterToolbar = screen.getByRole('toolbar', { name: 'Audit filters' })
-    fireEvent.click(within(filterToolbar).getByRole('button', { name: /In Progress/i }))
+    fireEvent.click(within(filterToolbar).getByRole('button', { name: /Do now/i }))
 
     expect(await screen.findByTestId('audits-list-filter-empty')).toBeInTheDocument()
     expect(screen.getByText('No audits match filters')).toBeInTheDocument()
@@ -1220,5 +1403,643 @@ describe('Audits import modal deep-link (PX-260)', () => {
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(screen.getByText('Create External Audit Intake')).toBeInTheDocument()
+  })
+})
+
+describe('Audits schedule modal templateId seed (N-BUILD-1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams('templateId=21')
+    mockListRuns.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 21,
+            reference_number: 'TPL-0021',
+            name: 'Annual Safety Audit',
+            description: 'Published schedule template',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: ['instrument:audit'],
+            version: 3,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
+            id: 22,
+            reference_number: 'TPL-0022',
+            name: 'Other published template',
+            description: 'd',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: ['instrument:audit'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+  })
+
+  it('opens the schedule modal with the published template preselected', async () => {
+    render(<Audits />)
+
+    const dialog = await screen.findByRole('dialog')
+    const select = within(dialog).getByRole('combobox')
+    await waitFor(() => expect(select).toHaveValue('21'))
+  })
+})
+
+describe('Audits schedule modal purpose filter (N-BUILD-2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListRuns.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 21,
+            reference_number: 'TPL-0021',
+            name: 'Annual Safety Audit',
+            description: 'Untagged published audit',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: [],
+            version: 3,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
+            id: 22,
+            reference_number: 'TPL-0022',
+            name: 'Tagged audit template',
+            description: 'd',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: ['instrument:audit'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
+            id: 31,
+            reference_number: 'TPL-0031',
+            name: 'Skills competency template',
+            description: 'skills',
+            category: 'Workforce',
+            audit_type: 'inspection',
+            tags: ['instrument:skills'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
+            id: 32,
+            reference_number: 'TPL-0032',
+            name: 'Induction onboarding template',
+            description: 'induction',
+            category: 'Workforce',
+            audit_type: 'inspection',
+            tags: ['instrument:induction'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+        ],
+        total: 4,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+  })
+
+  it('excludes skills and induction templates and includes untagged as audit', async () => {
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schedule Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    const templateSelect = within(dialog).getAllByRole('combobox')[0]!
+    const options = within(templateSelect)
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+
+    expect(options.join(' ')).toContain('Annual Safety Audit')
+    expect(options.join(' ')).toContain('Tagged audit template')
+    expect(options.join(' ')).not.toContain('Skills competency template')
+    expect(options.join(' ')).not.toContain('Induction onboarding template')
+  })
+
+  it('does not seed a skills templateId into the schedule modal', async () => {
+    mockSearchParams = new URLSearchParams('templateId=31')
+    render(<Audits />)
+
+    expect(await screen.findByRole('button', { name: 'Schedule Audit' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+describe('A2 honest KPIs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('shows em dash for Average Score when closed runs only have a fake 0%', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 56,
+            reference_number: 'AUD-2026-0056',
+            template_id: 21,
+            template_version: 2,
+            title: 'Wickford close',
+            status: 'completed',
+            source_origin: 'internal',
+            score_percentage: 0,
+            max_score: 0,
+            created_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+          },
+          {
+            id: 54,
+            reference_number: 'AUD-2026-0054',
+            template_id: 21,
+            template_version: 1,
+            title: 'Unscored close',
+            status: 'completed',
+            source_origin: 'internal',
+            score_percentage: 0,
+            created_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    const kpi = await screen.findByTestId('audits-kpi-avg-score')
+    expect(kpi).toHaveTextContent('—')
+    expect(screen.getByTestId('audits-kpi-avg-score-caption')).toHaveTextContent(
+      'Not scored in this view',
+    )
+    const closed = screen.getByTestId('audits-board-lane-closed')
+    expect(within(closed).queryByText('0%')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-score-56')).not.toBeInTheDocument()
+  })
+
+  it('keeps a real 0% when the run has a positive max_score', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 90,
+            reference_number: 'AUD-2026-0090',
+            template_id: 21,
+            template_version: 1,
+            title: 'Failed scored close',
+            status: 'completed',
+            source_origin: 'internal',
+            score_percentage: 0,
+            max_score: 10,
+            created_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-board-score-90')).toHaveTextContent('0%')
+    expect(screen.getByTestId('audits-kpi-avg-score')).toHaveTextContent('0%')
+    expect(screen.queryByTestId('audits-kpi-avg-score-caption')).not.toBeInTheDocument()
+  })
+})
+
+function a3Run(
+  partial: Record<string, unknown> & { id: number; title: string },
+): Record<string, unknown> {
+  return {
+    template_id: 21,
+    template_version: 1,
+    status: 'in_progress',
+    source_origin: 'internal',
+    created_at: '2026-07-12T10:00:00Z',
+    ...partial,
+  }
+}
+
+function a3Finding(
+  partial: Record<string, unknown> & { id: number; run_id: number; title: string },
+): Record<string, unknown> {
+  return {
+    reference_number: `AF-${String(partial.id).padStart(5, '0')}`,
+    description: 'd',
+    severity: 'medium',
+    finding_type: 'nonconformity',
+    status: 'open',
+    corrective_action_required: true,
+    created_at: '2026-07-12T10:00:00Z',
+    ...partial,
+  }
+}
+
+describe('A3 programme-scoped findings + clause', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('scopes Open Findings KPI to the Internal chip, not the tenant server total', async () => {
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          a3Run({ id: 1, reference_number: 'AUD-2026-0001', title: 'Internal one' }),
+          a3Run({ id: 2, reference_number: 'AUD-2026-0002', title: 'Internal two' }),
+          a3Run({ id: 3, reference_number: 'AUD-2026-0003', title: 'Internal three' }),
+          a3Run({ id: 4, reference_number: 'AUD-2026-0004', title: 'Internal four' }),
+          a3Run({ id: 5, reference_number: 'AUD-2026-0005', title: 'Internal five' }),
+          a3Run({ id: 6, reference_number: 'AUD-2026-0006', title: 'Internal six' }),
+          a3Run({
+            id: 99,
+            reference_number: 'AUD-2026-0099',
+            title: 'Customer visit',
+            source_origin: 'customer',
+          }),
+        ],
+        total: 7,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+    stubFindingsApi({
+      items: [
+        a3Finding({ id: 11, run_id: 1, title: 'Internal open A' }),
+        a3Finding({ id: 12, run_id: 1, title: 'Internal open B' }),
+        a3Finding({ id: 91, run_id: 99, title: 'Customer open' }),
+      ],
+      total: 101,
+    })
+    mockListFindings.mockImplementation((_page, pageSize, _runId, status?: string) => {
+      if (status === 'open') {
+        return Promise.resolve({
+          data: { items: [], total: 100, page: 1, page_size: 1, pages: 1 },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          items: [
+            a3Finding({ id: 11, run_id: 1, title: 'Internal open A' }),
+            a3Finding({ id: 12, run_id: 1, title: 'Internal open B' }),
+            a3Finding({ id: 91, run_id: 99, title: 'Customer open' }),
+          ],
+          total: 101,
+          page: 1,
+          page_size: pageSize,
+          pages: 1,
+        },
+      })
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-kpi-open-findings')).toHaveTextContent('100')
+    fireEvent.click(screen.getByTestId('audits-program-chip-internal'))
+    expect(screen.getByTestId('audits-kpi-open-findings')).toHaveTextContent('2')
+    expect(screen.getByTestId('audits-kpi-open-findings')).not.toHaveTextContent('100')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Findings' }))
+    expect(screen.getByTestId('finding-card-11')).toBeInTheDocument()
+    expect(screen.getByTestId('finding-card-12')).toBeInTheDocument()
+    expect(screen.queryByTestId('finding-card-91')).not.toBeInTheDocument()
+  })
+
+  it('honours ?view=findings&clause= and does not invent unmatched findings', async () => {
+    mockSearchParams = new URLSearchParams('view=findings&clause=7.2')
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [a3Run({ id: 1, reference_number: 'AUD-2026-0001', title: 'Internal one' })],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+    stubFindingsApi({
+      items: [
+        a3Finding({
+          id: 21,
+          run_id: 1,
+          title: 'Competence gap',
+          clause_ids: ['7.2'],
+        }),
+        a3Finding({
+          id: 22,
+          run_id: 1,
+          title: 'Documented information',
+          clause_ids: ['8.1'],
+        }),
+      ],
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-findings-clause-filter')).toHaveTextContent('7.2')
+    expect(screen.getByTestId('finding-card-21')).toBeInTheDocument()
+    expect(screen.queryByTestId('finding-card-22')).not.toBeInTheDocument()
+    expect(screen.getByTestId('audits-kpi-open-findings')).toHaveTextContent('1')
+  })
+})
+
+describe('A5b server search q=', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('refetches listRuns with q so search is not stuck on the loaded page', async () => {
+    mockListRuns.mockImplementation((_page?: number, _pageSize?: number, options?: { q?: string }) => {
+      if (options?.q === 'Wickford-needle') {
+        return Promise.resolve({
+          data: {
+            items: [
+              {
+                id: 240,
+                reference_number: 'AUD-2026-0240',
+                template_id: 21,
+                template_version: 1,
+                title: 'Wickford-needle close',
+                status: 'completed',
+                source_origin: 'internal',
+                created_at: new Date().toISOString(),
+              },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 100,
+            pages: 1,
+          },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          items: [
+            {
+              id: 1,
+              reference_number: 'AUD-2026-0001',
+              template_id: 21,
+              template_version: 1,
+              title: 'Loaded page run',
+              status: 'scheduled',
+              source_origin: 'internal',
+              created_at: new Date().toISOString(),
+            },
+          ],
+          total: 240,
+          page: 1,
+          page_size: 100,
+          pages: 3,
+        },
+      })
+    })
+
+    render(<Audits />)
+    expect(await screen.findByText('Loaded page run')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('audits-search'), {
+      target: { value: 'Wickford-needle' },
+    })
+    expect(await screen.findByText('Wickford-needle close')).toBeInTheDocument()
+    expect(screen.queryByText('Loaded page run')).not.toBeInTheDocument()
+    expect(mockListRuns).toHaveBeenCalledWith(1, 100, { q: 'Wickford-needle' })
+  })
+})
+
+describe('N1 locate complete', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    mockSearchParams = new URLSearchParams()
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('keeps zero-count programme chips mounted', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 21,
+            reference_number: 'AUD-00021',
+            template_id: 21,
+            template_version: 1,
+            title: 'Internal only',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-program-chip-internal')).toHaveTextContent('1')
+    expect(screen.getByTestId('audits-program-chip-uvdb')).toHaveTextContent('0')
+    expect(screen.getByTestId('audits-program-chip-planet_mark')).toHaveTextContent('0')
+    expect(screen.getByTestId('audits-program-chip-customer')).toHaveTextContent('0')
+  })
+
+  it('defaults List density to Comfort and Compact keeps keyboard-openable rows', async () => {
+    mockSearchParams = new URLSearchParams('view=list')
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 31,
+            reference_number: 'AUD-00031',
+            template_id: 21,
+            template_version: 1,
+            title: 'List density run',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    const comfort = await screen.findByTestId('audits-list-density-comfort')
+    expect(comfort).toHaveAttribute('aria-checked', 'true')
+    const row = screen.getByTestId('audits-list-row')
+    expect(row).toHaveAttribute('data-density', 'comfort')
+    expect(row).toHaveAttribute('tabindex', '0')
+
+    fireEvent.click(screen.getByTestId('audits-list-density-compact'))
+    expect(screen.getByTestId('audits-list-density-compact')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByTestId('audits-list-row')).toHaveAttribute('data-density', 'compact')
+    expect(screen.getByTestId('audits-list-row')).toHaveAttribute('tabindex', '0')
+    expect(localStorage.getItem('qgp.audits.listDensity')).toBe('compact')
+
+    fireEvent.keyDown(screen.getByTestId('audits-list-row'), { key: 'Enter' })
+    expect(mockNavigate).toHaveBeenCalled()
+  })
+})
+
+describe('N2 follow-up honesty', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('names the empty Findings register for the active programme chip', async () => {
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          a3Run({ id: 1, reference_number: 'AUD-2026-0001', title: 'Internal one' }),
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+    stubFindingsApi({
+      items: [a3Finding({ id: 11, run_id: 1, title: 'Internal finding' })],
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-program-chip-planet_mark')).toHaveTextContent('0')
+    fireEvent.click(screen.getByTestId('audits-program-chip-planet_mark'))
+    fireEvent.click(screen.getByRole('button', { name: 'Findings' }))
+
+    expect(await screen.findByTestId('audits-findings-empty')).toHaveTextContent('No Planet Mark findings')
+    expect(screen.getByTestId('audits-findings-empty')).toHaveTextContent(
+      'No findings in Planet Mark on the loaded page',
+    )
+    expect(screen.queryByTestId('finding-card-11')).not.toBeInTheDocument()
+  })
+
+  it('uses N1-style Showing loaded of total on the Findings register', async () => {
+    stubFindingsApi({
+      items: [
+        {
+          id: 1,
+          reference_number: 'AF-00001',
+          run_id: 1,
+          title: 'Loaded open finding',
+          description: 'd',
+          severity: 'medium',
+          finding_type: 'nonconformity',
+          status: 'open',
+          corrective_action_required: true,
+          created_at: '2026-07-12T10:00:00Z',
+        },
+        {
+          id: 2,
+          reference_number: 'AF-00002',
+          run_id: 1,
+          title: 'In progress finding',
+          description: 'd',
+          severity: 'medium',
+          finding_type: 'nonconformity',
+          status: 'in_progress',
+          corrective_action_required: true,
+          created_at: '2026-07-12T10:01:00Z',
+        },
+      ],
+      total: 101,
+    })
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 1,
+            reference_number: 'AUD-00001',
+            template_id: 21,
+            template_version: 1,
+            title: 'Internal run',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Findings' }))
+    expect(await screen.findByTestId('audits-findings-truncated-banner')).toHaveTextContent(
+      'Showing 2 of 101 findings',
+    )
   })
 })

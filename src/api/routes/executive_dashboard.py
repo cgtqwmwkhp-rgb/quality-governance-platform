@@ -4,12 +4,15 @@ Provides endpoints for executive-level KPI dashboards,
 real-time metrics, and organizational health scoring.
 """
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user, get_db
+from src.api.routes._action_unified import pending_action_count
+from src.api.routes.actions import _compute_actions_summary
 from src.api.schemas.executive_dashboard import (
     DashboardSummaryResponse,
     ExecutiveDashboardResponse,
@@ -18,6 +21,8 @@ from src.api.schemas.executive_dashboard import (
 from src.domain.metrics import percentage_or_none
 from src.domain.models.user import User
 from src.services.executive_dashboard import ExecutiveDashboardService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])
 
@@ -40,8 +45,30 @@ async def get_executive_dashboard(
     - Active alerts requiring attention
     """
     service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
-    dashboard = await service.get_full_dashboard(period_days)
+    dashboard = await service.get_full_dashboard(period_days, user=current_user)
     return ExecutiveDashboardResponse.model_validate(dashboard)
+
+
+async def _count_pending_actions(db: AsyncSession, tenant_id: Optional[int]) -> Optional[int]:
+    """Actions still owed tenant-wide, or None when the aggregate is unreadable.
+
+    Delegates to the aggregate behind ``/actions/summary`` instead of counting here,
+    so this tile cannot drift from the Actions register it claims to summarise —
+    C-66 was precisely the two disagreeing, by nine.
+
+    Returns None rather than 0 on failure. PX-216 established that a sub-query which
+    never returned is not a measurement of zero, and "no outstanding remedial work"
+    is the single most consequential thing this dashboard can assert.
+    """
+    try:
+        summary = await _compute_actions_summary(db, tenant_id)
+    except Exception:
+        logger.warning(
+            "executive-dashboard.summary: pending action aggregate failed; reporting unavailable rather than 0",
+            exc_info=True,
+        )
+        return None
+    return pending_action_count(summary.by_display_status)
 
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
@@ -56,17 +83,15 @@ async def get_dashboard_summary(
     service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
     dashboard = await service.get_full_dashboard(30)
 
-    # Calculate pending actions
-    pending_actions = dashboard["incidents"]["open"] + dashboard["complaints"]["open"]
-
-    # Calculate overdue items
+    open_cases = dashboard["incidents"]["open"] + dashboard["complaints"]["open"]
     overdue_items = dashboard["compliance"]["overdue"]
 
     return DashboardSummaryResponse(
         health_score=dashboard["health_score"]["score"],
         health_status=dashboard["health_score"]["status"],
         open_incidents=dashboard["incidents"]["open"],
-        pending_actions=pending_actions,
+        open_cases=open_cases,
+        pending_actions=await _count_pending_actions(db, current_user.tenant_id),
         overdue_items=overdue_items,
         kri_alerts=dashboard["kris"]["pending_alerts"],
     )

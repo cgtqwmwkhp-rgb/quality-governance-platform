@@ -6,6 +6,22 @@ import type { AxiosInstance } from 'axios'
 import type { Investigation } from './investigationsClient'
 import type { RunningSheetEntry } from './incidentsClient'
 
+/**
+ * Statuses a near miss can hold, matching `NEAR_MISS_TRANSITIONS`.
+ *
+ * These are the incident lifecycle's values: N-2 aligned the two registers, so
+ * a near miss no longer holds an uppercase label of its own. `formatCodedValue`
+ * renders them for display.
+ */
+export const NEAR_MISS_STATUS_OPTIONS = [
+  'reported',
+  'under_investigation',
+  'pending_actions',
+  'actions_in_progress',
+  'pending_review',
+  'closed',
+] as const
+
 /** Minimal paginated shape used by near-miss list responses. */
 export interface PaginatedResponse<T> {
   items: T[]

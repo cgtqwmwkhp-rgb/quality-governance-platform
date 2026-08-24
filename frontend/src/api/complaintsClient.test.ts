@@ -22,8 +22,10 @@ describe('createComplaintsApi', () => {
     const complaints = createComplaintsApi(api as never)
     complaints.get(9)
     complaints.update(9, { status: 'closed' })
+    complaints.delete(9)
     expect(api.get).toHaveBeenCalledWith('/api/v1/complaints/9')
     expect(api.patch).toHaveBeenCalledWith('/api/v1/complaints/9', { status: 'closed' })
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/complaints/9')
   })
 
   it('running-sheet helpers match OpenAPI nested paths', () => {

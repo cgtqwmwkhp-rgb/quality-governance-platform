@@ -6,6 +6,13 @@ import {
   PROGRAM_FILTER_CHIPS,
   classifyAuditProgram,
   getAuditsForLaneStatuses,
+  partitionClosedForBoard,
+  auditRunIsScored,
+  formatAuditsAverageScore,
+  parseAuditsListDensity,
+  auditsListCellClass,
+  countDoNowAudits,
+  isDoNowAuditStatus,
 } from '../auditsBoardModel'
 
 function run(partial: Partial<AuditRun> & Pick<AuditRun, 'id' | 'status'>): AuditRun {
@@ -20,27 +27,35 @@ function run(partial: Partial<AuditRun> & Pick<AuditRun, 'id' | 'status'>): Audi
   } as AuditRun
 }
 
-describe('AUD-W-01 audits board model (Round 3)', () => {
-  it('locks exactly three work lanes (not equal 4-col status board)', () => {
-    expect(BOARD_WORK_LANES).toHaveLength(3)
-    expect(BOARD_WORK_LANES.map((lane) => lane.id)).toEqual(['do_now', 'review', 'closed'])
+describe('AUD-W-01 / A4 audits board model', () => {
+  it('locks four named work lanes (Planned / Fieldwork / Review / Closed)', () => {
+    expect(BOARD_WORK_LANES).toHaveLength(4)
+    expect(BOARD_WORK_LANES.map((lane) => lane.id)).toEqual([
+      'planned',
+      'fieldwork',
+      'review',
+      'closed',
+    ])
     expect(BOARD_WORK_LANES.map((lane) => lane.label)).toEqual([
-      'Do now',
+      'Planned',
+      'Fieldwork',
       'Needs review',
       'Closed',
     ])
   })
 
-  it('aggregates scheduled + in_progress into Do now', () => {
-    const doNow = BOARD_WORK_LANES.find((lane) => lane.id === 'do_now')
-    expect(doNow?.statuses).toEqual(['scheduled', 'in_progress'])
+  it('splits scheduled into Planned and in_progress into Fieldwork', () => {
+    const planned = BOARD_WORK_LANES.find((lane) => lane.id === 'planned')
+    const fieldwork = BOARD_WORK_LANES.find((lane) => lane.id === 'fieldwork')
+    expect(planned?.statuses).toEqual(['scheduled'])
+    expect(fieldwork?.statuses).toEqual(['in_progress'])
     expect(BOARD_STATUS_IDS.has('scheduled')).toBe(true)
     expect(BOARD_STATUS_IDS.has('in_progress')).toBe(true)
     expect(BOARD_STATUS_IDS.has('draft')).toBe(false)
     expect(BOARD_STATUS_IDS.has('cancelled')).toBe(false)
   })
 
-  it('groups mixed statuses into the Round 3 lanes', () => {
+  it('groups mixed statuses into the four named lanes', () => {
     const audits = [
       run({ id: 1, status: 'scheduled', title: 'Scheduled' }),
       run({ id: 2, status: 'in_progress', title: 'In progress' }),
@@ -49,11 +64,13 @@ describe('AUD-W-01 audits board model (Round 3)', () => {
       run({ id: 5, status: 'draft', title: 'Draft' }),
     ]
 
-    const doNow = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[0].statuses)
-    const review = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[1].statuses)
-    const closed = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[2].statuses)
+    const planned = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[0].statuses)
+    const fieldwork = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[1].statuses)
+    const review = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[2].statuses)
+    const closed = getAuditsForLaneStatuses(audits, BOARD_WORK_LANES[3].statuses)
 
-    expect(doNow.map((a) => a.title)).toEqual(['Scheduled', 'In progress'])
+    expect(planned.map((a) => a.title)).toEqual(['Scheduled'])
+    expect(fieldwork.map((a) => a.title)).toEqual(['In progress'])
     expect(review.map((a) => a.title)).toEqual(['Review'])
     expect(closed.map((a) => a.title)).toEqual(['Done'])
   })
@@ -102,5 +119,97 @@ describe('AUD-W-01 audits board model (Round 3)', () => {
         }),
       ),
     ).toBe('customer')
+  })
+})
+
+describe('A5 closed board window', () => {
+  const nowMs = Date.parse('2026-08-16T07:00:00Z')
+
+  it('keeps completed runs from the last 30 days on the board', () => {
+    const audits = [
+      run({
+        id: 1,
+        status: 'completed',
+        title: 'Recent',
+        completed_at: '2026-08-10T10:00:00Z',
+      }),
+      run({
+        id: 2,
+        status: 'completed',
+        title: 'Aged',
+        completed_at: '2026-07-01T10:00:00Z',
+      }),
+      run({ id: 3, status: 'in_progress', title: 'Open' }),
+    ]
+    const part = partitionClosedForBoard(audits, nowMs)
+    expect(part.visible.map((a) => a.title)).toEqual(['Recent'])
+    expect(part.moreCount).toBe(1)
+  })
+
+  it('caps Closed cards at 8 and counts the rest as more', () => {
+    const audits = Array.from({ length: 9 }, (_, i) =>
+      run({
+        id: i + 1,
+        status: 'completed',
+        title: `Closed ${i + 1}`,
+        completed_at: `2026-08-${String(16 - i).padStart(2, '0')}T10:00:00Z`,
+      }),
+    )
+    const part = partitionClosedForBoard(audits, nowMs)
+    expect(part.visible).toHaveLength(8)
+    expect(part.visible[0]?.title).toBe('Closed 1')
+    expect(part.moreCount).toBe(1)
+  })
+})
+
+describe('A2 score honesty', () => {
+  it('treats 0% with no denominator as missing', () => {
+    expect(auditRunIsScored({ score_percentage: 0, max_score: 0 })).toBe(false)
+    expect(auditRunIsScored({ score_percentage: 0, max_score: null })).toBe(false)
+    expect(auditRunIsScored({ score_percentage: null, max_score: 10 })).toBe(false)
+  })
+
+  it('keeps a real 0% when max_score is positive', () => {
+    expect(auditRunIsScored({ score_percentage: 0, max_score: 10 })).toBe(true)
+    expect(auditRunIsScored({ score_percentage: 92, max_score: 100 })).toBe(true)
+  })
+
+  it('shows em dash until a scored run exists, not 0%', () => {
+    const empty = formatAuditsAverageScore([
+      run({ id: 1, status: 'completed', score_percentage: 0, max_score: 0 }),
+      run({ id: 2, status: 'completed', score_percentage: 0 }),
+    ])
+    expect(empty.value).toBe('—')
+    expect(empty.caption).toBe('Not scored in this view')
+
+    const mixed = formatAuditsAverageScore([
+      run({ id: 1, status: 'completed', score_percentage: 0, max_score: 0 }),
+      run({ id: 2, status: 'completed', score_percentage: 80, max_score: 10 }),
+      run({ id: 3, status: 'completed', score_percentage: 100, max_score: 10 }),
+    ])
+    expect(mixed.value).toBe('90%')
+    expect(mixed.caption).toBeNull()
+  })
+
+  it('parses list density with Comfort as default', () => {
+    expect(parseAuditsListDensity(null)).toBe('comfort')
+    expect(parseAuditsListDensity('compact')).toBe('compact')
+    expect(parseAuditsListDensity('unknown')).toBe('comfort')
+    expect(auditsListCellClass('comfort')).toBe('px-6 py-4')
+    expect(auditsListCellClass('compact')).toBe('px-3 py-2')
+  })
+
+  it('counts Do now KPI as Planned + Fieldwork (scheduled + in_progress)', () => {
+    const audits = [
+      run({ id: 1, status: 'scheduled' }),
+      run({ id: 2, status: 'in_progress' }),
+      run({ id: 3, status: 'pending_review' }),
+      run({ id: 4, status: 'completed' }),
+    ]
+    expect(countDoNowAudits(audits)).toBe(2)
+    expect(isDoNowAuditStatus('scheduled')).toBe(true)
+    expect(isDoNowAuditStatus('in_progress')).toBe(true)
+    expect(isDoNowAuditStatus('pending_review')).toBe(false)
+    expect(isDoNowAuditStatus('completed')).toBe(false)
   })
 })

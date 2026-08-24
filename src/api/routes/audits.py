@@ -76,7 +76,7 @@ from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.audit_analytics_service import SUPPORTED_GROUP_BY, AuditAnalyticsService
 from src.domain.services.audit_scoring_service import AuditScoringService
-from src.domain.services.audit_service import AuditService
+from src.domain.services.audit_service import AuditService, question_belongs_to_run, require_run_tenant_id
 from src.domain.services.external_audit_intake_template_resolver import (
     ExternalAuditIntakeTemplateResolver,
     IntakeTemplateResolution,
@@ -641,13 +641,16 @@ async def update_template(
         template.is_published = False
 
     # Protect workflow/system-controlled fields from mass assignment.
+    # `tags` is the API field; the ORM column is `tags_json` (same remap as create_template).
     update_data = template_data.model_dump(
         exclude_unset=True,
-        exclude={"standard_ids", "is_active", "is_published", "template_status"},
+        exclude={"standard_ids", "is_active", "is_published", "template_status", "tags"},
     )
     for field in ("name", "description", "category"):
         if field in update_data and isinstance(update_data[field], str):
             update_data[field] = html.unescape(update_data[field])
+    if "tags" in template_data.model_fields_set:
+        update_data["tags_json"] = template_data.tags
     for field, value in update_data.items():
         setattr(template, field, value)
 
@@ -1010,6 +1013,10 @@ async def list_runs(
     status_filter: Optional[str] = Query(None, alias="status"),
     template_id: Optional[int] = None,
     assigned_to_id: Optional[int] = None,
+    q: Optional[str] = Query(
+        None,
+        description="Match title, reference, location, scheme, or body (ilike)",
+    ),
 ) -> Any:
     """List all audit runs with pagination and filtering."""
     try:
@@ -1022,6 +1029,7 @@ async def list_runs(
             status_filter=status_filter,
             template_id=template_id,
             assigned_to_id=assigned_to_id,
+            q=q,
         )
 
         validated_items = []
@@ -1159,6 +1167,38 @@ async def create_run(
             "template_not_published",
         )
         raise NotFoundError("Published template not found")
+
+    # FR-DEDUP-02: refuse a second external intake for the same real-world report id.
+    if run_data.external_audit_type is not None and current_user.tenant_id is not None:
+        from src.domain.services.external_audit_idempotency import (
+            conflict_details_for_run,
+            find_existing_external_audit_run,
+            normalize_external_reference,
+        )
+
+        external_ref = normalize_external_reference(run_data.external_reference)
+        if external_ref:
+            existing = await find_existing_external_audit_run(
+                db,
+                tenant_id=current_user.tenant_id,
+                external_reference=run_data.external_reference or "",
+                assurance_scheme=run_data.assurance_scheme,
+            )
+            if existing is not None:
+                _record_audit_endpoint_event(
+                    "POST /api/v1/audits/runs",
+                    409,
+                    (time.perf_counter() - started) * 1000,
+                    "external_reference_duplicate",
+                )
+                raise ConflictError(
+                    (
+                        f"An audit for external reference '{existing.external_reference}' already exists "
+                        f"({existing.reference_number}). Open that run instead of creating a twin."
+                    ),
+                    code="EXTERNAL_AUDIT_REFERENCE_EXISTS",
+                    details=conflict_details_for_run(existing),
+                )
 
     payload = _normalize_run_create_payload(run_data)
     payload["template_id"] = template.id
@@ -1360,16 +1400,16 @@ async def create_response(
 ) -> AuditResponseResponse:
     """Submit a response to an audit question."""
     started = time.perf_counter()
-    # Verify run exists and is in progress
+    # Verify run exists and is in progress. Exact tenant match only: the
+    # previous filter also matched runs with a NULL tenant_id, which is a live
+    # set of rows in the migrated schema (the column is still nullable there),
+    # so any authenticated caller could write into an unattributed run belonging
+    # to another organisation. Nothing below the application enforces this.
     result = await db.execute(
-        select(AuditRun)
-        .options(selectinload(AuditRun.template))
-        .where(
-            AuditRun.id == run_id,
-            or_(
-                AuditRun.tenant_id == current_user.tenant_id,
-                AuditRun.tenant_id.is_(None),
-            ),
+        apply_tenant_filter(
+            select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.id == run_id),
+            AuditRun,
+            current_user.tenant_id,
         )
     )
     run = result.scalar_one_or_none()
@@ -1426,18 +1466,21 @@ async def create_response(
 
     question_result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == response_data.question_id))
     question = question_result.scalar_one_or_none()
-    if not question:
+    if not question or not question_belongs_to_run(run, question):
         _record_audit_endpoint_event(
             "POST /api/v1/audits/runs/{id}/responses",
             404,
             (time.perf_counter() - started) * 1000,
-            "question_not_found",
+            "question_not_found" if question is None else "question_not_in_run_template",
         )
+        # Deliberately the same message either way: a distinct one would confirm
+        # that a question the caller cannot see exists.
         raise NotFoundError("Audit question not found")
 
     payload = AuditScoringService.apply_derived_scores(question, response_data.model_dump())
     response = AuditResponse(
         run_id=run_id,
+        tenant_id=require_run_tenant_id(run),
         **payload,
     )
 

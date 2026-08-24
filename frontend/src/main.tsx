@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './i18n/i18n'
 import App from './App'
+import { FeatureFlagProvider } from './contexts/FeatureFlagContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { LiveAnnouncerProvider } from './components/ui/LiveAnnouncer'
@@ -43,14 +44,16 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <LiveAnnouncerProvider>
-        <TooltipProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
-        </TooltipProvider>
-      </LiveAnnouncerProvider>
-    </ThemeProvider>
+    <FeatureFlagProvider>
+      <ThemeProvider>
+        <LiveAnnouncerProvider>
+          <TooltipProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </TooltipProvider>
+        </LiveAnnouncerProvider>
+      </ThemeProvider>
+    </FeatureFlagProvider>
   </React.StrictMode>,
 )

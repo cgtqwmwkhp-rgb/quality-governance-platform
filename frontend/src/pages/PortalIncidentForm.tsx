@@ -28,6 +28,7 @@ import {
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector'
 import DraftRecoveryDialog from '../components/DraftRecoveryDialog'
+import { PersonNameField } from '../components/PersonNameField'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import {
   canOfferStaffDeepLink,
@@ -161,6 +162,8 @@ interface FormData {
   contractOther: string
   wasInvolved: boolean | null
   personName: string
+  /** UI-only roster link; never sent on portal submit (API is displayName string only). */
+  personEngineerId: number | null
   personRole: string
   personContact: string
   location: string
@@ -181,7 +184,7 @@ interface FormData {
 }
 
 export default function PortalIncidentForm() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const { user, platformToken } = usePortalAuth()
@@ -224,6 +227,7 @@ export default function PortalIncidentForm() {
     contractOther: '',
     wasInvolved: null,
     personName: '',
+    personEngineerId: null,
     personRole: '',
     personContact: '',
     location: '',
@@ -724,30 +728,35 @@ export default function PortalIncidentForm() {
                   </div>
                 </div>
 
-                {/* Person Name */}
-                <div>
-                  <label
-                    htmlFor="portalincidentform-field-0"
-                    className="block text-sm font-medium text-foreground mb-2"
-                  >
-                    {formData.wasInvolved
+                {/* Person Name — hybrid employee lookup; payload maps displayName only */}
+                <PersonNameField
+                  id="portalincidentform-field-0"
+                  testId="portal-incident-person-name"
+                  mode="hybrid"
+                  lang={i18n.language}
+                  label={
+                    formData.wasInvolved
                       ? t('portal.your_name')
-                      : t('portal.person_involved_name')}{' '}
-                    *
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      id="portalincidentform-field-0"
-                      value={formData.personName}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, personName: e.target.value }))
-                      }
-                      placeholder={t('portal.full_name_placeholder')}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
+                      : t('portal.person_involved_name')
+                  }
+                  placeholder={t('portal.full_name_placeholder')}
+                  required
+                  value={
+                    formData.personName
+                      ? {
+                          displayName: formData.personName,
+                          engineerId: formData.personEngineerId,
+                        }
+                      : null
+                  }
+                  onChange={(next) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      personName: next?.displayName?.trim() ?? '',
+                      personEngineerId: next?.engineerId ?? null,
+                    }))
+                  }
+                />
 
                 {/* Role */}
                 <FuzzySearchDropdown

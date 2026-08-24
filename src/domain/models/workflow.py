@@ -247,9 +247,16 @@ class ApprovalRequest(Base):
 
 
 class EscalationRule(Base):
-    """Escalation rule configuration"""
+    """Escalation rule configuration.
 
-    __tablename__ = "escalation_rules"
+    The table is ``escalation_rules_config``, which is what
+    ``20260220_workflow_persist`` created. This class declared
+    ``escalation_rules`` for six months, so it mapped a table that has never
+    existed on any migrated database and any ``select(EscalationRule)`` would
+    have raised ``UndefinedTable``. Nothing queried it, so nothing failed.
+    """
+
+    __tablename__ = "escalation_rules_config"
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -302,7 +309,7 @@ class EscalationLog(Base):
 
     # References
     instance_id: Mapped[int] = mapped_column(ForeignKey("workflow_instances.id"), nullable=False, index=True)
-    rule_id: Mapped[Optional[int]] = mapped_column(ForeignKey("escalation_rules.id"), nullable=True)
+    rule_id: Mapped[Optional[int]] = mapped_column(ForeignKey("escalation_rules_config.id"), nullable=True)
 
     # Escalation details
     trigger: Mapped[str] = mapped_column(String(50), nullable=False)

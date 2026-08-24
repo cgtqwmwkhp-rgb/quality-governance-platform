@@ -1,9 +1,11 @@
 """Employee Self-Service Portal API routes.
 
 Provides simplified, mobile-first endpoints for:
-- Anonymous incident/complaint reporting
+- Identified incident/complaint/near-miss/RTA reporting
 - Report tracking by reference number
 - QR code generation for quick access
+
+Anonymous portal submissions are intentionally disabled (PX-312).
 """
 
 import hashlib
@@ -35,10 +37,22 @@ from src.domain.models.evidence_asset import (
 )
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
-from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
+from src.domain.models.rta import RoadTrafficCollision, RTAStatus
 from src.domain.services.api_idempotency_service import begin_idempotent_create, complete_idempotent_create
 from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.portal_triage_service import assign_and_notify_portal_intake
+from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.rta_severity import (
+    derive_portal_rta_severity,
+    interpret_rta_injury_answer,
+    interpret_rta_yes_no_answer,
+    read_reported_bool,
+)
+from src.domain.services.shared_severity import (
+    map_portal_severity,
+    near_miss_priority_for_severity,
+    normalize_portal_severity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +111,8 @@ PORTAL_REPORTER_PHONE_MAX_LENGTH = 50  # near_misses.reporter_phone
 PORTAL_COMPLAINANT_PHONE_DB_LENGTH = 30  # complaints.complainant_phone
 PORTAL_LOCATION_MAX_LENGTH = 500  # rtas.location
 PORTAL_INCIDENT_LOCATION_DB_LENGTH = 300  # incidents.location
+PORTAL_NEAR_MISS_EVENT_TIME_DB_LENGTH = 10  # near_misses.event_time
+PORTAL_RTA_COLLISION_TIME_DB_LENGTH = 10  # road_traffic_collisions.collision_time
 
 _EMAIL_LIKE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -151,7 +167,7 @@ class QuickReportCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=200, description="Brief title")
     description: str = Field(..., min_length=10, description="What happened?")
     location: Optional[str] = Field(None, max_length=PORTAL_LOCATION_MAX_LENGTH, description="Where did it occur?")
-    severity: str = Field(default="medium", description="Severity: low, medium, high, critical")
+    severity: str = Field(default="medium", description="Severity: negligible, low, medium, high, critical")
 
     # Reporter info (optional for anonymous). complainant_name is accepted as an alias
     # for complaint intake clients that use the staff-schema field name.
@@ -165,8 +181,8 @@ class QuickReportCreate(BaseModel):
     reporter_phone: Optional[str] = Field(None, max_length=PORTAL_REPORTER_PHONE_MAX_LENGTH)
     department: Optional[str] = Field(None, max_length=100)
 
-    # Anonymous flag
-    is_anonymous: bool = Field(default=False, description="Submit anonymously")
+    # Anonymous flag — accepted on the wire but hard-rejected in submit_quick_report (PX-312)
+    is_anonymous: bool = Field(default=False, description="Must be false; anonymous portal submit is not available")
 
     # Optional photo/attachment reference
     attachment_ids: Optional[list[str]] = None
@@ -336,6 +352,43 @@ def generate_portal_reference(prefix: str) -> str:
     """Generate a collision-resistant portal reference number."""
     year = datetime.now(timezone.utc).year
     return f"{prefix}-{year}-{secrets.token_hex(4).upper()}"
+
+
+# PX-126: which register each portal prefix writes into, so the portal can draw
+# from the same sequence staff intake already uses instead of its own hex space.
+_PORTAL_REFERENCE_REGISTERS: dict[str, tuple[str, Any]] = {
+    "INC": ("incident", Incident),
+    "COMP": ("complaint", Complaint),
+    "RTA": ("rta", RoadTrafficCollision),
+    "NM": ("near_miss", NearMiss),
+}
+
+
+async def mint_portal_reference(db: DbSession, prefix: str) -> str:
+    """Mint a portal reference from the shared sequential register (PX-126).
+
+    Portal intake used to mint ``COMP-2026-9F3A21C4`` while staff intake minted
+    ``COMP-2026-0007`` for the same register, so a single case list showed two
+    incompatible reference formats and neither operators nor complainants could
+    tell which was "real".
+
+    If the sequence cannot be read the legacy hex form is used rather than
+    refusing the submission: an employee filing a near miss must never lose it to
+    a reference-minting problem.
+    """
+    register = _PORTAL_REFERENCE_REGISTERS.get(prefix)
+    if register is None:
+        return generate_portal_reference(prefix)
+    record_type, model_class = register
+    try:
+        return await ReferenceNumberService.generate(db, record_type, model_class)
+    except Exception:
+        logger.warning(
+            "Sequential portal reference unavailable for %s; falling back to the legacy form",
+            prefix,
+            exc_info=True,
+        )
+        return generate_portal_reference(prefix)
 
 
 _CUSTOMER_DISPLAY_LABELS = {
@@ -516,15 +569,9 @@ def staff_golden_thread_fields(
     }
 
 
-def map_severity(severity: str) -> tuple:
-    """Map simplified severity to model enums."""
-    severity_map = {
-        "low": (IncidentSeverity.LOW, ComplaintPriority.LOW),
-        "medium": (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM),
-        "high": (IncidentSeverity.HIGH, ComplaintPriority.HIGH),
-        "critical": (IncidentSeverity.CRITICAL, ComplaintPriority.CRITICAL),
-    }
-    return severity_map.get(severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM))
+def map_severity(severity: str) -> tuple[IncidentSeverity, ComplaintPriority]:
+    """Map the portal severity word onto the incident and complaint enums."""
+    return map_portal_severity(severity)
 
 
 _STATUS_LABELS = {
@@ -539,6 +586,7 @@ _STATUS_LABELS = {
 }
 
 _PRIORITY_LABELS = {
+    "negligible": "⚪ Negligible",
     "low": "🟢 Low",
     "medium": "🟡 Medium",
     "high": "🟠 High",
@@ -654,11 +702,63 @@ def build_incident_portal_fields(
     }
 
 
+# The published complaint template asks the reporter for ``complaint_date``, and
+# ``received_date`` is the column every complaint time limit is measured from.
+# The builder never read either name, so the reporter's stated date was replaced
+# by the instant they pressed submit. Both spellings are accepted because
+# template field names live in admin-editable ``form_fields`` rows and the portal
+# deploys independently of this API, so neither shape can be assumed.
+_COMPLAINT_RECEIVED_DATE_KEYS: tuple[str, ...] = ("complaint_date", "received_date")
+
+
+def resolve_complaint_received_date(
+    reporter_submission: dict[str, Any],
+    *,
+    reference_number: Optional[str] = None,
+) -> datetime:
+    """Resolve the reporter's stated complaint date from any accepted key.
+
+    Falls back to the submission instant when no accepted key carries a
+    parseable date, because losing the complaint is worse than an imprecise
+    clock — but that substitution is logged rather than made silently, since
+    ``received_date`` is what statutory response deadlines are counted from.
+    """
+    resolved: list[tuple[str, datetime]] = []
+    for key in _COMPLAINT_RECEIVED_DATE_KEYS:
+        parsed = parse_portal_datetime(reporter_submission.get(key))
+        if parsed is not None:
+            resolved.append((key, parsed))
+
+    if not resolved:
+        logger.warning(
+            "Complaint %s carried no usable complaint date; recording the submission instant instead. "
+            "Accepted date keys: %s. Keys present in reporter_submission: %s.",
+            reference_number or "<reference not yet minted>",
+            list(_COMPLAINT_RECEIVED_DATE_KEYS),
+            sorted(reporter_submission),
+        )
+        return datetime.now(timezone.utc)
+
+    chosen_key, chosen_datetime = resolved[0]
+    conflicts = [(key, dt.isoformat()) for key, dt in resolved[1:] if dt != chosen_datetime]
+    if conflicts:
+        logger.warning(
+            "Complaint %s carried conflicting complaint dates across accepted keys; using %s=%s and ignoring %s.",
+            reference_number or "<reference not yet minted>",
+            chosen_key,
+            chosen_datetime.isoformat(),
+            conflicts,
+        )
+    return chosen_datetime
+
+
 def build_complaint_portal_fields(
     report: QuickReportCreate,
     complaint_priority: ComplaintPriority,
     reporter_submission: dict[str, Any],
     tenant_id: Optional[int] = None,
+    *,
+    reference_number: Optional[str] = None,
 ) -> dict[str, Any]:
     resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
     display_name = require_portal_display_name(report, reporter_submission)
@@ -666,7 +766,10 @@ def build_complaint_portal_fields(
         "complaint_type": ComplaintType.OTHER,
         "priority": complaint_priority,
         "status": ComplaintStatus.RECEIVED,
-        "received_date": datetime.now(timezone.utc),
+        "received_date": resolve_complaint_received_date(
+            reporter_submission,
+            reference_number=reference_number,
+        ),
         "complainant_name": display_name,
         "complainant_email": (report.reporter_email if not report.is_anonymous else None),
         "complainant_phone": (
@@ -680,20 +783,123 @@ def build_complaint_portal_fields(
     }
 
 
+# ``/report/rta`` renders the hardcoded PortalRTAForm, which posts
+# ``accident_date`` / ``accident_time`` / ``pe_vehicle`` / ``third_parties``. The
+# published 'rta' template — currently unreachable, because App.tsx routes
+# report/rta to that hardcoded form rather than to PortalDynamicForm — names the
+# same facts ``incident_date`` / ``incident_time`` / ``vehicle_reg`` /
+# ``third_party_involved``. Both shapes are accepted, live keys first, for the
+# same reason the near-miss path accepts both: 'incident-legacy' and
+# 'near-miss-static' exist because those routes were already converted from
+# hardcoded to template-driven, RTA is the last one left, and template field
+# names are admin-editable at runtime with no gate in front of them.
+#
+# Date and time are resolved as a *pair* so a value from one client shape can
+# never be spliced onto a value from another.
+_RTA_COLLISION_DATETIME_KEYS: tuple[tuple[str, str], ...] = (
+    ("accident_date", "accident_time"),
+    ("incident_date", "incident_time"),
+)
+
+_RTA_VEHICLE_REGISTRATION_KEYS: tuple[str, ...] = ("pe_vehicle", "vehicle_reg")
+
+
+def resolve_rta_collision_datetime(
+    reporter_submission: dict[str, Any],
+    *,
+    reference_number: Optional[str] = None,
+) -> tuple[datetime, Optional[str]]:
+    """Resolve the reporter-submitted collision date/time from any accepted key pair.
+
+    Returns ``(collision_datetime, raw_time_string)``. The submission instant is
+    used when no accepted key carries a parseable date — losing a collision
+    report is worse than an imprecise timestamp — but that is logged, and no time
+    is invented to go with it.
+    """
+    resolved: list[tuple[str, datetime, Any]] = []
+    for date_key, time_key in _RTA_COLLISION_DATETIME_KEYS:
+        parsed = parse_portal_datetime(reporter_submission.get(date_key), reporter_submission.get(time_key))
+        if parsed is not None:
+            resolved.append((date_key, parsed, reporter_submission.get(time_key)))
+
+    if not resolved:
+        logger.warning(
+            "RTA %s carried no usable collision date; recording the submission instant instead. "
+            "Accepted date keys: %s. Keys present in reporter_submission: %s.",
+            reference_number or "<reference not yet minted>",
+            [date_key for date_key, _ in _RTA_COLLISION_DATETIME_KEYS],
+            sorted(reporter_submission),
+        )
+        return datetime.now(timezone.utc), None
+
+    chosen_key, chosen_datetime, chosen_time = resolved[0]
+    conflicts = [(key, dt.isoformat()) for key, dt, _ in resolved[1:] if dt != chosen_datetime]
+    if conflicts:
+        logger.warning(
+            "RTA %s carried conflicting collision dates across accepted keys; using %s=%s and ignoring %s.",
+            reference_number or "<reference not yet minted>",
+            chosen_key,
+            chosen_datetime.isoformat(),
+            conflicts,
+        )
+
+    raw_time = str(chosen_time).strip() if chosen_time is not None else ""
+    if len(raw_time) > PORTAL_RTA_COLLISION_TIME_DB_LENGTH:
+        # road_traffic_collisions.collision_time is varchar(10). An over-long value
+        # raises StringDataRightTruncation, which aborts the INSERT and loses the
+        # entire collision report rather than just the time. The template declares
+        # this field as 'time' today, but field_type is a database row an
+        # administrator can retype to text, and the endpoint accepts JSON from any
+        # caller. Full precision is already on collision_date and in the reporter
+        # snapshot, so clip and say so — the same trade the near-miss path makes.
+        logger.warning(
+            "RTA %s submitted a %d-character time under %s; clipping to fit collision_time(varchar %d). "
+            "Full precision is retained on collision_date.",
+            reference_number or "<reference not yet minted>",
+            len(raw_time),
+            chosen_key,
+            PORTAL_RTA_COLLISION_TIME_DB_LENGTH,
+        )
+        raw_time = raw_time[:PORTAL_RTA_COLLISION_TIME_DB_LENGTH]
+    return chosen_datetime, raw_time or None
+
+
+def resolve_rta_vehicle_registration(reporter_submission: dict[str, Any]) -> Any:
+    """Resolve the company vehicle registration from any accepted key.
+
+    The registration is what ties a collision to a vehicle, a driver and an
+    insurer, so a name mismatch here loses the identity of the vehicle involved.
+    """
+    for key in _RTA_VEHICLE_REGISTRATION_KEYS:
+        value = reporter_submission.get(key)
+        if value == "other":
+            # The live form's vehicle picker offers an "other" escape hatch.
+            value = reporter_submission.get("pe_vehicle_other")
+        if value:
+            return value
+    return None
+
+
 def build_rta_portal_fields(
     report: QuickReportCreate,
-    rta_severity: RTASeverity,
     reporter_submission: dict[str, Any],
     tenant_id: Optional[int] = None,
+    *,
+    reference_number: Optional[str] = None,
 ) -> dict[str, Any]:
+    """Map a portal RTA submission onto RoadTrafficCollision columns.
+
+    Severity is derived here rather than passed in, so there is exactly one place
+    that decides an injury outcome. ``report.severity`` is the portal's generic
+    triage word and is deliberately not consulted: see
+    :mod:`src.domain.services.rta_severity`.
+    """
     resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
-    collision_occurred_at = parse_portal_datetime(
-        reporter_submission.get("accident_date"),
-        reporter_submission.get("accident_time"),
-    ) or datetime.now(timezone.utc)
-    vehicle_registration = reporter_submission.get("pe_vehicle")
-    if vehicle_registration == "other":
-        vehicle_registration = reporter_submission.get("pe_vehicle_other")
+    collision_occurred_at, collision_time_value = resolve_rta_collision_datetime(
+        reporter_submission,
+        reference_number=reference_number,
+    )
+    vehicle_registration = resolve_rta_vehicle_registration(reporter_submission)
     witness_details = reporter_submission.get("witness_details")
     third_party_entries = reporter_submission.get("third_parties")
     from src.domain.services.rta_injury_fields import derive_third_party_injured
@@ -707,8 +913,17 @@ def build_rta_portal_fields(
         explicit_tp_injured = reporter_submission.get("injured")
     third_party_injured = derive_third_party_injured(
         third_parties_payload,
-        explicit=bool(explicit_tp_injured) if explicit_tp_injured is not None else None,
+        explicit=interpret_rta_injury_answer(explicit_tp_injured),
     )
+    # The published template asks "Third Party Involved?" as a yes/no toggle and
+    # never asks how many, so the only typed column it can reach is the vehicle
+    # count. A detailed party record still requires the ``third_parties`` array.
+    reported_third_party_involved = interpret_rta_yes_no_answer(reporter_submission.get("third_party_involved"))
+    # None = the form never asked, which is not the same as "nobody was hurt".
+    driver_injured = interpret_rta_injury_answer(reporter_submission.get("driver_injured"))
+    # reporter_submission is arbitrary client JSON; only a string belongs in a Text column.
+    raw_injury_details = reporter_submission.get("driver_injury_details")
+    driver_injury_details = raw_injury_details.strip() or None if isinstance(raw_injury_details, str) else None
     witness_structured = None
     if isinstance(witness_details, str) and witness_details.strip():
         witness_structured = {
@@ -722,11 +937,14 @@ def build_rta_portal_fields(
 
     display_name = require_portal_display_name(report, reporter_submission)
     return {
-        "severity": rta_severity,
+        "severity": derive_portal_rta_severity(
+            driver_injured=driver_injured,
+            third_party_injured=third_party_injured,
+        ),
         "status": RTAStatus.REPORTED,
         "location": report.location or "Not specified",
         "collision_date": collision_occurred_at,
-        "collision_time": reporter_submission.get("accident_time"),
+        "collision_time": collision_time_value,
         "reported_date": datetime.now(timezone.utc),
         "weather_conditions": reporter_submission.get("weather"),
         "road_conditions": reporter_submission.get("road_condition"),
@@ -736,11 +954,14 @@ def build_rta_portal_fields(
         "reporter_email": report.reporter_email if not report.is_anonymous else None,
         "driver_name": display_name,
         "driver_email": report.reporter_email if not report.is_anonymous else None,
-        "driver_injured": bool(reporter_submission.get("driver_injured")),
+        "driver_injured": driver_injured is True,
+        "driver_injury_details": driver_injury_details,
         "third_party_injured": third_party_injured,
+        # Drivability is the operational urgency signal the triage word used to carry.
+        "vehicle_drivable": read_reported_bool(reporter_submission.get("is_drivable")),
         "third_parties": third_parties_payload,
         "vehicles_involved_count": max(
-            1,
+            2 if reported_third_party_involved else 1,
             int(reporter_submission.get("vehicle_count") or 0) + 1,
         ),
         "witnesses": witness_details if isinstance(witness_details, str) else None,
@@ -760,11 +981,117 @@ def build_rta_portal_fields(
     }
 
 
+# The portal's dynamic form renderer builds one generic field set for every
+# report type, so a Near Miss arrives carrying the incident-shaped keys the
+# published template defines (``incident_date``/``incident_time``/
+# ``preventive_action``) rather than the NearMiss domain names. Both shapes are
+# accepted: template field names live in admin-editable ``form_fields`` rows and
+# the portal deploys independently of this API, so the backend cannot assume
+# either shape is the one that will arrive.
+#
+# Date and time are resolved as a *pair* so a value from one client shape can
+# never be spliced onto a value from another.
+_NEAR_MISS_EVENT_DATETIME_KEYS: tuple[tuple[str, str], ...] = (
+    ("event_date", "event_time"),
+    ("incident_date", "incident_time"),
+)
+
+_NEAR_MISS_PREVENTIVE_ACTION_KEYS: tuple[str, ...] = (
+    "preventive_action_suggested",
+    "preventive_action",
+)
+
+
+def resolve_near_miss_event_datetime(
+    reporter_submission: dict[str, Any],
+    *,
+    reference_number: Optional[str] = None,
+) -> tuple[datetime, Optional[str]]:
+    """Resolve the reporter-submitted event date/time from any accepted key pair.
+
+    Returns ``(event_datetime, raw_time_string)``. When no accepted key carries a
+    parseable date the submission instant is used, because losing a safety report
+    is worse than an imprecise timestamp — but that substitution is logged rather
+    than made silently, and no time is invented to go with it.
+    """
+    resolved: list[tuple[str, datetime, Any]] = []
+    for date_key, time_key in _NEAR_MISS_EVENT_DATETIME_KEYS:
+        parsed = parse_portal_datetime(reporter_submission.get(date_key), reporter_submission.get(time_key))
+        if parsed is not None:
+            resolved.append((date_key, parsed, reporter_submission.get(time_key)))
+
+    if not resolved:
+        logger.warning(
+            "Near miss %s carried no usable event date; recording the submission instant instead. "
+            "Accepted date keys: %s. Keys present in reporter_submission: %s.",
+            reference_number or "<reference not yet minted>",
+            [date_key for date_key, _ in _NEAR_MISS_EVENT_DATETIME_KEYS],
+            sorted(reporter_submission),
+        )
+        return datetime.now(timezone.utc), None
+
+    chosen_key, chosen_datetime, chosen_time = resolved[0]
+    conflicts = [(key, dt.isoformat()) for key, dt, _ in resolved[1:] if dt != chosen_datetime]
+    if conflicts:
+        logger.warning(
+            "Near miss %s carried conflicting event dates across accepted keys; using %s=%s and ignoring %s.",
+            reference_number or "<reference not yet minted>",
+            chosen_key,
+            chosen_datetime.isoformat(),
+            conflicts,
+        )
+
+    raw_time = str(chosen_time).strip() if chosen_time is not None else ""
+    if len(raw_time) > PORTAL_NEAR_MISS_EVENT_TIME_DB_LENGTH:
+        # near_misses.event_time is varchar(10); an over-long value would abort the
+        # whole insert and lose the safety report. The full-precision instant is
+        # already on event_date and in the reporter snapshot, so clip and say so.
+        logger.warning(
+            "Near miss %s submitted a %d-character time under %s; clipping to fit event_time(varchar %d). "
+            "Full precision is retained on event_date.",
+            reference_number or "<reference not yet minted>",
+            len(raw_time),
+            chosen_key,
+            PORTAL_NEAR_MISS_EVENT_TIME_DB_LENGTH,
+        )
+        raw_time = raw_time[:PORTAL_NEAR_MISS_EVENT_TIME_DB_LENGTH]
+    return chosen_datetime, raw_time or None
+
+
+def resolve_near_miss_preventive_action(
+    reporter_submission: dict[str, Any],
+    *,
+    reference_number: Optional[str] = None,
+) -> Optional[Any]:
+    """Resolve the reporter's suggested preventive action from any accepted key."""
+    present = [
+        (key, reporter_submission.get(key))
+        for key in _NEAR_MISS_PREVENTIVE_ACTION_KEYS
+        if str(reporter_submission.get(key) or "").strip()
+    ]
+    if not present:
+        return None
+
+    chosen_key, chosen_value = present[0]
+    ignored = [key for key, _ in present[1:]]
+    if ignored:
+        logger.warning(
+            "Near miss %s carried a suggested preventive action under multiple accepted keys; "
+            "using %s and ignoring %s.",
+            reference_number or "<reference not yet minted>",
+            chosen_key,
+            ignored,
+        )
+    return chosen_value
+
+
 def build_near_miss_portal_fields(
     report: QuickReportCreate,
     priority: str,
     reporter_submission: dict[str, Any],
     tenant_id: Optional[int] = None,
+    *,
+    reference_number: Optional[str] = None,
 ) -> dict[str, Any]:
     """Map portal Near Miss submission onto every NearMiss column it already has.
 
@@ -789,10 +1116,10 @@ def build_near_miss_portal_fields(
 
     # CRITICAL: use the reporter-submitted event date/time — never silently overwrite
     # with server utcnow when the client provided one (data integrity requirement).
-    event_occurred_at = parse_portal_datetime(
-        reporter_submission.get("event_date"),
-        reporter_submission.get("event_time"),
-    ) or datetime.now(timezone.utc)
+    event_occurred_at, event_time_value = resolve_near_miss_event_datetime(
+        reporter_submission,
+        reference_number=reference_number,
+    )
 
     witnesses_present_raw = reporter_submission.get("witnesses_present")
     witnesses_present = bool(witnesses_present_raw) if witnesses_present_raw is not None else False
@@ -812,18 +1139,21 @@ def build_near_miss_portal_fields(
         "location": report.location or "Not specified",
         "location_coordinates": reporter_submission.get("location_coordinates"),
         "event_date": event_occurred_at,
-        "event_time": reporter_submission.get("event_time"),
+        "event_time": event_time_value,
         "potential_consequences": reporter_submission.get("potential_consequences"),
-        "preventive_action_suggested": reporter_submission.get("preventive_action_suggested"),
+        "preventive_action_suggested": resolve_near_miss_preventive_action(
+            reporter_submission,
+            reference_number=reference_number,
+        ),
         "persons_involved": reporter_submission.get("persons_involved"),
         "witnesses_present": witnesses_present,
         "witness_names": witness_names if witnesses_present and isinstance(witness_names, str) else None,
         "asset_number": reporter_submission.get("asset_number"),
         "asset_type": reporter_submission.get("asset_type"),
         "risk_category": reporter_submission.get("risk_category"),
-        "potential_severity": report.severity.lower(),
+        "potential_severity": normalize_portal_severity(report.severity),
         "is_hipo": is_hipo,
-        "status": "REPORTED",
+        "status": "reported",
         "priority": priority,
         "source_form_id": "portal_near_miss_v1",
         "tenant_id": resolved_tenant_id,
@@ -1317,7 +1647,7 @@ async def upload_portal_attachment(
     response_model=QuickReportResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Submit a Quick Report",
-    description="Submit an incident or complaint report. Can be anonymous.",
+    description="Submit an identified incident, complaint, near-miss, or RTA report.",
 )
 async def submit_quick_report(
     report: QuickReportCreate,
@@ -1329,13 +1659,25 @@ async def submit_quick_report(
     Submit a quick report (incident or complaint).
 
     This endpoint is public and doesn't require authentication.
-    Anonymous reports can be tracked using the returned tracking_code.
-    Authenticated staff receive a golden-thread staff_href when role allows.
+    Anonymous submissions are not available (PX-312) and are rejected with 422
+    before any persistence. Authenticated staff receive a golden-thread
+    staff_href when role allows.
 
     Optional ``Idempotency-Key`` header (or ``idempotency_key`` body field, for
     clients that cannot set custom headers): retries with the same key return
     the original 201 response instead of creating a duplicate case (PX-001).
     """
+    # PX-312: anonymous portal reporting stays off — refuse before any DB write.
+    if report.is_anonymous:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Anonymous portal submissions are not available",
+                details={"fields": ["is_anonymous"]},
+            ),
+        )
+
     incident_severity, complaint_priority = map_severity(report.severity)
     reporter_submission = report.reporter_submission or {}
     portal_tenant_id = get_default_portal_tenant_id()
@@ -1366,7 +1708,7 @@ async def submit_quick_report(
     )
 
     if report_type == "incident":
-        ref_number = generate_portal_reference("INC")
+        ref_number = await mint_portal_reference(db, "INC")
         tracking_code = generate_tracking_code(ref_number)
 
         from src.domain.services.contract_resolve import resolve_contract_id_by_code
@@ -1420,14 +1762,20 @@ async def submit_quick_report(
         )
 
     elif report_type == "complaint":
-        ref_number = generate_portal_reference("COMP")
+        ref_number = await mint_portal_reference(db, "COMP")
         tracking_code = generate_tracking_code(ref_number)
 
         complaint = Complaint(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_complaint_portal_fields(report, complaint_priority, reporter_submission, portal_tenant_id),
+            **build_complaint_portal_fields(
+                report,
+                complaint_priority,
+                reporter_submission,
+                portal_tenant_id,
+                reference_number=ref_number,
+            ),
         )
 
         db.add(complaint)
@@ -1464,23 +1812,19 @@ async def submit_quick_report(
         )
 
     elif report_type == "rta":
-        ref_number = generate_portal_reference("RTA")
+        ref_number = await mint_portal_reference(db, "RTA")
         tracking_code = generate_tracking_code(ref_number)
-
-        # Map severity
-        rta_severity_map = {
-            "low": RTASeverity.DAMAGE_ONLY,
-            "medium": RTASeverity.MINOR_INJURY,
-            "high": RTASeverity.SERIOUS_INJURY,
-            "critical": RTASeverity.FATAL,
-        }
-        rta_severity = rta_severity_map.get(report.severity.lower(), RTASeverity.DAMAGE_ONLY)
 
         rta = RoadTrafficCollision(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_rta_portal_fields(report, rta_severity, reporter_submission, portal_tenant_id),
+            **build_rta_portal_fields(
+                report,
+                reporter_submission,
+                portal_tenant_id,
+                reference_number=ref_number,
+            ),
         )
 
         db.add(rta)
@@ -1517,22 +1861,21 @@ async def submit_quick_report(
         )
 
     elif report_type == "near_miss":
-        ref_number = generate_portal_reference("NM")
+        ref_number = await mint_portal_reference(db, "NM")
         tracking_code = generate_tracking_code(ref_number)
 
-        # Map severity to priority
-        priority_map = {
-            "low": "LOW",
-            "medium": "MEDIUM",
-            "high": "HIGH",
-            "critical": "CRITICAL",
-        }
-        priority = priority_map.get(report.severity.lower(), "MEDIUM")
+        priority = near_miss_priority_for_severity(report.severity)
 
         near_miss = NearMiss(
             reference_number=ref_number,
             description=report.description,
-            **build_near_miss_portal_fields(report, priority, reporter_submission, portal_tenant_id),
+            **build_near_miss_portal_fields(
+                report,
+                priority,
+                reporter_submission,
+                portal_tenant_id,
+                reference_number=ref_number,
+            ),
         )
 
         db.add(near_miss)
@@ -1907,6 +2250,12 @@ async def get_report_types():
             },
         ],
         "severity_levels": [
+            {
+                "id": "negligible",
+                "label": "Negligible",
+                "description": "No harm or loss, recorded for the trend",
+                "color": "#94a3b8",
+            },
             {
                 "id": "low",
                 "label": "Low",

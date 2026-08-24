@@ -1,10 +1,26 @@
-"""Risk Register API routes."""
+"""Operational Risk Register API routes — DEPRECATED.
+
+These routes read and write the ``risks`` table via the ``Risk`` model. That
+store is separate from the Enterprise Risk Register (``risks_v2`` /
+``EnterpriseRisk``) served by ``/api/v1/risk-register``, and it is the only
+risk store in the platform that nothing but ``POST /api/v1/risks/`` ever
+writes: audit-finding escalation, incident/complaint/near-miss risk links,
+``RiskService`` and the risk-register importer all write ``EnterpriseRisk``.
+
+The practical consequence is that ``GET /api/v1/risks/`` reports 0 on a
+deployment whose risk register is full, which is how two dashboards ended up
+disagreeing about the same question (PX-178). ``/risk-register`` is the single
+source; this surface is kept only so existing OpenAPI consumers do not break,
+is advertised as deprecated in the schema, and returns deprecation headers.
+
+Ids and payloads are NOT interchangeable between the two registers.
+"""
 
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import ColumnElement, and_, func, select, true
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import ColumnElement, and_, func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -75,7 +91,21 @@ async def _get_risk_tenant_checked(db, risk_id: int, current_user) -> Risk:
     return risk
 
 
-router = APIRouter()
+SUCCESSOR_REGISTER_PATH = "/api/v1/risk-register/"
+
+
+def advertise_deprecation(response: Response) -> None:
+    """Announce the successor register on every operational-risk response.
+
+    RFC 8594 style. No ``Sunset`` header: the removal date is not agreed yet, and
+    a made-up one would be worse than none. Callers get a machine-readable
+    pointer at the register that actually holds the data.
+    """
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = f'<{SUCCESSOR_REGISTER_PATH}>; rel="successor-version"'
+
+
+router = APIRouter(dependencies=[Depends(advertise_deprecation)])
 
 
 # ============== Risk Matrix Configuration ==============
@@ -129,11 +159,11 @@ def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
 # ============== Risk Endpoints ==============
 
 
-@router.get("", response_model=RiskListResponse, include_in_schema=False)
-@router.get("/", response_model=RiskListResponse)
+@router.get("", response_model=RiskListResponse, include_in_schema=False, deprecated=True)
+@router.get("/", response_model=RiskListResponse, deprecated=True)
 async def list_risks(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
@@ -142,12 +172,21 @@ async def list_risks(
     risk_level: Optional[str] = None,
     owner_id: Optional[int] = None,
 ) -> RiskListResponse:
-    """List all risks with pagination and filtering."""
+    """List all risks with pagination and filtering.
+
+    Scoped to the caller's own tenant for every caller, superuser included.
+    ``get_risk`` keeps its superuser exemption, so one named cross-tenant risk
+    can still be opened by id; only enumerating the estate is withdrawn.
+    """
     query = select(Risk).where(Risk.is_active == True)
 
-    if not current_user.is_superuser:
-        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-        query = apply_tenant_filter(query, Risk, tenant_id)
+    # No superuser bypass on the register list (B-13). ``risks`` is a FORCE-RLS
+    # table of C3-confidential rows whose policies are inert while the app
+    # connects as a rolbypassrls role, so this predicate is the only thing
+    # scoping the read. ``/risks/statistics`` and ``/risks/matrix`` are scoped
+    # the same way, so the aggregates and this page describe one population.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    query = apply_tenant_filter(query, Risk, tenant_id)
 
     if search:
         search_filter = f"%{search}%"
@@ -186,8 +225,9 @@ async def list_risks(
     response_model=RiskResponse,
     status_code=status.HTTP_201_CREATED,
     include_in_schema=False,
+    deprecated=True,
 )
-@router.post("/", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RiskResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,
@@ -240,17 +280,22 @@ async def create_risk(
     return RiskResponse.model_validate(risk)
 
 
-@router.get("/statistics", response_model=RiskStatistics)
+@router.get("/statistics", response_model=RiskStatistics, deprecated=True)
 async def get_risk_statistics(
     db: DbSession,
     current_user: CurrentUser,
 ) -> RiskStatistics:
-    """Get risk register statistics."""
-    if current_user.is_superuser:
-        tf: ColumnElement[bool] = true()
-    else:
-        tid = require_tenant_id(getattr(current_user, "tenant_id", None))
-        tf = Risk.tenant_id == tid
+    """Get risk register statistics.
+
+    Scoped to the caller's own tenant for every caller, superuser included, so
+    these aggregates describe the same population ``list_risks`` pages through.
+    """
+    # No superuser bypass on the aggregates (B-13). #1513 scoped the register
+    # list unconditionally and left this divergence open: a tenant-bound
+    # superuser read their own risks in the list and every tenant's in the
+    # statistics beside it, so the two surfaces disagreed about one question.
+    tid = require_tenant_id(getattr(current_user, "tenant_id", None))
+    tf: ColumnElement[bool] = Risk.tenant_id == tid
 
     # Total and active risks
     total_result = await db.execute(select(func.count()).select_from(Risk).where(tf))
@@ -315,17 +360,18 @@ async def get_risk_statistics(
     )
 
 
-@router.get("/matrix", response_model=RiskMatrixResponse)
+@router.get("/matrix", response_model=RiskMatrixResponse, deprecated=True)
 async def get_risk_matrix(
     db: DbSession,
     current_user: CurrentUser,
 ) -> RiskMatrixResponse:
-    """Get the risk matrix with risk counts per cell."""
-    if current_user.is_superuser:
-        tf: ColumnElement[bool] = true()
-    else:
-        tid = require_tenant_id(getattr(current_user, "tenant_id", None))
-        tf = Risk.tenant_id == tid
+    """Get the risk matrix with risk counts per cell.
+
+    Scoped to the caller's own tenant for every caller, superuser included, for
+    the same reason as ``get_risk_statistics``.
+    """
+    tid = require_tenant_id(getattr(current_user, "tenant_id", None))
+    tf: ColumnElement[bool] = Risk.tenant_id == tid
     # Get risk counts by likelihood and impact
     result = await db.execute(
         select(Risk.likelihood, Risk.impact, func.count())
@@ -367,7 +413,7 @@ async def get_risk_matrix(
     )
 
 
-@router.get("/{risk_id}", response_model=RiskDetailResponse)
+@router.get("/{risk_id}", response_model=RiskDetailResponse, deprecated=True)
 async def get_risk(
     risk_id: int,
     db: DbSession,
@@ -402,7 +448,7 @@ async def get_risk(
     return response
 
 
-@router.patch("/{risk_id}", response_model=RiskResponse)
+@router.patch("/{risk_id}", response_model=RiskResponse, deprecated=True)
 async def update_risk(
     risk_id: int,
     risk_data: RiskUpdate,
@@ -456,7 +502,7 @@ async def update_risk(
     return RiskResponse.model_validate(risk)
 
 
-@router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 async def delete_risk(
     risk_id: int,
     db: DbSession,
@@ -484,6 +530,7 @@ async def delete_risk(
     "/{risk_id}/controls",
     response_model=RiskControlResponse,
     status_code=status.HTTP_201_CREATED,
+    deprecated=True,
 )
 async def create_control(
     risk_id: int,
@@ -514,7 +561,7 @@ async def create_control(
     return RiskControlResponse.model_validate(control)
 
 
-@router.get("/{risk_id}/controls", response_model=dict)
+@router.get("/{risk_id}/controls", response_model=dict, deprecated=True)
 async def list_controls(
     risk_id: int,
     db: DbSession,
@@ -547,7 +594,7 @@ async def list_controls(
     }
 
 
-@router.patch("/controls/{control_id}", response_model=RiskControlResponse)
+@router.patch("/controls/{control_id}", response_model=RiskControlResponse, deprecated=True)
 async def update_control(
     control_id: int,
     control_data: RiskControlUpdate,
@@ -588,7 +635,7 @@ async def update_control(
     return RiskControlResponse.model_validate(control)
 
 
-@router.delete("/controls/{control_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/controls/{control_id}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 async def delete_control(
     control_id: int,
     db: DbSession,
@@ -622,6 +669,7 @@ async def delete_control(
     "/{risk_id}/assessments",
     response_model=RiskAssessmentResponse,
     status_code=status.HTTP_201_CREATED,
+    deprecated=True,
 )
 async def create_assessment(
     risk_id: int,
@@ -674,7 +722,7 @@ async def create_assessment(
     return RiskAssessmentResponse.model_validate(assessment)
 
 
-@router.get("/{risk_id}/assessments", response_model=list[RiskAssessmentResponse])
+@router.get("/{risk_id}/assessments", response_model=list[RiskAssessmentResponse], deprecated=True)
 async def list_assessments(
     risk_id: int,
     db: DbSession,
@@ -690,7 +738,7 @@ async def list_assessments(
     return [RiskAssessmentResponse.model_validate(a) for a in assessments]
 
 
-@router.get("/{risk_id}/assessments/paged", response_model=RiskAssessmentListResponse)
+@router.get("/{risk_id}/assessments/paged", response_model=RiskAssessmentListResponse, deprecated=True)
 async def list_assessments_paged(
     risk_id: int,
     db: DbSession,

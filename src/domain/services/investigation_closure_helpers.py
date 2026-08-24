@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import String
 
+from src.domain.exceptions import TenantAccessError
 from src.domain.models.capa import CAPAAction, CAPASource, CAPAStatus
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus
 from src.domain.models.rca_tools import CAPAItem
+from src.domain.services.case_closure import resolve_case_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,41 @@ class OpenWorkItem:
 
 def _status_value(status: Any) -> str:
     return status.value if hasattr(status, "value") else str(status)
+
+
+def resolve_investigation_closure_scope(investigation: Any, *, caller_tenant_id: Optional[int]) -> int:
+    """Tenant to scope an investigation's closure probes to, taken from the run.
+
+    #1382 established this for the four case registers: the scope is a property
+    of the record, never of the caller. Probing the caller's tenant for a run
+    that lives in another one finds none of that run's actions and reports a
+    clean close over work nobody can see — the worst outcome an evidence system
+    can produce. ``investigation_runs.tenant_id`` is NOT NULL, so a run without
+    one is a corrupt row and is refused rather than guessed at.
+
+    Where the two tenants differ we refuse instead of probing either. The four
+    registers let a superuser edit across tenants and rely on their update route
+    to say who may; the investigation update route makes no such check at all,
+    so honouring the record's scope here without this guard would turn today's
+    (accidental) refusal into a real cross-tenant close. Refusing keeps the probe
+    honest without granting anything new.
+    """
+    tenant_id = resolve_case_tenant_id(investigation)
+    if caller_tenant_id is None or int(caller_tenant_id) != tenant_id:
+        logger.warning(
+            "investigation_closure_scope_cross_tenant",
+            extra={
+                "investigation_id": getattr(investigation, "id", None),
+                "reference_number": getattr(investigation, "reference_number", None),
+                "record_tenant_id": tenant_id,
+                "caller_tenant_id": caller_tenant_id,
+            },
+        )
+        raise TenantAccessError(
+            "Closure readiness for this investigation can only be assessed from the tenant that owns it.",
+            details={"investigation_id": getattr(investigation, "id", None)},
+        )
+    return tenant_id
 
 
 async def fetch_open_work_for_investigation(

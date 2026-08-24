@@ -2,9 +2,12 @@
 
 Handles scheduling, template approval, competency gating,
 and supervisor validation for assessments and inductions.
+
+Workforce notification dispatch lives on
+``src.domain.services.notification_service.NotificationService`` — this module
+must not grow a second notification path.
 """
 
-import logging
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -12,8 +15,6 @@ from typing import Any, Optional
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-logger = logging.getLogger(__name__)
 
 
 class GovernanceService:
@@ -285,136 +286,3 @@ class GovernanceService:
             )
 
         return sorted(suggestions, key=lambda x: x["priority"] == "high", reverse=True)
-
-
-class NotificationService:
-    """Extended notification service for workforce development events."""
-
-    @staticmethod
-    async def notify_assessment_complete(
-        db: AsyncSession,
-        assessment_run_id: str,
-        engineer_user_id: int | None,
-        supervisor_id: int,
-        outcome: str,
-        tenant_id: int | None = None,
-    ) -> None:
-        """Create notifications when an assessment is completed."""
-        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
-
-        messages = {
-            "pass": "Your competency assessment has been marked as PASS.",
-            "fail": "Your competency assessment has been marked as FAIL. CAPA actions will be generated.",
-            "conditional": "Your competency assessment has been marked as CONDITIONAL. Follow-up required.",
-        }
-
-        if engineer_user_id is not None:
-            notification = Notification(
-                tenant_id=tenant_id,
-                user_id=engineer_user_id,
-                type=NotificationType.AUDIT_COMPLETED,
-                priority=NotificationPriority.MEDIUM,
-                title="Assessment Complete",
-                message=messages.get(outcome, f"Assessment completed with outcome: {outcome}"),
-                entity_type="assessment",
-                entity_id=assessment_run_id,
-                extra_data={"notification_type": "assessment_complete", "outcome": outcome},
-            )
-            db.add(notification)
-
-        supervisor_notification = Notification(
-            tenant_id=tenant_id,
-            user_id=supervisor_id,
-            type=NotificationType.AUDIT_COMPLETED,
-            priority=NotificationPriority.MEDIUM,
-            title="Assessment Submitted",
-            message=f"Assessment {assessment_run_id} completed with outcome: {outcome}",
-            entity_type="assessment",
-            entity_id=assessment_run_id,
-            extra_data={"notification_type": "assessment_complete", "outcome": outcome},
-        )
-        db.add(supervisor_notification)
-
-        logger.info("Notifications created for assessment %s", assessment_run_id)
-
-    @staticmethod
-    async def notify_induction_complete(
-        db: AsyncSession,
-        induction_run_id: str,
-        engineer_user_id: int | None,
-        supervisor_id: int,
-        not_yet_competent_count: int,
-        tenant_id: int | None = None,
-    ) -> None:
-        """Create notifications when an induction is completed."""
-        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
-
-        if not_yet_competent_count > 0:
-            msg = f"Your induction has been completed with {not_yet_competent_count} item(s) marked as 'Not Yet Competent'. CAPA actions will be generated."
-        else:
-            msg = "Congratulations! Your induction has been completed successfully."
-
-        if engineer_user_id is not None:
-            notification = Notification(
-                tenant_id=tenant_id,
-                user_id=engineer_user_id,
-                type=NotificationType.COMPLIANCE_ALERT,
-                priority=NotificationPriority.MEDIUM,
-                title="Induction Complete",
-                message=msg,
-                entity_type="induction",
-                entity_id=induction_run_id,
-                extra_data={
-                    "notification_type": "induction_complete",
-                    "not_yet_competent_count": not_yet_competent_count,
-                },
-            )
-            db.add(notification)
-
-        supervisor_notification = Notification(
-            tenant_id=tenant_id,
-            user_id=supervisor_id,
-            type=NotificationType.COMPLIANCE_ALERT,
-            priority=NotificationPriority.MEDIUM,
-            title="Induction Submitted",
-            message=(
-                f"Induction {induction_run_id} completed with {not_yet_competent_count} item(s) marked as "
-                "'Not Yet Competent'."
-                if not_yet_competent_count > 0
-                else f"Induction {induction_run_id} completed successfully."
-            ),
-            entity_type="induction",
-            entity_id=induction_run_id,
-            extra_data={
-                "notification_type": "induction_complete",
-                "not_yet_competent_count": not_yet_competent_count,
-            },
-        )
-        db.add(supervisor_notification)
-
-        logger.info("Notification created for induction %s", induction_run_id)
-
-    @staticmethod
-    async def notify_competency_expiry(
-        db: AsyncSession,
-        engineer_user_id: int | None,
-        asset_type_id: int,
-        days_until_expiry: int,
-    ) -> None:
-        """Create notification for upcoming competency expiry."""
-        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
-
-        if engineer_user_id is None:
-            return
-
-        notification = Notification(
-            user_id=engineer_user_id,
-            type=NotificationType.CERTIFICATE_EXPIRING,
-            priority=NotificationPriority.MEDIUM,
-            title="Competency Expiring Soon",
-            message=f"Your competency for asset type {asset_type_id} expires in {days_until_expiry} days. Please schedule a reassessment.",
-            entity_type="competency",
-            entity_id=str(asset_type_id),
-            extra_data={"notification_type": "competency_expiry_warning"},
-        )
-        db.add(notification)

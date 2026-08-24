@@ -1,7 +1,9 @@
-"""Unit tests for GovernanceService and NotificationService.
+"""Unit tests for GovernanceService.
 
-Tests supervisor validation, template approval, competency gating,
-scheduling suggestions, and notification creation.
+Tests supervisor validation, template approval, competency gating and
+scheduling suggestions. Workforce notification dispatch now lives on
+``notification_service.NotificationService`` — see
+``tests/unit/test_workforce_notifications.py``.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -315,84 +317,3 @@ class TestCheckTemplateApproval:
         result = await GovernanceService.check_template_approval(db, template_id=1)
         assert result["approved"] is False
         assert "draft" in result["reason"]
-
-
-# =========================================================================
-# NotificationService
-# =========================================================================
-
-
-class TestNotifyAssessmentComplete:
-    @pytest.mark.asyncio
-    async def test_creates_notifications_for_engineer_and_supervisor(self):
-        from src.domain.services.governance_service import NotificationService
-
-        db = _make_db()
-        await NotificationService.notify_assessment_complete(
-            db, assessment_run_id="run-1", engineer_user_id=5, supervisor_id=10, outcome="pass"
-        )
-        assert db.add.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_skips_engineer_notification_when_no_user_id(self):
-        from src.domain.services.governance_service import NotificationService
-
-        db = _make_db()
-        await NotificationService.notify_assessment_complete(
-            db, assessment_run_id="run-1", engineer_user_id=None, supervisor_id=10, outcome="fail"
-        )
-        assert db.add.call_count == 1
-
-
-class TestNotifyInductionComplete:
-    @pytest.mark.asyncio
-    async def test_creates_notifications_with_nyc_items(self):
-        from src.domain.services.governance_service import NotificationService
-
-        db = _make_db()
-        await NotificationService.notify_induction_complete(
-            db, induction_run_id="ind-1", engineer_user_id=5, supervisor_id=10, not_yet_competent_count=3
-        )
-        assert db.add.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_successful_induction_message_differs(self):
-        from src.domain.services.governance_service import NotificationService
-
-        db = _make_db()
-        await NotificationService.notify_induction_complete(
-            db, induction_run_id="ind-1", engineer_user_id=5, supervisor_id=10, not_yet_competent_count=0
-        )
-        assert db.add.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_skips_engineer_when_user_id_none(self):
-        from src.domain.services.governance_service import NotificationService
-
-        db = _make_db()
-        await NotificationService.notify_induction_complete(
-            db, induction_run_id="ind-1", engineer_user_id=None, supervisor_id=10, not_yet_competent_count=0
-        )
-        assert db.add.call_count == 1
-
-
-class TestNotifyCompetencyExpiry:
-    @pytest.mark.asyncio
-    async def test_creates_notification(self):
-        from src.domain.services.governance_service import NotificationService
-
-        db = _make_db()
-        await NotificationService.notify_competency_expiry(
-            db, engineer_user_id=5, asset_type_id=3, days_until_expiry=14
-        )
-        db.add.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_skips_when_no_user_id(self):
-        from src.domain.services.governance_service import NotificationService
-
-        db = _make_db()
-        await NotificationService.notify_competency_expiry(
-            db, engineer_user_id=None, asset_type_id=3, days_until_expiry=14
-        )
-        db.add.assert_not_called()

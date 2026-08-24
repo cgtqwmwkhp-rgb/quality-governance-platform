@@ -12,6 +12,8 @@ from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, T
 class LocationKind(str, enum.Enum):
     SITE = "site"
     WORKSHOP = "workshop"
+    PREMISES = "premises"
+    OFFICE = "office"
 
 
 class Location(Base, TimestampMixin, AuditTrailMixin):

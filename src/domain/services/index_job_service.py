@@ -301,6 +301,8 @@ class IndexJobService:
         documents_processed = 0
         documents_succeeded = 0
         documents_failed = 0
+        # One TrapGuard + cover-block index per tenant for the whole job.
+        gate_contexts: dict[int, Any] = {}
 
         try:
             for document_id in job.document_ids:
@@ -329,8 +331,16 @@ class IndexJobService:
                 text_content = extraction.text.strip()
                 if extraction.hard_ocr_failure or not text_content:
                     if extraction.hard_ocr_failure:
-                        document.status = DocumentStatus.FAILED
                         document.indexing_error = extraction.note or "OCR extraction failed"
+                        # Filed / taxonomy documents must not flip to FAILED — that would
+                        # erase the governance lifecycle (DRAFT → review → approve) because
+                        # a scan was unreadable. Record indexing_error only and restore DRAFT
+                        # when we had moved the row to PROCESSING for this job.
+                        if getattr(document, "category_id", None) is not None:
+                            if document.status == DocumentStatus.PROCESSING:
+                                document.status = DocumentStatus.DRAFT
+                        else:
+                            document.status = DocumentStatus.FAILED
                     else:
                         _apply_post_index_status(document, DocumentStatus.APPROVED)
                     await self._append_error(
@@ -438,7 +448,9 @@ class IndexJobService:
                     self._pending_stale_document_ids.append(document.id)
 
                 if current_user is not None:
-                    await self._trigger_governed_kb_mapping(document, text_content, current_user)
+                    await self._trigger_governed_kb_mapping(
+                        document, text_content, current_user, gate_contexts=gate_contexts
+                    )
 
             job.status = IndexJobStatus.COMPLETED if documents_failed == 0 else IndexJobStatus.FAILED
             if documents_failed and documents_succeeded:
@@ -454,22 +466,39 @@ class IndexJobService:
 
         return job
 
-    async def _trigger_governed_kb_mapping(self, document: Document, text_content: str, current_user: User) -> None:
+    async def _trigger_governed_kb_mapping(
+        self,
+        document: Document,
+        text_content: str,
+        current_user: User,
+        *,
+        gate_contexts: dict[int, Any] | None = None,
+    ) -> None:
         try:
             from src.domain.services.governed_knowledge_service import governed_knowledge_service
+            from src.domain.services.standards_ingest_gate import StandardsAutoConfirmContext
 
             doc_type = (
                 document.document_type.value
                 if hasattr(document.document_type, "value")
                 else str(document.document_type)
             )
+            tenant_id = document.tenant_id
+            ctx = None
+            if tenant_id is not None:
+                cache = gate_contexts if gate_contexts is not None else {}
+                ctx = cache.get(tenant_id)
+                if ctx is None:
+                    ctx = await StandardsAutoConfirmContext.for_tenant(self.db, tenant_id)
+                    cache[tenant_id] = ctx
             await governed_knowledge_service.map_document_to_schemes(
                 self.db,
                 document.id,
                 text_content,
                 doc_type,
-                document.tenant_id,
+                tenant_id,
                 current_user,
+                gate_context=ctx,
             )
         except Exception:
             logger.warning(
@@ -491,9 +520,77 @@ def dispatch_index_job(job_id: int, tenant_id: int | None, user_id: int | None =
         return False
 
 
+async def maybe_create_filing_index_job(
+    db: AsyncSession,
+    *,
+    document: Document,
+    created_by_id: int | None,
+) -> IndexJob | None:
+    """Create a pending IndexJob for a newly filed Library document when gated on.
+
+    Callers must commit the job row before ``dispatch_index_job`` (commit-then-
+    dispatch). Returns None when ``COMPLIANCE_FILING_INDEX_ENABLED`` is off.
+    """
+    if not settings.compliance_filing_index_enabled:
+        return None
+    if document.id is None:
+        raise ValueError("document must be flushed before creating an index job")
+    service = IndexJobService(db)
+    return await service.create_job(
+        document_ids=[document.id],
+        job_type="single",
+        tenant_id=document.tenant_id,
+        created_by_id=created_by_id,
+    )
+
+
+async def dispatch_or_process_committed_index_job(
+    db: AsyncSession,
+    job: IndexJob,
+    document: Document,
+    *,
+    current_user: User | None = None,
+    content: bytes | None = None,
+) -> bool:
+    """Dispatch an already-committed index job; sync-process if Celery is down.
+
+    Mirrors ``documents._dispatch_single_index_job`` for Compliance Schedule
+    filing routes so a flag-on file is never left permanently PENDING when the
+    broker is unavailable in test/dev.
+    """
+    user_id = current_user.id if current_user is not None else None
+    dispatched = dispatch_index_job(job.id, document.tenant_id, user_id)
+    if dispatched:
+        return True
+    logger.warning(
+        "Celery dispatch unavailable for filing index job %s; falling back to synchronous processing",
+        job.id,
+    )
+    try:
+        index_service = IndexJobService(db)
+        content_cache = {document.id: content} if content is not None else None
+        await index_service.process_job(
+            job.id,
+            tenant_id=document.tenant_id,
+            content_cache=content_cache,
+            current_user=current_user,
+        )
+        await db.commit()
+        await index_service.delete_pending_stale_vectors()
+    except Exception:
+        logger.warning(
+            "Synchronous fallback processing failed for filing index job %s; leaving job pending",
+            job.id,
+            exc_info=True,
+        )
+    return False
+
+
 __all__ = [
     "DEFAULT_BULK_REPROCESS_STATUSES",
     "IndexJobService",
     "dispatch_index_job",
+    "dispatch_or_process_committed_index_job",
+    "maybe_create_filing_index_job",
     "vector_index_configured",
 ]

@@ -171,3 +171,83 @@ async def test_delete_near_miss_denies_cross_tenant_target():
     sql = _sql(statements[0])
     assert "tenant_id = 66" in sql
     assert "9002" in sql
+
+
+@pytest.mark.asyncio
+async def test_delete_near_miss_skip_tenant_check_omits_tenant_predicate():
+    """Default remains tenant-scoped; skip_tenant_check=True is the superuser escape."""
+    statements = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return _Result(None)
+
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=execute),
+        delete=AsyncMock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+    )
+    svc = NearMissService(db)
+
+    with pytest.raises(LookupError):
+        await svc.delete_near_miss(
+            9002,
+            user_id=8,
+            tenant_id=66,
+            request_id="req-isolation-del-skip",
+            skip_tenant_check=True,
+        )
+
+    sql = _sql(statements[0])
+    assert "9002" in sql
+    assert "tenant_id = 66" not in sql
+
+
+@pytest.mark.asyncio
+async def test_list_investigations_scopes_parent_lookup_to_caller_tenant():
+    statements = []
+
+    async def execute(statement):
+        statements.append(statement)
+        return _Result(None)
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=execute))
+    svc = NearMissService(db)
+
+    with pytest.raises(LookupError):
+        await svc.list_investigations(
+            501,
+            tenant_id=23,
+            params=PaginationInput(page=1, page_size=20),
+        )
+
+    sql = _sql(statements[0])
+    assert "tenant_id = 23" in sql
+    assert "501" in sql
+
+
+@pytest.mark.asyncio
+async def test_list_investigations_skip_tenant_check_omits_tenant_predicate():
+    statements = []
+
+    async def execute(statement):
+        statements.append(statement)
+        if len(statements) == 1:
+            return _Result(None)
+        return _Result(0) if len(statements) == 2 else _Result([])
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=execute))
+    svc = NearMissService(db)
+
+    with pytest.raises(LookupError):
+        await svc.list_investigations(
+            501,
+            tenant_id=23,
+            params=PaginationInput(page=1, page_size=20),
+            skip_tenant_check=True,
+        )
+
+    sql = _sql(statements[0])
+    assert "501" in sql
+    assert "tenant_id = 23" not in sql

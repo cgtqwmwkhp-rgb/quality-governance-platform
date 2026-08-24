@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { AlertCircle, Minus, PackageCheck, ShieldAlert, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertCircle, CalendarClock, Minus, PackageCheck, ShieldAlert, TrendingDown, TrendingUp } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
 import type { OrgData } from './useDashboardData'
@@ -27,16 +27,32 @@ function TrendBadge({ trend }: { trend: OrgData['riskTrend'] }) {
 
 /**
  * Org Command strip (locked design §4) — manager-facing tenant-wide
- * signals: unassigned intake, risk + forecast, asset health. Rendered full
- * for the manager persona and condensed for dual-role (My Day + compact org).
+ * signals: unassigned intake, risk + forecast, asset health, and Compliance
+ * Schedule obligations where that module is open. Rendered full for the manager
+ * persona and condensed for dual-role (My Day + compact org).
  */
 export function OrgCommandStrip({ data, compact = false }: { data: OrgData; compact?: boolean }) {
-  const { unassignedTotal, unassignedIncidents, unassignedComplaints, riskHigh, riskOutsideAppetite, riskTrend, assetHealth } = data
+  const {
+    unassignedTotal,
+    unassignedIncidents,
+    unassignedComplaints,
+    riskHigh,
+    riskOutsideAppetite,
+    riskTrend,
+    assetHealth,
+    complianceSchedule,
+  } = data
+  // Absent (not merely empty) when the module is closed to this caller — see the
+  // three states documented on OrgData.complianceSchedule.
+  const showComplianceSchedule = complianceSchedule !== undefined
 
   return (
     <div
       data-testid="org-command-strip"
-      className={cn('grid gap-4', compact ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-3')}
+      className={cn(
+        'grid gap-4 grid-cols-1',
+        showComplianceSchedule ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3',
+      )}
     >
       {/* Unassigned intake */}
       <Link to="/incidents?owner=unassigned" data-testid="org-unassigned-tile">
@@ -119,6 +135,46 @@ export function OrgCommandStrip({ data, compact = false }: { data: OrgData; comp
           </CardContent>
         </Card>
       </Link>
+
+      {/* Compliance Schedule obligations (flag + compliance_schedule:read gated on API) */}
+      {showComplianceSchedule && (
+        <Link to="/compliance-schedule" data-testid="org-compliance-schedule-tile">
+          <Card hoverable className={cn('h-full p-5', compact && 'p-4')}>
+            <CardContent className="p-0">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Compliance obligations</p>
+                  <p
+                    className="mt-1 text-2xl font-bold text-foreground"
+                    data-testid="org-compliance-schedule-value"
+                  >
+                    {complianceSchedule.status === 'ok' ? complianceSchedule.value.total_active : '—'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">active obligations</p>
+                </div>
+                <div className="rounded-xl bg-info/10 p-3 text-info">
+                  <CalendarClock className="h-5 w-5" aria-hidden />
+                </div>
+              </div>
+              {complianceSchedule.status === 'ok' ? (
+                <div className="mt-3 flex gap-3 text-xs">
+                  <span className="flex items-center gap-1 text-destructive">
+                    {complianceSchedule.value.overdue} overdue
+                  </span>
+                  <span className="flex items-center gap-1 text-warning">
+                    {complianceSchedule.value.due_soon} due soon
+                  </span>
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    {complianceSchedule.value.current} current
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">Metrics are currently unavailable.</p>
+              )}
+            </CardContent>
+          </Card>
+        </Link>
+      )}
     </div>
   )
 }

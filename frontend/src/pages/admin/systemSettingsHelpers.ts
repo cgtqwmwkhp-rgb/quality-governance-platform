@@ -188,14 +188,6 @@ export function buildSettingDefinitions(): SettingDefinition[] {
       is_editable: true,
     },
     {
-      key: 'allow_portal_anonymous',
-      value: 'false',
-      category: 'security',
-      description: 'Allow anonymous portal submissions',
-      value_type: 'boolean',
-      is_editable: true,
-    },
-    {
       key: 'date_format',
       value: 'DD/MM/YYYY',
       category: 'regional',

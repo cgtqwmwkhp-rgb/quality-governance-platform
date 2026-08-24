@@ -137,6 +137,35 @@ describe('Notifications', () => {
     expect(await screen.findByText('notifications.pref.high_priority_alerts')).toBeInTheDocument()
   })
 
+  it('does not offer a weekly digest toggle, because no digest job sends one', async () => {
+    mockGetPreferences.mockResolvedValue({
+      data: {
+        email_enabled: true,
+        sms_enabled: false,
+        push_enabled: true,
+        // A tenant that saved the retired toggle before it was removed must not
+        // get it back just because the stored JSON still mentions it.
+        category_preferences: {
+          weekly_summaries: { email: true, push: false, in_app: false },
+        },
+      },
+    })
+
+    render(
+      <Wrapper>
+        <Notifications />
+      </Wrapper>,
+    )
+
+    expect(await screen.findByText('High Priority Incident Reported')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /notifications.preferences/i }))
+    await waitFor(() => expect(mockGetPreferences).toHaveBeenCalled())
+
+    expect(await screen.findByText('notifications.pref.high_priority_alerts')).toBeInTheDocument()
+    expect(screen.queryByText('notifications.pref.weekly_summaries')).not.toBeInTheDocument()
+    expect(screen.queryByText('notifications.pref.weekly_summaries_desc')).not.toBeInTheDocument()
+  })
+
   it('renders RTA acronym casing in title and entity chip (PX-188)', async () => {
     mockList.mockResolvedValue({
       data: {

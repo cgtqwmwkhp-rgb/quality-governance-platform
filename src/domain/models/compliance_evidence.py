@@ -9,7 +9,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base, CaseInsensitiveEnum, TimestampMixin
@@ -57,16 +57,47 @@ class EvidenceSignalType(str, enum.Enum):
     OPPORTUNITY = "opportunity"
 
 
+class EvidenceCoverKind(str, enum.Enum):
+    """D15 relationship shape — orthogonal to ``signal_type``.
+
+    ``covers`` = entity asserts conformance / implements the clause.
+    ``evidences`` = supporting proof / operational artefact (legacy default).
+    """
+
+    COVERS = "covers"
+    EVIDENCES = "evidences"
+
+
+_COVER_KIND_VALUES = ", ".join(f"'{m.value}'" for m in EvidenceCoverKind)
+
+
 class ComplianceEvidenceLink(Base, TimestampMixin):
     """Maps a business entity to an ISO clause as evidence of compliance.
 
     entity_type + entity_id form a polymorphic reference to the source
     record (document, audit finding, incident, policy, action, etc.).
-    clause_id references the in-memory ISO clause catalogue maintained
-    by ISOComplianceService.
+    clause_id is the catalogue string (ALL_CLAUSES / clauses.catalogue_key).
     """
 
     __tablename__ = "compliance_evidence_links"
+    __table_args__ = (
+        CheckConstraint(f"cover_kind IN ({_COVER_KIND_VALUES})", name="ck_cel_cover_kind"),
+        Index("ix_cel_entity", "entity_type", "entity_id"),
+        Index("ix_cel_clause", "clause_id"),
+        Index("ix_cel_cover_kind", "cover_kind"),
+        # D15: soft-delete aware; cover_kind lets covers + evidences coexist.
+        Index(
+            "ux_cel_tenant_entity_clause_cover_live",
+            "tenant_id",
+            "entity_type",
+            "entity_id",
+            "clause_id",
+            "cover_kind",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
@@ -77,6 +108,16 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
         index=True,
     )
     entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    # ADR-0021 P0: pin document evidence to a library DocumentVersion tip when known.
+    document_version_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("document_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Optional ISO/standards catalogue edition for clause_id (nullable; not Doc Graph edges).
+    standard_edition: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     clause_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
 
@@ -96,29 +137,33 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     auto_applied: Mapped[bool] = mapped_column(default=False, server_default="false")
     rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     signal_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True)
+    cover_kind: Mapped[EvidenceCoverKind] = mapped_column(
+        CaseInsensitiveEnum(EvidenceCoverKind, length=20),
+        nullable=False,
+        default=EvidenceCoverKind.EVIDENCES,
+        server_default=text(f"'{EvidenceCoverKind.EVIDENCES.value}'"),
+    )
 
     title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     created_by_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # D15: durable human confirmer — AI / auto paths must leave these null.
+    confirmed_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     deleted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    __table_args__ = (
-        Index("ix_cel_entity", "entity_type", "entity_id"),
-        Index("ix_cel_clause", "clause_id"),
-        Index("ix_cel_tenant_entity_clause", "tenant_id", "entity_type", "entity_id", "clause_id", unique=True),
-    )
-
     def __repr__(self) -> str:
         return (
             f"<ComplianceEvidenceLink(id={self.id}, "
             f"entity='{self.entity_type}:{self.entity_id}', "
-            f"clause='{self.clause_id}')>"
+            f"clause='{self.clause_id}', cover_kind='{self.cover_kind}')>"
         )
 
     @property

@@ -21,6 +21,7 @@ MODEL_MODULES = [
     "src.domain.models.user",
     "src.domain.models.tenant",
     "src.domain.models.investigation",
+    "src.domain.models.compliance_schedule",
 ]
 
 VALID_LEVELS = {"C1_PUBLIC", "C2_INTERNAL", "C3_CONFIDENTIAL", "C4_RESTRICTED"}

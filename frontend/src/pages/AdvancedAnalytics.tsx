@@ -36,6 +36,7 @@ import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
 import { analyticsApi } from '../api/client'
 import { formatPercent } from '../utils/percentage'
+import { isMetricOk, metricOk, metricUnavailable, type Metric } from './dashboard/dashboardMetrics'
 
 interface KPIData {
   incidents: {
@@ -49,17 +50,31 @@ interface KPIData {
     total: number
     open: number
     overdue: number
-    completed_on_time_rate: number
-    trend: number
+    completed_on_time_rate: number | null
+    /** undefined when not computed — see audits.trend. */
+    trend?: number
   }
-  audits: {
+  /**
+   * Fail-honest for the same reason as `training`. The server now sends a
+   * discriminated union whose unavailable branch carries no count at all, because
+   * `Number(payload?.audits?.total ?? 0)` turned a failed audit aggregate into a
+   * confident "0 audits, 0 completed" tile — measured against PostgreSQL with
+   * `audit_runs.status` dropped while three runs sat in the table (C-53 sibling
+   * of C-7). `avg_score` was already null-honest; the counts were not.
+   */
+  audits: Metric<{
     total: number
     completed: number
     in_progress: number
     /** null when no completed run in the period carried a score. */
     avg_score: number | null
-    trend: number
-  }
+    /**
+     * undefined when the server did not compute a period-over-period comparison.
+     * Must not be coerced to 0: KPICard renders 0 as a green "0%" no-change
+     * indicator, which is a claim, not an absence of one (C-7).
+     */
+    trend?: number
+  }>
   risks: { total: number; high: number; medium: number; low: number; mitigated: number }
   compliance: {
     overall_score: number | null
@@ -68,7 +83,13 @@ interface KPIData {
     iso_14001: number | null
     iso_45001: number | null
   }
-  training: { completion_rate: number; expiring_soon: number; overdue: number }
+  /**
+   * Fail-honest by construction. The server sends a discriminated union whose
+   * unavailable branch carries no numeric field, so the old
+   * `Number(payload?.training?.completion_rate ?? 0)` would have turned "we
+   * cannot measure this" back into a confident 0% (C-7).
+   */
+  training: Metric<{ completion_rate: number | null; expiring_soon: number; overdue: number }>
 }
 
 interface CostData {
@@ -100,6 +121,76 @@ interface ROIData {
     total_incidents_prevented: number
     overall_roi: number
   }
+}
+
+/**
+ * Read a nullable server number without inventing one.
+ *
+ * `Number(x ?? 0)` — the idiom this replaces — collapses null, undefined and a
+ * missing key onto 0, which is exactly how an unmeasurable figure became a
+ * confident zero on this page (C-7).
+ */
+export function numberOrNull(value: number | null | undefined): number | null {
+  if (value == null) return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+/** As numberOrNull, but for props whose "absent" contract is undefined. */
+export function numberOrUndefined(value: number | null | undefined): number | undefined {
+  const n = numberOrNull(value)
+  return n == null ? undefined : n
+}
+
+/**
+ * Read the server's training discriminated union into a fail-honest Metric.
+ *
+ * Branches on `status` rather than on the presence of `completion_rate`. Testing
+ * for the field would make the client's honesty depend on the server continuing
+ * to omit it, and any future addition of `completion_rate: null` to the
+ * unavailable branch would silently reintroduce the fabricated zero.
+ */
+export function readTrainingMetric(
+  training: { status?: string; completion_rate?: number | null; expiring_soon?: number | null; overdue?: number | null } | null | undefined,
+): KPIData['training'] {
+  if (!training || training.status !== 'measured') return metricUnavailable()
+  return metricOk({
+    completion_rate: numberOrNull(training.completion_rate),
+    expiring_soon: Number(training.expiring_soon ?? 0),
+    overdue: Number(training.overdue ?? 0),
+  })
+}
+
+/**
+ * Read the server's audits discriminated union into a fail-honest Metric.
+ *
+ * Branches on `status` for the same reason `readTrainingMetric` does, and there is
+ * one extra reason here: this endpoint published `audits` without a `status` key
+ * until now, so an old server (or a cached response mid-deploy) reaches this
+ * function too. Treating a missing `status` as unavailable is the safe direction —
+ * the tile reads "—" for one deploy rather than asserting a number nobody measured.
+ */
+export function readAuditsMetric(
+  audits:
+    | {
+        status?: string
+        total?: number | null
+        completed?: number | null
+        in_progress?: number | null
+        avg_score?: number | null
+        trend?: number | null
+      }
+    | null
+    | undefined,
+): KPIData['audits'] {
+  if (!audits || audits.status !== 'measured') return metricUnavailable()
+  return metricOk({
+    total: Number(audits.total ?? 0),
+    completed: Number(audits.completed ?? 0),
+    in_progress: Number(audits.in_progress ?? 0),
+    avg_score: numberOrNull(audits.avg_score),
+    trend: numberOrUndefined(audits.trend),
+  })
 }
 
 const timeRanges = [
@@ -134,8 +225,9 @@ export default function AdvancedAnalytics() {
 
     const emptyKpis: KPIData = {
       incidents: { total: 0, open: 0, closed: 0, trend: 0, avg_resolution_days: 0 },
-      actions: { total: 0, open: 0, overdue: 0, completed_on_time_rate: 0, trend: 0 },
-      audits: { total: 0, completed: 0, in_progress: 0, avg_score: null, trend: 0 },
+      actions: { total: 0, open: 0, overdue: 0, completed_on_time_rate: null },
+      // A failed fetch has measured no audits either.
+      audits: metricUnavailable(),
       risks: { total: 0, high: 0, medium: 0, low: 0, mitigated: 0 },
       compliance: {
         overall_score: null,
@@ -144,7 +236,8 @@ export default function AdvancedAnalytics() {
         iso_14001: null,
         iso_45001: null,
       },
-      training: { completion_rate: 0, expiring_soon: 0, overdue: 0 },
+      // A failed fetch has measured nothing, least of all training.
+      training: metricUnavailable(),
     }
 
     try {
@@ -153,13 +246,25 @@ export default function AdvancedAnalytics() {
         period_days?: number
         incidents?: Partial<KPIData['incidents']>
         actions?: Partial<KPIData['actions']>
-        audits?: Partial<KPIData['audits']>
+        audits?: {
+          status?: string
+          total?: number | null
+          completed?: number | null
+          in_progress?: number | null
+          avg_score?: number | null
+          trend?: number | null
+        } | null
         risks?: Partial<KPIData['risks']>
         compliance?: {
           policy_acknowledgment_rate?: number | null
           overall_score?: number | null
         }
-        training?: Partial<KPIData['training']>
+        training?: {
+          status?: string
+          completion_rate?: number | null
+          expiring_soon?: number | null
+          overdue?: number | null
+        } | null
       } | null
 
       const policyAck =
@@ -177,17 +282,10 @@ export default function AdvancedAnalytics() {
           total: Number(payload?.actions?.total ?? 0),
           open: Number(payload?.actions?.open ?? 0),
           overdue: Number(payload?.actions?.overdue ?? 0),
-          completed_on_time_rate: Number(payload?.actions?.completed_on_time_rate ?? 0),
-          trend: Number(payload?.actions?.trend ?? 0),
+          completed_on_time_rate: numberOrNull(payload?.actions?.completed_on_time_rate),
+          trend: numberOrUndefined(payload?.actions?.trend),
         },
-        audits: {
-          total: Number(payload?.audits?.total ?? 0),
-          completed: Number(payload?.audits?.completed ?? 0),
-          in_progress: Number(payload?.audits?.in_progress ?? 0),
-          avg_score:
-            payload?.audits?.avg_score == null ? null : Number(payload.audits.avg_score),
-          trend: Number(payload?.audits?.trend ?? 0),
-        },
+        audits: readAuditsMetric(payload?.audits),
         risks: {
           total: Number(payload?.risks?.total ?? 0),
           high: Number(payload?.risks?.high ?? 0),
@@ -202,11 +300,7 @@ export default function AdvancedAnalytics() {
           iso_14001: null,
           iso_45001: null,
         },
-        training: {
-          completion_rate: Number(payload?.training?.completion_rate ?? 0),
-          expiring_soon: Number(payload?.training?.expiring_soon ?? 0),
-          overdue: Number(payload?.training?.overdue ?? 0),
-        },
+        training: readTrainingMetric(payload?.training),
       })
     } catch {
       setKpis(emptyKpis)
@@ -514,9 +608,13 @@ export default function AdvancedAnalytics() {
             />
             <KPICard
               title="Audit Score"
-              value={formatPercent(kpis.audits.avg_score)}
-              subtitle={`${kpis.audits.completed} completed`}
-              trend={kpis.audits.trend}
+              value={isMetricOk(kpis.audits) ? formatPercent(kpis.audits.value.avg_score) : '—'}
+              subtitle={
+                isMetricOk(kpis.audits)
+                  ? `${kpis.audits.value.completed} completed`
+                  : 'Unavailable — audit figures could not be read'
+              }
+              trend={isMetricOk(kpis.audits) ? kpis.audits.value.trend : undefined}
               icon={Shield}
               color="purple"
               onClick={() => navigate('/audits/analytics')}
@@ -727,14 +825,23 @@ export default function AdvancedAnalytics() {
                 Audit KPIs on this page come from live analytics. Peer industry averages are not
                 available as a live data source.
               </p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-foreground">
-                  {formatPercent(kpis.audits.avg_score)}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  avg score · {kpis.audits.completed} completed
-                </span>
-              </div>
+              {isMetricOk(kpis.audits) ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-foreground">
+                    {formatPercent(kpis.audits.value.avg_score)}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    avg score · {kpis.audits.value.completed} completed
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-muted-foreground">—</span>
+                  <span className="text-sm text-muted-foreground">
+                    Audit figures could not be read, so no score is shown here.
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -87,7 +87,51 @@ docs/evidence/pentest-report-YYYY-Q?.md
 
 ## EA-03: DPO Sign-off on DPIAs (D07)
 
-**Status:** ✅ **Closed 2026-07-12**
+**Status:** ✅ **Closed 2026-07-12** — **but see the challenge below; the basis of this
+closure does not support what production publicly claims on the strength of it.**
+
+> **RAISED 2026-07-28. Not edited to a different status, because changing the platform's
+> compliance posture is the controller's decision and not mine. What follows is the
+> evidence, so that the decision is an informed one.**
+>
+> **1. The same control is recorded in three different states across three documents.**
+> This tracker says EA-03 closed 2026-07-12. `e4-dual-ocr-redaction-gate.md` recorded
+> sign-off on 2026-07-18. `dpia-ocr-ai-import.md` read "pending DPO residual-risk
+> acceptance (EA-03)" until today. A control cannot be closed on the 12th, signed on the
+> 18th, and pending on the 28th.
+>
+> **2. The cited evidence is an instruction to record a signature, not a signature.**
+> `dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md` records its Signature (electronic) field
+> as: *"Confirmed complete in Cursor session 2026-07-12T16:18+01:00 — 'DPO, just have that
+> signed off so that's complete'"*. That is a chat instruction to mark the item complete.
+> Note also that the file's own name still says READY-FOR-SIGNATURE.
+>
+> **3. Production publicly asserts the resulting status right now.** On the strength of
+> that field, `_DPIA_STATUS` in `src/api/routes/privacy.py` was set to `"signed"`, and
+> `GET /api/v1/privacy/contact` on production returns `dpia.status: "signed"` — citing
+> the READY-FOR-SIGNATURE file as its evidence. Anyone who asks the platform whether its
+> DPIA is signed by a DPO is told yes. **This is the part that is live exposure rather
+> than paperwork**, because it is an unprompted public assertion of a compliance state to
+> customers, procurement reviewers and potentially a regulator.
+>
+> **4. What the 28/07 signature does and does not fix.** David Harris gave a named human
+> acceptance of the OCR/AI residual risk on 28/07, now recorded in the E4 gate and in
+> `dpia-ocr-ai-import.md`. That closes the *residual-risk acceptance* honestly and for
+> the first time. It does **not** retrospectively create the 12 July DPO signature on the
+> platform DPIA §9 that this tracker entry and the runtime `dpia.status` rest on — that
+> is a broader claim about the whole platform DPIA, and it was not the question put to
+> him. It needs either a named human signature in its own right, or `_DPIA_STATUS` needs
+> to stop claiming `signed`.
+
+
+> **UPDATE 2026-08-06 — OCR/AI DPIA v2.0 residual risk.** David Harris (DPO / Privacy lead)
+> accepted **HIGH** residual risk for the expanded §2.0a processor set (Anthropic, OpenAI,
+> Voyage AI, Pinecone, plus the previously accepted Mistral / Gemini / Azure DI set), as
+> recorded in `docs/compliance/dpia-ocr-ai-import.md` §8. This closes the *OCR/AI import
+> DPIA v2.0 residual-risk acceptance* gap called out on 2026-07-28. It does **not** by
+> itself resolve the separate challenge above about platform-wide `_DPIA_STATUS` /
+> READY-FOR-SIGNATURE dating, nor does it close §7 organisational follow-ons (vendor DPAs,
+> region establishment, vector-delete reconciliation).
 
 **Blocking score uplift:** D07 WCS 8.6 → 9.5 (partial — EA-01/02/04 still open)
 

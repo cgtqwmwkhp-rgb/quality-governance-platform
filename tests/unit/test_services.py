@@ -69,6 +69,9 @@ class TestReferenceNumberParsing:
             "complaint_action",
             "capa",
             "document",
+            "document_campaign",
+            "compliance_requirement",
+            "compliance_record",
         }
         assert set(ReferenceNumberService.PREFIXES.keys()) == expected_types
 

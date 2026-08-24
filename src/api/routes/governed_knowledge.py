@@ -5,13 +5,18 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkStatus, EvidenceSignalType
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceCoverKind,
+    EvidenceLinkStatus,
+    EvidenceSignalType,
+)
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import (
     AiDecisionLog,
@@ -25,6 +30,12 @@ from src.domain.models.governed_knowledge import (
 )
 from src.domain.models.user import User
 from src.domain.services.governed_knowledge_service import governed_knowledge_service
+from src.domain.services.standards_exceptions_gate_reason import (
+    filter_links_by_gate_reason,
+    gate_reasons_for_links,
+    is_known_ingest_gate_reason,
+    sort_inbox_page_for_triage,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,6 +44,12 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # SCHEMAS
 # =============================================================================
+
+
+def split_inbox_page(rows: list, page_size: int) -> tuple[list, bool]:
+    """Caller fetched page_size+1 rows. Return this page and whether another exists."""
+    has_next = len(rows) > page_size
+    return rows[:page_size], has_next
 
 
 class EvidenceLinkDetailResponse(BaseModel):
@@ -49,14 +66,30 @@ class EvidenceLinkDetailResponse(BaseModel):
     title: Optional[str]
     notes: Optional[str]
     signal_type: Optional[str] = None
+    document_version_id: Optional[int] = None
+    standard_edition: Optional[str] = None
+    cover_kind: str = "evidences"
+    confirmed_by_id: Optional[int] = None
+    confirmed_at: Optional[str] = None
     created_at: str
     created_by_email: Optional[str]
+    gate_reason: Optional[str] = None
+
+
+class ExceptionInboxPageResponse(BaseModel):
+    items: list[EvidenceLinkDetailResponse]
+    page: int
+    page_size: int
+    truncated: bool
+    has_next: bool
+    has_prev: bool
 
 
 class MapEvidenceResponse(BaseModel):
     document_id: int
     links_created: int
     links: list[EvidenceLinkDetailResponse]
+    auto_confirm_gate: Optional[dict[str, Any]] = None
 
 
 class RejectEvidenceRequest(BaseModel):
@@ -64,6 +97,9 @@ class RejectEvidenceRequest(BaseModel):
 
 
 class BulkConfirmRequest(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
     link_ids: list[int] = Field(..., min_length=1)
 
 
@@ -119,6 +155,14 @@ class ScanKbRequest(BaseModel):
 
 
 class AssessEntityRequest(BaseModel):
+    """Assess an operational entity against governed knowledge.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the assessment running while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     content: Optional[str] = Field(
         None,
         description="Optional override text; when omitted the live entity record is loaded",
@@ -163,6 +207,14 @@ class RegulatoryImpactResponse(BaseModel):
 
 
 class CreateWatchActionRequest(BaseModel):
+    """Create an Action (CAPA) from a regulatory watch impact.
+
+    ``extra="forbid"`` so a misspelled or unsupported field fails loudly instead
+    of the action being created while the unknown key is silently dropped (B-10).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     owner_email: Optional[str] = None
     owner_id: Optional[int] = None
     due_date: Optional[str] = None
@@ -192,7 +244,14 @@ def _tenant_id_for(user: CurrentUser) -> int:
     return require_tenant_id(getattr(user, "tenant_id", None))
 
 
-def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetailResponse:
+def _serialize_evidence_link(
+    link: ComplianceEvidenceLink,
+    *,
+    gate_reason: Optional[str] = None,
+) -> EvidenceLinkDetailResponse:
+    cover = getattr(link, "cover_kind", None)
+    cover_value = cover.value if isinstance(cover, EvidenceCoverKind) else (cover or EvidenceCoverKind.EVIDENCES.value)
+    confirmed_at = getattr(link, "confirmed_at", None)
     return EvidenceLinkDetailResponse(
         id=link.id,
         entity_type=link.entity_type,
@@ -207,9 +266,21 @@ def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetail
         title=link.title,
         notes=link.notes,
         signal_type=link.signal_type,
+        document_version_id=getattr(link, "document_version_id", None),
+        standard_edition=getattr(link, "standard_edition", None),
+        cover_kind=str(cover_value),
+        confirmed_by_id=getattr(link, "confirmed_by_id", None),
+        confirmed_at=confirmed_at.isoformat() if confirmed_at is not None else None,
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
+        gate_reason=gate_reason,
     )
+
+
+def _stamp_human_cel_confirm(link: ComplianceEvidenceLink, user: User) -> None:
+    """D15: only human confirm/create may set durable confirmer columns."""
+    link.confirmed_by_id = getattr(user, "id", None)
+    link.confirmed_at = datetime.now(timezone.utc)
 
 
 async def _get_document_or_404(db: DbSession, document_id: int, tenant_id: int) -> Document:
@@ -348,7 +419,7 @@ async def map_document_evidence(
     content = await _document_text(db, document)
     doc_type = document.document_type.value if hasattr(document.document_type, "value") else str(document.document_type)
 
-    links = await governed_knowledge_service.map_document_to_schemes(
+    mapped = await governed_knowledge_service.map_document_to_schemes(
         db,
         document_id,
         content,
@@ -356,6 +427,7 @@ async def map_document_evidence(
         tenant_id,
         current_user,
     )
+    links = mapped.links
     await db.commit()
     for link in links:
         await db.refresh(link)
@@ -364,6 +436,7 @@ async def map_document_evidence(
         document_id=document_id,
         links_created=len(links),
         links=[_serialize_evidence_link(link) for link in links],
+        auto_confirm_gate=mapped.gate_summary,
     )
 
 
@@ -403,6 +476,11 @@ async def confirm_evidence_link(
     prior = link.effective_status.value
     link.status = EvidenceLinkStatus.CONFIRMED
     link.auto_applied = False
+    _stamp_human_cel_confirm(link, current_user)
+    if link.entity_type == "document":
+        from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+        await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
     db.add(
         AiDecisionLog(
             tenant_id=tenant_id,
@@ -417,12 +495,12 @@ async def confirm_evidence_link(
                 "prior_status": prior,
                 "actor_email": getattr(current_user, "email", None),
                 "actor_id": getattr(current_user, "id", None),
+                "document_version_id": link.document_version_id,
             },
         )
     )
     # Minimal Assessor → Workforce hook: competence_gap / nonconformity / gap → from-signal.
     competence_gap_id = None
-    competence_gap_href = None
     try:
         from src.domain.services.competence_gap_service import competence_gap_service
 
@@ -435,14 +513,14 @@ async def confirm_evidence_link(
         )
         if gap is not None:
             competence_gap_id = gap.id
-            competence_gap_href = f"/workforce/competence-gaps?id={gap.id}"
     except Exception:
         logger.exception("competence gap from-signal failed for evidence link %s", link_id)
     await db.commit()
     payload: dict[str, Any] = {"status": "confirmed", "link_id": link_id}
     if competence_gap_id is not None:
+        # No per-gap page any more: the gap id is the handle, and the work becomes
+        # visible in Actions once the gap is escalated to a CAPA.
         payload["competence_gap_id"] = competence_gap_id
-        payload["competence_gap_href"] = competence_gap_href
     return payload
 
 
@@ -513,6 +591,11 @@ async def bulk_confirm_evidence(
         for link in links:
             link.status = EvidenceLinkStatus.CONFIRMED
             link.auto_applied = False
+            _stamp_human_cel_confirm(link, current_user)
+            if link.entity_type == "document":
+                from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+                await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
             gap = await competence_gap_service.from_evidence_link(
                 db,
                 link=link,
@@ -527,6 +610,11 @@ async def bulk_confirm_evidence(
         for link in links:
             link.status = EvidenceLinkStatus.CONFIRMED
             link.auto_applied = False
+            _stamp_human_cel_confirm(link, current_user)
+            if link.entity_type == "document":
+                from src.domain.services.cel_version_pin import pin_evidence_link_document_version
+
+                await pin_evidence_link_document_version(db, link, tenant_id=tenant_id)
     await db.commit()
     return {
         "status": "confirmed",
@@ -535,7 +623,7 @@ async def bulk_confirm_evidence(
     }
 
 
-@router.get("/exceptions", response_model=list[EvidenceLinkDetailResponse])
+@router.get("/exceptions", response_model=ExceptionInboxPageResponse)
 async def list_exception_inbox(
     db: DbSession,
     current_user: CurrentUser,
@@ -548,8 +636,14 @@ async def list_exception_inbox(
         False,
         description="When true, only operational signals (nonconformity|gap|opportunity)",
     ),
+    gate_reason: Optional[str] = Query(
+        None,
+        description="Filter by PR-E ingest gate_reason token (e.g. below_threshold)",
+    ),
+    page: int = Query(1, ge=1, description="1-based inbox page"),
+    page_size: int = Query(200, ge=1, le=200, description="Rows per page; cap stays 200"),
 ):
-    """Proposed + needs_review evidence inbox."""
+    """Proposed + needs_review evidence inbox. One page of up to 200 — not a global dump."""
     tenant_id = _tenant_id_for(current_user)
     statuses = [EvidenceLinkStatus.PROPOSED, EvidenceLinkStatus.NEEDS_REVIEW]
     if status_filter:
@@ -557,6 +651,10 @@ async def list_exception_inbox(
             statuses = [EvidenceLinkStatus(status_filter.lower())]
         except ValueError as exc:
             raise BadRequestError(f"Invalid status: {status_filter}") from exc
+
+    wanted_reason = gate_reason.strip() if gate_reason else None
+    if wanted_reason and not is_known_ingest_gate_reason(wanted_reason):
+        raise BadRequestError(f"Invalid gate_reason: {gate_reason}")
 
     filters = [
         ComplianceEvidenceLink.tenant_id == tenant_id,
@@ -581,16 +679,33 @@ async def list_exception_inbox(
         filters.append(ComplianceEvidenceLink.signal_type == normalized)
 
     result = await db.execute(
-        select(ComplianceEvidenceLink).where(*filters).order_by(ComplianceEvidenceLink.created_at.desc()).limit(200)
+        select(ComplianceEvidenceLink)
+        .where(*filters)
+        .order_by(ComplianceEvidenceLink.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size + 1)
     )
-    links = [link for link in result.scalars().all() if link.effective_status in statuses]
+    fetched = list(result.scalars().all())
+    window, has_next = split_inbox_page(fetched, page_size)
+    links = [link for link in window if link.effective_status in statuses]
     if operational_only:
         from src.domain.services.iso_compliance_service import OPERATIONAL_SIGNAL_TYPES
 
         links = [
             link for link in links if (getattr(link, "signal_type", None) or "").lower() in OPERATIONAL_SIGNAL_TYPES
         ]
-    return [_serialize_evidence_link(link) for link in links]
+    reasons = await gate_reasons_for_links(db, tenant_id=tenant_id, links=links)
+    if wanted_reason:
+        links = filter_links_by_gate_reason(links, reasons, wanted_reason)
+    links = sort_inbox_page_for_triage(links)
+    return ExceptionInboxPageResponse(
+        items=[_serialize_evidence_link(link, gate_reason=reasons.get(link.id)) for link in links],
+        page=page,
+        page_size=page_size,
+        truncated=has_next,
+        has_next=has_next,
+        has_prev=page > 1,
+    )
 
 
 @router.get("/exceptions/operational-counts")
