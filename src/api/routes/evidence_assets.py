@@ -38,6 +38,11 @@ from src.domain.models.evidence_asset import (
     EvidenceVisibility,
 )
 from src.domain.models.user import User
+from src.domain.services.evidence_service import (
+    ALLOWED_CONTENT_TYPES,
+    MAX_FILE_SIZE_BYTES,
+    resolve_evidence_content_type,
+)
 from src.domain.services.library_file_home_link import link_evidence_asset, promote_evidence_asset
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -48,35 +53,6 @@ logger = logging.getLogger(__name__)
 def _evidence_asset_response(asset: EvidenceAsset) -> EvidenceAssetResponse:
     """Serialize ORM → response (source_id is str in DB; may be action_key)."""
     return EvidenceAssetResponse.model_validate(asset)
-
-
-# Allowed content types for upload (security: content-type allowlist)
-ALLOWED_CONTENT_TYPES = {
-    # Images
-    "image/jpeg": "photo",
-    "image/png": "photo",
-    "image/gif": "photo",
-    "image/webp": "photo",
-    "image/heic": "photo",
-    "image/heif": "photo",
-    # Videos
-    "video/mp4": "video",
-    "video/webm": "video",
-    "video/quicktime": "video",
-    # Documents
-    "application/pdf": "pdf",
-    "application/msword": "document",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "document",
-    "application/vnd.ms-excel": "document",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "document",
-    # Audio
-    "audio/mpeg": "audio",
-    "audio/wav": "audio",
-    "audio/ogg": "audio",
-}
-
-# Maximum file size: 50MB
-MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
 
 async def validate_source_exists(
@@ -228,11 +204,11 @@ async def upload_evidence_asset(
     )
     upload_log_source_ref = normalized_source_id
 
-    # Validate content type
-    content_type = file.content_type or "application/octet-stream"
-    if content_type not in ALLOWED_CONTENT_TYPES:
+    # Validate content type (extension fallback for .eml / .msg / empty MIME)
+    content_type = resolve_evidence_content_type(file.filename, file.content_type)
+    if content_type is None:
         raise BadRequestError(
-            f"Content type {content_type} is not allowed",
+            f"Content type {file.content_type or 'unknown'} is not allowed",
             code="INVALID_CONTENT_TYPE",
             details={"allowed_types": list(ALLOWED_CONTENT_TYPES.keys())},
         )

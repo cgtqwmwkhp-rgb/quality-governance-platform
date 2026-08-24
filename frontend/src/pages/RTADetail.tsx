@@ -62,7 +62,7 @@ import { Switch } from '../components/ui/Switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { AssetPicker } from '../components/AssetPicker'
-import { EvidenceGallery } from '../components/EvidenceGallery'
+import { EvidenceGallery, isSupportedEvidenceFile } from '../components/EvidenceGallery'
 import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
 import { SubmissionSections } from '../components/case/SubmissionSections'
 import {
@@ -92,8 +92,6 @@ import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
 import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
-const SUPPORTED_EVIDENCE_MIME_PREFIXES = ['image/', 'video/']
-const SUPPORTED_EVIDENCE_MIME_TYPES = ['application/pdf']
 
 export default function RTADetail() {
   const { t, i18n } = useTranslation()
@@ -364,11 +362,10 @@ export default function RTADetail() {
     setUploading(true)
     try {
       for (const file of Array.from(e.target.files)) {
-        const isSupportedType =
-          SUPPORTED_EVIDENCE_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix)) ||
-          SUPPORTED_EVIDENCE_MIME_TYPES.includes(file.type)
-        if (!isSupportedType) {
-          throw new Error(`${file.name} is not a supported file type. Use JPG, PNG, WebP, HEIC, MP4, or PDF.`)
+        if (!isSupportedEvidenceFile(file)) {
+          throw new Error(
+            `${file.name} is not a supported file type. Use images, video, audio, documents, or email (.eml, .msg).`,
+          )
         }
         if (file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
           throw new Error(`${file.name} exceeds the 50MB upload limit.`)
@@ -760,7 +757,7 @@ export default function RTADetail() {
           <TabsTrigger value="driver1"><User className="w-4 h-4 mr-1.5" />{t('rtas.tabs.our_driver', 'Our Driver')}</TabsTrigger>
           <TabsTrigger value="driver2"><User className="w-4 h-4 mr-1.5" />{t('rtas.tabs.other_driver', 'Other Driver')}</TabsTrigger>
           <TabsTrigger value="witnesses"><Users className="w-4 h-4 mr-1.5" />{t('rtas.tabs.witnesses', 'Witnesses')}</TabsTrigger>
-          <TabsTrigger value="photos"><Camera className="w-4 h-4 mr-1.5" />{t('rtas.tabs.photos', 'Photos')}</TabsTrigger>
+          <TabsTrigger value="photos"><Camera className="w-4 h-4 mr-1.5" />{t('rtas.tabs.photos', 'Evidence')}</TabsTrigger>
           <TabsTrigger value="running-sheet"><MessageSquare className="w-4 h-4 mr-1.5" />{t('rtas.tabs.running_sheet', 'Running Sheet')}</TabsTrigger>
           <TabsTrigger value="actions"><ClipboardList className="w-4 h-4 mr-1.5" />{t('rtas.tabs.actions', 'Actions')} ({actions.length})</TabsTrigger>
         </TabsList>
@@ -1438,9 +1435,9 @@ export default function RTADetail() {
         <TabsContent value="photos">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2"><Camera className="w-5 h-5 text-primary" />Scene Photos &amp; Evidence</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Camera className="w-5 h-5 text-primary" />Scene evidence</CardTitle>
               <div>
-                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,.pdf" className="hidden" onChange={handlePhotoUpload} aria-label="Upload photos or evidence files" />
+                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.eml,.msg" className="hidden" onChange={handlePhotoUpload} aria-label="Upload evidence files" />
                 <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
                   {uploading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />}
                   Upload

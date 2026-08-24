@@ -1192,7 +1192,7 @@ export default function IncidentDetail() {
           </TabsTrigger>
           <TabsTrigger value="photos" data-testid="incident-photos-tab">
             <Camera className="w-4 h-4 mr-1.5" />
-            {t('incidents.tabs.photos', 'Photos')}
+            {t('incidents.tabs.photos', 'Evidence')}
           </TabsTrigger>
           <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
           <TabsTrigger value="actions" data-testid="incident-actions-tab">

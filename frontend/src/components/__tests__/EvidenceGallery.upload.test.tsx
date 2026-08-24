@@ -75,4 +75,33 @@ describe('EvidenceGallery upload', () => {
     )
     expect(evidenceAssetsApi.upload).not.toHaveBeenCalled()
   })
+
+  it('accepts .eml evidence when the browser leaves MIME empty', async () => {
+    vi.mocked(evidenceAssetsApi.upload).mockResolvedValue({ data: { id: 51 } } as never)
+    const onUploadComplete = vi.fn()
+
+    render(
+      <EvidenceGallery
+        assets={[]}
+        enableUpload
+        uploadSourceModule="incident"
+        uploadSourceId={7}
+        onUploadComplete={onUploadComplete}
+      />,
+    )
+
+    const input = screen.getByLabelText('Upload evidence')
+    const file = new File(['From: a@b.com'], 'witness.eml', { type: '' })
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await waitFor(() =>
+      expect(evidenceAssetsApi.upload).toHaveBeenCalledWith(file, {
+        source_module: 'incident',
+        source_id: 7,
+        title: 'witness.eml',
+        visibility: 'internal_customer',
+      }),
+    )
+    expect(screen.getByText(/email \(\.eml, \.msg\)/i)).toBeInTheDocument()
+  })
 })
