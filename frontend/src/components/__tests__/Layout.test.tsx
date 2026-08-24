@@ -199,6 +199,22 @@ describe('Layout', () => {
     }
   })
 
+  it('labels the /complaints Safety hub child as Feedback (route unchanged)', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.safety_cases' }))
+    const link = navLink('/complaints')
+    expect(link).toHaveAttribute('href', '/complaints')
+    expect(link).toHaveTextContent('nav.complaints')
+  })
+
   it('places Customer & external under Audits and keeps UVDB/Planet Mark off the sidebar (N-NAV)', async () => {
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default

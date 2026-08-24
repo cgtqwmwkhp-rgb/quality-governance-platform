@@ -62,10 +62,10 @@ const TABS: {
   },
   {
     id: 'complaints',
-    label: 'Complaints',
+    label: 'Feedback',
     href: '/complaints',
-    noun: 'complaint',
-    empty: 'No complaints found',
+    noun: 'feedback',
+    empty: 'No feedback found',
     dateLabel: 'Received',
   },
   {
@@ -121,7 +121,7 @@ export interface RecentCasesData {
 
 /**
  * Cascading recent-cases panel — four compact tabs to switch between
- * Incidents, Near misses, Complaints, and RTAs.
+ * Incidents, Near misses, Feedback, and RTAs.
  *
  * Rows open their own case: a real anchor on the reference (so middle-click,
  * open-in-new-tab and copy-link all work) plus a row-level click for the rest of
