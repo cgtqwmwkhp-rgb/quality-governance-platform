@@ -39,6 +39,8 @@ export interface CaseLifecycleControlsProps {
   /** Optional external control, so Edit → Closed can open the same dialog. */
   closeDialogOpen?: boolean
   onCloseDialogOpenChange?: (open: boolean) => void
+  /** Compliment/general skip lessons; default true for the four registers. */
+  requireLessons?: boolean
 }
 
 export function CaseLifecycleControls({
@@ -52,6 +54,7 @@ export function CaseLifecycleControls({
   testIdPrefix = 'case',
   closeDialogOpen,
   onCloseDialogOpenChange,
+  requireLessons = true,
 }: CaseLifecycleControlsProps) {
   const { t } = useTranslation()
   const [internalCloseOpen, setInternalCloseOpen] = useState(false)
@@ -140,6 +143,7 @@ export function CaseLifecycleControls({
         onOpenChange={setCloseOpen}
         onOpenActions={onOpenActions}
         testIdPrefix={testIdPrefix}
+        requireLessons={requireLessons}
       />
     </>
   )

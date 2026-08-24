@@ -15,8 +15,8 @@ from sqlalchemy.orm import selectinload
 
 from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
-from src.domain.exceptions import StateTransitionError
-from src.domain.models.complaint import Complaint, ComplaintAction, ComplaintStatus
+from src.domain.exceptions import StateTransitionError, ValidationError
+from src.domain.models.complaint import Complaint, ComplaintAction, ComplaintStatus, FeedbackKind
 from src.domain.models.form_config import Contract
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
@@ -27,6 +27,13 @@ from src.domain.services.case_closure import (
     clear_close_stamps,
     is_closed_status,
     resolve_case_tenant_id,
+)
+from src.domain.services.feedback_kind_policy import (
+    KIND_RECORD_TYPE,
+    assert_compliment_has_subject,
+    assert_kind_may_be_written,
+    parse_feedback_kind,
+    transitions_for,
 )
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -98,14 +105,21 @@ def resolve_response_due_at(
     return received_date + timedelta(hours=response_sla_hours)
 
 
-def validate_complaint_transition(current: str, target: str) -> None:
-    """Validate a status transition for a complaint.
+def validate_complaint_transition(
+    current: str,
+    target: str,
+    kind: FeedbackKind | str = FeedbackKind.COMPLAINT,
+) -> None:
+    """Validate a status transition for a complaint (or other feedback kind).
 
     Raises StateTransitionError if the transition is not allowed.
 
     Callers pass either the raw string or the enum member; the message must carry the
     value either way, because an f-string on a str-mixin enum renders its repr
     ("ComplaintStatus.ACKNOWLEDGED") from Python 3.11 onwards.
+
+    Compliment/suggestion/general use shorter maps. Do not add acknowledged→closed
+    to the complaint map — that would skip ISO 10002 investigation.
     """
     current_raw = getattr(current, "value", current)
     target_raw = getattr(target, "value", target)
@@ -114,7 +128,7 @@ def validate_complaint_transition(current: str, target: str) -> None:
         target_status = ComplaintStatus(target_raw)
     except ValueError:
         return
-    allowed = COMPLAINT_TRANSITIONS.get(current_status, set())
+    allowed = transitions_for(parse_feedback_kind(kind)).get(current_status, set())
     if target_status not in allowed:
         raise StateTransitionError(
             f"Cannot transition from '{current_status.value}' to '{target_status.value}'",
@@ -180,6 +194,15 @@ class ComplaintService:
         data = complaint_data.model_dump()
         external_ref = data.get("external_ref")
 
+        kind = parse_feedback_kind(data.get("feedback_kind"))
+        assert_kind_may_be_written(kind)
+        if kind is FeedbackKind.COMPLIMENT:
+            assert_compliment_has_subject(
+                subject_user_id=data.get("subject_user_id"),
+                subject_name=data.get("subject_name"),
+            )
+        data["feedback_kind"] = kind
+
         if external_ref:
             existing_result = await self.db.execute(select(Complaint).where(Complaint.external_ref == external_ref))
             existing = existing_result.scalar_one_or_none()
@@ -200,7 +223,7 @@ class ComplaintService:
             data.get("response_due_at"),
         )
 
-        ref_num = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
+        ref_num = await ReferenceNumberService.generate(self.db, KIND_RECORD_TYPE[kind], Complaint)
 
         complaint = Complaint(
             **data,
@@ -297,12 +320,35 @@ class ComplaintService:
         """
         complaint = await self.get_complaint(complaint_id, tenant_id, skip_tenant_check=skip_tenant_check)
         old_status = complaint.status
+        old_kind = parse_feedback_kind(getattr(complaint, "feedback_kind", FeedbackKind.COMPLAINT))
 
         raw_update = complaint_data.model_dump(exclude_unset=True)
+        if "feedback_kind" in raw_update:
+            new_kind = parse_feedback_kind(raw_update["feedback_kind"])
+            if new_kind != old_kind:
+                assert_kind_may_be_written(new_kind)
+                if new_kind is FeedbackKind.COMPLIMENT:
+                    assert_compliment_has_subject(
+                        subject_user_id=raw_update.get("subject_user_id", complaint.subject_user_id),
+                        subject_name=raw_update.get("subject_name", complaint.subject_name),
+                    )
+                current_status = _as_status(complaint.status)
+                if current_status is not None and current_status not in transitions_for(new_kind):
+                    raise ValidationError(
+                        f"Cannot reclassify to {new_kind.value} while status is {current_status.value}",
+                        details={
+                            "status": current_status.value,
+                            "feedback_kind": new_kind.value,
+                        },
+                    )
+            effective_kind = new_kind
+        else:
+            effective_kind = old_kind
+
         was_closed = is_closed_status(CASE_TYPE_COMPLAINT, old_status)
         closing = False
         if "status" in raw_update:
-            validate_complaint_transition(old_status, raw_update["status"])
+            validate_complaint_transition(old_status, raw_update["status"], kind=effective_kind)
             closing = not was_closed and is_closed_status(CASE_TYPE_COMPLAINT, raw_update["status"])
 
         if closing:

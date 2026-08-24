@@ -51,6 +51,8 @@ import {
 } from '../components/ui/Select'
 import { CUSTOMERS_LOOKUP_CATEGORY, toCustomerSelectOptions } from './admin/customersCatalog'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { FEEDBACK_KIND_OPTIONS } from '../helpers/feedbackKind'
 
 const COMPLAINT_TYPE_VALUES = [
   'product',
@@ -88,6 +90,7 @@ const EMPTY_FORM: ComplaintCreate = {
   subject_user_id: null,
   subject_name: '',
   alleged_event_at: null,
+  feedback_kind: 'complaint',
 }
 
 function freshComplaintForm(): ComplaintCreate {
@@ -155,6 +158,7 @@ export default function Complaints() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { t, i18n } = useTranslation()
   const registerLabels = useCaseRegisterLabels()
+  const kindsEnabled = useFeatureFlag('customer_feedback_kinds')
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -186,6 +190,9 @@ export default function Complaints() {
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
   const [customersLoaded, setCustomersLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
+  const [kindOptions, setKindOptions] = useState<{ value: string; label: string }[]>([
+    ...FEEDBACK_KIND_OPTIONS,
+  ])
   const defaultPriorityOptions = [
     { value: 'critical', label: t('priority.critical') },
     { value: 'high', label: t('priority.high') },
@@ -222,10 +229,11 @@ export default function Complaints() {
     setContractsLoadFailed(false)
     ;(async () => {
       try {
-        const [customerRes, typeRes, severityRes, contractsSettled] = await Promise.all([
+        const [customerRes, typeRes, severityRes, kindRes, contractsSettled] = await Promise.all([
           lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
+          lookupsApi.list('feedback_kinds', true).catch(() => ({ items: [], total: 0 })),
           contractsApi.list(true).then(
             (res) => ({ ok: true as const, res }),
             () => ({ ok: false as const, res: { items: [] as Contract[], total: 0 } }),
@@ -250,6 +258,7 @@ export default function Complaints() {
           ),
         )
         setPriorityOptions(mergeLookupSelectOptions(defaultPriorityOptions, severityRes.items))
+        setKindOptions(mergeLookupSelectOptions([...FEEDBACK_KIND_OPTIONS], kindRes.items))
       } catch (err) {
         if (!cancelled) {
           setCustomersLoaded(true)
@@ -262,6 +271,7 @@ export default function Complaints() {
             })),
           )
           setPriorityOptions(defaultPriorityOptions)
+          setKindOptions([...FEEDBACK_KIND_OPTIONS])
         }
       }
     })()
@@ -362,14 +372,19 @@ export default function Complaints() {
             ids,
           })
           if (ownerFilter === 'unassigned') params.set('owner', 'unassigned')
+          if (kindsEnabled) params.set('feedback_kind', 'all')
           response = await api.get<PaginatedResponse<Complaint>>(
             `/api/v1/complaints/?${params.toString()}`,
           )
         } else {
+          const listOptions = {
+            ...(ownerFilter === 'unassigned' ? { owner: 'unassigned' as const } : {}),
+            ...(kindsEnabled ? { feedback_kind: 'all' as const } : {}),
+          }
           response = await complaintsApi.list(
             page,
             PAGE_SIZE,
-            ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
+            Object.keys(listOptions).length ? listOptions : undefined,
           )
         }
         if (!cancelled) {
@@ -394,7 +409,7 @@ export default function Complaints() {
     return () => {
       cancelled = true
     }
-  }, [ownerFilter, page, idsFilter])
+  }, [ownerFilter, page, idsFilter, kindsEnabled])
 
   const setFilter = (next: OwnerFilter) => {
     setOwnerFilter(next)
@@ -473,6 +488,20 @@ export default function Complaints() {
       )
       return
     }
+    if (
+      kindsEnabled &&
+      formData.feedback_kind === 'compliment' &&
+      !formData.subject_name?.trim() &&
+      formData.subject_user_id == null
+    ) {
+      setFormError(
+        t(
+          'complaints.form.compliment_subject_required',
+          'Name the staff member this compliment is about.',
+        ),
+      )
+      return
+    }
     if (contractsLoadFailed) {
       setFormError(
         t(
@@ -503,6 +532,7 @@ export default function Complaints() {
       subject_name: formData.subject_name?.trim() || null,
       complainant_company: complainantCompany,
       source_type: formData.source_type || 'manual',
+      feedback_kind: kindsEnabled ? formData.feedback_kind || 'complaint' : 'complaint',
     }
 
     if (!navigator.onLine) {
@@ -941,7 +971,11 @@ export default function Complaints() {
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{t('complaints.dialog.title')}</DialogTitle>
+            <DialogTitle>
+              {kindsEnabled
+                ? t('complaints.dialog.feedback_title', 'New feedback')
+                : t('complaints.dialog.title')}
+            </DialogTitle>
             <DialogDescription>
               {t(
                 'complaints.dialog.intake_hint',
@@ -950,6 +984,37 @@ export default function Complaints() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5" data-testid="complaints-create-form">
+            {kindsEnabled ? (
+              <div>
+                <label
+                  htmlFor="complaints-feedback-kind"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('complaints.form.feedback_kind', 'What kind of feedback')}{' '}
+                  <span className="text-destructive">*</span>
+                </label>
+                <Select
+                  value={formData.feedback_kind || 'complaint'}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      feedback_kind: value as ComplaintCreate['feedback_kind'],
+                    })
+                  }
+                >
+                  <SelectTrigger id="complaints-feedback-kind" data-testid="complaints-feedback-kind">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {kindOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {t('complaints.form.group_customer', 'Customer')}
@@ -1066,7 +1131,11 @@ export default function Complaints() {
                   id="complaints-subject-name"
                   mode="hybrid"
                   lang={i18n.language}
-                  label={t('complaints.form.about_staff', 'Who is the complaint about (staff)')}
+                  label={
+                    formData.feedback_kind === 'compliment' && kindsEnabled
+                      ? t('complaints.form.about_staff_compliment', 'Who is this compliment about (staff)')
+                      : t('complaints.form.about_staff', 'Who is the complaint about (staff)')
+                  }
                   placeholder={t(
                     'complaints.form.about_staff_placeholder',
                     'Search employees or type a name…',

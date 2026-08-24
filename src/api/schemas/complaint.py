@@ -132,6 +132,7 @@ class ComplaintCreate(ComplaintBase):
         max_length=100,
         description="Optional external reference for idempotent imports. Must be unique.",
     )
+    feedback_kind: FeedbackKind = FeedbackKind.COMPLAINT
 
 
 class ComplaintUpdate(BaseModel):
@@ -140,6 +141,7 @@ class ComplaintUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = Field(None, min_length=1)
     complaint_type: Optional[ComplaintType] = None
+    feedback_kind: Optional[FeedbackKind] = None
     priority: Optional[ComplaintPriority] = None
     status: Optional[ComplaintStatus] = None
     complainant_name: Optional[str] = Field(None, min_length=1, max_length=200)
