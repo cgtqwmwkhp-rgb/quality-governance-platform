@@ -377,10 +377,15 @@ export default function Complaints() {
             `/api/v1/complaints/?${params.toString()}`,
           )
         } else {
-          response = await complaintsApi.list(page, PAGE_SIZE, {
+          const listOptions = {
             ...(ownerFilter === 'unassigned' ? { owner: 'unassigned' as const } : {}),
             ...(kindsEnabled ? { feedback_kind: 'all' as const } : {}),
-          })
+          }
+          response = await complaintsApi.list(
+            page,
+            PAGE_SIZE,
+            Object.keys(listOptions).length ? listOptions : undefined,
+          )
         }
         if (!cancelled) {
           setComplaints(response.data.items ?? [])
