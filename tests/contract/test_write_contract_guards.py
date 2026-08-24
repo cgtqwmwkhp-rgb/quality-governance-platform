@@ -381,10 +381,19 @@ class TestDiscoveryIsNotVacuous:
         ``workforce_roles``, ``medical_assistance`` and ``emergency_services``
         are seeded but populate free-text or portal-only fields with no closed
         value set on the API side, so there is nothing to compare them against.
+        ``feedback_kinds`` is seeded in FB-PR1 for the admin list; the write
+        field that will bind it lands in PR-2.
         """
         from src.domain.services.lookup_defaults_seed_data import SEED_CATEGORIES
 
-        unbound_by_design = {"workforce_roles", "medical_assistance", "emergency_services"}
+        # feedback_kinds is seeded in FB-PR1 so the admin list exists, but no
+        # write field binds it until PR-2 (ComplaintCreate.feedback_kind).
+        unbound_by_design = {
+            "workforce_roles",
+            "medical_assistance",
+            "emergency_services",
+            "feedback_kinds",
+        }
         bound = {b.category for b in LOOKUP_BINDINGS}
         unaccounted = sorted(set(SEED_CATEGORIES) - bound - unbound_by_design)
         assert not unaccounted, (

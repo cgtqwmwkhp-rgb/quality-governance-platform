@@ -122,6 +122,7 @@ def _complaint_row(row: Complaint) -> list[str]:
         _enum_str(getattr(row, "complaint_type", None)),
         _enum_str(getattr(row, "priority", None)),
         _enum_str(row.status),
+        _enum_str(getattr(row, "feedback_kind", None)),
         _dt_str(getattr(row, "created_at", None)),
     ]
 
@@ -243,6 +244,7 @@ _MODULE_SPECS: dict[str, _ModuleSpec] = {
             "complaint_type",
             "priority",
             "status",
+            "feedback_kind",
             "created_at",
         ],
         row_mapper=_complaint_row,

@@ -40,6 +40,10 @@ export interface Complaint {
   title: string
   description: string
   complaint_type: string
+  /** Discriminator. PR-1 is read-only; every row is `complaint` until PR-2. */
+  feedback_kind?: 'complaint' | 'compliment' | 'suggestion' | 'general'
+  /** Derived from `feedback_kind`. Never stored. */
+  feedback_polarity?: 'negative' | 'positive' | 'neutral'
   priority: string
   status: string
   received_date: string

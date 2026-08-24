@@ -759,6 +759,7 @@ class CopilotGroundingService:
             .where(
                 Complaint.tenant_id == tenant_id,
                 Complaint.deleted_at.is_(None),
+                Complaint.feedback_kind == "complaint",
             )
         )
         count = int((await self.db.execute(count_stmt)).scalar() or 0)
@@ -767,6 +768,7 @@ class CopilotGroundingService:
             .where(
                 Complaint.tenant_id == tenant_id,
                 Complaint.deleted_at.is_(None),
+                Complaint.feedback_kind == "complaint",
             )
             .order_by(Complaint.id.desc())
             .limit(_MAX_SAMPLE_REFS)

@@ -6,7 +6,14 @@ from typing import Any, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from src.api.schemas.validators import sanitize_field
-from src.domain.models.complaint import ComplaintPriority, ComplaintStatus, ComplaintType
+from src.domain.models.complaint import (
+    FEEDBACK_POLARITY,
+    ComplaintPriority,
+    ComplaintStatus,
+    ComplaintType,
+    FeedbackKind,
+    FeedbackPolarity,
+)
 
 ComplaintSourceType = Literal["manual", "email", "api", "phone", "portal", "in_person"]
 
@@ -199,6 +206,8 @@ class ComplaintResponse(BaseModel):
     title: str
     description: str
     complaint_type: ComplaintType
+    feedback_kind: FeedbackKind = FeedbackKind.COMPLAINT
+    feedback_polarity: FeedbackPolarity = FeedbackPolarity.NEGATIVE
     priority: ComplaintPriority
     received_date: datetime
     complainant_name: str
@@ -240,6 +249,7 @@ class ComplaintResponse(BaseModel):
             self.response_due_at,
             self.first_response_at,
         )
+        self.feedback_polarity = FEEDBACK_POLARITY[self.feedback_kind]
         return self
 
 

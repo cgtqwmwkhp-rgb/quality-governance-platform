@@ -60,6 +60,31 @@ class ComplaintStatus(str, enum.Enum):
     ESCALATED = "escalated"
 
 
+class FeedbackKind(str, enum.Enum):
+    """What kind of customer feedback this register row is."""
+
+    COMPLAINT = "complaint"
+    COMPLIMENT = "compliment"
+    SUGGESTION = "suggestion"
+    GENERAL = "general"
+
+
+class FeedbackPolarity(str, enum.Enum):
+    """Whether a feedback kind counts for or against satisfaction."""
+
+    NEGATIVE = "negative"
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+
+
+FEEDBACK_POLARITY: dict[FeedbackKind, FeedbackPolarity] = {
+    FeedbackKind.COMPLAINT: FeedbackPolarity.NEGATIVE,
+    FeedbackKind.COMPLIMENT: FeedbackPolarity.POSITIVE,
+    FeedbackKind.SUGGESTION: FeedbackPolarity.NEUTRAL,
+    FeedbackKind.GENERAL: FeedbackPolarity.NEUTRAL,
+}
+
+
 class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Complaint model for external complaint management."""
 
@@ -81,6 +106,11 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
             "'pending_response', 'awaiting_customer', 'resolved', 'closed', 'escalated')",
             name="ck_complaints_status",
         ),
+        CheckConstraint(
+            "feedback_kind IN ('complaint', 'compliment', 'suggestion', 'general')",
+            name="ck_complaints_feedback_kind",
+        ),
+        Index("ix_complaints_tenant_kind_received", "tenant_id", "feedback_kind", "received_date"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -103,6 +133,15 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     )
     status: Mapped[ComplaintStatus] = mapped_column(
         CaseInsensitiveEnum(ComplaintStatus), default=ComplaintStatus.RECEIVED, index=True
+    )
+    # Discriminator for the Customer Feedback register. Existing rows and every
+    # create path in PR-1 stay ``complaint``. Keep server_default so rolling
+    # deploys and alembic check stay aligned.
+    feedback_kind: Mapped[FeedbackKind] = mapped_column(
+        CaseInsensitiveEnum(FeedbackKind, length=20),
+        default=FeedbackKind.COMPLAINT,
+        server_default="complaint",
+        nullable=False,
     )
 
     # Dates
@@ -205,8 +244,24 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         """True when this complaint has been soft-deleted."""
         return self.deleted_at is not None
 
+    @property
+    def feedback_polarity(self) -> FeedbackPolarity:
+        """Derived polarity. Never stored — kind is the single source of truth."""
+        try:
+            return FEEDBACK_POLARITY[self.feedback_kind]
+        except KeyError as exc:
+            raise ValueError(f"Unmapped feedback_kind {self.feedback_kind!r}") from exc
+
     def __repr__(self) -> str:
-        return f"<Complaint(id={self.id}, ref='{self.reference_number}', type='{self.complaint_type}')>"
+        return (
+            f"<Complaint(id={self.id}, ref='{self.reference_number}', "
+            f"kind='{self.feedback_kind}', type='{self.complaint_type}')>"
+        )
+
+
+def is_complaint_kind():
+    """SQL filter: rows that count as ISO 10002 complaints, not compliments."""
+    return Complaint.feedback_kind == FeedbackKind.COMPLAINT
 
 
 class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):

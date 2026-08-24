@@ -297,6 +297,10 @@ SERVER_OWNED_FIELDS = frozenset(
         "created_by_email",
         "reference_number",
         "version",
+        # FB-PR1: feedback_kind is server-defaulted to complaint until the
+        # write path (PR-2). feedback_polarity is always derived from kind.
+        "feedback_kind",
+        "feedback_polarity",
     }
 )
 

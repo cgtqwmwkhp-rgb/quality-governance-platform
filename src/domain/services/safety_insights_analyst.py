@@ -342,7 +342,10 @@ class SafetyInsightsAnalystService:
                 rows.append(item)
 
         if "complaint" in modules:
-            q_complaint = select(Complaint).where(Complaint.tenant_id == tenant_id)
+            q_complaint = select(Complaint).where(
+                Complaint.tenant_id == tenant_id,
+                Complaint.feedback_kind == "complaint",
+            )
             date_field = getattr(Complaint, "received_date", None) or Complaint.created_at
             if date_from is not None:
                 q_complaint = q_complaint.where(date_field >= date_from)
@@ -369,6 +372,7 @@ class SafetyInsightsAnalystService:
                     "root_cause": getattr(complaint_row, "root_cause", None) or "",
                     "severity": str(getattr(complaint_row, "severity", "") or ""),
                     "is_hipo": False,
+                    "feedback_kind": str(getattr(complaint_row, "feedback_kind", "") or "complaint"),
                 }
                 if topic and not self._matches_topic(item, topic):
                     continue
