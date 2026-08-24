@@ -846,7 +846,7 @@ export default function ComplaintDetail() {
     <div className="space-y-6 animate-fade-in">
       <Breadcrumbs
         items={[
-          { label: t('complaints.title', 'Complaints'), href: '/complaints' },
+          { label: t('complaints.title', 'Feedback'), href: '/complaints' },
           {
             label: caseBreadcrumbLabel(complaint?.reference_number, 'Complaint'),
           },

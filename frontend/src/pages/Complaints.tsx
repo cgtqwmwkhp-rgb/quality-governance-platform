@@ -813,7 +813,7 @@ export default function Complaints() {
                   icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
                   title={
                     needle
-                      ? 'No matching complaints'
+                      ? 'No matching feedback'
                       : t('complaints.empty.title', 'No complaints found')
                   }
                   description={
@@ -829,7 +829,7 @@ export default function Complaints() {
                         onClick={() => setShowModal(true)}
                         data-testid="complaints-empty-create"
                       >
-                        <Plus size={16} /> {t('complaints.new', 'New Complaint')}
+                        <Plus size={16} /> {t('complaints.new', 'New feedback')}
                       </Button>
                     ) : undefined
                   }
