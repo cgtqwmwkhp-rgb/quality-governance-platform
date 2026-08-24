@@ -33,6 +33,7 @@ import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
 import { cn } from '../../helpers/utils'
+import { fieldMatchesShowCondition } from '../../helpers/showCondition'
 import { useVoiceToText } from '../../hooks/useVoiceToText'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import type { FormTemplate, FormField } from '../../services/api'
@@ -906,6 +907,7 @@ export default function DynamicFormRenderer({
       if (!stepData) return stepErrors
 
       for (const field of stepData.fields) {
+        if (!fieldMatchesShowCondition(field.show_condition, formData)) continue
         const value = formData[field.name]
 
         // Required validation
@@ -955,6 +957,7 @@ export default function DynamicFormRenderer({
       if (validateData) {
         const custom = validateData(formData)
         for (const field of stepData.fields) {
+          if (!fieldMatchesShowCondition(field.show_condition, formData)) continue
           const message = custom[field.name]
           if (message && !stepErrors[field.name]) {
             stepErrors[field.name] = message
@@ -1191,6 +1194,7 @@ export default function DynamicFormRenderer({
 
             <div className="grid grid-cols-2 gap-4">
               {[...currentStepData.fields]
+                .filter((field) => fieldMatchesShowCondition(field.show_condition, formData))
                 .sort((a, b) => a.order - b.order)
                 .map((field) => (
                   <div key={field.id} data-testid={portalFieldTestId(field.name)}>

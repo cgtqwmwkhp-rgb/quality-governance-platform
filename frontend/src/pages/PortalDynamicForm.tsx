@@ -17,6 +17,8 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { cn } from '../helpers/utils'
+import { applyFeedbackKindTemplate, parseFeedbackKind } from '../helpers/feedbackKind'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { buildPortalCatalogWarnings, formatCatalogWarning } from '../helpers/formLookupFields'
 import { PORTAL_TEMPLATE_FALLBACK_BANNER } from './portalTemplateHonesty'
 import { API_BASE_URL } from '../config/apiBase'
@@ -44,6 +46,8 @@ export interface PortalReportPayload {
   department?: string
   is_anonymous: boolean
   reporter_submission?: Record<string, unknown>
+  /** Portal write of Customer Feedback kind; omitted defaults to complaint on the API. */
+  feedback_kind?: string
   /** Handles returned by the attachment upload endpoint, linked on submit. */
   attachment_ids?: string[]
 }
@@ -103,6 +107,13 @@ export function validatePortalFormData(formData: DynamicFormData): Record<string
     errors.complainant_contact =
       `Phone numbers must be ${REPORTER_PHONE_MAX_LENGTH} characters or fewer ` +
       `(this one is ${contact.value.length}). Shorten the number, or enter an email address instead.`
+  }
+
+  if (parseFeedbackKind(formData.feedback_kind != null ? String(formData.feedback_kind) : undefined) === 'compliment') {
+    const named = String(formData.subject_name ?? '').trim()
+    if (!named) {
+      errors.subject_name = 'Name the staff member this compliment is about.'
+    }
   }
 
   return errors
@@ -336,6 +347,9 @@ export function buildPortalReportPayload({
     // Full reporter-entered snapshot, so the raw contact value is always
     // retrievable by an investigator regardless of how it was mapped above.
     reporter_submission: buildReporterSubmission(formData, attachments),
+    ...(formType === 'complaint' && formData.feedback_kind
+      ? { feedback_kind: parseFeedbackKind(String(formData.feedback_kind)) }
+      : {}),
     ...(attachments.length > 0
       ? { attachment_ids: attachments.map((attachment) => attachment.attachment_id) }
       : {}),
@@ -845,6 +859,33 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
         order: 2,
         fields: [
           {
+            id: 9101,
+            name: 'feedback_kind',
+            label: 'What kind of feedback',
+            field_type: 'select',
+            order: -2,
+            is_required: true,
+            width: 'full',
+            default_value: 'complaint',
+            options: [
+              { value: 'complaint', label: 'Complaint' },
+              { value: 'compliment', label: 'Compliment' },
+              { value: 'suggestion', label: 'Suggestion' },
+              { value: 'general', label: 'General feedback' },
+            ],
+          },
+          {
+            id: 9102,
+            name: 'subject_name',
+            label: 'Who is this compliment about',
+            field_type: 'text',
+            order: -1,
+            is_required: true,
+            width: 'full',
+            placeholder: 'Name of the staff member',
+            show_condition: { field: 'feedback_kind', equals: 'compliment' },
+          },
+          {
             id: 7,
             name: 'description',
             label: 'Complaint Description',
@@ -1036,10 +1077,10 @@ function withMedicalAssistanceOptions(
   }
 }
 
-// Determine form type from URL
-function getFormTypeFromPath(pathname: string): string {
+// Determine form type from URL. `/portal/report/feedback` is the same complaint form.
+export function getFormTypeFromPath(pathname: string): string {
   if (pathname.includes('near-miss')) return 'near-miss'
-  if (pathname.includes('complaint')) return 'complaint'
+  if (pathname.includes('feedback') || pathname.includes('complaint')) return 'complaint'
   if (pathname.includes('rta')) return 'rta'
   return 'incident'
 }
@@ -1080,11 +1121,18 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = usePortalAuth()
+  const kindsEnabled = useFeatureFlag('customer_feedback_kinds')
 
   // Use prop formType if provided (preferred), otherwise fall back to URL parsing
   const derivedFormType = getFormTypeFromPath(location.pathname)
   const formType = propFormType || derivedFormType
-  const config = FORM_TYPE_CONFIG[formType] || FORM_TYPE_CONFIG.incident
+  const config = useMemo(() => {
+    const base = FORM_TYPE_CONFIG[formType] || FORM_TYPE_CONFIG.incident
+    if (formType === 'complaint' && kindsEnabled) {
+      return { ...base, title: 'Customer Feedback' }
+    }
+    return base
+  }, [formType, kindsEnabled])
 
   // Debug logging for form type resolution — dev only (PX-166 / PX-331).
   if (import.meta.env.DEV) {
@@ -1167,7 +1215,12 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
         // on both P0 journeys that mount this component. The form is still
         // usable without a customer catalogue: it renders, and the warning
         // banner below names what is missing and who can fix it.
-        setTemplate(withMedicalAssistanceOptions(effectiveTemplate, medicalOptions))
+        setTemplate(
+          applyFeedbackKindTemplate(
+            withMedicalAssistanceOptions(effectiveTemplate, medicalOptions),
+            kindsEnabled,
+          ),
+        )
 
         const warnings = buildPortalCatalogWarnings(effectiveTemplate, {
           customers: customerItems.length,
@@ -1198,7 +1251,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
         setMedicalAssistance([])
         const fallback = FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident
         if (fallback) {
-          setTemplate(fallback)
+          setTemplate(applyFeedbackKindTemplate(fallback, kindsEnabled))
           setCatalogWarning(getApiErrorMessage(err, 'Could not load form catalogs from Admin.'))
         } else {
           setError(getApiErrorMessage(err, 'Could not load form catalogs from Admin.'))
@@ -1212,7 +1265,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
     return () => {
       cancelled = true
     }
-  }, [formType])
+  }, [formType, kindsEnabled])
 
   // Pre-fill user data. Memoised so DynamicFormRenderer sees a stable baseline
   // (a fresh object each render made draft detection re-run continuously).
@@ -1223,10 +1276,11 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       incident_date: today,
       incident_time: now.toTimeString().slice(0, 5),
       complaint_date: today,
+      ...(kindsEnabled && formType === 'complaint' ? { feedback_kind: 'complaint' } : {}),
     }
     if (!user) return base
     return { ...base, person_name: user.name }
-  }, [user])
+  }, [user, kindsEnabled, formType])
 
   const validateData = useCallback(
     (formData: DynamicFormData) => validatePortalFormData(formData),

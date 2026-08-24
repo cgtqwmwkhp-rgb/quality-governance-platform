@@ -19,6 +19,7 @@ import {
   REPORTER_PHONE_MAX_LENGTH,
   buildPortalReportPayload,
   classifyContactValue,
+  getFormTypeFromPath,
   validatePortalFormData,
 } from '../PortalDynamicForm'
 
@@ -227,5 +228,35 @@ describe('validatePortalFormData', () => {
   it('allows a normal phone number and an empty contact', () => {
     expect(validatePortalFormData({ complainant_contact: '+44 7700 900123' })).toEqual({})
     expect(validatePortalFormData({})).toEqual({})
+  })
+
+  it('requires a named subject for a compliment', () => {
+    expect(
+      validatePortalFormData({
+        feedback_kind: 'compliment',
+        description: 'The fitter was outstanding.',
+      }).subject_name,
+    ).toContain('staff member')
+  })
+})
+
+describe('getFormTypeFromPath', () => {
+  it('treats /portal/report/feedback as the complaint form', () => {
+    expect(getFormTypeFromPath('/portal/report/feedback')).toBe('complaint')
+  })
+
+  it('keeps /portal/report/complaint as complaint for the QR path', () => {
+    expect(getFormTypeFromPath('/portal/report/complaint')).toBe('complaint')
+  })
+})
+
+describe('buildPortalReportPayload feedback kind', () => {
+  it('puts feedback_kind on the wire for a compliment', () => {
+    const payload = buildComplaint(
+      complaintForm({ feedback_kind: 'compliment', subject_name: 'Alex Fitter' }),
+    )
+    expect(payload.feedback_kind).toBe('compliment')
+    expect(payload.reporter_submission?.feedback_kind).toBe('compliment')
+    expect(payload.report_type).toBe('complaint')
   })
 })

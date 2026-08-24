@@ -303,7 +303,7 @@ class PortalService:
         """
         if reference_number.startswith("INC-"):
             return await self._track_incident(reference_number)
-        elif reference_number.startswith("COMP-"):
+        elif reference_number.startswith(("COMP-", "CMND-", "SUGG-", "FDBK-")):
             return await self._track_complaint(reference_number)
         elif reference_number.startswith("RTA-"):
             return await self._track_rta(reference_number)

@@ -27,7 +27,7 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.core.config import settings
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
+from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType, FeedbackKind
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -40,6 +40,12 @@ from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTAStatus
 from src.domain.services.api_idempotency_service import begin_idempotent_create, complete_idempotent_create
 from src.domain.services.audit_log_service import AuditLogService
+from src.domain.services.feedback_kind_policy import (
+    KIND_RECORD_TYPE,
+    assert_compliment_has_subject,
+    assert_kind_may_be_written,
+    parse_feedback_kind,
+)
 from src.domain.services.portal_triage_service import assign_and_notify_portal_intake
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.rta_severity import (
@@ -189,6 +195,10 @@ class QuickReportCreate(BaseModel):
     reporter_submission: Optional[dict[str, Any]] = Field(
         None,
         description="Immutable snapshot of reporter-entered intake data for investigator views",
+    )
+    feedback_kind: Optional[str] = Field(
+        None,
+        description="Customer feedback kind. Omitted defaults to complaint. Non-complaint requires the kinds flag.",
     )
 
     # Optional client-supplied idempotency key (PX-001). Prefer the ``Idempotency-Key``
@@ -359,6 +369,9 @@ def generate_portal_reference(prefix: str) -> str:
 _PORTAL_REFERENCE_REGISTERS: dict[str, tuple[str, Any]] = {
     "INC": ("incident", Incident),
     "COMP": ("complaint", Complaint),
+    "CMND": ("compliment", Complaint),
+    "SUGG": ("suggestion", Complaint),
+    "FDBK": ("general", Complaint),
     "RTA": ("rta", RoadTrafficCollision),
     "NM": ("near_miss", NearMiss),
 }
@@ -448,7 +461,27 @@ def validate_tracking_code(reference_number: str, provided_code: Optional[str]) 
     return hmac.compare_digest(expected_code, provided_code)
 
 
-_PORTAL_REFERENCE_PREFIXES = ("INC-", "COMP-", "RTA-", "NM-")
+_PORTAL_COMPLAINT_PREFIXES = ("COMP-", "CMND-", "SUGG-", "FDBK-")
+_PORTAL_REFERENCE_PREFIXES = ("INC-", "COMP-", "CMND-", "SUGG-", "FDBK-", "RTA-", "NM-")
+_PORTAL_COMPLIMENT_SUBJECT_KEYS = ("subject_name", "about_staff", "compliment_subject")
+_PORTAL_FEEDBACK_SUCCESS: dict[FeedbackKind, tuple[str, str]] = {
+    FeedbackKind.COMPLAINT: (
+        "Your complaint has been submitted successfully.",
+        "A case manager will review your complaint within 24 hours.",
+    ),
+    FeedbackKind.COMPLIMENT: (
+        "Your compliment has been submitted successfully.",
+        "Thank you — we will pass this on to the person you named.",
+    ),
+    FeedbackKind.SUGGESTION: (
+        "Your suggestion has been submitted successfully.",
+        "A case manager will review your suggestion within 24 hours.",
+    ),
+    FeedbackKind.GENERAL: (
+        "Your feedback has been submitted successfully.",
+        "A case manager will review your feedback within 24 hours.",
+    ),
+}
 
 # One wording for every "no report for you here" outcome. The session path
 # answers 404 rather than 403 on an ownership mismatch so that it cannot
@@ -752,6 +785,41 @@ def resolve_complaint_received_date(
     return chosen_datetime
 
 
+def portal_compliment_subject(reporter_submission: dict[str, Any]) -> str | None:
+    """Named staff member from the portal snapshot. Compliment write requires one."""
+    for key in _PORTAL_COMPLIMENT_SUBJECT_KEYS:
+        value = reporter_submission.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def resolve_portal_feedback_kind(
+    report: QuickReportCreate,
+    reporter_submission: dict[str, Any],
+) -> FeedbackKind:
+    """Parse kind from the body or snapshot, then apply the same write gate as staff create."""
+    raw = report.feedback_kind
+    if raw is None:
+        raw = reporter_submission.get("feedback_kind")
+    kind = parse_feedback_kind(raw)
+    assert_kind_may_be_written(kind)
+    if kind is FeedbackKind.COMPLIMENT:
+        assert_compliment_has_subject(
+            subject_user_id=None,
+            subject_name=portal_compliment_subject(reporter_submission),
+        )
+    return kind
+
+
+def portal_kind_prefix(kind: FeedbackKind) -> str:
+    return ReferenceNumberService.PREFIXES[KIND_RECORD_TYPE[kind]]
+
+
+def portal_feedback_success_copy(kind: FeedbackKind) -> tuple[str, str]:
+    return _PORTAL_FEEDBACK_SUCCESS.get(kind, _PORTAL_FEEDBACK_SUCCESS[FeedbackKind.COMPLAINT])
+
+
 def build_complaint_portal_fields(
     report: QuickReportCreate,
     complaint_priority: ComplaintPriority,
@@ -759,10 +827,14 @@ def build_complaint_portal_fields(
     tenant_id: Optional[int] = None,
     *,
     reference_number: Optional[str] = None,
+    feedback_kind: FeedbackKind | None = None,
+    subject_name: str | None = None,
 ) -> dict[str, Any]:
     resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
     display_name = require_portal_display_name(report, reporter_submission)
-    return {
+    kind = feedback_kind if feedback_kind is not None else parse_feedback_kind(reporter_submission.get("feedback_kind"))
+    named_subject = subject_name if subject_name is not None else portal_compliment_subject(reporter_submission)
+    fields: dict[str, Any] = {
         "complaint_type": ComplaintType.OTHER,
         "priority": complaint_priority,
         "status": ComplaintStatus.RECEIVED,
@@ -780,7 +852,11 @@ def build_complaint_portal_fields(
         "source_type": "portal",
         "reporter_submission": reporter_submission or None,
         "tenant_id": resolved_tenant_id,
+        "feedback_kind": kind,
     }
+    if named_subject:
+        fields["subject_name"] = named_subject
+    return fields
 
 
 # ``/report/rta`` renders the hardcoded PortalRTAForm, which posts
@@ -1762,8 +1838,11 @@ async def submit_quick_report(
         )
 
     elif report_type == "complaint":
-        ref_number = await mint_portal_reference(db, "COMP")
+        kind = resolve_portal_feedback_kind(report, reporter_submission)
+        named_subject = portal_compliment_subject(reporter_submission)
+        ref_number = await mint_portal_reference(db, portal_kind_prefix(kind))
         tracking_code = generate_tracking_code(ref_number)
+        success_message, estimated_response = portal_feedback_success_copy(kind)
 
         complaint = Complaint(
             reference_number=ref_number,
@@ -1775,6 +1854,8 @@ async def submit_quick_report(
                 reporter_submission,
                 portal_tenant_id,
                 reference_number=ref_number,
+                feedback_kind=kind,
+                subject_name=named_subject,
             ),
         )
 
@@ -1804,8 +1885,8 @@ async def submit_quick_report(
             success=True,
             reference_number=ref_number,
             tracking_code=tracking_code,
-            message="Your complaint has been submitted successfully.",
-            estimated_response="A case manager will review your complaint within 24 hours.",
+            message=success_message,
+            estimated_response=estimated_response,
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
             triage_assigned=triage_assigned,
             **staff_golden_thread_fields(current_user, entity_type="complaint", entity_id=complaint.id),
@@ -1995,7 +2076,7 @@ async def track_report(
             next_steps="Our team is reviewing your report.",
         )
 
-    elif reference_number.startswith("COMP-"):
+    elif reference_number.startswith(_PORTAL_COMPLAINT_PREFIXES):
         comp_query = select(Complaint).where(Complaint.reference_number == reference_number)
         comp_result = await db.execute(comp_query)
         complaint = comp_result.scalar_one_or_none()
@@ -2010,10 +2091,19 @@ async def track_report(
             tenant_id=complaint.tenant_id,
         )
 
+        report_type_label = {
+            "compliment": "Compliment",
+            "suggestion": "Suggestion",
+            "general": "Feedback",
+        }.get(
+            getattr(complaint.feedback_kind, "value", complaint.feedback_kind) or "complaint",
+            "Complaint",
+        )
+
         timeline = [
             {
                 "date": complaint.created_at.isoformat(),
-                "event": "Complaint Submitted",
+                "event": f"{report_type_label} Submitted",
                 "icon": "📋",
             },
         ]
@@ -2029,7 +2119,7 @@ async def track_report(
 
         return ReportStatusResponse(
             reference_number=complaint.reference_number,
-            report_type="Complaint",
+            report_type=report_type_label,
             title=complaint.title,
             status=complaint.status.value,
             status_label=get_status_label(complaint.status.value),

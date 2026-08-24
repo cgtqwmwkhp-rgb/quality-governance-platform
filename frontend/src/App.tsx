@@ -310,6 +310,10 @@ function App() {
                 path="report/complaint"
                 element={<PortalDynamicForm key="complaint" formType="complaint" />}
               />
+              <Route
+                path="report/feedback"
+                element={<PortalDynamicForm key="feedback" formType="complaint" />}
+              />
               <Route path="report/rta" element={<PortalRTAForm />} />
               <Route path="report/incident-legacy" element={<PortalIncidentForm />} />
               <Route path="report/near-miss-static" element={<PortalNearMissForm />} />
