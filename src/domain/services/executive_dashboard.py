@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.metrics import percentage_or_none
 from src.domain.models.asset import Asset, AssetStatus, AssetType
 from src.domain.models.audit import AuditRun, AuditStatus
-from src.domain.models.complaint import Complaint, ComplaintStatus
+from src.domain.models.complaint import Complaint, ComplaintStatus, is_complaint_kind
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert
 from src.domain.models.near_miss import NearMiss
@@ -614,7 +614,7 @@ class ExecutiveDashboardService:
         Pulse totals use received_date (coalesced to created_at) so the 7-day
         headline matches complaints_weekly sparklines.
         """
-        tf = self._tenant_filter(Complaint)
+        tf = and_(self._tenant_filter(Complaint), is_complaint_kind())
         complaint_when = func.coalesce(Complaint.received_date, Complaint.created_at)
 
         total_result = await self.db.execute(select(func.count(Complaint.id)).where(and_(tf, complaint_when >= cutoff)))
@@ -895,12 +895,13 @@ class ExecutiveDashboardService:
         week_windows: List[tuple[datetime, datetime, str]],
         model: Any,
         date_col: Any,
+        *extra,
     ) -> List[Dict[str, Any]]:
         tf = self._tenant_filter(model)
         out: List[Dict[str, Any]] = []
         for week_start, week_end, label in week_windows:
             result = await self.db.execute(
-                select(func.count(model.id)).where(and_(tf, date_col >= week_start, date_col < week_end))
+                select(func.count(model.id)).where(and_(tf, date_col >= week_start, date_col < week_end, *extra))
             )
             out.append({"week_start": label, "count": result.scalar() or 0})
         return out
@@ -1060,7 +1061,10 @@ class ExecutiveDashboardService:
             "complaints_weekly",
             unavailable,
             lambda: self._trend_count_in_window(
-                week_windows, Complaint, func.coalesce(Complaint.received_date, Complaint.created_at)
+                week_windows,
+                Complaint,
+                func.coalesce(Complaint.received_date, Complaint.created_at),
+                is_complaint_kind(),
             ),
         )
         near_misses_weekly = await self._trend_series(

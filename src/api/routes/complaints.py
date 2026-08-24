@@ -192,6 +192,10 @@ async def list_complaints(
         None,
         description="Comma-separated complaint ids (Safety Insights theme deep-link)",
     ),
+    feedback_kind: str = Query(
+        "complaint",
+        description="complaint (default), compliment, suggestion, general, or all",
+    ),
 ) -> ComplaintListResponse:
     """
     List all complaints with deterministic ordering.
@@ -208,6 +212,11 @@ async def list_complaints(
 
     if owner is not None and owner != "unassigned":
         raise BadRequestError("Invalid owner filter. Supported value: unassigned")
+
+    allowed_kinds = {"complaint", "compliment", "suggestion", "general", "all"}
+    kind_value = feedback_kind.strip().lower() if isinstance(feedback_kind, str) else "complaint"
+    if kind_value not in allowed_kinds:
+        raise BadRequestError("Invalid feedback_kind. Supported: complaint, compliment, suggestion, general, all")
 
     id_list: list[int] | None = None
     # Guard: unit tests may invoke the handler with FastAPI Query defaults unbound.
@@ -280,6 +289,8 @@ async def list_complaints(
             query = query.where(Complaint.owner_id.is_(None))
         if id_list:
             query = query.where(Complaint.id.in_(id_list))
+        if kind_value != "all":
+            query = query.where(Complaint.feedback_kind == kind_value)
 
         # Total count
         count_query = select(func.count()).select_from(query.subquery())

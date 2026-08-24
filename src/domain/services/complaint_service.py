@@ -260,6 +260,7 @@ class ComplaintService:
         params: PaginationInput,
         status_filter: Optional[str] = None,
         complainant_email: Optional[str] = None,
+        feedback_kind: Optional[str] = "complaint",
     ):
         """List complaints with pagination and optional filters."""
         query = (
@@ -272,6 +273,8 @@ class ComplaintService:
             query = query.where(Complaint.complainant_email == complainant_email)
         if status_filter:
             query = query.where(Complaint.status == status_filter)
+        if feedback_kind and feedback_kind != "all":
+            query = query.where(Complaint.feedback_kind == feedback_kind)
 
         query = query.order_by(Complaint.received_date.desc(), Complaint.id.asc())
         return await paginate(self.db, query, params)

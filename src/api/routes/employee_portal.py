@@ -2170,6 +2170,7 @@ async def get_portal_stats(current_user: CurrentUser, db: DbSession):
         .select_from(Complaint)
         .where(Complaint.tenant_id == tid)
         .where(Complaint.created_at >= today_start)
+        .where(Complaint.feedback_kind == "complaint")
     )
     total_today = (incidents_today.scalar() or 0) + (complaints_today.scalar() or 0)
 
@@ -2186,6 +2187,7 @@ async def get_portal_stats(current_user: CurrentUser, db: DbSession):
         .where(Complaint.tenant_id == tid)
         .where(Complaint.status == ComplaintStatus.CLOSED)
         .where(Complaint.updated_at >= week_ago)
+        .where(Complaint.feedback_kind == "complaint")
     )
     resolved_week = (resolved_incidents.scalar() or 0) + (resolved_complaints.scalar() or 0)
 

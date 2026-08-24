@@ -468,7 +468,10 @@ class PortalService:
             select(func.count()).select_from(Incident).where(Incident.created_at >= today_start)
         )
         complaints_today = await self.db.execute(
-            select(func.count()).select_from(Complaint).where(Complaint.created_at >= today_start)
+            select(func.count())
+            .select_from(Complaint)
+            .where(Complaint.created_at >= today_start)
+            .where(Complaint.feedback_kind == "complaint")
         )
         total_today = (incidents_today.scalar() or 0) + (complaints_today.scalar() or 0)
 
@@ -483,6 +486,7 @@ class PortalService:
             .select_from(Complaint)
             .where(Complaint.status == ComplaintStatus.CLOSED)
             .where(Complaint.updated_at >= week_ago)
+            .where(Complaint.feedback_kind == "complaint")
         )
         resolved_week = (resolved_incidents.scalar() or 0) + (resolved_complaints.scalar() or 0)
 

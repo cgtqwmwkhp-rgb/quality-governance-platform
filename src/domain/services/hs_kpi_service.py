@@ -79,7 +79,7 @@ class HsKpiService:
         end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
         rows: list[dict[str, Any]] = []
 
-        async def _pull(model, date_field, module: str, status_closed) -> None:
+        async def _pull(model, date_field, module: str, *conditions) -> None:
             result = await self.db.execute(
                 select(model.reference_number, date_field, model.lessons_learnt)
                 .where(
@@ -88,7 +88,7 @@ class HsKpiService:
                     date_field <= end_dt,
                     model.lessons_learnt.is_not(None),
                     model.lessons_learnt != "",
-                    status_closed,
+                    *conditions,
                 )
                 .order_by(date_field.desc())
                 .limit(50)
@@ -126,6 +126,7 @@ class HsKpiService:
             Complaint.received_date,
             "complaint",
             Complaint.status == "closed",
+            Complaint.feedback_kind == "complaint",
         )
         rows.sort(key=lambda r: r["date"], reverse=True)
         return rows[:50]
@@ -222,7 +223,14 @@ class HsKpiService:
             "near_miss_to_injury_ratio": near_miss_to_injury_ratio,
             "hipo_near_miss_to_injury_ratio": hipo_near_miss_to_injury_ratio,
             "rtas": rtas,
-            "complaints": await self._count(Complaint, Complaint.received_date, period.tenant_id, start, end),
+            "complaints": await self._count(
+                Complaint,
+                Complaint.received_date,
+                period.tenant_id,
+                start,
+                end,
+                Complaint.feedback_kind == "complaint",
+            ),
             "ltis": ltis,
             "riddor": riddor_incidents + riddor_rtas,
             "ltifr": ltifr,

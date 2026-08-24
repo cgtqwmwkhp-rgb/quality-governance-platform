@@ -547,6 +547,7 @@ class SearchService:
                 select(Complaint, score.label("score"))
                 .where(Complaint.tenant_id == tenant_id)
                 .where(Complaint.deleted_at.is_(None))
+                .where(Complaint.feedback_kind == "complaint")
                 .where(filter_clause)
                 .order_by(score.desc())
                 .limit(10)
