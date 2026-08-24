@@ -255,7 +255,8 @@ export default function ComplaintDetail() {
   ]
   const [typeOptions, setTypeOptions] =
     useState<Array<{ value: string; label: string }>>(defaultTypeOptions)
-  const [kindOptions, setKindOptions] = useState(FEEDBACK_KIND_OPTIONS)
+  const [kindOptions, setKindOptions] =
+    useState<Array<{ value: string; label: string }>>([...FEEDBACK_KIND_OPTIONS])
   const [priorityOptions, setPriorityOptions] = useState(defaultPriorityOptions)
 
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)

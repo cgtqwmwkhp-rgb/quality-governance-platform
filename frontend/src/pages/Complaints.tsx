@@ -190,7 +190,9 @@ export default function Complaints() {
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
   const [customersLoaded, setCustomersLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
-  const [kindOptions, setKindOptions] = useState(FEEDBACK_KIND_OPTIONS)
+  const [kindOptions, setKindOptions] = useState<{ value: string; label: string }[]>([
+    ...FEEDBACK_KIND_OPTIONS,
+  ])
   const defaultPriorityOptions = [
     { value: 'critical', label: t('priority.critical') },
     { value: 'high', label: t('priority.high') },

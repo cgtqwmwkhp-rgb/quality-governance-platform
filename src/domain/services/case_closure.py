@@ -566,11 +566,7 @@ async def evaluate_case_closure(
 
     from src.domain.services.feedback_kind_policy import lessons_required_for, parse_feedback_kind
 
-    kind = (
-        parse_feedback_kind(getattr(case, "feedback_kind", None))
-        if case_type == CASE_TYPE_COMPLAINT
-        else None
-    )
+    kind = parse_feedback_kind(getattr(case, "feedback_kind", None)) if case_type == CASE_TYPE_COMPLAINT else None
     require_lessons = True if kind is None else lessons_required_for(kind)
 
     open_work, tally = await fetch_open_work_for_case(

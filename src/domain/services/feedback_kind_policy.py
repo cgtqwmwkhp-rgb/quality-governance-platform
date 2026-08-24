@@ -6,7 +6,7 @@ flag all hang off it. Polarity stays derived in the model — never stored.
 
 from __future__ import annotations
 
-from src.domain.exceptions import StateTransitionError, ValidationError
+from src.domain.exceptions import ValidationError
 from src.domain.models.complaint import ComplaintStatus, FeedbackKind
 
 KIND_RECORD_TYPE: dict[FeedbackKind, str] = {
@@ -16,9 +16,7 @@ KIND_RECORD_TYPE: dict[FeedbackKind, str] = {
     FeedbackKind.GENERAL: "general",
 }
 
-LIGHT_CLOSE_KINDS: frozenset[FeedbackKind] = frozenset(
-    {FeedbackKind.COMPLIMENT, FeedbackKind.GENERAL}
-)
+LIGHT_CLOSE_KINDS: frozenset[FeedbackKind] = frozenset({FeedbackKind.COMPLIMENT, FeedbackKind.GENERAL})
 
 COMPLIMENT_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
     ComplaintStatus.RECEIVED: {ComplaintStatus.ACKNOWLEDGED},
