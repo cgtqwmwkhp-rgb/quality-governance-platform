@@ -598,6 +598,14 @@ export default function Analytics() {
     if (complaintResolutionRate != null) {
       lines.push(`${complaintResolutionRate}% of complaints received in this period are now closed.`)
     }
+    const complimentRatio = dash?.complaints.compliment_to_complaint_ratio
+    if (complimentRatio != null) {
+      lines.push(
+        `Compliment:Complaint ratio this period is ${complimentRatio} (${dash!.complaints.compliments_in_period ?? 0} compliments / ${dash!.complaints.total_in_period} complaints).`,
+      )
+    } else if (dash && dash.complaints.total_in_period === 0) {
+      lines.push('Compliment:Complaint ratio is unavailable this period — no complaints in the denominator.')
+    }
     if (auditsLoadState === 'unavailable') {
       lines.push('Audit summary unavailable — open/closed counts are not shown as zero.')
     } else if (auditsLoadState === 'estimated') {
@@ -1016,6 +1024,35 @@ export default function Analytics() {
                   Critical/high in period: {dash?.incidents.critical_high ?? 0}
                 </Link>
               </Button>
+            )}
+            {section === 'complaints' && (
+              <Card className="w-full p-4" data-testid="analytics-feedback-ratio">
+                <h4 className="font-semibold text-foreground mb-2">Compliment : Complaint</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Complaints in period</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {formatMetric(dash?.complaints.total_in_period ?? null)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Compliments in period</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {formatMetric(dash?.complaints.compliments_in_period ?? 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Ratio</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {dash?.complaints.compliment_to_complaint_ratio ?? '—'}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Suggestions and general feedback are excluded. A dash means there were no complaints
+                  in the period — the ratio is not a fake zero.
+                </p>
+              </Card>
             )}
             {section === 'risks' && (
               <Button variant="outline" asChild>

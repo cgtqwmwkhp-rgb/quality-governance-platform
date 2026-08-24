@@ -16,6 +16,8 @@ export interface HsKpiYear {
   hipo_near_miss_to_injury_ratio?: number | null
   rtas: number
   complaints: number
+  compliments?: number
+  compliment_to_complaint_ratio?: number | null
   ltis: number
   riddor: number
   ltifr: number | null

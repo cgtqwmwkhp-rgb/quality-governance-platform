@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.metrics import percentage_or_none
 from src.domain.models.asset import Asset, AssetStatus, AssetType
 from src.domain.models.audit import AuditRun, AuditStatus
-from src.domain.models.complaint import Complaint, ComplaintStatus, is_complaint_kind
+from src.domain.models.complaint import Complaint, ComplaintStatus, FeedbackKind, is_complaint_kind
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert
 from src.domain.models.near_miss import NearMiss
@@ -27,6 +27,7 @@ from src.domain.models.rta import RTA, RTAStatus
 from src.domain.models.training_matrix import TrainingMatrixCell, TrainingMatrixImport
 from src.domain.models.workflow_rules import SLATracking
 from src.domain.services.asset_health_analytics_service import AssetHealthRow, aggregate_asset_health_kpis
+from src.domain.services.hs_kpi_service import compliment_to_complaint_ratio
 from src.domain.services.risk_service import register_active_clause, register_visibility_clause
 from src.domain.services.session_savepoint import SavepointScope, read_savepoint
 
@@ -61,6 +62,8 @@ _EMPTY_COMPLAINT_SUMMARY: Dict[str, Any] = {
     "register_closed": None,
     "received_in_period_closed": None,
     "avg_resolution_days": None,
+    "compliments_in_period": 0,
+    "compliment_to_complaint_ratio": None,
 }
 _EMPTY_RTA_SUMMARY: Dict[str, Any] = {
     "total_in_period": 0,
@@ -669,6 +672,11 @@ class ExecutiveDashboardService:
             complaint_when, Complaint.closed_at, and_(tf, Complaint.status == ComplaintStatus.CLOSED)
         )
 
+        compliment_tf = and_(self._tenant_filter(Complaint), Complaint.feedback_kind == FeedbackKind.COMPLIMENT)
+        compliments_in_period = (
+            await self.db.execute(select(func.count(Complaint.id)).where(and_(compliment_tf, complaint_when >= cutoff)))
+        ).scalar() or 0
+
         return {
             "total_in_period": total,
             "open": open_count,
@@ -681,6 +689,8 @@ class ExecutiveDashboardService:
             "register_open": max(0, register_total - register_closed),
             "received_in_period_closed": received_in_period_closed,
             "avg_resolution_days": avg_resolution_days,
+            "compliments_in_period": int(compliments_in_period),
+            "compliment_to_complaint_ratio": compliment_to_complaint_ratio(int(compliments_in_period), int(total)),
         }
 
     async def _get_rta_summary(self, cutoff: datetime) -> Dict[str, Any]:

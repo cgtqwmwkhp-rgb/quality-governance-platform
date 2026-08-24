@@ -5,11 +5,26 @@ from src.domain.services.hs_kpi_service import (
     LTIFR_NO_HOURS,
     LTIFR_NOT_CLASSIFIED,
     RATE_UNIT,
+    compliment_to_complaint_ratio,
     effective_hours,
     lti_rate,
     pro_rated_hours,
     rate_per_100000,
 )
+
+
+def test_compliment_to_complaint_ratio_none_when_no_complaints():
+    assert compliment_to_complaint_ratio(2, 0) is None
+    assert compliment_to_complaint_ratio(0, 0) is None
+
+
+def test_compliment_to_complaint_ratio_rounds_two_decimals():
+    assert compliment_to_complaint_ratio(2, 4) == 0.5
+    assert compliment_to_complaint_ratio(1, 3) == 0.33
+
+
+def test_compliment_to_complaint_ratio_zero_when_complaints_exist_and_no_compliments():
+    assert compliment_to_complaint_ratio(0, 5) == 0.0
 
 
 def test_pro_rated_hours_uses_excel_style_inclusive_days():

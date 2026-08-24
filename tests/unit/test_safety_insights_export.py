@@ -26,6 +26,9 @@ def _minimal_board_pack() -> dict:
                 "hipo_near_misses": 1,
                 "near_miss_to_incident_ratio": 1.0,
                 "hipo_near_miss_to_incident_ratio": 0.2,
+                "complaints": 4,
+                "compliments": 2,
+                "compliment_to_complaint_ratio": 0.5,
             },
             "hs_board_by_year": [
                 {
@@ -34,6 +37,9 @@ def _minimal_board_pack() -> dict:
                     "hipo_near_miss_to_injury_ratio": 0.4,
                     "ltifr": 1.1,
                     "afr": 0.3,
+                    "complaints": 4,
+                    "compliments": 2,
+                    "compliment_to_complaint_ratio": 0.5,
                 }
             ],
         },

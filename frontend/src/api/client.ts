@@ -2490,6 +2490,8 @@ export interface ExecutiveDashboardData {
     register_closed?: number | null
     received_in_period_closed?: number | null
     avg_resolution_days?: number | null
+    compliments_in_period?: number
+    compliment_to_complaint_ratio?: number | null
   }
   /**
    * `total_in_period` is windowed by the dashboard period; `total`/`open`/`closed`

@@ -22,6 +22,8 @@ def test_empty_complaint_register_fields_are_none_not_zero():
     assert summary.register_total is None
     assert summary.received_in_period_closed is None
     assert summary.avg_resolution_days is None
+    assert summary.compliments_in_period == 0
+    assert summary.compliment_to_complaint_ratio is None
 
 
 def test_register_triple_reconciles_when_present():
