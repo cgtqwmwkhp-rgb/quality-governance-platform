@@ -1,6 +1,7 @@
 """Customer Feedback PR-1 — discriminator honesty."""
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from src.api.schemas.complaint import ComplaintCreate, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import (
@@ -124,3 +125,11 @@ def test_suggestion_and_general_are_neutral() -> None:
         )
         assert response.feedback_polarity is FeedbackPolarity.NEUTRAL
         assert FEEDBACK_POLARITY[kind] is FeedbackPolarity.NEUTRAL
+
+
+def test_migration_revises_the_int_w6_head() -> None:
+    text = (Path(__file__).resolve().parents[2] / "alembic/versions/20261114_complaint_feedback_kind.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'revision: str = "20261114_cmp_fb_kind"' in text
+    assert 'down_revision: Union[str, Sequence[str], None] = "20261113_standards_w6_edges"' in text
