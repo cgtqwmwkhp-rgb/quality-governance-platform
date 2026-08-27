@@ -99,13 +99,49 @@ type Props = {
 
 type PreviewUrls = Record<number, string>
 
-const isImage = (asset: EvidenceAsset) => asset.content_type.startsWith('image/')
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.bmp', '.svg'])
+
+/** True when the gallery should fetch an inline image thumbnail. */
+export function isEvidenceImage(asset: Pick<EvidenceAsset, 'content_type' | 'asset_type' | 'original_filename' | 'title'>): boolean {
+  const mime = (asset.content_type || '').toLowerCase().split(';')[0].trim()
+  if (mime.startsWith('image/')) return true
+  if (asset.asset_type === 'photo' || asset.asset_type === 'signature') return true
+  const name = asset.original_filename || asset.title || ''
+  return IMAGE_EXTENSIONS.has(evidenceFileExtension(name))
+}
+
+const isImage = (asset: EvidenceAsset) => isEvidenceImage(asset)
+
+function EvidenceThumbnail({
+  src,
+  alt,
+  onLoadError,
+}: {
+  src: string
+  alt: string
+  onLoadError: () => void
+}) {
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  useEffect(() => {
+    const el = imgRef.current
+    if (!el) return
+    const handler = () => onLoadError()
+    el.addEventListener('error', handler)
+    return () => el.removeEventListener('error', handler)
+  }, [src, onLoadError])
+
+  return <img ref={imgRef} src={src} alt={alt} className="h-full w-full object-cover" />
+}
 
 const assetLabel = (asset: EvidenceAsset) =>
   asset.title || asset.original_filename || `Evidence #${asset.id}`
 
 const assetNeedsInlinePreview = (asset: EvidenceAsset) =>
-  canPreviewInApp(asset.content_type, asset.original_filename || asset.title)
+  isImage(asset) || canPreviewInApp(asset.content_type, asset.original_filename || asset.title)
+
+const assetPreviewContentType = (asset: EvidenceAsset) =>
+  isImage(asset) ? 'image/*' : asset.content_type
 
 export function evidenceFileExtension(filename: string): string {
   const i = filename.lastIndexOf('.')
@@ -391,8 +427,19 @@ export function EvidenceGallery({
                   aria-label={`Preview ${label}`}
                 >
                   <div className="aspect-square overflow-hidden bg-muted">
-                    {image && previewUrl ? (
-                      <img src={previewUrl} alt={label} className="h-full w-full object-cover" />
+                    {image && previewUrl && !previewFailed ? (
+                      <EvidenceThumbnail
+                        src={previewUrl}
+                        alt={label}
+                        onLoadError={() => {
+                          setPreviewFailures((current) => new Set(current).add(asset.id))
+                          setPreviewUrls((current) => {
+                            const next = { ...current }
+                            delete next[asset.id]
+                            return next
+                          })
+                        }}
+                      />
                     ) : (
                       <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
                         {image && previewFailed ? (
@@ -400,11 +447,16 @@ export function EvidenceGallery({
                             <ImageOff className="h-8 w-8" aria-hidden="true" />
                             <span className="mt-1 text-xs">Preview unavailable</span>
                           </>
+                        ) : image ? (
+                          <>
+                            <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
+                            <span className="mt-1 text-xs">Loading preview…</span>
+                          </>
                         ) : (
                           <>
                             <FileText className="h-8 w-8" aria-hidden="true" />
                             <span className="mt-1 text-xs">
-                              {image ? 'Loading preview…' : asset.content_type.split('/')[1]?.toUpperCase()}
+                              {asset.content_type.split('/')[1]?.toUpperCase() || 'FILE'}
                             </span>
                           </>
                         )}
@@ -447,12 +499,16 @@ export function EvidenceGallery({
               {selectedAsset && assetNeedsInlinePreview(selectedAsset) ? (
                 <DocumentPreview
                   url={selectedPreviewUrl}
-                  contentType={selectedAsset.content_type}
+                  contentType={assetPreviewContentType(selectedAsset)}
                   fileName={selectedAsset.original_filename || selectedAsset.title}
                   alt={assetLabel(selectedAsset)}
                   loading={!selectedPreviewUrl && !selectedPreviewFailed}
                   loadFailed={selectedPreviewFailed}
                   className="w-full"
+                  onLoadError={() => {
+                    const id = selectedAsset.id
+                    setPreviewFailures((current) => new Set(current).add(id))
+                  }}
                 />
               ) : (
                 <div className="p-8 text-center text-sm text-muted-foreground">

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { evidenceAssetsApi, type EvidenceAsset } from '../../api/client'
-import { EvidenceGallery } from '../EvidenceGallery'
+import { EvidenceGallery, isEvidenceImage } from '../EvidenceGallery'
 
 vi.mock('../../api/client', () => ({
   evidenceAssetsApi: {
@@ -126,5 +126,65 @@ describe('EvidenceGallery', () => {
     })
     expect(within(dialog).queryByText(/cannot be previewed here/i)).toBeNull()
     expect(within(dialog).getByRole('button', { name: /download/i })).toBeInTheDocument()
+  })
+
+  it('treats photo assets and image filenames as images even when MIME is generic', () => {
+    expect(
+      isEvidenceImage({
+        content_type: 'application/octet-stream',
+        asset_type: 'photo',
+        original_filename: 'scene.bin',
+      }),
+    ).toBe(true)
+    expect(
+      isEvidenceImage({
+        content_type: 'application/octet-stream',
+        asset_type: 'other',
+        original_filename: 'pro-xXTDOUic.jpeg',
+      }),
+    ).toBe(true)
+    expect(
+      isEvidenceImage({
+        content_type: 'application/pdf',
+        asset_type: 'pdf',
+        original_filename: 'report.pdf',
+      }),
+    ).toBe(false)
+  })
+
+  it('previews photo assets in the lightbox when MIME and filename are generic', async () => {
+    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
+      data: { signed_url: 'https://example.test/photo-bytes' },
+    } as never)
+    const photo = {
+      ...asset(10, 'scene.bin', 'application/octet-stream'),
+      asset_type: 'photo',
+    }
+
+    render(<EvidenceGallery assets={[photo]} />)
+
+    await screen.findByAltText('scene.bin')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview scene.bin' }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).getByTestId('document-preview-image')).toBeInTheDocument()
+    expect(within(dialog).getByAltText('scene.bin').getAttribute('src')).toBe(
+      'https://example.test/photo-bytes',
+    )
+    expect(within(dialog).queryByText(/cannot be previewed here/i)).toBeNull()
+  })
+
+  it('shows preview unavailable when the thumbnail image fails to load', async () => {
+    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
+      data: { signed_url: 'https://example.test/broken.jpg' },
+    } as never)
+
+    render(<EvidenceGallery assets={[asset(1, 'broken.jpg')]} />)
+
+    const image = await screen.findByAltText('broken.jpg')
+    fireEvent.error(image)
+
+    expect(await screen.findByText('Preview unavailable')).toBeInTheDocument()
+    expect(screen.queryByAltText('broken.jpg')).toBeNull()
   })
 })
