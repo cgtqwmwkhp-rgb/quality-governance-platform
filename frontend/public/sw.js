@@ -132,7 +132,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // CRITICAL: Check if this is an API request that needs HTTPS enforcement
-  const isApiRequest = url.hostname.includes('azurewebsites.net') &&
+  const isApiRequest = url.hostname.endsWith('.azurewebsites.net') &&
                        url.pathname.startsWith('/api/');
 
   // Never intercept other cross-origin GETs. Evidence thumbnails use Azure
