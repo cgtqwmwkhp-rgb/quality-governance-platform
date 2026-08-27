@@ -152,6 +152,28 @@ describe('EvidenceGallery', () => {
     ).toBe(false)
   })
 
+  it('previews photo assets in the lightbox when MIME and filename are generic', async () => {
+    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
+      data: { signed_url: 'https://example.test/photo-bytes' },
+    } as never)
+    const photo = {
+      ...asset(10, 'scene.bin', 'application/octet-stream'),
+      asset_type: 'photo',
+    }
+
+    render(<EvidenceGallery assets={[photo]} />)
+
+    await screen.findByAltText('scene.bin')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview scene.bin' }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).getByTestId('document-preview-image')).toBeInTheDocument()
+    expect(within(dialog).getByAltText('scene.bin').getAttribute('src')).toBe(
+      'https://example.test/photo-bytes',
+    )
+    expect(within(dialog).queryByText(/cannot be previewed here/i)).toBeNull()
+  })
+
   it('shows preview unavailable when the thumbnail image fails to load', async () => {
     vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
       data: { signed_url: 'https://example.test/broken.jpg' },

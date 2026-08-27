@@ -138,7 +138,10 @@ const assetLabel = (asset: EvidenceAsset) =>
   asset.title || asset.original_filename || `Evidence #${asset.id}`
 
 const assetNeedsInlinePreview = (asset: EvidenceAsset) =>
-  canPreviewInApp(asset.content_type, asset.original_filename || asset.title)
+  isImage(asset) || canPreviewInApp(asset.content_type, asset.original_filename || asset.title)
+
+const assetPreviewContentType = (asset: EvidenceAsset) =>
+  isImage(asset) ? 'image/*' : asset.content_type
 
 export function evidenceFileExtension(filename: string): string {
   const i = filename.lastIndexOf('.')
@@ -496,7 +499,7 @@ export function EvidenceGallery({
               {selectedAsset && assetNeedsInlinePreview(selectedAsset) ? (
                 <DocumentPreview
                   url={selectedPreviewUrl}
-                  contentType={selectedAsset.content_type}
+                  contentType={assetPreviewContentType(selectedAsset)}
                   fileName={selectedAsset.original_filename || selectedAsset.title}
                   alt={assetLabel(selectedAsset)}
                   loading={!selectedPreviewUrl && !selectedPreviewFailed}

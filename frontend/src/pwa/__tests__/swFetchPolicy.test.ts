@@ -9,6 +9,27 @@ describe('serviceWorkerShouldHandleFetch', () => {
     expect(serviceWorkerShouldHandleFetch(`${SWA}/assets/index.js`, SWA)).toBe(true)
   })
 
+  it('continues to handle cross-origin Azure API GETs', () => {
+    expect(
+      serviceWorkerShouldHandleFetch(
+        'https://app-qgp-prod.azurewebsites.net/api/v1/assessments',
+        SWA,
+      ),
+    ).toBe(true)
+    expect(
+      serviceWorkerShouldHandleFetch(
+        'http://qgp-staging-plantexpand.azurewebsites.net/api/v1/healthz',
+        SWA,
+      ),
+    ).toBe(true)
+    expect(
+      serviceWorkerShouldHandleFetch(
+        'https://app-qgp-prod.azurewebsites.net/healthz',
+        SWA,
+      ),
+    ).toBe(false)
+  })
+
   it('does not intercept Azure Blob SAS evidence URLs (png/jpeg/pdf)', () => {
     const png =
       'https://stqgpprdcdd14b.blob.core.windows.net/evidence-assets/evidence/near_miss/106/shot.png?sp=r&sig=abc'

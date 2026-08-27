@@ -131,18 +131,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Never intercept cross-origin GETs. Evidence thumbnails use Azure Blob SAS
-  // URLs that end in .png/.jpeg — isStaticAsset + the catch-all networkFirst
-  // used to steal those requests, fail (no blob CORS), and return 503, which
-  // the gallery renders as a blank dark tile. Keep in sync with
-  // frontend/src/pwa/swFetchPolicy.ts.
-  if (url.origin !== self.location.origin) {
-    return;
-  }
-
   // CRITICAL: Check if this is an API request that needs HTTPS enforcement
   const isApiRequest = url.hostname.includes('azurewebsites.net') &&
                        url.pathname.startsWith('/api/');
+
+  // Never intercept other cross-origin GETs. Evidence thumbnails use Azure
+  // Blob SAS URLs that end in .png/.jpeg — isStaticAsset + the catch-all
+  // networkFirst used to steal those requests, fail (no blob CORS), and return
+  // 503. Keep the cross-origin API exception in sync with swFetchPolicy.ts.
+  if (url.origin !== self.location.origin && !isApiRequest) {
+    return;
+  }
 
   if (isApiRequest) {
     // Always enforce HTTPS for API requests

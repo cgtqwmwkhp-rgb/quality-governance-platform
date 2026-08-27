@@ -2,7 +2,7 @@
  * Fetch-interception policy for the app-shell service worker.
  *
  * `frontend/public/sw.js` cannot import this module (classic SW script).
- * The origin check in sw.js MUST stay identical to
+ * The origin/API-host check in sw.js MUST stay identical to
  * {@link serviceWorkerShouldHandleFetch}.
  */
 
@@ -16,5 +16,7 @@ export function serviceWorkerShouldHandleFetch(requestUrl: string, swOrigin: str
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return false
   }
-  return url.origin === swOrigin
+  const isApiRequest =
+    url.hostname.includes('azurewebsites.net') && url.pathname.startsWith('/api/')
+  return url.origin === swOrigin || isApiRequest
 }
