@@ -5,8 +5,8 @@
  * Old cached bundles may contain HTTP URLs - the SW rewrites them to HTTPS.
  */
 
-// Cache version - CI replaces this with git SHA + timestamp at build time
-const CACHE_VERSION = 'qgp-v2.0.1-nav-sync';
+// Cache version - bump whenever fetch interception rules change so old SWs activate-and-die.
+const CACHE_VERSION = 'qgp-v2.0.2-evidence-preview';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -128,6 +128,15 @@ self.addEventListener('fetch', (event) => {
   
   // Skip non-http(s) requests
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Never intercept cross-origin GETs. Evidence thumbnails use Azure Blob SAS
+  // URLs that end in .png/.jpeg — isStaticAsset + the catch-all networkFirst
+  // used to steal those requests, fail (no blob CORS), and return 503, which
+  // the gallery renders as a blank dark tile. Keep in sync with
+  // frontend/src/pwa/swFetchPolicy.ts.
+  if (url.origin !== self.location.origin) {
     return;
   }
 
