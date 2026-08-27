@@ -5,8 +5,8 @@
  * Old cached bundles may contain HTTP URLs - the SW rewrites them to HTTPS.
  */
 
-// Cache version - CI replaces this with git SHA + timestamp at build time
-const CACHE_VERSION = 'qgp-v2.0.1-nav-sync';
+// Cache version - bump whenever fetch interception rules change so old SWs activate-and-die.
+const CACHE_VERSION = 'qgp-v2.0.2-evidence-preview';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -134,6 +134,14 @@ self.addEventListener('fetch', (event) => {
   // CRITICAL: Check if this is an API request that needs HTTPS enforcement
   const isApiRequest = url.hostname.includes('azurewebsites.net') &&
                        url.pathname.startsWith('/api/');
+
+  // Never intercept other cross-origin GETs. Evidence thumbnails use Azure
+  // Blob SAS URLs that end in .png/.jpeg — isStaticAsset + the catch-all
+  // networkFirst used to steal those requests, fail (no blob CORS), and return
+  // 503. Keep the cross-origin API exception in sync with swFetchPolicy.ts.
+  if (url.origin !== self.location.origin && !isApiRequest) {
+    return;
+  }
 
   if (isApiRequest) {
     // Always enforce HTTPS for API requests
