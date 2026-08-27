@@ -797,9 +797,7 @@ async def get_evidence_asset_content(
         # which is stricter than anything this handler could add. Setting a weaker
         # value here would be overwritten and would only mislead the next reader.
         headers={
-            "Content-Disposition": build_evidence_content_disposition(
-                effective_disposition, asset.original_filename
-            ),
+            "Content-Disposition": build_evidence_content_disposition(effective_disposition, asset.original_filename),
         },
     )
 
