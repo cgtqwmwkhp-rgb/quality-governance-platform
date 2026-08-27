@@ -181,6 +181,10 @@ export function EvidenceGallery({
   allowedExtensions = DEFAULT_EVIDENCE_EXTENSIONS,
 }: Props) {
   const [previewUrls, setPreviewUrls] = useState<PreviewUrls>({})
+  // Object URLs are held here as well as in state because they must be revoked
+  // from cleanup paths that must not read stale state — an unmount, or an asset
+  // leaving the list. Every URL in `previewUrls` is also in this map.
+  const objectUrls = useRef<Map<number, string>>(new Map())
   const [previewFailures, setPreviewFailures] = useState<Set<number>>(new Set())
   const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null)
   const [downloadError, setDownloadError] = useState<string | null>(null)
@@ -192,13 +196,45 @@ export function EvidenceGallery({
   const uploadReady = enableUpload && !!uploadSourceModule && uploadSourceId != null
   const canShowDelete = !!onDelete && canDelete
 
-  // Thumbnails: prefetch inline URLs for images only (grid tiles).
+  const releaseObjectUrl = useCallback((assetId: number) => {
+    const existing = objectUrls.current.get(assetId)
+    if (existing) {
+      URL.revokeObjectURL(existing)
+      objectUrls.current.delete(assetId)
+    }
+  }, [])
+
+  /** Take ownership of a fetched blob, replacing any URL already held for the asset. */
+  const adoptObjectUrl = useCallback(
+    (assetId: number, blob: Blob) => {
+      releaseObjectUrl(assetId)
+      const url = URL.createObjectURL(blob)
+      objectUrls.current.set(assetId, url)
+      return url
+    },
+    [releaseObjectUrl],
+  )
+
+  // Object URLs live until they are revoked, so the last unmount has to let go of
+  // every one of them or the blobs stay in memory for the life of the tab.
+  useEffect(() => {
+    const held = objectUrls.current
+    return () => {
+      held.forEach((url) => URL.revokeObjectURL(url))
+      held.clear()
+    }
+  }, [])
+
+  // Thumbnails: prefetch inline bytes for images only (grid tiles).
   useEffect(() => {
     let cancelled = false
     const images = assets.filter(isImage)
     const assetIds = new Set(assets.map((asset) => asset.id))
 
     // Drop URLs/failures for assets that left the list; keep non-image lightbox URLs.
+    for (const heldId of [...objectUrls.current.keys()]) {
+      if (!assetIds.has(heldId)) releaseObjectUrl(heldId)
+    }
     setPreviewUrls((current) =>
       Object.fromEntries(Object.entries(current).filter(([id]) => assetIds.has(Number(id)))),
     )
@@ -207,9 +243,12 @@ export function EvidenceGallery({
     void Promise.all(
       images.map(async (asset) => {
         try {
-          const response = await evidenceAssetsApi.getSignedUrl(asset.id, undefined, 'inline')
+          const response = await evidenceAssetsApi.getContent(asset.id, 'inline')
+          // Only take ownership once we know the URL will be rendered; a blob
+          // adopted after cancellation would have nothing left to revoke it.
           if (!cancelled) {
-            setPreviewUrls((current) => ({ ...current, [asset.id]: response.data.signed_url }))
+            const url = adoptObjectUrl(asset.id, response.data)
+            setPreviewUrls((current) => ({ ...current, [asset.id]: url }))
             setPreviewFailures((current) => {
               if (!current.has(asset.id)) return current
               const next = new Set(current)
@@ -228,7 +267,7 @@ export function EvidenceGallery({
     return () => {
       cancelled = true
     }
-  }, [assets])
+  }, [adoptObjectUrl, assets, releaseObjectUrl])
 
   // Lightbox: ensure an inline URL for any Tier 1/2 previewable selection (PDF, video, audio, text).
   useEffect(() => {
@@ -240,9 +279,9 @@ export function EvidenceGallery({
 
     void (async () => {
       try {
-        const response = await evidenceAssetsApi.getSignedUrl(assetId, undefined, 'inline')
+        const response = await evidenceAssetsApi.getContent(assetId, 'inline')
         if (!cancelled) {
-          setPreviewUrls((current) => ({ ...current, [assetId]: response.data.signed_url }))
+          setPreviewUrls((current) => ({ ...current, [assetId]: adoptObjectUrl(assetId, response.data) }))
         }
       } catch {
         if (!cancelled) {
@@ -254,7 +293,7 @@ export function EvidenceGallery({
     return () => {
       cancelled = true
     }
-  }, [previewFailures, previewUrls, selectedAsset])
+  }, [adoptObjectUrl, previewFailures, previewUrls, selectedAsset])
 
   const moveSelection = useCallback((direction: -1 | 1) => {
     setSelectedAssetId((currentId) => {
@@ -432,6 +471,7 @@ export function EvidenceGallery({
                         src={previewUrl}
                         alt={label}
                         onLoadError={() => {
+                          releaseObjectUrl(asset.id)
                           setPreviewFailures((current) => new Set(current).add(asset.id))
                           setPreviewUrls((current) => {
                             const next = { ...current }

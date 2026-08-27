@@ -78,3 +78,20 @@ Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
   writable: true,
   value: () => {},
 })
+
+// jsdom implements neither URL.createObjectURL nor URL.revokeObjectURL. Evidence
+// previews fetch bytes through the API and wrap them in an object URL, so without
+// these any component rendering a preview throws. The counter keeps each URL
+// distinct so a test can tell two previews apart; tests that need to assert
+// creation or revocation spy on these.
+let objectUrlSequence = 0
+Object.defineProperty(URL, 'createObjectURL', {
+  configurable: true,
+  writable: true,
+  value: () => `blob:mock/${++objectUrlSequence}`,
+})
+Object.defineProperty(URL, 'revokeObjectURL', {
+  configurable: true,
+  writable: true,
+  value: () => {},
+})

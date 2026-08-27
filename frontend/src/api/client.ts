@@ -2392,6 +2392,9 @@ export const evidenceAssetsApi = {
 
   /**
    * Get a signed download URL for an evidence asset.
+   *
+   * Downloads only. In-page previews use {@link getContent} so the browser never
+   * has to reach blob storage directly.
    */
   getSignedUrl: (
     assetId: number,
@@ -2402,6 +2405,22 @@ export const evidenceAssetsApi = {
     if (expiresIn) params.set('expires_in', String(expiresIn))
     params.set('disposition', disposition)
     return api.get<SignedUrlResponse>(`/api/v1/evidence-assets/${assetId}/signed-url?${params}`)
+  },
+
+  /**
+   * Fetch an evidence asset's bytes from the API on the app's own origin.
+   *
+   * Preferred over a signed URL for anything rendered in the page: the request
+   * carries the caller's JWT like every other API call, so previews do not depend
+   * on the storage account's CORS rules or on the browser being able to reach blob
+   * storage at all. Callers own the resulting blob — wrap it in
+   * `URL.createObjectURL` and revoke that URL when the element goes away.
+   */
+  getContent: (assetId: number, disposition: 'attachment' | 'inline' = 'inline') => {
+    const params = new URLSearchParams({ disposition })
+    return api.get<Blob>(`/api/v1/evidence-assets/${assetId}/content?${params}`, {
+      responseType: 'blob',
+    })
   },
 }
 

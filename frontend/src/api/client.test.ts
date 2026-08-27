@@ -559,6 +559,7 @@ describe('client inline API surfaces', () => {
     evidenceAssetsApi.delete(1)
     evidenceAssetsApi.getSignedUrl(1, 60)
     evidenceAssetsApi.getSignedUrl(1)
+    evidenceAssetsApi.getContent(1)
     workflowsApi.listInstances({ status: 'active', entity_type: 'incident' })
     workflowsApi.listInstances()
     workflowsApi.listTemplates()
@@ -580,6 +581,21 @@ describe('client inline API surfaces', () => {
     await expect(checkPackCapability(9)).resolves.toMatchObject({ canGenerate: false })
     vi.mocked(api.get).mockRejectedValueOnce({ response: { status: 500 } })
     await expect(checkPackCapability(9)).resolves.toEqual({ canGenerate: true })
+  })
+
+  it('evidence getContent asks the API for bytes, inline by default', () => {
+    vi.mocked(api.get).mockResolvedValue({ data: new Blob(['bytes']) } as never)
+
+    evidenceAssetsApi.getContent(7)
+    expect(api.get).toHaveBeenLastCalledWith('/api/v1/evidence-assets/7/content?disposition=inline', {
+      responseType: 'blob',
+    })
+
+    evidenceAssetsApi.getContent(7, 'attachment')
+    expect(api.get).toHaveBeenLastCalledWith(
+      '/api/v1/evidence-assets/7/content?disposition=attachment',
+      { responseType: 'blob' },
+    )
   })
 
   it('admin config APIs unwrap axios data', async () => {

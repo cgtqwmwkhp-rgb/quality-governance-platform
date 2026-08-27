@@ -1,13 +1,51 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { evidenceAssetsApi, type EvidenceAsset } from '../../api/client'
 import { EvidenceGallery, isEvidenceImage } from '../EvidenceGallery'
 
 vi.mock('../../api/client', () => ({
   evidenceAssetsApi: {
     getSignedUrl: vi.fn(),
+    getContent: vi.fn(),
   },
 }))
+
+/**
+ * Blobs tagged with the asset they came from, so a rendered `src` says which
+ * asset produced it instead of being an opaque counter.
+ */
+const namedBlob = (name: string) => Object.assign(new Blob([name]), { testName: name })
+
+let created: string[] = []
+let revoked: string[] = []
+
+/**
+ * The most recent object URL created for an asset. Each creation gets its own
+ * URL — a refetch replaces the previous one, and only distinct URLs can show
+ * that the old one was released while the rendered one was not.
+ */
+const currentUrlFor = (name: string) =>
+  [...created].reverse().find((url) => url.startsWith(`blob:mock/${name}/`))
+
+beforeEach(() => {
+  vi.mocked(evidenceAssetsApi.getContent).mockReset()
+  created = []
+  revoked = []
+  vi.spyOn(URL, 'createObjectURL').mockImplementation((blob: Blob | MediaSource) => {
+    const url = `blob:mock/${(blob as { testName?: string }).testName ?? 'untagged'}/${created.length + 1}`
+    created.push(url)
+    return url
+  })
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation((url: string) => {
+    revoked.push(url)
+  })
+})
+
+/** Resolve every getContent call with a blob named after the asset id. */
+const serveContentByAssetId = () =>
+  vi.mocked(evidenceAssetsApi.getContent).mockImplementation((id) =>
+    Promise.resolve({ data: namedBlob(String(id)) } as never),
+  )
 
 const asset = (
   id: number,
@@ -30,22 +68,59 @@ const asset = (
 })
 
 describe('EvidenceGallery', () => {
-  it('renders image thumbnails from inline signed URLs', async () => {
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
-      data: { signed_url: 'https://example.test/scene.jpg' },
-    } as never)
+  it('renders image thumbnails from object URLs, never from a signed URL', async () => {
+    serveContentByAssetId()
 
     render(<EvidenceGallery assets={[asset(1, 'scene.jpg')]} />)
 
     const image = await screen.findByAltText('scene.jpg')
-    expect(image.getAttribute('src')).toBe('https://example.test/scene.jpg')
-    expect(evidenceAssetsApi.getSignedUrl).toHaveBeenCalledWith(1, undefined, 'inline')
+    expect(image.getAttribute('src')).toBe(currentUrlFor('1'))
+    expect(evidenceAssetsApi.getContent).toHaveBeenCalledWith(1, 'inline')
+    expect(evidenceAssetsApi.getSignedUrl).not.toHaveBeenCalled()
+  })
+
+  it('revokes every object URL it created when it unmounts', async () => {
+    serveContentByAssetId()
+
+    const { unmount } = render(
+      <EvidenceGallery assets={[asset(1, 'first.jpg'), asset(2, 'second.jpg')]} />,
+    )
+
+    await screen.findByAltText('first.jpg')
+    await screen.findByAltText('second.jpg')
+    expect(revoked).toEqual([])
+
+    const live = [currentUrlFor('1'), currentUrlFor('2')]
+    unmount()
+
+    expect([...revoked].sort()).toEqual([...live].sort())
+  })
+
+  it('revokes the object URL of an asset that leaves the list, and keeps the survivor live', async () => {
+    serveContentByAssetId()
+
+    const first = asset(1, 'first.jpg')
+    const second = asset(2, 'second.jpg')
+    const { rerender } = render(<EvidenceGallery assets={[first, second]} />)
+
+    await screen.findByAltText('first.jpg')
+    await screen.findByAltText('second.jpg')
+    const departing = currentUrlFor('2')
+
+    rerender(<EvidenceGallery assets={[first]} />)
+
+    await waitFor(() => {
+      expect(revoked).toContain(departing)
+    })
+    // The survivor is refetched, so its URL is a new one — what must hold is that
+    // whatever the thumbnail is showing has not been revoked underneath it.
+    const image = await screen.findByAltText('first.jpg')
+    expect(revoked).not.toContain(image.getAttribute('src'))
+    expect(screen.queryByAltText('second.jpg')).toBeNull()
   })
 
   it('navigates previews with the next control and arrow keys', async () => {
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockImplementation((id) =>
-      Promise.resolve({ data: { signed_url: `https://example.test/${id}.jpg` } } as never),
-    )
+    serveContentByAssetId()
 
     render(<EvidenceGallery assets={[asset(1, 'first.jpg'), asset(2, 'second.jpg')]} />)
 
@@ -54,9 +129,7 @@ describe('EvidenceGallery', () => {
 
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Next evidence' }))
-    expect(within(dialog).getByAltText('second.jpg').getAttribute('src')).toBe(
-      'https://example.test/2.jpg',
-    )
+    expect(within(dialog).getByAltText('second.jpg').getAttribute('src')).toBe(currentUrlFor('2'))
 
     fireEvent.keyDown(window, { key: 'ArrowLeft' })
     await waitFor(() => {
@@ -71,9 +144,7 @@ describe('EvidenceGallery', () => {
   })
 
   it('keeps the selected evidence open when assets reorder', async () => {
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockImplementation((id) =>
-      Promise.resolve({ data: { signed_url: `https://example.test/${id}.jpg` } } as never),
-    )
+    serveContentByAssetId()
 
     const first = asset(1, 'first.jpg')
     const second = asset(2, 'second.jpg')
@@ -91,9 +162,7 @@ describe('EvidenceGallery', () => {
   })
 
   it('previews PDFs in the lightbox instead of download-only copy', async () => {
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
-      data: { signed_url: 'https://example.test/report.pdf' },
-    } as never)
+    serveContentByAssetId()
 
     render(<EvidenceGallery assets={[asset(9, 'report.pdf', 'application/pdf')]} />)
 
@@ -104,17 +173,15 @@ describe('EvidenceGallery', () => {
       expect(within(dialog).getByTestId('document-preview-pdf')).not.toBeNull()
     })
     expect(within(dialog).getByTitle('Preview of report.pdf').getAttribute('src')).toBe(
-      'https://example.test/report.pdf',
+      currentUrlFor('9'),
     )
     expect(within(dialog).queryByText(/cannot be previewed here/i)).toBeNull()
     expect(within(dialog).getByRole('button', { name: /download/i })).toBeInTheDocument()
-    expect(evidenceAssetsApi.getSignedUrl).toHaveBeenCalledWith(9, undefined, 'inline')
+    expect(evidenceAssetsApi.getContent).toHaveBeenCalledWith(9, 'inline')
   })
 
   it('previews video in the lightbox with download as a secondary CTA', async () => {
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
-      data: { signed_url: 'https://example.test/clip.mp4' },
-    } as never)
+    serveContentByAssetId()
 
     render(<EvidenceGallery assets={[asset(3, 'clip.mp4', 'video/mp4')]} />)
 
@@ -126,6 +193,31 @@ describe('EvidenceGallery', () => {
     })
     expect(within(dialog).queryByText(/cannot be previewed here/i)).toBeNull()
     expect(within(dialog).getByRole('button', { name: /download/i })).toBeInTheDocument()
+  })
+
+  it('downloads through a signed URL, which the byte proxy does not replace', async () => {
+    serveContentByAssetId()
+    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
+      data: { signed_url: 'https://storage.test/scene.jpg?sig=abc' },
+    } as never)
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
+    render(<EvidenceGallery assets={[asset(1, 'scene.jpg')]} />)
+
+    await screen.findByAltText('scene.jpg')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview scene.jpg' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /download/i }))
+
+    await waitFor(() => {
+      expect(evidenceAssetsApi.getSignedUrl).toHaveBeenCalledWith(1, undefined, 'attachment')
+    })
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://storage.test/scene.jpg?sig=abc',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    openSpy.mockRestore()
   })
 
   it('treats photo assets and image filenames as images even when MIME is generic', () => {
@@ -153,9 +245,7 @@ describe('EvidenceGallery', () => {
   })
 
   it('previews photo assets in the lightbox when MIME and filename are generic', async () => {
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
-      data: { signed_url: 'https://example.test/photo-bytes' },
-    } as never)
+    serveContentByAssetId()
     const photo = {
       ...asset(10, 'scene.bin', 'application/octet-stream'),
       asset_type: 'photo',
@@ -168,16 +258,12 @@ describe('EvidenceGallery', () => {
     const dialog = await screen.findByRole('dialog')
 
     expect(within(dialog).getByTestId('document-preview-image')).toBeInTheDocument()
-    expect(within(dialog).getByAltText('scene.bin').getAttribute('src')).toBe(
-      'https://example.test/photo-bytes',
-    )
+    expect(within(dialog).getByAltText('scene.bin').getAttribute('src')).toBe(currentUrlFor('10'))
     expect(within(dialog).queryByText(/cannot be previewed here/i)).toBeNull()
   })
 
   it('shows preview unavailable when the thumbnail image fails to load', async () => {
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
-      data: { signed_url: 'https://example.test/broken.jpg' },
-    } as never)
+    serveContentByAssetId()
 
     render(<EvidenceGallery assets={[asset(1, 'broken.jpg')]} />)
 
@@ -186,5 +272,15 @@ describe('EvidenceGallery', () => {
 
     expect(await screen.findByText('Preview unavailable')).toBeInTheDocument()
     expect(screen.queryByAltText('broken.jpg')).toBeNull()
+    expect(revoked).toContain(currentUrlFor('1'))
+  })
+
+  it('shows preview unavailable when the bytes cannot be fetched', async () => {
+    vi.mocked(evidenceAssetsApi.getContent).mockRejectedValue(new Error('403'))
+
+    render(<EvidenceGallery assets={[asset(1, 'denied.jpg')]} />)
+
+    expect(await screen.findByText('Preview unavailable')).toBeInTheDocument()
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 })

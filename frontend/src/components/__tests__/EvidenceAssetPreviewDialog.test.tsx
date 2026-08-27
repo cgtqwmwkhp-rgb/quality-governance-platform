@@ -5,12 +5,17 @@ import type { EvidenceAsset } from '../../api/client'
 import { EvidenceAssetPreviewDialog } from '../EvidenceAssetPreviewDialog'
 
 const mockGetSignedUrl = vi.fn()
+const mockGetContent = vi.fn()
 
 vi.mock('../../api/client', () => ({
   evidenceAssetsApi: {
     getSignedUrl: (...args: unknown[]) => mockGetSignedUrl(...args),
+    getContent: (...args: unknown[]) => mockGetContent(...args),
   },
 }))
+
+const OBJECT_URL = 'blob:mock/preview'
+let revoked: string[] = []
 
 function makeAsset(overrides: Partial<EvidenceAsset> = {}): EvidenceAsset {
   return {
@@ -35,10 +40,16 @@ function makeAsset(overrides: Partial<EvidenceAsset> = {}): EvidenceAsset {
 describe('EvidenceAssetPreviewDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetSignedUrl.mockResolvedValue({ data: { signed_url: 'https://example.test/inline.pdf' } })
+    revoked = []
+    mockGetContent.mockResolvedValue({ data: new Blob(['pdf-bytes']) })
+    mockGetSignedUrl.mockResolvedValue({ data: { signed_url: 'https://storage.test/inline.pdf' } })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue(OBJECT_URL)
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation((url: string) => {
+      revoked.push(url)
+    })
   })
 
-  it('fetches an inline signed URL and renders DocumentPreview for Tier 1 PDF', async () => {
+  it('renders Tier 1 PDF from bytes fetched through the API, not from a signed URL', async () => {
     render(
       <EvidenceAssetPreviewDialog
         asset={makeAsset()}
@@ -48,20 +59,47 @@ describe('EvidenceAssetPreviewDialog', () => {
     )
 
     await waitFor(() => {
-      expect(mockGetSignedUrl).toHaveBeenCalledWith(42, undefined, 'inline')
+      expect(mockGetContent).toHaveBeenCalledWith(42, 'inline')
     })
     expect(await screen.findByTestId('document-preview-pdf')).toBeInTheDocument()
-    expect(screen.getByTitle('Preview of Scene report')).toHaveAttribute(
-      'src',
-      'https://example.test/inline.pdf',
-    )
+    expect(screen.getByTitle('Preview of Scene report')).toHaveAttribute('src', OBJECT_URL)
+    expect(mockGetSignedUrl).not.toHaveBeenCalled()
   })
 
-  it('shows unsupported copy for Office docs and still offers Download', async () => {
+  it('revokes the object URL when the dialog goes away', async () => {
+    const { unmount } = render(
+      <EvidenceAssetPreviewDialog
+        asset={makeAsset()}
+        open
+        onOpenChange={() => undefined}
+      />,
+    )
+
+    await screen.findByTestId('document-preview-pdf')
+    expect(revoked).toEqual([])
+
+    unmount()
+
+    expect(revoked).toEqual([OBJECT_URL])
+  })
+
+  it('shows preview-unavailable copy when the bytes cannot be fetched', async () => {
+    mockGetContent.mockRejectedValue(new Error('404'))
+
+    render(
+      <EvidenceAssetPreviewDialog
+        asset={makeAsset()}
+        open
+        onOpenChange={() => undefined}
+      />,
+    )
+
+    expect(await screen.findByTestId('document-preview-failed')).toBeInTheDocument()
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('shows unsupported copy for Office docs and still downloads via a signed URL', async () => {
     const user = userEvent.setup()
-    mockGetSignedUrl.mockResolvedValue({
-      data: { signed_url: 'https://example.test/sheet.xlsx' },
-    })
 
     render(
       <EvidenceAssetPreviewDialog
@@ -78,7 +116,7 @@ describe('EvidenceAssetPreviewDialog', () => {
     )
 
     expect(await screen.findByTestId('evidence-asset-preview-unsupported')).toBeInTheDocument()
-    expect(mockGetSignedUrl).not.toHaveBeenCalled()
+    expect(mockGetContent).not.toHaveBeenCalled()
 
     await user.click(screen.getByTestId('evidence-asset-preview-download'))
     await waitFor(() => {
@@ -97,6 +135,7 @@ describe('EvidenceAssetPreviewDialog', () => {
     )
 
     expect(await screen.findByTestId('document-preview-image')).toBeInTheDocument()
+    expect(mockGetContent).not.toHaveBeenCalled()
     expect(mockGetSignedUrl).not.toHaveBeenCalled()
     expect(screen.getByAltText('Scene report')).toHaveAttribute(
       'src',
