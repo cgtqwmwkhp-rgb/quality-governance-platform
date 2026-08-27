@@ -112,6 +112,28 @@ export function isEvidenceImage(asset: Pick<EvidenceAsset, 'content_type' | 'ass
 
 const isImage = (asset: EvidenceAsset) => isEvidenceImage(asset)
 
+function EvidenceThumbnail({
+  src,
+  alt,
+  onLoadError,
+}: {
+  src: string
+  alt: string
+  onLoadError: () => void
+}) {
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  useEffect(() => {
+    const el = imgRef.current
+    if (!el) return
+    const handler = () => onLoadError()
+    el.addEventListener('error', handler)
+    return () => el.removeEventListener('error', handler)
+  }, [src, onLoadError])
+
+  return <img ref={imgRef} src={src} alt={alt} className="h-full w-full object-cover" />
+}
+
 const assetLabel = (asset: EvidenceAsset) =>
   asset.title || asset.original_filename || `Evidence #${asset.id}`
 
@@ -403,11 +425,10 @@ export function EvidenceGallery({
                 >
                   <div className="aspect-square overflow-hidden bg-muted">
                     {image && previewUrl && !previewFailed ? (
-                      <img
+                      <EvidenceThumbnail
                         src={previewUrl}
                         alt={label}
-                        className="h-full w-full object-cover"
-                        onError={() => {
+                        onLoadError={() => {
                           setPreviewFailures((current) => new Set(current).add(asset.id))
                           setPreviewUrls((current) => {
                             const next = { ...current }
