@@ -430,6 +430,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/evidence-assets"),
         ("GET", "/api/v1/evidence-assets/"),
         ("GET", "/api/v1/evidence-assets/{asset_id}"),
+        ("GET", "/api/v1/evidence-assets/{asset_id}/content"),
         ("GET", "/api/v1/evidence-assets/{asset_id}/signed-url"),
         # src.api.routes.executive_dashboard
         ("GET", "/api/v1/executive-dashboard"),
@@ -782,7 +783,17 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: endpoints (/workflows/approvals/pending, /workflows/delegations,
 #: /workflows/stats). Lowered rather than left at 467 because a ceiling that keeps
 #: room freed by a deletion hands the next three undeclared routes a free pass.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 466
+#: Raised 466 -> 467 for GET /api/v1/evidence-assets/{asset_id}/content, which is
+#: the same-origin byte twin of GET /{asset_id}/signed-url and reads exactly what
+#: that endpoint already hands out. The alternatives were both worse: reusing
+#: evidence:create or evidence:update would make viewing evidence require the right
+#: to add or edit it, and the catalogue has no evidence:read to use instead —
+#: inventing one and gating only the new route would take previews away from every
+#: role that can see them today, which is the defect #1802 has just finished fixing.
+#: The gap this adds is therefore nominal rather than real, but it is still a gap,
+#: so it is counted. Closing it means giving signed-url and content a shared read
+#: permission in the same change.
+MAX_AUTHENTICATED_ONLY_DEBT: int = 467
 #: Raised 50 -> 51 for GET /api/v1/meta/features. The alternative was to make it
 #: require authentication, which would land it in AUTHENTICATED_ONLY_DEBT — a list
 #: that is at its ceiling and deliberately closed to new entries. Requiring a

@@ -27,6 +27,7 @@ vi.mock('../../../api/client', async () => {
       upload: vi.fn(),
       delete: vi.fn(),
       getSignedUrl: vi.fn(),
+      getContent: vi.fn(),
     },
   }
 })
@@ -54,13 +55,14 @@ describe('CaseEvidencePanel', () => {
   beforeEach(() => {
     vi.mocked(evidenceAssetsApi.list).mockReset()
     vi.mocked(evidenceAssetsApi.getSignedUrl).mockReset()
+    vi.mocked(evidenceAssetsApi.getContent).mockReset()
     vi.mocked(evidenceAssetsApi.delete).mockReset()
   })
 
   it('loads and lists evidence for the given source', async () => {
     vi.mocked(evidenceAssetsApi.list).mockResolvedValue(listResponse([asset(1, 'scene.jpg')]))
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
-      data: { signed_url: 'https://example.test/scene.jpg' },
+    vi.mocked(evidenceAssetsApi.getContent).mockResolvedValue({
+      data: new Blob(['scene-bytes']),
     } as never)
 
     render(<CaseEvidencePanel sourceType="incident" sourceId={1} testIdPrefix="incident" />)
@@ -121,8 +123,8 @@ describe('CaseEvidencePanel', () => {
     vi.mocked(evidenceAssetsApi.list)
       .mockResolvedValueOnce(listResponse([asset(1, 'scene.jpg')]))
       .mockResolvedValueOnce(listResponse([]))
-    vi.mocked(evidenceAssetsApi.getSignedUrl).mockResolvedValue({
-      data: { signed_url: 'https://example.test/scene.jpg' },
+    vi.mocked(evidenceAssetsApi.getContent).mockResolvedValue({
+      data: new Blob(['scene-bytes']),
     } as never)
     vi.mocked(evidenceAssetsApi.delete).mockResolvedValue({} as never)
 
