@@ -17,6 +17,12 @@ describe('createIncidentsApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/incidents/?page=2&page_size=25')
   })
 
+  it('list sends type as a server query param', () => {
+    const api = mockApi()
+    createIncidentsApi(api as never).list(1, 10, { type: 'injury' })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/incidents/?page=1&page_size=10&type=injury')
+  })
+
   it('get and update use resource paths', () => {
     const api = mockApi()
     const incidents = createIncidentsApi(api as never)

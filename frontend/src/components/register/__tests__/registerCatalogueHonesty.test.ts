@@ -27,4 +27,10 @@ describe('register catalogue honesty', () => {
       }
     }
   })
+
+  it('appends register= on incident caption hrefs without inventing a type', () => {
+    const riddor = REGISTER_CATALOGUE.find((e) => e.docRef === 'PEL-HSEQ-5033')
+    expect(riddor?.captionQuery).toBe('register=PEL-HSEQ-5033')
+    expect(riddor?.captionQuery).not.toMatch(/type=/)
+  })
 })
