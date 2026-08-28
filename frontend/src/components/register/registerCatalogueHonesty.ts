@@ -19,7 +19,7 @@ export function catalogueHasRecordCounts(entries: readonly RegisterEntry[] = REG
   return entries.some((entry) => 'recordCount' in entry || 'count' in entry)
 }
 
-const CAPTION_QUERY_KEYS = new Set(['register', 'type'])
+const CAPTION_QUERY_KEYS = new Set(['register', 'type', 'statutory'])
 const INCIDENT_TYPE_VALUES = new Set([
   'injury',
   'near_miss',
@@ -43,6 +43,23 @@ export function lookupRegister(docRef: string | null): RegisterEntry | undefined
 
 export function isLinkableRegister(entry: RegisterEntry): boolean {
   return LINKABLE_BANDS.has(entry.band) && Boolean(entry.to)
+}
+
+export type HubOpenKind = 'link' | 'schedule-off' | 'none'
+
+/**
+ * Hub Open column. Schedule tiles must not look like a working list when
+ * `compliance_schedule` is off — the router 404s and "coming soon" would lie.
+ */
+export function hubOpenKind(
+  entry: RegisterEntry,
+  flags: { compliance_schedule: boolean },
+): HubOpenKind {
+  if (!isLinkableRegister(entry) || !entry.to) return 'none'
+  if (entry.to === '/compliance-schedule' && !flags.compliance_schedule) {
+    return 'schedule-off'
+  }
+  return 'link'
 }
 
 export function assertRegisterCatalogueIntegrity(
@@ -84,6 +101,10 @@ export function assertRegisterCatalogueIntegrity(
       const type = params.get('type')
       if (type && !INCIDENT_TYPE_VALUES.has(type)) {
         errors.push(`${entry.docRef} captionQuery type ${type} is not an incident type`)
+      }
+      const statutory = params.get('statutory')
+      if (statutory !== null && statutory !== 'true' && statutory !== 'false') {
+        errors.push(`${entry.docRef} captionQuery statutory must be true or false`)
       }
     }
     if ('recordCount' in entry || 'count' in entry) {

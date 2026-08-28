@@ -256,6 +256,7 @@ export function createComplianceScheduleApi(api: AxiosInstance) {
       is_active?: boolean
       location_id?: number
       status?: ComplianceStatus
+      statutory?: boolean
       page?: number
       page_size?: number
     }) => api.get<Paginated<ComplianceRequirement>>(`${base}/requirements`, { params }),
