@@ -39,6 +39,8 @@ export type RegisterEntry = {
   standardRefs: readonly string[]
   retentionYears: number
   to?: RegisterAllowedRoute
+  /** Query string without `?`. Only `register` and optional `type`. */
+  captionQuery?: string
   externalSor?: ExternalSor
   note?: string
 }
@@ -93,6 +95,7 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     ownerRole: 'HSEQ',
     band: 'live',
     to: '/incidents',
+    captionQuery: 'register=PEL-HSEQ-5010',
     standardRefs: ['ISO 45001 10.2'],
     retentionYears: 6,
   },
@@ -131,6 +134,7 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     ownerRole: 'HSEQ',
     band: 'live',
     to: '/risk-register',
+    captionQuery: 'register=PEL-HSEQ-5021',
     standardRefs: ['ISO 9001 6.1', 'ISO 14001 6.1', 'ISO 45001 6.1'],
     retentionYears: 7,
   },
@@ -203,6 +207,7 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     ownerRole: 'HSEQ',
     band: 'caption',
     to: '/incidents',
+    captionQuery: 'register=PEL-HSEQ-5032',
     externalSor: 'Wickford book',
     standardRefs: ['SSCP 1979', 'RIDDOR'],
     retentionYears: 3,
@@ -215,6 +220,7 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     ownerRole: 'HSEQ',
     band: 'caption',
     to: '/incidents',
+    captionQuery: 'register=PEL-HSEQ-5033',
     standardRefs: ['RIDDOR 2013'],
     retentionYears: 3,
   },

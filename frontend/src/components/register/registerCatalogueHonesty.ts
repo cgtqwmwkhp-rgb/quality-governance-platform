@@ -19,6 +19,28 @@ export function catalogueHasRecordCounts(entries: readonly RegisterEntry[] = REG
   return entries.some((entry) => 'recordCount' in entry || 'count' in entry)
 }
 
+const CAPTION_QUERY_KEYS = new Set(['register', 'type'])
+const INCIDENT_TYPE_VALUES = new Set([
+  'injury',
+  'near_miss',
+  'hazard',
+  'property_damage',
+  'environmental',
+  'security',
+  'quality',
+  'other',
+])
+
+export function registerHref(entry: RegisterEntry): string {
+  if (!entry.to) return ''
+  return entry.captionQuery ? `${entry.to}?${entry.captionQuery}` : entry.to
+}
+
+export function lookupRegister(docRef: string | null): RegisterEntry | undefined {
+  if (!docRef) return undefined
+  return REGISTER_CATALOGUE.find((entry) => entry.docRef === docRef)
+}
+
 export function isLinkableRegister(entry: RegisterEntry): boolean {
   return LINKABLE_BANDS.has(entry.band) && Boolean(entry.to)
 }
@@ -44,6 +66,25 @@ export function assertRegisterCatalogueIntegrity(
       }
     } else if (entry.to) {
       errors.push(`${entry.docRef} band ${entry.band} must not have a to`)
+    }
+    if (entry.captionQuery) {
+      if (!entry.to) {
+        errors.push(`${entry.docRef} captionQuery requires to`)
+      }
+      const params = new URLSearchParams(entry.captionQuery)
+      const register = params.get('register')
+      if (register !== entry.docRef) {
+        errors.push(`${entry.docRef} captionQuery register must equal docRef`)
+      }
+      for (const key of params.keys()) {
+        if (!CAPTION_QUERY_KEYS.has(key)) {
+          errors.push(`${entry.docRef} captionQuery has forbidden key ${key}`)
+        }
+      }
+      const type = params.get('type')
+      if (type && !INCIDENT_TYPE_VALUES.has(type)) {
+        errors.push(`${entry.docRef} captionQuery type ${type} is not an incident type`)
+      }
     }
     if ('recordCount' in entry || 'count' in entry) {
       errors.push(`${entry.docRef} must not carry a record count`)

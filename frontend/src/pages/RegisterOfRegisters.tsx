@@ -9,7 +9,7 @@ import {
   type RegisterBand,
   type RegisterEntry,
 } from '../data/registerCatalogue'
-import { BAND_LABEL, isLinkableRegister } from '../components/register/registerCatalogueHonesty'
+import { BAND_LABEL, isLinkableRegister, registerHref } from '../components/register/registerCatalogueHonesty'
 import NotFound from './NotFound'
 
 const BAND_FILTERS: Array<{ id: 'all' | RegisterBand; label: string }> = [
@@ -164,7 +164,7 @@ export default function RegisterOfRegisters() {
                 <td className="px-4 py-3">
                   {isLinkableRegister(entry) && entry.to ? (
                     <Link
-                      to={entry.to}
+                      to={registerHref(entry)}
                       className="text-primary underline-offset-2 hover:underline"
                     >
                       {t('registers.hub.open', 'Open')}
