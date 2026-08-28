@@ -33,6 +33,7 @@ vi.mock('../../api/client', () => ({
     upload: vi.fn(),
     list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
     getSignedUrl: vi.fn(),
+    getContent: vi.fn().mockResolvedValue({ data: new Blob(['photo-bytes']) }),
     delete: vi.fn(),
   },
   getApiErrorMessage: (error: unknown) =>
