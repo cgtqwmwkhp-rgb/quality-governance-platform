@@ -14,7 +14,13 @@ vi.mock('../../api/client', () => ({
     listRequirements: mockListRequirements,
     getStats: mockGetStats,
     getLocationCoverageGaps: vi.fn().mockResolvedValue({
-      data: { total_locations: 0, missing_fra: 0, missing_fire_drill: 0, missing_both: 0, items: [] },
+      data: {
+        total_locations: 0,
+        missing_fra: 0,
+        missing_fire_drill: 0,
+        missing_both: 0,
+        items: [],
+      },
     }),
     importDryRun: vi.fn(),
     importCommit: vi.fn(),
@@ -45,9 +51,7 @@ beforeEach(() => {
 describe('ComplianceSchedule statutory caption (REG-R3)', () => {
   it('asks the API for statutory=true and captions PEL-HSEQ-5056', async () => {
     render(
-      <MemoryRouter
-        initialEntries={['/compliance-schedule?register=PEL-HSEQ-5056&statutory=true']}
-      >
+      <MemoryRouter initialEntries={['/compliance-schedule?register=PEL-HSEQ-5056&statutory=true']}>
         <ComplianceSchedule />
       </MemoryRouter>,
     )
@@ -62,14 +66,15 @@ describe('ComplianceSchedule statutory caption (REG-R3)', () => {
       'statutory obligations only',
     )
     expect(screen.getByTestId('register-caption-banner')).toHaveTextContent('Server total: 4')
+    expect(screen.getByTestId('compliance-schedule-empty')).toHaveTextContent(
+      'No active statutory requirements match this filter.',
+    )
   })
 
   it('withholds the server total when clause is a client-only filter', async () => {
     render(
       <MemoryRouter
-        initialEntries={[
-          '/compliance-schedule?register=PEL-HSEQ-5056&statutory=true&clause=6.1.3',
-        ]}
+        initialEntries={['/compliance-schedule?register=PEL-HSEQ-5056&statutory=true&clause=6.1.3']}
       >
         <ComplianceSchedule />
       </MemoryRouter>,
