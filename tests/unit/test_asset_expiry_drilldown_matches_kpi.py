@@ -21,8 +21,17 @@ from src.domain.services.asset_health_analytics_service import AssetHealthRow, a
 from src.domain.services.asset_service import AssetService
 
 TENANT_ID = 1
-NOW = datetime.now(timezone.utc)
-TODAY_START = NOW.replace(hour=0, minute=0, second=0, microsecond=0)
+ASSET_TYPE_ID = 1
+
+
+def _clock() -> tuple[datetime, datetime]:
+    """Capture the same UTC day-boundary the query uses.
+
+    Do not freeze this at import: pytest can collect the module before midnight
+    and run it after, which made 'expires today' fixtures land on yesterday.
+    """
+    now = datetime.now(timezone.utc)
+    return now, now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 @pytest.fixture
@@ -36,9 +45,6 @@ async def session_factory():
     await engine.dispose()
 
 
-ASSET_TYPE_ID = 1
-
-
 def _asset(number: str, status: AssetStatus, expiry: datetime | None) -> Asset:
     return Asset(
         tenant_id=TENANT_ID,
@@ -50,21 +56,22 @@ def _asset(number: str, status: AssetStatus, expiry: datetime | None) -> Asset:
     )
 
 
-#: Deliberately spans every boundary the two code paths disagreed on.
-FIXTURE: list[tuple[str, AssetStatus, datetime | None]] = [
-    ("A-EXPIRED-INSERVICE", AssetStatus.ACTIVE, TODAY_START - timedelta(days=30)),
-    ("A-EXPIRED-YESTERDAY", AssetStatus.ACTIVE, TODAY_START - timedelta(seconds=1)),
-    ("A-EXPIRED-QUARANTINED", AssetStatus.QUARANTINED, TODAY_START - timedelta(days=5)),
-    ("A-EXPIRED-REMOVED", AssetStatus.DECOMMISSIONED, TODAY_START - timedelta(days=90)),
-    ("A-EXPIRES-TODAY-MIDNIGHT", AssetStatus.ACTIVE, TODAY_START),
-    ("A-EXPIRES-TODAY-LATER", AssetStatus.ACTIVE, TODAY_START + timedelta(hours=23)),
-    ("A-DUE-SOON", AssetStatus.ACTIVE, NOW + timedelta(days=10)),
-    ("A-IN-DATE", AssetStatus.ACTIVE, NOW + timedelta(days=400)),
-    ("A-NO-EXPIRY", AssetStatus.ACTIVE, None),
-]
+def _fixture(now: datetime, today_start: datetime) -> list[tuple[str, AssetStatus, datetime | None]]:
+    #: Deliberately spans every boundary the two code paths disagreed on.
+    return [
+        ("A-EXPIRED-INSERVICE", AssetStatus.ACTIVE, today_start - timedelta(days=30)),
+        ("A-EXPIRED-YESTERDAY", AssetStatus.ACTIVE, today_start - timedelta(seconds=1)),
+        ("A-EXPIRED-QUARANTINED", AssetStatus.QUARANTINED, today_start - timedelta(days=5)),
+        ("A-EXPIRED-REMOVED", AssetStatus.DECOMMISSIONED, today_start - timedelta(days=90)),
+        ("A-EXPIRES-TODAY-MIDNIGHT", AssetStatus.ACTIVE, today_start),
+        ("A-EXPIRES-TODAY-LATER", AssetStatus.ACTIVE, today_start + timedelta(hours=23)),
+        ("A-DUE-SOON", AssetStatus.ACTIVE, now + timedelta(days=10)),
+        ("A-IN-DATE", AssetStatus.ACTIVE, now + timedelta(days=400)),
+        ("A-NO-EXPIRY", AssetStatus.ACTIVE, None),
+    ]
 
 
-async def _seed(session_factory) -> None:
+async def _seed(session_factory, rows: list[tuple[str, AssetStatus, datetime | None]]) -> None:
     async with session_factory() as session:
         session.add(
             AssetType(
@@ -75,19 +82,21 @@ async def _seed(session_factory) -> None:
             )
         )
         await session.flush()
-        for number, status, expiry in FIXTURE:
+        for number, status, expiry in rows:
             session.add(_asset(number, status, expiry))
         await session.commit()
 
 
-def _expected_overdue_count() -> int:
-    rows = [AssetHealthRow(asset_type=None, status=s.value, expiry_date=e) for _n, s, e in FIXTURE]
-    return int(aggregate_asset_health_kpis(rows, as_of=NOW)["expiry_bands"]["overdue"])
+def _expected_overdue_count(rows: list[tuple[str, AssetStatus, datetime | None]], now: datetime) -> int:
+    health_rows = [AssetHealthRow(asset_type=None, status=s.value, expiry_date=e) for _n, s, e in rows]
+    return int(aggregate_asset_health_kpis(health_rows, as_of=now)["expiry_bands"]["overdue"])
 
 
 @pytest.mark.asyncio
 async def test_overdue_drilldown_returns_exactly_the_rows_the_kpi_counts(session_factory):
-    await _seed(session_factory)
+    now, today_start = _clock()
+    rows = _fixture(now, today_start)
+    await _seed(session_factory, rows)
 
     async with session_factory() as session:
         result = await AssetService(session).list_assets(TENANT_ID, page_size=100, expiry_band="overdue")
@@ -98,12 +107,13 @@ async def test_overdue_drilldown_returns_exactly_the_rows_the_kpi_counts(session
         "A-EXPIRED-YESTERDAY",
         "A-EXPIRED-QUARANTINED",
     }
-    assert result.total == _expected_overdue_count() == 3
+    assert result.total == _expected_overdue_count(rows, now) == 3
 
 
 @pytest.mark.asyncio
 async def test_removed_assets_never_appear_in_an_expiry_drilldown(session_factory):
-    await _seed(session_factory)
+    now, today_start = _clock()
+    await _seed(session_factory, _fixture(now, today_start))
 
     async with session_factory() as session:
         service = AssetService(session)
@@ -115,7 +125,8 @@ async def test_removed_assets_never_appear_in_an_expiry_drilldown(session_factor
 @pytest.mark.asyncio
 async def test_an_asset_expiring_today_is_due_not_overdue(session_factory):
     """The gap case: bounded at `now`, these rows fell out of overdue and due_30 both."""
-    await _seed(session_factory)
+    now, today_start = _clock()
+    await _seed(session_factory, _fixture(now, today_start))
 
     async with session_factory() as session:
         service = AssetService(session)
@@ -132,7 +143,8 @@ async def test_an_asset_expiring_today_is_due_not_overdue(session_factory):
 
 @pytest.mark.asyncio
 async def test_overdue_and_due_bands_do_not_overlap(session_factory):
-    await _seed(session_factory)
+    now, today_start = _clock()
+    await _seed(session_factory, _fixture(now, today_start))
 
     async with session_factory() as session:
         service = AssetService(session)
