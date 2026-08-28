@@ -1,6 +1,7 @@
 import { useEffect, useState, useDeferredValue } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CaseRegisterReferenceLink } from '../components/register/CaseRegisterReferenceLink'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { useTranslation } from 'react-i18next'
 import { Plus, AlertTriangle, Search, Loader2, MailWarning } from 'lucide-react'
 import api, {
@@ -121,6 +122,8 @@ function buildIncidentsListSearch(params: {
   page: number
   owner: OwnerFilter
   ids: string
+  type: string
+  register: string
 }): string {
   const next = new URLSearchParams()
   const q = params.q.trim()
@@ -131,6 +134,9 @@ function buildIncidentsListSearch(params: {
   if (params.owner === 'unassigned') next.set('owner', 'unassigned')
   const ids = params.ids.trim()
   if (ids) next.set('ids', ids)
+  if (params.type !== ALL_FILTER) next.set('type', params.type)
+  const register = params.register.trim()
+  if (register) next.set('register', register)
   return next.toString()
 }
 
@@ -168,6 +174,8 @@ export default function Incidents() {
     searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all',
   )
   const [idsFilter, setIdsFilter] = useState(() => searchParams.get('ids') || '')
+  const [typeFilter, setTypeFilter] = useState(() => parseListFilter(searchParams.get('type')))
+  const registerParam = searchParams.get('register') || ''
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [assigningId, setAssigningId] = useState<number | null>(null)
   const [assigneeById, setAssigneeById] = useState<
@@ -293,12 +301,14 @@ export default function Incidents() {
     const nextOwner: OwnerFilter =
       searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all'
     const nextIds = searchParams.get('ids') || ''
+    const nextType = parseListFilter(searchParams.get('type'))
     setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
     setSeverityFilter((prev) => (prev === nextSeverity ? prev : nextSeverity))
     setPage((prev) => (prev === nextPage ? prev : nextPage))
     setOwnerFilter((prev) => (prev === nextOwner ? prev : nextOwner))
     setIdsFilter((prev) => (prev === nextIds ? prev : nextIds))
+    setTypeFilter((prev) => (prev === nextType ? prev : nextType))
   }, [searchParams])
 
   // Keep q/status/severity/page/owner/ids in the URL (omit defaults); replace history entry.
@@ -310,6 +320,8 @@ export default function Incidents() {
       page,
       owner: ownerFilter,
       ids: idsFilter,
+      type: typeFilter,
+      register: registerParam,
     })
     if (desired !== searchParams.toString()) {
       setSearchParams(desired ? new URLSearchParams(desired) : new URLSearchParams(), {
@@ -325,6 +337,8 @@ export default function Incidents() {
     idsFilter,
     searchParams,
     setSearchParams,
+    typeFilter,
+    registerParam,
   ])
 
   useEffect(() => {
@@ -346,6 +360,7 @@ export default function Incidents() {
           })
           if (ownerFilter === 'unassigned') params.set('owner', 'unassigned')
           if (serverSearch) params.set('search', serverSearch)
+          if (typeFilter !== ALL_FILTER) params.set('type', typeFilter)
           response = await api.get<PaginatedResponse<Incident>>(
             `/api/v1/incidents/?${params.toString()}`,
           )
@@ -353,6 +368,7 @@ export default function Incidents() {
           response = await incidentsApi.list(page, PAGE_SIZE, {
             owner: ownerFilter === 'unassigned' ? 'unassigned' : undefined,
             search: serverSearch,
+            type: typeFilter !== ALL_FILTER ? typeFilter : undefined,
           })
         }
         if (!cancelled) {
@@ -400,7 +416,7 @@ export default function Incidents() {
     return () => {
       cancelled = true
     }
-  }, [ownerFilter, page, idsFilter, deferredSearch])
+  }, [ownerFilter, page, idsFilter, deferredSearch, typeFilter])
 
   const setFilter = (next: OwnerFilter) => {
     setOwnerFilter(next)
@@ -576,6 +592,18 @@ export default function Incidents() {
   const showingFrom = listTotal === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const showingTo =
     listTotal === 0 ? 0 : Math.min(page * PAGE_SIZE, listTotal)
+  const clientOnlyFiltersOn =
+    statusFilter !== ALL_FILTER || severityFilter !== ALL_FILTER
+  const showCaptionServerTotal = !clientOnlyFiltersOn
+
+  const captionBanner = (
+    <RegisterCaptionBanner
+      registerParam={registerParam || null}
+      typeParam={typeFilter !== ALL_FILTER ? typeFilter : null}
+      serverTotal={listTotal}
+      showServerTotal={showCaptionServerTotal}
+    />
+  )
 
   if (loading) {
     return (
@@ -584,6 +612,7 @@ export default function Incidents() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">{t('incidents.title')}</h1>
             <p className="text-muted-foreground mt-1">{t('incidents.subtitle')}</p>
+            {captionBanner}
           </div>
         </div>
         <Card>
@@ -605,6 +634,7 @@ export default function Incidents() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('incidents.title')}</h1>
           <p className="text-muted-foreground mt-1">{t('incidents.subtitle')}</p>
+          {captionBanner}
         </div>
         <Button onClick={openCreateModal}>
           <Plus size={20} />

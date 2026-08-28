@@ -40,6 +40,7 @@ from src.domain.services.incident_fra_review import (
     incident_suggests_fra_significant_change,
     resolve_suggested_location_id,
 )
+from src.domain.services.incident_list_filters import INCIDENT_TYPE_VALUES
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
     create_enterprise_risk_from_incident,
@@ -562,6 +563,11 @@ async def list_incidents(
         None,
         description="Match reference, title, or description (ilike)",
     ),
+    incident_type: Optional[str] = Query(
+        None,
+        alias="type",
+        description="SQL filter by incident_type. Unknown values return 422.",
+    ),
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
@@ -572,6 +578,18 @@ async def list_incidents(
     """
     if owner is not None and owner != "unassigned":
         raise BadRequestError("Invalid owner filter. Supported value: unassigned")
+
+    # Guard: unit tests may invoke the handler with FastAPI Query defaults unbound.
+    resolved_type = incident_type if isinstance(incident_type, str) else None
+    if resolved_type is not None and resolved_type not in INCIDENT_TYPE_VALUES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "Unknown incident type",
+                "details": {"type": resolved_type},
+            },
+        )
 
     id_list: list[int] | None = None
     # Guard: unit tests may invoke the handler with FastAPI Query defaults unbound.
@@ -628,6 +646,7 @@ async def list_incidents(
             asset_id=asset_id,
             ids=id_list,
             search=search if isinstance(search, str) else None,
+            incident_type=resolved_type,
         )
         items: list[IncidentResponse] = []
         skipped = 0

@@ -229,6 +229,7 @@ class IncidentService:
         asset_id: Optional[int] = None,
         ids: Optional[list[int]] = None,
         search: Optional[str] = None,
+        incident_type: Optional[str] = None,
     ):
         """List incidents with pagination and optional filters.
 
@@ -267,6 +268,9 @@ class IncidentService:
                     Incident.description.ilike(needle),
                 )
             )
+
+        if incident_type:
+            query = query.where(Incident.incident_type == incident_type)
 
         query = query.order_by(Incident.reported_date.desc(), Incident.id.asc())
         return await paginate(self.db, query, params)
