@@ -2300,6 +2300,7 @@
   "registers.hub.col_open": "Open",
   "registers.hub.open": "Open",
   "registers.hub.no_link": "No QGP list",
+  "registers.hub.schedule_off": "Schedule module is off in this deployment",
   "nav.engineers": "Employees",
   "nav.enterprise": "Enterprise",
   "nav.export_center": "Export Center",
