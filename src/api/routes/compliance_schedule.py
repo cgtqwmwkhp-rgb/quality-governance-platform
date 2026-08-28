@@ -377,16 +377,22 @@ async def list_requirements(
     is_active: Optional[bool] = Query(True),
     location_id: Optional[int] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
+    statutory: Optional[bool] = Query(
+        None,
+        description="SQL filter by compliance_requirements.statutory.",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ):
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     service = ComplianceScheduleService(db)
+    resolved_statutory = statutory if isinstance(statutory, bool) else None
     rows, total = await service.list_requirements(
         tenant_id=tenant_id,
         is_active=is_active,
         location_id=location_id,
         status=status_filter,
+        statutory=resolved_statutory,
         page=page,
         page_size=page_size,
     )

@@ -42,4 +42,21 @@ describe('RegisterCaptionBanner', () => {
     expect(screen.getByTestId('register-caption-banner')).toHaveTextContent('type=injury')
     expect(screen.getByTestId('register-caption-banner')).toHaveTextContent('Server total: 12')
   })
+
+  it('names a statutory server filter', () => {
+    render(
+      <MemoryRouter>
+        <RegisterCaptionBanner
+          registerParam="PEL-HSEQ-5056"
+          statutoryParam="true"
+          serverTotal={4}
+          showServerTotal
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('register-caption-banner')).toHaveTextContent(
+      'statutory obligations only',
+    )
+    expect(screen.getByTestId('register-caption-banner')).toHaveTextContent('Server total: 4')
+  })
 })

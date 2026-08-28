@@ -9,7 +9,7 @@ import {
   type RegisterBand,
   type RegisterEntry,
 } from '../data/registerCatalogue'
-import { BAND_LABEL, isLinkableRegister, registerHref } from '../components/register/registerCatalogueHonesty'
+import { BAND_LABEL, hubOpenKind, registerHref } from '../components/register/registerCatalogueHonesty'
 import NotFound from './NotFound'
 
 const BAND_FILTERS: Array<{ id: 'all' | RegisterBand; label: string }> = [
@@ -41,9 +41,44 @@ function systemOfRecord(entry: RegisterEntry): string {
   return 'Quality Governance Platform'
 }
 
+function HubOpenCell({
+  entry,
+  scheduleEnabled,
+  openLabel,
+  scheduleOffLabel,
+  noLinkLabel,
+}: {
+  entry: RegisterEntry
+  scheduleEnabled: boolean
+  openLabel: string
+  scheduleOffLabel: string
+  noLinkLabel: string
+}) {
+  const open = hubOpenKind(entry, { compliance_schedule: scheduleEnabled })
+  if (open === 'link' && entry.to) {
+    return (
+      <Link
+        to={registerHref(entry)}
+        className="text-primary underline-offset-2 hover:underline"
+      >
+        {openLabel}
+      </Link>
+    )
+  }
+  if (open === 'schedule-off') {
+    return (
+      <span className="text-muted-foreground" data-testid={`register-schedule-off-${entry.docRef}`}>
+        {scheduleOffLabel}
+      </span>
+    )
+  }
+  return <span className="text-muted-foreground">{noLinkLabel}</span>
+}
+
 export default function RegisterOfRegisters() {
   const { t } = useTranslation()
   const enabled = useFeatureFlag('register_catalogue')
+  const scheduleEnabled = useFeatureFlag('compliance_schedule')
   const [query, setQuery] = useState('')
   const [band, setBand] = useState<(typeof BAND_FILTERS)[number]['id']>('all')
 
@@ -162,18 +197,16 @@ export default function RegisterOfRegisters() {
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{systemOfRecord(entry)}</td>
                 <td className="px-4 py-3">
-                  {isLinkableRegister(entry) && entry.to ? (
-                    <Link
-                      to={registerHref(entry)}
-                      className="text-primary underline-offset-2 hover:underline"
-                    >
-                      {t('registers.hub.open', 'Open')}
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {t('registers.hub.no_link', 'No QGP list')}
-                    </span>
-                  )}
+                  <HubOpenCell
+                    entry={entry}
+                    scheduleEnabled={scheduleEnabled}
+                    openLabel={t('registers.hub.open', 'Open')}
+                    scheduleOffLabel={t(
+                      'registers.hub.schedule_off',
+                      'Schedule module is off in this deployment',
+                    )}
+                    noLinkLabel={t('registers.hub.no_link', 'No QGP list')}
+                  />
                 </td>
               </tr>
             ))}

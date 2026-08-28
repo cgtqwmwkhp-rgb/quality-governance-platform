@@ -22,9 +22,9 @@ import { coverageCopy } from './complianceScheduleCoverageI18n'
 import { importCopy } from './complianceScheduleImportI18n'
 import { obligationMentionsClause } from './compliance/scheduleProgrammeContext'
 import { toast } from '../contexts/ToastContext'
-import type {
-  ComplianceImportValidationReport,
-} from '../api/complianceScheduleClient'
+import type { ComplianceImportValidationReport } from '../api/complianceScheduleClient'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
+import { parseStatutoryParam } from '../components/register/scheduleServerFilterableParams'
 
 const SCHEDULE_VIEWS = ['obligations', 'certificates'] as const
 type ScheduleView = (typeof SCHEDULE_VIEWS)[number]
@@ -43,9 +43,13 @@ export default function ComplianceSchedule() {
   const programmeClause = (searchParams.get('clause') || '').trim()
   const programmeFramework = (searchParams.get('framework') || '').trim()
   const hasProgrammeContext = Boolean(programmeClause || programmeFramework)
+  const registerParam = searchParams.get('register')
+  const statutoryParam = searchParams.get('statutory')
+  const statutoryFilter = parseStatutoryParam(statutoryParam)
   const cov = coverageCopy(i18n.language)
   const imp = importCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
+  const [listTotal, setListTotal] = useState<number | null>(null)
   const [stats, setStats] = useState<ComplianceScheduleStats | null>(null)
   const [coverage, setCoverage] = useState<LocationCoverageGaps | null>(null)
   const [catalogue, setCatalogue] = useState<CatalogueTemplate[]>([])
@@ -74,12 +78,14 @@ export default function ComplianceSchedule() {
         complianceScheduleApi.listRequirements({
           is_active: !showInactive,
           status: statusFilter || undefined,
+          statutory: statutoryFilter,
           page_size: 100,
         }),
         complianceScheduleApi.getStats(),
         complianceScheduleApi.listCatalogue(),
       ])
       setItems(listRes.data.items)
+      setListTotal(typeof listRes.data.total === 'number' ? listRes.data.total : null)
       setStats(statsRes.data)
       setCatalogue(catRes.data.items)
       try {
@@ -93,6 +99,7 @@ export default function ComplianceSchedule() {
       // Cleared so no stale register is left on screen under a failure notice,
       // which would misreport how many obligations there are.
       setItems([])
+      setListTotal(null)
       setStats(null)
       setCatalogue([])
       setCoverage(null)
@@ -100,16 +107,34 @@ export default function ComplianceSchedule() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, showInactive])
+  }, [statusFilter, showInactive, statutoryFilter])
 
   const clauseMatches = useMemo(() => {
     if (!programmeClause) return null
     return items.filter((item) => obligationMentionsClause(item, programmeClause))
   }, [items, programmeClause])
 
-  const listItems =
-    clauseMatches && clauseMatches.length > 0 ? clauseMatches : items
+  const listItems = clauseMatches && clauseMatches.length > 0 ? clauseMatches : items
   const showingClauseFilter = Boolean(clauseMatches && clauseMatches.length > 0)
+  const emptyRequirementsCopy = showInactive
+    ? t(
+        'compliance.schedule.empty_inactive',
+        'Nothing has been retired. Obligations you retire are kept here and can be reactivated.',
+      )
+    : statutoryFilter === true
+      ? t(
+          'compliance.schedule.empty_statutory',
+          'No active statutory requirements match this filter. Mark an obligation as required by law to include it.',
+        )
+      : statutoryFilter === false
+        ? t(
+            'compliance.schedule.empty_non_statutory',
+            'No active non-statutory requirements match this filter.',
+          )
+        : t(
+            'compliance.schedule.empty',
+            'No active requirements yet. Activate a catalogue template below.',
+          )
 
   const clearProgrammeContext = () => {
     const params = new URLSearchParams(searchParams)
@@ -217,53 +242,61 @@ export default function ComplianceSchedule() {
               )}
             </p>
           )}
+          {view === 'obligations' && (
+            <RegisterCaptionBanner
+              registerParam={registerParam}
+              statutoryParam={statutoryParam}
+              serverTotal={listTotal}
+              showServerTotal={!hasProgrammeContext}
+            />
+          )}
         </div>
         {view === 'obligations' && (
-        <div className="flex flex-wrap items-center gap-2">
-          {(['', 'current', 'due_soon', 'overdue'] as const).map((s) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {(['', 'current', 'due_soon', 'overdue'] as const).map((s) => (
+              <Button
+                key={s || 'all'}
+                variant={statusFilter === s ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter(s)}
+                data-testid={`compliance-schedule-filter-${s || 'all'}`}
+              >
+                {s ? statusLabel(s) : t('compliance.schedule.filter.all', 'All')}
+              </Button>
+            ))}
             <Button
-              key={s || 'all'}
-              variant={statusFilter === s ? 'default' : 'outline'}
+              variant={showInactive ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setStatusFilter(s)}
-              data-testid={`compliance-schedule-filter-${s || 'all'}`}
+              aria-pressed={showInactive}
+              onClick={() => setShowInactive((v) => !v)}
+              data-testid="compliance-schedule-toggle-inactive"
             >
-              {s ? statusLabel(s) : t('compliance.schedule.filter.all', 'All')}
+              {t('compliance.schedule.filter.inactive', 'Retired')}
             </Button>
-          ))}
-          <Button
-            variant={showInactive ? 'default' : 'outline'}
-            size="sm"
-            aria-pressed={showInactive}
-            onClick={() => setShowInactive((v) => !v)}
-            data-testid="compliance-schedule-toggle-inactive"
-          >
-            {t('compliance.schedule.filter.inactive', 'Retired')}
-          </Button>
-          {!showInactive && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setImportOpen(true)
-                setImportReport(null)
-              }}
-              data-testid="compliance-schedule-import-csv-button"
-            >
-              {imp.button}
-            </Button>
-          )}
-          {!showInactive && (
-            <Button
-              size="sm"
-              onClick={() => setFormOpen(true)}
-              data-testid="compliance-schedule-add"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              {t('compliance.schedule.form.create', 'Add obligation')}
-            </Button>
-          )}
-        </div>
+            {!showInactive && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setImportOpen(true)
+                  setImportReport(null)
+                }}
+                data-testid="compliance-schedule-import-csv-button"
+              >
+                {imp.button}
+              </Button>
+            )}
+            {!showInactive && (
+              <Button
+                size="sm"
+                onClick={() => setFormOpen(true)}
+                data-testid="compliance-schedule-add"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                {t('compliance.schedule.form.create', 'Add obligation')}
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -367,23 +400,13 @@ export default function ComplianceSchedule() {
                 : t('compliance.schedule.requirements', 'Requirements')}
             </div>
             {loading ? (
-              <p className="p-6 text-sm text-muted-foreground">
-                {t('common.loading', 'Loading…')}
-              </p>
+              <p className="p-6 text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>
             ) : items.length === 0 ? (
               <div
                 className="p-6 text-sm text-muted-foreground"
                 data-testid="compliance-schedule-empty"
               >
-                {showInactive
-                  ? t(
-                      'compliance.schedule.empty_inactive',
-                      'Nothing has been retired. Obligations you retire are kept here and can be reactivated.',
-                    )
-                  : t(
-                      'compliance.schedule.empty',
-                      'No active requirements yet. Activate a catalogue template below.',
-                    )}
+                {emptyRequirementsCopy}
               </div>
             ) : (
               <ul className="divide-y divide-border" data-testid="compliance-schedule-list">
@@ -501,39 +524,39 @@ export default function ComplianceSchedule() {
           )}
 
           {!showInactive && (
-          <section className="rounded-lg border border-border bg-card">
-            <div className="border-b border-border px-4 py-3 font-medium">
-              {t('compliance.schedule.catalogue', 'Catalogue')}
-            </div>
-            <ul className="divide-y divide-border" data-testid="compliance-schedule-catalogue">
-              {catalogue.map((tpl) => (
-                <li
-                  key={tpl.template_key}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium">{tpl.title}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {tpl.template_key}
-                      {tpl.statutory
-                        ? ` · ${t('compliance.schedule.statutory', 'Statutory')}`
-                        : ''}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={activating === tpl.template_key}
-                    onClick={() => void activate(tpl.template_key)}
-                    data-testid={`compliance-schedule-activate-${tpl.template_key}`}
+            <section className="rounded-lg border border-border bg-card">
+              <div className="border-b border-border px-4 py-3 font-medium">
+                {t('compliance.schedule.catalogue', 'Catalogue')}
+              </div>
+              <ul className="divide-y divide-border" data-testid="compliance-schedule-catalogue">
+                {catalogue.map((tpl) => (
+                  <li
+                    key={tpl.template_key}
+                    className="flex items-center justify-between gap-3 px-4 py-3"
                   >
-                    <Plus className="h-4 w-4 mr-1" />
-                    {t('compliance.schedule.activate', 'Activate')}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </section>
+                    <div className="min-w-0">
+                      <div className="font-medium">{tpl.title}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {tpl.template_key}
+                        {tpl.statutory
+                          ? ` · ${t('compliance.schedule.statutory', 'Statutory')}`
+                          : ''}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={activating === tpl.template_key}
+                      onClick={() => void activate(tpl.template_key)}
+                      data-testid={`compliance-schedule-activate-${tpl.template_key}`}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      {t('compliance.schedule.activate', 'Activate')}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </>
       )}
@@ -564,8 +587,7 @@ export default function ComplianceSchedule() {
             {importReport && (
               <div className="text-xs space-y-1 rounded border border-border p-2">
                 <div>
-                  {imp.creates}: {importReport.creates} · {imp.errors}:{' '}
-                  {importReport.error_rows}
+                  {imp.creates}: {importReport.creates} · {imp.errors}: {importReport.error_rows}
                 </div>
                 {importReport.errors.slice(0, 5).map((err) => (
                   <div key={`${err.row}-${err.code}`} className="text-destructive">
