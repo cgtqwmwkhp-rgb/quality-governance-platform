@@ -99,6 +99,7 @@ vi.mock('../pages/Investigations', () => ({ default: () => <div>Investigations</
 vi.mock('../pages/Standards', () => ({ default: () => <div>Standards</div> }))
 vi.mock('../pages/Actions', () => ({ default: () => <div>Actions</div> }))
 vi.mock('../pages/Documents', () => ({ default: () => <div>Documents</div> }))
+vi.mock('../pages/RegisterOfRegisters', () => ({ default: () => <div>RegisterOfRegisters</div> }))
 vi.mock('../pages/AuditTemplateLibrary', () => ({ default: () => <div>AuditTemplateLibrary</div> }))
 vi.mock('../pages/AuditTemplateBuilder', () => ({ default: () => <div>AuditTemplateBuilder</div> }))
 vi.mock('../pages/AuditExecution', () => ({ default: () => <div>AuditExecution</div> }))
@@ -152,6 +153,7 @@ describe('App', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
+    delete window.__FEATURE_FLAGS__
     window.history.pushState({}, '', '/')
     isAIIntelligenceRouteEnabledMock.mockReset()
     isAIIntelligenceRouteEnabledMock.mockReturnValue(false)
@@ -342,6 +344,35 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/compliance')
     expect(window.location.search).toBe('?code=ISO9001&clause=7.2&view=matrix')
     expect(screen.getByText('ComplianceEvidence')).toBeInTheDocument()
+  })
+
+  it('does not serve /registers on direct navigation while register_catalogue is off', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/registers')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.queryByText('RegisterOfRegisters')).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe('/registers')
+  })
+
+  it('serves /registers on direct navigation when register_catalogue is on', async () => {
+    window.__FEATURE_FLAGS__ = { register_catalogue: true }
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/registers')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(await screen.findByText('RegisterOfRegisters')).toBeInTheDocument()
+    delete window.__FEATURE_FLAGS__
   })
 
   it('serves /ai-intelligence on direct navigation when the flag is on', async () => {
