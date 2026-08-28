@@ -382,6 +382,30 @@ describe('Layout', () => {
     expect(screen.queryByText('nav.policies')).not.toBeInTheDocument()
   })
 
+  it('shows Registers in Library only when register_catalogue is on', async () => {
+    const user = userEvent.setup()
+    useFeatureFlagMock.mockImplementation((name: string) => name !== 'register_catalogue')
+    const Layout = (await import('../Layout')).default
+
+    const { unmount } = render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+    await user.click(screen.getByRole('button', { name: 'nav.library' }))
+    expect(navLink('/registers')).not.toBeInTheDocument()
+    unmount()
+
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+    await user.click(screen.getByRole('button', { name: 'nav.library' }))
+    expect(navLink('/registers')).toHaveAttribute('href', '/registers')
+  })
+
   it('keeps Document Control out of Compliance after the Library move', async () => {
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default

@@ -107,6 +107,15 @@ def test_compliance_schedule_is_registered_with_its_permission():
     assert feature.required_permission == "compliance_schedule:read"
 
 
+def test_register_catalogue_is_registered_closed_without_a_permission():
+    """Hub has no API; the flag must exist so /meta/features can hide the route."""
+    feature = CLIENT_FEATURES_BY_KEY["register_catalogue"]
+    assert feature.settings_attr == "register_catalogue_enabled"
+    assert feature.kill_switch_key is None
+    assert feature.required_permission is None
+    assert Settings.model_fields[feature.settings_attr].default is False
+
+
 def test_requires_ui_key_names_a_feature_declared_earlier():
     """The evaluator folds prerequisites in registration order.
 

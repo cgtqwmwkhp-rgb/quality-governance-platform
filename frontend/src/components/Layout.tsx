@@ -106,6 +106,7 @@ export default function Layout({
   const canAccessAdmin = hasRole('admin', 'manager', 'hsec')
   const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
   const jobLifecycleEnabled = useFeatureFlag('job_lifecycle')
+  const registerCatalogueEnabled = useFeatureFlag('register_catalogue')
   const canAccessComplianceSchedule = complianceScheduleEnabled && canAccessAdvancedNav
 
   // Optional `group` nests siblings under a non-hub section label inside a hub.
@@ -268,6 +269,15 @@ export default function Layout({
           icon: FolderOpen,
           label: t('nav.documents', { defaultValue: 'Documents' }),
         },
+        ...(registerCatalogueEnabled
+          ? [
+              {
+                path: '/registers',
+                icon: ClipboardList,
+                label: t('nav.registers', { defaultValue: 'Registers' }),
+              },
+            ]
+          : []),
         {
           path: '/document-control',
           icon: FileText,

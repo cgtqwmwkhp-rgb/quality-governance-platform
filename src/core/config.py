@@ -391,6 +391,10 @@ class Settings(BaseSettings):
     job_lifecycle_enabled: bool = False
     job_cell_links_enabled: bool = False
 
+    # PEL-HSEQ-5062 Register of Registers hub. Default off; the hub has no API
+    # 404 of its own, so App.tsx also gates the route (not only the nav entry).
+    register_catalogue_enabled: bool = False
+
     # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
     library_horizon_provider: str = "stub"
     perplexity_api_key: str = ""
