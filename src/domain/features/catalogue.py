@@ -302,6 +302,21 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
             "slices do not thrash the client feature catalogue."
         ),
     ),
+    ClientFeature(
+        ui_key="register_catalogue",
+        settings_attr="register_catalogue_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission=None,
+        reason=(
+            "Gates the PEL-HSEQ-5062 Register of Registers hub at /registers. There is no "
+            "API behind the page, so an ungated route would stay reachable after the nav "
+            "entry disappeared — App.tsx therefore renders NotFound when this is off. Not "
+            "permission-gated while the hub shows no record counts; a count would need a "
+            "permission and per-destination gating. Default off; discloses only that this "
+            "deployment opted the index in."
+        ),
+    ),
     # The copilot pair is registered so the panel can state what it actually is. It is
     # the only consumer that needs these: the surface is mounted by its own build-time
     # gate, and what these two decide is the wording, not the door.

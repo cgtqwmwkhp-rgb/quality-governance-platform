@@ -52,6 +52,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   job_lifecycle: false,
   job_cell_links: false,
 
+  // PEL-HSEQ-5062 Register of Registers hub — mirrors REGISTER_CATALOGUE_ENABLED
+  register_catalogue: false,
+
   // PlantEx Assist disclosure pair — mirrors AI_COPILOT_ENABLED and
   // AI_COPILOT_INFERENCE_ENABLED. Both default closed so the panel understates what
   // it is until the backend has said otherwise (see components/copilot/copilotDisclosure).
