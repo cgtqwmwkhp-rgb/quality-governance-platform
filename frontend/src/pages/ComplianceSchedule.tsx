@@ -25,6 +25,8 @@ import { toast } from '../contexts/ToastContext'
 import type {
   ComplianceImportValidationReport,
 } from '../api/complianceScheduleClient'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
+import { parseStatutoryParam } from '../components/register/scheduleServerFilterableParams'
 
 const SCHEDULE_VIEWS = ['obligations', 'certificates'] as const
 type ScheduleView = (typeof SCHEDULE_VIEWS)[number]
@@ -43,9 +45,13 @@ export default function ComplianceSchedule() {
   const programmeClause = (searchParams.get('clause') || '').trim()
   const programmeFramework = (searchParams.get('framework') || '').trim()
   const hasProgrammeContext = Boolean(programmeClause || programmeFramework)
+  const registerParam = searchParams.get('register')
+  const statutoryParam = searchParams.get('statutory')
+  const statutoryFilter = parseStatutoryParam(statutoryParam)
   const cov = coverageCopy(i18n.language)
   const imp = importCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
+  const [listTotal, setListTotal] = useState<number | null>(null)
   const [stats, setStats] = useState<ComplianceScheduleStats | null>(null)
   const [coverage, setCoverage] = useState<LocationCoverageGaps | null>(null)
   const [catalogue, setCatalogue] = useState<CatalogueTemplate[]>([])
@@ -74,12 +80,14 @@ export default function ComplianceSchedule() {
         complianceScheduleApi.listRequirements({
           is_active: !showInactive,
           status: statusFilter || undefined,
+          statutory: statutoryFilter,
           page_size: 100,
         }),
         complianceScheduleApi.getStats(),
         complianceScheduleApi.listCatalogue(),
       ])
       setItems(listRes.data.items)
+      setListTotal(typeof listRes.data.total === 'number' ? listRes.data.total : null)
       setStats(statsRes.data)
       setCatalogue(catRes.data.items)
       try {
@@ -93,6 +101,7 @@ export default function ComplianceSchedule() {
       // Cleared so no stale register is left on screen under a failure notice,
       // which would misreport how many obligations there are.
       setItems([])
+      setListTotal(null)
       setStats(null)
       setCatalogue([])
       setCoverage(null)
@@ -100,7 +109,7 @@ export default function ComplianceSchedule() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, showInactive])
+  }, [statusFilter, showInactive, statutoryFilter])
 
   const clauseMatches = useMemo(() => {
     if (!programmeClause) return null
@@ -217,6 +226,12 @@ export default function ComplianceSchedule() {
               )}
             </p>
           )}
+          <RegisterCaptionBanner
+            registerParam={registerParam}
+            statutoryParam={statutoryParam}
+            serverTotal={listTotal}
+            showServerTotal={!hasProgrammeContext}
+          />
         </div>
         {view === 'obligations' && (
         <div className="flex flex-wrap items-center gap-2">

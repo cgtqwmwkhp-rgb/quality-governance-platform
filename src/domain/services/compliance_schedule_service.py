@@ -379,6 +379,7 @@ class ComplianceScheduleService:
         is_active: Optional[bool] = True,
         location_id: Optional[int] = None,
         status: Optional[str] = None,
+        statutory: Optional[bool] = None,
         page: int = 1,
         page_size: int = 50,
         now: Optional[datetime] = None,
@@ -393,6 +394,8 @@ class ComplianceScheduleService:
             query = query.where(ComplianceRequirement.is_active.is_(is_active))
         if location_id is not None:
             query = query.where(ComplianceRequirement.location_id == location_id)
+        if statutory is not None:
+            query = query.where(ComplianceRequirement.statutory.is_(statutory))
 
         # Status is derived — filter in Python after fetch for the page window
         # when a status filter is requested, otherwise paginate in SQL.
