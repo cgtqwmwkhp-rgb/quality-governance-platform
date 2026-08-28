@@ -7,10 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 from src.core.pagination import PaginatedResponse, PaginationInput
-from src.domain.services.incident_list_filters import (
-    CLIENT_ONLY_LIST_PARAMS,
-    SERVER_FILTERABLE_PARAMS,
-)
+from src.domain.services.incident_list_filters import CLIENT_ONLY_LIST_PARAMS, SERVER_FILTERABLE_PARAMS
 from src.domain.services.incident_service import IncidentService
 
 

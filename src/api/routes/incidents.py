@@ -21,7 +21,6 @@ from src.api.utils.pagination import PaginationParams
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry, IncidentStatus
-from src.domain.services.incident_list_filters import INCIDENT_TYPE_VALUES
 from src.domain.models.user import User
 from src.domain.services.api_idempotency_service import (
     SCOPE_INCIDENT_CREATE,
@@ -41,6 +40,7 @@ from src.domain.services.incident_fra_review import (
     incident_suggests_fra_significant_change,
     resolve_suggested_location_id,
 )
+from src.domain.services.incident_list_filters import INCIDENT_TYPE_VALUES
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
     create_enterprise_risk_from_incident,
