@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +27,10 @@ from src.api.schemas.evidence_asset import (
     EvidenceAssetUploadResponse,
 )
 from src.api.utils.errors import api_error
-from src.api.utils.evidence_disposition import resolve_evidence_signed_url_disposition
+from src.api.utils.evidence_disposition import (
+    build_evidence_content_disposition,
+    resolve_evidence_signed_url_disposition,
+)
 from src.core.config import settings
 from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
 from src.domain.models.evidence_asset import (
@@ -708,6 +711,95 @@ async def get_signed_download_url(
         "content_type": asset.content_type,
         "filename": asset.original_filename,
     }
+
+
+@router.get("/{asset_id}/content")
+async def get_evidence_asset_content(
+    asset_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    disposition: Literal["attachment", "inline"] = Query(
+        "inline",
+        description=(
+            "Content disposition; inline is honoured only for preview-safe types "
+            "(image/*, application/pdf, video/*, audio/*)"
+        ),
+    ),
+):
+    """Serve an evidence asset's bytes from App Service, on the application's own origin.
+
+    In-page previews read this instead of a blob SAS URL. A SAS URL points at
+    ``*.blob.core.windows.net``, so every thumbnail is a cross-origin request that
+    depends on the storage account's CORS rules and on the browser reaching storage
+    at all. Reading through the API removes both dependencies: the caller is already
+    authenticated against this origin, and previews keep working if the storage
+    account is later firewalled to the App Service.
+
+    ``GET /{asset_id}/signed-url`` is unchanged and remains the download path — a
+    redirect to storage is still the right way to move a whole file to the browser.
+
+    Authorisation matches signed-url exactly: any authenticated caller may read an
+    asset belonging to their own tenant, and anything else is a 404 so a caller
+    cannot tell "not yours" from "does not exist".
+    """
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise NotFoundError(
+            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
+        )
+
+    from src.infrastructure.storage import StorageDependencyError, StorageError, storage_service
+
+    try:
+        content = await storage_service().download(asset.storage_key)
+    except StorageDependencyError:
+        logger.exception(
+            "Evidence content read blocked by storage dependency failure",
+            extra={"asset_id": asset_id, "storage_key": asset.storage_key},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "STORAGE_DEPENDENCY_UNAVAILABLE",
+                "message": "Evidence is temporarily unavailable. Please try again later or contact support.",
+            },
+        )
+    except StorageError:
+        # The record exists, so this is not a 404: the blob behind it could not be
+        # read. Saying "not found" here would send a steward looking for a deleted
+        # asset instead of a storage fault.
+        logger.exception(
+            "Evidence content read failed",
+            extra={"asset_id": asset_id, "storage_key": asset.storage_key},
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error_code": "STORAGE_DOWNLOAD_FAILED",
+                "message": "Evidence could not be read from storage. Please retry, and contact support if the issue continues.",
+            },
+        )
+
+    effective_disposition = resolve_evidence_signed_url_disposition(disposition, asset.content_type)
+    return Response(
+        content=content,
+        media_type=asset.content_type or "application/octet-stream",
+        # No Cache-Control is set here on purpose. Evidence is tenant data and may
+        # carry PII, so it must not be cached — and SecurityHeadersMiddleware
+        # already puts "no-store, no-cache, must-revalidate" on every /api/ response,
+        # which is stricter than anything this handler could add. Setting a weaker
+        # value here would be overwritten and would only mislead the next reader.
+        headers={
+            "Content-Disposition": build_evidence_content_disposition(effective_disposition, asset.original_filename),
+        },
+    )
 
 
 @router.get("/download")

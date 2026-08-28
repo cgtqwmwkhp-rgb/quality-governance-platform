@@ -827,10 +827,22 @@ export default function AuditExecution() {
   const questionIndexRef = useRef(0)
   const runCompletedRef = useRef(false)
   const savingRef = useRef(false)
+  // Object URLs for evidence hydrated from the API. They stay alive for as long as
+  // the thumbnails render, so the only places that can let go of them are a reload
+  // (which builds a fresh set) and unmount.
+  const hydratedPreviewUrls = useRef<string[]>([])
   const [autosaveError, setAutosaveError] = useState<string | null>(null)
   const [recoveryPrompt, setRecoveryPrompt] = useState<AuditDraft | null>(null)
 
   const runIdNum = runId ? Number(runId) : null
+
+  useEffect(
+    () => () => {
+      hydratedPreviewUrls.current.forEach((url) => URL.revokeObjectURL(url))
+      hydratedPreviewUrls.current = []
+    },
+    [],
+  )
 
   // Keep refs in sync with state so background callbacks see fresh values
   useEffect(() => {
@@ -1041,7 +1053,8 @@ export default function AuditExecution() {
           idMap[qId] = r.id
         }
 
-        // Hydrate thumbnails from evidence-assets (signed URLs).
+        // Hydrate thumbnails from evidence-assets, reading the bytes through the API
+        // rather than a blob SAS URL so previews do not depend on storage CORS.
         // Also recover links for older runs that only stored "captured" by listing run evidence.
         const listed =
           Object.values(existingResponses).some((r) => (r.evidenceAssetIds?.length ?? 0) === 0)
@@ -1050,6 +1063,8 @@ export default function AuditExecution() {
                 .then((res) => res.data.items || [])
                 .catch(() => [])
             : []
+
+        const createdPreviewUrls: string[] = []
 
         await Promise.all(
           Object.entries(existingResponses).map(async ([qId, resp]) => {
@@ -1064,12 +1079,10 @@ export default function AuditExecution() {
             const urls = await Promise.all(
               ids.map(async (assetId) => {
                 try {
-                  const signed = await evidenceAssetsApi.getSignedUrl(
-                    assetId,
-                    undefined,
-                    'inline',
-                  )
-                  return signed.data.signed_url
+                  const content = await evidenceAssetsApi.getContent(assetId, 'inline')
+                  const url = URL.createObjectURL(content.data)
+                  createdPreviewUrls.push(url)
+                  return url
                 } catch {
                   return null
                 }
@@ -1093,7 +1106,15 @@ export default function AuditExecution() {
           }),
         )
 
-        if (cancelled) return
+        if (cancelled) {
+          // Nothing will render these, so nothing else will ever revoke them.
+          createdPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+          return
+        }
+
+        // The previous load's thumbnails are about to be replaced in state.
+        hydratedPreviewUrls.current.forEach((url) => URL.revokeObjectURL(url))
+        hydratedPreviewUrls.current = createdPreviewUrls
 
         setAudit({
           id: String(runData.id),

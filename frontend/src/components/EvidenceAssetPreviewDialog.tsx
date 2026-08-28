@@ -25,8 +25,9 @@ function assetLabel(asset: EvidenceAsset): string {
 
 /**
  * Host-facing lightbox for a single evidence asset.
- * Tier 1/2 types preview in-app via DocumentPreview (inline signed URL);
- * Download remains a secondary CTA with attachment disposition.
+ * Tier 1/2 types preview in-app via DocumentPreview, from bytes fetched through the
+ * API and wrapped in an object URL rather than a blob SAS URL. Download remains a
+ * secondary CTA and still redirects to storage with attachment disposition.
  */
 export function EvidenceAssetPreviewDialog({
   asset,
@@ -59,6 +60,7 @@ export function EvidenceAssetPreviewDialog({
     }
 
     let cancelled = false
+    let objectUrl: string | null = null
     setLoading(true)
     setLoadFailed(false)
     setFetchedUrl(null)
@@ -66,9 +68,10 @@ export function EvidenceAssetPreviewDialog({
 
     void (async () => {
       try {
-        const response = await evidenceAssetsApi.getSignedUrl(asset.id, undefined, 'inline')
+        const response = await evidenceAssetsApi.getContent(asset.id, 'inline')
         if (!cancelled) {
-          setFetchedUrl(response.data.signed_url)
+          objectUrl = URL.createObjectURL(response.data)
+          setFetchedUrl(objectUrl)
         }
       } catch {
         if (!cancelled) setLoadFailed(true)
@@ -77,8 +80,11 @@ export function EvidenceAssetPreviewDialog({
       }
     })()
 
+    // The URL is created only after the cancellation check, so a dialog closed
+    // mid-fetch never leaves one behind; this releases the one that was rendered.
     return () => {
       cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [asset, open, previewUrlOverride, previewable])
 

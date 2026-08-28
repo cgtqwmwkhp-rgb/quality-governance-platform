@@ -85455,6 +85455,68 @@
         ]
       }
     },
+    "/api/v1/evidence-assets/{asset_id}/content": {
+      "get": {
+        "description": "Serve an evidence asset's bytes from App Service, on the application's own origin.\n\nIn-page previews read this instead of a blob SAS URL. A SAS URL points at\n``*.blob.core.windows.net``, so every thumbnail is a cross-origin request that\ndepends on the storage account's CORS rules and on the browser reaching storage\nat all. Reading through the API removes both dependencies: the caller is already\nauthenticated against this origin, and previews keep working if the storage\naccount is later firewalled to the App Service.\n\n``GET /{asset_id}/signed-url`` is unchanged and remains the download path \u2014 a\nredirect to storage is still the right way to move a whole file to the browser.\n\nAuthorisation matches signed-url exactly: any authenticated caller may read an\nasset belonging to their own tenant, and anything else is a 404 so a caller\ncannot tell \"not yours\" from \"does not exist\".",
+        "operationId": "get_evidence_asset_content_api_v1_evidence_assets__asset_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Content disposition; inline is honoured only for preview-safe types (image/*, application/pdf, video/*, audio/*)",
+            "in": "query",
+            "name": "disposition",
+            "required": false,
+            "schema": {
+              "default": "inline",
+              "description": "Content disposition; inline is honoured only for preview-safe types (image/*, application/pdf, video/*, audio/*)",
+              "enum": [
+                "attachment",
+                "inline"
+              ],
+              "title": "Disposition",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Evidence Asset Content",
+        "tags": [
+          "Evidence Assets"
+        ]
+      }
+    },
     "/api/v1/evidence-assets/{asset_id}/link-investigation": {
       "post": {
         "description": "Link an evidence asset to an investigation.\n\nUsed when creating an investigation from a source record to\ncarry forward existing evidence assets.",

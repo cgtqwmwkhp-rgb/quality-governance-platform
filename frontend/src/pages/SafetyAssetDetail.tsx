@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ArrowLeft, Award, Camera, Loader2, Package, QrCode } from 'lucide-react'
@@ -85,6 +85,21 @@ export default function SafetyAssetDetail() {
   const [competencyRequirementsUnavailable, setCompetencyRequirementsUnavailable] = useState(false)
   const [competencyMatrix, setCompetencyMatrix] = useState<WdpEngineerMatrix | null>(null)
   const [competencyMatrixUnavailable, setCompetencyMatrixUnavailable] = useState(false)
+  const photoObjectUrl = useRef<string | null>(null)
+
+  /** Show a photo fetched from the API, letting go of whatever was shown before. */
+  const showPhotoFromBlob = useCallback((blob: Blob | null) => {
+    if (photoObjectUrl.current) URL.revokeObjectURL(photoObjectUrl.current)
+    photoObjectUrl.current = blob ? URL.createObjectURL(blob) : null
+    setPhotoPreviewUrl(photoObjectUrl.current)
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (photoObjectUrl.current) URL.revokeObjectURL(photoObjectUrl.current)
+    },
+    [],
+  )
 
   const load = useCallback(async () => {
     if (!Number.isFinite(assetId) || assetId <= 0) {
@@ -142,14 +157,10 @@ export default function SafetyAssetDetail() {
 
       if (next.photo_evidence_id != null) {
         try {
-          const signed = await evidenceAssetsApi.getSignedUrl(
-            next.photo_evidence_id,
-            undefined,
-            'inline',
-          )
-          setPhotoPreviewUrl(signed.data?.signed_url ?? null)
+          const content = await evidenceAssetsApi.getContent(next.photo_evidence_id, 'inline')
+          showPhotoFromBlob(content.data)
         } catch {
-          setPhotoPreviewUrl(null)
+          showPhotoFromBlob(null)
           setPhotoError(
             t(
               'safetyAssets.detail.photo_unavailable',
@@ -158,7 +169,7 @@ export default function SafetyAssetDetail() {
           )
         }
       } else {
-        setPhotoPreviewUrl(null)
+        showPhotoFromBlob(null)
       }
     } catch (err) {
       const message = getApiErrorMessage(
@@ -170,7 +181,7 @@ export default function SafetyAssetDetail() {
     } finally {
       setLoading(false)
     }
-  }, [assetId, t])
+  }, [assetId, showPhotoFromBlob, t])
 
   useEffect(() => {
     void load()
@@ -215,10 +226,10 @@ export default function SafetyAssetDetail() {
       })
       setAsset(updated.data)
       try {
-        const signed = await evidenceAssetsApi.getSignedUrl(evidenceId, undefined, 'inline')
-        setPhotoPreviewUrl(signed.data?.signed_url ?? null)
+        const content = await evidenceAssetsApi.getContent(evidenceId, 'inline')
+        showPhotoFromBlob(content.data)
       } catch {
-        setPhotoPreviewUrl(null)
+        showPhotoFromBlob(null)
       }
       toast.success(t('safetyAssets.detail.photo_uploaded', 'Photo attached.'))
     } catch (err) {

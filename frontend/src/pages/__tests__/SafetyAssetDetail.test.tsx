@@ -9,6 +9,8 @@ const mockListAssetTypes = vi.fn()
 const mockGetLocation = vi.fn()
 const mockListRequirements = vi.fn()
 const mockGetEngineerMatrix = vi.fn()
+const mockGetContent = vi.fn()
+const mockGetSignedUrl = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -38,7 +40,11 @@ vi.mock('../../api/safetyAssetsClient', () => ({
 }))
 
 vi.mock('../../api/client', () => ({
-  evidenceAssetsApi: { getSignedUrl: vi.fn(), upload: vi.fn() },
+  evidenceAssetsApi: {
+    getSignedUrl: (...args: unknown[]) => mockGetSignedUrl(...args),
+    getContent: (...args: unknown[]) => mockGetContent(...args),
+    upload: vi.fn(),
+  },
   getApiErrorMessage: () => 'Request failed',
   workforceApi: {
     competencyRequirements: {
@@ -84,6 +90,21 @@ describe('SafetyAssetDetail competency panel', () => {
     })
     mockListRequirements.mockResolvedValue({ data: { items: [] } })
     mockGetEngineerMatrix.mockResolvedValue({ data: { asset_types: [], engineers: [] } })
+    mockGetContent.mockResolvedValue({ data: new Blob(['photo-bytes']) })
+  })
+
+  it('renders the asset photo from API bytes rather than a blob SAS URL', async () => {
+    mockGetAsset.mockResolvedValue({ data: { ...asset, photo_evidence_id: 77 } })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock/asset-photo')
+
+    renderDetail()
+
+    await waitFor(() => {
+      expect(mockGetContent).toHaveBeenCalledWith(77, 'inline')
+    })
+    const photo = await screen.findByAltText('Asset photo')
+    expect(photo).toHaveAttribute('src', 'blob:mock/asset-photo')
+    expect(mockGetSignedUrl).not.toHaveBeenCalled()
   })
 
   it('shows type requirements and type-linked competency holders', async () => {
