@@ -39,7 +39,7 @@ export type RegisterEntry = {
   standardRefs: readonly string[]
   retentionYears: number
   to?: RegisterAllowedRoute
-  /** Query string without `?`. Only `register` and optional `type`. */
+  /** Query string without `?`. Keys: `register`, optional `type`, optional `statutory`. */
   captionQuery?: string
   externalSor?: ExternalSor
   note?: string
@@ -389,9 +389,10 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     ownerRole: 'HSEQ',
     band: 'caption',
     to: '/compliance-schedule',
+    captionQuery: 'register=PEL-HSEQ-5056&statutory=true',
     standardRefs: ['ISO 14001 6.1.3', 'ISO 45001 6.1.3'],
     retentionYears: 6,
-    note: 'Statutory filter ships in a later PR. Schedule flag may be off.',
+    note: 'Statutory obligations on the schedule. Module may be off in this deployment.',
   },
   {
     docRef: 'PEL-HSEQ-5059',

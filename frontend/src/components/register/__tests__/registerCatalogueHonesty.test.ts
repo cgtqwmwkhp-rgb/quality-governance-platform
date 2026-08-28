@@ -3,6 +3,7 @@ import { REGISTER_CATALOGUE } from '../../../data/registerCatalogue'
 import {
   assertRegisterCatalogueIntegrity,
   catalogueHasRecordCounts,
+  hubOpenKind,
   isLinkableRegister,
 } from '../registerCatalogueHonesty'
 
@@ -32,5 +33,18 @@ describe('register catalogue honesty', () => {
     const riddor = REGISTER_CATALOGUE.find((e) => e.docRef === 'PEL-HSEQ-5033')
     expect(riddor?.captionQuery).toBe('register=PEL-HSEQ-5033')
     expect(riddor?.captionQuery).not.toMatch(/type=/)
+  })
+
+  it('captions the legal register with a statutory server filter', () => {
+    const legal = REGISTER_CATALOGUE.find((e) => e.docRef === 'PEL-HSEQ-5056')
+    expect(legal?.captionQuery).toBe('register=PEL-HSEQ-5056&statutory=true')
+    expect(legal?.to).toBe('/compliance-schedule')
+  })
+
+  it('does not link schedule tiles when the schedule flag is off', () => {
+    const legal = REGISTER_CATALOGUE.find((e) => e.docRef === 'PEL-HSEQ-5056')
+    expect(legal).toBeDefined()
+    expect(hubOpenKind(legal!, { compliance_schedule: false })).toBe('schedule-off')
+    expect(hubOpenKind(legal!, { compliance_schedule: true })).toBe('link')
   })
 })

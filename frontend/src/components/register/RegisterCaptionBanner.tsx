@@ -15,6 +15,7 @@ const INCIDENT_TYPE_LABEL: Record<string, string> = {
 type RegisterCaptionBannerProps = {
   registerParam: string | null
   typeParam?: string | null
+  statutoryParam?: string | null
   serverTotal?: number | null
   showServerTotal?: boolean
 }
@@ -26,6 +27,7 @@ type RegisterCaptionBannerProps = {
 export default function RegisterCaptionBanner({
   registerParam,
   typeParam,
+  statutoryParam,
   serverTotal,
   showServerTotal = false,
 }: RegisterCaptionBannerProps) {
@@ -35,9 +37,19 @@ export default function RegisterCaptionBanner({
   }
 
   const typeLabel = typeParam ? INCIDENT_TYPE_LABEL[typeParam] : undefined
-  const applied = typeLabel
-    ? `Server filter: type=${typeParam} (${typeLabel}).`
-    : 'No type filter — this is the module list, captioned.'
+  const appliedParts: string[] = []
+  if (typeLabel) {
+    appliedParts.push(`Server filter: type=${typeParam} (${typeLabel}).`)
+  }
+  if (statutoryParam === 'true') {
+    appliedParts.push('Server filter: statutory obligations only.')
+  } else if (statutoryParam === 'false') {
+    appliedParts.push('Server filter: non-statutory obligations only.')
+  }
+  const applied =
+    appliedParts.length > 0
+      ? appliedParts.join(' ')
+      : 'No extra server filter — this is the module list, captioned.'
 
   return (
     <aside

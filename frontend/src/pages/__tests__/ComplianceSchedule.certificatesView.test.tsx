@@ -75,7 +75,12 @@ describe('ComplianceSchedule certificates view', () => {
       },
     })
     mockGetAssuranceCertShelf.mockResolvedValue({
-      data: { items: [], total: 0, summary: { valid: 0, due_soon: 0, expired: 0, unknown: 0 }, due_soon_days: 30 },
+      data: {
+        items: [],
+        total: 0,
+        summary: { valid: 0, due_soon: 0, expired: 0, unknown: 0 },
+        due_soon_days: 30,
+      },
     })
   })
 
@@ -108,13 +113,15 @@ describe('ComplianceSchedule certificates view', () => {
 
   it('switches to certificates via the view switcher', async () => {
     const user = userEvent.setup()
-    renderAt('/compliance-schedule')
+    renderAt('/compliance-schedule?register=PEL-HSEQ-5056&statutory=true')
     await waitFor(() => {
       expect(screen.getByTestId('compliance-schedule-view-switcher')).toBeInTheDocument()
     })
+    expect(screen.getByTestId('register-caption-banner')).toHaveTextContent('PEL-HSEQ-5056')
     await user.click(screen.getByTestId('compliance-schedule-view-certificates'))
     await waitFor(() => {
       expect(mockGetAssuranceCertShelf).toHaveBeenCalled()
     })
+    expect(screen.queryByTestId('register-caption-banner')).not.toBeInTheDocument()
   })
 })
