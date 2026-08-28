@@ -42,6 +42,7 @@ const InvestigationTemplateBuilder = lazy(
 const Actions = lazy(() => import('./pages/Actions'))
 const ActionDetail = lazy(() => import('./pages/ActionDetail'))
 const Documents = lazy(() => import('./pages/Documents'))
+const RegisterOfRegisters = lazy(() => import('./pages/RegisterOfRegisters'))
 const DocumentStructureMap = lazy(() => import('./pages/DocumentStructureMap'))
 const JobLifecycle = lazy(() => import('./pages/JobLifecycle'))
 const DocumentDetail = lazy(() => import('./pages/DocumentDetail'))
@@ -239,6 +240,7 @@ function PostLoginRedirect() {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getValidPlatformToken()))
   const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
+  const registerCatalogueEnabled = useFeatureFlag('register_catalogue')
 
   // Keep the access JWT warm for long sessions (e.g. tablet auditors who
   // can sit on the questionnaire for >30 min between API calls without
@@ -425,6 +427,10 @@ function App() {
                 <Route path="help" element={<StaffHelp />} />
                 <Route path="exports" element={<ExportCenter />} />
                 <Route path="documents" element={<Documents />} />
+                <Route
+                  path="registers"
+                  element={registerCatalogueEnabled ? <RegisterOfRegisters /> : <NotFound />}
+                />
                 <Route
                   path="documents/campaigns"
                   element={
