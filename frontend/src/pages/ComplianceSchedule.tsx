@@ -122,15 +122,9 @@ export default function ComplianceSchedule() {
         'Nothing has been retired. Obligations you retire are kept here and can be reactivated.',
       )
     : statutoryFilter === true
-      ? t(
-          'compliance.schedule.empty_statutory',
-          'No active statutory requirements match this filter. Mark an obligation as required by law to include it.',
-        )
+      ? 'No active statutory requirements match this filter. Mark an obligation as required by law to include it.'
       : statutoryFilter === false
-        ? t(
-            'compliance.schedule.empty_non_statutory',
-            'No active non-statutory requirements match this filter.',
-          )
+        ? 'No active non-statutory requirements match this filter.'
         : t(
             'compliance.schedule.empty',
             'No active requirements yet. Activate a catalogue template below.',

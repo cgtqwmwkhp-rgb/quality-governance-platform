@@ -21,6 +21,8 @@ const BAND_FILTERS: Array<{ id: 'all' | RegisterBand; label: string }> = [
   { id: 'hub', label: 'This hub' },
 ]
 
+const SCHEDULE_OFF_LABEL = 'Schedule module is off in this deployment'
+
 function bandVariant(band: RegisterBand): 'success' | 'info' | 'secondary' | 'outline' | 'warning' {
   if (band === 'live') return 'success'
   if (band === 'hub') return 'info'
@@ -201,10 +203,7 @@ export default function RegisterOfRegisters() {
                     entry={entry}
                     scheduleEnabled={scheduleEnabled}
                     openLabel={t('registers.hub.open', 'Open')}
-                    scheduleOffLabel={t(
-                      'registers.hub.schedule_off',
-                      'Schedule module is off in this deployment',
-                    )}
+                    scheduleOffLabel={SCHEDULE_OFF_LABEL}
                     noLinkLabel={t('registers.hub.no_link', 'No QGP list')}
                   />
                 </td>
