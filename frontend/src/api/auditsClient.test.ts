@@ -128,10 +128,38 @@ describe('createAuditsApi', () => {
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs', { template_id: 1 })
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs/4')
     expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/runs/4', { notes: 'n' })
-    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/start')
-    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/complete')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/start', {}, undefined)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/complete', {}, undefined)
     audits.listAssignedToMe(1, 50)
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs/assigned-to-me?page=1&page_size=50')
+    audits.acknowledgeRun(4)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/acknowledge', {}, undefined)
+  })
+
+  it('forwards If-Match on execute writes only when an etag was read', () => {
+    const api = mockApi()
+    const audits = createAuditsApi(api as never)
+    const config = { headers: { 'If-Match': 'c9fc19e955ab' } }
+    audits.startRun(4, 'c9fc19e955ab')
+    audits.completeRun(4, 'c9fc19e955ab')
+    audits.acknowledgeRun(4, 'c9fc19e955ab')
+    audits.createResponse(9, { question_id: 1 } as never, 'c9fc19e955ab')
+    audits.updateResponse(2, { notes: 'n' } as never, 'c9fc19e955ab')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/start', {}, config)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/complete', {}, config)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/acknowledge', {}, config)
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/v1/audits/runs/9/responses',
+      { question_id: 1 },
+      config,
+    )
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/responses/2', { notes: 'n' }, config)
+
+    audits.startRun(4, '')
+    audits.startRun(4, null)
+    const startCalls = api.post.mock.calls.filter((c) => c[0] === '/api/v1/audits/runs/4/start')
+    expect(startCalls[1][2]).toBeUndefined()
+    expect(startCalls[2][2]).toBeUndefined()
   })
 
   it('findings and responses list includes optional run_id', () => {
@@ -147,8 +175,12 @@ describe('createAuditsApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/findings?page=1&page_size=10')
     audits.listFindings(1, 1, undefined, 'open')
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/findings?page=1&page_size=1&status=open')
-    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/9/responses', { question_id: 1 })
-    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/responses/2', { notes: 'n' })
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/v1/audits/runs/9/responses',
+      { question_id: 1 },
+      undefined,
+    )
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/responses/2', { notes: 'n' }, undefined)
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/9/findings', {
       title: 'f',
       description: 'd',

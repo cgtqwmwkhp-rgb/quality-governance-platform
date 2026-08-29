@@ -648,6 +648,8 @@ class AuditRunResponse(BaseModel):
     assigned_to_id: Optional[int] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    notified_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = None
     score: Optional[float] = None
     max_score: Optional[float] = None
     score_percentage: Optional[float] = None
@@ -664,6 +666,8 @@ class AuditRunDetailResponse(AuditRunResponse):
     responses: List["AuditResponseResponse"] = []
     findings: List["AuditFindingResponse"] = []
     completion_percentage: float = 0.0
+    answered_count: int = 0
+    question_count: int = 0
 
 
 class AuditRunListResponse(BaseModel):

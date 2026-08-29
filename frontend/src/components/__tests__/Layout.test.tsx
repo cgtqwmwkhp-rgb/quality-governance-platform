@@ -802,16 +802,16 @@ describe('Layout', () => {
     const sidebar = document.getElementById('app-sidebar')
     expect(sidebar).toBeTruthy()
     expect(sidebar).not.toHaveAttribute('data-collapsed')
-    expect(sidebar?.className).not.toMatch(/\blg:w-16\b/)
+    expect(sidebar?.className).not.toMatch(/\bmd:w-16\b/)
 
     await user.click(screen.getByTestId('nav-sidebar-collapse'))
 
     expect(sidebar).toHaveAttribute('data-collapsed', 'true')
-    expect(sidebar?.className).toMatch(/\blg:w-16\b/)
+    expect(sidebar?.className).toMatch(/\bmd:w-16\b/)
 
     await user.click(screen.getByTestId('nav-sidebar-collapse'))
 
     expect(sidebar).not.toHaveAttribute('data-collapsed')
-    expect(sidebar?.className).not.toMatch(/\blg:w-16\b/)
+    expect(sidebar?.className).not.toMatch(/\bmd:w-16\b/)
   })
 })

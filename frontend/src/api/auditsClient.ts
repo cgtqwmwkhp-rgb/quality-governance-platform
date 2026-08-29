@@ -55,6 +55,9 @@ export interface AuditRun {
   location_id?: number | null
   customer_code?: string | null
   assigned_to_id?: number | null
+  updated_at?: string
+  notified_at?: string | null
+  acknowledged_at?: string | null
 }
 
 export interface AuditFinding {
@@ -165,6 +168,8 @@ export interface AuditRunDetail extends AuditRun {
   responses: AuditResponse[]
   findings: AuditFinding[]
   completion_percentage: number
+  answered_count?: number
+  question_count?: number
 }
 
 export interface AuditRunCreate {
@@ -525,6 +530,24 @@ export interface CriticalQueueResponse {
   items: CriticalQueueItem[]
 }
 
+function ifMatchConfig(etag?: string | null): AxiosRequestConfig | undefined {
+  const token = (etag || '').trim()
+  if (!token) return undefined
+  return { headers: { 'If-Match': token } }
+}
+
+export function captureAuditRunEtag(resp: unknown): string | null {
+  const r = resp as {
+    headers?: { etag?: unknown; ETag?: unknown; get?: (name: string) => unknown }
+    data?: { updated_at?: string }
+  }
+  const headers = r.headers
+  const fromGet = typeof headers?.get === 'function' ? headers.get('etag') : undefined
+  const raw = fromGet ?? headers?.etag ?? headers?.ETag ?? r.data?.updated_at
+  if (raw == null || raw === '') return null
+  return String(raw).replace(/"/g, '')
+}
+
 export function createAuditsApi(api: AxiosInstance) {
   return {
   // Analytics / reporting pack
@@ -637,14 +660,18 @@ export function createAuditsApi(api: AxiosInstance) {
   getRunDetail: (id: number) => api.get<AuditRunDetail>(`/api/v1/audits/runs/${id}`),
   updateRun: (id: number, data: AuditRunUpdate) =>
     api.patch<AuditRun>(`/api/v1/audits/runs/${id}`, data),
-  startRun: (id: number) => api.post<AuditRun>(`/api/v1/audits/runs/${id}/start`),
-  completeRun: (id: number) => api.post<AuditRun>(`/api/v1/audits/runs/${id}/complete`),
+  startRun: (id: number, etag?: string | null) =>
+    api.post<AuditRun>(`/api/v1/audits/runs/${id}/start`, {}, ifMatchConfig(etag)),
+  completeRun: (id: number, etag?: string | null) =>
+    api.post<AuditRun>(`/api/v1/audits/runs/${id}/complete`, {}, ifMatchConfig(etag)),
+  acknowledgeRun: (id: number, etag?: string | null) =>
+    api.post<AuditRun>(`/api/v1/audits/runs/${id}/acknowledge`, {}, ifMatchConfig(etag)),
 
   // Responses
-  createResponse: (runId: number, data: AuditResponseCreate) =>
-    api.post<AuditResponse>(`/api/v1/audits/runs/${runId}/responses`, data),
-  updateResponse: (responseId: number, data: AuditResponseUpdate) =>
-    api.patch<AuditResponse>(`/api/v1/audits/responses/${responseId}`, data),
+  createResponse: (runId: number, data: AuditResponseCreate, etag?: string | null) =>
+    api.post<AuditResponse>(`/api/v1/audits/runs/${runId}/responses`, data, ifMatchConfig(etag)),
+  updateResponse: (responseId: number, data: AuditResponseUpdate, etag?: string | null) =>
+    api.patch<AuditResponse>(`/api/v1/audits/responses/${responseId}`, data, ifMatchConfig(etag)),
 
   // Findings
   listFindings: (page = 1, pageSize = 10, runId?: number, status?: string) => {

@@ -11,7 +11,7 @@ import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,6 +81,13 @@ from src.domain.services.audit_assignment_notify import (
     require_assignee_in_tenant,
     should_notify_assignee_change,
 )
+from src.domain.services.audit_execute_access import (
+    PUSH_FAILED,
+    assert_can_execute_run,
+    assert_run_if_match,
+    classify_push_results,
+    run_etag,
+)
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.audit_service import AuditService, question_belongs_to_run, require_run_tenant_id
 from src.domain.services.external_audit_intake_template_resolver import (
@@ -93,6 +100,73 @@ from src.infrastructure.monitoring.azure_monitor import StructuredLogger
 router = APIRouter()
 logger = logging.getLogger(__name__)
 observability_logger = StructuredLogger("audit.observability")
+
+IfMatchHeader = Annotated[Optional[str], Header()]
+
+
+def _set_run_etag(response: Response | None, run: AuditRun) -> None:
+    if response is None:
+        return
+    token = run_etag(run)
+    if token:
+        response.headers["ETag"] = token
+
+
+def _touch_run(run: AuditRun) -> None:
+    run.updated_at = datetime.now(timezone.utc)
+
+
+async def _load_tenant_run(db: AsyncSession, run_id: int, tenant_id: Optional[int]) -> AuditRun:
+    result = await db.execute(
+        apply_tenant_filter(
+            select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.id == run_id),
+            AuditRun,
+            tenant_id,
+        )
+    )
+    run = result.scalar_one_or_none()
+    if not run:
+        raise NotFoundError("Audit run not found")
+    return run
+
+
+def _gate_execute(current_user: User, run: AuditRun, if_match: Optional[str]) -> None:
+    assert_can_execute_run(current_user, run)
+    assert_run_if_match(run, if_match)
+
+
+async def _after_audit_scheduled_notify(db: AsyncSession, run: AuditRun) -> None:
+    """Stamp notified_at and fire web push. Never raises; never claims delivered."""
+    try:
+        run.notified_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(run)
+    except Exception:
+        logger.warning("Failed to stamp notified_at on audit run %s", run.id, exc_info=True)
+        return
+    if run.assigned_to_id is None:
+        return
+    try:
+        from src.api.routes.push_notifications import PushNotificationService
+
+        svc = PushNotificationService(db)
+        results = await svc.send_notification(
+            user_id=run.assigned_to_id,
+            title=f"Audit assigned: {run.reference_number}",
+            body=(f"You have been assigned audit {run.reference_number}. " "Open it from Employee Portal → Audits."),
+            url="/portal/audits",
+            data={"url": "/portal/audits", "run_id": run.id},
+            notification_type="AUDIT_SCHEDULED",
+        )
+        outcome = classify_push_results(results)
+        logger.info("AUDIT_SCHEDULED push outcome=%s run_id=%s", outcome, run.id)
+    except Exception:
+        logger.warning(
+            "AUDIT_SCHEDULED push failed run_id=%s outcome=%s",
+            run.id,
+            PUSH_FAILED,
+            exc_info=True,
+        )
 
 
 # ============== Reporting / Analytics Endpoints ==============
@@ -1279,6 +1353,7 @@ async def create_run(
             assigned_by_id=current_user.id,
             tenant_id=run.tenant_id,
         )
+        await _after_audit_scheduled_notify(db, run)
 
     response = _annotate_run_response_import_mode(AuditRunResponse.model_validate(run), template=template)
     if intake_resolution is not None:
@@ -1313,6 +1388,8 @@ async def get_run(
     )
     response.template_name = detail.template_name
     response.completion_percentage = detail.completion_percentage
+    response.answered_count = detail.answered_count
+    response.question_count = detail.question_count
     return response
 
 
@@ -1378,6 +1455,7 @@ async def update_run(
             assigned_by_id=current_user.id,
             tenant_id=run.tenant_id,
         )
+        await _after_audit_scheduled_notify(db, run)
     response = _annotate_run_response_import_mode(
         AuditRunResponse.model_validate(run),
         template=run.__dict__.get("template"),
@@ -1390,14 +1468,42 @@ async def update_run(
     return response
 
 
+@router.post("/runs/{run_id}/acknowledge", response_model=AuditRunResponse)
+async def acknowledge_run(
+    run_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    response: Response,
+    if_match: IfMatchHeader = None,
+) -> AuditRunResponse:
+    """Stamp acknowledged_at. Assignee or audit:update. Idempotent if already acked."""
+    run = await _load_tenant_run(db, run_id, current_user.tenant_id)
+    _gate_execute(current_user, run, if_match)
+    if run.acknowledged_at is None:
+        run.acknowledged_at = datetime.now(timezone.utc)
+        _touch_run(run)
+        await db.commit()
+        await db.refresh(run)
+    payload = _annotate_run_response_import_mode(
+        AuditRunResponse.model_validate(run),
+        template=run.__dict__.get("template"),
+    )
+    _set_run_etag(response, run)
+    return payload
+
+
 @router.post("/runs/{run_id}/start", response_model=AuditRunResponse)
 async def start_run(
     run_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    response: Response,
+    if_match: IfMatchHeader = None,
 ) -> AuditRunResponse:
     """Start an audit run."""
     started = time.perf_counter()
+    run = await _load_tenant_run(db, run_id, current_user.tenant_id)
+    _gate_execute(current_user, run, if_match)
     service = AuditService(db)
     try:
         run = await service.start_run(run_id, tenant_id=current_user.tenant_id)
@@ -1417,16 +1523,17 @@ async def start_run(
             "invalid_status_transition",
         )
         raise BadRequestError(str(exc))
-    response = _annotate_run_response_import_mode(
+    payload = _annotate_run_response_import_mode(
         AuditRunResponse.model_validate(run),
         template=run.__dict__.get("template"),
     )
+    _set_run_etag(response, run)
     _record_audit_endpoint_event(
         "POST /api/v1/audits/runs/{id}/start",
         200,
         (time.perf_counter() - started) * 1000,
     )
-    return response
+    return payload
 
 
 @router.post("/runs/{run_id}/complete", response_model=AuditRunResponse)
@@ -1434,9 +1541,13 @@ async def complete_run(
     run_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    response: Response,
+    if_match: IfMatchHeader = None,
 ) -> AuditRunResponse:
     """Complete an audit run and calculate scores."""
     started = time.perf_counter()
+    run = await _load_tenant_run(db, run_id, current_user.tenant_id)
+    _gate_execute(current_user, run, if_match)
     service = AuditService(db)
     try:
         run = await service.complete_run(
@@ -1464,16 +1575,17 @@ async def complete_run(
     await db.commit()
     await db.refresh(run)
 
-    response = _annotate_run_response_import_mode(
+    payload = _annotate_run_response_import_mode(
         AuditRunResponse.model_validate(run),
         template=run.__dict__.get("template"),
     )
+    _set_run_etag(response, run)
     _record_audit_endpoint_event(
         "POST /api/v1/audits/runs/{id}/complete",
         200,
         (time.perf_counter() - started) * 1000,
     )
-    return response
+    return payload
 
 
 # ============== Response Endpoints ==============
@@ -1489,6 +1601,8 @@ async def create_response(
     response_data: AuditResponseCreate,
     db: DbSession,
     current_user: CurrentUser,
+    http_response: Response,
+    if_match: IfMatchHeader = None,
 ) -> AuditResponseResponse:
     """Submit a response to an audit question."""
     started = time.perf_counter()
@@ -1514,6 +1628,8 @@ async def create_response(
             "run_not_found",
         )
         raise NotFoundError("Audit run not found")
+
+    _gate_execute(current_user, run, if_match)
 
     if _is_external_import_intake_template(run.template):
         _record_audit_endpoint_event(
@@ -1577,10 +1693,13 @@ async def create_response(
     )
 
     db.add(response)
+    _touch_run(run)
     await db.commit()
     await db.refresh(response)
+    await db.refresh(run)
 
     response_payload = AuditResponseResponse.model_validate(response)
+    _set_run_etag(http_response, run)
     _record_audit_endpoint_event(
         "POST /api/v1/audits/runs/{id}/responses",
         201,
@@ -1595,14 +1714,31 @@ async def update_response(
     response_data: AuditResponseUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    http_response: Response,
+    if_match: IfMatchHeader = None,
 ) -> AuditResponseResponse:
     """Update an audit response."""
+    result = await db.execute(
+        select(AuditResponse)
+        .options(selectinload(AuditResponse.run).selectinload(AuditRun.template))
+        .where(AuditResponse.id == response_id)
+    )
+    existing = result.scalar_one_or_none()
+    if not existing or existing.run is None:
+        raise NotFoundError("Audit response not found")
+    if current_user.tenant_id is not None and existing.run.tenant_id != current_user.tenant_id:
+        raise NotFoundError("Audit response not found")
+    _gate_execute(current_user, existing.run, if_match)
     service = AuditService(db)
     response = await service.update_audit_response(
         response_id,
         response_data.model_dump(exclude_unset=True),
         tenant_id=current_user.tenant_id,
     )
+    _touch_run(existing.run)
+    await db.flush()
+    await db.refresh(existing.run)
+    _set_run_etag(http_response, existing.run)
     return AuditResponseResponse.model_validate(response)
 
 
