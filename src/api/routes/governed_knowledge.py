@@ -537,6 +537,8 @@ async def reject_evidence_link(
     prior = link.effective_status.value
     link.status = EvidenceLinkStatus.REJECTED
     link.auto_applied = False
+    link.confirmed_by_id = None
+    link.confirmed_at = None
     rationale = body.rationale.strip() if body and body.rationale else ""
     if rationale:
         reject_note = f"Rejected: {rationale}"

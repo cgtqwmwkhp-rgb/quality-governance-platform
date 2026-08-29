@@ -24,10 +24,11 @@ const signalBadge = (signal?: string | null) => {
 }
 
 const statusBadge = (link: KnowledgeEvidenceLink) => {
-  if (link.status === 'confirmed') return <Badge variant="success">Confirmed</Badge>
-  if (link.status === 'proposed') return <Badge variant="submitted">Proposed</Badge>
-  if (link.status === 'needs_review') return <Badge variant="warning">Needs review</Badge>
-  if (link.status === 'rejected') return <Badge variant="destructive">Rejected</Badge>
+  const status = (link.status || '').toLowerCase()
+  if (status === 'confirmed') return <Badge variant="success">Confirmed</Badge>
+  if (status === 'proposed') return <Badge variant="submitted">Proposed</Badge>
+  if (status === 'needs_review') return <Badge variant="warning">Needs review</Badge>
+  if (status === 'rejected') return <Badge variant="destructive">Rejected</Badge>
   return <Badge variant="secondary">{link.status}</Badge>
 }
 
@@ -297,7 +298,7 @@ export function StandardsAssessmentPanel({
                     <p className="text-xs text-muted-foreground">{link.rationale}</p>
                   ) : null}
                 </div>
-                {(link.status === 'proposed' || link.status === 'needs_review') && (
+                {['proposed', 'needs_review'].includes((link.status || '').toLowerCase()) && (
                   <div className="flex gap-2 shrink-0">
                     <Button
                       type="button"

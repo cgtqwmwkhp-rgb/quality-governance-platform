@@ -309,6 +309,12 @@ def _is_human_confirmed(link: ComplianceEvidenceLink) -> bool:
     return value == EvidenceLinkMethod.MANUAL.value
 
 
+def _is_rejected(link: ComplianceEvidenceLink) -> bool:
+    status = getattr(link, "status", None)
+    value = str(getattr(status, "value", status) or "").strip().lower()
+    return value == EvidenceLinkStatus.REJECTED.value
+
+
 async def apply_ingest_mapping(
     db: AsyncSession,
     *,
@@ -364,6 +370,11 @@ async def apply_ingest_mapping(
         link = existing
 
     human_preserved = (not is_new) and _is_human_confirmed(link)
+    rejected_preserved = (not is_new) and _is_rejected(link)
+    if rejected_preserved:
+        # A human rejection is a decision. Re-assess must not revive the row
+        # as proposed coverage (Run 035 CF-06 / INT-11).
+        return link, True
     if human_preserved:
         link.scheme = scheme
         link.confidence = confidence

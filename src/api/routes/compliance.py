@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, List, Optional
 
 import sqlalchemy
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
@@ -167,6 +167,9 @@ class EvidenceLinkResponse(BaseModel):
     notes: Optional[str]
     document_version_id: Optional[int] = None
     standard_edition: Optional[str] = None
+    status: Optional[str] = None
+    signal_type: Optional[str] = None
+    scheme: Optional[str] = None
     cover_kind: str = EvidenceCoverKind.EVIDENCES.value
     created_at: str
     created_by_email: Optional[str]
@@ -332,6 +335,8 @@ def _serialize_link(link: ComplianceEvidenceLink) -> EvidenceLinkResponse:
     cover = getattr(link, "cover_kind", None)
     cover_value = cover.value if isinstance(cover, EvidenceCoverKind) else (cover or EvidenceCoverKind.EVIDENCES.value)
     confirmed_at = getattr(link, "confirmed_at", None)
+    link_status = link.effective_status if hasattr(link, "effective_status") else getattr(link, "status", None)
+    status_value = None if link_status is None else getattr(link_status, "value", str(link_status))
     return EvidenceLinkResponse(
         id=link.id,
         entity_type=link.entity_type,
@@ -343,6 +348,9 @@ def _serialize_link(link: ComplianceEvidenceLink) -> EvidenceLinkResponse:
         notes=link.notes,
         document_version_id=getattr(link, "document_version_id", None),
         standard_edition=getattr(link, "standard_edition", None),
+        status=status_value,
+        signal_type=getattr(link, "signal_type", None),
+        scheme=getattr(link, "scheme", None),
         cover_kind=str(cover_value),
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
