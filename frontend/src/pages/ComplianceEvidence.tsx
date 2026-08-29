@@ -44,6 +44,11 @@ import {
   type StatementOfApplicability,
 } from '../api/client'
 import {
+  isAuditorConfirmedConformance,
+  isProposedLink,
+  sourceIdentityLabel,
+} from './complianceEvidenceHonesty'
+import {
   Button,
   Card,
   CardContent,
@@ -551,6 +556,9 @@ export default function ComplianceEvidence() {
   const getEvidenceForClause = (clauseId: string): EvidenceLinkRecord[] =>
     evidenceLinks.filter((evidence) => evidence.clause_id === clauseId)
 
+  const getConfirmedConformanceForClause = (clauseId: string): EvidenceLinkRecord[] =>
+    getEvidenceForClause(clauseId).filter(isAuditorConfirmedConformance)
+
   const selectedClauseEvidence = useMemo(
     () =>
       selectedClause
@@ -559,8 +567,18 @@ export default function ComplianceEvidence() {
     [evidenceLinks, selectedClause],
   )
 
+  const selectedConfirmedEvidence = useMemo(
+    () => selectedClauseEvidence.filter(isAuditorConfirmedConformance),
+    [selectedClauseEvidence],
+  )
+
+  const selectedProposedEvidence = useMemo(
+    () => selectedClauseEvidence.filter(isProposedLink),
+    [selectedClauseEvidence],
+  )
+
   const selectedClauseProvenance = useMemo(() => {
-    const counts = selectedClauseEvidence.reduce<Record<string, number>>((acc, evidence) => {
+    const counts = selectedConfirmedEvidence.reduce<Record<string, number>>((acc, evidence) => {
       acc[evidence.entity_type] = (acc[evidence.entity_type] || 0) + 1
       return acc
     }, {})
@@ -568,10 +586,10 @@ export default function ComplianceEvidence() {
       auditLinks: (counts.audit || 0) + (counts.audit_finding || 0),
       actionLinks: counts.action || 0,
       riskLinks: counts.risk || 0,
-      totalLinks: selectedClauseEvidence.length,
+      totalLinks: selectedConfirmedEvidence.length,
       mappedFrameworks: mappings.length,
     }
-  }, [mappings.length, selectedClauseEvidence])
+  }, [mappings.length, selectedConfirmedEvidence])
 
   const filteredClauses = clauses
 
@@ -747,6 +765,16 @@ export default function ComplianceEvidence() {
   }
 
   const getCoverageStatus = (clauseId: string): 'full' | 'partial' | 'none' | 'unavailable' => {
+    const localConfirmed = getConfirmedConformanceForClause(clauseId)
+    const linksCarryHonesty =
+      getEvidenceForClause(clauseId).some(
+        (link) => Boolean(link.status) || Boolean(link.signal_type) || Boolean(link.confirmed_at),
+      )
+    if (linksCarryHonesty) {
+      if (localConfirmed.length >= 2) return 'full'
+      if (localConfirmed.length === 1) return 'partial'
+      return 'none'
+    }
     if (reportUnavailable || !report) return 'unavailable'
     const clauseDetail = clauseDetailsById.get(clauseId)
     if (clauseDetail?.status === 'full') return 'full'
@@ -767,7 +795,7 @@ export default function ComplianceEvidence() {
       <div className={cn(level > 0 && 'ml-6 border-l border-border pl-4')}>
         {children.map((clause) => {
           const coverageStatus = getCoverageStatus(clause.id)
-          const evidence = getEvidenceForClause(clause.id)
+          const evidence = getConfirmedConformanceForClause(clause.id)
           const isExpanded = expandedClauses.has(clause.id)
           const hasChildren = filteredClauses.some((c) => c.parent_clause === clause.id)
           const StandardIcon = iconForStandard(clause.standard)
@@ -1673,7 +1701,7 @@ export default function ComplianceEvidence() {
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">Coverage Status</h4>
                     {(() => {
                       const status = getCoverageStatus(selectedClause.id)
-                      const evidence = getEvidenceForClause(selectedClause.id)
+                      const evidence = getConfirmedConformanceForClause(selectedClause.id)
                       return (
                         <div
                           className={cn(
@@ -1721,7 +1749,7 @@ export default function ComplianceEvidence() {
                             <p className="text-xs text-muted-foreground">
                               {status === 'unavailable'
                                 ? 'Live report could not be loaded — status unknown'
-                                : `${evidence.length} evidence item(s) linked`}
+                                : `${evidence.length} confirmed evidence item(s)`}
                             </p>
                           </div>
                         </div>
@@ -1789,17 +1817,17 @@ export default function ComplianceEvidence() {
                     enabled={documentGraphEnabled}
                   />
 
-                  {/* Linked Evidence */}
+                  {/* Linked Evidence — confirmed conformance only; proposals are not coverage */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-medium text-muted-foreground">Linked Evidence</h4>
                       <span className="text-xs text-muted-foreground">
-                        {selectedClauseProvenance.totalLinks} live link(s)
+                        {selectedClauseProvenance.totalLinks} confirmed link(s)
                       </span>
                     </div>
-                    {selectedClauseEvidence.length > 0 ? (
+                    {selectedConfirmedEvidence.length > 0 ? (
                       <div className="space-y-2">
-                        {selectedClauseEvidence.map((evidence) => {
+                        {selectedConfirmedEvidence.map((evidence) => {
                           const config =
                             evidenceTypeConfig[evidence.entity_type] ?? evidenceTypeConfig.document
                           const Icon = config.icon
@@ -1809,9 +1837,11 @@ export default function ComplianceEvidence() {
                             { documentGraphEnabled },
                           )
                           const isDeleting = deletingLinkId === evidence.id
+                          const identity = sourceIdentityLabel(evidence)
                           return (
                             <div
                               key={evidence.id}
+                              data-testid={`linked-evidence-${evidence.id}`}
                               className="p-3 bg-surface rounded-lg flex items-center gap-3 border border-border hover:border-border-strong transition-colors"
                             >
                               <div className={`p-1.5 rounded ${config.color} flex-shrink-0`} aria-hidden="true">
@@ -1819,13 +1849,27 @@ export default function ComplianceEvidence() {
                               </div>
                               <div className="flex-grow min-w-0">
                                 <p className="text-sm text-foreground truncate">
-                                  {evidence.title ?? `${config.label} ${evidence.entity_id}`}
+                                  <span data-testid={`linked-evidence-identity-${evidence.id}`}>
+                                    {identity}
+                                  </span>
+                                  {evidence.title ? (
+                                    <>
+                                      <span aria-hidden="true"> · </span>
+                                      <span>{evidence.title}</span>
+                                    </>
+                                  ) : null}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  {new Date(evidence.created_at).toLocaleString()}
+                                  {evidence.confirmed_at
+                                    ? `Confirmed ${new Date(evidence.confirmed_at).toLocaleString('en-GB')}`
+                                    : new Date(evidence.created_at).toLocaleString('en-GB')}
                                 </p>
                               </div>
                               <div className="flex items-center gap-1 flex-shrink-0">
+                                <Badge variant="success">Confirmed</Badge>
+                                {evidence.signal_type ? (
+                                  <Badge variant="outline">{evidence.signal_type}</Badge>
+                                ) : null}
                                 <Link
                                   to={route}
                                   className="p-1 rounded text-primary hover:text-primary/80 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -1847,10 +1891,32 @@ export default function ComplianceEvidence() {
                         })}
                       </div>
                     ) : (
-                      <div className="p-4 bg-surface/50 rounded-lg border border-border text-center">
-                        <p className="text-sm text-muted-foreground">No evidence linked yet</p>
-                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        No confirmed evidence for this clause.
+                      </p>
                     )}
+                    {selectedProposedEvidence.length > 0 ? (
+                      <div className="mt-4 space-y-2" data-testid="clause-proposed-strip">
+                        <h4 className="text-sm font-medium text-muted-foreground">
+                          Proposed ({selectedProposedEvidence.length}) — not coverage
+                        </h4>
+                        {selectedProposedEvidence.map((evidence) => (
+                          <div
+                            key={evidence.id}
+                            className="p-3 rounded-lg border border-border bg-muted/30 text-sm"
+                            data-testid={`proposed-evidence-${evidence.id}`}
+                          >
+                            <p className="text-foreground">
+                              {sourceIdentityLabel(evidence)}
+                              {evidence.signal_type ? ` · ${evidence.signal_type}` : ''}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {evidence.status || 'proposed'} · confirm on the case Standards tab
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Cross-Standard Mappings */}
