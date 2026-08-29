@@ -50,6 +50,11 @@ vi.mock('../../api/client', () => ({
   },
   evidenceAssetsApi: { upload: vi.fn() },
   externalAuditImportsApi: { createJob: vi.fn(), queueJob: vi.fn() },
+  usersApi: {
+    list: vi.fn().mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    }),
+  },
 }))
 
 vi.mock('../../components/ui/Toast', () => ({
