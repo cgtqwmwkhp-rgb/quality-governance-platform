@@ -506,6 +506,9 @@ jobs:
       # comparison as a warning preserves the visibility without the false red.
       - name: Report available upgrades (non-blocking)
         continue-on-error: true
+        # PyPI resolve+hash can hang; without a step timeout this advisory
+        # report blocks All Checks Passed even though verify_lockfile.py already passed.
+        timeout-minutes: 8
         run: |
           pip-compile requirements.txt -o requirements.lock.check \
             --no-header --strip-extras --allow-unsafe --generate-hashes --quiet
