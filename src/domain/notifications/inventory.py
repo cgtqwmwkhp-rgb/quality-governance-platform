@@ -250,6 +250,23 @@ PRODUCERS: tuple[ProducerDeclaration, ...] = (
         note="Reached from action create and action update in src/api/routes/actions.py.",
     ),
     ProducerDeclaration(
+        id="audit_run_assigned",
+        event="An audit run is assigned to a person, or its assignee changes",
+        module="src/domain/services/audit_assignment_notify.py",
+        symbol="notify_audit_scheduled",
+        channels=("in_app", "email"),
+        trigger=TRIGGER_REQUEST,
+        schedule=None,
+        beat_task=None,
+        feature_flags=(),
+        referenced=True,
+        note=(
+            "Reached from audit run create and update in src/api/routes/audits.py. "
+            "The action_url is /portal/audits (Employee Portal), not the staff execute shell. "
+            "Notify failure does not roll back the assignee write."
+        ),
+    ),
+    ProducerDeclaration(
         id="audit_finding_capa_closure",
         event="A CAPA closure changes the state of the audit finding it answers",
         module="src/domain/services/audit_service.py",

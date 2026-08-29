@@ -7,6 +7,7 @@ const mockMyCompliance = vi.fn()
 const mockListMyAssignments = vi.fn()
 const mockMyTraining = vi.fn()
 const mockActionsList = vi.fn()
+const mockListAssignedToMe = vi.fn()
 const mockAnnounce = vi.fn()
 
 vi.mock('../../api/client', () => ({
@@ -21,6 +22,9 @@ vi.mock('../../api/client', () => ({
   },
   actionsApi: {
     list: (...args: unknown[]) => mockActionsList(...args),
+  },
+  auditsApi: {
+    listAssignedToMe: (...args: unknown[]) => mockListAssignedToMe(...args),
   },
 }))
 
@@ -49,6 +53,7 @@ describe('Portal tools + van landing', () => {
     mockListMyAssignments.mockResolvedValue({ data: { items: [] } })
     mockMyTraining.mockResolvedValue({ items: [] })
     mockActionsList.mockResolvedValue({ data: { items: [] } })
+    mockListAssignedToMe.mockResolvedValue({ data: { items: [], total: 0 } })
   })
 
   it('shows clear-to-work and tool/van actions before report', async () => {

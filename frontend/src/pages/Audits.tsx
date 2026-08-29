@@ -29,6 +29,8 @@ import {
   AuditRunCreate,
   ExternalAuditType,
   type Action,
+  usersApi,
+  type UserDetail,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -124,6 +126,7 @@ interface CreateAuditForm {
   external_body_name: string
   external_auditor_name: string
   external_reference: string
+  assigned_to_id: number | null
 }
 
 const BOARD_LANE_ICONS = {
@@ -305,6 +308,7 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
   external_body_name: '',
   external_auditor_name: '',
   external_reference: '',
+  assigned_to_id: null,
 }
 
 export default function Audits() {
@@ -366,6 +370,7 @@ export default function Audits() {
   const [loopAssigningFindingId, setLoopAssigningFindingId] = useState<number | null>(null)
   const importModalOpenedRef = useRef(false)
   const scheduleFromQueryOpenedRef = useRef(false)
+  const [assigneeUsers, setAssigneeUsers] = useState<UserDetail[]>([])
 
   const scopedAudits = useMemo(
     () => filterAuditsByAssuranceSource(audits, urlAssuranceSource),
@@ -444,6 +449,17 @@ export default function Audits() {
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+  useEffect(() => {
+    void usersApi
+      .list(1, 100, { is_active: true })
+      .then((response) => {
+        setAssigneeUsers(response.data.items ?? [])
+      })
+      .catch(() => {
+        setAssigneeUsers([])
+      })
+  }, [])
 
   useEffect(() => {
     const refreshOnFocus = () => {
@@ -918,6 +934,7 @@ export default function Audits() {
         external_body_name: formData.external_body_name || undefined,
         external_auditor_name: formData.external_auditor_name || undefined,
         external_reference: formData.external_reference || undefined,
+        assigned_to_id: formData.assigned_to_id || undefined,
       }
 
       const res = await auditsApi.createRun(payload)
@@ -1038,6 +1055,21 @@ export default function Audits() {
     dirty: auditFormDirty,
     onDiscard: handleCloseModal,
   })
+
+  const reassignAudit = async (runId: number, assignedToId: number | null) => {
+    try {
+      const res = await auditsApi.updateRun(runId, { assigned_to_id: assignedToId })
+      setAudits((prev) =>
+        prev.map((row) => (row.id === runId ? { ...row, ...res.data } : row)),
+      )
+      showToast(
+        assignedToId ? 'Assignee updated. The new person is notified.' : 'Audit unassigned.',
+        'success',
+      )
+    } catch {
+      showToast('Could not update assignee. The previous assignment is unchanged.', 'error')
+    }
+  }
 
   const searchFilteredAudits = useMemo(() => {
     if (!searchTerm.trim()) return scopedAudits
@@ -1621,6 +1653,30 @@ export default function Audits() {
                             <span className="truncate">{audit.location}</span>
                           </div>
                         )}
+                        {(lane.id === 'planned' || lane.id === 'fieldwork') &&
+                        (audit.status === 'scheduled' || audit.status === 'in_progress') ? (
+                          <label className="block mb-2">
+                            <span className="sr-only">Assign {audit.reference_number}</span>
+                            <select
+                              aria-label={`Assign ${audit.reference_number}`}
+                              className="w-full min-h-11 rounded-lg border border-border bg-background px-2 text-xs text-foreground"
+                              value={audit.assigned_to_id ?? ''}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation()
+                                const raw = e.target.value
+                                void reassignAudit(audit.id, raw ? Number(raw) : null)
+                              }}
+                            >
+                              <option value="">Unassigned</option>
+                              {assigneeUsers.map((person) => (
+                                <option key={person.id} value={person.id}>
+                                  {person.full_name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
                         <div className="flex items-center justify-between mt-2">
                           {audit.scheduled_date && (
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -2416,6 +2472,35 @@ export default function Audits() {
                   }
                   maxLength={200}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="audit-assignee" className="text-sm font-medium text-foreground">
+                  Assign to
+                </label>
+                <select
+                  id="audit-assignee"
+                  aria-label="Assign audit to a person"
+                  className="w-full min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={formData.assigned_to_id ?? ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      assigned_to_id: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                >
+                  <option value="">Unassigned</option>
+                  {assigneeUsers.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.full_name} ({person.email})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  The assignee sees this run on Employee Portal → Audits. Notify is in-app and
+                  email; a failed notify does not undo the assignment.
+                </p>
               </div>
 
               {modalMode === 'import' ? (

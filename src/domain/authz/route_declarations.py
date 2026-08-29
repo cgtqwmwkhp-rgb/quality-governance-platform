@@ -303,6 +303,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("PATCH", "/api/v1/audits/questions/{question_id}"),
         ("PATCH", "/api/v1/audits/responses/{response_id}"),
         ("GET", "/api/v1/audits/runs"),
+        ("GET", "/api/v1/audits/runs/assigned-to-me"),
         ("GET", "/api/v1/audits/runs/{run_id}"),
         ("POST", "/api/v1/audits/runs/{run_id}/complete"),
         ("POST", "/api/v1/audits/runs/{run_id}/responses"),
@@ -793,7 +794,12 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: The gap this adds is therefore nominal rather than real, but it is still a gap,
 #: so it is counted. Closing it means giving signed-url and content a shared read
 #: permission in the same change.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 467
+#: Raised 467 -> 468 for GET /api/v1/audits/runs/assigned-to-me. The handler is
+#: self-scoped (assigned_to_id = current_user.id) plus tenant. A named
+#: audit:read gate would lock Employee Portal assignees out of their own queue;
+#: sibling GET /audits/runs is already on this list. Closing it means a shared
+#: execute/read permission for the assignee path (AUD-DEV-2 execute authz).
+MAX_AUTHENTICATED_ONLY_DEBT: int = 468
 #: Raised 50 -> 51 for GET /api/v1/meta/features. The alternative was to make it
 #: require authentication, which would land it in AUTHENTICATED_ONLY_DEBT — a list
 #: that is at its ceiling and deliberately closed to new entries. Requiring a

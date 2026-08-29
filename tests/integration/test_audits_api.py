@@ -762,3 +762,180 @@ class TestAuditsAPI:
         body = response.json()
         message = body.get("detail") or body.get("error", {}).get("message", "")
         assert "modified by another user" in message
+
+    @pytest.mark.asyncio
+    async def test_create_run_assigns_notifies_and_lists_on_device_queue(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Assigned runs land on assigned-to-me; AUDIT_SCHEDULED is constructed."""
+        from src.domain.models.notification import Notification, NotificationType
+        from src.domain.services.notification_service import NotificationService
+        from tests.factories import TenantFactory, UserFactory
+
+        async def _skip_email(self: NotificationService, notification: object) -> None:
+            return None
+
+        monkeypatch.setattr(NotificationService, "_deliver_email", _skip_email)
+
+        template = AuditTemplate(
+            name="Yard inspection",
+            category="Safety",
+            audit_type="inspection",
+            created_by_id=1,
+            tenant_id=1,
+            reference_number=generate_test_reference("TPL"),
+            is_published=True,
+            is_active=True,
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        response = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Bedford yard inspection",
+                "location": "Bedford yard",
+                "assigned_to_id": 1,
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201, response.text
+        data = response.json()
+        assert data["assigned_to_id"] == 1
+        run_id = data["id"]
+
+        queued = await client.get("/api/v1/audits/runs/assigned-to-me", headers=auth_headers)
+        assert queued.status_code == 200, queued.text
+        body = queued.json()
+        ids = [item["id"] for item in body["items"]]
+        assert run_id in ids
+        assert body["total"] == len(body["items"])
+        for item in body["items"]:
+            assert item["reference_number"] != "???"
+            assert item["status"] != "unknown"
+
+        note_row = (
+            await test_session.execute(
+                select(Notification.action_url, Notification.user_id).where(
+                    Notification.entity_type == "audit_run",
+                    Notification.entity_id == str(run_id),
+                    Notification.type == NotificationType.AUDIT_SCHEDULED,
+                )
+            )
+        ).first()
+        assert note_row is not None
+        assert note_row[0] == "/portal/audits"
+        assert note_row[1] == 1
+
+        other_tenant = TenantFactory.build(
+            name="Other Org",
+            slug=f"other-org-{generate_test_reference('ORG').lower()}",
+            admin_email="admin-other@example.com",
+        )
+        test_session.add(other_tenant)
+        await test_session.commit()
+        await test_session.refresh(other_tenant)
+
+        other = UserFactory.build(
+            email=f"other-{generate_test_reference('U')}@example.com",
+            hashed_password=test_user.hashed_password,
+            is_active=True,
+            tenant_id=other_tenant.id,
+        )
+        test_session.add(other)
+        await test_session.commit()
+        await test_session.refresh(other)
+
+        refused = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Cross-tenant assign",
+                "assigned_to_id": other.id,
+            },
+            headers=auth_headers,
+        )
+        assert refused.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_reassign_drops_previous_device_queue_row(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        auth_headers: dict,
+        superuser_auth_headers: dict,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Reassign notifies the new person and removes the old queue row."""
+        from src.domain.models.notification import Notification, NotificationType
+        from src.domain.services.notification_service import NotificationService
+
+        async def _skip_email(self: NotificationService, notification: object) -> None:
+            return None
+
+        monkeypatch.setattr(NotificationService, "_deliver_email", _skip_email)
+
+        template = AuditTemplate(
+            name="Reassign inspection",
+            category="Safety",
+            audit_type="inspection",
+            created_by_id=1,
+            tenant_id=1,
+            reference_number=generate_test_reference("TPL"),
+            is_published=True,
+            is_active=True,
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        created = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Reassign me",
+                "assigned_to_id": 1,
+            },
+            headers=auth_headers,
+        )
+        assert created.status_code == 201, created.text
+        run_id = created.json()["id"]
+
+        patched = await client.patch(
+            f"/api/v1/audits/runs/{run_id}",
+            json={"assigned_to_id": 2},
+            headers=auth_headers,
+        )
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["assigned_to_id"] == 2
+
+        mine = await client.get("/api/v1/audits/runs/assigned-to-me", headers=auth_headers)
+        assert mine.status_code == 200
+        assert run_id not in [item["id"] for item in mine.json()["items"]]
+
+        theirs = await client.get(
+            "/api/v1/audits/runs/assigned-to-me",
+            headers=superuser_auth_headers,
+        )
+        assert theirs.status_code == 200
+        assert run_id in [item["id"] for item in theirs.json()["items"]]
+
+        note_row = (
+            await test_session.execute(
+                select(Notification.action_url).where(
+                    Notification.entity_type == "audit_run",
+                    Notification.entity_id == str(run_id),
+                    Notification.type == NotificationType.AUDIT_SCHEDULED,
+                    Notification.user_id == 2,
+                )
+            )
+        ).first()
+        assert note_row is not None
+        assert note_row[0] == "/portal/audits"
