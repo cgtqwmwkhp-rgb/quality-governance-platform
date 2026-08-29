@@ -130,6 +130,8 @@ describe('createAuditsApi', () => {
     expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/runs/4', { notes: 'n' })
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/start')
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/complete')
+    audits.listAssignedToMe(1, 50)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs/assigned-to-me?page=1&page_size=50')
   })
 
   it('findings and responses list includes optional run_id', () => {

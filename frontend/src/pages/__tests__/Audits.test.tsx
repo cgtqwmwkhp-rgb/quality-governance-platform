@@ -108,6 +108,11 @@ vi.mock('../../api/client', () => ({
     createJob: (...args: unknown[]) => mockCreateImportJob(...args),
     queueJob: (...args: unknown[]) => mockQueueImportJob(...args),
   },
+  usersApi: {
+    list: vi.fn().mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    }),
+  },
 }))
 
 vi.mock('../../components/ui/Toast', () => ({
@@ -1458,7 +1463,7 @@ describe('Audits schedule modal templateId seed (N-BUILD-1)', () => {
     render(<Audits />)
 
     const dialog = await screen.findByRole('dialog')
-    const select = within(dialog).getByRole('combobox')
+    const select = within(dialog).getByRole('combobox', { name: /Audit Template/ })
     await waitFor(() => expect(select).toHaveValue('21'))
   })
 })
