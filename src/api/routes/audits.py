@@ -75,13 +75,13 @@ from src.domain.models.audit import (
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.audit_analytics_service import SUPPORTED_GROUP_BY, AuditAnalyticsService
-from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.audit_assignment_notify import (
     is_device_queue_run,
     notify_audit_scheduled,
     require_assignee_in_tenant,
     should_notify_assignee_change,
 )
+from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.audit_service import AuditService, question_belongs_to_run, require_run_tenant_id
 from src.domain.services.external_audit_intake_template_resolver import (
     ExternalAuditIntakeTemplateResolver,
