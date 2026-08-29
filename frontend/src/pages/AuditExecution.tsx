@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import { auditsApi, evidenceAssetsApi, getApiErrorMessage } from '../api/client'
+import { captureAuditRunEtag as captureRunEtag } from '../api/auditsClient'
 import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
 import { DocumentPreview } from '../components/DocumentPreview'
 import {
@@ -264,16 +265,6 @@ export function canAdvancePastFailEvidenceGate(
 export function isStaleWriteError(error: unknown): boolean {
   const ax = error as { response?: { status?: number; data?: { error?: { code?: string } } } }
   return ax.response?.status === 409 && ax.response.data?.error?.code === 'STALE_WRITE'
-}
-
-export function captureRunEtag(resp: {
-  headers?: Record<string, string | undefined>
-  data?: { updated_at?: string }
-}): string | null {
-  const headers = resp.headers || {}
-  const raw = headers.etag || headers.ETag || resp.data?.updated_at
-  if (!raw) return null
-  return String(raw).replaceAll('"', '')
 }
 
 export function scorePayloadForQuestion(

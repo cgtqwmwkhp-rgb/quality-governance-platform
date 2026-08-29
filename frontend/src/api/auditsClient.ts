@@ -536,14 +536,16 @@ function ifMatchConfig(etag?: string | null): AxiosRequestConfig | undefined {
   return { headers: { 'If-Match': token } }
 }
 
-export function captureAuditRunEtag(resp: {
-  headers?: Record<string, string | undefined>
-  data?: { updated_at?: string }
-}): string | null {
-  const headers = resp.headers || {}
-  const raw = headers.etag || headers.ETag || resp.data?.updated_at
-  if (!raw) return null
-  return String(raw).replaceAll('"', '')
+export function captureAuditRunEtag(resp: unknown): string | null {
+  const r = resp as {
+    headers?: { etag?: unknown; ETag?: unknown; get?: (name: string) => unknown }
+    data?: { updated_at?: string }
+  }
+  const headers = r.headers
+  const fromGet = typeof headers?.get === 'function' ? headers.get('etag') : undefined
+  const raw = fromGet ?? headers?.etag ?? headers?.ETag ?? r.data?.updated_at
+  if (raw == null || raw === '') return null
+  return String(raw).replace(/"/g, '')
 }
 
 export function createAuditsApi(api: AxiosInstance) {
