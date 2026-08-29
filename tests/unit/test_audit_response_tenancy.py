@@ -21,6 +21,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from starlette.responses import Response
 
 from src.api.routes.audits import create_response
 from src.api.schemas.audit import AuditResponseCreate
@@ -214,6 +215,8 @@ def _run(*, tenant_id: int | None, template_id: int = 1) -> SimpleNamespace:
         template=None,
         status=AuditStatus.IN_PROGRESS,
         started_at=None,
+        assigned_to_id=1,
+        updated_at=datetime.now(timezone.utc),
     )
 
 
@@ -237,6 +240,7 @@ async def test_created_response_is_stamped_with_the_runs_tenant_not_the_callers(
         response_data=AuditResponseCreate(question_id=5, response_value="yes"),
         db=db,
         current_user=SimpleNamespace(id=1, tenant_id=CALLER_TENANT),
+        http_response=Response(),
     )
 
     assert len(db.added) == 1
@@ -281,6 +285,7 @@ async def test_create_response_refuses_a_run_that_is_not_attributed_to_a_tenant(
             response_data=AuditResponseCreate(question_id=5, response_value="yes"),
             db=db,
             current_user=SimpleNamespace(id=1, tenant_id=CALLER_TENANT),
+            http_response=Response(),
         )
 
     assert db.added == []
@@ -308,6 +313,7 @@ async def test_create_response_looks_up_the_run_on_an_exact_tenant_match() -> No
             response_data=AuditResponseCreate(question_id=5, response_value="yes"),
             db=db,
             current_user=SimpleNamespace(id=1, tenant_id=CALLER_TENANT),
+            http_response=Response(),
         )
 
     assert len(db.statements) == 1
@@ -328,6 +334,7 @@ async def test_create_response_matches_nothing_when_the_caller_has_no_tenant() -
             response_data=AuditResponseCreate(question_id=5, response_value="yes"),
             db=db,
             current_user=SimpleNamespace(id=1, tenant_id=None),
+            http_response=Response(),
         )
 
     sql = str(db.statements[0].compile(compile_kwargs={"literal_binds": True})).upper()

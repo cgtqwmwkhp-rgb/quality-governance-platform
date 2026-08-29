@@ -77,8 +77,8 @@ interface LayoutProps {
 /** Referenced by the mobile menu button's aria-controls. */
 const SIDEBAR_ID = 'app-sidebar'
 
-/** Tailwind's `lg` breakpoint — above this the sidebar is permanent, not a drawer. */
-const DESKTOP_MEDIA_QUERY = '(min-width: 1024px)'
+/** Tailwind's `md` breakpoint — tablet+ (768px) gets the permanent sidebar, not a drawer. */
+const DESKTOP_MEDIA_QUERY = '(min-width: 768px)'
 
 /**
  * React 18 does not accept `inert` as a boolean JSX prop, so it has to be
@@ -497,7 +497,7 @@ export default function Layout({
         {...(sidebarOpen ? INERT_PROPS : {})}
         className={cn(
           'fixed top-0 right-0 left-0 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6',
-          sidebarCollapsed ? 'lg:left-16' : 'lg:left-72',
+          sidebarCollapsed ? 'md:left-16' : 'md:left-72',
         )}
       >
         {/* Search Bar — opens overlay palette; does not navigate away */}
@@ -578,7 +578,7 @@ export default function Layout({
         aria-expanded={sidebarOpen}
         aria-controls={SIDEBAR_ID}
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 h-auto w-auto p-2 rounded-lg bg-card border border-border text-foreground shadow-sm"
+        className="md:hidden fixed top-4 left-4 z-50 h-auto w-auto p-2 rounded-lg bg-card border border-border text-foreground shadow-sm"
       >
         {sidebarOpen ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
       </IconButton>
@@ -596,9 +596,9 @@ export default function Layout({
         tabIndex={sidebarOpen ? -1 : undefined}
         className={cn(
           'fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border',
-          sidebarCollapsed && 'lg:w-16',
+          sidebarCollapsed && 'md:w-16',
           'transform transition-transform duration-300 ease-in-out',
-          'lg:translate-x-0',
+          'md:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -607,17 +607,17 @@ export default function Layout({
           <div
             className={cn(
               'border-b border-border',
-              sidebarCollapsed ? 'p-3 lg:p-2' : 'p-5',
+              sidebarCollapsed ? 'p-3 md:p-2' : 'p-5',
             )}
           >
             <div
               className={cn(
                 'flex items-center gap-3',
-                sidebarCollapsed && 'lg:flex-col lg:items-center lg:gap-2',
+                sidebarCollapsed && 'md:flex-col md:items-center md:gap-2',
               )}
             >
               <BrandMarkTile size={sidebarCollapsed ? 40 : 56} className="shrink-0" />
-              <div className={cn('min-w-0', sidebarCollapsed && 'lg:hidden')}>
+              <div className={cn('min-w-0', sidebarCollapsed && 'md:hidden')}>
                 {/* Not a heading: the shell renders on every route, so an <h1>
                     here collides with the page's own <h1> (PX-290). */}
                 <p className="text-sm font-bold text-foreground leading-snug">
@@ -632,7 +632,7 @@ export default function Layout({
                 data-testid="nav-sidebar-collapse"
                 onClick={toggleSidebar}
                 className={cn(
-                  'hidden lg:inline-flex shrink-0 items-center justify-center rounded-lg p-2',
+                  'hidden md:inline-flex shrink-0 items-center justify-center rounded-lg p-2',
                   'text-muted-foreground hover:text-foreground hover:bg-surface transition-colors',
                   !sidebarCollapsed && 'ml-auto',
                 )}
@@ -653,7 +653,7 @@ export default function Layout({
 
           {/* Navigation */}
           <nav
-            className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'p-2 lg:p-2' : 'p-4')}
+            className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'p-2 md:p-2' : 'p-4')}
             aria-label={t('a11y.navigation_menu')}
           >
             <div className="space-y-1">
@@ -665,7 +665,7 @@ export default function Layout({
                   cn(
                     'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
                     'transition-all duration-200 group',
-                    sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
+                    sidebarCollapsed && 'md:justify-center md:px-2 md:gap-0',
                     isActive
                       ? 'bg-primary/10 text-primary border border-primary/20'
                       : 'text-muted-foreground hover:text-foreground hover:bg-surface',
@@ -683,12 +683,12 @@ export default function Layout({
                       )}
                       aria-hidden="true"
                     />
-                    <span className={cn(sidebarCollapsed && 'lg:sr-only')}>{t('nav.home')}</span>
+                    <span className={cn(sidebarCollapsed && 'md:sr-only')}>{t('nav.home')}</span>
                     {isActive && (
                       <div
                         className={cn(
                           'ml-auto w-1.5 h-1.5 rounded-full bg-primary',
-                          sidebarCollapsed && 'lg:hidden',
+                          sidebarCollapsed && 'md:hidden',
                         )}
                       />
                     )}
@@ -719,7 +719,7 @@ export default function Layout({
                         className={cn(
                           'relative flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-left',
                           'transition-all duration-200 group',
-                          sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
+                          sidebarCollapsed && 'md:justify-center md:px-2 md:gap-0',
                           active
                             ? 'bg-primary/10 text-primary'
                             : 'text-muted-foreground hover:text-foreground hover:bg-surface',
@@ -734,14 +734,14 @@ export default function Layout({
                           )}
                           aria-hidden="true"
                         />
-                        <span className={cn('min-w-0 flex-1 leading-snug', sidebarCollapsed && 'lg:sr-only')}>
+                        <span className={cn('min-w-0 flex-1 leading-snug', sidebarCollapsed && 'md:sr-only')}>
                           {hub.title}
                         </span>
                         {hub.id === 'admin' && pendingSafetyLookups > 0 ? (
                           <span
                             className={cn(
                               'inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground',
-                              sidebarCollapsed && 'lg:absolute lg:top-1 lg:right-1 lg:min-w-[0.625rem] lg:h-2.5 lg:w-2.5 lg:px-0 lg:py-0 lg:text-[0px]',
+                              sidebarCollapsed && 'md:absolute md:top-1 md:right-1 md:min-w-[0.625rem] md:h-2.5 md:w-2.5 md:px-0 md:py-0 md:text-[0px]',
                             )}
                             data-testid="nav-admin-pending-lookups-badge"
                             aria-label={`${pendingSafetyLookups} Safety lookups awaiting approval`}
@@ -753,7 +753,7 @@ export default function Layout({
                           className={cn(
                             'w-4 h-4 shrink-0 transition-transform',
                             expanded ? 'rotate-0' : '-rotate-90',
-                            sidebarCollapsed && 'lg:hidden',
+                            sidebarCollapsed && 'md:hidden',
                           )}
                           aria-hidden="true"
                         />
@@ -762,7 +762,7 @@ export default function Layout({
                       {expanded && (
                         <div
                           id={`nav-hub-${hub.id}`}
-                          className={cn('mt-1 space-y-1 pl-4', sidebarCollapsed && 'lg:hidden')}
+                          className={cn('mt-1 space-y-1 pl-4', sidebarCollapsed && 'md:hidden')}
                         >
                           {hub.items.map((item, itemIndex) => {
                             const itemActive =
@@ -841,18 +841,18 @@ export default function Layout({
           </nav>
 
           {/* Footer */}
-          <div className={cn('border-t border-border', sidebarCollapsed ? 'p-2 lg:p-2' : 'p-4')}>
+          <div className={cn('border-t border-border', sidebarCollapsed ? 'p-2 md:p-2' : 'p-4')}>
             <button
               onClick={onLogout}
               title={sidebarCollapsed ? t('logout') : undefined}
               className={cn(
                 'flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium',
                 'text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200',
-                sidebarCollapsed && 'lg:justify-center lg:px-2 lg:gap-0',
+                sidebarCollapsed && 'md:justify-center md:px-2 md:gap-0',
               )}
             >
               <LogOut size={20} aria-hidden="true" />
-              <span className={cn(sidebarCollapsed && 'lg:sr-only')}>{t('logout')}</span>
+              <span className={cn(sidebarCollapsed && 'md:sr-only')}>{t('logout')}</span>
             </button>
           </div>
         </div>
@@ -863,9 +863,9 @@ export default function Layout({
         id="main-content"
         aria-hidden={sidebarOpen || undefined}
         {...(sidebarOpen ? INERT_PROPS : {})}
-        className={cn('pt-16', sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-72')}
+        className={cn('pt-16', sidebarCollapsed ? 'md:pl-16' : 'md:pl-72')}
       >
-        <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
+        <div className="p-4 sm:p-6 md:p-8 min-h-screen">
           <Outlet />
         </div>
       </main>
@@ -873,7 +873,7 @@ export default function Layout({
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />

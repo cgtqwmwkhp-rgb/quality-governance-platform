@@ -239,6 +239,8 @@ class RunDetail:
     run: AuditRun
     template_name: str | None
     completion_percentage: float
+    answered_count: int
+    question_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -1681,26 +1683,32 @@ class AuditService:
 
         template_name = run.template.name if run.template else None
         completion_pct = 0.0
+        total_questions = 0
+        answered = len(run.responses)
 
         if run.template:
-            total_questions = await self.db.scalar(
-                select(func.count())
-                .select_from(AuditQuestion)
-                .where(
-                    and_(
-                        AuditQuestion.template_id == run.template_id,
-                        AuditQuestion.is_active == True,  # noqa: E712
+            total_questions = (
+                await self.db.scalar(
+                    select(func.count())
+                    .select_from(AuditQuestion)
+                    .where(
+                        and_(
+                            AuditQuestion.template_id == run.template_id,
+                            AuditQuestion.is_active == True,  # noqa: E712
+                        )
                     )
                 )
+                or 0
             )
-            answered = len(run.responses)
-            if total_questions and total_questions > 0:
+            if total_questions > 0:
                 completion_pct = answered / total_questions * 100
 
         return RunDetail(
             run=run,
             template_name=template_name,
             completion_percentage=completion_pct,
+            answered_count=answered,
+            question_count=int(total_questions),
         )
 
     async def update_run(
@@ -2148,6 +2156,9 @@ class AuditService:
         if run.status != AuditStatus.IN_PROGRESS:
             raise ValidationError("Only in-progress runs can be completed")
 
+        # Auto-created findings from execute scoring must not write CEL.
+        # /compliance stays confirmed-only (#1811). Manual finding CEL is a
+        # separate ADR; do not smooth that asymmetry here.
         template = run.template
         if template is None:
             template_result = await self.db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
