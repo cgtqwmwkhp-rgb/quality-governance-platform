@@ -63,6 +63,7 @@ const PortalReport = lazy(() => import('./pages/PortalReport'))
 const PortalTrack = lazy(() => import('./pages/PortalTrack'))
 const PortalHelp = lazy(() => import('./pages/PortalHelp'))
 const PortalWork = lazy(() => import('./pages/PortalWork'))
+const PortalAudits = lazy(() => import('./pages/PortalAudits'))
 const PortalReading = lazy(() => import('./pages/PortalReading'))
 const PortalMyTools = lazy(() => import('./pages/PortalMyTools'))
 const PortalMyVan = lazy(() => import('./pages/PortalMyVan'))
@@ -322,6 +323,7 @@ function App() {
               <Route path="track" element={<PortalTrack />} />
               <Route path="track/:referenceNumber" element={<PortalTrack />} />
               <Route path="work" element={<PortalWork />} />
+              <Route path="audits" element={<PortalAudits />} />
               <Route path="reading" element={<PortalReading />} />
               <Route path="tools" element={<PortalMyTools />} />
               <Route path="van" element={<PortalMyVan />} />
