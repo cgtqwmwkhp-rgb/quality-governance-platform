@@ -261,6 +261,21 @@ export function canAdvancePastFailEvidenceGate(
   return !isFailEvidenceGateActive(question, response)
 }
 
+export function isStaleWriteError(error: unknown): boolean {
+  const ax = error as { response?: { status?: number; data?: { error?: { code?: string } } } }
+  return ax.response?.status === 409 && ax.response.data?.error?.code === 'STALE_WRITE'
+}
+
+export function captureRunEtag(resp: {
+  headers?: Record<string, string | undefined>
+  data?: { updated_at?: string }
+}): string | null {
+  const headers = resp.headers || {}
+  const raw = headers.etag || headers.ETag || resp.data?.updated_at
+  if (!raw) return null
+  return String(raw).replaceAll('"', '')
+}
+
 export function scorePayloadForQuestion(
   question: SavePayloadQuestion,
   response: { response: unknown },
@@ -833,6 +848,10 @@ export default function AuditExecution() {
   const hydratedPreviewUrls = useRef<string[]>([])
   const [autosaveError, setAutosaveError] = useState<string | null>(null)
   const [recoveryPrompt, setRecoveryPrompt] = useState<AuditDraft | null>(null)
+  const [conflictReload, setConflictReload] = useState(false)
+  const runEtagRef = useRef<string | null>(null)
+  const goNextRef = useRef<() => void>(() => {})
+  const goPrevRef = useRef<() => void>(() => {})
 
   const runIdNum = runId ? Number(runId) : null
 
@@ -1150,8 +1169,37 @@ export default function AuditExecution() {
           setStayOnCompletionProof(true)
         }
 
-        if (runData.status === 'scheduled') {
-          await auditsApi.startRun(runIdNum)
+        runEtagRef.current = runData.updated_at || null
+        setConflictReload(false)
+        let stale = false
+
+        if (!alreadyCompleted && !runData.acknowledged_at) {
+          try {
+            const ack = await auditsApi.acknowledgeRun(runIdNum, runEtagRef.current)
+            const next = captureRunEtag(ack)
+            if (next) runEtagRef.current = next
+          } catch (err) {
+            if (isStaleWriteError(err)) {
+              stale = true
+              setConflictReload(true)
+            } else {
+              throw err
+            }
+          }
+        }
+
+        if (runData.status === 'scheduled' && !stale) {
+          try {
+            const started = await auditsApi.startRun(runIdNum, runEtagRef.current)
+            const next = captureRunEtag(started)
+            if (next) runEtagRef.current = next
+          } catch (err) {
+            if (isStaleWriteError(err)) {
+              setConflictReload(true)
+            } else {
+              throw err
+            }
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -1286,11 +1334,66 @@ export default function AuditExecution() {
     }
     document.addEventListener('visibilitychange', onVisibility)
 
+    const persistOfflineDraft = () => {
+      if (!runIdNum || !dirtyRef.current || runCompletedRef.current) return
+      void saveAuditDraft({
+        runId: runIdNum,
+        responses: { ...responsesRef.current },
+        responseIdMap: { ...responseIdMapRef.current },
+        currentSectionIndex: sectionIndexRef.current,
+        currentQuestionIndex: questionIndexRef.current,
+        savedAt: Date.now(),
+        reason: 'autosave',
+      })
+    }
+
+    const onOnline = () => {
+      persistOfflineDraft()
+      void saveAllResponsesRef.current()
+    }
+    window.addEventListener('online', onOnline)
+
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('online', onOnline)
     }
   }, [runIdNum, audit, isPaused])
+
+  useEffect(() => {
+    if (!runIdNum || runCompleted) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false && dirtyRef.current) {
+      void saveAuditDraft({
+        runId: runIdNum,
+        responses: { ...responsesRef.current },
+        responseIdMap: { ...responseIdMapRef.current },
+        currentSectionIndex: sectionIndexRef.current,
+        currentQuestionIndex: questionIndexRef.current,
+        savedAt: Date.now(),
+        reason: 'autosave',
+      })
+    }
+  }, [responses, runIdNum, runCompleted])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (conflictReload) return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
+        return
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        goNextRef.current()
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        goPrevRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [conflictReload])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -1348,13 +1451,17 @@ export default function AuditExecution() {
         payload.applicability = question && !isQuestionCurrentlyVisible(question) ? 'hidden_by_logic' : 'applicable'
 
         if (existingId) {
-          await auditsApi.updateResponse(existingId, payload)
+          const updated = await auditsApi.updateResponse(existingId, payload, runEtagRef.current)
+          const next = captureRunEtag(updated)
+          if (next) runEtagRef.current = next
         } else {
           const res = await auditsApi.createResponse(runIdNum, {
             question_id: Number(questionId),
             ...payload,
-          })
+          }, runEtagRef.current)
           updatedIdMap[questionId] = res.data.id
+          const next = captureRunEtag(res)
+          if (next) runEtagRef.current = next
         }
       }
 
@@ -1368,6 +1475,11 @@ export default function AuditExecution() {
       }
       return true
     } catch (err) {
+      if (isStaleWriteError(err)) {
+        setConflictReload(true)
+        setError('This audit was updated on another device. Reload to continue.')
+        return false
+      }
       setError(getApiErrorMessage(err))
       return false
     } finally {
@@ -1442,8 +1554,10 @@ export default function AuditExecution() {
       setSaving(true)
       let completionData: Record<string, unknown> = {}
       if (!runCompleted) {
-        const completionResponse = await auditsApi.completeRun(runIdNum)
+        const completionResponse = await auditsApi.completeRun(runIdNum, runEtagRef.current)
         completionData = completionResponse.data as unknown as Record<string, unknown>
+        const next = captureRunEtag(completionResponse)
+        if (next) runEtagRef.current = next
         setRunCompleted(true)
       }
 
@@ -1471,6 +1585,11 @@ export default function AuditExecution() {
         setError(message)
         setShowSummary(false)
         navigateToQuestion(String(missingQuestionIds[0]))
+        return
+      }
+      if (isStaleWriteError(err)) {
+        setConflictReload(true)
+        setError('This audit was updated on another device. Reload to continue.')
         return
       }
       setError(getApiErrorMessage(err))
@@ -1657,6 +1776,19 @@ export default function AuditExecution() {
 
     if (!runIdNum || runCompleted) return
 
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      void saveAuditDraft({
+        runId: runIdNum,
+        responses: { ...responsesRef.current },
+        responseIdMap: { ...responseIdMapRef.current },
+        currentSectionIndex: sectionIndexRef.current,
+        currentQuestionIndex: questionIndexRef.current,
+        savedAt: Date.now(),
+        reason: 'autosave',
+      })
+      return
+    }
+
     const uploadFile =
       file ||
       dataUrlToFile(previewDataUrl, `audit-q${questionId}-${Date.now()}.jpg`)
@@ -1823,6 +1955,9 @@ export default function AuditExecution() {
       setCurrentQuestionIndex(prevVisible.questionIndex)
     }
   }
+
+  goNextRef.current = goNext
+  goPrevRef.current = goPrev
 
   // Auto-advance handler for binary question types (YES/NO, PASS/FAIL, N/A)
   const handleBinaryResponse = (value: string) => {
@@ -2449,6 +2584,25 @@ export default function AuditExecution() {
 
           {/* Autosave failure: subtle banner so the user knows their last
               edits aren't on the server yet (the next tick will retry). */}
+          {conflictReload && (
+            <div
+              role="alert"
+              className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-3 text-sm text-destructive flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <span>This audit was updated on another device. Reload to continue — last-write-wins is disabled.</span>
+              <button
+                type="button"
+                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-destructive/40 text-destructive hover:bg-destructive/10"
+                onClick={() => {
+                  setConflictReload(false)
+                  setReloadToken((token) => token + 1)
+                }}
+              >
+                Reload
+              </button>
+            </div>
+          )}
+
           {autosaveError && (
             <div
               role="status"
@@ -2473,7 +2627,7 @@ export default function AuditExecution() {
               <div className="bg-card p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-muted-foreground" aria-current="step">
                       {currentSection.title} • Question {currentQuestionIndex + 1} of{' '}
                       {currentSection.questions.length}
                     </span>
@@ -2648,9 +2802,11 @@ export default function AuditExecution() {
           </button>
 
           {/* Global question counter — replaces the per-question dot strip */}
-          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
-            {globalQuestionIndex + 1} / {totalQuestions}
-          </span>
+          <nav aria-label="Question progress" className="shrink-0">
+            <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums" aria-current="step">
+              {globalQuestionIndex + 1} / {totalQuestions}
+            </span>
+          </nav>
 
           {/* Next / Finish — full remaining width, shown for non-auto-advance types */}
           {!isAutoAdvanceType && (

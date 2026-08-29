@@ -305,6 +305,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/audits/runs"),
         ("GET", "/api/v1/audits/runs/assigned-to-me"),
         ("GET", "/api/v1/audits/runs/{run_id}"),
+        ("POST", "/api/v1/audits/runs/{run_id}/acknowledge"),
         ("POST", "/api/v1/audits/runs/{run_id}/complete"),
         ("POST", "/api/v1/audits/runs/{run_id}/responses"),
         ("POST", "/api/v1/audits/runs/{run_id}/start"),
@@ -799,7 +800,11 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: audit:read gate would lock Employee Portal assignees out of their own queue;
 #: sibling GET /audits/runs is already on this list. Closing it means a shared
 #: execute/read permission for the assignee path (AUD-DEV-2 execute authz).
-MAX_AUTHENTICATED_ONLY_DEBT: int = 468
+#: Raised 468 -> 469 for POST /api/v1/audits/runs/{run_id}/acknowledge. The
+#: handler is assignee-or-audit:update (same gate as start/complete). A named
+#: audit:update dependency would lock portal assignees out of ack. In-handler
+#: checks do not change census posture.
+MAX_AUTHENTICATED_ONLY_DEBT: int = 469
 #: Raised 50 -> 51 for GET /api/v1/meta/features. The alternative was to make it
 #: require authentication, which would land it in AUTHENTICATED_ONLY_DEBT — a list
 #: that is at its ceiling and deliberately closed to new entries. Requiring a

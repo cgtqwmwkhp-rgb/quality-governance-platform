@@ -20,6 +20,7 @@ vi.mock('../../api/client', () => ({
     getTemplate: (...args: unknown[]) => mockGetTemplate(...args),
     startRun: (...args: unknown[]) => mockStartRun(...args),
     completeRun: (...args: unknown[]) => mockCompleteRun(...args),
+    acknowledgeRun: vi.fn().mockResolvedValue({ data: {} }),
     createResponse: vi.fn(),
     updateResponse: vi.fn(),
   },
@@ -255,7 +256,7 @@ describe('AuditExecution', () => {
     expect(await screen.findByText('Inspection completed')).toBeInTheDocument()
     expect(screen.getByText('4 findings / 2 actions created')).toBeInTheDocument()
     expect(screen.getByText('Downstream Workflow Proof')).toBeInTheDocument()
-    expect(mockCompleteRun).toHaveBeenCalledWith(41)
+    expect(mockCompleteRun).toHaveBeenCalledWith(41, null)
 
     await waitFor(
       () => {
