@@ -26,6 +26,7 @@ vi.mock('../../api/client', () => ({
     getTemplate: (...args: unknown[]) => mockGetTemplate(...args),
     startRun: vi.fn().mockResolvedValue({ data: {} }),
     completeRun: vi.fn(),
+    acknowledgeRun: vi.fn().mockResolvedValue({ data: {} }),
     createResponse: vi.fn().mockResolvedValue({ data: { id: 1 } }),
     updateResponse: vi.fn().mockResolvedValue({ data: { id: 1 } }),
   },

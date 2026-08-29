@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
+from starlette.responses import Response
 
 from src.api.routes.audits import create_response
 from src.api.schemas.audit import AuditResponseCreate
@@ -86,6 +87,8 @@ def _run() -> SimpleNamespace:
         template=None,
         status=AuditStatus.IN_PROGRESS,
         started_at=None,
+        assigned_to_id=1,
+        updated_at=datetime.now(timezone.utc),
     )
 
 
@@ -108,6 +111,7 @@ async def test_create_response_refuses_a_question_from_another_template() -> Non
             response_data=AuditResponseCreate(question_id=5, response_value="yes"),
             db=db,
             current_user=SimpleNamespace(id=1, tenant_id=1),
+            http_response=Response(),
         )
 
     assert db.added == []
@@ -127,6 +131,7 @@ async def test_create_response_still_accepts_a_question_from_its_own_template() 
         response_data=AuditResponseCreate(question_id=5, response_value="yes"),
         db=db,
         current_user=SimpleNamespace(id=1, tenant_id=1),
+        http_response=Response(),
     )
 
     assert len(db.added) == 1
