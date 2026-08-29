@@ -32,10 +32,10 @@ PUSH_OUTCOMES = frozenset({PUSH_SENT, PUSH_NO_SUB, PUSH_DISABLED, PUSH_FAILED})
 
 def can_execute_run(user: User, run: AuditRun) -> bool:
     """True when the caller may start, answer, or complete this run."""
-    if user.has_permission(EXECUTE_PERMISSION):
-        return True
     assigned = getattr(run, "assigned_to_id", None)
-    return assigned is not None and assigned == user.id
+    if assigned is not None and assigned == user.id:
+        return True
+    return user.has_permission("audit:update")
 
 
 def assert_can_execute_run(user: User, run: AuditRun) -> None:

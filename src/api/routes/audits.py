@@ -104,7 +104,9 @@ observability_logger = StructuredLogger("audit.observability")
 IfMatchHeader = Annotated[Optional[str], Header()]
 
 
-def _set_run_etag(response: Response, run: AuditRun) -> None:
+def _set_run_etag(response: Response | None, run: AuditRun) -> None:
+    if response is None:
+        return
     token = run_etag(run)
     if token:
         response.headers["ETag"] = token
