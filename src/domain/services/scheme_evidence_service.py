@@ -88,7 +88,10 @@ def scheme_clause_by_id(clause_id: str) -> Optional[dict[str, Any]]:
 def _counts_for_keys(evidence_links: Iterable[Any], keys: set[str]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for link in evidence_links:
-        if not counts_toward_compliance_coverage(getattr(link, "signal_type", None)):
+        if not counts_toward_compliance_coverage(
+            getattr(link, "signal_type", None),
+            getattr(link, "status", None),
+        ):
             continue
         clause_id = str(getattr(link, "clause_id", "") or "")
         if clause_id in keys:
@@ -158,7 +161,11 @@ def scheme_audit_report(
     clause_details = []
     for clause in scheme_clause_records(framework):
         evidence = by_clause.get(clause["id"], [])
-        conformance = [e for e in evidence if counts_toward_compliance_coverage(getattr(e, "signal_type", None))]
+        conformance = [
+            e
+            for e in evidence
+            if counts_toward_compliance_coverage(getattr(e, "signal_type", None), getattr(e, "status", None))
+        ]
         status = "full" if len(conformance) >= 2 else "partial" if len(conformance) == 1 else "gap"
         detail: dict[str, Any] = {
             "clause_id": clause["id"],

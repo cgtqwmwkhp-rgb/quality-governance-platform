@@ -912,7 +912,7 @@ class StandardsCellAggregateService:
         conformance = [
             e
             for e in evidence
-            if counts_toward_compliance_coverage(e.get("signal_type"))
+            if counts_toward_compliance_coverage(e.get("signal_type"), e.get("status"))
             and not (e.get("auto_applied") and status_value(e.get("status")) != "confirmed")
         ]
 

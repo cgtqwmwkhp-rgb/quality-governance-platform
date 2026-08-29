@@ -119,3 +119,89 @@ class TestCalculateComplianceCoverageHonesty:
         assert evidence_plus_nc["coverage_percentage"] == evidence_only["coverage_percentage"]
         assert evidence_plus_nc["partial_coverage"] == evidence_only["partial_coverage"]
         assert evidence_plus_nc["full_coverage"] == evidence_only["full_coverage"]
+
+
+class TestConfirmedStatusHonesty:
+    def test_proposed_ai_does_not_count(self) -> None:
+        svc = ISOComplianceService()
+        clause_id = _level2_clause_id(ISOStandard.ISO_45001)
+        empty = svc.calculate_compliance_coverage([], ISOStandard.ISO_45001)
+        proposed = svc.calculate_compliance_coverage(
+            [
+                EvidenceLink(
+                    id="ai1",
+                    entity_type="incident",
+                    entity_id="138",
+                    clause_id=clause_id,
+                    linked_by="ai",
+                    confidence=0.95,
+                    signal_type="nonconformity",
+                    status="proposed",
+                )
+            ],
+            ISOStandard.ISO_45001,
+        )
+        assert proposed["coverage_percentage"] == empty["coverage_percentage"]
+        assert proposed["partial_coverage"] == empty["partial_coverage"]
+
+    def test_rejected_does_not_count(self) -> None:
+        svc = ISOComplianceService()
+        clause_id = _level2_clause_id()
+        empty = svc.calculate_compliance_coverage([], ISOStandard.ISO_9001)
+        rejected = svc.calculate_compliance_coverage(
+            [
+                EvidenceLink(
+                    id="r1",
+                    entity_type="incident",
+                    entity_id="138",
+                    clause_id=clause_id,
+                    linked_by="ai",
+                    signal_type="evidence",
+                    status="rejected",
+                )
+            ],
+            ISOStandard.ISO_9001,
+        )
+        assert rejected["coverage_percentage"] == empty["coverage_percentage"]
+
+    def test_confirmed_evidence_counts(self) -> None:
+        svc = ISOComplianceService()
+        clause_id = _level2_clause_id()
+        empty = svc.calculate_compliance_coverage([], ISOStandard.ISO_9001)
+        confirmed = svc.calculate_compliance_coverage(
+            [
+                EvidenceLink(
+                    id="c1",
+                    entity_type="document",
+                    entity_id="1",
+                    clause_id=clause_id,
+                    linked_by="manual",
+                    signal_type="evidence",
+                    status="confirmed",
+                )
+            ],
+            ISOStandard.ISO_9001,
+        )
+        assert confirmed["coverage_percentage"] > empty["coverage_percentage"]
+        assert confirmed["partial_coverage"] == empty["partial_coverage"] + 1
+
+    def test_audit_report_status_is_gap_for_proposed_only(self) -> None:
+        svc = ISOComplianceService()
+        clause_id = _level2_clause_id()
+        report = svc.generate_audit_report(
+            [
+                EvidenceLink(
+                    id="ai1",
+                    entity_type="incident",
+                    entity_id="138",
+                    clause_id=clause_id,
+                    linked_by="ai",
+                    signal_type="nonconformity",
+                    status="proposed",
+                )
+            ],
+            ISOStandard.ISO_9001,
+        )
+        row = next(c for c in report["clauses"] if c["clause_id"] == clause_id)
+        assert row["status"] == "gap"
+        assert row["evidence_count"] == 0

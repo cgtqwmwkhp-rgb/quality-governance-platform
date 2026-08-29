@@ -104,6 +104,48 @@ async def test_existing_human_stamp_is_preserved(monkeypatch):
     db.add.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_existing_rejected_row_is_not_revived_as_proposed():
+    existing = SimpleNamespace(
+        confirmed_by_id=None,
+        confirmed_at=None,
+        linked_by=EvidenceLinkMethod.AI,
+        status=EvidenceLinkStatus.REJECTED,
+        auto_applied=False,
+        title="Rejected guess",
+        scheme="iso9001",
+        confidence=0.9,
+        rationale="CUJ-TEST reject wrong standard",
+        signal_type="nonconformity",
+        clause_id="9001-10.2",
+        notes="Rejected: CUJ-TEST reject wrong standard",
+    )
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_ScalarResult(existing))
+    db.add = MagicMock()
+
+    link, preserved = await apply_ingest_mapping(
+        db,
+        tenant_id=1,
+        entity_type="incident",
+        entity_id="138",
+        clause_id="9001-10.2",
+        status=EvidenceLinkStatus.PROPOSED,
+        auto_applied=False,
+        actor_id=1,
+        scheme="iso9001",
+        confidence=0.95,
+        rationale="would revive",
+        title="Would overwrite",
+        signal_type="nonconformity",
+    )
+    assert preserved is True
+    assert link is existing
+    assert link.status == EvidenceLinkStatus.REJECTED
+    assert link.title == "Rejected guess"
+    db.add.assert_not_called()
+
+
 def test_remaining_cel_writer_list_is_empty():
     from pathlib import Path
 
