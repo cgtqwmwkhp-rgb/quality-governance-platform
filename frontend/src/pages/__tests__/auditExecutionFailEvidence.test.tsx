@@ -6,6 +6,7 @@ import AuditExecution, {
   canAdvancePastFailEvidenceGate,
   isFailEvidenceGateActive,
   isQuestionFinding,
+  isStaleWriteError,
   questionCanRequireFailEvidence,
   shouldShowFailEvidencePanel,
 } from '../AuditExecution'
@@ -27,6 +28,8 @@ vi.mock('../../api/client', () => ({
     startRun: (...args: unknown[]) => mockStartRun(...args),
     createResponse: vi.fn(),
     updateResponse: vi.fn(),
+    acknowledgeRun: vi.fn().mockResolvedValue({ data: {} }),
+    completeRun: vi.fn(),
   },
   evidenceAssetsApi: {
     upload: vi.fn().mockResolvedValue({ data: { id: 99 } }),
@@ -153,6 +156,30 @@ describe('fail evidence gate helpers', () => {
       ),
     ).toBe(false)
     expect(questionCanRequireFailEvidence({ ...baseQuestion, evidenceRequired: true })).toBe(true)
+  })
+
+  it('does not treat local photo blobs as fail-evidence ACK', () => {
+    expect(
+      canAdvancePastFailEvidenceGate(baseQuestion, {
+        response: 'fail',
+        photos: ['data:image/png;base64,x'],
+      }),
+    ).toBe(false)
+    expect(
+      canAdvancePastFailEvidenceGate(baseQuestion, {
+        response: 'fail',
+        evidenceAssetIds: [99],
+      }),
+    ).toBe(true)
+  })
+
+  it('classifies STALE_WRITE 409 as a conflict, never last-write-wins', () => {
+    expect(
+      isStaleWriteError({ response: { status: 409, data: { error: { code: 'STALE_WRITE' } } } }),
+    ).toBe(true)
+    expect(
+      isStaleWriteError({ response: { status: 409, data: { error: { code: 'DUPLICATE_ENTITY' } } } }),
+    ).toBe(false)
   })
 
   it('shows evidence panel for configured or fail-triggered questions', () => {

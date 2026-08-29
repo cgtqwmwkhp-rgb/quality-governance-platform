@@ -6,7 +6,7 @@
  */
 
 // Cache version - bump whenever fetch interception rules change so old SWs activate-and-die.
-const CACHE_VERSION = 'qgp-v2.0.2-evidence-preview';
+const CACHE_VERSION = 'qgp-v2.0.3-audit-push-url';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -333,16 +333,16 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: '/icons/icon-192x192.png',
       badge: '/icons/icon-72x72.png',
-      tag: 'qgp-notification',
+      tag: data.tag || 'qgp-notification',
+      data: { url: data.url || (data.data && data.data.url) || '/portal/audits' },
     })
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(
-    clients.openWindow(event.notification.data?.url || '/portal')
-  );
+  const url = (event.notification.data && event.notification.data.url) || '/portal';
+  event.waitUntil(clients.openWindow(url));
 });
 
 // ============================================================================
