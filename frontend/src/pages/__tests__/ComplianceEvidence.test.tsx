@@ -165,8 +165,26 @@ const evidenceLinksResponse = {
       confidence: 95,
       title: 'Quality policy',
       notes: 'Latest approved version',
+      status: 'confirmed',
+      signal_type: 'evidence',
       created_at: '2026-03-22T10:00:00Z',
       created_by_email: 'qa@example.com',
+      confirmed_at: '2026-03-22T10:00:00Z',
+    },
+    {
+      id: 2,
+      entity_type: 'policy',
+      entity_id: 'POL-001',
+      clause_id: '9001-7.5',
+      linked_by: 'manual',
+      confidence: 90,
+      title: 'Records procedure',
+      notes: 'Controlled procedure',
+      status: 'confirmed',
+      signal_type: 'evidence',
+      created_at: '2026-03-22T11:00:00Z',
+      created_by_email: 'qa@example.com',
+      confirmed_at: '2026-03-22T11:00:00Z',
     },
   ],
 }
@@ -844,5 +862,71 @@ describe('ComplianceEvidence', () => {
       /not zero gaps/i,
     )
     expect(screen.queryByText(/No gaps found/i)).not.toBeInTheDocument()
+  })
+
+  it('does not treat AI proposals as Fully Covered and names the confirmed source', async () => {
+    mockListEvidenceLinks.mockResolvedValue({
+      data: [
+        {
+          id: 6428,
+          entity_type: 'incident',
+          entity_id: '138',
+          clause_id: '9001-7.5',
+          linked_by: 'ai',
+          confidence: 95,
+          title: 'AI guess',
+          notes: null,
+          status: 'confirmed',
+          signal_type: 'evidence',
+          created_at: '2026-08-28T22:56:47Z',
+          created_by_email: 'david.harris@plantexpand.com',
+          confirmed_at: '2026-08-28T22:56:47Z',
+        },
+        {
+          id: 6430,
+          entity_type: 'incident',
+          entity_id: '138',
+          clause_id: '9001-7.5',
+          linked_by: 'ai',
+          confidence: 90,
+          title: 'Wrong standard',
+          notes: 'Rejected: CUJ-TEST reject wrong standard',
+          status: 'rejected',
+          signal_type: 'nonconformity',
+          created_at: '2026-08-28T22:50:00Z',
+          created_by_email: null,
+          confirmed_at: null,
+        },
+        {
+          id: 6431,
+          entity_type: 'incident',
+          entity_id: '99',
+          clause_id: '9001-7.5',
+          linked_by: 'ai',
+          confidence: 80,
+          title: 'Still a proposal',
+          notes: null,
+          status: 'proposed',
+          signal_type: 'nonconformity',
+          created_at: '2026-08-28T22:40:00Z',
+          created_by_email: null,
+          confirmed_at: null,
+        },
+      ],
+    })
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    expect(await screen.findByText('Partially Covered')).toBeInTheDocument()
+    expect(screen.getByText('1 confirmed evidence item(s)')).toBeInTheDocument()
+    expect(screen.getByTestId('linked-evidence-6428')).toHaveTextContent('incident 138')
+    expect(screen.getByTestId('linked-evidence-6428')).toHaveTextContent('Confirmed')
+    expect(screen.queryByTestId('linked-evidence-6430')).not.toBeInTheDocument()
+    expect(screen.getByTestId('clause-proposed-strip')).toHaveTextContent('Proposed (1)')
+    expect(screen.getByTestId('proposed-evidence-6431')).toHaveTextContent('incident 99')
   })
 })

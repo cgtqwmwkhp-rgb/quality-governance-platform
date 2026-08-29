@@ -1486,8 +1486,13 @@ export interface EvidenceLinkRecord {
   confidence: number | null
   title: string | null
   notes: string | null
+  status?: string | null
+  signal_type?: string | null
+  scheme?: string | null
   created_at: string
   created_by_email: string | null
+  confirmed_at?: string | null
+  confirmed_by_id?: number | null
 }
 
 export interface ComplianceClauseRecord {

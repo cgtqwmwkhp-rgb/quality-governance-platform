@@ -159,7 +159,9 @@ class ExactShareService:
             )
 
         conformance = [
-            e for e in (source_cell.evidence or []) if counts_toward_compliance_coverage(e.get("signal_type"))
+            e
+            for e in (source_cell.evidence or [])
+            if counts_toward_compliance_coverage(e.get("signal_type"), e.get("status"))
         ]
         if not conformance:
             return ExactSharePlan(
@@ -307,7 +309,7 @@ class ExactShareService:
         if not token_matches_clause(source_link.clause_id, keys, clause_number):
             raise BadRequestError("Source link does not belong to the requested cell")
 
-        if not counts_toward_compliance_coverage(source_link.signal_type):
+        if not counts_toward_compliance_coverage(source_link.signal_type, getattr(source_link, "status", None)):
             raise ConflictError(
                 f"{self.share_label} share refused: source link is not conformance evidence",
                 code=f"{self.conflict_prefix}_NONCONFORMANCE_SIGNAL",

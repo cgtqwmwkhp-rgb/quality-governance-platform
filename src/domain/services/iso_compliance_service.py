@@ -71,14 +71,35 @@ def _normalize_signal_type(signal_type: Optional[str]) -> Optional[str]:
     return normalized or None
 
 
-def counts_toward_compliance_coverage(signal_type: Optional[str]) -> bool:
+def _status_is_coverage_confirmed(status: Optional[str]) -> bool:
+    """Unconfirmed / rejected links must not inflate coverage.
+
+    Legacy callers that omit status keep the previous signal-only rule so
+    historical unit fixtures and pre-WI-1 packs still score. Live CEL rows
+    go through ``effective_status`` (proposed | confirmed | rejected |
+    needs_review) before they reach this helper.
+    """
+    normalized = str(status or "").strip().lower()
+    if not normalized:
+        return True
+    return normalized == "confirmed"
+
+
+def counts_toward_compliance_coverage(
+    signal_type: Optional[str],
+    status: Optional[str] = None,
+) -> bool:
     """Return True when a CEL row should increase coverage_percentage.
 
     Document / evidence-only links count. Explicit operational signals
     (nonconformity, gap, opportunity) are mapped for assessor workflows but
-    are not proof of conformance. Legacy rows with null/empty signal_type
-    remain counted for backward compatibility.
+    are not proof of conformance. Proposed, needs-review, and rejected
+    links are never coverage — an AI guess is not a human confirmation.
+    Legacy rows with null/empty signal_type and null status remain counted
+    for backward compatibility.
     """
+    if not _status_is_coverage_confirmed(status):
+        return False
     normalized = _normalize_signal_type(signal_type)
     if normalized is None:
         return True
@@ -112,7 +133,7 @@ def serialize_audit_pack_link(
 ) -> Dict[str, Any]:
     """Serialize one evidence link with full provenance for certification packs."""
     signal = _normalize_signal_type(link.signal_type)
-    conformance_eligible = counts_toward_compliance_coverage(link.signal_type)
+    conformance_eligible = counts_toward_compliance_coverage(link.signal_type, link.status)
     return {
         "id": link.id,
         "created_at": _iso_dt(link.created_at),
@@ -3391,7 +3412,11 @@ Write only the conformance statement. Use formal auditor language (past tense, s
         """
         clauses = self.get_all_clauses(standard)
         level_2_clauses = [c for c in clauses if c.level == 2]
-        coverage_links = [link for link in evidence_links if counts_toward_compliance_coverage(link.signal_type)]
+        coverage_links = [
+            link
+            for link in evidence_links
+            if counts_toward_compliance_coverage(link.signal_type, getattr(link, "status", None))
+        ]
 
         # Count evidence per clause
         clause_evidence_count: Dict[str, int] = {}
@@ -3499,7 +3524,9 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                 continue
 
             evidence = clause_evidence.get(clause.id, [])
-            conformance = [e for e in evidence if counts_toward_compliance_coverage(e.signal_type)]
+            conformance = [
+                e for e in evidence if counts_toward_compliance_coverage(e.signal_type, getattr(e, "status", None))
+            ]
             status = "full" if len(conformance) >= 2 else "partial" if len(conformance) == 1 else "gap"
 
             detail: Dict[str, Any] = {
@@ -3561,7 +3588,7 @@ Write only the conformance statement. Use formal auditor language (past tense, s
         for link in evidence_links:
             scheme = self.resolve_link_standard(link)
             row = serialize_audit_pack_link(link, scheme_or_standard=scheme)
-            if counts_toward_compliance_coverage(link.signal_type):
+            if counts_toward_compliance_coverage(link.signal_type, getattr(link, "status", None)):
                 conformance_rows.append(row)
             else:
                 operational_rows.append(row)
