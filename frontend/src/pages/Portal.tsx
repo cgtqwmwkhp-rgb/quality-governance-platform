@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Wrench,
   Truck,
+  ClipboardCheck,
   AlertTriangle,
   CheckCircle2,
   ShieldAlert,
@@ -24,11 +25,13 @@ import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import {
   actionsApi,
+  auditsApi,
   documentCampaignApi,
   portalComplianceApi,
   trainingMatrixApi,
   type PortalMyCompliance,
 } from '../api/client'
+import { assignedAuditQueueTotal } from './portalAssignedAuditsHonesty'
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { cn } from '../helpers/utils'
@@ -92,6 +95,8 @@ export default function Portal() {
   const [trainingGapCount, setTrainingGapCount] = useState(0)
   const [compliance, setCompliance] = useState<PortalMyCompliance | null>(null)
   const [complianceFailed, setComplianceFailed] = useState(false)
+  const [auditQueueFailed, setAuditQueueFailed] = useState(false)
+  const [auditQueueTotal, setAuditQueueTotal] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     announce('Employee portal loaded')
@@ -136,10 +141,21 @@ export default function Portal() {
         setCompliance(null)
         setComplianceFailed(true)
       })
+    void auditsApi
+      .listAssignedToMe(1, 100)
+      .then((response) => {
+        setAuditQueueTotal(response.data.total)
+        setAuditQueueFailed(false)
+      })
+      .catch(() => {
+        setAuditQueueTotal(undefined)
+        setAuditQueueFailed(true)
+      })
   }, [])
 
   // My Work badge = open assigned actions + pending reading (PX-305).
   const myWorkBadgeCount = pendingCampaignCount + openActionsCount
+  const shownAuditTotal = assignedAuditQueueTotal(auditQueueTotal, auditQueueFailed)
 
   const handleLogout = () => {
     logout()
@@ -390,6 +406,61 @@ export default function Portal() {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">Assigned actions and pending reading</p>
+            </div>
+            <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+          </button>
+
+          {/* Assigned audits — logging-device entry (AUD-DEV-1) */}
+          <button
+            data-testid="portal-audits-btn"
+            type="button"
+            aria-label={
+              shownAuditTotal && shownAuditTotal > 0
+                ? `Audits — ${shownAuditTotal} assigned to you`
+                : auditQueueFailed
+                  ? 'Audits — could not load assigned audits'
+                  : 'Audits — no audits assigned to you'
+            }
+            onClick={() => navigate('/portal/audits')}
+            className={cn(
+              'w-full flex items-center gap-4 p-5 rounded-2xl transition-all group relative',
+              'bg-card hover:bg-muted/40 border-2 border-border hover:border-primary/30',
+            )}
+          >
+            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center relative">
+              <ClipboardCheck className="w-7 h-7 text-primary" />
+              {shownAuditTotal != null && shownAuditTotal > 0 ? (
+                <span
+                  data-testid="portal-audits-badge"
+                  className="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold"
+                >
+                  {shownAuditTotal}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex-1 text-left">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                  Audits
+                </h3>
+                {shownAuditTotal != null && shownAuditTotal > 0 ? (
+                  <span
+                    data-testid="portal-audits-count"
+                    className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-semibold"
+                  >
+                    {shownAuditTotal}
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-sm text-muted-foreground" data-testid="portal-audits-subtitle">
+                {auditQueueFailed
+                  ? 'Couldn’t load assigned audits'
+                  : shownAuditTotal === 0
+                    ? 'No audits assigned to you'
+                    : shownAuditTotal != null
+                      ? 'Assigned inspections for this device'
+                      : 'Assigned inspections for this device'}
+              </p>
             </div>
             <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
           </button>

@@ -9,6 +9,7 @@ const mockListMyAssignments = vi.fn()
 const mockActionsList = vi.fn()
 const mockMyTraining = vi.fn()
 const mockMyCompliance = vi.fn()
+const mockListAssignedToMe = vi.fn()
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -43,6 +44,9 @@ vi.mock('../../api/client', () => ({
   portalComplianceApi: {
     myCompliance: (...args: unknown[]) => mockMyCompliance(...args),
   },
+  auditsApi: {
+    listAssignedToMe: (...args: unknown[]) => mockListAssignedToMe(...args),
+  },
 }))
 
 describe('Portal hub honesty', () => {
@@ -65,6 +69,7 @@ describe('Portal hub honesty', () => {
       tool_summary: { total: 0, overdue: 0 },
       van_summary: { empty_reason: 'no_van' },
     })
+    mockListAssignedToMe.mockResolvedValue({ data: { items: [], total: 0 } })
   })
 
   it('uses keyboard-focusable buttons for track and help tiles (PX-295)', async () => {
@@ -121,5 +126,53 @@ describe('Portal hub honesty', () => {
 
     await user.click(screen.getByTestId('portal-training-btn'))
     expect(mockNavigate).toHaveBeenCalledWith('/portal/work#training')
+  })
+
+  it('shows an explicit empty Audits tile from the server total, not a missing tile', async () => {
+    render(
+      <MemoryRouter>
+        <Portal />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('portal-audits-subtitle')).toHaveTextContent(
+        'No audits assigned to you',
+      )
+    })
+    expect(screen.queryByTestId('portal-audits-count')).not.toBeInTheDocument()
+  })
+
+  it('does not show a fake zero when assigned audits fail to load', async () => {
+    mockListAssignedToMe.mockRejectedValue(new Error('offline'))
+    render(
+      <MemoryRouter>
+        <Portal />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('portal-audits-subtitle')).toHaveTextContent(
+        'Couldn’t load assigned audits',
+      )
+    })
+    expect(screen.queryByTestId('portal-audits-count')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('portal-audits-badge')).not.toBeInTheDocument()
+  })
+
+  it('opens the portal Audits section from the hub tile', async () => {
+    const user = userEvent.setup()
+    mockListAssignedToMe.mockResolvedValue({ data: { items: [], total: 2 } })
+    render(
+      <MemoryRouter>
+        <Portal />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('portal-audits-count')).toHaveTextContent('2')
+    })
+    await user.click(screen.getByTestId('portal-audits-btn'))
+    expect(mockNavigate).toHaveBeenCalledWith('/portal/audits')
   })
 })

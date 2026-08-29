@@ -76,6 +76,12 @@ from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.audit_analytics_service import SUPPORTED_GROUP_BY, AuditAnalyticsService
 from src.domain.services.audit_scoring_service import AuditScoringService
+from src.domain.services.audit_assignment_notify import (
+    is_device_queue_run,
+    notify_audit_scheduled,
+    require_assignee_in_tenant,
+    should_notify_assignee_change,
+)
 from src.domain.services.audit_service import AuditService, question_belongs_to_run, require_run_tenant_id
 from src.domain.services.external_audit_intake_template_resolver import (
     ExternalAuditIntakeTemplateResolver,
@@ -1097,6 +1103,42 @@ async def list_runs(
         ) from exc
 
 
+@router.get("/runs/assigned-to-me", response_model=AuditRunListResponse)
+async def list_runs_assigned_to_me(
+    db: DbSession,
+    current_user: CurrentUser,
+    params: PaginationParams = Depends(),
+) -> AuditRunListResponse:
+    """Open audit runs assigned to the current user for the Employee Portal queue.
+
+    Declared before ``/runs/{run_id}`` so ``assigned-to-me`` is not captured as an id.
+    Serializer-fallback rows (reference ``???``, status ``unknown``) are excluded.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = AuditService(db)
+    result = await service.list_runs(
+        tenant_id,
+        page=params.page,
+        page_size=params.page_size,
+        assigned_to_id=current_user.id,
+    )
+    visible = [run for run in result.items if is_device_queue_run(run)]
+    validated_items = [
+        _annotate_run_response_import_mode(
+            AuditRunResponse.model_validate(run),
+            template=getattr(run, "template", None),
+        )
+        for run in visible
+    ]
+    return AuditRunListResponse(
+        items=validated_items,
+        total=len(validated_items),
+        page=params.page,
+        page_size=params.page_size,
+        pages=1 if validated_items else 0,
+    )
+
+
 @router.post("/runs", response_model=AuditRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_run(
     run_data: AuditRunCreate,
@@ -1203,6 +1245,15 @@ async def create_run(
     payload = _normalize_run_create_payload(run_data)
     payload["template_id"] = template.id
 
+    if run_data.assigned_to_id is not None:
+        if current_user.tenant_id is None:
+            raise ValidationError("Assigning an audit requires an active tenant context")
+        await require_assignee_in_tenant(
+            db,
+            assignee_id=run_data.assigned_to_id,
+            tenant_id=current_user.tenant_id,
+        )
+
     run = AuditRun(
         **payload,
         template_version=template.version,
@@ -1217,6 +1268,17 @@ async def create_run(
     db.add(run)
     await db.commit()
     await db.refresh(run)
+
+    if should_notify_assignee_change(previous_id=None, new_id=run.assigned_to_id):
+        await notify_audit_scheduled(
+            db,
+            run_id=run.id,
+            reference_number=run.reference_number,
+            title=run.title,
+            assigned_to_id=run.assigned_to_id,
+            assigned_by_id=current_user.id,
+            tenant_id=run.tenant_id,
+        )
 
     response = _annotate_run_response_import_mode(AuditRunResponse.model_validate(run), template=template)
     if intake_resolution is not None:
@@ -1264,10 +1326,27 @@ async def update_run(
     """Update an audit run."""
     started = time.perf_counter()
     service = AuditService(db)
+    update_data = run_data.model_dump(exclude_unset=True)
+    previous_assignee_id: Optional[int] = None
+    if "assigned_to_id" in update_data:
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        await require_assignee_in_tenant(
+            db,
+            assignee_id=update_data["assigned_to_id"],
+            tenant_id=tenant_id,
+        )
+        previous_assignee_id = (
+            await db.execute(
+                select(AuditRun.assigned_to_id).where(
+                    AuditRun.id == run_id,
+                    AuditRun.tenant_id == tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
     try:
         run = await service.update_run(
             run_id,
-            run_data.model_dump(exclude_unset=True),
+            update_data,
             tenant_id=current_user.tenant_id,
         )
     except NotFoundError:
@@ -1286,6 +1365,19 @@ async def update_run(
             "invalid_status_transition",
         )
         raise BadRequestError(str(exc))
+    if "assigned_to_id" in update_data and should_notify_assignee_change(
+        previous_id=previous_assignee_id,
+        new_id=run.assigned_to_id,
+    ):
+        await notify_audit_scheduled(
+            db,
+            run_id=run.id,
+            reference_number=run.reference_number,
+            title=run.title,
+            assigned_to_id=run.assigned_to_id,
+            assigned_by_id=current_user.id,
+            tenant_id=run.tenant_id,
+        )
     response = _annotate_run_response_import_mode(
         AuditRunResponse.model_validate(run),
         template=run.__dict__.get("template"),

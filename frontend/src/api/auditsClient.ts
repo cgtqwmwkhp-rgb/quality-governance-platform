@@ -54,6 +54,7 @@ export interface AuditRun {
   engineer_id?: number | null
   location_id?: number | null
   customer_code?: string | null
+  assigned_to_id?: number | null
 }
 
 export interface AuditFinding {
@@ -189,6 +190,7 @@ export interface AuditRunCreate {
   engineer_id?: number
   location_id?: number
   customer_code?: string
+  assigned_to_id?: number | null
 }
 
 export interface AuditRunUpdate {
@@ -198,7 +200,7 @@ export interface AuditRunUpdate {
   status?: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
   scheduled_date?: string
   due_date?: string
-  assigned_to_id?: number
+  assigned_to_id?: number | null
   notes?: string
   source_origin?: string
   assurance_scheme?: string
@@ -626,6 +628,10 @@ export function createAuditsApi(api: AxiosInstance) {
     if (q) params.set('q', q)
     return api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?${params}`)
   },
+  listAssignedToMe: (page = 1, pageSize = 100) =>
+    api.get<PaginatedResponse<AuditRun>>(
+      `/api/v1/audits/runs/assigned-to-me?page=${page}&page_size=${pageSize}`,
+    ),
   createRun: (data: AuditRunCreate) => api.post<AuditRun>('/api/v1/audits/runs', data),
   getRun: (id: number) => api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
   getRunDetail: (id: number) => api.get<AuditRunDetail>(`/api/v1/audits/runs/${id}`),
