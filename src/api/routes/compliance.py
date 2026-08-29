@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, List, Optional
 
 import sqlalchemy
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
