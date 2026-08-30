@@ -7,12 +7,55 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.datastructures import Headers, UploadFile
 
 from src.api.routes.evidence_assets import list_evidence_assets, upload_evidence_asset
-from src.domain.exceptions import ValidationError
+from src.domain.exceptions import BadRequestError, ValidationError
 from src.domain.models.investigation import AssignedEntityType
 from src.domain.services.audit_service import AuditService
 from src.domain.services.evidence_service import EvidenceService
 from src.domain.services.investigation_service import InvestigationService as DomainInvestigationService
 from src.infrastructure.storage import StorageDependencyError
+
+
+@pytest.mark.asyncio
+async def test_evidence_upload_rejects_empty_file_before_storage(monkeypatch):
+    async def _validate_source_exists(*args, **kwargs):
+        return True
+
+    class _UnexpectedStorage:
+        async def upload(self, **kwargs):
+            pytest.fail("empty evidence must be rejected before storage upload")
+
+    monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
+    monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _UnexpectedStorage())
+
+    file = UploadFile(
+        file=io.BytesIO(b""),
+        filename="empty.jpg",
+        headers=Headers({"content-type": "image/jpeg"}),
+    )
+
+    with pytest.raises(BadRequestError) as exc_info:
+        await upload_evidence_asset(
+            db=types.SimpleNamespace(),
+            current_user=types.SimpleNamespace(id=42, tenant_id=1),
+            file=file,
+            source_module="road_traffic_collision",
+            source_id=7,
+            asset_type=None,
+            title=None,
+            description=None,
+            captured_at=None,
+            captured_by_role=None,
+            latitude=None,
+            longitude=None,
+            location_description=None,
+            visibility="internal_customer",
+            contains_pii=False,
+            redaction_required=False,
+        )
+
+    assert exc_info.value.code == "FILE_TOO_SMALL"
+    assert exc_info.value.http_status == 400
+    assert exc_info.value.details == {"file_size": 0, "min_size": 1}
 
 
 @pytest.mark.asyncio
