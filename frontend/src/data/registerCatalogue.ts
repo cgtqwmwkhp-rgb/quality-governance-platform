@@ -22,6 +22,7 @@ export const REGISTER_ALLOWED_ROUTES = [
   '/compliance',
   '/documents',
   '/planet-mark',
+  '/admin/forms',
 ] as const
 
 export type RegisterAllowedRoute = (typeof REGISTER_ALLOWED_ROUTES)[number]
@@ -146,9 +147,12 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     title: 'Worker Consultation Record',
     purpose: 'Record of consultation with non-managerial workers.',
     ownerRole: 'HSEQ',
-    band: 'absent',
+    band: 'caption',
+    to: '/admin/forms',
+    captionQuery: 'register=PEL-HSEQ-5026',
     standardRefs: ['ISO 45001 5.4', 'HSCE 1996'],
     retentionYears: 6,
+    note: 'Form Builder draft worker-consultation-record, admin or manager only. No dedicated consultation list in QGP.',
   },
   {
     docRef: 'PEL-HSEQ-5027',
@@ -259,9 +263,12 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     title: 'Permit to Work Record',
     purpose: 'Permits for hazardous work.',
     ownerRole: 'HSEQ',
-    band: 'absent',
+    band: 'caption',
+    to: '/admin/forms',
+    captionQuery: 'register=PEL-HSEQ-5036',
     standardRefs: ['MHSWR 1999', 'CDM 2015'],
     retentionYears: 6,
+    note: 'Form Builder draft permit-to-work-record, admin or manager only. No dedicated permit list in QGP.',
   },
   {
     docRef: 'PEL-HSEQ-5037',
@@ -308,9 +315,12 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     title: 'Remote Working Agreement and Assessment Record',
     purpose: 'Home / remote workstation assessment.',
     ownerRole: 'HSEQ',
-    band: 'absent',
+    band: 'caption',
+    to: '/admin/forms',
+    captionQuery: 'register=PEL-HSEQ-5043',
     standardRefs: ['DSE 1992', 'MHSWR 1999'],
     retentionYears: 6,
+    note: 'Form Builder draft remote-working-record, admin or manager only. No dedicated remote working list in QGP.',
   },
   {
     docRef: 'PEL-HSEQ-5044',
@@ -373,9 +383,12 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     title: 'Waste Duty of Care Register',
     purpose: 'Every controlled-waste movement.',
     ownerRole: 'HSEQ',
-    band: 'document',
+    band: 'caption',
+    to: '/admin/forms',
+    captionQuery: 'register=PEL-HSEQ-5052',
     standardRefs: ['EPA 1990 s.34'],
     retentionYears: 6,
+    note: 'Form Builder draft waste-duty-of-care-record, admin or manager only. The transfer note is filed to the Governance Library and referenced by PEL number, not attached here. No dedicated waste list in QGP.',
   },
   {
     docRef: 'PEL-HSEQ-5054',

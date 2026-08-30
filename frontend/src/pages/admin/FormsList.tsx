@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Plus,
   Search,
@@ -36,6 +36,7 @@ import {
 } from '../../components/ui/Dialog'
 import { cn } from '../../helpers/utils'
 import { formConfigApi, type FormTemplateListItem } from '../../api/formConfigClient'
+import RegisterCaptionBanner from '../../components/register/RegisterCaptionBanner'
 import { captureAdminLoadError } from './adminLoadHelpers'
 import { formBuilderEmptyStateCopy } from './formBuilderHonesty'
 
@@ -74,6 +75,7 @@ const FORM_TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; c
 
 export default function FormsList() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [forms, setForms] = useState<FormTemplateListItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<string | null>(null)
@@ -229,6 +231,8 @@ export default function FormsList() {
               Create New Form
             </Button>
           </div>
+
+          <RegisterCaptionBanner registerParam={searchParams.get('register')} />
 
           {/* Filters */}
           <div className="mt-6 flex flex-wrap items-center gap-4">

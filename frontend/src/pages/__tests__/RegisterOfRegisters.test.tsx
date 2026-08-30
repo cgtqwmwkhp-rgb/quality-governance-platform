@@ -135,6 +135,41 @@ describe('RegisterOfRegisters', () => {
     expect(screen.getByTestId('register-dual-PEL-IT-5003')).toHaveTextContent('DUAL')
   })
 
+  it.each([
+    ['PEL-HSEQ-5026', '/admin/forms?register=PEL-HSEQ-5026'],
+    ['PEL-HSEQ-5036', '/admin/forms?register=PEL-HSEQ-5036'],
+    ['PEL-HSEQ-5043', '/admin/forms?register=PEL-HSEQ-5043'],
+  ])('opens %s on the Form Builder, still marked EMPTY (REG-SSOT-D1)', (docRef, href) => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    const row = screen.getByText(docRef).closest('tr')
+    expect(row).not.toBeNull()
+    expect(row!.querySelector('a')).toHaveAttribute('href', href)
+    expect(screen.getByTestId(`register-empty-${docRef}`)).toHaveTextContent('EMPTY')
+    expect(row).not.toHaveTextContent('No QGP list')
+  })
+
+  it('opens PEL-HSEQ-5052 on the Form Builder, still marked EMPTY (REG-SSOT-D2)', () => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    const row = screen.getByText('PEL-HSEQ-5052').closest('tr')
+    expect(row).not.toBeNull()
+    expect(row!.querySelector('a')).toHaveAttribute('href', '/admin/forms?register=PEL-HSEQ-5052')
+    // Caption band, not a Library-document row any more, and no invented count
+    // of transfer notes behind the link.
+    expect(screen.getByTestId('register-empty-PEL-HSEQ-5052')).toHaveTextContent('EMPTY')
+    expect(row).not.toHaveTextContent('No QGP list')
+    expect(row).not.toHaveTextContent('Library document')
+  })
+
   it('does not add ISO chip filters on the hub', () => {
     useFeatureFlagMock.mockReturnValue(true)
     render(
