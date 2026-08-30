@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 
 const mockListTemplates = vi.fn()
 const mockDeleteTemplate = vi.fn()
@@ -31,6 +32,15 @@ vi.mock('react-router-dom', async () => {
 
 import FormsList from '../FormsList'
 
+/** FormsList reads `?register=` for the PEL caption, so it needs a router. */
+function renderFormsList(route = '/admin/forms') {
+  return render(
+    <MemoryRouter initialEntries={[route]}>
+      <FormsList />
+    </MemoryRouter>,
+  )
+}
+
 const sampleForm = {
   id: 1,
   name: 'Incident Report',
@@ -59,7 +69,7 @@ describe('FormsList API wiring', () => {
   })
 
   it('loads templates from admin config API', async () => {
-    render(<FormsList />)
+    renderFormsList()
 
     expect(await screen.findByText('Incident Report')).toBeInTheDocument()
     expect(mockListTemplates).toHaveBeenCalledWith({ page_size: 100 })
@@ -68,7 +78,7 @@ describe('FormsList API wiring', () => {
 
   it('shows retry when list fails', async () => {
     mockListTemplates.mockRejectedValue(new Error('network'))
-    render(<FormsList />)
+    renderFormsList()
 
     expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(screen.getByText('network')).toBeInTheDocument()
@@ -78,7 +88,7 @@ describe('FormsList API wiring', () => {
     const user = userEvent.setup()
     mockPublishTemplate.mockResolvedValue({ ...sampleForm, is_published: true, version: 2 })
 
-    render(<FormsList />)
+    renderFormsList()
     await screen.findByText('Incident Report')
 
     const card = screen.getByText('Incident Report').closest('div[class*="group"]')
@@ -99,11 +109,54 @@ describe('FormsList API wiring', () => {
 
   it('explains empty Form Builder catalogue honestly (PX-272)', async () => {
     mockListTemplates.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100 })
-    render(<FormsList />)
+    renderFormsList()
 
     expect(await screen.findByTestId('forms-list-empty-honesty')).toBeInTheDocument()
     expect(screen.getByText('No Form Builder templates')).toBeInTheDocument()
     expect(screen.getByText(/live portal intake forms/i)).toBeInTheDocument()
     expect(screen.queryByText(/Get started by creating your first form/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('FormsList register caption (REG-SSOT-D1)', () => {
+  beforeEach(() => {
+    mockListTemplates.mockReset()
+    mockNavigate.mockReset()
+    mockListTemplates.mockResolvedValue({ items: [sampleForm], total: 1, page: 1, page_size: 100 })
+  })
+
+  it.each([
+    ['PEL-HSEQ-5026', 'PEL-HSEQ-5026 · Worker Consultation Record'],
+    ['PEL-HSEQ-5036', 'PEL-HSEQ-5036 · Permit to Work Record'],
+    ['PEL-HSEQ-5043', 'PEL-HSEQ-5043 · Remote Working Agreement and Assessment Record'],
+  ])('captions the Form Builder when opened as %s', async (docRef, heading) => {
+    renderFormsList(`/admin/forms?register=${docRef}`)
+
+    const banner = await screen.findByTestId('register-caption-banner')
+    expect(banner).toHaveTextContent(heading)
+    expect(banner).toHaveTextContent('No dedicated')
+    expect(screen.getByRole('link', { name: 'Back to Registers' })).toHaveAttribute(
+      'href',
+      '/registers',
+    )
+  })
+
+  it('renders no caption without a register param, and ignores an unknown one', async () => {
+    const plain = renderFormsList()
+    await screen.findByText('Incident Report')
+    expect(screen.queryByTestId('register-caption-banner')).not.toBeInTheDocument()
+    plain.unmount()
+
+    renderFormsList('/admin/forms?register=PEL-NOPE-0000')
+    await screen.findByText('Incident Report')
+    expect(screen.queryByTestId('register-caption-banner')).not.toBeInTheDocument()
+  })
+
+  it('does not invent a record count for the captioned register', async () => {
+    renderFormsList('/admin/forms?register=PEL-HSEQ-5036')
+
+    const banner = await screen.findByTestId('register-caption-banner')
+    expect(banner).not.toHaveTextContent(/Server total/i)
+    expect(banner).not.toHaveTextContent(/\b\d+ records?\b/i)
   })
 })

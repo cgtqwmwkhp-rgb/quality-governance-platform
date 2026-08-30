@@ -135,6 +135,24 @@ describe('RegisterOfRegisters', () => {
     expect(screen.getByTestId('register-dual-PEL-IT-5003')).toHaveTextContent('DUAL')
   })
 
+  it.each([
+    ['PEL-HSEQ-5026', '/admin/forms?register=PEL-HSEQ-5026'],
+    ['PEL-HSEQ-5036', '/admin/forms?register=PEL-HSEQ-5036'],
+    ['PEL-HSEQ-5043', '/admin/forms?register=PEL-HSEQ-5043'],
+  ])('opens %s on the Form Builder, still marked EMPTY (REG-SSOT-D1)', (docRef, href) => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    const row = screen.getByText(docRef).closest('tr')
+    expect(row).not.toBeNull()
+    expect(row!.querySelector('a')).toHaveAttribute('href', href)
+    expect(screen.getByTestId(`register-empty-${docRef}`)).toHaveTextContent('EMPTY')
+    expect(row).not.toHaveTextContent('No QGP list')
+  })
+
   it('does not add ISO chip filters on the hub', () => {
     useFeatureFlagMock.mockReturnValue(true)
     render(
