@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
@@ -107,6 +108,9 @@ function heroIcon(band: AssetHeroBand) {
 
 export default function SafetyAssetRegister() {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
+  const registerParam = searchParams.get('register')
+  const captionBanner = <RegisterCaptionBanner registerParam={registerParam} />
 
   const [boardAssets, setBoardAssets] = useState<SafetyAsset[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,6 +125,9 @@ export default function SafetyAssetRegister() {
   /** Board-level type filter (`null` = all types). Drives KPIs, lists, and rollups. */
   const [typeFilterId, setTypeFilterId] = useState<number | null>(() => {
     try {
+      if (new URLSearchParams(window.location.search).get('register')) {
+        return null
+      }
       const raw = window.localStorage.getItem('qgp.safetyAssets.typeFilterId')
       if (!raw) return null
       const parsed = Number(raw)
@@ -234,6 +241,16 @@ export default function SafetyAssetRegister() {
       // Storage may be unavailable in private browsing contexts.
     }
   }, [typeFilterId])
+
+  useEffect(() => {
+    if (!registerParam) return
+    setTypeFilterId(null)
+    try {
+      window.localStorage.removeItem('qgp.safetyAssets.typeFilterId')
+    } catch {
+      // Storage may be unavailable in private browsing contexts.
+    }
+  }, [registerParam])
 
   const typeOptions = useMemo(
     () =>
@@ -462,6 +479,7 @@ export default function SafetyAssetRegister() {
               'CES-fed register — click hero bands, roll up by engineer/vehicle/type, drill into kits.',
             )}
           </p>
+          {captionBanner}
         </div>
         <Button variant="outline" size="sm" onClick={() => void loadBoard()}>
           <RefreshCw className="mr-2 h-4 w-4" />

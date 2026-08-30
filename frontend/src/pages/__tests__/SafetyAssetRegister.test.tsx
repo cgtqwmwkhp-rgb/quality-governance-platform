@@ -292,4 +292,40 @@ describe('SafetyAssetRegister Wave 2 board', () => {
       )
     })
   })
+
+  it('resets sticky type filter and captions when opened with ?register=', async () => {
+    window.localStorage.setItem('qgp.safetyAssets.typeFilterId', '10')
+    mockListAssetTypes.mockResolvedValue({
+      data: {
+        items: [{ id: 10, category: 'safety', name: 'Harness', is_active: true }],
+        total: 1,
+      },
+    })
+    mockListAllAssetsForBoard.mockResolvedValue([
+      {
+        id: 55,
+        external_id: 'ext-55',
+        asset_type_id: 10,
+        asset_number: 'SA-001',
+        name: 'Fall harness A',
+        status: 'active',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ])
+
+    render(
+      <MemoryRouter initialEntries={['/safety-assets?register=PEL-HSEQ-5031']}>
+        <SafetyAssetRegister />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('register-caption-banner')).toHaveTextContent(
+      'PEL-HSEQ-5031',
+    )
+    await waitFor(() => {
+      expect(screen.getByTestId('safety-assets-type-filter')).toHaveValue('')
+    })
+    expect(window.localStorage.getItem('qgp.safetyAssets.typeFilterId')).toBeNull()
+  })
 })
