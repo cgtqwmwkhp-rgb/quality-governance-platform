@@ -21,6 +21,102 @@ const BAND_FILTERS: Array<{ id: 'all' | RegisterBand; label: string }> = [
   { id: 'hub', label: 'This hub' },
 ]
 
+/** Function clusters over existing spines. Not a second catalogue field. */
+type HubCluster =
+  | 'cases'
+  | 'assets'
+  | 'clocks'
+  | 'people'
+  | 'audit'
+  | 'fleet'
+  | 'information'
+  | 'filed'
+  | 'this-hub'
+
+const CLUSTER_ORDER: readonly HubCluster[] = [
+  'cases',
+  'assets',
+  'clocks',
+  'people',
+  'audit',
+  'fleet',
+  'information',
+  'filed',
+  'this-hub',
+]
+
+const CLUSTER_LABEL: Record<HubCluster, string> = {
+  cases: 'Cases',
+  assets: 'Assets',
+  clocks: 'Clocks',
+  people: 'People',
+  audit: 'Audit',
+  fleet: 'Fleet',
+  information: 'Information',
+  filed: 'Filed',
+  'this-hub': 'This hub',
+}
+
+/**
+ * EMPTY is a catalogue fact (absent band or note), never a counted zero.
+ * Dual-SoR is externalSor. Do not treat “module may be off” as empty.
+ */
+const EMPTY_NOTE_RE =
+  /\b(no tenant |no premises |no dedicated |may still be empty|not a qgp spine|privacy stub|inventory locked)/i
+
+function clusterOf(entry: RegisterEntry): HubCluster {
+  if (entry.band === 'hub') return 'this-hub'
+  if (entry.band === 'document') return 'filed'
+  switch (entry.to) {
+    case '/incidents':
+    case '/complaints':
+    case '/risk-register':
+    case '/actions':
+      return 'cases'
+    case '/safety-assets':
+      return 'assets'
+    case '/compliance-schedule':
+    case '/compliance':
+      return 'clocks'
+    case '/workforce/training':
+    case '/my-reading':
+      return 'people'
+    case '/audits':
+    case '/audit-templates':
+      return 'audit'
+    case '/vehicle-checklists':
+    case '/planet-mark':
+      return 'fleet'
+    case '/ims':
+      return 'information'
+    case '/registers':
+      return 'this-hub'
+    default:
+      break
+  }
+  if (entry.docRef.startsWith('PEL-IT-') || entry.docRef === 'PEL-DP-5008') {
+    return 'information'
+  }
+  if (entry.docRef === 'PEL-HSEQ-5008' || entry.docRef === 'PEL-HSEQ-5036') {
+    return 'clocks'
+  }
+  if (
+    entry.docRef === 'PEL-HSEQ-5026' ||
+    entry.docRef === 'PEL-HSEQ-5028' ||
+    entry.docRef === 'PEL-HSEQ-5043'
+  ) {
+    return 'people'
+  }
+  if (entry.ownerRole === 'Procurement') return 'cases'
+  return 'cases'
+}
+
+function isEmptyOccurrence(entry: RegisterEntry): boolean {
+  if (entry.band === 'hub') return false
+  if (entry.band === 'absent') return true
+  return Boolean(entry.note && EMPTY_NOTE_RE.test(entry.note))
+}
+
 function bandVariant(band: RegisterBand): 'success' | 'info' | 'secondary' | 'outline' | 'warning' {
   if (band === 'live') return 'success'
   if (band === 'hub') return 'info'
@@ -75,6 +171,26 @@ function HubOpenCell({
   return <span className="text-muted-foreground">{noLinkLabel}</span>
 }
 
+function OccupancyChips({ entry }: { entry: RegisterEntry }) {
+  const empty = isEmptyOccurrence(entry)
+  const dual = Boolean(entry.externalSor)
+  if (!empty && !dual) return null
+  return (
+    <span className="inline-flex flex-wrap gap-1 mt-1">
+      {empty ? (
+        <Badge variant="outline" data-testid={`register-empty-${entry.docRef}`}>
+          EMPTY
+        </Badge>
+      ) : null}
+      {dual ? (
+        <Badge variant="info" data-testid={`register-dual-${entry.docRef}`}>
+          DUAL
+        </Badge>
+      ) : null}
+    </span>
+  )
+}
+
 export default function RegisterOfRegisters() {
   const { t } = useTranslation()
   const enabled = useFeatureFlag('register_catalogue')
@@ -92,6 +208,7 @@ export default function RegisterOfRegisters() {
         entry.title,
         entry.purpose,
         entry.ownerRole,
+        CLUSTER_LABEL[clusterOf(entry)],
         ...entry.standardRefs,
         entry.note ?? '',
         entry.externalSor ?? '',
@@ -101,6 +218,14 @@ export default function RegisterOfRegisters() {
       return hay.includes(needle)
     })
   }, [band, query])
+
+  const clustered = useMemo(() => {
+    return CLUSTER_ORDER.map((id) => ({
+      id,
+      label: CLUSTER_LABEL[id],
+      entries: rows.filter((entry) => clusterOf(entry) === id),
+    })).filter((group) => group.entries.length > 0)
+  }, [rows])
 
   if (!enabled) {
     return <NotFound />
@@ -182,35 +307,53 @@ export default function RegisterOfRegisters() {
               </th>
             </tr>
           </thead>
-          <tbody>
-            {rows.map((entry) => (
-              <tr key={entry.docRef} className="border-b border-border">
-                <th scope="row" className="px-4 py-3 font-medium text-foreground whitespace-nowrap">
-                  {entry.docRef}
+          {clustered.map((group) => (
+            <tbody key={group.id} data-testid={`register-cluster-${group.id}`}>
+              <tr className="border-b border-border bg-muted/20">
+                <th
+                  scope="colgroup"
+                  colSpan={5}
+                  className="px-4 py-2 text-left text-sm font-semibold text-foreground"
+                >
+                  {group.label}
                 </th>
-                <td className="px-4 py-3">
-                  <div className="text-foreground">{entry.title}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{entry.purpose}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge variant={bandVariant(entry.band)}>{BAND_LABEL[entry.band]}</Badge>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{systemOfRecord(entry)}</td>
-                <td className="px-4 py-3">
-                  <HubOpenCell
-                    entry={entry}
-                    scheduleEnabled={scheduleEnabled}
-                    openLabel={t('registers.hub.open', 'Open')}
-                    scheduleOffLabel={t(
-                      'registers.hub.schedule_off',
-                      'Schedule module is off in this deployment',
-                    )}
-                    noLinkLabel={t('registers.hub.no_link', 'No QGP list')}
-                  />
-                </td>
               </tr>
-            ))}
-          </tbody>
+              {group.entries.map((entry) => (
+                <tr key={entry.docRef} className="border-b border-border">
+                  <th scope="row" className="px-4 py-3 font-medium text-foreground whitespace-nowrap">
+                    {entry.docRef}
+                  </th>
+                  <td className="px-4 py-3">
+                    <div className="text-foreground">{entry.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{entry.purpose}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{entry.ownerRole}</div>
+                    {isEmptyOccurrence(entry) && entry.note ? (
+                      <div className="text-xs text-muted-foreground mt-0.5">{entry.note}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col items-start gap-1">
+                      <Badge variant={bandVariant(entry.band)}>{BAND_LABEL[entry.band]}</Badge>
+                      <OccupancyChips entry={entry} />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{systemOfRecord(entry)}</td>
+                  <td className="px-4 py-3">
+                    <HubOpenCell
+                      entry={entry}
+                      scheduleEnabled={scheduleEnabled}
+                      openLabel={t('registers.hub.open', 'Open')}
+                      scheduleOffLabel={t(
+                        'registers.hub.schedule_off',
+                        'Schedule module is off in this deployment',
+                      )}
+                      noLinkLabel={t('registers.hub.no_link', 'No QGP list')}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
       </div>
     </div>
