@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { useTranslation } from 'react-i18next'
 import {
   Truck,
@@ -384,6 +385,10 @@ function getEndTimeRaw(record: Record<string, unknown>): string {
 
 export default function VehicleChecklists() {
   useTranslation()
+  const [searchParams] = useSearchParams()
+  const captionBanner = (
+    <RegisterCaptionBanner registerParam={searchParams.get('register')} />
+  )
 
   const [activeTab, setActiveTab] = useState<TabKey>('daily')
   const [loading, setLoading] = useState(true)
@@ -809,6 +814,7 @@ export default function VehicleChecklists() {
           <p className="text-sm text-muted-foreground mt-1">
             PAMS vehicle checklist data with governance defect tracking
           </p>
+          {captionBanner}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleSync}>

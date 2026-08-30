@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useDeferredValue, useMemo, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { useTranslation } from 'react-i18next'
 import {
   Search,
@@ -246,6 +247,8 @@ export default function Actions() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const registerParam = searchParams.get('register')
+  const captionBanner = <RegisterCaptionBanner registerParam={registerParam} />
   const complianceScheduleEnabled = useFeatureFlag('compliance_schedule')
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
@@ -737,6 +740,7 @@ export default function Actions() {
               {t('actions.title')}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">{t('actions.subtitle')}</p>
+            {captionBanner}
           </div>
           <Button
             ref={createTriggerRef}
@@ -763,6 +767,7 @@ export default function Actions() {
             {t('actions.title')}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">{t('actions.subtitle')}</p>
+          {captionBanner}
         </div>
         <Button
           ref={createTriggerRef}

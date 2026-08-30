@@ -16,6 +16,7 @@ import {
   Play,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { parseInstrument } from './auditInstrument'
 import { buildActionDetailPath } from './actionLinks'
 import {
@@ -315,6 +316,9 @@ export default function Audits() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const captionBanner = (
+    <RegisterCaptionBanner registerParam={searchParams.get('register')} />
+  )
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [auditsTotal, setAuditsTotal] = useState<number | null>(null)
   const [findings, setFindings] = useState<AuditFinding[]>([])
@@ -1307,6 +1311,7 @@ export default function Audits() {
               ? 'Customer-raised and imported external audit runs within the Assurance hub'
               : 'Internal audits, imported external audits, inspections, and compliance checks'}
           </p>
+          {captionBanner}
         </div>
         <div className="flex items-center gap-3">
           {/* View Toggle */}

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { useTranslation } from 'react-i18next'
 import {
   Award,
@@ -215,6 +216,9 @@ const standardProgressClass: Record<string, string> = {
 export default function ComplianceEvidence() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const captionBanner = (
+    <RegisterCaptionBanner registerParam={searchParams.get('register')} />
+  )
   const documentGraphEnabled = useFeatureFlag('document_graph')
   const clauseFromUrl = (searchParams.get('clause') || '').trim()
   const standardFromUrl = (searchParams.get('standard') || '').trim()
@@ -899,6 +903,7 @@ export default function ComplianceEvidence() {
                     'Live repository for multi-framework evidence, clause coverage, and specialist programme deep-links',
                 })}
           </p>
+          {captionBanner}
           <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="compliance-evidence-hub-links">
             <div
               className="inline-flex rounded-lg border border-border bg-card p-0.5"
