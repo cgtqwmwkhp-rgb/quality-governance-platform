@@ -88,4 +88,68 @@ describe('RegisterOfRegisters', () => {
       '/compliance-schedule?register=PEL-HSEQ-5056&statutory=true',
     )
   })
+
+  it('groups the existing table by function clusters without a second table', () => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    expect(screen.getAllByRole('table')).toHaveLength(1)
+    expect(screen.getByTestId('register-cluster-cases')).toBeInTheDocument()
+    expect(screen.getByTestId('register-cluster-assets')).toBeInTheDocument()
+    expect(screen.getByTestId('register-cluster-clocks')).toBeInTheDocument()
+    expect(screen.getByText('PEL-HSEQ-5010').closest('tbody')).toHaveAttribute(
+      'data-testid',
+      'register-cluster-cases',
+    )
+    expect(screen.getByText('PEL-HSEQ-5031').closest('tbody')).toHaveAttribute(
+      'data-testid',
+      'register-cluster-assets',
+    )
+  })
+
+  it('shows EMPTY from catalogue note or absent band, never a counted zero', () => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('register-empty-PEL-HSEQ-5027')).toHaveTextContent('EMPTY')
+    expect(screen.getByTestId('register-empty-PEL-DP-5008')).toHaveTextContent('EMPTY')
+    expect(screen.queryByTestId('register-empty-PEL-HSEQ-5062')).not.toBeInTheDocument()
+    expect(screen.queryByText(/record count/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\b0 records\b/i)).not.toBeInTheDocument()
+  })
+
+  it('shows DUAL when a second system of record is named', () => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('register-dual-PEL-HSEQ-5032')).toHaveTextContent('DUAL')
+    expect(screen.getByTestId('register-dual-PEL-IT-5003')).toHaveTextContent('DUAL')
+  })
+
+  it('does not add ISO chip filters on the hub', () => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    const tabs = screen.getByRole('tablist').querySelectorAll('[role="tab"]')
+    expect([...tabs].map((el) => el.textContent)).toEqual([
+      'All',
+      'LIVE',
+      'Caption',
+      'Document',
+      'Not captured',
+      'This hub',
+    ])
+  })
 })
