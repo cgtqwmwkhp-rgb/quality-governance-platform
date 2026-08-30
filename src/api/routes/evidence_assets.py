@@ -44,6 +44,7 @@ from src.domain.models.user import User
 from src.domain.services.evidence_service import (
     ALLOWED_CONTENT_TYPES,
     MAX_FILE_SIZE_BYTES,
+    MIN_FILE_SIZE_BYTES,
     resolve_evidence_content_type,
 )
 from src.domain.services.library_file_home_link import link_evidence_asset, promote_evidence_asset
@@ -235,6 +236,12 @@ async def upload_evidence_asset(
     file_size = len(file_content)
 
     # Validate file size
+    if file_size < MIN_FILE_SIZE_BYTES:
+        raise BadRequestError(
+            f"File is empty ({file_size} bytes) and cannot be stored as evidence",
+            code="FILE_TOO_SMALL",
+            details={"file_size": file_size, "min_size": MIN_FILE_SIZE_BYTES},
+        )
     if file_size > MAX_FILE_SIZE_BYTES:
         raise BadRequestError(
             f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes",
