@@ -1,6 +1,7 @@
 import { useEffect, useState, useDeferredValue } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CaseRegisterReferenceLink } from '../components/register/CaseRegisterReferenceLink'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { formatCodedValue } from '../helpers/displayLabels'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
@@ -140,6 +141,7 @@ function buildComplaintsListSearch(params: {
   page: number
   owner: OwnerFilter
   ids: string
+  register: string
 }): string {
   const next = new URLSearchParams()
   const q = params.q.trim()
@@ -150,12 +152,16 @@ function buildComplaintsListSearch(params: {
   if (params.owner === 'unassigned') next.set('owner', 'unassigned')
   const ids = params.ids.trim()
   if (ids) next.set('ids', ids)
+  const register = params.register.trim()
+  if (register) next.set('register', register)
   return next.toString()
 }
 
 export default function Complaints() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const registerParam = searchParams.get('register') || ''
+  const captionBanner = <RegisterCaptionBanner registerParam={registerParam || null} />
   const { t, i18n } = useTranslation()
   const registerLabels = useCaseRegisterLabels()
   const kindsEnabled = useFeatureFlag('customer_feedback_kinds')
@@ -338,6 +344,7 @@ export default function Complaints() {
       page,
       owner: ownerFilter,
       ids: idsFilter,
+      register: registerParam,
     })
     if (desired !== searchParams.toString()) {
       setSearchParams(desired ? new URLSearchParams(desired) : new URLSearchParams(), {
@@ -353,6 +360,7 @@ export default function Complaints() {
     idsFilter,
     searchParams,
     setSearchParams,
+    registerParam,
   ])
 
   useEffect(() => {
@@ -670,6 +678,7 @@ export default function Complaints() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">{t('complaints.title')}</h1>
             <p className="text-muted-foreground mt-1">{t('complaints.subtitle')}</p>
+            {captionBanner}
           </div>
         </div>
         <Card>
@@ -700,6 +709,7 @@ export default function Complaints() {
             )}
           </div>
           <p className="text-muted-foreground mt-1">{t('complaints.subtitle')}</p>
+          {captionBanner}
         </div>
         <Button onClick={() => setShowModal(true)} data-testid="complaints-new">
           <Plus size={20} />

@@ -47,4 +47,21 @@ describe('register catalogue honesty', () => {
     expect(hubOpenKind(legal!, { compliance_schedule: false })).toBe('schedule-off')
     expect(hubOpenKind(legal!, { compliance_schedule: true })).toBe('link')
   })
+
+  it('captions every Open except safety-assets and the hub (REG-SSOT-A1; A2 owns assets)', () => {
+    const missing: string[] = []
+    const unexpected: string[] = []
+    for (const entry of REGISTER_CATALOGUE) {
+      if (!entry.to) continue
+      if (entry.to === '/safety-assets' || entry.to === '/registers') {
+        if (entry.captionQuery) unexpected.push(entry.docRef)
+        continue
+      }
+      if (!entry.captionQuery?.includes(`register=${entry.docRef}`)) {
+        missing.push(entry.docRef)
+      }
+    }
+    expect(missing).toEqual([])
+    expect(unexpected).toEqual([])
+  })
 })

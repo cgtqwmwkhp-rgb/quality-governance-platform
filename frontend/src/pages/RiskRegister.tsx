@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import {
   AlertTriangle,
   Plus,
@@ -275,6 +276,8 @@ export default function RiskRegister() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const registerParam = searchParams.get('register')
+  const captionBanner = <RegisterCaptionBanner registerParam={registerParam} />
   const bowtieEnabled = useFeatureFlag('risk_bowtie')
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
   const [risks, setRisks] = useState<Risk[]>([])
@@ -1152,6 +1155,7 @@ export default function RiskRegister() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Enterprise Risk Register</h1>
           <p className="text-muted-foreground">ISO 31000 Compliant Risk Management</p>
+          {captionBanner}
           <div className="flex flex-wrap gap-2 mt-3">
             <Button
               size="sm"
