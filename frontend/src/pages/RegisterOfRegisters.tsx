@@ -65,7 +65,8 @@ const CLUSTER_LABEL: Record<HubCluster, string> = {
 
 /**
  * EMPTY is a catalogue fact (absent band or note), never a counted zero.
- * Dual-SoR is externalSor. Do not treat “module may be off” as empty.
+ * Dual-SoR requires QGP participation plus externalSor. Do not treat
+ * “module may be off” as empty.
  */
 const EMPTY_NOTE_RE =
   /\b(no tenant |no premises |no dedicated |may still be empty|not a qgp spine|privacy stub|inventory locked)/i
@@ -176,7 +177,7 @@ function HubOpenCell({
 
 function OccupancyChips({ entry }: { entry: RegisterEntry }) {
   const empty = isEmptyOccurrence(entry)
-  const dual = Boolean(entry.externalSor)
+  const dual = Boolean(entry.externalSor && entry.band !== 'absent')
   if (!empty && !dual) return null
   return (
     <span className="inline-flex flex-wrap gap-1 mt-1">

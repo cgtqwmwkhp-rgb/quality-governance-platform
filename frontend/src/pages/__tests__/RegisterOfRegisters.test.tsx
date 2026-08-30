@@ -124,7 +124,7 @@ describe('RegisterOfRegisters', () => {
     expect(screen.queryByText(/\b0 records\b/i)).not.toBeInTheDocument()
   })
 
-  it('shows DUAL when a second system of record is named', () => {
+  it('shows DUAL only when QGP and a second system of record participate', () => {
     useFeatureFlagMock.mockReturnValue(true)
     render(
       <MemoryRouter>
@@ -133,6 +133,7 @@ describe('RegisterOfRegisters', () => {
     )
     expect(screen.getByTestId('register-dual-PEL-HSEQ-5032')).toHaveTextContent('DUAL')
     expect(screen.getByTestId('register-dual-PEL-IT-5003')).toHaveTextContent('DUAL')
+    expect(screen.queryByTestId('register-dual-PEL-IT-5014')).not.toBeInTheDocument()
   })
 
   it('does not add ISO chip filters on the hub', () => {
