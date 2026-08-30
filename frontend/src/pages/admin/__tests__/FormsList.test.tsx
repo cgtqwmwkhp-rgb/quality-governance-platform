@@ -160,3 +160,36 @@ describe('FormsList register caption (REG-SSOT-D1)', () => {
     expect(banner).not.toHaveTextContent(/\b\d+ records?\b/i)
   })
 })
+
+describe('FormsList waste duty of care caption (REG-SSOT-D2)', () => {
+  beforeEach(() => {
+    mockListTemplates.mockReset()
+    mockNavigate.mockReset()
+    mockListTemplates.mockResolvedValue({ items: [sampleForm], total: 1, page: 1, page_size: 100 })
+  })
+
+  it('captions the Form Builder when opened as PEL-HSEQ-5052', async () => {
+    renderFormsList('/admin/forms?register=PEL-HSEQ-5052')
+
+    const banner = await screen.findByTestId('register-caption-banner')
+    expect(banner).toHaveTextContent('PEL-HSEQ-5052 · Waste Duty of Care Register')
+    expect(banner).toHaveTextContent('Owner: HSEQ')
+    expect(banner).toHaveTextContent('No dedicated waste list in QGP')
+  })
+
+  it('tells the reader the note is filed in the Library, not attached here', async () => {
+    renderFormsList('/admin/forms?register=PEL-HSEQ-5052')
+
+    const banner = await screen.findByTestId('register-caption-banner')
+    expect(banner).toHaveTextContent('Governance Library')
+    expect(banner).toHaveTextContent('not attached here')
+  })
+
+  it('does not invent a transfer note count', async () => {
+    renderFormsList('/admin/forms?register=PEL-HSEQ-5052')
+
+    const banner = await screen.findByTestId('register-caption-banner')
+    expect(banner).not.toHaveTextContent(/Server total/i)
+    expect(banner).not.toHaveTextContent(/\b\d+ (transfer|consignment|movement)/i)
+  })
+})

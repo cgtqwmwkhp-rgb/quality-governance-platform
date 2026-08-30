@@ -383,9 +383,12 @@ export const REGISTER_CATALOGUE: readonly RegisterEntry[] = [
     title: 'Waste Duty of Care Register',
     purpose: 'Every controlled-waste movement.',
     ownerRole: 'HSEQ',
-    band: 'document',
+    band: 'caption',
+    to: '/admin/forms',
+    captionQuery: 'register=PEL-HSEQ-5052',
     standardRefs: ['EPA 1990 s.34'],
     retentionYears: 6,
+    note: 'Form Builder draft waste-duty-of-care-record, admin or manager only. The transfer note is filed to the Governance Library and referenced by PEL number, not attached here. No dedicated waste list in QGP.',
   },
   {
     docRef: 'PEL-HSEQ-5054',
