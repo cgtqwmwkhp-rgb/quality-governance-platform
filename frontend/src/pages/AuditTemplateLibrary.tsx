@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { trackError } from '../utils/errorTracker'
 import {
   Plus,
@@ -115,6 +116,10 @@ function estimateMinutes(questionCount: number | undefined): string {
 export default function AuditTemplateLibrary() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const captionBanner = (
+    <RegisterCaptionBanner registerParam={searchParams.get('register')} />
+  )
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
   const [archivedTemplates, setArchivedTemplates] = useState<AuditTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -551,6 +556,7 @@ export default function AuditTemplateLibrary() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">{t('audit_templates.title')}</h1>
           <p className="text-muted-foreground mt-1">{t('audit_templates.subtitle')}</p>
+          {captionBanner}
         </div>
         <div className="flex items-center gap-3">
           <Button
