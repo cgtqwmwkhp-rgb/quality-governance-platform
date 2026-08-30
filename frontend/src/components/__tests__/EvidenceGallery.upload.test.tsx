@@ -76,6 +76,26 @@ describe('EvidenceGallery upload', () => {
     expect(evidenceAssetsApi.upload).not.toHaveBeenCalled()
   })
 
+  it('rejects a 0-byte file without calling the upload API', async () => {
+    render(
+      <EvidenceGallery
+        assets={[]}
+        enableUpload
+        uploadSourceModule="incident"
+        uploadSourceId={7}
+      />,
+    )
+
+    const input = screen.getByLabelText('Upload evidence')
+    const file = new File([], 'blank.jpg', { type: 'image/jpeg' })
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await waitFor(() =>
+      expect(screen.getByText(/empty \(0 bytes\)/i)).toBeInTheDocument(),
+    )
+    expect(evidenceAssetsApi.upload).not.toHaveBeenCalled()
+  })
+
   it('accepts .eml evidence when the browser leaves MIME empty', async () => {
     vi.mocked(evidenceAssetsApi.upload).mockResolvedValue({ data: { id: 51 } } as never)
     const onUploadComplete = vi.fn()
