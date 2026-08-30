@@ -491,6 +491,15 @@ def create_application() -> FastAPI:
             "X-RateLimit-Remaining",
             "X-RateLimit-Reset",
             "Retry-After",
+            # The SWA calls this API cross-origin, so anything the browser must
+            # read has to be listed here. Export Center saves the download under
+            # the server filename and warns when the row cap was hit; without
+            # these three it silently fell back to a generic name and never
+            # warned. X-Export-Register carries the PEL register a captioned
+            # export was tagged for (REG-SSOT-E1).
+            "Content-Disposition",
+            "X-Export-Truncated",
+            "X-Export-Register",
         ],
         max_age=86400,  # Cache preflight for 24 hours
     )

@@ -34,6 +34,9 @@ def _export_response(result) -> StreamingResponse:
         "X-Export-Truncated": "true" if result.truncated else "false",
         "X-Export-Mode": "sync",
     }
+    if getattr(result, "register", None):
+        # Names the register the file was requested for. Scope is still the module.
+        headers["X-Export-Register"] = result.register
     return StreamingResponse(
         iter([result.content]),
         media_type=result.media_type,
@@ -67,10 +70,17 @@ async def create_sync_export(
 
     Matches WORKFLOW_REGISTRY ``POST /api/v1/exports``. Does not enqueue a job.
     Documents module emits the fixed IMS052 Register pack (csv/xlsx/pdf).
+    An optional ``register`` tags the file for a Register of Registers Open.
     """
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     service = ExportCenterService(db)
-    result = await service.build_sync_csv(tenant_id, body.module, body.format, user=current_user)
+    result = await service.build_sync_csv(
+        tenant_id,
+        body.module,
+        body.format,
+        user=current_user,
+        register=body.register,
+    )
     return _export_response(result)
 
 
