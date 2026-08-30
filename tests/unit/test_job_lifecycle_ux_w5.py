@@ -117,9 +117,7 @@ def test_migration_chains_serially_from_the_w4_head():
 
 def test_the_w5_revision_is_the_only_head(tmp_path):
     heads = _alembic_revision_map(tmp_path)["heads"]
-    assert heads == [
-        "20261116_reg_ssot_d1_forms"
-    ], f"expected REG-SSOT-D1 form-trio as the single head, found {heads}"
+    assert heads == ["20261116_reg_ssot_d1_forms"], f"expected REG-SSOT-D1 form-trio as the single head, found {heads}"
 
 
 def test_only_the_w5_revision_sits_on_the_w4_head(tmp_path):
