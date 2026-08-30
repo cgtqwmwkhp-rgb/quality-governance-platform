@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { REGISTER_CATALOGUE } from '../../../data/registerCatalogue'
+import { REGISTER_ALLOWED_ROUTES, REGISTER_CATALOGUE } from '../../../data/registerCatalogue'
 import {
   assertRegisterCatalogueIntegrity,
   catalogueHasRecordCounts,
@@ -166,5 +166,57 @@ describe('waste duty of care register (REG-SSOT-D2)', () => {
       expect(other?.band).toBe('document')
       expect(other?.to).toBeUndefined()
     }
+  })
+})
+
+describe('modern slavery rows (REG-SSOT-D3)', () => {
+  const tracker = () => REGISTER_CATALOGUE.find((e) => e.docRef === 'PEL-PROC-5014')!
+  const saq = () => REGISTER_CATALOGUE.find((e) => e.docRef === 'PEL-PROC-5011')!
+
+  it('captions the action tracker onto the 5059 actions spine', () => {
+    expect(tracker().band).toBe('caption')
+    expect(tracker().to).toBe('/actions')
+    expect(tracker().captionQuery).toBe('register=PEL-PROC-5014')
+    expect(registerHref(tracker())).toBe('/actions?register=PEL-PROC-5014')
+    expect(hubOpenKind(tracker(), { compliance_schedule: false })).toBe('link')
+    // Same route as the live NC/CAPA register — one spine, two captions.
+    expect(tracker().to).toBe(REGISTER_CATALOGUE.find((e) => e.docRef === 'PEL-HSEQ-5059')!.to)
+  })
+
+  it('says the Open is a caption over the whole register, not a slavery filter', () => {
+    // GET /api/v1/actions/ has no register / PEL / slavery parameter, so a
+    // captionQuery promising one would filter nothing and lie about it.
+    expect(tracker().captionQuery).not.toMatch(/slavery|sourceType|source_type/i)
+    expect(tracker().note).toMatch(/no modern slavery parameter/i)
+    expect(tracker().note).toMatch(/no dedicated slavery action list/i)
+  })
+
+  it('keeps the tracker EMPTY on the hub with no invented action count', () => {
+    expect(tracker().band).not.toBe('live')
+    expect(tracker().note).not.toMatch(/\b\d+ (action|case|tracker)/i)
+    expect(tracker()).not.toHaveProperty('recordCount')
+  })
+
+  it('leaves the supplier SAQ absent because no SAQ store was found', () => {
+    // assessment_runs assesses an engineer against an audit template; the
+    // schedule's approved_supplier_register_review is a review clock. Captioning
+    // either would let a competence record answer a supply-chain question.
+    expect(saq().band).toBe('absent')
+    expect(saq().to).toBeUndefined()
+    expect(saq().captionQuery).toBeUndefined()
+    expect(isLinkableRegister(saq())).toBe(false)
+    expect(saq().note).toMatch(/no supplier questionnaire store/i)
+  })
+
+  it('adds no slavery route and names no external system of record', () => {
+    for (const route of REGISTER_ALLOWED_ROUTES) {
+      expect(route).not.toMatch(/slavery|saq/i)
+    }
+    // Citation HR sheet 05 is a document, not a product — it must not appear as
+    // a second system of record for either row.
+    expect(tracker().externalSor).toBeUndefined()
+    expect(saq().externalSor).toBeUndefined()
+    expect(saq().note).not.toMatch(/citation/i)
+    expect(tracker().note).not.toMatch(/citation/i)
   })
 })
