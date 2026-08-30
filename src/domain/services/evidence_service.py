@@ -205,9 +205,7 @@ class EvidenceService:
 
         file_size = len(file_content)
         if file_size < MIN_FILE_SIZE_BYTES:
-            raise ValueError(
-                f"File is empty ({file_size} bytes) and cannot be stored as evidence"
-            )
+            raise ValueError(f"File is empty ({file_size} bytes) and cannot be stored as evidence")
         if file_size > MAX_FILE_SIZE_BYTES:
             raise ValueError(f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes")
 
