@@ -59,6 +59,7 @@ export default function ComplianceSchedule() {
   const statutoryParam = searchParams.get('statutory')
   const statutoryFilter = parseStatutoryParam(statutoryParam)
   const useWelshCopy = i18n.language.toLowerCase().startsWith('cy')
+  const copy = (key: string, english: string) => (useWelshCopy ? t(key, english) : english)
   const cov = coverageCopy(i18n.language)
   const imp = importCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
@@ -135,9 +136,7 @@ export default function ComplianceSchedule() {
       ? 'No active statutory requirements match this filter. Mark an obligation as required by law to include it.'
       : statutoryFilter === false
         ? 'No active non-statutory requirements match this filter.'
-        : useWelshCopy
-          ? t('compliance.schedule.empty', EMPTY_REQUIREMENTS_COPY)
-          : EMPTY_REQUIREMENTS_COPY
+        : copy('compliance.schedule.empty', EMPTY_REQUIREMENTS_COPY)
 
   const clearProgrammeContext = () => {
     const params = new URLSearchParams(searchParams)
@@ -235,13 +234,11 @@ export default function ComplianceSchedule() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <CalendarClock className="h-6 w-6" />
-            {useWelshCopy ? t('compliance.schedule.title', SCHEDULE_TITLE) : SCHEDULE_TITLE}
+            {copy('compliance.schedule.title', SCHEDULE_TITLE)}
           </h1>
           {view === 'obligations' && (
             <p className="text-sm text-muted-foreground mt-1">
-              {useWelshCopy
-                ? t('compliance.schedule.subtitle', SCHEDULE_SUBTITLE)
-                : SCHEDULE_SUBTITLE}
+              {copy('compliance.schedule.subtitle', SCHEDULE_SUBTITLE)}
             </p>
           )}
           {view === 'obligations' && (
@@ -362,9 +359,7 @@ export default function ComplianceSchedule() {
         <AssuranceCertShelfPanel />
       ) : loadError ? (
         <ErrorState
-          title={
-            useWelshCopy ? t('compliance.schedule.load_error', LOAD_ERROR_TITLE) : LOAD_ERROR_TITLE
-          }
+          title={copy('compliance.schedule.load_error', LOAD_ERROR_TITLE)}
           description={LOAD_ERROR_HINT}
           message={loadError}
           onRetry={() => void load()}
@@ -398,9 +393,7 @@ export default function ComplianceSchedule() {
             <div className="border-b border-border px-4 py-3 font-medium">
               {showInactive
                 ? RETIRED_REQUIREMENTS_LABEL
-                : useWelshCopy
-                  ? t('compliance.schedule.requirements', REQUIREMENTS_LABEL)
-                  : REQUIREMENTS_LABEL}
+                : copy('compliance.schedule.requirements', REQUIREMENTS_LABEL)}
             </div>
             {loading ? (
               <p className="p-6 text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>
@@ -529,9 +522,7 @@ export default function ComplianceSchedule() {
           {!showInactive && (
             <section className="rounded-lg border border-border bg-card">
               <div className="border-b border-border px-4 py-3 font-medium">
-                {useWelshCopy
-                  ? t('compliance.schedule.catalogue', CATALOGUE_LABEL)
-                  : CATALOGUE_LABEL}
+                {copy('compliance.schedule.catalogue', CATALOGUE_LABEL)}
               </div>
               <ul className="divide-y divide-border" data-testid="compliance-schedule-catalogue">
                 {catalogue.map((tpl) => (
