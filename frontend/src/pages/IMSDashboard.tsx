@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { useTranslation } from 'react-i18next'
 import {
   imsDashboardApi,
@@ -142,6 +143,9 @@ export default function IMSDashboard() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const captionBanner = (
+    <RegisterCaptionBanner registerParam={searchParams.get('register')} />
+  )
   const section = parseImsSection(searchParams.get('section'))
 
   // Live dashboard data
@@ -373,6 +377,7 @@ export default function IMSDashboard() {
           <p className="text-muted-foreground">
             Compliance hub orientation — jump to Standards, Evidence, or Monitoring for detail.
           </p>
+          {captionBanner}
         </div>
         <div className="flex flex-wrap gap-3 items-center">
           <select

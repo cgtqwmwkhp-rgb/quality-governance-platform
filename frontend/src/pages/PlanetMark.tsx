@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import {
   Leaf,
   RefreshCw,
@@ -92,6 +93,9 @@ function PlanetMarkAuditsBoardStrip() {
 export default function PlanetMark() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const captionBanner = (
+    <RegisterCaptionBanner registerParam={searchParams.get('register')} />
+  )
   const section = parsePlanetMarkSection(searchParams.get('section'))
   const yearParam = searchParams.get('year')
 
@@ -454,6 +458,7 @@ export default function PlanetMark() {
             <div>
               <h1 className="text-3xl font-bold text-foreground">{t('planet_mark.title')}</h1>
               <p className="text-muted-foreground">{t('planet_mark.subtitle')}</p>
+              {captionBanner}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2" data-testid="planet-mark-filters">
@@ -523,6 +528,7 @@ export default function PlanetMark() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">{t('planet_mark.title')}</h1>
             <p className="text-muted-foreground mt-1">{t('planet_mark.shell.page_subtitle')}</p>
+            {captionBanner}
           </div>
         </div>
         <div
