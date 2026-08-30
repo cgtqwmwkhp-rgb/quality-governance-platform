@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import RegisterCaptionBanner from '../components/register/RegisterCaptionBanner'
 import { BookOpen, CheckCircle2, ChevronDown, Clock, ExternalLink, Loader2, MessageSquare, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import api, {
@@ -64,6 +65,10 @@ type ReadingItem =
 
 export default function MyReading() {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
+  const captionBanner = (
+    <RegisterCaptionBanner registerParam={searchParams.get('register')} />
+  )
   const [policyItems, setPolicyItems] = useState<PolicyAcknowledgment[]>([])
   const [campaignItems, setCampaignItems] = useState<DocumentCampaignAssignment[]>([])
   const [loading, setLoading] = useState(true)
@@ -369,6 +374,7 @@ export default function MyReading() {
         <p className="text-muted-foreground mt-1">
           {t('my_reading.subtitle')}
         </p>
+        {captionBanner}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3" data-testid="my-reading-filters">

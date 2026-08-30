@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { cn } from '../../helpers/utils'
+import RegisterCaptionBanner from '../../components/register/RegisterCaptionBanner'
 import TrainingInductionsPanel from './TrainingInductionsPanel'
 import {
   TrainingMatrixAdminPanel,
@@ -15,6 +16,7 @@ export default function Training() {
   const { t } = useTranslation()
   const [params, setParams] = useSearchParams()
   const tab = (params.get('tab') as TabId) || 'gaps'
+  const captionBanner = <RegisterCaptionBanner registerParam={params.get('register')} />
 
   const tabs = useMemo(
     () =>
@@ -51,6 +53,7 @@ export default function Training() {
             'Atlas completions + Plantexpand frequency rules. Not an LMS — complete modules in Atlas.',
           )}
         </p>
+        {captionBanner}
       </div>
 
       <div
@@ -71,7 +74,13 @@ export default function Training() {
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground',
             )}
-            onClick={() => setParams(item.id === 'gaps' ? {} : { tab: item.id })}
+            onClick={() => {
+              const next = new URLSearchParams()
+              const register = params.get('register')
+              if (register) next.set('register', register)
+              if (item.id !== 'gaps') next.set('tab', item.id)
+              setParams(next)
+            }}
           >
             {item.label}
           </button>
