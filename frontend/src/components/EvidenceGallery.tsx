@@ -23,6 +23,7 @@ import {
 
 /** Default upload constraints shared by every case that embeds the gallery. */
 export const DEFAULT_EVIDENCE_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
+export const DEFAULT_EVIDENCE_MIN_FILE_SIZE_BYTES = 1
 export const DEFAULT_EVIDENCE_MIME_PREFIXES = ['image/', 'video/', 'audio/']
 export const DEFAULT_EVIDENCE_MIME_TYPES = [
   'application/pdf',
@@ -92,6 +93,7 @@ type Props = {
   uploadLabel?: string
   uploadAccept?: string
   maxFileSizeBytes?: number
+  minFileSizeBytes?: number
   allowedMimePrefixes?: string[]
   allowedMimeTypes?: string[]
   allowedExtensions?: string[]
@@ -176,6 +178,7 @@ export function EvidenceGallery({
   uploadLabel = 'Upload evidence',
   uploadAccept = DEFAULT_EVIDENCE_UPLOAD_ACCEPT,
   maxFileSizeBytes = DEFAULT_EVIDENCE_MAX_FILE_SIZE_BYTES,
+  minFileSizeBytes = DEFAULT_EVIDENCE_MIN_FILE_SIZE_BYTES,
   allowedMimePrefixes = DEFAULT_EVIDENCE_MIME_PREFIXES,
   allowedMimeTypes = DEFAULT_EVIDENCE_MIME_TYPES,
   allowedExtensions = DEFAULT_EVIDENCE_EXTENSIONS,
@@ -359,6 +362,10 @@ export function EvidenceGallery({
       for (const file of files) {
         if (!isSupportedEvidenceFile(file, allowedMimePrefixes, allowedMimeTypes, allowedExtensions)) {
           failures.push(`${file.name} is not a supported file type.`)
+          continue
+        }
+        if (file.size < minFileSizeBytes) {
+          failures.push(`${file.name} is empty (0 bytes) and cannot be stored as evidence.`)
           continue
         }
         if (file.size > maxFileSizeBytes) {

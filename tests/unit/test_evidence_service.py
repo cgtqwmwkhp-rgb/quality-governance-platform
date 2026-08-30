@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.domain.services.evidence_service import ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES, EvidenceService
+from src.domain.services.evidence_service import (
+    ALLOWED_CONTENT_TYPES,
+    MAX_FILE_SIZE_BYTES,
+    MIN_FILE_SIZE_BYTES,
+    EvidenceService,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -20,6 +25,9 @@ class TestConstants:
 
     def test_max_file_size(self):
         assert MAX_FILE_SIZE_BYTES == 50 * 1024 * 1024
+
+    def test_min_file_size(self):
+        assert MIN_FILE_SIZE_BYTES == 1
 
     def test_photo_types_map_correctly(self):
         assert ALLOWED_CONTENT_TYPES["image/jpeg"] == "photo"
@@ -101,6 +109,20 @@ class TestEvidenceService:
             await service.upload(
                 file_content=big_content,
                 filename="huge.pdf",
+                content_type="application/pdf",
+                source_module="incident",
+                source_id=1,
+                user_id=1,
+                tenant_id=1,
+            )
+
+    @pytest.mark.asyncio
+    @patch.object(EvidenceService, "validate_source_exists", new_callable=AsyncMock, return_value=True)
+    async def test_upload_empty_file_refused(self, _validate, service):
+        with pytest.raises(ValueError, match="empty"):
+            await service.upload(
+                file_content=b"",
+                filename="blank.pdf",
                 content_type="application/pdf",
                 source_module="incident",
                 source_id=1,
