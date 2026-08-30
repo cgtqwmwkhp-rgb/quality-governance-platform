@@ -70,6 +70,12 @@ EXPECTED_STEPS = sum(len(d["steps"]) for d in migration.REGISTER_FORM_TEMPLATES)
 EXPECTED_FIELDS = sum(len(step["fields"]) for d in migration.REGISTER_FORM_TEMPLATES for step in d["steps"])
 
 
+def test_revision_chains_serially_from_aud_dev_2():
+    """Single-head ratchet: this revision is what W4/W5 head pins must name next."""
+    assert migration.revision == "20261116_reg_ssot_d1_forms"
+    assert migration.down_revision == "20261115_aud_notify"
+
+
 class ScratchDb:
     """A private database with the app schema and a single tenant."""
 
