@@ -5,6 +5,7 @@ import {
   catalogueHasRecordCounts,
   hubOpenKind,
   isLinkableRegister,
+  registerHref,
 } from '../registerCatalogueHonesty'
 
 describe('register catalogue honesty', () => {
@@ -63,5 +64,57 @@ describe('register catalogue honesty', () => {
     }
     expect(missing).toEqual([])
     expect(unexpected).toEqual([])
+  })
+})
+
+describe('form-engine trio (REG-SSOT-D1)', () => {
+  const TRIO = ['PEL-HSEQ-5026', 'PEL-HSEQ-5036', 'PEL-HSEQ-5043'] as const
+
+  it.each(TRIO)('%s opens the real Form Builder route, captioned', (docRef) => {
+    const entry = REGISTER_CATALOGUE.find((e) => e.docRef === docRef)
+    expect(entry).toBeDefined()
+    expect(entry!.band).toBe('caption')
+    expect(entry!.to).toBe('/admin/forms')
+    expect(entry!.captionQuery).toBe(`register=${docRef}`)
+    expect(registerHref(entry!)).toBe(`/admin/forms?register=${docRef}`)
+    expect(hubOpenKind(entry!, { compliance_schedule: false })).toBe('link')
+  })
+
+  it.each(TRIO)('%s says plainly that no dedicated list exists', (docRef) => {
+    const entry = REGISTER_CATALOGUE.find((e) => e.docRef === docRef)
+    // Caption band + this note is what drives the hub EMPTY chip; without it the
+    // row would imply a populated register behind the Open link.
+    expect(entry!.note).toMatch(/no dedicated /i)
+    expect(entry!.band).not.toBe('live')
+  })
+
+  it.each([
+    ['PEL-HSEQ-5026', 'worker-consultation-record'],
+    ['PEL-HSEQ-5036', 'permit-to-work-record'],
+    ['PEL-HSEQ-5043', 'remote-working-record'],
+  ])('%s names the seeded template slug so the Open is findable', (docRef, slug) => {
+    // Slugs come from alembic/versions/20261116_seed_register_form_trio.py.
+    // Rename one there without renaming it here and the Open lands on a Form
+    // Builder list where nothing matches the note.
+    const entry = REGISTER_CATALOGUE.find((e) => e.docRef === docRef)
+    expect(entry!.note).toContain(slug)
+  })
+
+  it('does not promote the trio to a fake list route or a portal intake route', () => {
+    for (const docRef of TRIO) {
+      const entry = REGISTER_CATALOGUE.find((e) => e.docRef === docRef)!
+      // The portal intake endpoint only accepts incident/complaint/rta/near_miss,
+      // so a /portal/report/* Open for these would dead-end on submit.
+      expect(entry.to).not.toMatch(/^\/portal\//)
+      expect(entry.to).not.toBe('/incidents')
+    }
+  })
+
+  it('leaves the locked absent rows alone', () => {
+    for (const docRef of ['PEL-HSEQ-5008', 'PEL-HSEQ-5028']) {
+      const entry = REGISTER_CATALOGUE.find((e) => e.docRef === docRef)
+      expect(entry?.band).toBe('absent')
+      expect(entry?.to).toBeUndefined()
+    }
   })
 })
