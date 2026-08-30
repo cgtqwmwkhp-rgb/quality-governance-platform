@@ -59,4 +59,16 @@ describe('RegisterCaptionBanner', () => {
     )
     expect(screen.getByTestId('register-caption-banner')).toHaveTextContent('Server total: 4')
   })
+
+  it('tells a slavery tracker reader the actions list is unfiltered (REG-SSOT-D3)', () => {
+    render(
+      <MemoryRouter>
+        <RegisterCaptionBanner registerParam="PEL-PROC-5014" />
+      </MemoryRouter>,
+    )
+    const banner = screen.getByTestId('register-caption-banner')
+    expect(banner).toHaveTextContent('Modern Slavery Action Tracker')
+    expect(banner).toHaveTextContent('No extra server filter')
+    expect(banner).toHaveTextContent('No dedicated slavery action list in QGP')
+  })
 })

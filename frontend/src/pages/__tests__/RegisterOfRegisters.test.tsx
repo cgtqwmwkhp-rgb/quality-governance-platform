@@ -171,6 +171,34 @@ describe('RegisterOfRegisters', () => {
     expect(row).not.toHaveTextContent('Library document')
   })
 
+  it('opens PEL-PROC-5014 on the actions spine, still marked EMPTY (REG-SSOT-D3)', () => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    const row = screen.getByText('PEL-PROC-5014').closest('tr')
+    expect(row).not.toBeNull()
+    expect(row!.querySelector('a')).toHaveAttribute('href', '/actions?register=PEL-PROC-5014')
+    // Caption over the whole action register — there is no slavery filter, so
+    // the EMPTY chip has to survive the promotion out of the absent band.
+    expect(screen.getByTestId('register-empty-PEL-PROC-5014')).toHaveTextContent('EMPTY')
+  })
+
+  it('leaves PEL-PROC-5011 unopenable, with no SAQ journey invented (REG-SSOT-D3)', () => {
+    useFeatureFlagMock.mockReturnValue(true)
+    render(
+      <MemoryRouter>
+        <RegisterOfRegisters />
+      </MemoryRouter>,
+    )
+    const row = screen.getByText('PEL-PROC-5011').closest('tr')
+    expect(row).not.toBeNull()
+    expect(row!.querySelector('a')).toBeNull()
+    expect(screen.getByTestId('register-empty-PEL-PROC-5011')).toHaveTextContent('EMPTY')
+  })
+
   it('does not add ISO chip filters on the hub', () => {
     useFeatureFlagMock.mockReturnValue(true)
     render(
