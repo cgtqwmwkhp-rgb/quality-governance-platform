@@ -84,6 +84,7 @@ ALLOWED_EXTENSIONS: dict[str, str] = {
 }
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
+MIN_FILE_SIZE_BYTES = 1
 
 
 def resolve_evidence_content_type(filename: str | None, declared: str | None) -> str | None:
@@ -203,6 +204,8 @@ class EvidenceService:
             raise ValueError(f"Invalid asset type: {final_asset_type}")
 
         file_size = len(file_content)
+        if file_size < MIN_FILE_SIZE_BYTES:
+            raise ValueError(f"File is empty ({file_size} bytes) and cannot be stored as evidence")
         if file_size > MAX_FILE_SIZE_BYTES:
             raise ValueError(f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes")
 
