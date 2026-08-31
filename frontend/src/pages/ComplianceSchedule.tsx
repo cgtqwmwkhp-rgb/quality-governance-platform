@@ -260,7 +260,7 @@ export default function ComplianceSchedule() {
                 onClick={() => setStatusFilter(s)}
                 data-testid={`compliance-schedule-filter-${s || 'all'}`}
               >
-                {s ? statusLabel(s) : t('compliance.schedule.filter.all', 'All')}
+                {s ? statusLabel(s) : copy('compliance.schedule.filter.all', 'All')}
               </Button>
             ))}
             <Button
@@ -302,7 +302,7 @@ export default function ComplianceSchedule() {
       <div
         className="flex w-fit rounded-xl border border-border bg-surface p-1"
         role="group"
-        aria-label={t('compliance.schedule.view.label', 'Schedule view')}
+        aria-label={copy('compliance.schedule.view.label', 'Schedule view')}
         data-testid="compliance-schedule-view-switcher"
       >
         {SCHEDULE_VIEWS.map((mode) => (

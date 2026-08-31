@@ -4220,8 +4220,6 @@
   "investigations.timeline.save_manual": "Save entry",
   "nav.compliance_schedule": "Compliance Schedule",
   "compliance.schedule.due": "Due",
-  "compliance.schedule.filter.all": "All",
-  "compliance.schedule.view.label": "Schedule view",
   "compliance.schedule.view.obligations": "Obligations",
   "compliance.schedule.view.certificates": "Certificates",
   "compliance.schedule.programme_context": "From {{framework}} · {{clause}} — Schedule remains the obligation register.",
