@@ -32,7 +32,5 @@ def is_audit_catalogue_caller(user: _CatalogueUser) -> bool:
     if _role_names(user) & PORTAL_AUDIT_SENIOR_ROLES:
         return True
     return (
-        user.has_permission("audit:read")
-        or user.has_permission("audit:create")
-        or user.has_permission("audit:update")
+        user.has_permission("audit:read") or user.has_permission("audit:create") or user.has_permission("audit:update")
     )
