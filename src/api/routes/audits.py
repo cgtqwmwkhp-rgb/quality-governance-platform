@@ -8,7 +8,7 @@ import html
 import logging
 import time
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -81,6 +81,7 @@ from src.domain.services.audit_assignment_notify import (
     require_assignee_in_tenant,
     should_notify_assignee_change,
 )
+from src.domain.services.audit_catalogue_access import effective_assigned_to_filter
 from src.domain.services.audit_execute_access import (
     PUSH_FAILED,
     assert_can_execute_run,
@@ -1097,8 +1098,21 @@ async def list_runs(
         None,
         description="Match title, reference, location, scheme, or body (ilike)",
     ),
+    progress: Optional[str] = Query(
+        None,
+        pattern="^(open|completed)$",
+        description="open = not completed/cancelled; completed = completed. Ignored when status is set.",
+    ),
+    audit_type: Optional[str] = Query(None, description="Template audit_type exact match"),
+    employee: Optional[str] = Query(
+        None,
+        description="Ilike on assignee first name, last name, or email",
+    ),
+    date_from: Optional[date] = Query(None, description="Inclusive start on scheduled_date or created_at"),
+    date_to: Optional[date] = Query(None, description="Inclusive end on scheduled_date or created_at"),
 ) -> Any:
     """List all audit runs with pagination and filtering."""
+    assigned_to_id = effective_assigned_to_filter(current_user, assigned_to_id)
     try:
         tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         service = AuditService(db)
@@ -1110,6 +1124,11 @@ async def list_runs(
             template_id=template_id,
             assigned_to_id=assigned_to_id,
             q=q,
+            progress=progress,
+            audit_type=audit_type,
+            employee=employee,
+            date_from=date_from,
+            date_to=date_to,
         )
 
         validated_items = []
