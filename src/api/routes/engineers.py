@@ -377,6 +377,8 @@ async def update_engineer(
     }
     if identity_keys.intersection(updates) and "qgp_profile_override" not in updates:
         updates["qgp_profile_override"] = True
+    if updates.get("is_active") is True:
+        updates["roster_archived_at"] = None
 
     for k, v in updates.items():
         setattr(engineer, k, v)
