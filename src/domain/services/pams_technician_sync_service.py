@@ -179,8 +179,12 @@ def apply_mapped_technician_to_engineer(
         engineer.employee_number = mapped.employee_number
         if mapped.notes:
             engineer.notes = mapped.notes
-    # Always keep roster presence + join keys aligned with PAMS feed.
-    engineer.is_active = mapped.is_active
+    # Always keep roster presence + join keys aligned with PAMS feed —
+    # except a QGP Atlas archive, which must survive hourly PAMS sync.
+    if getattr(engineer, "roster_archived_at", None) is not None:
+        engineer.is_active = False
+    else:
+        engineer.is_active = mapped.is_active
     engineer.pams_technician_id = mapped.pams_id
     engineer.external_id = mapped.external_id
     if user_id is not None:

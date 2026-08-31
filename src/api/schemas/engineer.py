@@ -85,6 +85,7 @@ class EngineerResponse(BaseModel):
     specialisations_json: Optional[List[Any]] = None
     certifications_json: Optional[List[Any]] = None
     is_active: bool
+    roster_archived_at: Optional[datetime] = None
     notes: Optional[str] = None
     qgp_profile_override: bool = False
     tenant_id: int | None = None

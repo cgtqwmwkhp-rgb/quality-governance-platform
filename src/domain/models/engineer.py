@@ -75,6 +75,10 @@ class Engineer(Base, TimestampMixin, AuditTrailMixin):
     certifications_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Set when an operator archives this person from the Atlas roster queue.
+    # Invariant: roster_archived_at IS NOT NULL ⇒ is_active is False.
+    # Exists so hourly PAMS sync cannot re-activate a QGP archive.
+    roster_archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # When True, PAMS sync must not overwrite QGP-edited identity fields (pseudo-DB).
     qgp_profile_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

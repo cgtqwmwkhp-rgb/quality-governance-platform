@@ -153,6 +153,66 @@ export type TrainingMatrixNotifyResponse = {
   failed: number
 }
 
+export type TrainingMatrixRosterReason = 'unmapped' | 'archived_person' | 'left_roster'
+export type TrainingMatrixRosterSuggested =
+  | 'link_person'
+  | 'create_person'
+  | 'reinstate'
+  | 'archive'
+export type TrainingMatrixRosterAction = 'archive' | 'create_person' | 'reinstate'
+
+export type TrainingMatrixRosterDeltaItem = {
+  person_id: number
+  atlas_name: string
+  department?: string | null
+  board_role_override?: string | null
+  first_seen_at: string
+  new_since_previous_import: boolean
+  last_seen_import_id?: number | null
+  last_seen_at?: string | null
+  last_seen_filename?: string | null
+  reason: TrainingMatrixRosterReason
+  suggested_action: TrainingMatrixRosterSuggested
+  engineer_id?: number | null
+  engineer_display_name?: string | null
+  engineer_is_active?: boolean | null
+  engineer_roster_archived_at?: string | null
+  engineer_pams_technician_id?: number | null
+  user_id?: number | null
+  user_email?: string | null
+  user_is_active?: boolean | null
+  user_is_superuser?: boolean | null
+  blocked_reason?: string | null
+}
+
+export type TrainingMatrixRosterDelta = {
+  latest_import_id?: number | null
+  latest_import_filename?: string | null
+  latest_import_at?: string | null
+  latest_person_count: number
+  previous_import_id?: number | null
+  previous_import_at?: string | null
+  appeared: TrainingMatrixRosterDeltaItem[]
+  disappeared: TrainingMatrixRosterDeltaItem[]
+  appeared_count: number
+  appeared_new_this_import: number
+  disappeared_count: number
+  atlas_hub_url: string
+}
+
+export type TrainingMatrixRosterActionResponse = {
+  person_id: number
+  action: string
+  engineer_id?: number | null
+  engineer_is_active?: boolean | null
+  engineer_roster_archived_at?: string | null
+  user_id?: number | null
+  user_is_active?: boolean | null
+  login_disabled: boolean
+  atlas_person_changed: boolean
+  message: string
+}
+
 export function createTrainingMatrixApi(api: AxiosInstance) {
   return {
     uploadImport: (file: File) => {
@@ -213,6 +273,21 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
           from_auto_match: number
           still_unmatched: number
         }>('/api/v1/training-matrix/name-maps/auto-match')
+        .then((r) => r.data),
+    getRosterDelta: () =>
+      api
+        .get<TrainingMatrixRosterDelta>('/api/v1/training-matrix/roster-delta')
+        .then((r) => r.data),
+    resolveRosterAction: (
+      personId: number,
+      action: TrainingMatrixRosterAction,
+      disable_login: boolean = true,
+    ) =>
+      api
+        .post<TrainingMatrixRosterActionResponse>(
+          `/api/v1/training-matrix/people/${personId}/roster-action`,
+          { action, disable_login },
+        )
         .then((r) => r.data),
     patchPersonBoardRole: (personId: number, board_role_override: string | null) =>
       api
