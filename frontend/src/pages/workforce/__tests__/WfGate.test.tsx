@@ -72,6 +72,16 @@ vi.mock('../../../api/client', () => ({
     approveMatrixProposal: vi.fn(),
     rejectMatrixProposal: vi.fn(),
     notify: vi.fn(),
+    getRosterDelta: vi.fn().mockResolvedValue({
+      appeared: [],
+      disappeared: [],
+      appeared_count: 0,
+      appeared_new_this_import: 0,
+      disappeared_count: 0,
+      latest_person_count: 0,
+      atlas_hub_url: 'https://atlas',
+    }),
+    resolveRosterAction: vi.fn(),
   },
   ATLAS_HUB_URL: 'https://www.atlas-hub.co.uk/o/98b88f4e-2c3f-44c1-a812-36ea66222c7d/',
   getApiErrorMessage: (err: unknown, fallback = 'Request failed') => {

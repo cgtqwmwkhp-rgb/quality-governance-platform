@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import types
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,8 @@ from src.domain.exceptions import BadRequestError, ExternalServiceError
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
 from src.domain.services.pams_technician_sync_service import (
+    MappedTechnician,
+    apply_mapped_technician_to_engineer,
     apply_tenant_guc_sync,
     map_pams_technician_row,
     pams_technician_external_id,
@@ -329,3 +332,86 @@ async def test_sync_from_pams_route_null_tenant_uses_default(monkeypatch):
     assert result.created == 2
     sync_mock.assert_called_once()
     assert sync_mock.call_args.kwargs["tenant_id"] == 42
+
+
+def _archived_mapped() -> MappedTechnician:
+    return MappedTechnician(
+        pams_id=158,
+        display_name="Still In PAMS",
+        job_title="Workshop Technician",
+        site="Workshop",
+        employee_number="158",
+        is_active=True,
+        email=None,
+        notes="pams-note",
+        external_id=pams_technician_external_id(158),
+    )
+
+
+def test_archived_engineer_stays_inactive_when_pams_reports_active():
+    marker = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+    engineer = Engineer(
+        id=200,
+        tenant_id=1,
+        user_id=None,
+        external_id=pams_technician_external_id(158),
+        pams_technician_id=158,
+        display_name="Old Name",
+        is_active=False,
+        roster_archived_at=marker,
+    )
+    apply_mapped_technician_to_engineer(engineer, _archived_mapped(), user_id=None)
+    assert engineer.is_active is False
+    assert engineer.roster_archived_at == marker
+    assert engineer.display_name == "Still In PAMS"
+    assert engineer.job_title == "Workshop Technician"
+
+
+def test_archived_engineer_race_is_active_true_is_forced_false():
+    marker = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+    engineer = Engineer(
+        id=201,
+        tenant_id=1,
+        user_id=None,
+        external_id=pams_technician_external_id(158),
+        pams_technician_id=158,
+        display_name="Flipped",
+        is_active=True,
+        roster_archived_at=marker,
+    )
+    apply_mapped_technician_to_engineer(engineer, _archived_mapped(), user_id=None)
+    assert engineer.is_active is False
+    assert engineer.roster_archived_at == marker
+
+
+def test_sync_does_not_reactivate_roster_archived_engineer():
+    marker = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+    archived = Engineer(
+        id=202,
+        tenant_id=1,
+        user_id=None,
+        external_id=pams_technician_external_id(158),
+        pams_technician_id=158,
+        display_name="Cameron",
+        is_active=False,
+        roster_archived_at=marker,
+    )
+    db = _FakeSession(users=[], engineers=[archived])
+    counts = sync_pams_technicians(
+        db,
+        tenant_id=1,
+        rows=[
+            {
+                "id": 158,
+                "display_name": "Cameron Alexander-Forde",
+                "role": "Workshop Technician",
+                "active_technician": 1,
+            }
+        ],
+    )
+    assert counts.updated == 1
+    assert counts.errors == 0
+    assert archived.is_active is False
+    assert archived.roster_archived_at == marker
+    assert archived.display_name == "Cameron Alexander-Forde"
+    assert db.committed is True
