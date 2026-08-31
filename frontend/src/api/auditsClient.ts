@@ -60,6 +60,18 @@ export interface AuditRun {
   acknowledged_at?: string | null
 }
 
+export type AuditRunListOptions = {
+  q?: string
+  status?: string
+  progress?: 'open' | 'completed'
+  audit_type?: string
+  date_from?: string
+  date_to?: string
+  employee?: string
+  assigned_to_id?: number
+  template_id?: number
+}
+
 export interface AuditFinding {
   id: number
   reference_number: string
@@ -642,13 +654,22 @@ export function createAuditsApi(api: AxiosInstance) {
     api.delete(`/api/v1/audits/questions/${questionId}`, config),
 
   // Runs
-  listRuns: (page = 1, pageSize = 10, options?: { q?: string }) => {
+  listRuns: (page = 1, pageSize = 10, options?: AuditRunListOptions) => {
     const params = new URLSearchParams({
       page: String(page),
       page_size: String(pageSize),
     })
     const q = options?.q?.trim()
     if (q) params.set('q', q)
+    if (options?.status) params.set('status', options.status)
+    if (options?.progress) params.set('progress', options.progress)
+    if (options?.audit_type) params.set('audit_type', options.audit_type)
+    if (options?.date_from) params.set('date_from', options.date_from)
+    if (options?.date_to) params.set('date_to', options.date_to)
+    const employee = options?.employee?.trim()
+    if (employee) params.set('employee', employee)
+    if (options?.assigned_to_id != null) params.set('assigned_to_id', String(options.assigned_to_id))
+    if (options?.template_id != null) params.set('template_id', String(options.template_id))
     return api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?${params}`)
   },
   listAssignedToMe: (page = 1, pageSize = 100) =>

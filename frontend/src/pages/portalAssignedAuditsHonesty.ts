@@ -14,6 +14,13 @@ export function isShowableAssignedAudit(run: AssignedAuditRow): boolean {
   return true
 }
 
+export function isShowableCompletedAudit(run: AssignedAuditRow): boolean {
+  const ref = (run.reference_number ?? '').trim()
+  if (!ref || ref === '???') return false
+  const status = (run.status ?? '').trim().toLowerCase()
+  return status === 'completed'
+}
+
 export function assignedAuditQueueTotal(
   serverTotal: number | undefined,
   loadFailed: boolean,

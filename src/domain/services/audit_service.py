@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import and_, cast, func, or_, select
@@ -1592,14 +1592,41 @@ class AuditService:
         template_id: int | None = None,
         assigned_to_id: int | None = None,
         q: str | None = None,
+        progress: str | None = None,
+        audit_type: str | None = None,
+        employee: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> PaginatedResult:
         query = select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == tenant_id)
         if status_filter:
             query = query.where(AuditRun.status == status_filter)
+        elif progress == "open":
+            query = query.where(AuditRun.status.notin_([AuditStatus.COMPLETED, AuditStatus.CANCELLED]))
+        elif progress == "completed":
+            query = query.where(AuditRun.status == AuditStatus.COMPLETED)
         if template_id:
             query = query.where(AuditRun.template_id == template_id)
         if assigned_to_id:
             query = query.where(AuditRun.assigned_to_id == assigned_to_id)
+        type_needle = (audit_type or "").strip()
+        if type_needle:
+            query = query.join(AuditRun.template).where(AuditTemplate.audit_type == type_needle)
+        employee_needle = (employee or "").strip()
+        if employee_needle:
+            emp_pattern = f"%{employee_needle}%"
+            query = query.join(User, User.id == AuditRun.assigned_to_id).where(
+                (User.first_name.ilike(emp_pattern))
+                | (User.last_name.ilike(emp_pattern))
+                | (User.email.ilike(emp_pattern))
+            )
+        anchor = func.coalesce(AuditRun.scheduled_date, AuditRun.created_at)
+        if date_from is not None:
+            start = datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc)
+            query = query.where(anchor >= start)
+        if date_to is not None:
+            end = datetime.combine(date_to, datetime.min.time(), tzinfo=timezone.utc) + timedelta(days=1)
+            query = query.where(anchor < end)
         needle = (q or "").strip()
         if needle:
             pattern = f"%{needle}%"
