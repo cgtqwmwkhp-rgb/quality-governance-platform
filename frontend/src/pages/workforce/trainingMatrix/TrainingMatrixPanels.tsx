@@ -21,6 +21,8 @@ import {
   type TrainingMatrixMatrixCell,
   type TrainingMatrixNameMapItem,
   type TrainingMatrixRequirement,
+  type TrainingMatrixRosterDelta,
+  type TrainingMatrixRosterDeltaItem,
 } from '../../../api/client'
 import {
   ATLAS_HUB_URL,
@@ -216,6 +218,30 @@ function downloadCsv(filename: string, csv: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function confirmRosterAction(
+  item: TrainingMatrixRosterDeltaItem,
+  kind: 'archive' | 'create_person' | 'reinstate',
+): boolean {
+  const atlas = `Atlas: ${item.atlas_name}${item.department ? ` (${item.department})` : ''}`
+  const person = item.engineer_id
+    ? `QGP person: ${item.engineer_display_name || `#${item.engineer_id}`} — ${
+        kind === 'archive' ? 'will be set inactive' : kind === 'reinstate' ? 'will be set active' : 'already linked'
+      }`
+    : 'QGP person: none yet'
+  const login = item.user_email
+    ? `Login: ${item.user_email}${
+        kind === 'archive' ? ' — will be disabled' : kind === 'reinstate' ? ' — will stay as it is (not re-enabled)' : ''
+      }`
+    : 'Login: none (this does not create a QGP user)'
+  const question =
+    kind === 'archive'
+      ? 'Archive this QGP account based on the Atlas roster?'
+      : kind === 'create_person'
+        ? 'Create a QGP person record from the new Atlas information? No login is created.'
+        : 'Reinstate this QGP person record from the Atlas roster? Login is not re-enabled.'
+  return window.confirm([question, '', atlas, person, login, 'PAMS and Entra will not be changed.'].join('\n'))
 }
 
 function ComplianceTable({ rows, loading }: { rows: TrainingMatrixComplianceRow[]; loading: boolean }) {
@@ -1365,6 +1391,7 @@ export function TrainingMatrixAdminPanel() {
   const [autoMatching, setAutoMatching] = useState(false)
   const [latestImport, setLatestImport] = useState<TrainingMatrixImport | null>(null)
   const [openUpload, setOpenUpload] = useState(true)
+  const [openRoster, setOpenRoster] = useState(true)
   const [openNameMap, setOpenNameMap] = useState(true)
   const [openMatrix, setOpenMatrix] = useState(true)
   const [hideNonMandated, setHideNonMandated] = useState(true)
@@ -1372,6 +1399,9 @@ export function TrainingMatrixAdminPanel() {
   const [viewerCanApprove, setViewerCanApprove] = useState(false)
   const [approverEmail, setApproverEmail] = useState('david.harris@plantexpand.com')
   const [reviewingId, setReviewingId] = useState<number | null>(null)
+  const [rosterDelta, setRosterDelta] = useState<TrainingMatrixRosterDelta | null>(null)
+  const [rosterActingId, setRosterActingId] = useState<number | null>(null)
+  const [linkPick, setLinkPick] = useState<Record<number, string>>({})
 
   const reloadProposals = () => {
     trainingMatrixApi
@@ -1406,6 +1436,13 @@ export function TrainingMatrixAdminPanel() {
       .getLatestImport()
       .then(setLatestImport)
       .catch(() => setLatestImport(null))
+    trainingMatrixApi
+      .getRosterDelta()
+      .then((delta) => {
+        setRosterDelta(delta)
+        if (delta.appeared_count + delta.disappeared_count > 0) setOpenRoster(true)
+      })
+      .catch(() => setRosterDelta(null))
     reloadProposals()
     workforceApi
       .listEngineers({ page: '1', page_size: '500' })
@@ -1592,8 +1629,57 @@ export function TrainingMatrixAdminPanel() {
       .finally(() => setAutoMatching(false))
   }
 
+  const onRosterAction = (
+    item: TrainingMatrixRosterDeltaItem,
+    kind: 'archive' | 'create_person' | 'reinstate',
+  ) => {
+    if (!confirmRosterAction(item, kind)) return
+    setRosterActingId(item.person_id)
+    setError(null)
+    setMessage(null)
+    void trainingMatrixApi
+      .resolveRosterAction(item.person_id, kind)
+      .then((res) => {
+        setMessage(res.message)
+        reload()
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not apply roster action.')))
+      .finally(() => setRosterActingId(null))
+  }
+
+  const onRosterLink = (item: TrainingMatrixRosterDeltaItem) => {
+    const engineerId = Number(linkPick[item.person_id] || 0)
+    if (!engineerId) {
+      setError('Choose an existing employee record to link. This does not create a login.')
+      return
+    }
+    const ok = window.confirm(
+      [
+        `Link Atlas “${item.atlas_name}” to the existing QGP person record?`,
+        '',
+        'This uses the same name map as People mapping below.',
+        'No new login is created. PAMS and Entra will not be changed.',
+      ].join('\n'),
+    )
+    if (!ok) return
+    setRosterActingId(item.person_id)
+    setError(null)
+    setMessage(null)
+    void trainingMatrixApi
+      .upsertNameMap(item.atlas_name, engineerId)
+      .then(() => {
+        setMessage(`Linked ${item.atlas_name} to the existing person record.`)
+        reload()
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not link Atlas name.')))
+      .finally(() => setRosterActingId(null))
+  }
+
   const unmatched = nameMaps.filter((m) => !m.mapped)
   const mappedCount = nameMaps.length - unmatched.length
+  const appearedCount = rosterDelta?.appeared_count ?? 0
+  const disappearedCount = rosterDelta?.disappeared_count ?? 0
+  const rosterTotal = appearedCount + disappearedCount
 
   return (
     <div className="space-y-4" data-testid="training-matrix-admin">
@@ -1646,6 +1732,142 @@ export function TrainingMatrixAdminPanel() {
         </p>
         {message ? <p className="text-sm text-foreground">{message}</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      </AdminSection>
+
+      <AdminSection
+        testId="training-matrix-admin-roster"
+        title="Roster changes"
+        subtitle={
+          rosterTotal > 0
+            ? `After this Atlas file: ${appearedCount} appeared, ${disappearedCount} left. Archive or create a person record — never a login.`
+            : 'After each Atlas CSV, unresolved joiners and leavers appear here. Archive or create a person record based on the new information. No login is created from this queue.'
+        }
+        open={openRoster}
+        onToggle={() => setOpenRoster((v) => !v)}
+        headerRight={
+          rosterTotal > 0 ? (
+            <Badge variant="warning" data-testid="training-matrix-roster-count">
+              {rosterTotal} to review
+            </Badge>
+          ) : undefined
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Atlas is who is live. QGP User is a login seat. This queue never writes PAMS or Entra, and
+          never creates a user account. Link an existing employee with People mapping below — do not
+          duplicate that list here.
+        </p>
+        {disappearedCount > 0 ? (
+          <div className="space-y-2" data-testid="training-matrix-roster-disappeared">
+            <p className="text-sm font-medium">Left the Atlas roster</p>
+            {rosterDelta?.disappeared.map((item) => (
+              <div
+                key={`left-${item.person_id}`}
+                className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                data-testid="training-matrix-roster-left-row"
+              >
+                <span className="min-w-[10rem] font-medium">{item.atlas_name}</span>
+                <span className="text-muted-foreground">{item.department || '—'}</span>
+                <span className="text-xs text-muted-foreground">
+                  {item.engineer_display_name
+                    ? `Person: ${item.engineer_display_name}`
+                    : 'No person record'}
+                  {item.user_email ? ` · Login: ${item.user_email}` : ' · No login'}
+                </span>
+                {item.blocked_reason === 'superuser_login' ? (
+                  <span className="text-xs text-destructive">Superuser — deactivate in Admin → Users</span>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={rosterActingId === item.person_id}
+                    onClick={() => onRosterAction(item, 'archive')}
+                    data-testid="training-matrix-roster-archive"
+                  >
+                    Archive account
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {appearedCount > 0 ? (
+          <div className="space-y-2" data-testid="training-matrix-roster-appeared">
+            <p className="text-sm font-medium">New or returning on this Atlas file</p>
+            {rosterDelta?.appeared.map((item) => (
+              <div
+                key={`new-${item.person_id}`}
+                className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                data-testid="training-matrix-roster-appeared-row"
+              >
+                <span className="min-w-[10rem] font-medium">{item.atlas_name}</span>
+                <span className="text-muted-foreground">{item.department || '—'}</span>
+                {item.new_since_previous_import ? (
+                  <Badge variant="secondary">New this file</Badge>
+                ) : null}
+                {item.reason === 'archived_person' ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={rosterActingId === item.person_id}
+                    onClick={() => onRosterAction(item, 'reinstate')}
+                    data-testid="training-matrix-roster-reinstate"
+                  >
+                    Reinstate person
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={rosterActingId === item.person_id}
+                      onClick={() => onRosterAction(item, 'create_person')}
+                      data-testid="training-matrix-roster-create"
+                    >
+                      Create person record
+                    </Button>
+                    <label className="sr-only" htmlFor={`tm-roster-link-${item.person_id}`}>
+                      Link existing employee
+                    </label>
+                    <select
+                      id={`tm-roster-link-${item.person_id}`}
+                      className="h-8 rounded-md border border-border bg-card px-2 text-sm"
+                      value={linkPick[item.person_id] || ''}
+                      onChange={(e) =>
+                        setLinkPick((prev) => ({ ...prev, [item.person_id]: e.target.value }))
+                      }
+                      data-testid="training-matrix-roster-link-select"
+                    >
+                      <option value="">Link existing…</option>
+                      {engineers.map((eng) => (
+                        <option key={eng.id} value={String(eng.id)}>
+                          {eng.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={rosterActingId === item.person_id || !linkPick[item.person_id]}
+                      onClick={() => onRosterLink(item)}
+                      data-testid="training-matrix-roster-link"
+                    >
+                      Link
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {rosterTotal === 0 ? (
+          <p className="text-sm text-muted-foreground" data-testid="training-matrix-roster-empty">
+            No unresolved joiners or leavers. Upload a fresh Atlas CSV when people join or leave, then
+            choose Archive or Create person record here.
+          </p>
+        ) : null}
       </AdminSection>
 
       <AdminSection
