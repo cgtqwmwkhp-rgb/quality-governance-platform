@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -268,3 +268,61 @@ class TrainingMatrixNotifyResponse(BaseModel):
     sent: int
     skipped: int
     failed: int
+
+
+class TrainingMatrixRosterDeltaItem(BaseModel):
+    person_id: int
+    atlas_name: str
+    department: Optional[str] = None
+    board_role_override: Optional[str] = None
+    first_seen_at: datetime
+    new_since_previous_import: bool
+    last_seen_import_id: Optional[int] = None
+    last_seen_at: Optional[datetime] = None
+    last_seen_filename: Optional[str] = None
+    reason: Literal["unmapped", "archived_person", "left_roster"]
+    suggested_action: Literal["link_person", "create_person", "reinstate", "archive"]
+    engineer_id: Optional[int] = None
+    engineer_display_name: Optional[str] = None
+    engineer_is_active: Optional[bool] = None
+    engineer_roster_archived_at: Optional[datetime] = None
+    engineer_pams_technician_id: Optional[int] = None
+    user_id: Optional[int] = None
+    user_email: Optional[str] = None
+    user_is_active: Optional[bool] = None
+    user_is_superuser: Optional[bool] = None
+    blocked_reason: Optional[str] = None
+
+
+class TrainingMatrixRosterDeltaResponse(BaseModel):
+    latest_import_id: Optional[int] = None
+    latest_import_filename: Optional[str] = None
+    latest_import_at: Optional[datetime] = None
+    latest_person_count: int = 0
+    previous_import_id: Optional[int] = None
+    previous_import_at: Optional[datetime] = None
+    appeared: List[TrainingMatrixRosterDeltaItem]
+    disappeared: List[TrainingMatrixRosterDeltaItem]
+    appeared_count: int
+    appeared_new_this_import: int
+    disappeared_count: int
+    atlas_hub_url: str
+
+
+class TrainingMatrixRosterActionRequest(BaseModel):
+    action: Literal["archive", "create_person", "reinstate"]
+    disable_login: bool = True
+
+
+class TrainingMatrixRosterActionResponse(BaseModel):
+    person_id: int
+    action: str
+    engineer_id: Optional[int] = None
+    engineer_is_active: Optional[bool] = None
+    engineer_roster_archived_at: Optional[datetime] = None
+    user_id: Optional[int] = None
+    user_is_active: Optional[bool] = None
+    login_disabled: bool
+    atlas_person_changed: bool
+    message: str
+

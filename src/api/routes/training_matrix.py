@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.training_matrix import (
     TrainingMatrixComplianceListResponse,
     TrainingMatrixComplianceRow,
@@ -35,6 +35,10 @@ from src.api.schemas.training_matrix import (
     TrainingMatrixRequirementSeedRequest,
     TrainingMatrixRequirementSeedResponse,
     TrainingMatrixRequirementUpdate,
+    TrainingMatrixRosterActionRequest,
+    TrainingMatrixRosterActionResponse,
+    TrainingMatrixRosterDeltaItem,
+    TrainingMatrixRosterDeltaResponse,
     TrainingMatrixSummaryResponse,
 )
 from src.api.utils.tenant import require_tenant_id
@@ -77,6 +81,7 @@ from src.domain.services.training_matrix_parser import (
     person_name_match_keys,
 )
 from src.domain.services.training_matrix_requirement_seed import seed_plantexpand_2024_requirements
+from src.domain.services.training_matrix_roster_delta import apply_roster_action, build_roster_delta
 
 router = APIRouter()
 
@@ -287,6 +292,64 @@ async def list_name_maps(db: DbSession, user: CurrentUser):
         )
         for p in people
     ]
+
+
+@router.get("/roster-delta", response_model=TrainingMatrixRosterDeltaResponse)
+async def get_roster_delta(
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Unresolved Atlas roster exceptions (appeared / disappeared). Empty lists when no import."""
+    tenant_id = _tenant(user)
+    delta = await build_roster_delta(db, tenant_id)
+    return TrainingMatrixRosterDeltaResponse(
+        latest_import_id=delta.latest_import_id,
+        latest_import_filename=delta.latest_import_filename,
+        latest_import_at=delta.latest_import_at,
+        latest_person_count=delta.latest_person_count,
+        previous_import_id=delta.previous_import_id,
+        previous_import_at=delta.previous_import_at,
+        appeared=[TrainingMatrixRosterDeltaItem.model_validate(item.__dict__) for item in delta.appeared],
+        disappeared=[TrainingMatrixRosterDeltaItem.model_validate(item.__dict__) for item in delta.disappeared],
+        appeared_count=delta.appeared_count,
+        appeared_new_this_import=delta.appeared_new_this_import,
+        disappeared_count=delta.disappeared_count,
+        atlas_hub_url=delta.atlas_hub_url,
+    )
+
+
+@router.post("/people/{person_id}/roster-action", response_model=TrainingMatrixRosterActionResponse)
+async def post_roster_action(
+    person_id: int,
+    body: TrainingMatrixRosterActionRequest,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Archive, create a person record (no login), or reinstate from the Atlas roster queue."""
+    tenant_id = _tenant(user)
+    if body.action == "create_person" and not user.has_permission("engineer:create"):
+        raise AuthorizationError("You do not have permission to create engineer records")
+    result = await apply_roster_action(
+        db,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        action=body.action,
+        disable_login=body.disable_login,
+        actor_user_id=int(user.id),
+    )
+    await db.commit()
+    return TrainingMatrixRosterActionResponse(
+        person_id=result.person_id,
+        action=result.action,
+        engineer_id=result.engineer_id,
+        engineer_is_active=result.engineer_is_active,
+        engineer_roster_archived_at=result.engineer_roster_archived_at,
+        user_id=result.user_id,
+        user_is_active=result.user_is_active,
+        login_disabled=result.login_disabled,
+        atlas_person_changed=result.atlas_person_changed,
+        message=result.message,
+    )
 
 
 @router.post("/name-maps/auto-match", response_model=TrainingMatrixNameMapAutoMatchResponse)

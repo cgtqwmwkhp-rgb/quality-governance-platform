@@ -40,6 +40,17 @@ vi.mock('../../../api/client', () => ({
     approveMatrixProposal: vi.fn(),
     rejectMatrixProposal: vi.fn(),
     notify: vi.fn(),
+    getRosterDelta: vi.fn().mockResolvedValue({
+      latest_import_id: null,
+      appeared: [],
+      disappeared: [],
+      appeared_count: 0,
+      appeared_new_this_import: 0,
+      disappeared_count: 0,
+      latest_person_count: 0,
+      atlas_hub_url: 'https://atlas',
+    }),
+    resolveRosterAction: vi.fn(),
   },
   workforceApi: {
     listEngineers: vi.fn().mockResolvedValue({ data: { items: [] } }),

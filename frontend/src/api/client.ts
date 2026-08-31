@@ -1142,6 +1142,10 @@ export {
   type TrainingMatrixFrequencyChangeRequest,
   type TrainingMatrixFrequencyChangeRequestList,
   type TrainingMatrixNotifyResponse,
+  type TrainingMatrixRosterAction,
+  type TrainingMatrixRosterActionResponse,
+  type TrainingMatrixRosterDelta,
+  type TrainingMatrixRosterDeltaItem,
 } from './trainingMatrixClient'
 
 // ============ Portal tool + van compliance (person-scoped) ============
