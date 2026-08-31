@@ -127,8 +127,8 @@ async def build_roster_delta(db: AsyncSession, tenant_id: int) -> RosterDelta:
             .scalars()
             .all()
         )
-        for row in eng_rows:
-            engineers[row.id] = row
+        for eng in eng_rows:
+            engineers[eng.id] = eng
 
     user_ids = {eng.user_id for eng in engineers.values() if eng.user_id}
     users: dict[int, User] = {}
@@ -136,8 +136,8 @@ async def build_roster_delta(db: AsyncSession, tenant_id: int) -> RosterDelta:
         user_rows = (
             (await db.execute(select(User).where(User.id.in_(user_ids), User.tenant_id == tenant_id))).scalars().all()
         )
-        for row in user_rows:
-            users[row.id] = row
+        for usr in user_rows:
+            users[usr.id] = usr
 
     appeared: list[RosterDeltaItem] = []
     disappeared: list[RosterDeltaItem] = []
