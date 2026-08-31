@@ -6,16 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { API_BASE_URL } from '../config/apiBase'
 import { getPlatformToken } from '../utils/auth'
 import { toast } from '../contexts/ToastContext'
-
-type ExportModuleId =
-  | 'incidents'
-  | 'rtas'
-  | 'complaints'
-  | 'risks'
-  | 'audits'
-  | 'actions'
-  | 'documents'
-  | 'compliance_schedule'
+import { downloadModuleExport, type ExportModuleId } from '../utils/moduleExportDownload'
 
 interface ExportModule {
   id: ExportModuleId
@@ -85,32 +76,7 @@ export default function ExportCenter() {
   const handleExport = async (moduleId: ExportModuleId) => {
     setExportingId(moduleId)
     try {
-      const token = getPlatformToken()
-      const response = await fetch(`${API_BASE_URL}/api/v1/exports`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ module: moduleId, format: 'csv' }),
-      })
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}))
-        throw new Error(
-          (body as { detail?: string }).detail || `Export failed (${response.status})`,
-        )
-      }
-      const blob = await response.blob()
-      const disposition = response.headers.get('Content-Disposition') || ''
-      const match = /filename="?([^"]+)"?/i.exec(disposition)
-      const filename = match?.[1] || `${moduleId}_export.csv`
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = filename
-      anchor.click()
-      URL.revokeObjectURL(url)
-      const truncated = response.headers.get('X-Export-Truncated') === 'true'
+      const { truncated } = await downloadModuleExport({ module: moduleId, format: 'csv' })
       toast.success(
         truncated
           ? t(

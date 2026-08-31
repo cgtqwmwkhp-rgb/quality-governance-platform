@@ -250,3 +250,19 @@ class TestCORSExposedHeaders:
         )
         expose_headers = response.headers.get("access-control-expose-headers", "")
         assert "X-Request-Id" in expose_headers or "x-request-id" in expose_headers.lower()
+
+    def test_expose_export_download_headers(self, client):
+        """Export downloads are cross-origin: the browser must read the filename.
+
+        ``anchor.download`` is set from Content-Disposition, so an unexposed
+        header means the saved file loses its name — including the PEL register
+        tag a captioned export was requested under (REG-SSOT-E1).
+        """
+        response = client.get(
+            "/api/v1/uvdb/sections",
+            headers={"Origin": PROD_ORIGIN},
+        )
+        expose_headers = response.headers.get("access-control-expose-headers", "").lower()
+        assert "content-disposition" in expose_headers
+        assert "x-export-truncated" in expose_headers
+        assert "x-export-register" in expose_headers
