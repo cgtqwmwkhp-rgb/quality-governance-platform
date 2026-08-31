@@ -125,6 +125,16 @@ describe('createAuditsApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs?page=1&page_size=10')
     audits.listRuns(1, 10, { q: 'Wickford' })
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs?page=1&page_size=10&q=Wickford')
+    audits.listRuns(1, 100, {
+      progress: 'completed',
+      audit_type: 'inspection',
+      date_from: '2026-08-01',
+      date_to: '2026-08-31',
+      employee: 'Alex',
+    })
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/audits/runs?page=1&page_size=100&progress=completed&audit_type=inspection&date_from=2026-08-01&date_to=2026-08-31&employee=Alex',
+    )
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs', { template_id: 1 })
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/runs/4')
     expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/runs/4', { notes: 'n' })
