@@ -28,9 +28,7 @@ async def _user_count(tenant_id: int = TENANT) -> int:
     async with async_session_maker() as session:
         return int(
             (
-                await session.execute(
-                    select(func.count()).select_from(User).where(User.tenant_id == tenant_id)
-                )
+                await session.execute(select(func.count()).select_from(User).where(User.tenant_id == tenant_id))
             ).scalar_one()
         )
 

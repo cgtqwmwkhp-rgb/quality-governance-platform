@@ -310,6 +310,10 @@ class TrainingMatrixRosterDeltaResponse(BaseModel):
 
 
 class TrainingMatrixRosterActionRequest(BaseModel):
+    """Operator choice from the Atlas roster queue. Unknown fields must 422."""
+
+    model_config = ConfigDict(extra="forbid")
+
     action: Literal["archive", "create_person", "reinstate"]
     disable_login: bool = True
 
@@ -325,4 +329,3 @@ class TrainingMatrixRosterActionResponse(BaseModel):
     login_disabled: bool
     atlas_person_changed: bool
     message: str
-

@@ -123,8 +123,10 @@ async def build_roster_delta(db: AsyncSession, tenant_id: int) -> RosterDelta:
     engineers: dict[int, Engineer] = {}
     if eng_ids:
         eng_rows = (
-            await db.execute(select(Engineer).where(Engineer.id.in_(eng_ids), Engineer.tenant_id == tenant_id))
-        ).scalars().all()
+            (await db.execute(select(Engineer).where(Engineer.id.in_(eng_ids), Engineer.tenant_id == tenant_id)))
+            .scalars()
+            .all()
+        )
         for row in eng_rows:
             engineers[row.id] = row
 
@@ -132,8 +134,8 @@ async def build_roster_delta(db: AsyncSession, tenant_id: int) -> RosterDelta:
     users: dict[int, User] = {}
     if user_ids:
         user_rows = (
-            await db.execute(select(User).where(User.id.in_(user_ids), User.tenant_id == tenant_id))
-        ).scalars().all()
+            (await db.execute(select(User).where(User.id.in_(user_ids), User.tenant_id == tenant_id))).scalars().all()
+        )
         for row in user_rows:
             users[row.id] = row
 
@@ -291,9 +293,7 @@ async def _load_linked(
     user = None
     if person.engineer_id:
         engineer = (
-            await db.execute(
-                select(Engineer).where(Engineer.id == person.engineer_id, Engineer.tenant_id == tenant_id)
-            )
+            await db.execute(select(Engineer).where(Engineer.id == person.engineer_id, Engineer.tenant_id == tenant_id))
         ).scalar_one_or_none()
     if engineer is not None and engineer.user_id:
         user = (
