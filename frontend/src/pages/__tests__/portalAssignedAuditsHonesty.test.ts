@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assignedAuditQueueTotal,
   isShowableAssignedAudit,
+  isShowableCompletedAudit,
 } from '../portalAssignedAuditsHonesty'
 
 describe('portal assigned-audit honesty', () => {
@@ -12,6 +13,12 @@ describe('portal assigned-audit honesty', () => {
     expect(isShowableAssignedAudit({ reference_number: '???', status: 'scheduled' })).toBe(false)
     expect(isShowableAssignedAudit({ reference_number: 'AUD-1', status: 'unknown' })).toBe(false)
     expect(isShowableAssignedAudit({ reference_number: 'AUD-1', status: 'completed' })).toBe(false)
+  })
+
+  it('completed catalogue only shows completed rows with a real reference', () => {
+    expect(isShowableCompletedAudit({ reference_number: 'AUD-1', status: 'completed' })).toBe(true)
+    expect(isShowableCompletedAudit({ reference_number: 'AUD-1', status: 'scheduled' })).toBe(false)
+    expect(isShowableCompletedAudit({ reference_number: '???', status: 'completed' })).toBe(false)
   })
 
   it('never returns a fake zero when the server total is missing or the load failed', () => {
