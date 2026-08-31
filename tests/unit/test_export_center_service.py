@@ -11,6 +11,7 @@ import pytest
 from src.domain.exceptions import BadRequestError
 from src.domain.services.document_register_export import IMS052_COLUMNS
 from src.domain.services.export_center_service import (
+    REGISTER_EXPORT_MODULE,
     SYNC_ROW_LIMIT,
     ExportCenterService,
     _compliance_schedule_row,
@@ -226,3 +227,98 @@ async def test_documents_export_requires_user_for_acl():
     service = ExportCenterService(SimpleNamespace())
     with pytest.raises(BadRequestError, match="authenticated user"):
         await service.build_sync_csv(1, "documents", "csv", user=None)
+
+
+def test_register_overlay_covers_only_registers_that_are_a_whole_module():
+    """REG-SSOT-E1: mirrors registerExportOverlay.ts. Subset registers stay out."""
+    assert REGISTER_EXPORT_MODULE == {
+        "PEL-HSEQ-5010": "incidents",
+        "PEL-HSEQ-5021": "risks",
+        "PEL-HSEQ-5059": "actions",
+        "PEL-HSEQ-5060": "complaints",
+    }
+
+
+@pytest.mark.asyncio
+async def test_register_overlay_tags_filename_without_narrowing_rows():
+    incident = SimpleNamespace(
+        id=4,
+        reference_number="INC-2026-0004",
+        title="Trip",
+        incident_type=SimpleNamespace(value="injury"),
+        severity=SimpleNamespace(value="low"),
+        status=SimpleNamespace(value="closed"),
+        incident_date=None,
+        created_at=None,
+    )
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _FakeResult(scalar=1),
+                _FakeResult(values=[incident]),
+            ]
+        )
+    )
+    service = ExportCenterService(db)
+
+    result = await service.build_sync_csv(42, "incidents", "csv", register="PEL-HSEQ-5010")
+
+    assert result.register == "PEL-HSEQ-5010"
+    assert result.filename.startswith("incidents_export_PEL-HSEQ-5010_")
+    assert result.filename.endswith(".csv")
+    # Same rows as the untagged module export — the tag is a label, not a filter.
+    assert result.row_count == 1
+    assert result.total_available == 1
+    assert "INC-2026-0004" in result.csv_text
+
+
+@pytest.mark.asyncio
+async def test_register_overlay_rejects_a_register_that_is_not_this_module():
+    service = ExportCenterService(SimpleNamespace(execute=AsyncMock()))
+
+    with pytest.raises(BadRequestError, match="is the 'risks' register, not 'incidents'"):
+        await service.build_sync_csv(1, "incidents", "csv", register="PEL-HSEQ-5021")
+
+
+@pytest.mark.asyncio
+async def test_register_overlay_rejects_a_subset_register():
+    """RIDDOR names fewer rows than the incidents module holds — refuse the label."""
+    service = ExportCenterService(SimpleNamespace(execute=AsyncMock()))
+
+    with pytest.raises(BadRequestError, match="no Export Center overlay"):
+        await service.build_sync_csv(1, "incidents", "csv", register="PEL-HSEQ-5033")
+
+    with pytest.raises(BadRequestError, match="no Export Center overlay"):
+        await service.build_sync_csv(1, "incidents", "csv", register=' "; drop ')
+
+
+@pytest.mark.asyncio
+async def test_register_overlay_is_case_insensitive_and_optional():
+    incident = SimpleNamespace(
+        id=1,
+        reference_number="INC-1",
+        title="T",
+        incident_type=SimpleNamespace(value="hazard"),
+        severity="low",
+        status=SimpleNamespace(value="reported"),
+        incident_date=None,
+        created_at=None,
+    )
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _FakeResult(scalar=1),
+                _FakeResult(values=[incident]),
+                _FakeResult(scalar=1),
+                _FakeResult(values=[incident]),
+            ]
+        )
+    )
+    service = ExportCenterService(db)
+
+    tagged = await service.build_sync_csv(42, "incidents", "csv", register=" pel-hseq-5010 ")
+    assert tagged.filename.startswith("incidents_export_PEL-HSEQ-5010_")
+
+    untagged = await service.build_sync_csv(42, "incidents", "csv")
+    assert untagged.register is None
+    assert untagged.filename.startswith("incidents_export_2")

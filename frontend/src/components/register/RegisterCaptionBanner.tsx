@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import { lookupRegister } from './registerCatalogueHonesty'
+import RegisterExportButton from './RegisterExportButton'
+import { resolveRegisterExport } from './registerExportOverlay'
 
 const INCIDENT_TYPE_LABEL: Record<string, string> = {
   injury: 'injury',
@@ -36,6 +38,7 @@ export default function RegisterCaptionBanner({
     return null
   }
 
+  const exportOverlay = resolveRegisterExport(entry)
   const typeLabel = typeParam ? INCIDENT_TYPE_LABEL[typeParam] : undefined
   const appliedParts: string[] = []
   if (typeLabel) {
@@ -67,6 +70,13 @@ export default function RegisterCaptionBanner({
           : ''}
       </p>
       {entry.note ? <p className="text-muted-foreground mt-1">{entry.note}</p> : null}
+      {exportOverlay ? (
+        <RegisterExportButton
+          docRef={entry.docRef}
+          overlay={exportOverlay}
+          serverFilterApplied={appliedParts.length > 0}
+        />
+      ) : null}
       <p className="mt-2">
         <Link to="/registers" className="text-primary underline-offset-2 hover:underline">
           Back to Registers

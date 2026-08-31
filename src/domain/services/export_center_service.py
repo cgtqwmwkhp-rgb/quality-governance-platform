@@ -6,6 +6,10 @@ owned by Lane S (alembic) and is intentionally not claimed here.
 The ``documents`` module is the Master Document Register evidence pack —
 fixed IMS052 columns, never driven by a UI column picker. Other modules keep
 their generic CSV row mappers.
+
+A PEL register may *tag* one of these module exports (REG-SSOT-E1). The tag only
+names the register the reader came from; the payload is still the whole module,
+and no per-register dump job exists.
 """
 
 from __future__ import annotations
@@ -49,6 +53,21 @@ SUPPORTED_MODULES = (
 )
 
 SUPPORTED_FORMATS = ("csv", "xlsx", "pdf")
+
+# Registers whose own scope *is* an Export Center module, so the module export is
+# already that register's export (REG-SSOT-E1). Mirrors
+# frontend/src/components/register/registerExportOverlay.ts, where the same set is
+# derived from the `live` band of the PEL-HSEQ-5062 catalogue; this dict is the
+# enforced copy. Named-subset registers are deliberately absent — RIDDOR, the
+# Accident Book, a single asbestos clock on the schedule and the modern slavery
+# tracker all name fewer rows than their module export contains, so tagging a whole
+# module with those references would misdescribe the file.
+REGISTER_EXPORT_MODULE: dict[str, str] = {
+    "PEL-HSEQ-5010": "incidents",
+    "PEL-HSEQ-5021": "risks",
+    "PEL-HSEQ-5059": "actions",
+    "PEL-HSEQ-5060": "complaints",
+}
 
 
 @dataclass(frozen=True)
@@ -184,6 +203,35 @@ def _compliance_schedule_row(row: ComplianceRequirement) -> list[str]:
         _s(row.is_active),
         _s(row.statutory),
     ]
+
+
+def _resolve_register_tag(module_key: str, register: str | None) -> Optional[str]:
+    """Validate a PEL register tag for ``module_key``, or return ``None``.
+
+    Fails closed: only a register whose own scope is this module may tag the file,
+    so a whole-module export cannot leave here wearing a narrower register's name.
+    """
+    if register is None:
+        return None
+    ref = register.strip().upper()
+    expected = REGISTER_EXPORT_MODULE.get(ref)
+    if expected is None:
+        raise BadRequestError(
+            f"Register '{register}' has no Export Center overlay. "
+            f"Registers that are a module export: {', '.join(sorted(REGISTER_EXPORT_MODULE))}."
+        )
+    if expected != module_key:
+        raise BadRequestError(
+            f"Register '{ref}' is the '{expected}' register, not '{module_key}'. "
+            "A module export must not be tagged with another register's reference."
+        )
+    return ref
+
+
+def _export_filename(stem: str, register: Optional[str], stamp: str, extension: str) -> str:
+    """Module stem first, so a tagged file still reads as a module export."""
+    tag = f"_{register}" if register else ""
+    return f"{stem}{tag}_{stamp}.{extension}"
 
 
 async def _build_document_register(
@@ -347,6 +395,8 @@ class SyncExportResult:
     row_count: int
     truncated: bool
     total_available: int
+    # PEL register this whole-module export was tagged for, when the caller named one.
+    register: Optional[str] = None
 
     @property
     def csv_text(self) -> str:
@@ -394,8 +444,13 @@ class ExportCenterService:
         export_format: str = "csv",
         *,
         user: Any = None,
+        register: Optional[str] = None,
     ) -> SyncExportResult:
-        """Build a sync export. Name retained for route compatibility; formats vary."""
+        """Build a sync export. Name retained for route compatibility; formats vary.
+
+        ``register`` tags the filename with a PEL reference for the Register of
+        Registers overlay. It never narrows the rows.
+        """
         module_key = (module or "").strip().lower()
         fmt = (export_format or "").strip().lower()
         if module_key not in _MODULE_SPECS:
@@ -409,6 +464,7 @@ class ExportCenterService:
                 f"Supported: {', '.join(spec.formats)}."
             )
 
+        register_tag = _resolve_register_tag(module_key, register)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
         stem = spec.filename_stem or f"{module_key}_export"
 
@@ -422,12 +478,13 @@ class ExportCenterService:
                 raise BadRequestError(str(exc)) from exc
             return SyncExportResult(
                 module=module_key,
-                filename=f"{stem}_{stamp}.{extension}",
+                filename=_export_filename(stem, register_tag, stamp, extension),
                 content=content,
                 media_type=media_type,
                 row_count=len(data_rows),
                 truncated=truncated,
                 total_available=total_visible,
+                register=register_tag,
             )
 
         if fmt != "csv":
@@ -454,12 +511,13 @@ class ExportCenterService:
         truncated = total > len(rows)
         return SyncExportResult(
             module=module_key,
-            filename=f"{stem}_{stamp}.csv",
+            filename=_export_filename(stem, register_tag, stamp, "csv"),
             content=buffer.getvalue().encode("utf-8"),
             media_type="text/csv; charset=utf-8",
             row_count=len(rows),
             truncated=truncated,
             total_available=total,
+            register=register_tag,
         )
 
     async def _count(self, spec: _ModuleSpec, tenant_id: int) -> int:

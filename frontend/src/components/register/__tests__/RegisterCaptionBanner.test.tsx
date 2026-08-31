@@ -60,6 +60,37 @@ describe('RegisterCaptionBanner', () => {
     expect(screen.getByTestId('register-caption-banner')).toHaveTextContent('Server total: 4')
   })
 
+  it('offers the Export Center module export where the register is the module (REG-SSOT-E1)', () => {
+    render(
+      <MemoryRouter>
+        <RegisterCaptionBanner registerParam="PEL-HSEQ-5060" />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('register-export-btn')).toBeInTheDocument()
+    expect(screen.getByTestId('register-export-note')).toHaveTextContent('whole Complaints module')
+  })
+
+  it('offers no export for a register that is a subset of its module', () => {
+    render(
+      <MemoryRouter>
+        <RegisterCaptionBanner registerParam="PEL-HSEQ-5033" />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('register-caption-banner')).toBeInTheDocument()
+    expect(screen.queryByTestId('register-export-btn')).not.toBeInTheDocument()
+  })
+
+  it('warns that an applied type filter is missing from the export', () => {
+    render(
+      <MemoryRouter>
+        <RegisterCaptionBanner registerParam="PEL-HSEQ-5010" typeParam="injury" />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('register-export-note')).toHaveTextContent(
+      'server filter named above is not applied to the file',
+    )
+  })
+
   it('tells a slavery tracker reader the actions list is unfiltered (REG-SSOT-D3)', () => {
     render(
       <MemoryRouter>
