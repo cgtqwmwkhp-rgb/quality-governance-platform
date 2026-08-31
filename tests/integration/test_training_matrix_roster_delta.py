@@ -36,6 +36,24 @@ async def _user_count(tenant_id: int = TENANT) -> int:
         )
 
 
+async def _engineer_count(tenant_id: int = TENANT) -> int:
+    async with async_session_maker() as session:
+        return int(
+            (
+                await session.execute(select(func.count()).select_from(Engineer).where(Engineer.tenant_id == tenant_id))
+            ).scalar_one()
+        )
+
+
+def _client_for(*, role: str, permissions: str) -> AsyncClient:
+    token = _generate_test_jwt(user_id="1", tenant_id=TENANT, role=role, permissions=permissions)
+    return AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
 async def _seed_imports(*, tag: str) -> tuple[int, int]:
     """Insert previous then latest import. Returns (previous_id, latest_id)."""
     async with async_session_maker() as session:
@@ -150,6 +168,31 @@ async def test_viewer_cannot_read_or_act_on_roster(viewer_client: AsyncClient):
         json={"action": "archive"},
     )
     assert post_res.status_code == 403, post_res.text
+
+
+@pytest.mark.asyncio
+async def test_permission_rich_manager_cannot_review_or_create_roster_people():
+    tag = f"manager-{uuid.uuid4().hex[:8]}"
+    _prev, latest = await _seed_imports(tag=tag)
+    person_id = await _add_person(atlas_name=f"Manager Joiner {tag}", last_seen_import_id=latest)
+    engineers_before = await _engineer_count()
+
+    async with _client_for(
+        role="manager",
+        permissions="engineer:update,engineer:create",
+    ) as client:
+        get_res = await client.get(DELTA_URL)
+        post_res = await client.post(
+            ACTION_URL.format(person_id=person_id),
+            json={"action": "create_person"},
+        )
+
+    assert get_res.status_code == 403, get_res.text
+    assert post_res.status_code == 403, post_res.text
+    assert await _engineer_count() == engineers_before
+    async with async_session_maker() as session:
+        person = await session.get(TrainingMatrixPerson, person_id)
+        assert person is not None and person.engineer_id is None
 
 
 @pytest.mark.asyncio

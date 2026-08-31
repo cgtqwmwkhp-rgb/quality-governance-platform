@@ -38,6 +38,7 @@ from src.api.schemas.engineer import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
+from src.domain.authz.workforce import is_workforce_manager as _is_workforce_manager
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.asset import AssetType
 from src.domain.models.engineer import CompetencyRecord, Engineer
@@ -45,11 +46,6 @@ from src.domain.models.user import User
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-def _is_workforce_manager(user: CurrentUser) -> bool:
-    role_names = {r.name.lower() for r in getattr(user, "roles", []) or []}
-    return bool(getattr(user, "is_superuser", False) or "admin" in role_names or "supervisor" in role_names)
 
 
 def _require_engineer_tenant_id(user: CurrentUser) -> int:

@@ -42,6 +42,7 @@ from src.api.schemas.training_matrix import (
     TrainingMatrixSummaryResponse,
 )
 from src.api.utils.tenant import require_tenant_id
+from src.domain.authz.workforce import is_workforce_manager as is_workforce_write_manager
 from src.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 from src.domain.models.engineer import Engineer
 from src.domain.models.notification import NotificationChannel, NotificationPriority, NotificationType
@@ -300,6 +301,8 @@ async def get_roster_delta(
     user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
     """Unresolved Atlas roster exceptions (appeared / disappeared). Empty lists when no import."""
+    if not is_workforce_write_manager(user):
+        raise AuthorizationError("You do not have permission to review workforce roster changes")
     tenant_id = _tenant(user)
     delta = await build_roster_delta(db, tenant_id)
     return TrainingMatrixRosterDeltaResponse(
@@ -326,6 +329,8 @@ async def post_roster_action(
     user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
     """Archive, create a person record (no login), or reinstate from the Atlas roster queue."""
+    if not is_workforce_write_manager(user):
+        raise AuthorizationError("You do not have permission to manage workforce roster changes")
     tenant_id = _tenant(user)
     if body.action == "create_person" and not user.has_permission("engineer:create"):
         raise AuthorizationError("You do not have permission to create engineer records")
