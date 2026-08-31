@@ -143,6 +143,49 @@ async def test_download_module_csv_route():
     assert response.headers["x-export-total-available"] == "12"
 
 
+@pytest.mark.asyncio
+async def test_create_sync_export_passes_register_tag_and_discloses_it():
+    result = _csv_result(
+        filename="incidents_export_PEL-HSEQ-5010_20260831.csv",
+        register="PEL-HSEQ-5010",
+    )
+    with patch(
+        "src.api.routes.exports.ExportCenterService.build_sync_csv",
+        new=AsyncMock(return_value=result),
+    ) as mocked:
+        response = await create_sync_export(
+            CreateExportRequest(module="incidents", format="csv", register="PEL-HSEQ-5010"),
+            db=SimpleNamespace(),
+            current_user=_user(),
+        )
+
+    assert mocked.await_args.kwargs["register"] == "PEL-HSEQ-5010"
+    assert response.headers["x-export-register"] == "PEL-HSEQ-5010"
+    assert "incidents_export_PEL-HSEQ-5010_20260831.csv" in response.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
+async def test_create_sync_export_omits_register_header_when_untagged():
+    with patch(
+        "src.api.routes.exports.ExportCenterService.build_sync_csv",
+        new=AsyncMock(return_value=_csv_result()),
+    ):
+        response = await create_sync_export(
+            CreateExportRequest(module="incidents", format="csv"),
+            db=SimpleNamespace(),
+            current_user=_user(),
+        )
+
+    assert "x-export-register" not in response.headers
+
+
+@pytest.mark.parametrize("register", ["PEL_HSEQ_5010", "PEL-HSEQ-5010; rm -rf /", 'PEL-HSEQ-5010"', ""])
+def test_create_export_request_rejects_a_malformed_register(register):
+    """Filename tags reach Content-Disposition — only PEL references get through."""
+    with pytest.raises(ValidationError):
+        CreateExportRequest(module="incidents", format="csv", register=register)
+
+
 def test_create_export_request_forbids_columns_picker():
     with pytest.raises(ValidationError):
         CreateExportRequest(

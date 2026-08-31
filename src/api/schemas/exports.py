@@ -65,3 +65,13 @@ class CreateExportRequest(BaseModel):
 
     module: ExportModuleId
     format: ExportFormat = "csv"
+    register: str | None = Field(
+        default=None,
+        max_length=32,
+        pattern=r"^PEL-[A-Z]{2,6}-\d{4}$",
+        description=(
+            "Optional PEL register reference to tag the filename with (REG-SSOT-E1). "
+            "Only registers whose own scope is this module are accepted; the rows are "
+            "still the whole module, never a per-register dump."
+        ),
+    )
