@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
 from src.core.security import get_password_hash
@@ -13,7 +14,9 @@ from src.domain.models.engineer import Engineer
 from src.domain.models.training_matrix import TrainingMatrixImport, TrainingMatrixPerson
 from src.domain.models.user import User
 from src.infrastructure.database import async_session_maker
+from src.main import app
 from tests.factories import TenantFactory, UserFactory
+from tests.integration.conftest import _generate_test_jwt
 
 TENANT = 1
 DELTA_URL = "/api/v1/training-matrix/roster-delta"
@@ -112,8 +115,23 @@ async def _add_engineer(
 
 
 @pytest.mark.asyncio
-async def test_roster_delta_empty_when_no_import(admin_client: AsyncClient):
-    response = await admin_client.get(DELTA_URL)
+async def test_roster_delta_empty_when_no_import():
+    """200 empty lists, not 404. Isolated tenant so Postgres leftover imports cannot leak."""
+    tag = uuid.uuid4().hex[:8]
+    async with async_session_maker() as session:
+        tenant = TenantFactory.build(name=f"Empty roster {tag}", slug=f"empty-roster-{tag}")
+        session.add(tenant)
+        await session.commit()
+        tenant_id = tenant.id
+
+    token = _generate_test_jwt(user_id="1", tenant_id=tenant_id, role="admin")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as client:
+        response = await client.get(DELTA_URL)
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["appeared"] == []
