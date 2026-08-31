@@ -81,6 +81,7 @@ from src.domain.services.audit_assignment_notify import (
     require_assignee_in_tenant,
     should_notify_assignee_change,
 )
+from src.domain.services.audit_catalogue_access import is_audit_catalogue_caller
 from src.domain.services.audit_execute_access import (
     PUSH_FAILED,
     assert_can_execute_run,
@@ -1111,6 +1112,11 @@ async def list_runs(
     date_to: Optional[date] = Query(None, description="Inclusive end on scheduled_date or created_at"),
 ) -> Any:
     """List all audit runs with pagination and filtering."""
+    if not is_audit_catalogue_caller(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Senior role or audit:read is required to list organisation audit runs",
+        )
     try:
         tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         service = AuditService(db)
