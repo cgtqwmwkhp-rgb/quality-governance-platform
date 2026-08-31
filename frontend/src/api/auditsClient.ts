@@ -233,7 +233,6 @@ export interface AuditRunUpdate {
   engineer_id?: number | null
   location_id?: number | null
   customer_code?: string | null
-  assigned_to_id?: number | null
 }
 
 export interface AuditTemplateDetail {

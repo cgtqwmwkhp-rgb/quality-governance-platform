@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.domain.services.audit_service import AuditService
-from tests.unit.test_route_authz_tenant_scope import _FakeResult, _assert_exact_tenant_sql, _sql
+from tests.unit.test_route_authz_tenant_scope import _assert_exact_tenant_sql, _FakeResult, _sql
 
 
 @pytest.mark.asyncio

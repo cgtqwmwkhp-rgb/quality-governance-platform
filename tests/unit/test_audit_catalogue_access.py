@@ -2,10 +2,7 @@
 
 from types import SimpleNamespace
 
-from src.domain.services.audit_catalogue_access import (
-    effective_assigned_to_filter,
-    is_audit_senior,
-)
+from src.domain.services.audit_catalogue_access import effective_assigned_to_filter, is_audit_senior
 
 
 def test_field_worker_is_not_senior_and_is_forced_to_self():
