@@ -1,4 +1,11 @@
-"""Parse Atlas Training Matrix Report CSV (Status / Passed / Expiry triplets)."""
+"""Parse Atlas / Citation Training Matrix Report (CSV or .xlsx).
+
+Two header layouts are accepted:
+
+- Atlas CSV: title row, then course names, then Status/Passed/Expiry, then people.
+- Citation Excel: ``Full Name`` / ``Department`` / course names on row 1,
+  Status / Completed date / Expiry Date on row 2, people from row 3.
+"""
 
 from __future__ import annotations
 
@@ -40,12 +47,32 @@ def parse_atlas_date(value: str | None) -> Optional[date]:
     raw = (value or "").strip()
     if not raw:
         return None
+    if "T" in raw:
+        raw = raw.split("T", 1)[0]
+    if " " in raw:
+        raw = raw.split(" ", 1)[0]
     for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"):
         try:
             return datetime.strptime(raw, fmt).date()
         except ValueError:
             continue
     return None
+
+
+def _cell_str(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value).strip()
+
+
+def _header_status(rows: list[list[str]], row_idx: int) -> str:
+    if row_idx >= len(rows) or len(rows[row_idx]) < 3:
+        return ""
+    return (rows[row_idx][2] or "").strip().lower()
 
 
 @dataclass
@@ -73,17 +100,27 @@ class ParsedMatrix:
     expiry_without_passed_count: int
 
 
-def parse_training_matrix_csv(content: bytes | str) -> ParsedMatrix:
-    if isinstance(content, bytes):
-        text = content.decode("utf-8-sig", errors="replace")
-    else:
-        text = content
-    reader = csv.reader(io.StringIO(text))
-    rows = list(reader)
-    if len(rows) < 4:
-        raise ValueError("Training matrix CSV must include title, course, status, and data rows")
+def parse_training_matrix_rows(rows: list[list[str]]) -> ParsedMatrix:
+    """Parse already-stringified matrix rows (CSV or Excel)."""
+    if len(rows) < 3:
+        raise ValueError("Training matrix must include course names, a Status header row, and people")
 
-    course_row = rows[1]
+    status_r1 = _header_status(rows, 1)
+    status_r2 = _header_status(rows, 2)
+    if status_r1.startswith("status"):
+        course_row_idx, people_start = 0, 2
+    elif status_r2.startswith("status"):
+        course_row_idx, people_start = 1, 3
+    else:
+        raise ValueError(
+            "Training matrix must include course names and a Status / date header row. "
+            "This is not an Atlas or Citation Training Matrix Report."
+        )
+
+    if people_start >= len(rows):
+        raise ValueError("Training matrix must include people rows")
+
+    course_row = rows[course_row_idx]
     courses: list[str] = []
     for i in range(2, len(course_row), 3):
         name = (course_row[i] or "").strip()
@@ -91,14 +128,14 @@ def parse_training_matrix_csv(content: bytes | str) -> ParsedMatrix:
             courses.append(name)
 
     if not courses:
-        raise ValueError("No course columns found in training matrix CSV")
+        raise ValueError("No course columns found in training matrix")
 
     people_by_name: dict[str, ParsedPerson] = {}
     cell_count = 0
     nonempty = 0
     expiry_without_passed = 0
 
-    for row in rows[3:]:
+    for row in rows[people_start:]:
         if not row or not (row[0] or "").strip():
             continue
         # Ignore footer noise
@@ -142,7 +179,7 @@ def parse_training_matrix_csv(content: bytes | str) -> ParsedMatrix:
 
     people = list(people_by_name.values())
     if not people:
-        raise ValueError("No people rows found in training matrix CSV")
+        raise ValueError("No people rows found in training matrix")
 
     return ParsedMatrix(
         courses=courses,
@@ -150,4 +187,44 @@ def parse_training_matrix_csv(content: bytes | str) -> ParsedMatrix:
         cell_count=cell_count,
         nonempty_cell_count=nonempty,
         expiry_without_passed_count=expiry_without_passed,
+    )
+
+
+def parse_training_matrix_csv(content: bytes | str) -> ParsedMatrix:
+    if isinstance(content, bytes):
+        text = content.decode("utf-8-sig", errors="replace")
+    else:
+        text = content
+    rows = [list(row) for row in csv.reader(io.StringIO(text))]
+    return parse_training_matrix_rows(rows)
+
+
+def parse_training_matrix_xlsx(content: bytes) -> ParsedMatrix:
+    if not content.startswith(b"PK"):
+        raise ValueError("Excel workbook (.xlsx) is required; this file is not a valid .xlsx")
+    from zipfile import BadZipFile
+
+    from openpyxl import load_workbook
+    from openpyxl.utils.exceptions import InvalidFileException
+
+    try:
+        workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    except (InvalidFileException, BadZipFile, OSError, KeyError) as exc:
+        raise ValueError("Could not read the Excel training matrix") from exc
+    try:
+        sheet = workbook.active
+        rows = [[_cell_str(value) for value in row] for row in sheet.iter_rows(values_only=True)]
+    finally:
+        workbook.close()
+    return parse_training_matrix_rows(rows)
+
+
+def parse_training_matrix_upload(filename: str | None, content: bytes) -> ParsedMatrix:
+    name = (filename or "training-matrix.csv").lower()
+    if name.endswith(".xlsx"):
+        return parse_training_matrix_xlsx(content)
+    if name.endswith(".csv"):
+        return parse_training_matrix_csv(content)
+    raise ValueError(
+        "Upload the Atlas or Citation Training Matrix Report as CSV or Excel (.csv / .xlsx). " "PDF is not accepted."
     )
