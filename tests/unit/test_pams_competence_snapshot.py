@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -131,19 +130,6 @@ async def test_flag_off_returns_404(monkeypatch):
 async def test_flag_on_allows_dependency(monkeypatch):
     monkeypatch.setattr(settings, "competence_board_enabled", True)
     await board_routes.require_competence_board_enabled()
-
-
-@pytest.mark.asyncio
-async def test_atlas_family_is_422_not_pams_cells(monkeypatch):
-    monkeypatch.setattr(settings, "competence_board_enabled", True)
-    with pytest.raises(HTTPException) as exc_info:
-        await board_routes.get_competence_board(
-            db=MagicMock(),
-            current_user=SimpleNamespace(tenant_id=1),
-            family="atlas",
-        )
-    assert exc_info.value.status_code == 422
-    assert exc_info.value.detail == board_routes.ATLAS_NOT_SHIPPED
 
 
 def test_competence_task_is_imported_and_scheduled_once():

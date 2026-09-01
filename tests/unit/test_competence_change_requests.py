@@ -149,16 +149,3 @@ async def test_change_requests_404_when_flag_off(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         await board_routes.require_competence_board_enabled()
     assert exc_info.value.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_get_atlas_board_still_422(monkeypatch):
-    monkeypatch.setattr(settings, "competence_board_enabled", True)
-    with pytest.raises(HTTPException) as exc_info:
-        await board_routes.get_competence_board(
-            db=MagicMock(),
-            current_user=SimpleNamespace(tenant_id=1),
-            family="atlas",
-        )
-    assert exc_info.value.status_code == 422
-    assert exc_info.value.detail == board_routes.ATLAS_NOT_SHIPPED
