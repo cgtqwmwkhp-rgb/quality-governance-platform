@@ -479,13 +479,12 @@ def sync_pams_technicians(self) -> dict[str, Any]:  # type: ignore[override]
 
 
 @celery_app.task(
-    bind=True,
     name="src.infrastructure.tasks.pams_sync_tasks.sync_pams_competence",
     queue="default",
     max_retries=2,
     soft_time_limit=300,
 )
-def sync_pams_competence(self) -> dict[str, Any]:  # type: ignore[override]
+def sync_pams_competence() -> dict[str, Any]:
     """Celery task: snapshot vw_plantex_engineercompetence into QGP. Never writes PAMS."""
     from src.domain.services.pams_competence_snapshot_service import sync_pams_competence_snapshot
     from src.domain.services.pams_technician_sync_service import resolve_tenant_id

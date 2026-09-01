@@ -24,7 +24,8 @@ from src.domain.services.pams_technician_sync_service import apply_tenant_guc_sy
 logger = logging.getLogger(__name__)
 
 PAMS_COMPETENCE_VIEW = "vw_plantex_engineercompetence"
-PAMS_COMPETENCE_SELECT = text(f"SELECT * FROM {PAMS_COMPETENCE_VIEW}")
+# Constant SQL — view name is not user input (Bandit B608).
+PAMS_COMPETENCE_SELECT = text("SELECT * FROM vw_plantex_engineercompetence")
 STALE_AFTER = timedelta(hours=25)
 SOURCE_NAME = PAMS_COMPETENCE_VIEW
 
