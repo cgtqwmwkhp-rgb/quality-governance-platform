@@ -303,6 +303,18 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         ),
     ),
     ClientFeature(
+        ui_key="competence_board",
+        settings_attr="competence_board_enabled",
+        kill_switch_key=None,
+        enabling_flag_key=None,
+        required_permission="engineer:update",
+        reason=(
+            "Gates GET /workforce/competence/board (CB-PR1 PAMS issued-skills snapshot). "
+            "Default off so the live CompetencyDashboard is unchanged until the snapshot "
+            "is verified. Enable via COMPETENCE_BOARD_ENABLED / FF_COMPETENCE_BOARD."
+        ),
+    ),
+    ClientFeature(
         ui_key="register_catalogue",
         settings_attr="register_catalogue_enabled",
         kill_switch_key=None,
