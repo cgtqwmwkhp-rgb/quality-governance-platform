@@ -1,13 +1,22 @@
 """Unit tests for Atlas training matrix CSV parser + compliance engine."""
 
-from datetime import date
+from datetime import date, datetime
+from io import BytesIO
+
+import pytest
+from openpyxl import Workbook
 
 from src.domain.services.training_matrix_compliance import (
     ComplianceInput,
     evaluate_compliance,
     requirement_matches_engineer,
 )
-from src.domain.services.training_matrix_parser import parse_training_matrix_csv, person_name_match_keys
+from src.domain.services.training_matrix_parser import (
+    parse_training_matrix_csv,
+    parse_training_matrix_upload,
+    parse_training_matrix_xlsx,
+    person_name_match_keys,
+)
 
 SAMPLE_CSV = """Training matrix ,,
 ,,Asbestos Awareness,,,Fire Safety Awareness,,,Manual Handling
@@ -108,3 +117,93 @@ def test_person_name_match_keys_handles_comma_order():
     assert "harris, david" in keys
     assert "david harris" in keys
     assert person_name_match_keys("David Harris") & keys
+
+
+def _citation_xlsx_bytes() -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Training Matrix"
+    sheet.append(
+        [
+            "Full Name",
+            "Department",
+            "Asbestos Awareness",
+            None,
+            None,
+            "Fire Safety Awareness",
+            None,
+            None,
+            "Manual Handling",
+            None,
+            None,
+        ]
+    )
+    sheet.append(
+        [
+            None,
+            None,
+            "Status",
+            "Completed date",
+            "Expiry Date",
+            "Status",
+            "Completed date",
+            "Expiry Date",
+            "Status",
+            "Completed date",
+            "Expiry Date",
+        ]
+    )
+    sheet.append(
+        [
+            "Aaron Smith",
+            "Mobile Engineers",
+            "Passed",
+            datetime(2022, 12, 2, 17, 3),
+            datetime(2025, 11, 21, 17, 3),
+            "Pending",
+            None,
+            datetime(2025, 12, 30, 10, 8),
+            "Passed",
+            datetime(2024, 12, 27),
+            datetime(2026, 12, 27),
+        ]
+    )
+    sheet.append(
+        [
+            "Aidan Binley",
+            "Workshop",
+            "Passed",
+            datetime(2026, 5, 11),
+            datetime(2027, 5, 11),
+            None,
+            None,
+            None,
+            "Passed",
+            datetime(2025, 5, 7),
+            datetime(2027, 5, 7),
+        ]
+    )
+    buf = BytesIO()
+    workbook.save(buf)
+    return buf.getvalue()
+
+
+def test_parse_citation_xlsx_layout_and_excel_datetimes():
+    parsed = parse_training_matrix_xlsx(_citation_xlsx_bytes())
+    assert parsed.courses == ["Asbestos Awareness", "Fire Safety Awareness", "Manual Handling"]
+    assert len(parsed.people) == 2
+    assert parsed.people[0].atlas_name == "Aaron Smith"
+    assert parsed.expiry_without_passed_count == 1
+    aaron_fire = next(c for c in parsed.people[0].cells if c.course_key == "fire_safety_awareness")
+    assert aaron_fire.atlas_status == "Pending"
+    assert aaron_fire.passed_on is None
+    assert aaron_fire.expires_on == date(2025, 12, 30)
+
+
+def test_parse_upload_dispatches_xlsx_and_rejects_pdf():
+    parsed = parse_training_matrix_upload("Training Matrix 01.09.26.xlsx", _citation_xlsx_bytes())
+    assert parsed.people[0].atlas_name == "Aaron Smith"
+    with pytest.raises(ValueError, match="PDF"):
+        parse_training_matrix_upload("matrix.pdf", b"%PDF-1.4 fake")
+    with pytest.raises(ValueError, match="xlsx"):
+        parse_training_matrix_upload("matrix.xlsx", b"not-a-zip")
