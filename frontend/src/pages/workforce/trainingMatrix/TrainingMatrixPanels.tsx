@@ -739,7 +739,7 @@ export function TrainingMatrixGapBoard() {
               </p>
             ) : (
               <p className="text-xs text-muted-foreground mt-1" data-testid="training-matrix-last-upload">
-                No Atlas matrix uploaded yet — use Admin → Upload CSV.
+                No Atlas matrix uploaded yet — use Admin → Upload CSV or Excel.
               </p>
             )}
           </div>
@@ -1504,9 +1504,10 @@ export function TrainingMatrixAdminPanel() {
   }, [courseRows, grid, hideNonMandated])
 
   const onUpload = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.csv')) {
+    const lower = file.name.toLowerCase()
+    if (!lower.endsWith('.csv') && !lower.endsWith('.xlsx')) {
       setError(
-        'Upload the Atlas Training Matrix Report as CSV (.csv). Excel (.xlsx) is not accepted — export/save as CSV from Atlas first.',
+        'Upload the Atlas or Citation Training Matrix Report as CSV or Excel (.csv / .xlsx). PDF is not accepted.',
       )
       return
     }
@@ -1514,7 +1515,7 @@ export function TrainingMatrixAdminPanel() {
       const ok = window.confirm(
         `Overwrite the Atlas matrix currently on file?\n\n` +
           `Current: ${formatImportStamp(latestImport)}\n\n` +
-          `This replaces last week's completion cells with the new CSV. Name maps and frequency rules are kept.`,
+          `This replaces last week's completion cells with the new file. Name maps and frequency rules are kept.`,
       )
       if (!ok) return
     }
@@ -1698,7 +1699,7 @@ export function TrainingMatrixAdminPanel() {
       <AdminSection
         testId="training-matrix-admin-upload"
         title={t('workforce.training_matrix.upload_title', 'Weekly Atlas matrix upload')}
-        subtitle="Admin only. Atlas CSV only (.csv). Each upload replaces the previous week's completion data and stays on file until the next upload."
+        subtitle="Admin only. Atlas or Citation Training Matrix as CSV or Excel (.csv / .xlsx). Each upload replaces the previous week's completion data and stays on file until the next upload."
         open={openUpload}
         onToggle={() => setOpenUpload((v) => !v)}
       >
@@ -1721,7 +1722,7 @@ export function TrainingMatrixAdminPanel() {
         <input
           ref={fileRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0]
@@ -1736,11 +1737,15 @@ export function TrainingMatrixAdminPanel() {
           data-testid="training-matrix-upload"
         >
           <Upload className="w-4 h-4 mr-2" />
-          {uploading ? 'Uploading…' : latestImport ? 'Upload CSV (overwrite)' : 'Upload CSV'}
+          {uploading
+            ? 'Uploading…'
+            : latestImport
+              ? 'Upload CSV or Excel (overwrite)'
+              : 'Upload CSV or Excel'}
         </Button>
         <p className="text-xs text-muted-foreground">
-          Export the Training Matrix Report from Atlas as CSV. XLSX/PDF will be rejected. You will be asked
-          to confirm before overwriting an existing snapshot.
+          Export the Training Matrix Report from Atlas or Citation as CSV or Excel (.xlsx). PDF is
+          rejected. You will be asked to confirm before overwriting an existing snapshot.
         </p>
         {message ? <p className="text-sm text-foreground">{message}</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
