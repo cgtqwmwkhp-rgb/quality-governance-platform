@@ -622,49 +622,78 @@ class AuditService:
         return handled
 
     @staticmethod
-    def _validate_publishable_template(template: AuditTemplate) -> None:
-        """Raise ValidationError when a template is incomplete for publishing."""
+    def _is_live(entity: object) -> bool:
+        """Soft-delete is explicit ``is_active=False``. Unset/None counts as live."""
+        flag = getattr(entity, "is_active", True)
+        return flag is not False
+
+    @classmethod
+    def _live_sections(cls, template: AuditTemplate) -> list[Any]:
+        return [section for section in (template.sections or []) if cls._is_live(section)]
+
+    @classmethod
+    def _live_questions(cls, questions: Any) -> list[Any]:
+        return [question for question in (questions or []) if cls._is_live(question)]
+
+    @classmethod
+    def _validate_publishable_template(cls, template: AuditTemplate) -> None:
+        """Raise ValidationError when the *live* graph is incomplete for publishing.
+
+        Delete in the builder is soft-delete. Inactive leftover sections/questions
+        must not block publish — execution already ignores them.
+        """
         if not (template.name or "").strip():
             raise ValidationError("Template name is required before publishing")
-        if not template.sections or not template.questions:
+
+        live_sections = cls._live_sections(template)
+        if not live_sections:
             raise ValidationError("Template must have at least one question to publish")
 
-        for section in template.sections:
+        gathered: list[Any] = []
+        for section in live_sections:
             if not (section.title or "").strip():
                 raise ValidationError("Every section must have a title before publishing")
-            if not section.questions:
+            live_qs = cls._live_questions(section.questions)
+            if not live_qs:
                 raise ValidationError(f"Section '{section.title}' must contain at least one question")
-            for question in section.questions:
-                if not (question.question_text or "").strip():
-                    raise ValidationError("Every question must include question text before publishing")
-                if (question.weight or 0) <= 0:
-                    raise ValidationError(f"Question '{question.question_text}' must have a weight greater than zero")
-                question_type = (question.question_type or "").strip().lower()
-                if question_type in _UNSUPPORTED_PUBLISH_QUESTION_TYPES:
+            gathered.extend(live_qs)
+
+        for question in template.questions or []:
+            if getattr(question, "section_id", None) is None and cls._is_live(question) and question not in gathered:
+                gathered.append(question)
+
+        if not gathered:
+            raise ValidationError("Template must have at least one question to publish")
+
+        for question in gathered:
+            if not (question.question_text or "").strip():
+                raise ValidationError("Every question must include question text before publishing")
+            if (question.weight or 0) <= 0:
+                raise ValidationError(f"Question '{question.question_text}' must have a weight greater than zero")
+            question_type = (question.question_type or "").strip().lower()
+            if question_type in _UNSUPPORTED_PUBLISH_QUESTION_TYPES:
+                raise ValidationError(
+                    f"Question '{question.question_text}' uses unsupported type "
+                    f"'{question.question_type}' for publish; remove it or change type"
+                )
+            if question_type and question_type not in _EXECUTABLE_QUESTION_TYPES:
+                raise ValidationError(
+                    f"Question '{question.question_text}' uses unknown type "
+                    f"'{question.question_type}' and cannot be published"
+                )
+            if question.question_type in _CHOICE_QUESTION_TYPES:
+                options = question.options_json or []
+                if len(options) < 2:
                     raise ValidationError(
-                        f"Question '{question.question_text}' uses unsupported type "
-                        f"'{question.question_type}' for publish; remove it or change type"
+                        f"Question '{question.question_text}' must define at least two answer options"
                     )
-                if question_type and question_type not in _EXECUTABLE_QUESTION_TYPES:
-                    raise ValidationError(
-                        f"Question '{question.question_text}' uses unknown type "
-                        f"'{question.question_type}' and cannot be published"
-                    )
-                if question.question_type in _CHOICE_QUESTION_TYPES:
-                    options = question.options_json or []
-                    if len(options) < 2:
+                for option in options:
+                    if not isinstance(option, dict):
+                        raise ValidationError(f"Question '{question.question_text}' contains an invalid answer option")
+                    if not str(option.get("label", "")).strip() or not str(option.get("value", "")).strip():
                         raise ValidationError(
-                            f"Question '{question.question_text}' must define at least two answer options"
+                            f"Question '{question.question_text}' contains an incomplete answer option"
                         )
-                    for option in options:
-                        if not isinstance(option, dict):
-                            raise ValidationError(
-                                f"Question '{question.question_text}' contains an invalid answer option"
-                            )
-                        if not str(option.get("label", "")).strip() or not str(option.get("value", "")).strip():
-                            raise ValidationError(
-                                f"Question '{question.question_text}' contains an incomplete answer option"
-                            )
 
     @staticmethod
     def _build_template_version_snapshot(template: AuditTemplate) -> dict[str, Any]:
@@ -702,6 +731,9 @@ class AuditService:
 
         sections = []
         for section in template.sections or []:
+            if not AuditService._is_live(section):
+                continue
+            live_qs = [q for q in (section.questions or []) if AuditService._is_live(q)]
             sections.append(
                 {
                     "id": section.id,
@@ -709,10 +741,11 @@ class AuditService:
                     "description": section.description,
                     "sort_order": section.sort_order,
                     "weight": section.weight,
-                    "questions": [_question_snapshot(q) for q in (section.questions or [])],
+                    "questions": [_question_snapshot(q) for q in live_qs],
                 }
             )
 
+        live_questions = [q for q in (template.questions or []) if AuditService._is_live(q)]
         return {
             "template_id": template.id,
             "version": template.version,
@@ -724,7 +757,7 @@ class AuditService:
             "passing_score": template.passing_score,
             "auto_create_findings": template.auto_create_findings,
             "sections": sections,
-            "questions": [_question_snapshot(q) for q in (template.questions or [])],
+            "questions": [_question_snapshot(q) for q in live_questions],
         }
 
     @staticmethod
@@ -1206,6 +1239,8 @@ class AuditService:
         await self.db.flush()
 
         for orig_section in original.sections:
+            if not self._is_live(orig_section):
+                continue
             sec_kwargs = {f: getattr(orig_section, f) for f in _SECTION_CLONE_FIELDS}
             cloned_section = AuditSection(
                 template_id=cloned.id,
@@ -1215,6 +1250,8 @@ class AuditService:
             await self.db.flush()
 
             for orig_q in orig_section.questions:
+                if not self._is_live(orig_q):
+                    continue
                 q_kwargs = {f: getattr(orig_q, f) for f in _QUESTION_CLONE_FIELDS}
                 self.db.add(
                     AuditQuestion(
@@ -1226,6 +1263,8 @@ class AuditService:
 
         for orig_q in original.questions:
             if orig_q.section_id is None:
+                if not self._is_live(orig_q):
+                    continue
                 q_kwargs = {f: getattr(orig_q, f) for f in _QUESTION_CLONE_FIELDS}
                 self.db.add(
                     AuditQuestion(
