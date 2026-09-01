@@ -265,12 +265,11 @@ async def create_competence_change_request(
             created_by_user_id=current_user.id,
         ),
     )
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    await db.commit()
     if created:
         try_send_change_request_email(row)
-        response.status_code = status.HTTP_201_CREATED
-    else:
-        response.status_code = status.HTTP_200_OK
-    await db.commit()
+        await db.commit()
     await db.refresh(row)
     return _serialize_change_request(row)
 

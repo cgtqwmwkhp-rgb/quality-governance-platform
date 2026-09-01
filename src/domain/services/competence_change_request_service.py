@@ -101,6 +101,8 @@ def close_matching_open_requests(
 
 
 def close_pams_requests_from_snapshot(db: Session, tenant_id: int) -> int:
+    if db.get(PamsCompetenceCurrent, tenant_id) is None:
+        return 0
     present = issued_pairs_from_snapshot(db, tenant_id)
     return close_matching_open_requests(db, tenant_id=tenant_id, family="pams", present=present)
 
@@ -186,6 +188,8 @@ async def _issued_pairs_async(db: Any, tenant_id: int) -> set[tuple[int, str]]:
 
 
 async def close_pams_requests_from_snapshot_async(db: Any, tenant_id: int) -> int:
+    if await db.get(PamsCompetenceCurrent, tenant_id) is None:
+        return 0
     present = await _issued_pairs_async(db, tenant_id)
     result = await db.scalars(
         select(CompetenceChangeRequest).where(

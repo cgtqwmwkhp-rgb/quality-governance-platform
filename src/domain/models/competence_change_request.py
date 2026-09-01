@@ -31,6 +31,7 @@ class CompetenceChangeRequest(Base):
             "characteristic_key",
             unique=True,
             postgresql_where=text("status = 'open'"),
+            sqlite_where=text("status = 'open'"),
         ),
     )
 
