@@ -266,8 +266,7 @@ async def list_change_requests_async(db: Any, *, tenant_id: int) -> list[Compete
 def try_send_change_request_email(row: CompetenceChangeRequest) -> None:
     """Best-effort. SMTP down must not delete the row."""
     subject = (
-        f"Competence change request #{row.id}: {row.action} {row.characteristic_key} "
-        f"(engineer {row.engineer_id})"
+        f"Competence change request #{row.id}: {row.action} {row.characteristic_key} " f"(engineer {row.engineer_id})"
     )
     body = (
         f"Family: {row.family}\n"

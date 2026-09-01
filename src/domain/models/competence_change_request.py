@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base
@@ -22,6 +22,17 @@ class CompetenceChangeRequest(Base):
     """One open request per tenant × family × engineer × characteristic cell."""
 
     __tablename__ = "competence_change_requests"
+    __table_args__ = (
+        Index(
+            "uq_competence_change_requests_open_cell",
+            "tenant_id",
+            "family",
+            "engineer_id",
+            "characteristic_key",
+            unique=True,
+            postgresql_where=text("status = 'open'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
