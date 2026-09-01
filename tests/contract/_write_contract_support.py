@@ -297,6 +297,8 @@ SERVER_OWNED_FIELDS = frozenset(
         "created_by_email",
         "reference_number",
         "version",
+        # Derived from feedback_kind. Kind itself is writable on Create/Update (FB-PR2).
+        "feedback_polarity",
         # CB-PR2 change requests. Clients cannot set mailbox, send state, or
         # close the row: routing and auto-close are server-owned. Status is
         # open|closed_observed only.
