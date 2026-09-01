@@ -93,10 +93,15 @@ def _row_get(row: Mapping[str, Any], *names: str) -> object | None:
 
 
 def _coerce_optional_int(value: object | None) -> int | None:
-    if value is None or value == "":
+    if value is None or isinstance(value, bool) or value == "":
+        return None
+    if isinstance(value, int):
+        return value
+    text = str(value).strip()
+    if not text:
         return None
     try:
-        return int(value)
+        return int(text)
     except (TypeError, ValueError):
         return None
 

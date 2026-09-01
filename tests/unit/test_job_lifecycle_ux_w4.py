@@ -142,8 +142,8 @@ def test_the_w4_revision_is_the_only_revision_on_the_w3_head(tmp_path):
     assert mapping["on_top_of_w3"] == ["20261022_job_cell_req_ev"]
     # Tip head advances with later migrations; W4 remains the only successor of W3.
     assert mapping["heads"] == [
-        "20261118_eng_roster_arch"
-    ], f"expected engineer roster_archived_at as the single head, found {mapping['heads']}"
+        "20260901_pams_comp"
+    ], f"expected pams competence cache as the single head, found {mapping['heads']}"
     assert mapping["on_top_of_w4"] == ["20261023_job_type_baselines"]
 
 
