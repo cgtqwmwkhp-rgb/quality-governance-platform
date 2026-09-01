@@ -478,6 +478,47 @@ def sync_pams_technicians(self) -> dict[str, Any]:  # type: ignore[override]
         db.close()
 
 
+@celery_app.task(
+    bind=True,
+    name="src.infrastructure.tasks.pams_sync_tasks.sync_pams_competence",
+    queue="default",
+    max_retries=2,
+    soft_time_limit=300,
+)
+def sync_pams_competence(self) -> dict[str, Any]:  # type: ignore[override]
+    """Celery task: snapshot vw_plantex_engineercompetence into QGP. Never writes PAMS."""
+    from src.domain.services.pams_competence_snapshot_service import sync_pams_competence_snapshot
+    from src.domain.services.pams_technician_sync_service import resolve_tenant_id
+    from src.infrastructure.database import SessionLocal
+
+    if not settings.pams_database_url:
+        logger.info("PAMS_DATABASE_URL not set — skipping competence snapshot")
+        return {"status": "skipped", "reason": "PAMS not configured"}
+
+    try:
+        tenant_id = resolve_tenant_id()
+    except Exception as exc:
+        logger.warning("PAMS competence snapshot skipped: %s", exc)
+        return {"status": "skipped", "reason": str(exc)}
+
+    db = SessionLocal()
+    try:
+        counts = sync_pams_competence_snapshot(db, tenant_id=tenant_id)
+        result = counts.as_dict()
+        logger.info(
+            "PAMS competence snapshot complete tenant_id=%s snapshot_id=%s stored=%s",
+            tenant_id,
+            counts.snapshot_id,
+            counts.stored,
+        )
+        return result
+    except Exception as exc:
+        logger.exception("PAMS competence snapshot failed")
+        return {"status": "error", "error": str(exc)}
+    finally:
+        db.close()
+
+
 def _send_p1_notifications() -> None:
     """Create in-app notifications for new auto-detected P1-eligible defects."""
     try:

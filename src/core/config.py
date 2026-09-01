@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import List, Optional
 from urllib.parse import urlparse
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -390,6 +390,16 @@ class Settings(BaseSettings):
     entity_360_satellites_enabled: bool = False
     job_lifecycle_enabled: bool = False
     job_cell_links_enabled: bool = False
+    # CB-PR1 — PAMS competence board snapshot. Default off; live CompetencyDashboard
+    # stays on WDP analytics.
+    competence_board_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "COMPETENCE_BOARD_ENABLED",
+            "FF_COMPETENCE_BOARD",
+            "competence_board_enabled",
+        ),
+    )
 
     # PEL-HSEQ-5062 Register of Registers hub. Default off; the hub has no API
     # 404 of its own, so App.tsx also gates the route (not only the nav entry).
