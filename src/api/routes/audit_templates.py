@@ -26,6 +26,7 @@ from src.api.schemas.audit import (
     AuditTemplateListResponse,
     AuditTemplateResponse,
     AuditTemplateUpdate,
+    retain_live_template_graph,
 )
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.models.audit import AuditTemplate
@@ -139,9 +140,7 @@ async def get_template(
         template_id=template_id,
         tenant_id=_tid(user),
     )
-    resp = AuditTemplateDetailResponse.model_validate(template)
-    resp.question_count = len(template.questions)
-    resp.section_count = len(template.sections)
+    resp = retain_live_template_graph(AuditTemplateDetailResponse.model_validate(template))
     return resp
 
 
