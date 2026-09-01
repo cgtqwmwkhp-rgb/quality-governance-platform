@@ -1,15 +1,15 @@
-"""Competence board API (CB-PR1).
+"""Competence board API (CB-PR1 / CB-PR3).
 
-``GET /board?family=pams`` is 404 while ``competence_board_enabled`` is false.
-Atlas family is CB-PR3. Live CompetencyDashboard is unchanged.
+``GET /board?family=pams|atlas`` is 404 while ``competence_board_enabled`` is false.
+Live CompetencyDashboard is unchanged. Atlas never creates a User.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -18,10 +18,10 @@ from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
+from src.domain.services.atlas_competence_board_service import build_atlas_board_async
 from src.domain.services.pams_competence_snapshot_service import load_current_snapshot_async, snapshot_stale_reason
 
 DISABLED_DETAIL = "Competence board is not enabled in this environment."
-ATLAS_NOT_SHIPPED = "Atlas family ships in CB-PR3."
 
 router = APIRouter()
 
@@ -39,6 +39,8 @@ class CompetenceBoardCell(BaseModel):
 
     issued: bool
     thorough_exam: Optional[bool] = None
+    passed_on: Optional[date] = None
+    expires_on: Optional[date] = None
 
 
 class CompetenceBoardColumn(BaseModel):
@@ -53,9 +55,11 @@ class CompetenceBoardPerson(BaseModel):
 
     engineer_id: Optional[int] = None
     pams_technician_id: Optional[int] = None
+    atlas_person_id: Optional[int] = None
     display_name: str
     email: Optional[str] = None
     depot: Optional[str] = None
+    department: Optional[str] = None
     mapped: bool
     cells: dict[str, CompetenceBoardCell]
 
@@ -75,7 +79,7 @@ class CompetenceBoardSnapshotMeta(BaseModel):
 class CompetenceBoardResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    family: Literal["pams"]
+    family: Literal["pams", "atlas"]
     snapshot: CompetenceBoardSnapshotMeta
     columns: list[CompetenceBoardColumn]
     people: list[CompetenceBoardPerson]
@@ -107,10 +111,43 @@ async def get_competence_board(
     current_user: Annotated[User, Depends(require_permission("engineer:update"))],
     family: Literal["pams", "atlas"] = Query(..., description="Plant (pams) or statutory (atlas)"),
 ):
-    if family == "atlas":
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=ATLAS_NOT_SHIPPED)
-
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    if family == "atlas":
+        view = await build_atlas_board_async(db, tenant_id)
+        return CompetenceBoardResponse(
+            family="atlas",
+            snapshot=CompetenceBoardSnapshotMeta(
+                id=view.snapshot.id,
+                status=view.snapshot.status,
+                source_name=view.snapshot.source_name,
+                row_count=view.snapshot.row_count,
+                completed_at=view.snapshot.completed_at,
+                stale=view.snapshot.stale,
+                stale_reason=view.snapshot.stale_reason,
+            ),
+            columns=[CompetenceBoardColumn(key=col.key, label=col.label) for col in view.columns],
+            people=[
+                CompetenceBoardPerson(
+                    engineer_id=person.engineer_id,
+                    atlas_person_id=person.atlas_person_id,
+                    display_name=person.display_name,
+                    department=person.department,
+                    mapped=person.mapped,
+                    cells={
+                        key: CompetenceBoardCell(
+                            issued=cell.issued,
+                            passed_on=cell.passed_on,
+                            expires_on=cell.expires_on,
+                        )
+                        for key, cell in person.cells.items()
+                    },
+                )
+                for person in view.people
+            ],
+            unmapped_count=view.unmapped_count,
+            banner=view.banner,
+        )
+
     snapshot, rows = await load_current_snapshot_async(db, tenant_id)
 
     if snapshot is None:
@@ -182,6 +219,109 @@ async def get_competence_board(
         unmapped_count=sum(1 for person in people if not person.mapped),
         banner=banner,
     )
+
+
+class CompetenceChangeRequestCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    family: Literal["pams", "atlas"]
+    engineer_id: int
+    characteristic_key: str = Field(min_length=1, max_length=80)
+    action: Literal["issue", "revoke"]
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+
+class CompetenceChangeRequestOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    family: str
+    engineer_id: int
+    characteristic_key: str
+    action: str
+    status: str
+    routed_to_email: str
+    email_sent: bool
+    notes: Optional[str] = None
+    created_at: datetime
+    closed_at: Optional[datetime] = None
+    close_reason: Optional[str] = None
+
+
+class CompetenceChangeRequestList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CompetenceChangeRequestOut]
+
+
+def _serialize_change_request(row) -> CompetenceChangeRequestOut:
+    return CompetenceChangeRequestOut(
+        id=row.id,
+        family=row.family,
+        engineer_id=row.engineer_id,
+        characteristic_key=row.characteristic_key,
+        action=row.action,
+        status=row.status,
+        routed_to_email=row.routed_to_email,
+        email_sent=row.email_sent,
+        notes=row.notes,
+        created_at=row.created_at,
+        closed_at=row.closed_at,
+        close_reason=row.close_reason,
+    )
+
+
+@_enabled_router.post(
+    "/change-requests",
+    response_model=CompetenceChangeRequestOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_competence_change_request(
+    payload: CompetenceChangeRequestCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+    response: Response,
+):
+    """Row first. Email second. Never a PAMS write. Atlas family is a mailbox route, not the board."""
+    from src.domain.services.competence_change_request_service import (
+        CreateChangeRequestInput,
+        create_change_request_async,
+        try_send_change_request_email,
+    )
+
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    row, created = await create_change_request_async(
+        db,
+        tenant_id=tenant_id,
+        payload=CreateChangeRequestInput(
+            family=payload.family,
+            engineer_id=payload.engineer_id,
+            characteristic_key=payload.characteristic_key,
+            action=payload.action,
+            notes=payload.notes,
+            created_by_user_id=current_user.id,
+        ),
+    )
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    await db.commit()
+    if created:
+        try_send_change_request_email(row)
+        await db.commit()
+    await db.refresh(row)
+    return _serialize_change_request(row)
+
+
+@_enabled_router.get("/change-requests", response_model=CompetenceChangeRequestList)
+async def list_competence_change_requests(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    from src.domain.services.competence_change_request_service import list_change_requests_async
+
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    rows = await list_change_requests_async(db, tenant_id=tenant_id)
+    await db.commit()
+    return CompetenceChangeRequestList(items=[_serialize_change_request(row) for row in rows])
 
 
 router.include_router(_enabled_router)
