@@ -51,6 +51,7 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   entity_360_satellites: false,
   job_lifecycle: false,
   job_cell_links: false,
+  competence_board: false,
 
   // PEL-HSEQ-5062 Register of Registers hub — mirrors REGISTER_CATALOGUE_ENABLED
   register_catalogue: false,
