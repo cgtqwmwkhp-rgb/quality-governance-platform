@@ -38,6 +38,8 @@ export interface SaveIssueContext {
    * Used for timeouts, where "which field is wrong" is the wrong question.
    */
   progress?: string
+  /** Distinguishes publish 422s so the banner does not say “Couldn’t save”. */
+  operation?: 'save' | 'publish'
 }
 
 type FieldGuidance = { label: string; action: string }
@@ -129,8 +131,8 @@ function guidanceForField(field: string | null): FieldGuidance {
     }
   }
   return {
-    label: 'Save request',
-    action: 'Review the highlighted details, fix the issue, then try saving again.',
+    label: 'Request failed',
+    action: '',
   }
 }
 
@@ -187,7 +189,11 @@ function issueFromParts(
 ): SaveIssue {
   const guidance = guidanceForField(field)
   let action = guidance.action
-  if (field && EXTRA_FORBIDDEN_RE.test(raw)) {
+  let label = guidance.label
+  if (!field) {
+    label = ctx?.operation === 'publish' ? 'Couldn’t publish' : 'Couldn’t save'
+    action = raw.trim() || 'The server rejected this request. See the details below.'
+  } else if (EXTRA_FORBIDDEN_RE.test(raw)) {
     action =
       FIELD_GUIDANCE[field]?.action ??
       `The server rejected “${field}” as an unsupported field on this request. Clear or adjust it, then save again — or update the API schema if this field should be allowed.`
@@ -196,7 +202,7 @@ function issueFromParts(
     {
       id: `issue-${index}-${field ?? 'general'}`,
       field,
-      label: guidance.label,
+      label,
       action,
       locPath,
       raw,
@@ -236,18 +242,45 @@ function issuesFromDetailArray(detail: unknown[], ctx?: SaveIssueContext): SaveI
   })
 }
 
+function normalizeQgpFieldErrors(errors: unknown[]): unknown[] {
+  return errors.map((item) => {
+    if (!item || typeof item !== 'object') return item
+    const row = item as { field?: unknown; message?: unknown; msg?: unknown; loc?: unknown; type?: unknown }
+    if (Array.isArray(row.loc)) return item
+    const field = typeof row.field === 'string' ? row.field : ''
+    return {
+      loc: field ? field.split(/\s*->\s*/) : undefined,
+      msg: typeof row.message === 'string' ? row.message : row.msg,
+      type: row.type,
+    }
+  })
+}
+
 function extractDetail(error: unknown): unknown {
   if (!error || typeof error !== 'object') return undefined
   const maybeAxios = error as {
-    response?: { data?: { detail?: unknown; message?: unknown; error?: { message?: unknown } } }
+    response?: {
+      data?: {
+        detail?: unknown
+        message?: unknown
+        error?: { message?: unknown; details?: unknown }
+      }
+    }
     message?: string
   }
   const data = maybeAxios.response?.data
   if (data && typeof data === 'object') {
     if ('detail' in data && data.detail !== undefined) return data.detail
     const nested = data.error
-    if (nested && typeof nested === 'object' && nested !== null && 'message' in nested) {
-      return nested.message
+    if (nested && typeof nested === 'object' && nested !== null) {
+      const details = nested.details
+      if (details && typeof details === 'object' && details !== null) {
+        const errors = (details as { errors?: unknown }).errors
+        if (Array.isArray(errors) && errors.length > 0) {
+          return { message: nested.message, errors: normalizeQgpFieldErrors(errors) }
+        }
+      }
+      if (typeof nested.message === 'string' && nested.message.trim()) return nested.message
     }
     if (typeof data.message === 'string') return data.message
   }
@@ -256,14 +289,18 @@ function extractDetail(error: unknown): unknown {
   return undefined
 }
 
-function summarize(issues: SaveIssue[]): string {
-  if (issues.length === 0) return 'Save failed. Please try again.'
+function summarize(issues: SaveIssue[], operation?: 'save' | 'publish'): string {
+  const verb = operation === 'publish' ? 'publish' : 'save'
+  if (issues.length === 0) return `${verb === 'publish' ? 'Publish' : 'Save'} failed. Please try again.`
   if (issues.length === 1) {
     const only = issues[0]
+    if (!only.field) {
+      return only.raw.trim() || only.action
+    }
     const where = only.context ? ` (${only.context})` : ''
-    return `Couldn’t save: ${only.label}${where}. ${only.action}`
+    return `Couldn’t ${verb}: ${only.label}${where}. ${only.action}`
   }
-  return `Couldn’t save — fix ${issues.length} issues, then try again.`
+  return `Couldn’t ${verb} — fix ${issues.length} issues, then try again.`
 }
 
 type TimeoutShapedError = {
@@ -401,7 +438,7 @@ export function buildSaveIssueModel(error: unknown, ctx?: SaveIssueContext): Sav
     issues = [issueFromParts(fallback, null, undefined, 0, ctx)]
   }
 
-  return { summary: summarize(issues), issues }
+  return { summary: summarize(issues, ctx?.operation), issues }
 }
 
 /**

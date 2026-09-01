@@ -48,6 +48,7 @@ from src.api.schemas.audit import (
     FlagFindingRiskRequest,
     PurgeExpiredTemplatesResponse,
     TemplateAssetTypeLinkResponse,
+    retain_live_template_graph,
 )
 from src.api.schemas.audit_analytics import (
     AuditAnalyticsDimensionItem,
@@ -684,9 +685,7 @@ async def get_template(
     service = AuditService(db)
     template = await service.get_template_detail(template_id, current_user.tenant_id)
 
-    response = AuditTemplateDetailResponse.model_validate(template)
-    response.section_count = len(template.sections)
-    response.question_count = sum(len(s.questions) for s in template.sections)
+    response = retain_live_template_graph(AuditTemplateDetailResponse.model_validate(template))
 
     return _decode_template_detail_response_entities(response)
 
