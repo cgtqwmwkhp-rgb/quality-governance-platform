@@ -276,14 +276,59 @@ async def test_assessment_binds_and_board_404_when_flag_off(monkeypatch):
     assert exc_info.value.detail == board_routes.DISABLED_DETAIL
 
 
+def _iter_api_routes(router):
+    """Flatten ``include_router`` mounts.
+
+    FastAPI >=0.140 (the lockfile pin) wraps included routers as
+    ``_IncludedRouter`` with no ``.path``. Child routes live on
+    ``original_router``. Older FastAPI flattens APIRoutes onto the parent.
+    """
+    for route in getattr(router, "routes", []) or []:
+        nested_router = getattr(route, "original_router", None)
+        if nested_router is not None:
+            yield from _iter_api_routes(nested_router)
+            continue
+        nested = getattr(route, "routes", None)
+        if nested is not None:
+            yield from _iter_api_routes(route)
+            continue
+        yield route
+
+
+def test_iter_api_routes_flattens_included_router_without_path():
+    """CI FastAPI 0.140 wraps include_router; the wrapper has no ``path``."""
+
+    class _Child:
+        path = "/assessment-binds"
+        methods = {"POST"}
+
+    class _Included:
+        original_router = types.SimpleNamespace(routes=[_Child()])
+        routes = []
+
+    parent = types.SimpleNamespace(routes=[_Included()])
+    assert [route.path for route in _iter_api_routes(parent)] == ["/assessment-binds"]
+
+
 def test_bind_routes_are_registered_behind_the_flag_dependency():
-    guarded = [route for route in board_routes.router.routes if "assessment-binds" in route.path]
+    """POST/GET/DELETE assessment-binds live on the flagged router.
+
+    FastAPI 0.140 (lockfile) wraps ``include_router`` as ``_IncludedRouter``
+    with no ``.path``, so walking ``board_routes.router.routes`` and reading
+    ``route.path`` raises. The flag is the router-level dependency on
+    ``_enabled_router``; bind endpoints are declared there, not on the
+    unguarded parent.
+    """
+    assert any(
+        getattr(dependency, "dependency", None) is board_routes.require_competence_board_enabled
+        for dependency in board_routes._enabled_router.dependencies
+    )
+    guarded = [
+        route
+        for route in _iter_api_routes(board_routes._enabled_router)
+        if "assessment-binds" in getattr(route, "path", "")
+    ]
     assert {tuple(sorted(route.methods)) for route in guarded} == {("POST",), ("GET",), ("DELETE",)}
-    for route in guarded:
-        assert any(
-            getattr(dependency, "dependency", None) is board_routes.require_competence_board_enabled
-            for dependency in route.dependencies
-        ), route.path
 
 
 def test_flag_default_stays_false():
