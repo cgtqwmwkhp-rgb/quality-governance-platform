@@ -131,6 +131,7 @@ from src.domain.models.engineer import (
     TicketVerifyState,
     TrainingTicket,
 )
+from src.domain.models.competence_change_request import CompetenceChangeRequest
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -548,6 +549,7 @@ __all__ = [
     "InvestigationCustomerPack",
     # Workforce Development (Assessment & Induction)
     "Engineer",
+    "CompetenceChangeRequest",
     "CompetencyRecord",
     "CompetencyRequirement",
     "CompetencyLifecycleState",
