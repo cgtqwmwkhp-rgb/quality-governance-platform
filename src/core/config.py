@@ -400,6 +400,21 @@ class Settings(BaseSettings):
             "competence_board_enabled",
         ),
     )
+    competence_plant_change_mailbox: str = Field(
+        default="IT-Admin@plantexpand.com",
+        validation_alias=AliasChoices(
+            "COMPETENCE_PLANT_CHANGE_MAILBOX",
+            "competence_plant_change_mailbox",
+        ),
+    )
+    competence_statutory_change_mailbox: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "COMPETENCE_STATUTORY_CHANGE_MAILBOX",
+            "HR_ADVISOR_MAILBOX",
+            "competence_statutory_change_mailbox",
+        ),
+    )
 
     # PEL-HSEQ-5062 Register of Registers hub. Default off; the hub has no API
     # 404 of its own, so App.tsx also gates the route (not only the nav entry).

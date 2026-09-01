@@ -293,6 +293,9 @@ def sync_pams_competence_snapshot(
         else:
             current.snapshot_id = snapshot.id
             current.updated_at = _now()
+        from src.domain.services.competence_change_request_service import close_pams_requests_from_snapshot
+
+        close_pams_requests_from_snapshot(db, resolved_tenant)
         db.commit()
         logger.info(
             "pams_competence_snapshot tenant_id=%s snapshot_id=%s stored=%s mapped=%s",
