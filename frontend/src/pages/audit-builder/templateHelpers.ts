@@ -129,6 +129,7 @@ type BackendQuestion = {
   description?: string
   question_type?: string
   is_required?: boolean
+  is_active?: boolean
   weight?: number
   options?: Array<{
     label: string
@@ -303,14 +304,18 @@ export function mapApiToTemplate(
   sectionIdMap: Record<string, number>,
   questionIdMap: Record<string, number>,
 ): AuditTemplate {
-  const mappedSections: Section[] = data.sections.map((s: any, idx: number) => {
+  const mappedSections: Section[] = (data.sections || [])
+    .filter((s: { is_active?: boolean }) => s?.is_active !== false)
+    .map((s: any, idx: number) => {
     const id = String(s.id)
     sectionIdMap[id] = s.id
     return {
       id,
       title: s.title,
       description: s.description,
-      questions: s.questions.map((q: any) => mapApiQuestion(q, questionIdMap)),
+      questions: (s.questions || [])
+        .filter((q: { is_active?: boolean }) => q?.is_active !== false)
+        .map((q: any) => mapApiQuestion(q, questionIdMap)),
       isExpanded: true,
       weight: s.weight,
       order: s.sort_order,
@@ -319,6 +324,7 @@ export function mapApiToTemplate(
     }
   })
 
+  const isPersisted = data.id != null && data.id !== ''
   return {
     id: String(data.id),
     name: data.name,
@@ -327,7 +333,7 @@ export function mapApiToTemplate(
     status: data.is_published ? 'published' : 'draft',
     category: data.category || 'quality',
     isoStandards: [],
-    sections: mappedSections.length > 0 ? mappedSections : [createNewSection(1)],
+    sections: mappedSections.length > 0 || isPersisted ? mappedSections : [createNewSection(1)],
     scoringMethod: (data.scoring_method || 'weighted') as ScoringMethod,
     passThreshold: data.passing_score || 80,
     createdAt: data.created_at,
