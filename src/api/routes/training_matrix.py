@@ -77,7 +77,7 @@ from src.domain.services.training_matrix_import_service import (
 )
 from src.domain.services.training_matrix_parser import (
     normalize_person_name,
-    parse_training_matrix_csv,
+    parse_training_matrix_upload,
     person_name_match_keys,
 )
 from src.domain.services.training_matrix_requirement_seed import seed_plantexpand_2024_requirements
@@ -169,16 +169,11 @@ async def upload_training_matrix(
     _require_admin(user)
     tenant_id = _tenant(user)
     filename = file.filename or "training-matrix.csv"
-    if not filename.lower().endswith(".csv"):
-        raise ValidationError(
-            "Upload the Atlas Training Matrix Report as CSV (.csv). "
-            "Excel (.xlsx) is not accepted — export/save as CSV from Atlas first."
-        )
     raw = await file.read()
     if not raw:
         raise ValidationError("Uploaded file is empty")
     try:
-        parsed = parse_training_matrix_csv(raw)
+        parsed = parse_training_matrix_upload(filename, raw)
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
 
