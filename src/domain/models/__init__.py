@@ -57,7 +57,9 @@ from src.domain.models.audit_challenge import (
 )
 from src.domain.models.base import AuditTrailMixin, Base, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.capa import CAPAAction
+from src.domain.models.competence_assessment_bind import CompetenceAssessmentBind
 from src.domain.models.competence_change_request import CompetenceChangeRequest
+from src.domain.models.competence_demonstration import CompetenceDemonstration
 from src.domain.models.competence_gap import (
     CompetenceGapAction,
     CompetenceGapSignalType,
@@ -549,7 +551,9 @@ __all__ = [
     "InvestigationCustomerPack",
     # Workforce Development (Assessment & Induction)
     "Engineer",
+    "CompetenceAssessmentBind",
     "CompetenceChangeRequest",
+    "CompetenceDemonstration",
     "CompetencyRecord",
     "CompetencyRequirement",
     "CompetencyLifecycleState",
