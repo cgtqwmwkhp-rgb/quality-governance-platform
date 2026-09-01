@@ -59,7 +59,15 @@ export default function ComplianceSchedule() {
   const statutoryParam = searchParams.get('statutory')
   const statutoryFilter = parseStatutoryParam(statutoryParam)
   const useWelshCopy = i18n.language.toLowerCase().startsWith('cy')
-  const copy = (key: string, english: string) => (useWelshCopy ? t(key, english) : english)
+  const copy = (key: string, english: string, values: Record<string, string> = {}) => {
+    if (useWelshCopy) {
+      return t(key, { defaultValue: english, ...values })
+    }
+    return Object.entries(values).reduce(
+      (text, [name, value]) => text.replace(`{{${name}}}`, value),
+      english,
+    )
+  }
   const cov = coverageCopy(i18n.language)
   const imp = importCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
@@ -333,16 +341,19 @@ export default function ComplianceSchedule() {
         >
           <p>
             {showingClauseFilter
-              ? t('compliance.schedule.programme_context', {
-                  defaultValue:
-                    'From {{framework}} · {{clause}} — Schedule remains the obligation register.',
-                  framework: programmeFramework || '—',
-                  clause: programmeClause || '—',
-                })
-              : t('compliance.schedule.programme_context_none', {
-                  defaultValue: 'No obligation cites {{clause}}. Full register shown.',
-                  clause: programmeClause || '—',
-                })}
+              ? copy(
+                  'compliance.schedule.programme_context',
+                  'From {{framework}} · {{clause}} — Schedule remains the obligation register.',
+                  {
+                    framework: programmeFramework || '—',
+                    clause: programmeClause || '—',
+                  },
+                )
+              : copy(
+                  'compliance.schedule.programme_context_none',
+                  'No obligation cites {{clause}}. Full register shown.',
+                  { clause: programmeClause || '—' },
+                )}
           </p>
           <button
             type="button"
