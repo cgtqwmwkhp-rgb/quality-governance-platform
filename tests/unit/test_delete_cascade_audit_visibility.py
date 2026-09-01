@@ -13,7 +13,7 @@ issues the per-row DELETE, which requires a mapped relationship whose cascade
 includes ``delete`` and which does not set ``passive_deletes=True``. Every pair
 below fails that test, so the removal happens with no Python event:
 
-* 85 pairs have no relationship mapped from the parent at all.
+* 86 pairs have no relationship mapped from the parent at all.
 * 5 have a relationship without ``delete`` in its cascade — SQLAlchemy will try
   to de-associate the children instead of deleting them, so still no per-child
   delete event (and on a NOT NULL foreign key that attempt errors).
@@ -53,6 +53,13 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("audit_runs", "external_audit_import_drafts"),
         ("audit_runs", "external_audit_import_jobs"),
         ("audit_templates", "template_asset_types"),
+        # CB-PR4 assessment binds. A bind is configuration pointing one template
+        # at one PAMS characteristic, so it cannot outlive the template; no
+        # relationship is mapped from AuditTemplate, and PostgreSQL removes the
+        # bind on a physical template delete with no per-row event. The
+        # demonstrations the bind produced carry no foreign key and survive as
+        # history, which is the behaviour that matters for competence evidence.
+        ("audit_templates", "competence_assessment_binds"),
         ("carbon_reporting_year", "carbon_evidence"),
         ("carbon_reporting_year", "carbon_improvement_action"),
         ("carbon_reporting_year", "data_quality_assessment"),

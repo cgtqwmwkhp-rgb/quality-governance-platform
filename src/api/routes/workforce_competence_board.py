@@ -1,7 +1,10 @@
-"""Competence board API (CB-PR1 / CB-PR3).
+"""Competence board API (CB-PR1 / CB-PR3 / CB-PR4).
 
 ``GET /board?family=pams|atlas`` is 404 while ``competence_board_enabled`` is false.
 Live CompetencyDashboard is unchanged. Atlas never creates a User.
+
+CB-PR4 adds explicit assessment binds and shows the demonstration they produce
+over issued plant cells. QGP still never writes PAMS.
 """
 
 from __future__ import annotations
@@ -19,6 +22,13 @@ from src.core.config import settings
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
 from src.domain.services.atlas_competence_board_service import build_atlas_board_async
+from src.domain.services.competence_demonstration_service import (
+    PASS_OUTCOME,
+    create_bind_async,
+    delete_bind_async,
+    list_binds_async,
+    load_demonstration_overlay_async,
+)
 from src.domain.services.pams_competence_snapshot_service import load_current_snapshot_async, snapshot_stale_reason
 
 DISABLED_DETAIL = "Competence board is not enabled in this environment."
@@ -41,6 +51,11 @@ class CompetenceBoardCell(BaseModel):
     thorough_exam: Optional[bool] = None
     passed_on: Optional[date] = None
     expires_on: Optional[date] = None
+    # CB-PR4 overlay. Absent when no bound assessment has been completed for the
+    # cell — never a grey "not_assessed".
+    demonstrated: Optional[Literal["pass", "fail"]] = None
+    assessed_at: Optional[datetime] = None
+    demonstrated_expires_on: Optional[date] = None
 
 
 class CompetenceBoardColumn(BaseModel):
@@ -103,6 +118,35 @@ def _person_key(
     if email:
         return f"email:{email.lower()}"
     return f"name:{name or 'unknown'}"
+
+
+async def _attach_demonstrations(
+    db: DbSession,
+    *,
+    tenant_id: int,
+    people: list[CompetenceBoardPerson],
+) -> None:
+    """Overlay the latest bound assessment on issued cells of mapped people.
+
+    Unmapped rows have no engineer to key a demonstration on, so they keep an
+    absent overlay. No cell is invented for a characteristic PAMS has not issued.
+    """
+    engineer_ids = {person.engineer_id for person in people if person.engineer_id is not None}
+    overlay = await load_demonstration_overlay_async(db, tenant_id=tenant_id, engineer_ids=engineer_ids)
+    if not overlay:
+        return
+    for person in people:
+        if person.engineer_id is None:
+            continue
+        for characteristic_key, cell in person.cells.items():
+            demonstration = overlay.get((person.engineer_id, characteristic_key))
+            if demonstration is None:
+                continue
+            cell.demonstrated = "pass" if demonstration.outcome == PASS_OUTCOME else "fail"
+            cell.assessed_at = demonstration.assessed_at
+            cell.demonstrated_expires_on = (
+                demonstration.expires_at.date() if demonstration.expires_at is not None else None
+            )
 
 
 @_enabled_router.get("/board", response_model=CompetenceBoardResponse)
@@ -202,6 +246,7 @@ async def get_competence_board(
         )
 
     people = sorted(people_acc.values(), key=lambda p: (not p.mapped, p.display_name.lower()))
+    await _attach_demonstrations(db, tenant_id=tenant_id, people=people)
     banner = stale_reason
     return CompetenceBoardResponse(
         family="pams",
@@ -322,6 +367,84 @@ async def list_competence_change_requests(
     rows = await list_change_requests_async(db, tenant_id=tenant_id)
     await db.commit()
     return CompetenceChangeRequestList(items=[_serialize_change_request(row) for row in rows])
+
+
+class CompetenceAssessmentBindCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: int
+    characteristic_key: str = Field(min_length=1, max_length=80)
+
+
+class CompetenceAssessmentBindOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    template_id: int
+    characteristic_key: str
+    created_at: datetime
+
+
+class CompetenceAssessmentBindList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CompetenceAssessmentBindOut]
+
+
+def _serialize_bind(row) -> CompetenceAssessmentBindOut:
+    return CompetenceAssessmentBindOut(
+        id=row.id,
+        template_id=row.template_id,
+        characteristic_key=row.characteristic_key,
+        created_at=row.created_at,
+    )
+
+
+@_enabled_router.post(
+    "/assessment-binds",
+    response_model=CompetenceAssessmentBindOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_competence_assessment_bind(
+    payload: CompetenceAssessmentBindCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+    response: Response,
+):
+    """Bind one template to one PAMS characteristic. Explicit only — never by name."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    row, created = await create_bind_async(
+        db,
+        tenant_id=tenant_id,
+        template_id=payload.template_id,
+        characteristic_key=payload.characteristic_key,
+    )
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    await db.commit()
+    await db.refresh(row)
+    return _serialize_bind(row)
+
+
+@_enabled_router.get("/assessment-binds", response_model=CompetenceAssessmentBindList)
+async def list_competence_assessment_binds(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    rows = await list_binds_async(db, tenant_id=tenant_id)
+    return CompetenceAssessmentBindList(items=[_serialize_bind(row) for row in rows])
+
+
+@_enabled_router.delete("/assessment-binds/{bind_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_competence_assessment_bind(
+    bind_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Revert the bind. Demonstrations already recorded stay as history."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    await delete_bind_async(db, tenant_id=tenant_id, bind_id=bind_id)
+    await db.commit()
 
 
 router.include_router(_enabled_router)

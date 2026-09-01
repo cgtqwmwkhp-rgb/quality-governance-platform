@@ -37,6 +37,8 @@ from src.domain.models.audit import AuditQuestion, AuditTemplate
 from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
 from src.domain.models.user import User
 from src.domain.services.capa_auto_service import CAPAAutoService
+from src.domain.services.competence_change_request_service import try_send_change_request_email
+from src.domain.services.competence_demonstration_service import OverlayResult, record_assessment_demonstration_async
 from src.domain.services.competency_scoring_service import CompetencyScoringService
 from src.domain.services.governance_service import GovernanceService
 from src.domain.services.notification_service import NotificationService
@@ -456,6 +458,47 @@ async def start_assessment(
         raise
 
 
+async def _record_bound_demonstration(
+    db: DbSession,
+    *,
+    run: AssessmentRun,
+    engineer: Optional[Engineer],
+    outcome: str,
+) -> Optional[OverlayResult]:
+    """Overlay a bound assessment onto its PAMS characteristic (CB-PR4).
+
+    Only runs whose template has an explicit bind produce a demonstration, and
+    the row is QGP's own: PAMS issuance is never written, and a fail opens a
+    change request instead of deleting it. The overlay is derived from the run,
+    so a nested savepoint keeps a failure here from aborting the transaction
+    that carries the assessment outcome and its CAPA.
+    """
+    if engineer is None:
+        return None
+    tenant_id = run.tenant_id if run.tenant_id is not None else getattr(engineer, "tenant_id", None)
+    if tenant_id is None:
+        return None
+    try:
+        async with db.begin_nested():
+            return await record_assessment_demonstration_async(
+                db,
+                tenant_id=tenant_id,
+                engineer_id=run.engineer_id,
+                template_id=run.template_id,
+                source_run_id=run.id,
+                outcome=outcome,
+                assessed_by_id=run.supervisor_id,
+                asset_type_id=run.asset_type_id,
+            )
+    except Exception:
+        logger.warning(
+            "Competence demonstration overlay skipped for assessment run %s; completion stands",
+            run.id,
+            exc_info=True,
+        )
+        return None
+
+
 @router.post("/{run_id}/complete", response_model=AssessmentRunResponse)
 async def complete_assessment(
     run_id: str,
@@ -588,11 +631,26 @@ async def complete_assessment(
 
     try:
         await db.flush()
+        overlay = await _record_bound_demonstration(db, run=run, engineer=engineer, outcome=score_result.outcome)
         response = _to_assessment_run_response(run)
         await db.commit()
     except Exception:
         await db.rollback()
         raise
+
+    # Row first, email second (CB-PR2 contract): the change request is already
+    # durable, so a mail failure must not fail the completed assessment.
+    if overlay is not None and overlay.change_request_created and overlay.change_request is not None:
+        try:
+            try_send_change_request_email(overlay.change_request)
+            await db.commit()
+        except Exception:
+            logger.warning(
+                "Competence change request email not recorded for assessment run %s",
+                run.id,
+                exc_info=True,
+            )
+            await db.rollback()
 
     # Dispatch only once the run is durable: NotificationService commits and
     # fans out to WebSocket/email/push, which must not describe a rolled-back run.
