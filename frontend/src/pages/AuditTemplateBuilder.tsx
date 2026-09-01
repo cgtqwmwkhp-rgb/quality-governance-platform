@@ -747,7 +747,7 @@ export default function AuditTemplateBuilder() {
       setTemplate((prev) => ({ ...prev, status: 'published' }))
       setShowPublishDialog(false)
     } catch (error) {
-      applySaveFailure(buildSaveIssueModel(error))
+      applySaveFailure(buildSaveIssueModel(error, { operation: 'publish' }))
     } finally {
       setIsPublishing(false)
     }
@@ -831,9 +831,11 @@ export default function AuditTemplateBuilder() {
             {validation.publishErrors.length > 0 && (
               <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p className="font-semibold">Template validation</p>
-                <p className="mt-1">
-                  Fix the highlighted authoring issues before publishing this template.
-                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {validation.publishErrors.map((error) => (
+                    <li key={error}>{error}</li>
+                  ))}
+                </ul>
               </div>
             )}
             {activeTab === 'builder' && (

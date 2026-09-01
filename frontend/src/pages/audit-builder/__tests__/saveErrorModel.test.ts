@@ -204,3 +204,54 @@ describe('saveErrorModel timeout classification', () => {
     expect(model.issues[0].field).toBe('weight')
   })
 })
+
+describe('saveErrorModel QGP error envelope', () => {
+  it('reads details.errors from the canonical { error: { message, details } } envelope', () => {
+    const model = buildSaveIssueModel({
+      response: {
+        status: 422,
+        data: {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Request validation failed',
+            details: {
+              errors: [
+                { field: 'body -> question_text', message: 'Field required', type: 'missing' },
+              ],
+            },
+          },
+        },
+      },
+    })
+
+    expect(model.issues).toHaveLength(1)
+    expect(model.issues[0].field).toBe('question_text')
+    expect(model.issues[0].label).toBe('Question text')
+    expect(model.summary).not.toMatch(/highlighted details/i)
+    expect(model.summary).toMatch(/Question text/i)
+  })
+
+  it('surfaces a domain ValidationError string instead of Save request / highlighted details', () => {
+    const model = buildSaveIssueModel(
+      {
+        response: {
+          status: 422,
+          data: {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: "Section 'Section 1' must contain at least one question",
+              details: {},
+            },
+          },
+        },
+      },
+      { operation: 'publish' },
+    )
+
+    expect(model.issues[0].field).toBeNull()
+    expect(model.summary).toBe("Section 'Section 1' must contain at least one question")
+    expect(model.issues[0].action).toMatch(/Section 'Section 1'/)
+    expect(model.summary).not.toMatch(/highlighted details/i)
+    expect(model.issues[0].label).toBe('Couldn’t publish')
+  })
+})

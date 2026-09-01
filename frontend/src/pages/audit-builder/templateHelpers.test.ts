@@ -517,4 +517,58 @@ describe('builder ISO Clause → clause tokens (PX-425a)', () => {
     expect(template.sections[0].questions[0].isoClause).toBe('9001-8.5.1')
     expect(template.sections[0].questions[0].clauseCatalogIds).toBeUndefined()
   })
+
+  it('drops inactive leftover sections and questions from builder hydrate', () => {
+    const sectionIdMap: Record<string, number> = {}
+    const questionIdMap: Record<string, number> = {}
+    const template = mapApiToTemplate(
+      {
+        id: 28,
+        name: 'Wickford HQ Daily Site Inspection',
+        version: 1,
+        is_published: false,
+        created_at: '2026-09-01T00:00:00Z',
+        sections: [
+          {
+            id: 30,
+            title: 'Section 1',
+            is_active: false,
+            weight: 1,
+            sort_order: 0,
+            questions: [],
+          },
+          {
+            id: 4,
+            title: 'Fire',
+            is_active: true,
+            weight: 1,
+            sort_order: 1,
+            questions: [
+              {
+                id: 12,
+                question_text: 'Fire exits clear?',
+                question_type: 'yes_no',
+                is_active: true,
+              },
+              {
+                id: 137,
+                question_text: 'Select areas covered in this inspection',
+                question_type: 'checkbox',
+                is_active: false,
+                options: null,
+              },
+            ],
+          },
+        ],
+      },
+      sectionIdMap,
+      questionIdMap,
+    )
+
+    expect(template.sections.map((s) => s.title)).toEqual(['Fire'])
+    expect(template.sections[0].questions.map((q) => q.text)).toEqual(['Fire exits clear?'])
+    expect(sectionIdMap).not.toHaveProperty('30')
+    expect(questionIdMap).not.toHaveProperty('137')
+    expect(questionIdMap['12']).toBe(12)
+  })
 })

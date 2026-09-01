@@ -443,6 +443,30 @@ class AuditTemplateDetailResponse(AuditTemplateResponse):
     section_count: int = 0
 
 
+def retain_live_template_graph(
+    response: AuditTemplateDetailResponse,
+) -> AuditTemplateDetailResponse:
+    """Drop soft-deleted sections and questions from a builder GET payload.
+
+    Delete in the audit builder sets ``is_active=False``. Publish and run
+    execution already ignore those rows; returning them on GET hydrates ghosts
+    the author cannot treat as live (Wickford leftover empty ``Section 1``).
+    """
+    live_sections: List[AuditSectionResponse] = []
+    for section in response.sections:
+        if section.is_active is False:
+            continue
+        live_questions = [question for question in section.questions if question.is_active is not False]
+        live_sections.append(section.model_copy(update={"questions": live_questions}))
+    return response.model_copy(
+        update={
+            "sections": live_sections,
+            "section_count": len(live_sections),
+            "question_count": sum(len(section.questions) for section in live_sections),
+        }
+    )
+
+
 class AuditTemplateListResponse(BaseModel):
     """Schema for paginated audit template list response."""
 
