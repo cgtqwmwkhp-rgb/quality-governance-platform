@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from src.api.routes import workforce_competence_board as board_routes
-from src.core.config import settings
+from src.core.config import Settings, settings
 from src.domain.features.catalogue import CLIENT_FEATURES_BY_KEY
 from src.domain.models.engineer import Engineer
 from src.domain.services.pams_competence_snapshot_service import (
@@ -24,11 +24,17 @@ MODULE_PATH = "src.infrastructure.tasks.pams_sync_tasks"
 TASK_NAME = f"{MODULE_PATH}.sync_pams_competence"
 
 
-def test_competence_board_flag_pre_registered_default_off():
+def test_competence_board_flag_is_registered_and_defaults_on():
+    """CB-PR6 (ADR-0026) opened this flag; the disclosure row must still exist.
+
+    Asserted on the field default rather than the live instance so an ambient
+    ``COMPETENCE_BOARD_ENABLED`` in the environment cannot make this pass or fail
+    for a reason that has nothing to do with the shipped decision.
+    """
     feature = CLIENT_FEATURES_BY_KEY["competence_board"]
     assert feature.settings_attr == "competence_board_enabled"
     assert feature.required_permission == "engineer:update"
-    assert settings.competence_board_enabled is False
+    assert Settings.model_fields["competence_board_enabled"].default is True
 
 
 def test_map_competence_row_reads_view_columns():

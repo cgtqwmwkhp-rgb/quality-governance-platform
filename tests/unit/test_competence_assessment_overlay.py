@@ -331,8 +331,11 @@ def test_bind_routes_are_registered_behind_the_flag_dependency():
     assert {tuple(sorted(route.methods)) for route in guarded} == {("POST",), ("GET",), ("DELETE",)}
 
 
-def test_flag_default_stays_false():
-    assert settings.competence_board_enabled is False
+def test_flag_default_is_on_since_cb_pr6():
+    """The overlay ships open (CB-PR6); false is still the kill, asserted above."""
+    from src.core.config import Settings
+
+    assert Settings.model_fields["competence_board_enabled"].default is True
 
 
 # ------------------------------------------------- AC-02 explicit bind only

@@ -1,6 +1,6 @@
 {
-  "generated": "2026-08-24",
-  "adr_count": 25,
+  "generated": "2026-09-02",
+  "adr_count": 26,
   "total_violations": 0,
   "adrs": [
     {
@@ -175,6 +175,13 @@
       "file": "ADR-0025-customer-feedback-kinds.md",
       "status": "Accepted",
       "date": "2026-08-24",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0026-competence-issued-vs-demonstrated.md",
+      "status": "Accepted",
+      "date": "2026-09-02",
       "superseded_by": null,
       "violations": []
     }
