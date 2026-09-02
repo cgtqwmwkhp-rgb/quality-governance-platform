@@ -51,6 +51,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   entity_360_satellites: false,
   job_lifecycle: false,
   job_cell_links: false,
+  // Mirrors COMPETENCE_BOARD_ENABLED. Fallback stays closed until /meta/features
+  // loads (backend default on since CB-PR6); the live CompetencyDashboard is
+  // unaffected either way.
   competence_board: false,
 
   // PEL-HSEQ-5062 Register of Registers hub — mirrors REGISTER_CATALOGUE_ENABLED

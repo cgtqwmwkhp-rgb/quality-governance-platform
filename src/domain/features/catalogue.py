@@ -309,9 +309,11 @@ CLIENT_FEATURES: Tuple[ClientFeature, ...] = (
         enabling_flag_key=None,
         required_permission="engineer:update",
         reason=(
-            "Gates GET /workforce/competence/board (CB-PR1 PAMS issued-skills snapshot). "
-            "Default off so the live CompetencyDashboard is unchanged until the snapshot "
-            "is verified. Enable via COMPETENCE_BOARD_ENABLED / FF_COMPETENCE_BOARD."
+            "Gates GET /workforce/competence/board (CB-PR1 PAMS issued-skills snapshot) "
+            "and the coverage / bind / change-request paths beside it. Default on "
+            "(CB-PR6, ADR-0026); COMPETENCE_BOARD_ENABLED / FF_COMPETENCE_BOARD=false "
+            "still subtracts — those routes 404, which already reveals the state. The "
+            "live CompetencyDashboard stays on WDP analytics either way."
         ),
     ),
     ClientFeature(
