@@ -38,7 +38,7 @@ export default function OfflineIndicator() {
   let style = ''
 
   if (isDisconnected) {
-    message = 'Offline — changes will sync when connected'
+    message = 'Offline — not connected. Changes are not queued to save.'
     style = 'bg-warning/10 text-warning border border-warning/30'
   } else if (isReconnecting) {
     message = 'Reconnecting...'

@@ -7,6 +7,7 @@ const mockNavigate = vi.fn()
 const mockGetRunDetail = vi.fn()
 const mockGetTemplate = vi.fn()
 const mockStartRun = vi.fn()
+const mockAcknowledgeRun = vi.fn()
 const mockCompleteRun = vi.fn()
 
 vi.mock('react-router-dom', async () => {
@@ -20,7 +21,7 @@ vi.mock('../../api/client', () => ({
     getTemplate: (...args: unknown[]) => mockGetTemplate(...args),
     startRun: (...args: unknown[]) => mockStartRun(...args),
     completeRun: (...args: unknown[]) => mockCompleteRun(...args),
-    acknowledgeRun: vi.fn().mockResolvedValue({ data: {} }),
+    acknowledgeRun: (...args: unknown[]) => mockAcknowledgeRun(...args),
     createResponse: vi.fn(),
     updateResponse: vi.fn(),
   },
@@ -48,6 +49,7 @@ describe('AuditExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockStartRun.mockResolvedValue({ data: {} })
+    mockAcknowledgeRun.mockResolvedValue({ data: {} })
   })
 
   it('fails safely for imported external intake runs instead of crashing on missing questions', async () => {
@@ -378,6 +380,102 @@ describe('AuditExecution', () => {
 
       expect(await screen.findByText('Any other comments?')).toBeInTheDocument()
       expect(screen.queryByText('Describe the issue')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('AUD-F1 GET-only open', () => {
+    const scheduledRun = {
+      id: 41,
+      reference_number: 'AUD-2026-0087',
+      template_id: 11,
+      template_version: 1,
+      title: 'Field Technician Audit',
+      location: 'ME14 3DA',
+      status: 'scheduled',
+      acknowledged_at: null,
+      responses: [],
+      findings: [],
+      completion_percentage: 0,
+      created_at: '2026-09-02T11:15:00Z',
+    }
+    const fieldTemplate = {
+      id: 11,
+      name: 'Field Technician Audit',
+      audit_type: 'internal',
+      version: 1,
+      scoring_method: 'percentage',
+      allow_offline: false,
+      require_gps: false,
+      require_signature: false,
+      require_approval: false,
+      auto_create_findings: true,
+      is_active: true,
+      is_published: true,
+      sections: [
+        {
+          id: 5,
+          title: 'Site',
+          is_active: true,
+          sort_order: 1,
+          questions: [
+            {
+              id: 151,
+              question_text: 'Van condition acceptable?',
+              question_type: 'yes_no',
+              is_required: true,
+              is_active: true,
+              sort_order: 1,
+              weight: 1,
+              failure_triggers_action: false,
+            },
+          ],
+        },
+      ],
+    }
+
+    it('opens a scheduled run from GET without acknowledge or start', async () => {
+      mockGetRunDetail.mockResolvedValue({ data: scheduledRun })
+      mockGetTemplate.mockResolvedValue({ data: fieldTemplate })
+
+      renderPage()
+
+      expect(await screen.findByText('Van condition acceptable?')).toBeInTheDocument()
+      expect(screen.getByTestId('planned-not-started')).toBeInTheDocument()
+      expect(screen.getByTestId('start-fieldwork')).toBeInTheDocument()
+      expect(mockAcknowledgeRun).not.toHaveBeenCalled()
+      expect(mockStartRun).not.toHaveBeenCalled()
+    })
+
+    it('Start fieldwork posts acknowledge then start', async () => {
+      mockGetRunDetail.mockResolvedValue({ data: scheduledRun })
+      mockGetTemplate.mockResolvedValue({ data: fieldTemplate })
+
+      renderPage()
+      fireEvent.click(await screen.findByTestId('start-fieldwork'))
+
+      await waitFor(() => {
+        expect(mockAcknowledgeRun).toHaveBeenCalledWith(41, null)
+        expect(mockStartRun).toHaveBeenCalledWith(41, null)
+      })
+      await waitFor(() => {
+        expect(screen.queryByTestId('start-fieldwork')).not.toBeInTheDocument()
+      })
+    })
+
+    it('keeps the loaded run when Start fieldwork fails', async () => {
+      mockGetRunDetail.mockResolvedValue({ data: scheduledRun })
+      mockGetTemplate.mockResolvedValue({ data: fieldTemplate })
+      mockAcknowledgeRun.mockRejectedValue(new Error('Network error. Please check your connection and try again.'))
+
+      renderPage()
+      expect(await screen.findByText('Van condition acceptable?')).toBeInTheDocument()
+      fireEvent.click(screen.getByTestId('start-fieldwork'))
+
+      expect(
+        await screen.findByText(/Could not start fieldwork|Network error/i),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Van condition acceptable?')).toBeInTheDocument()
+      expect(screen.queryByText('Error Loading Audit')).not.toBeInTheDocument()
     })
   })
 })

@@ -804,6 +804,8 @@ export default function AuditExecution() {
   const [showGuidance, setShowGuidance] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [runCompleted, setRunCompleted] = useState(false)
+  const [runStatus, setRunStatus] = useState<string | null>(null)
+  const [fieldworkStarting, setFieldworkStarting] = useState(false)
   const [uploadingPhotoFor, setUploadingPhotoFor] = useState<string | null>(null)
   const [completionSummary, setCompletionSummary] = useState<CompletionSummary | null>(null)
   const [stayOnCompletionProof, setStayOnCompletionProof] = useState(false)
@@ -1146,6 +1148,7 @@ export default function AuditExecution() {
         setResponseIdMap(idMap)
         const alreadyCompleted = runData.status === 'completed'
         setRunCompleted(alreadyCompleted)
+        setRunStatus(runData.status || null)
 
         if (alreadyCompleted) {
           const findings = runData.findings || []
@@ -1162,36 +1165,9 @@ export default function AuditExecution() {
 
         runEtagRef.current = runData.updated_at || null
         setConflictReload(false)
-        let stale = false
-
-        if (!alreadyCompleted && !runData.acknowledged_at) {
-          try {
-            const ack = await auditsApi.acknowledgeRun(runIdNum, runEtagRef.current)
-            const next = captureRunEtag(ack)
-            if (next) runEtagRef.current = next
-          } catch (err) {
-            if (isStaleWriteError(err)) {
-              stale = true
-              setConflictReload(true)
-            } else {
-              throw err
-            }
-          }
-        }
-
-        if (runData.status === 'scheduled' && !stale) {
-          try {
-            const started = await auditsApi.startRun(runIdNum, runEtagRef.current)
-            const next = captureRunEtag(started)
-            if (next) runEtagRef.current = next
-          } catch (err) {
-            if (isStaleWriteError(err)) {
-              setConflictReload(true)
-            } else {
-              throw err
-            }
-          }
-        }
+        // AUD-F1: open is GET-only. Acknowledge/start are an explicit
+        // "Start fieldwork" action. A failed write must not run after a
+        // successful GET and paint Network error over a loaded run.
       } catch (err) {
         if (!cancelled) {
           setError(getApiErrorMessage(err))
@@ -1484,6 +1460,30 @@ export default function AuditExecution() {
 
   const handleSaveDraft = async () => {
     await saveAllResponses()
+  }
+
+  const handleStartFieldwork = async () => {
+    if (!runIdNum || runCompleted || runStatus !== 'scheduled') return
+    setFieldworkStarting(true)
+    try {
+      const ack = await auditsApi.acknowledgeRun(runIdNum, runEtagRef.current)
+      const afterAck = captureRunEtag(ack)
+      if (afterAck) runEtagRef.current = afterAck
+      const started = await auditsApi.startRun(runIdNum, runEtagRef.current)
+      const afterStart = captureRunEtag(started)
+      if (afterStart) runEtagRef.current = afterStart
+      setRunStatus('in_progress')
+      setError(null)
+    } catch (err) {
+      if (isStaleWriteError(err)) {
+        setConflictReload(true)
+        setError('This audit was updated on another device. Reload to continue.')
+        return
+      }
+      setError(getApiErrorMessage(err, 'Could not start fieldwork. The audit is still open on this device.'))
+    } finally {
+      setFieldworkStarting(false)
+    }
   }
 
   const handleSaveDimensions = async (next: AssessmentDimensionsValue) => {
@@ -2440,6 +2440,23 @@ export default function AuditExecution() {
                 )}
                 Save
               </button>
+
+              {runStatus === 'scheduled' ? (
+                <button
+                  type="button"
+                  onClick={() => void handleStartFieldwork()}
+                  disabled={fieldworkStarting}
+                  data-testid="start-fieldwork"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:opacity-90 disabled:opacity-50"
+                >
+                  {fieldworkStarting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4" />
+                  )}
+                  Start fieldwork
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -2476,6 +2493,15 @@ export default function AuditExecution() {
           error={dimensionsError}
         />
       )}
+
+      {runStatus === 'scheduled' ? (
+        <div
+          className="bg-warning/10 border-b border-warning/20 px-4 py-2 text-sm text-warning"
+          data-testid="planned-not-started"
+        >
+          Planned — not started. Opening this screen does not begin fieldwork.
+        </div>
+      ) : null}
 
       {/* Error Banner */}
       {error && (

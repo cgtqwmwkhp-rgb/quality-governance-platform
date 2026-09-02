@@ -103,7 +103,6 @@ vi.mock('../pages/RegisterOfRegisters', () => ({ default: () => <div>RegisterOfR
 vi.mock('../pages/AuditTemplateLibrary', () => ({ default: () => <div>AuditTemplateLibrary</div> }))
 vi.mock('../pages/AuditTemplateBuilder', () => ({ default: () => <div>AuditTemplateBuilder</div> }))
 vi.mock('../pages/AuditExecution', () => ({ default: () => <div>AuditExecution</div> }))
-vi.mock('../pages/MobileAuditExecution', () => ({ default: () => <div>MobileAuditExecution</div> }))
 vi.mock('../pages/Analytics', () => ({ default: () => <div>Analytics</div> }))
 vi.mock('../pages/GlobalSearch', () => ({ default: () => <div>GlobalSearch</div> }))
 vi.mock('../pages/UserManagement', () => ({ default: () => <div>UserManagement</div> }))
