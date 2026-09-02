@@ -1,7 +1,10 @@
-"""Competence board API (CB-PR1 / CB-PR3).
+"""Competence board API (CB-PR1 / CB-PR3 / CB-PR4).
 
 ``GET /board?family=pams|atlas`` is 404 while ``competence_board_enabled`` is false.
 Live CompetencyDashboard is unchanged. Atlas never creates a User.
+
+CB-PR4 adds explicit assessment binds and shows the demonstration they produce
+over issued plant cells. QGP still never writes PAMS.
 """
 
 from __future__ import annotations
@@ -19,6 +22,19 @@ from src.core.config import settings
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
 from src.domain.services.atlas_competence_board_service import build_atlas_board_async
+from src.domain.services.competence_coverage_service import (
+    build_coverage_view_async,
+    create_quota_async,
+    delete_quota_async,
+    list_quotas_async,
+)
+from src.domain.services.competence_demonstration_service import (
+    PASS_OUTCOME,
+    create_bind_async,
+    delete_bind_async,
+    list_binds_async,
+    load_demonstration_overlay_async,
+)
 from src.domain.services.pams_competence_snapshot_service import load_current_snapshot_async, snapshot_stale_reason
 
 DISABLED_DETAIL = "Competence board is not enabled in this environment."
@@ -41,6 +57,11 @@ class CompetenceBoardCell(BaseModel):
     thorough_exam: Optional[bool] = None
     passed_on: Optional[date] = None
     expires_on: Optional[date] = None
+    # CB-PR4 overlay. Absent when no bound assessment has been completed for the
+    # cell — never a grey "not_assessed".
+    demonstrated: Optional[Literal["pass", "fail"]] = None
+    assessed_at: Optional[datetime] = None
+    demonstrated_expires_on: Optional[date] = None
 
 
 class CompetenceBoardColumn(BaseModel):
@@ -103,6 +124,35 @@ def _person_key(
     if email:
         return f"email:{email.lower()}"
     return f"name:{name or 'unknown'}"
+
+
+async def _attach_demonstrations(
+    db: DbSession,
+    *,
+    tenant_id: int,
+    people: list[CompetenceBoardPerson],
+) -> None:
+    """Overlay the latest bound assessment on issued cells of mapped people.
+
+    Unmapped rows have no engineer to key a demonstration on, so they keep an
+    absent overlay. No cell is invented for a characteristic PAMS has not issued.
+    """
+    engineer_ids = {person.engineer_id for person in people if person.engineer_id is not None}
+    overlay = await load_demonstration_overlay_async(db, tenant_id=tenant_id, engineer_ids=engineer_ids)
+    if not overlay:
+        return
+    for person in people:
+        if person.engineer_id is None:
+            continue
+        for characteristic_key, cell in person.cells.items():
+            demonstration = overlay.get((person.engineer_id, characteristic_key))
+            if demonstration is None:
+                continue
+            cell.demonstrated = "pass" if demonstration.outcome == PASS_OUTCOME else "fail"
+            cell.assessed_at = demonstration.assessed_at
+            cell.demonstrated_expires_on = (
+                demonstration.expires_at.date() if demonstration.expires_at is not None else None
+            )
 
 
 @_enabled_router.get("/board", response_model=CompetenceBoardResponse)
@@ -202,6 +252,7 @@ async def get_competence_board(
         )
 
     people = sorted(people_acc.values(), key=lambda p: (not p.mapped, p.display_name.lower()))
+    await _attach_demonstrations(db, tenant_id=tenant_id, people=people)
     banner = stale_reason
     return CompetenceBoardResponse(
         family="pams",
@@ -322,6 +373,236 @@ async def list_competence_change_requests(
     rows = await list_change_requests_async(db, tenant_id=tenant_id)
     await db.commit()
     return CompetenceChangeRequestList(items=[_serialize_change_request(row) for row in rows])
+
+
+class CompetenceAssessmentBindCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: int
+    characteristic_key: str = Field(min_length=1, max_length=80)
+
+
+class CompetenceAssessmentBindOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    template_id: int
+    characteristic_key: str
+    created_at: datetime
+
+
+class CompetenceAssessmentBindList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CompetenceAssessmentBindOut]
+
+
+def _serialize_bind(row) -> CompetenceAssessmentBindOut:
+    return CompetenceAssessmentBindOut(
+        id=row.id,
+        template_id=row.template_id,
+        characteristic_key=row.characteristic_key,
+        created_at=row.created_at,
+    )
+
+
+@_enabled_router.post(
+    "/assessment-binds",
+    response_model=CompetenceAssessmentBindOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_competence_assessment_bind(
+    payload: CompetenceAssessmentBindCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+    response: Response,
+):
+    """Bind one template to one PAMS characteristic. Explicit only — never by name."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    row, created = await create_bind_async(
+        db,
+        tenant_id=tenant_id,
+        template_id=payload.template_id,
+        characteristic_key=payload.characteristic_key,
+    )
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    await db.commit()
+    await db.refresh(row)
+    return _serialize_bind(row)
+
+
+@_enabled_router.get("/assessment-binds", response_model=CompetenceAssessmentBindList)
+async def list_competence_assessment_binds(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    rows = await list_binds_async(db, tenant_id=tenant_id)
+    return CompetenceAssessmentBindList(items=[_serialize_bind(row) for row in rows])
+
+
+@_enabled_router.delete("/assessment-binds/{bind_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_competence_assessment_bind(
+    bind_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Revert the bind. Demonstrations already recorded stay as history."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    await delete_bind_async(db, tenant_id=tenant_id, bind_id=bind_id)
+    await db.commit()
+
+
+CoverageRoleKey = Literal["first_aider", "fire_marshal", "mhfa"]
+
+
+class CompetenceCoverageQuotaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: int = Field(ge=1)
+    role_key: CoverageRoleKey
+    required_n: int = Field(ge=1)
+    template_key: str = Field(min_length=1, max_length=80)
+    # Explicit Atlas department string. Atlas has no Location foreign key, so
+    # leaving this unset makes the quota honestly unknown rather than guessing
+    # from the location name.
+    match_department: Optional[str] = Field(default=None, max_length=200)
+
+
+class CompetenceCoverageQuotaOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    location_id: int
+    role_key: str
+    required_n: int
+    template_key: str
+    match_department: Optional[str] = None
+    created_at: datetime
+
+
+class CompetenceCoverageQuotaList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CompetenceCoverageQuotaOut]
+
+
+class CompetenceCoverageItem(BaseModel):
+    """Counts and location ids only — who holds the role is the board's job."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quota_id: int
+    location_id: int
+    role_key: str
+    template_key: str
+    match_department: Optional[str] = None
+    required_n: int
+    current_m: int
+    met: Optional[bool] = None
+    gap: bool
+    unknown: bool
+
+
+class CompetenceCoverageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CompetenceCoverageItem]
+    banner: Optional[str] = Field(
+        default=None,
+        description="Honest empty/unknown notice. No Atlas import means unknown, not zero cover.",
+    )
+
+
+def _serialize_quota(row) -> CompetenceCoverageQuotaOut:
+    return CompetenceCoverageQuotaOut(
+        id=row.id,
+        location_id=row.location_id,
+        role_key=row.role_key,
+        required_n=row.required_n,
+        template_key=row.template_key,
+        match_department=row.match_department,
+        created_at=row.created_at,
+    )
+
+
+@_enabled_router.get("/coverage", response_model=CompetenceCoverageResponse)
+async def get_competence_coverage(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Location coverage quorum (n of m). Never a named person, never a PAMS write."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    view = await build_coverage_view_async(db, tenant_id)
+    return CompetenceCoverageResponse(
+        items=[
+            CompetenceCoverageItem(
+                quota_id=state.quota_id,
+                location_id=state.location_id,
+                role_key=state.role_key,
+                template_key=state.template_key,
+                match_department=state.match_department,
+                required_n=state.required_n,
+                current_m=state.current_m,
+                met=state.met,
+                gap=state.gap,
+                unknown=state.unknown,
+            )
+            for state in view.items
+        ],
+        banner=view.banner,
+    )
+
+
+@_enabled_router.post(
+    "/coverage-quotas",
+    response_model=CompetenceCoverageQuotaOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_competence_coverage_quota(
+    payload: CompetenceCoverageQuotaCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+    response: Response,
+):
+    """Declare the duty. It does not create a compliance requirement."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    row, created = await create_quota_async(
+        db,
+        tenant_id=tenant_id,
+        location_id=payload.location_id,
+        role_key=payload.role_key,
+        required_n=payload.required_n,
+        template_key=payload.template_key,
+        match_department=payload.match_department,
+    )
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    await db.commit()
+    await db.refresh(row)
+    return _serialize_quota(row)
+
+
+@_enabled_router.get("/coverage-quotas", response_model=CompetenceCoverageQuotaList)
+async def list_competence_coverage_quotas(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Stored configuration only. ``GET /coverage`` is the computed view."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    rows = await list_quotas_async(db, tenant_id=tenant_id)
+    return CompetenceCoverageQuotaList(items=[_serialize_quota(row) for row in rows])
+
+
+@_enabled_router.delete("/coverage-quotas/{quota_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_competence_coverage_quota(
+    quota_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Drop the duty. Any compliance requirement at that location stays."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    await delete_quota_async(db, tenant_id=tenant_id, quota_id=quota_id)
+    await db.commit()
 
 
 router.include_router(_enabled_router)
