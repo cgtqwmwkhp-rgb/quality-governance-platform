@@ -390,10 +390,12 @@ class Settings(BaseSettings):
     entity_360_satellites_enabled: bool = False
     job_lifecycle_enabled: bool = False
     job_cell_links_enabled: bool = False
-    # CB-PR1 — PAMS competence board snapshot. Default off; live CompetencyDashboard
-    # stays on WDP analytics.
+    # CB-PR6 (ADR-0026) — default on. COMPETENCE_BOARD_ENABLED=false remains the
+    # kill switch: board / coverage / binds / change-requests 404 and the compliance
+    # schedule emits no coverage fields. It cannot open a PAMS write path, because
+    # none exists. Live CompetencyDashboard stays on WDP analytics.
     competence_board_enabled: bool = Field(
-        default=False,
+        default=True,
         validation_alias=AliasChoices(
             "COMPETENCE_BOARD_ENABLED",
             "FF_COMPETENCE_BOARD",
