@@ -130,6 +130,17 @@ class RequirementResponse(BaseModel):
     # Server-authoritative FRA OCR eligibility (template key OR custom 03.01).
     # Do not re-derive from taxonomy alone on the client.
     fra_ocr_eligible: bool = False
+    # CB-PR5 coverage quorum (n of m appointed people at this location). A
+    # second fact about the duty, not a restatement of the date: a gap never
+    # moves `next_due_date` and never creates a person-scoped requirement
+    # (ADR-0020). All four stay absent unless the competence board flag is open
+    # and a quota matches this requirement's location + template.
+    # `coverage_met` is null when the answer is unknown — no Atlas import, or no
+    # department mapped — which is not the same as "not met".
+    coverage_required_n: Optional[int] = None
+    coverage_current_m: Optional[int] = None
+    coverage_met: Optional[bool] = None
+    coverage_gap: bool = False
 
 
 class RegulatoryBasisSuggestRequest(BaseModel):

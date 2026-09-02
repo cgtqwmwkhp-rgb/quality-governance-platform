@@ -59,6 +59,7 @@ from src.domain.models.base import AuditTrailMixin, Base, ReferenceNumberMixin, 
 from src.domain.models.capa import CAPAAction
 from src.domain.models.competence_assessment_bind import CompetenceAssessmentBind
 from src.domain.models.competence_change_request import CompetenceChangeRequest
+from src.domain.models.competence_coverage_quota import CompetenceCoverageQuota
 from src.domain.models.competence_demonstration import CompetenceDemonstration
 from src.domain.models.competence_gap import (
     CompetenceGapAction,
@@ -553,6 +554,7 @@ __all__ = [
     "Engineer",
     "CompetenceAssessmentBind",
     "CompetenceChangeRequest",
+    "CompetenceCoverageQuota",
     "CompetenceDemonstration",
     "CompetencyRecord",
     "CompetencyRequirement",

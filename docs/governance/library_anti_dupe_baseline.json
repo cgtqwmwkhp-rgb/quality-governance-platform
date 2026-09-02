@@ -12,7 +12,8 @@
     "policy_versions": "Legacy policy version file pointer (converge later)"
   },
   "coverage_twin_table_allowlist": {
-    "_comment": "Tables whose names match *coverage* / *framework* / *scheme*. Empty on tip — CEL SoT is compliance_evidence_links (does not match). Add only with owner + reason if a legitimate non-twin lands."
+    "_comment": "Tables whose names match *coverage* / *framework* / *scheme*. CEL SoT is compliance_evidence_links (does not match). Add only with owner + reason if a legitimate non-twin lands.",
+    "competence_coverage_quotas": "CB-PR5 (owner: David Harris). Headcount cover, not evidence cover: how many appointed first aiders / fire marshals / MHFAs a location must keep, counted from the Atlas training matrix. It holds no standard, clause, control or evidence link, so it cannot twin compliance_evidence_links — CEL stays the SoT for what a document covers."
   },
   "documents_like_freetext_allowlist": {
     "_comment": "table.column pairs of free-text standards/clause columns on documents-like models. Empty on tip — use CEL / clauses FK instead."

@@ -306,6 +306,15 @@ SERVER_OWNED_FIELDS = frozenset(
         "email_sent",
         "close_reason",
         "status",
+        # CB-PR5 coverage overlay on a location duty. Recomputed on every read
+        # from the latest Atlas import plus the quota row. Accepting any of
+        # these on RequirementCreate/Update would let a client assert n-of-m
+        # independently of Atlas — a second source of truth, and a way to put
+        # a named-person fact onto the schedule by the back door (ADR-0020).
+        "coverage_required_n",
+        "coverage_current_m",
+        "coverage_met",
+        "coverage_gap",
     }
 )
 
