@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { serviceWorkerShouldHandleFetch } from '../swFetchPolicy'
+import {
+  serviceWorkerShouldHandleFetch,
+  serviceWorkerShouldSynthesizeApiOffline,
+} from '../swFetchPolicy'
 
 const SWA = 'https://purple-water-03205fa03.6.azurestaticapps.net'
 
@@ -44,5 +47,34 @@ describe('serviceWorkerShouldHandleFetch', () => {
 
   it('does not intercept blob: object URLs', () => {
     expect(serviceWorkerShouldHandleFetch('blob:https://example/uuid', SWA)).toBe(false)
+  })
+})
+
+describe('serviceWorkerShouldSynthesizeApiOffline', () => {
+  it('does not synthesise 503 for audit GET (let transport fail)', () => {
+    expect(
+      serviceWorkerShouldSynthesizeApiOffline(
+        'https://app-qgp-prod.azurewebsites.net/api/v1/audits/runs/88',
+        'GET',
+      ),
+    ).toBe(false)
+    expect(
+      serviceWorkerShouldSynthesizeApiOffline(`${SWA}/api/v1/audits/templates/29`, 'GET'),
+    ).toBe(false)
+  })
+
+  it('still synthesises 503 for non-audit GET and for audit POST', () => {
+    expect(
+      serviceWorkerShouldSynthesizeApiOffline(
+        'https://app-qgp-prod.azurewebsites.net/api/v1/assessments',
+        'GET',
+      ),
+    ).toBe(true)
+    expect(
+      serviceWorkerShouldSynthesizeApiOffline(
+        'https://app-qgp-prod.azurewebsites.net/api/v1/audits/runs/88/start',
+        'POST',
+      ),
+    ).toBe(true)
   })
 })
