@@ -17,12 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.api.routes.audits import (
-    CLIENT_REVISION_KEY,
-    _client_revision,
-    _incoming_revision_is_older,
-    router,
-)
+from src.api.routes.audits import CLIENT_REVISION_KEY, _client_revision, _incoming_revision_is_older, router
 from src.domain.models.audit import AuditResponse
 
 #: The only routes on this router that may demand a matching run token.
