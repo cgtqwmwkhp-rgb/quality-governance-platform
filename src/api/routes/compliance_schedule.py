@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime, timezone
-from typing import Annotated, Iterable, Optional
+from typing import Annotated, Iterable, Optional, Sequence
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy import select
@@ -53,6 +53,7 @@ from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
 from src.domain.exceptions import BadRequestError
 from src.domain.models.user import User
+from src.domain.services.competence_coverage_service import CoverageState, coverage_targets, load_coverage_overlay_async
 from src.domain.services.compliance_schedule_filing_service import (
     file_record_to_library as file_record_to_library_service,
 )
@@ -148,11 +149,31 @@ async def _resolve_owner_names(
     return names
 
 
+async def _coverage_overlay(
+    db: DbSession,
+    rows: Sequence,
+    *,
+    tenant_id: int,
+) -> dict[int, CoverageState]:
+    """CB-PR5 coverage per requirement, or nothing at all while the flag is closed.
+
+    Kill switch is the competence board flag: with it false the schedule behaves
+    exactly as it did before this slice — no extra query, no extra fields.
+    """
+    if not settings.competence_board_enabled:
+        return {}
+    targets = coverage_targets(rows)
+    if not targets:
+        return {}
+    return await load_coverage_overlay_async(db, tenant_id=tenant_id, targets=targets)
+
+
 def _requirement_response(
     row,
     *,
     now: Optional[datetime] = None,
     owner_name: Optional[str] = None,
+    coverage: Optional[CoverageState] = None,
 ) -> RequirementResponse:
     clock = now or datetime.now(timezone.utc)
     status_value = derive_status(clock, row.next_due_date)
@@ -182,6 +203,10 @@ def _requirement_response(
         created_at=row.created_at,
         updated_at=row.updated_at,
         fra_ocr_eligible=ComplianceScheduleFraOcrService.is_fra_ocr_eligible(row),
+        coverage_required_n=coverage.required_n if coverage is not None else None,
+        coverage_current_m=coverage.current_m if coverage is not None else None,
+        coverage_met=coverage.met if coverage is not None else None,
+        coverage_gap=coverage.gap if coverage is not None else False,
     )
 
 
@@ -194,7 +219,8 @@ async def _requirement_response_with_owner(
 ) -> RequirementResponse:
     owner_names = await _resolve_owner_names(db, (row.owner_id,), tenant_id=tenant_id)
     owner_name = owner_names.get(row.owner_id) if row.owner_id is not None else None
-    return _requirement_response(row, now=now, owner_name=owner_name)
+    coverage = await _coverage_overlay(db, (row,), tenant_id=tenant_id)
+    return _requirement_response(row, now=now, owner_name=owner_name, coverage=coverage.get(row.id))
 
 
 def _regulatory_suggestion_response(result) -> RegulatoryBasisSuggestResponse:
@@ -401,11 +427,13 @@ async def list_requirements(
         (r.owner_id for r in rows),
         tenant_id=tenant_id,
     )
+    coverage = await _coverage_overlay(db, rows, tenant_id=tenant_id)
     return RequirementListResponse(
         items=[
             _requirement_response(
                 r,
                 owner_name=owner_names.get(r.owner_id) if r.owner_id is not None else None,
+                coverage=coverage.get(r.id),
             )
             for r in rows
         ],
