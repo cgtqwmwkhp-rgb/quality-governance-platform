@@ -154,6 +154,36 @@
       "description": "Annual review of first-aid provision and welfare arrangements."
     },
     {
+      "template_key": "first_aider_coverage_quorum",
+      "title": "First-aider Coverage (n of m)",
+      "taxonomy_id": "02.09",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Health and Safety (First-Aid) Regulations 1981",
+      "description": "Site duty to maintain the appointed first-aider quorum (n of m). Named first aiders stay on the Atlas competence board; this row is the location obligation, not a per-person training record."
+    },
+    {
+      "template_key": "fire_marshal_coverage_quorum",
+      "title": "Fire Marshal Coverage (n of m)",
+      "taxonomy_id": "03.04",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": true,
+      "regulatory_basis": "Regulatory Reform (Fire Safety) Order 2005",
+      "description": "Site duty to maintain the appointed fire-marshal quorum (n of m) for evacuation. Named marshals stay on the Atlas competence board; this row is the location obligation, not a per-person training record."
+    },
+    {
+      "template_key": "mhfa_coverage_quorum",
+      "title": "Mental Health First Aider Coverage (n of m)",
+      "taxonomy_id": "02.08",
+      "frequency_months": 12,
+      "anchor": "schedule",
+      "statutory": false,
+      "regulatory_basis": "Internal wellbeing policy / HSE stress management standards",
+      "description": "Site duty to maintain the appointed mental-health first-aider quorum (n of m). Named MHFAs stay on the Atlas competence board; this row is the location obligation, not a per-person training record."
+    },
+    {
       "template_key": "business_continuity_test",
       "title": "Business Continuity Plan Test",
       "taxonomy_id": "01.07",

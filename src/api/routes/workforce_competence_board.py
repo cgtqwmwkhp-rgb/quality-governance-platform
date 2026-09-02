@@ -22,6 +22,12 @@ from src.core.config import settings
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
 from src.domain.services.atlas_competence_board_service import build_atlas_board_async
+from src.domain.services.competence_coverage_service import (
+    build_coverage_view_async,
+    create_quota_async,
+    delete_quota_async,
+    list_quotas_async,
+)
 from src.domain.services.competence_demonstration_service import (
     PASS_OUTCOME,
     create_bind_async,
@@ -444,6 +450,158 @@ async def delete_competence_assessment_bind(
     """Revert the bind. Demonstrations already recorded stay as history."""
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     await delete_bind_async(db, tenant_id=tenant_id, bind_id=bind_id)
+    await db.commit()
+
+
+CoverageRoleKey = Literal["first_aider", "fire_marshal", "mhfa"]
+
+
+class CompetenceCoverageQuotaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: int = Field(ge=1)
+    role_key: CoverageRoleKey
+    required_n: int = Field(ge=1)
+    template_key: str = Field(min_length=1, max_length=80)
+    # Explicit Atlas department string. Atlas has no Location foreign key, so
+    # leaving this unset makes the quota honestly unknown rather than guessing
+    # from the location name.
+    match_department: Optional[str] = Field(default=None, max_length=200)
+
+
+class CompetenceCoverageQuotaOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    location_id: int
+    role_key: str
+    required_n: int
+    template_key: str
+    match_department: Optional[str] = None
+    created_at: datetime
+
+
+class CompetenceCoverageQuotaList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CompetenceCoverageQuotaOut]
+
+
+class CompetenceCoverageItem(BaseModel):
+    """Counts and location ids only — who holds the role is the board's job."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quota_id: int
+    location_id: int
+    role_key: str
+    template_key: str
+    match_department: Optional[str] = None
+    required_n: int
+    current_m: int
+    met: Optional[bool] = None
+    gap: bool
+    unknown: bool
+
+
+class CompetenceCoverageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CompetenceCoverageItem]
+    banner: Optional[str] = Field(
+        default=None,
+        description="Honest empty/unknown notice. No Atlas import means unknown, not zero cover.",
+    )
+
+
+def _serialize_quota(row) -> CompetenceCoverageQuotaOut:
+    return CompetenceCoverageQuotaOut(
+        id=row.id,
+        location_id=row.location_id,
+        role_key=row.role_key,
+        required_n=row.required_n,
+        template_key=row.template_key,
+        match_department=row.match_department,
+        created_at=row.created_at,
+    )
+
+
+@_enabled_router.get("/coverage", response_model=CompetenceCoverageResponse)
+async def get_competence_coverage(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Location coverage quorum (n of m). Never a named person, never a PAMS write."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    view = await build_coverage_view_async(db, tenant_id)
+    return CompetenceCoverageResponse(
+        items=[
+            CompetenceCoverageItem(
+                quota_id=state.quota_id,
+                location_id=state.location_id,
+                role_key=state.role_key,
+                template_key=state.template_key,
+                match_department=state.match_department,
+                required_n=state.required_n,
+                current_m=state.current_m,
+                met=state.met,
+                gap=state.gap,
+                unknown=state.unknown,
+            )
+            for state in view.items
+        ],
+        banner=view.banner,
+    )
+
+
+@_enabled_router.post(
+    "/coverage-quotas",
+    response_model=CompetenceCoverageQuotaOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_competence_coverage_quota(
+    payload: CompetenceCoverageQuotaCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+    response: Response,
+):
+    """Declare the duty. It does not create a compliance requirement."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    row, created = await create_quota_async(
+        db,
+        tenant_id=tenant_id,
+        location_id=payload.location_id,
+        role_key=payload.role_key,
+        required_n=payload.required_n,
+        template_key=payload.template_key,
+        match_department=payload.match_department,
+    )
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    await db.commit()
+    await db.refresh(row)
+    return _serialize_quota(row)
+
+
+@_enabled_router.get("/coverage-quotas", response_model=CompetenceCoverageQuotaList)
+async def list_competence_coverage_quotas(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Stored configuration only. ``GET /coverage`` is the computed view."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    rows = await list_quotas_async(db, tenant_id=tenant_id)
+    return CompetenceCoverageQuotaList(items=[_serialize_quota(row) for row in rows])
+
+
+@_enabled_router.delete("/coverage-quotas/{quota_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_competence_coverage_quota(
+    quota_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Drop the duty. Any compliance requirement at that location stays."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    await delete_quota_async(db, tenant_id=tenant_id, quota_id=quota_id)
     await db.commit()
 
 
