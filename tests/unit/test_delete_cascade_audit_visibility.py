@@ -13,7 +13,7 @@ issues the per-row DELETE, which requires a mapped relationship whose cascade
 includes ``delete`` and which does not set ``passive_deletes=True``. Every pair
 below fails that test, so the removal happens with no Python event:
 
-* 85 pairs have no relationship mapped from the parent at all.
+* 87 pairs have no relationship mapped from the parent at all.
 * 5 have a relationship without ``delete`` in its cascade — SQLAlchemy will try
   to de-associate the children instead of deleting them, so still no per-child
   delete event (and on a NOT NULL foreign key that attempt errors).
@@ -53,6 +53,13 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("audit_runs", "external_audit_import_drafts"),
         ("audit_runs", "external_audit_import_jobs"),
         ("audit_templates", "template_asset_types"),
+        # CB-PR4 assessment binds. A bind is configuration pointing one template
+        # at one PAMS characteristic, so it cannot outlive the template; no
+        # relationship is mapped from AuditTemplate, and PostgreSQL removes the
+        # bind on a physical template delete with no per-row event. The
+        # demonstrations the bind produced carry no foreign key and survive as
+        # history, which is the behaviour that matters for competence evidence.
+        ("audit_templates", "competence_assessment_binds"),
         ("carbon_reporting_year", "carbon_evidence"),
         ("carbon_reporting_year", "carbon_improvement_action"),
         ("carbon_reporting_year", "data_quality_assessment"),
@@ -125,6 +132,13 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         # from JobType, so a physical job_types delete removes them via FK CASCADE
         # with no per-row audit event. Soft-delete is the normal path.
         ("job_types", "job_type_baselines"),
+        # CB-PR5 coverage quotas. A quota is the duty "this site keeps two
+        # appointed first aiders"; with the site gone the duty is meaningless,
+        # so the foreign key cascades. No relationship is mapped from Location —
+        # a quota is competence-board configuration, not part of the location
+        # aggregate — so PostgreSQL removes it with no per-row event. Deleting a
+        # location is not the normal path; retiring the obligation is.
+        ("locations", "competence_coverage_quotas"),
         ("management_reviews", "management_review_inputs"),
         # WA-2 PR-C. Alignment edges are the derived output of a 5064 matrix
         # import, not authored records, so no relationship is mapped from the
