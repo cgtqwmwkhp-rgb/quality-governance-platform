@@ -258,7 +258,14 @@ async def test_post_duplicate_is_upsert_safe_rather_than_duplicate_response(
     url = f"/api/v1/audits/runs/{run.id}/responses"
 
     created = await client.post(
-        url, headers=auth_headers, json={"question_id": questions[0].id, "response_value": "yes"}
+        url,
+        headers=auth_headers,
+        json={
+            "question_id": questions[0].id,
+            "response_value": "yes",
+            "notes": "Keep this context",
+            "response_json": {"client_revision": 1},
+        },
     )
     duplicated = await client.post(
         url,
@@ -270,6 +277,8 @@ async def test_post_duplicate_is_upsert_safe_rather_than_duplicate_response(
     assert duplicated.status_code == 200, duplicated.text
     assert duplicated.json()["id"] == created.json()["id"]
     assert duplicated.json()["response_value"] == "no"
+    assert duplicated.json()["notes"] == "Keep this context"
+    assert duplicated.json()["response_json"] == {"client_revision": 1}
 
     rows = await _rows_for(test_session, run.id)
     assert len(rows) == 1

@@ -1794,6 +1794,7 @@ async def _upsert_answer_row(
 
     if existing is None:
         insert_payload = AuditScoringService.apply_derived_scores(question, payload)
+        insert_payload.setdefault("is_na", False)
         row = AuditResponse(
             run_id=run.id,
             question_id=question.id,
@@ -1916,7 +1917,7 @@ async def create_response(
         db, run, response_data.question_id, endpoint=endpoint, started=started
     )
 
-    payload = response_data.model_dump()
+    payload = response_data.model_dump(exclude_unset=True)
     payload.pop("question_id", None)
     row, outcome = await _upsert_answer_row(
         db,
