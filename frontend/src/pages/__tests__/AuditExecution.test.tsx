@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { evidenceAssetsApi } from '../../api/client'
 import AuditExecution from '../AuditExecution'
 
 const mockNavigate = vi.fn()
@@ -476,6 +477,108 @@ describe('AuditExecution', () => {
       ).toBeInTheDocument()
       expect(screen.getByText('Van condition acceptable?')).toBeInTheDocument()
       expect(screen.queryByText('Error Loading Audit')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('AUD-F2 hydrate orphan evidence', () => {
+    const emptyRun = {
+      id: 41,
+      reference_number: 'AUD-2026-0087',
+      template_id: 11,
+      template_version: 1,
+      title: 'Field Technician Audit',
+      location: 'ME14 3DA',
+      status: 'scheduled',
+      acknowledged_at: null,
+      responses: [],
+      findings: [],
+      completion_percentage: 0,
+      created_at: '2026-09-02T11:15:00Z',
+    }
+    const photoTemplate = {
+      id: 11,
+      name: 'Field Technician Audit',
+      audit_type: 'internal',
+      version: 1,
+      scoring_method: 'percentage',
+      allow_offline: false,
+      require_gps: false,
+      require_signature: false,
+      require_approval: false,
+      auto_create_findings: true,
+      is_active: true,
+      is_published: true,
+      sections: [
+        {
+          id: 5,
+          title: 'Site',
+          is_active: true,
+          sort_order: 1,
+          questions: [
+            {
+              id: 151,
+              question_text: 'Van photo',
+              question_type: 'photo',
+              is_required: true,
+              is_active: true,
+              sort_order: 1,
+              weight: 1,
+              failure_triggers_action: false,
+            },
+            {
+              id: 152,
+              question_text: 'Meter photo',
+              question_type: 'photo',
+              is_required: true,
+              is_active: true,
+              sort_order: 2,
+              weight: 1,
+              failure_triggers_action: false,
+            },
+          ],
+        },
+      ],
+    }
+
+    it('lists run evidence with zero response rows and lazy-loads the current question only', async () => {
+      mockGetRunDetail.mockResolvedValue({ data: emptyRun })
+      mockGetTemplate.mockResolvedValue({ data: photoTemplate })
+      vi.mocked(evidenceAssetsApi.list).mockResolvedValue({
+        data: {
+          items: [
+            { id: 501, description: 'audit_question:151' },
+            { id: 502, description: 'audit_question:152' },
+          ],
+          total: 2,
+          page: 1,
+          page_size: 100,
+          total_pages: 1,
+        },
+      } as Awaited<ReturnType<typeof evidenceAssetsApi.list>>)
+
+      renderPage()
+
+      expect(await screen.findByText('Van photo')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(evidenceAssetsApi.list).toHaveBeenCalledWith({
+          source_module: 'audit',
+          source_id: 41,
+          page_size: 100,
+        })
+      })
+      await waitFor(() => {
+        expect(evidenceAssetsApi.getContent).toHaveBeenCalledWith(501, 'inline')
+      })
+      expect(evidenceAssetsApi.getContent).not.toHaveBeenCalledWith(502, 'inline')
+      expect(await screen.findByTestId('audit-photo-preview-0')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+
+      expect(await screen.findByText('Meter photo')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(evidenceAssetsApi.getContent).toHaveBeenCalledWith(502, 'inline')
+      })
+      expect(await screen.findByTestId('audit-photo-preview-0')).toBeInTheDocument()
     })
   })
 })

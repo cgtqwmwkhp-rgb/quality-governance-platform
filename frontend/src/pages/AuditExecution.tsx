@@ -52,6 +52,7 @@ import {
   auditQuestionEvidenceDescription,
   dataUrlToFile,
   extractEvidenceAssetIds,
+  mergeListedEvidenceIdsIntoMap,
   signatureUploadFilename,
 } from './auditExecutionPhotoEvidence'
 import {
@@ -530,6 +531,7 @@ const PhotoCapture = ({
   ariaDescribedBy,
   readOnly = false,
   uploading = false,
+  loadingStored = false,
 }: {
   photos: string[]
   onAdd: (photo: string, file?: File) => void
@@ -540,6 +542,7 @@ const PhotoCapture = ({
   ariaDescribedBy?: string
   readOnly?: boolean
   uploading?: boolean
+  loadingStored?: boolean
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
@@ -586,6 +589,16 @@ const PhotoCapture = ({
         </button>
       )}
 
+      {loadingStored && photos.length === 0 ? (
+        <p
+          className="text-sm text-muted-foreground flex items-center justify-center gap-2 py-2"
+          data-testid="audit-stored-photos-loading"
+        >
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading stored photos…
+        </p>
+      ) : null}
+
       {photos.length > 0 ? (
         <div className="grid grid-cols-3 gap-2">
           {photos.map((photo, idx) => (
@@ -616,7 +629,7 @@ const PhotoCapture = ({
             </div>
           ))}
         </div>
-      ) : readOnly ? (
+      ) : loadingStored ? null : readOnly ? (
         <p className="text-sm text-muted-foreground">No photo evidence stored for this question.</p>
       ) : null}
 
@@ -807,6 +820,9 @@ export default function AuditExecution() {
   const [runStatus, setRunStatus] = useState<string | null>(null)
   const [fieldworkStarting, setFieldworkStarting] = useState(false)
   const [uploadingPhotoFor, setUploadingPhotoFor] = useState<string | null>(null)
+  const [hydratingEvidenceQuestionId, setHydratingEvidenceQuestionId] = useState<string | null>(
+    null,
+  )
   const [completionSummary, setCompletionSummary] = useState<CompletionSummary | null>(null)
   const [stayOnCompletionProof, setStayOnCompletionProof] = useState(false)
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
@@ -875,6 +891,81 @@ export default function AuditExecution() {
   useEffect(() => {
     savingRef.current = saving
   }, [saving])
+
+  const previewQuestionId =
+    audit?.sections[currentSectionIndex]?.questions[currentQuestionIndex]?.id ?? null
+  const previewEvidenceKey = previewQuestionId
+    ? `${previewQuestionId}:${(responses[previewQuestionId]?.evidenceAssetIds || []).join(',')}`
+    : ''
+
+  // AUD-F2: download preview bytes for the *current* question only. Listing
+  // every JPEG on open is what made 0087 feel like a 14-question blank form
+  // while Azure still held 3.5MB files. Do not mark dirty — this is display.
+  useEffect(() => {
+    if (!audit) return
+    const section = audit.sections[currentSectionIndex]
+    const question = section?.questions[currentQuestionIndex]
+    if (!question) return
+
+    const resp = responsesRef.current[question.id]
+    const ids = resp?.evidenceAssetIds || []
+    if (ids.length === 0) return
+
+    const isSignatureQuestion = question.type === 'signature'
+    if (isSignatureQuestion && resp?.signature) return
+    if (!isSignatureQuestion && (resp?.photos?.length ?? 0) > 0) return
+
+    let cancelled = false
+    const createdPreviewUrls: string[] = []
+
+    const loadPreviews = async () => {
+      setHydratingEvidenceQuestionId(question.id)
+      try {
+        const urls = await Promise.all(
+          ids.map(async (assetId) => {
+            try {
+              const content = await evidenceAssetsApi.getContent(assetId, 'inline')
+              if (cancelled) return null
+              const url = URL.createObjectURL(content.data)
+              createdPreviewUrls.push(url)
+              return url
+            } catch {
+              return null
+            }
+          }),
+        )
+        if (cancelled) {
+          createdPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+          return
+        }
+        const previewUrls = urls.filter((url): url is string => Boolean(url))
+        hydratedPreviewUrls.current.push(...createdPreviewUrls)
+        setResponses((prev) => {
+          const current = prev[question.id]
+          if (!current) return prev
+          if (isSignatureQuestion && current.signature) return prev
+          if (!isSignatureQuestion && (current.photos?.length ?? 0) > 0) return prev
+          return {
+            ...prev,
+            [question.id]: {
+              ...current,
+              photos: isSignatureQuestion ? current.photos : previewUrls,
+              signature: isSignatureQuestion ? previewUrls[0] : current.signature,
+            },
+          }
+        })
+      } finally {
+        if (!cancelled) {
+          setHydratingEvidenceQuestionId((id) => (id === question.id ? null : id))
+        }
+      }
+    }
+
+    void loadPreviews()
+    return () => {
+      cancelled = true
+    }
+  }, [audit, currentSectionIndex, currentQuestionIndex, previewEvidenceKey])
 
   useEffect(() => {
     if (!completionSummary || stayOnCompletionProof) return
@@ -1065,68 +1156,46 @@ export default function AuditExecution() {
           idMap[qId] = r.id
         }
 
-        // Hydrate thumbnails from evidence-assets, reading the bytes through the API
-        // rather than a blob SAS URL so previews do not depend on storage CORS.
-        // Also recover links for older runs that only stored "captured" by listing run evidence.
-        const listed =
-          Object.values(existingResponses).some((r) => (r.evidenceAssetIds?.length ?? 0) === 0)
-            ? await evidenceAssetsApi
-                .list({ source_module: 'audit', source_id: runIdNum, page_size: 100 })
-                .then((res) => res.data.items || [])
-                .catch(() => [])
-            : []
+        // AUD-F2: always list run evidence (page_size 100). Empty
+        // `audit_responses` used to skip the list (`.some()` on {}), so
+        // 0087's Azure blobs never attached. Attach by description even when
+        // there is no response row. Preview bytes load lazily for the
+        // current question — not every JPEG on open.
+        const listed = await evidenceAssetsApi
+          .list({ source_module: 'audit', source_id: runIdNum, page_size: 100 })
+          .then((res) => res.data.items || [])
+          .catch(() => [])
 
-        const createdPreviewUrls: string[] = []
-
-        await Promise.all(
-          Object.entries(existingResponses).map(async ([qId, resp]) => {
-            let ids = resp.evidenceAssetIds || []
-            if (ids.length === 0 && listed.length > 0) {
-              const needle = auditQuestionEvidenceDescription(qId)
-              ids = listed
-                .filter((asset) => (asset.description || '').includes(needle))
-                .map((asset) => asset.id)
-            }
-            if (ids.length === 0) return
-            const urls = await Promise.all(
-              ids.map(async (assetId) => {
-                try {
-                  const content = await evidenceAssetsApi.getContent(assetId, 'inline')
-                  const url = URL.createObjectURL(content.data)
-                  createdPreviewUrls.push(url)
-                  return url
-                } catch {
-                  return null
-                }
-              }),
-            )
-            const previewUrls = urls.filter((url): url is string => Boolean(url))
-            const isSignatureQuestion = questionTypeMap[qId] === 'signature'
-            existingResponses[qId] = {
-              ...resp,
-              evidenceAssetIds: ids,
-              photos: isSignatureQuestion ? [] : previewUrls,
-              signature: isSignatureQuestion ? previewUrls[0] : resp.signature,
-              response:
-                resp.response ??
-                (ids.length > 0
-                  ? isSignatureQuestion
-                    ? 'signed'
-                    : 'captured'
-                  : resp.response),
-            }
-          }),
+        const mergedIds = mergeListedEvidenceIdsIntoMap(
+          Object.fromEntries(
+            Object.entries(existingResponses).map(([qId, resp]) => [
+              qId,
+              resp.evidenceAssetIds || [],
+            ]),
+          ),
+          listed,
+          new Set(Object.keys(questionTypeMap)),
         )
 
-        if (cancelled) {
-          // Nothing will render these, so nothing else will ever revoke them.
-          createdPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
-          return
+        for (const [qId, ids] of Object.entries(mergedIds)) {
+          if (ids.length === 0) continue
+          const current = existingResponses[qId]
+          existingResponses[qId] = {
+            questionId: qId,
+            response: current?.response ?? null,
+            notes: current?.notes,
+            timestamp: current?.timestamp || '',
+            entityLabel: current?.entityLabel,
+            evidenceAssetIds: ids,
+            photos: current?.photos || [],
+            signature: current?.signature,
+          }
         }
 
-        // The previous load's thumbnails are about to be replaced in state.
+        if (cancelled) return
+
         hydratedPreviewUrls.current.forEach((url) => URL.revokeObjectURL(url))
-        hydratedPreviewUrls.current = createdPreviewUrls
+        hydratedPreviewUrls.current = []
 
         setAudit({
           id: String(runData.id),
@@ -2229,6 +2298,7 @@ export default function AuditExecution() {
             photos={currentResponse?.photos || []}
             readOnly={runCompleted}
             uploading={uploadingPhotoFor === currentQuestion.id}
+            loadingStored={hydratingEvidenceQuestionId === currentQuestion.id}
             onAdd={(photo, file) => {
               void attachPhotoToCurrentQuestion(photo, file, { markCaptured: true })
             }}
@@ -2740,6 +2810,7 @@ export default function AuditExecution() {
                     photos={currentResponse?.photos || []}
                     readOnly={runCompleted}
                     uploading={uploadingPhotoFor === currentQuestion.id}
+                    loadingStored={hydratingEvidenceQuestionId === currentQuestion.id}
                     captureButtonRef={evidenceCaptureRef}
                     captureButtonId={`fail-evidence-capture-${currentQuestion.id}`}
                     ariaInvalid={failEvidenceGateError}
