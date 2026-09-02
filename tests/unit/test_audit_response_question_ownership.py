@@ -59,6 +59,22 @@ class _FakeResult:
         return self._entity
 
 
+class _Savepoint:
+    """Stands in for ``AsyncSession.begin_nested()``.
+
+    The route wraps its insert in a SAVEPOINT so a lost unique-constraint race
+    can be recovered as an update without discarding the rest of the
+    transaction. Nothing here races, so the savepoint is a no-op; the recovery
+    itself is exercised in tests/integration/test_audit_response_upsert_by_question.py.
+    """
+
+    async def __aenter__(self) -> "_Savepoint":
+        return self
+
+    async def __aexit__(self, *_exc: object) -> bool:
+        return False
+
+
 class _RecordingSession:
     def __init__(self, results: list[object]) -> None:
         self._results = list(results)
@@ -69,6 +85,12 @@ class _RecordingSession:
 
     def add(self, entity: object) -> None:
         self.added.append(entity)
+
+    def begin_nested(self) -> _Savepoint:
+        return _Savepoint()
+
+    async def flush(self) -> None:
+        return None
 
     async def commit(self) -> None:
         return None
@@ -101,9 +123,12 @@ def _question(template_id: int) -> AuditQuestion:
     )
 
 
+# Queued in the order the route asks for them: the run, the question, then the
+# existing answer row for (run, question). The question is resolved before the
+# row because the upsert needs it to score whichever branch it takes.
 @pytest.mark.asyncio
 async def test_create_response_refuses_a_question_from_another_template() -> None:
-    db = _RecordingSession([_run(), None, _question(FOREIGN_TEMPLATE_ID)])
+    db = _RecordingSession([_run(), _question(FOREIGN_TEMPLATE_ID), None])
 
     with pytest.raises(NotFoundError) as excinfo:
         await create_response(
@@ -124,7 +149,7 @@ async def test_create_response_refuses_a_question_from_another_template() -> Non
 @pytest.mark.asyncio
 async def test_create_response_still_accepts_a_question_from_its_own_template() -> None:
     """The check must not break the endpoint it guards."""
-    db = _RecordingSession([_run(), None, _question(RUN_TEMPLATE_ID)])
+    db = _RecordingSession([_run(), _question(RUN_TEMPLATE_ID), None])
 
     result = await create_response(
         run_id=11,
