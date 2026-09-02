@@ -80,6 +80,65 @@ export function formatMissingQuestionsMessage(missingCount: number): string {
   return `${missingCount} required questions still need answers. Jumped to the first missing question.`
 }
 
+/**
+ * AUD-F4 completion-integrity refusals.
+ *
+ * These say the run has nothing the server can close on, which is a different
+ * fact from "a required question is unanswered" and needs different wording:
+ * the auditor's own screen may look finished. Neither is retryable without the
+ * auditor doing something first, so nothing here retries the completion.
+ */
+export const COMPLETE_NO_APPLICABLE_ANSWERS = 'AUDIT_COMPLETE_NO_APPLICABLE_ANSWERS'
+export const COMPLETE_EVIDENCE_NOT_RESOLVED = 'AUDIT_COMPLETE_EVIDENCE_NOT_RESOLVED'
+
+export type CompleteIntegrityRefusal = {
+  code: string
+  message: string
+  /** Questions the refusal names, so the UI can jump to the first one. */
+  questionIds: number[]
+}
+
+function readPositiveIds(details: unknown, key: string): number[] {
+  if (!details || typeof details !== 'object') return []
+  const raw = (details as Record<string, unknown>)[key]
+  if (!Array.isArray(raw)) return []
+  return raw.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+}
+
+function refusalMessage(code: string, details: unknown): string {
+  if (code === COMPLETE_EVIDENCE_NOT_RESOLVED) {
+    const affected = readPositiveIds(details, 'question_ids').length
+    const subject =
+      affected === 1 ? 'One answer references evidence' : `${affected || 'Some'} answers reference evidence`
+    return (
+      `${subject} that is not attached to this audit on the server, so the upload did not ` +
+      'finish. Re-attach the photo or signature, then submit again.'
+    )
+  }
+  return (
+    'This audit has no answers recorded on the server, so it cannot be completed. ' +
+    'Answer at least one question that applies to this run and save, then submit again.'
+  )
+}
+
+/** Parse an AUD-F4 completion refusal out of the 400 envelope, or return null. */
+export function parseCompleteIntegrityRefusal(error: unknown): CompleteIntegrityRefusal | null {
+  if (!axios.isAxiosError(error)) return null
+  const data = error.response?.data as Record<string, unknown> | undefined
+  const envelope = data?.error
+  if (!envelope || typeof envelope !== 'object') return null
+
+  const code = (envelope as Record<string, unknown>).code
+  if (code !== COMPLETE_NO_APPLICABLE_ANSWERS && code !== COMPLETE_EVIDENCE_NOT_RESOLVED) return null
+
+  const details = (envelope as Record<string, unknown>).details
+  return {
+    code,
+    message: refusalMessage(code, details),
+    questionIds: readPositiveIds(details, 'question_ids'),
+  }
+}
+
 export type SavePayloadQuestion = {
   type: string
   weight: number

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { AxiosError } from 'axios'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { evidenceAssetsApi } from '../../api/client'
@@ -267,6 +268,86 @@ describe('AuditExecution', () => {
       },
       { timeout: 2500 },
     )
+  })
+
+  it('shows an AUD-F4 completion refusal honestly and does not retry the completion', async () => {
+    const initialRun = {
+      id: 41,
+      reference_number: 'AUD-00041',
+      template_id: 11,
+      template_version: 1,
+      title: 'Warehouse inspection',
+      location: 'London',
+      status: 'in_progress',
+      responses: [],
+      findings: [],
+      completion_percentage: 0,
+      created_at: '2026-03-24T10:05:00Z',
+    }
+    mockGetRunDetail.mockResolvedValue({ data: initialRun })
+    mockGetTemplate.mockResolvedValue({
+      data: {
+        id: 11,
+        name: 'Warehouse inspection',
+        audit_type: 'internal',
+        version: 1,
+        scoring_method: 'percentage',
+        allow_offline: false,
+        require_gps: false,
+        require_signature: false,
+        require_approval: false,
+        auto_create_findings: true,
+        is_active: true,
+        is_published: true,
+        sections: [
+          {
+            id: 5,
+            title: 'Safety',
+            is_active: true,
+            sort_order: 1,
+            questions: [
+              {
+                id: 8,
+                question_text: 'Inspection notes',
+                question_type: 'text',
+                is_required: false,
+                is_active: true,
+                sort_order: 1,
+                weight: 1,
+                failure_triggers_action: false,
+              },
+            ],
+          },
+        ],
+      },
+    })
+
+    const refusal = new AxiosError('Request failed', 'ERR_BAD_REQUEST')
+    refusal.response = {
+      status: 400,
+      statusText: 'Bad Request',
+      headers: {},
+      config: {} as never,
+      data: {
+        error: {
+          code: 'AUDIT_COMPLETE_NO_APPLICABLE_ANSWERS',
+          message: 'This audit has no answers recorded against it, so it cannot be completed',
+          details: { applicable_answer_count: 0, stored_response_count: 0 },
+        },
+      },
+    }
+    mockCompleteRun.mockRejectedValue(refusal)
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Finish' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Audit' }))
+
+    expect(await screen.findByText(/no answers recorded on the server/)).toBeInTheDocument()
+    expect(screen.queryByText('Inspection completed')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockCompleteRun).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('conditional-logic navigation visibility', () => {
