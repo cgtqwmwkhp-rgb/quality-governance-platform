@@ -6,7 +6,7 @@ import {
   shouldShowFailEvidencePanel,
 } from '../AuditExecution'
 
-describe('MobileAuditExecution fail evidence parity', () => {
+describe('Execute fail evidence gate parity', () => {
   const actionQuestion = {
     type: 'yes_no',
     positiveAnswer: undefined,
