@@ -251,6 +251,15 @@ class TestCORSExposedHeaders:
         expose_headers = response.headers.get("access-control-expose-headers", "")
         assert "X-Request-Id" in expose_headers or "x-request-id" in expose_headers.lower()
 
+    def test_expose_etag_header(self, client):
+        """Cross-origin answer writes must expose the refreshed run token."""
+        response = client.get(
+            "/api/v1/uvdb/sections",
+            headers={"Origin": PROD_ORIGIN},
+        )
+        expose_headers = response.headers.get("access-control-expose-headers", "").lower()
+        assert "etag" in expose_headers
+
     def test_expose_export_download_headers(self, client):
         """Export downloads are cross-origin: the browser must read the filename.
 
