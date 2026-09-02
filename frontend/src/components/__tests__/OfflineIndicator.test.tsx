@@ -49,6 +49,8 @@ describe('OfflineIndicator', () => {
     })
 
     expect(screen.getByText(/Offline/i)).toBeInTheDocument()
+    expect(screen.queryByText(/will sync/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/not queued to save/i)).toBeInTheDocument()
   })
 
   it('shows back-online banner when online event fires after being offline', () => {

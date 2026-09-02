@@ -20,3 +20,23 @@ export function serviceWorkerShouldHandleFetch(requestUrl: string, swOrigin: str
     url.hostname.includes('azurewebsites.net') && url.pathname.startsWith('/api/')
   return url.origin === swOrigin || isApiRequest
 }
+
+/**
+ * When the SW fetch fails, classic sw.js used to return a synthetic 503
+ * `{error:Offline}`. Axios then sees a response, so execute cannot treat a
+ * failed GET as a transport error. Audit GET must reject instead.
+ *
+ * `frontend/public/sw.js` `networkFirstApi` catch MUST match this.
+ */
+export function serviceWorkerShouldSynthesizeApiOffline(
+  requestUrl: string,
+  method: string,
+): boolean {
+  if (method.toUpperCase() !== 'GET') return true
+  try {
+    const url = new URL(requestUrl)
+    return !url.pathname.startsWith('/api/v1/audits')
+  } catch {
+    return true
+  }
+}
