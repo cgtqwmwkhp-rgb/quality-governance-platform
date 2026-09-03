@@ -484,6 +484,7 @@ async def list_competence_assessment_binds(
     rows = await list_binds_async(db, tenant_id=tenant_id)
     snapshot, snapshot_rows = await load_current_snapshot_async(db, tenant_id)
     keys = sorted({row.characteristic_key for row in snapshot_rows if row.characteristic_key})
+    banner: str | None
     if snapshot is None:
         banner = "No PAMS competence snapshot yet, so there is no characteristic to bind against."
     elif not keys:
