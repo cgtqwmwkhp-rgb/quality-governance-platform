@@ -56,6 +56,13 @@ async def test_create_assessment_run_retries_reference_conflict(monkeypatch):
         "src.api.routes.assessments.GovernanceService.check_template_approval",
         AsyncMock(return_value={"approved": True, "reason": None}),
     )
+    # This template is bound to no PAMS characteristic, which is the case the
+    # CB-UI-3 assessor gate returns None for; the session double here has no
+    # ``scalars`` for the gate to establish that on its own.
+    monkeypatch.setattr(
+        "src.api.routes.assessments.enforce_bound_template_assessor_gate_async",
+        AsyncMock(return_value=None),
+    )
 
     runs: list = []
 

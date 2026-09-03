@@ -45,6 +45,9 @@ GUARDED_REQUESTS = (
     ("GET", "/assessment-binds"),
     ("POST", "/assessment-binds"),
     ("DELETE", "/assessment-binds/1"),
+    # CB-UI-3. The one write on this router that creates a run, so the kill
+    # switch closing it matters more here than anywhere else on the board.
+    ("POST", "/assessments"),
     ("GET", "/coverage"),
     ("GET", "/coverage-quotas"),
     ("POST", "/coverage-quotas"),
@@ -160,6 +163,7 @@ def test_the_flagged_router_carries_exactly_the_expected_routes():
         ("GET", "/assessment-binds"),
         ("POST", "/assessment-binds"),
         ("DELETE", "/assessment-binds/{bind_id}"),
+        ("POST", "/assessments"),
         ("GET", "/coverage"),
         ("GET", "/coverage-quotas"),
         ("POST", "/coverage-quotas"),
