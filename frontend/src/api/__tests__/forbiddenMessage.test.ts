@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { forbiddenMessageFor } from '../client'
+import { forbiddenMessageFor, getApiErrorMessage } from '../client'
+
+/** What the response interceptor attaches; set by hand here, as it does. */
+type ClassifiedAxiosError = AxiosError & { classifiedMessage?: string }
 
 /**
  * A 403 carries two unrelated failures.
@@ -128,5 +131,54 @@ describe('the message shown for an assessor gate refusal', () => {
     expect(forbiddenMessageFor(assessorRefusal('   '))).toBe(
       "You don't have permission to perform this action.",
     )
+  })
+})
+
+/**
+ * The sentence has to survive `getApiErrorMessage` too, which is what pages
+ * actually call.
+ *
+ * It runs every classified message through `humaniseCodedText`, whose job is to
+ * clean coded tokens out of messages never written for a user. This refusal
+ * deliberately quotes a PAMS characteristic key, and that key is the label on
+ * the board column the assessor just activated — so tidying it turns an
+ * actionable sentence into one naming something they cannot find. Measured, not
+ * assumed: it rewrote `COUNTERBALANCE_FLT` to `Counterbalance flt` and
+ * `MEWP_3A` to `Mewp 3 a`.
+ */
+describe('the characteristic key in a gate refusal', () => {
+  const ISSUED = 'PAMS has not issued you COUNTERBALANCE_FLT, so you cannot assess it.'
+
+  it('reaches the page spelled the way the board column spells it', () => {
+    const error = assessorRefusal(ISSUED) as ClassifiedAxiosError
+    error.classifiedMessage = forbiddenMessageFor(error)
+
+    expect(getApiErrorMessage(error)).toBe(ISSUED)
+    expect(getApiErrorMessage(error)).toContain('COUNTERBALANCE_FLT')
+  })
+
+  it('survives a key the rewriter would split into words', () => {
+    const message = 'MEWP_3A has no field template bound yet.'
+    const error = assessorRefusal(message) as ClassifiedAxiosError
+    error.classifiedMessage = forbiddenMessageFor(error)
+
+    expect(getApiErrorMessage(error)).toContain('MEWP_3A')
+    expect(getApiErrorMessage(error)).not.toContain('Mewp 3 a')
+  })
+
+  it('is read straight from the envelope when no interceptor classified it', () => {
+    // A caller that did not go through the shared client still gets the prose,
+    // because it is the same message whichever branch finds it.
+    expect(getApiErrorMessage(assessorRefusal(ISSUED))).toBe(ISSUED)
+  })
+
+  it('still tidies a coded message the server did not write for a reader', () => {
+    // The rewriter is not disabled in general — only for codes that opted in.
+    const error = forbidden('PERMISSION_DENIED') as ClassifiedAxiosError
+    error.classifiedMessage = "Blocked by Status.IN_REVIEW on 'audit_run'"
+
+    const shown = getApiErrorMessage(error)
+    expect(shown).not.toContain('Status.IN_REVIEW')
+    expect(shown).not.toContain("'audit_run'")
   })
 })

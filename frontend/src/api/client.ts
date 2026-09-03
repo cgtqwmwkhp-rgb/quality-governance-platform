@@ -797,6 +797,23 @@ export function getApiErrorCode(error: unknown): string | null {
  */
 const FORBIDDEN_CODES_WITH_OWN_MESSAGE = new Set(['ASSESSOR_NOT_ELIGIBLE'])
 
+/**
+ * True when the server wrote this message for a user to read, so nothing should
+ * tidy it up on the way to the screen.
+ *
+ * `humaniseCodedText` exists to clean coded tokens out of messages that were
+ * never written for a user — a leaked `Status.IN_REVIEW`, a quoted column name.
+ * Run over prose that deliberately quotes an identifier the UI also displays, it
+ * does damage instead: `COUNTERBALANCE_FLT` becomes `Counterbalance flt` and
+ * `MEWP_3A` becomes `Mewp 3 a`, so the toast names something the assessor cannot
+ * find on the board they are looking at. The characteristic key is the label on
+ * the column header, so the refusal has to spell it the same way.
+ */
+function carriesItsOwnMessage(error: unknown): boolean {
+  const code = getApiErrorCode(error)
+  return code !== null && FORBIDDEN_CODES_WITH_OWN_MESSAGE.has(code)
+}
+
 /** The server's own message from the unified envelope, when it sent one. */
 function serverEnvelopeMessage(error: unknown): string | null {
   if (!axios.isAxiosError(error)) return null
@@ -826,7 +843,7 @@ export function forbiddenMessageFor(error: unknown): string {
       'to assign your organisation.'
     )
   }
-  if (code !== null && FORBIDDEN_CODES_WITH_OWN_MESSAGE.has(code)) {
+  if (carriesItsOwnMessage(error)) {
     // Falls through to the generic line when the envelope carried a code but no
     // message, rather than showing an empty toast.
     const message = serverEnvelopeMessage(error)
@@ -848,6 +865,13 @@ export function isUnprovisionedError(error: unknown): boolean {
 export function getApiErrorMessage(error: unknown, fallback?: string): string {
   if (axios.isAxiosError(error)) {
     const classified = error as ClassifiedAxiosError
+    // Checked before either source is read, because it is the same message
+    // whichever branch finds it: the interceptor's copy when a request went
+    // through the shared client, the envelope directly when it did not.
+    if (carriesItsOwnMessage(error)) {
+      const verbatim = classified.classifiedMessage || serverEnvelopeMessage(error)
+      if (verbatim) return verbatim
+    }
     if (classified.classifiedMessage) {
       return presentServerErrorMessage(classified.classifiedMessage)
     }
