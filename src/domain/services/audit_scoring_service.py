@@ -287,6 +287,20 @@ class AuditScoringService:
             return False
         return True
 
+    @classmethod
+    def referenced_evidence_asset_ids(cls, response: Any) -> list[int]:
+        """Evidence-asset ids a stored response claims, deduplicated and sorted.
+
+        Public because completion has to resolve these ids against the database
+        before it can treat the evidence as present, and that check must read the
+        payload exactly the way the answer/evidence gates above read it rather
+        than reimplementing the parse next to them.
+        """
+        payload = getattr(response, "response_json", None)
+        if not isinstance(payload, dict):
+            return []
+        return sorted(set(cls._evidence_asset_ids(payload)))
+
     @staticmethod
     def _as_str(value: Any) -> str:
         if value is None:

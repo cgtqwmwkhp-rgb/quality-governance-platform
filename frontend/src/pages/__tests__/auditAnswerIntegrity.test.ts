@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildAuditResponseSavePayload,
+  COMPLETE_EVIDENCE_NOT_RESOLVED,
+  COMPLETE_NO_APPLICABLE_ANSWERS,
   formatMissingQuestionsMessage,
   mergeAuditResponseJson,
+  parseCompleteIntegrityRefusal,
   parseMissingQuestionIdsFromError,
   responseRowIsEmpty,
 } from '../auditAnswerIntegrity'
@@ -86,6 +89,41 @@ describe('auditAnswerIntegrity helpers', () => {
 
     expect(parseMissingQuestionIdsFromError(error)).toEqual([12, 15])
     expect(formatMissingQuestionsMessage(2)).toMatch(/2 required questions/)
+  })
+
+  it('reads AUD-F4 completion refusals and names what to fix', () => {
+    const refusal = (code: string, details: Record<string, unknown>) => {
+      const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST')
+      error.response = {
+        status: 400,
+        statusText: 'Bad Request',
+        headers: {},
+        config: {} as InternalAxiosRequestConfig,
+        data: { error: { code, message: 'refused', details } },
+      }
+      return error
+    }
+
+    const noAnswers = parseCompleteIntegrityRefusal(
+      refusal(COMPLETE_NO_APPLICABLE_ANSWERS, { applicable_answer_count: 0 }),
+    )
+    expect(noAnswers?.code).toBe(COMPLETE_NO_APPLICABLE_ANSWERS)
+    expect(noAnswers?.message).toMatch(/no answers recorded on the server/)
+    expect(noAnswers?.questionIds).toEqual([])
+
+    const badEvidence = parseCompleteIntegrityRefusal(
+      refusal(COMPLETE_EVIDENCE_NOT_RESOLVED, {
+        question_ids: [31],
+        unresolved_evidence_asset_ids: [4242],
+      }),
+    )
+    expect(badEvidence?.questionIds).toEqual([31])
+    expect(badEvidence?.message).toMatch(/Re-attach the photo or signature/)
+
+    // A required-question refusal is a different fact and keeps its own message.
+    expect(
+      parseCompleteIntegrityRefusal(refusal('BAD_REQUEST', { missing_question_ids: [12] })),
+    ).toBeNull()
   })
 
   it('live score ignores answers on hidden questions', () => {
