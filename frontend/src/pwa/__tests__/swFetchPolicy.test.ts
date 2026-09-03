@@ -33,6 +33,21 @@ describe('serviceWorkerShouldHandleFetch', () => {
     ).toBe(false)
   })
 
+  it('rejects hosts that only contain the Azure App Service domain', () => {
+    expect(
+      serviceWorkerShouldHandleFetch(
+        'https://azurewebsites.net.attacker.example/api/v1/assessments',
+        SWA,
+      ),
+    ).toBe(false)
+    expect(
+      serviceWorkerShouldHandleFetch(
+        'https://notazurewebsites.net/api/v1/assessments',
+        SWA,
+      ),
+    ).toBe(false)
+  })
+
   it('does not intercept Azure Blob SAS evidence URLs (png/jpeg/pdf)', () => {
     const png =
       'https://stqgpprdcdd14b.blob.core.windows.net/evidence-assets/evidence/near_miss/106/shot.png?sp=r&sig=abc'

@@ -17,7 +17,7 @@ export function serviceWorkerShouldHandleFetch(requestUrl: string, swOrigin: str
     return false
   }
   const isApiRequest =
-    url.hostname.includes('azurewebsites.net') && url.pathname.startsWith('/api/')
+    url.hostname.endsWith('.azurewebsites.net') && url.pathname.startsWith('/api/')
   return url.origin === swOrigin || isApiRequest
 }
 
