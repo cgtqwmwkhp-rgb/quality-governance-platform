@@ -30,6 +30,9 @@ vi.mock('../../api/client', () => ({
     updateResponse: vi.fn(),
     acknowledgeRun: vi.fn().mockResolvedValue({ data: {} }),
     completeRun: vi.fn(),
+    uploadQuestionEvidence: vi
+      .fn()
+      .mockResolvedValue({ data: { evidence_asset_id: 99, response_id: 7, evidence_asset_ids: [99] } }),
   },
   evidenceAssetsApi: {
     upload: vi.fn().mockResolvedValue({ data: { id: 99 } }),
@@ -45,7 +48,25 @@ vi.mock('../../services/auditDraftStore', () => ({
   registerDraftSnapshot: vi.fn(),
   getAuditDraft: vi.fn().mockResolvedValue(null),
   deleteAuditDraft: vi.fn(),
-  saveAuditDraft: vi.fn(),
+  saveAuditDraft: vi.fn().mockResolvedValue({ ok: true }),
+  putCaptureBlob: vi.fn().mockResolvedValue({ ok: true }),
+  deleteCaptureBlob: vi.fn().mockResolvedValue(undefined),
+  listCaptureBlobs: vi.fn().mockResolvedValue([]),
+  ensureDeviceLedgerDurability: vi.fn().mockResolvedValue({
+    durable: true,
+    reason: 'ok',
+    writeFailed: false,
+    usageBytes: null,
+    quotaBytes: null,
+  }),
+  subscribeDeviceLedgerStatus: vi.fn(() => () => {}),
+  getDeviceLedgerStatus: vi.fn(() => ({
+    durable: true,
+    reason: 'ok',
+    writeFailed: false,
+    usageBytes: null,
+    quotaBytes: null,
+  })),
 }))
 
 function renderPage() {
@@ -221,12 +242,22 @@ describe('AuditExecution fail evidence gate', () => {
 
     expect(screen.getByText('Fire extinguisher present?')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent(FAIL_EVIDENCE_ERROR_MESSAGE)
-    expect(screen.getByRole('button', { name: 'Take photo or upload evidence' })).toHaveAttribute(
+    // The gate focuses the camera control, so that is where aria-invalid lands.
+    // AUD-F5 split one "Take photo or upload evidence" button into a camera
+    // control and a library control; both carry the invalid state because either
+    // one satisfies the gate.
+    expect(screen.getByRole('button', { name: 'Take photo' })).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Choose photo from library' })).toHaveAttribute(
       'aria-invalid',
       'true',
     )
 
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const fileInput = document.querySelector(
+      '[data-testid="audit-photo-camera-input"]',
+    ) as HTMLInputElement
     const file = new File(['pixels'], 'evidence.png', { type: 'image/png' })
     fireEvent.change(fileInput, { target: { files: [file] } })
 

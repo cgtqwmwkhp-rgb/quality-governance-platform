@@ -62,6 +62,8 @@ import { createKnowledgeBankApi } from './knowledgeBankClient'
 import { createDocumentControlApi } from './documentControlClient'
 import { createDocumentCampaignApi } from './documentCampaignClient'
 import { createTrainingMatrixApi } from './trainingMatrixClient'
+import { createCompetenceBoardApi } from './competenceBoardClient'
+import { createCompetenceBindApi } from './competenceBindClient'
 import { createPortalComplianceApi } from './portalComplianceClient'
 import {
   beginGlobalLoading,
@@ -964,6 +966,7 @@ export type {
   AuditResponse,
   AuditResponseCreate,
   AuditResponseUpdate,
+  AuditQuestionEvidenceUpload,
   ResponseApplicability,
   AuditFindingCreate,
   AuditFindingUpdate,
@@ -1147,6 +1150,27 @@ export {
   type TrainingMatrixRosterDelta,
   type TrainingMatrixRosterDeltaItem,
 } from './trainingMatrixClient'
+
+// ============ Competence board (CB-PR1/PR3/PR4 — read-only, ADR-0026) ============
+export const competenceBoardApi = createCompetenceBoardApi(api)
+export type {
+  CompetenceBoardCell,
+  CompetenceBoardColumn,
+  CompetenceBoardFamily,
+  CompetenceBoardPerson,
+  CompetenceBoardResponse,
+  CompetenceBoardSnapshotMeta,
+} from './competenceBoardClient'
+
+// ============ Competence assessment binds (CB-UI-2 — QGP tables only) ============
+export const competenceBindApi = createCompetenceBindApi(api)
+export type {
+  CompetenceAssessmentBind,
+  CompetenceBindCreate,
+  CompetenceBindListResponse,
+  CompetenceBindMode,
+  CompetenceCharacteristic,
+} from './competenceBindClient'
 
 // ============ Portal tool + van compliance (person-scoped) ============
 export const portalComplianceApi = createPortalComplianceApi(api)
