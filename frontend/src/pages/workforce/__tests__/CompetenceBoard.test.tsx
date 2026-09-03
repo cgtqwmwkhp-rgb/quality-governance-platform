@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CompetenceBoardResponse } from '../../../api/competenceBoardClient'
 
 const getBoard = vi.fn()
+const getCoverage = vi.fn()
 const getEngineerMatrix = vi.fn()
 const startAssessment = vi.fn()
 const toastError = vi.fn()
@@ -12,6 +13,7 @@ const toastError = vi.fn()
 vi.mock('../../../api/client', () => ({
   competenceBoardApi: {
     getBoard: (family: string) => getBoard(family),
+    getCoverage: () => getCoverage(),
   },
   // CB-UI-3. The only writer this page has, and it writes a QGP assessment run.
   competenceStartApi: {
@@ -189,6 +191,8 @@ describe('CompetenceBoard (CB-UI-1)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getBoard.mockReset()
+    getCoverage.mockReset()
+    getCoverage.mockResolvedValue({ data: { items: [], forecast: [], banner: null } })
     getEngineerMatrix.mockReset()
     startAssessment.mockReset()
     toastError.mockReset()
@@ -211,6 +215,7 @@ describe('CompetenceBoard (CB-UI-1)', () => {
     // The workshop asset-type matrix is gone from this page, not merely hidden.
     expect(getEngineerMatrix).not.toHaveBeenCalled()
     expect(getBoard).toHaveBeenCalledWith('pams')
+    expect(getCoverage).not.toHaveBeenCalled()
     // Atlas is not fetched until its tab is opened.
     expect(getBoard).not.toHaveBeenCalledWith('atlas')
   })
@@ -289,6 +294,50 @@ describe('CompetenceBoard (CB-UI-1)', () => {
     expect(await screen.findByTestId('competence-board-table-atlas')).toBeInTheDocument()
     expect(getBoard).toHaveBeenCalledWith('atlas')
     expect(getBoard).not.toHaveBeenCalledWith('pams')
+    expect(getCoverage).toHaveBeenCalled()
+  })
+
+  it('lists Atlas names whose expiry will drop the site below n, and does not invent a user', async () => {
+    getBoard.mockResolvedValue({ data: ATLAS_BOARD })
+    getCoverage.mockResolvedValue({
+      data: {
+        items: [],
+        forecast: [
+          {
+            quota_id: 1,
+            location_id: 5,
+            role_key: 'first_aider',
+            template_key: 'first_aider_coverage_quorum',
+            atlas_person_id: 2,
+            atlas_name: 'Priya Office',
+            expires_on: '2026-09-20',
+            current_m: 3,
+            required_n: 2,
+          },
+        ],
+        banner: null,
+      },
+    })
+
+    await renderBoard('/workforce/dashboard?tab=people')
+
+    expect(await screen.findByTestId('competence-coverage-forecast')).toBeInTheDocument()
+    expect(screen.getByTestId('competence-coverage-forecast-2')).toHaveTextContent('Priya Office')
+    expect(screen.getByTestId('competence-coverage-forecast')).toHaveTextContent(
+      'does not create a person row or a user account',
+    )
+    expect(screen.queryByText(/field engineer/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/contract/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps the People board when coverage is 404 and invents no forecast zeros', async () => {
+    getBoard.mockResolvedValue({ data: ATLAS_BOARD })
+    getCoverage.mockRejectedValue(httpError(404, 'Competence board is not enabled in this environment.'))
+
+    await renderBoard('/workforce/dashboard?tab=people')
+
+    expect(await screen.findByTestId('competence-board-table-atlas')).toBeInTheDocument()
+    expect(screen.queryByTestId('competence-coverage-forecast')).not.toBeInTheDocument()
   })
 
   it('reports a flag-off 404 as not enabled and invents no zeros', async () => {

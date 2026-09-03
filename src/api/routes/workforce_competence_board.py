@@ -29,6 +29,7 @@ from src.core.config import settings
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
 from src.domain.services.atlas_competence_board_service import build_atlas_board_async
+from src.domain.services.competence_coverage_due_service import apply_coverage_shortfall_dues_async
 from src.domain.services.competence_coverage_service import (
     build_coverage_view_async,
     create_quota_async,
@@ -777,10 +778,27 @@ class CompetenceCoverageItem(BaseModel):
     unknown: bool
 
 
+class CompetenceCoverageForecastItem(BaseModel):
+    """Atlas person whose expiry will drop a currently-met site below n."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quota_id: int
+    location_id: int
+    role_key: str
+    template_key: str
+    atlas_person_id: int
+    atlas_name: str
+    expires_on: date
+    current_m: int
+    required_n: int
+
+
 class CompetenceCoverageResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[CompetenceCoverageItem]
+    forecast: list[CompetenceCoverageForecastItem] = Field(default_factory=list)
     banner: Optional[str] = Field(
         default=None,
         description="Honest empty/unknown notice. No Atlas import means unknown, not zero cover.",
@@ -804,7 +822,7 @@ async def get_competence_coverage(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
-    """Location coverage quorum (n of m). Never a named person, never a PAMS write."""
+    """Location coverage quorum (n of m). Forecast names stay on Atlas."""
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     view = await build_coverage_view_async(db, tenant_id)
     return CompetenceCoverageResponse(
@@ -822,6 +840,20 @@ async def get_competence_coverage(
                 unknown=state.unknown,
             )
             for state in view.items
+        ],
+        forecast=[
+            CompetenceCoverageForecastItem(
+                quota_id=row.quota_id,
+                location_id=row.location_id,
+                role_key=row.role_key,
+                template_key=row.template_key,
+                atlas_person_id=row.atlas_person_id,
+                atlas_name=row.atlas_name,
+                expires_on=row.expires_on,
+                current_m=row.current_m,
+                required_n=row.required_n,
+            )
+            for row in view.forecast
         ],
         banner=view.banner,
     )
@@ -852,6 +884,12 @@ async def create_competence_coverage_quota(
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     await db.commit()
     await db.refresh(row)
+    await apply_coverage_shortfall_dues_async(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=getattr(current_user, "id", None),
+    )
+    await db.commit()
     return _serialize_quota(row)
 
 

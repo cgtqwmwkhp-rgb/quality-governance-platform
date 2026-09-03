@@ -101,11 +101,44 @@ export type CompetenceBoardResponse = {
   banner?: string | null
 }
 
+export type CompetenceCoverageItem = {
+  quota_id: number
+  location_id: number
+  role_key: string
+  template_key: string
+  match_department?: string | null
+  required_n: number
+  current_m: number
+  met?: boolean | null
+  gap: boolean
+  unknown: boolean
+}
+
+/** Atlas name whose expiry will drop a currently-met site below n. Duty stays on the schedule. */
+export type CompetenceCoverageForecastItem = {
+  quota_id: number
+  location_id: number
+  role_key: string
+  template_key: string
+  atlas_person_id: number
+  atlas_name: string
+  expires_on: string
+  current_m: number
+  required_n: number
+}
+
+export type CompetenceCoverageResponse = {
+  items: CompetenceCoverageItem[]
+  forecast: CompetenceCoverageForecastItem[]
+  banner?: string | null
+}
+
 export function createCompetenceBoardApi(api: AxiosInstance) {
   return {
     getBoard: (family: CompetenceBoardFamily) =>
       api.get<CompetenceBoardResponse>('/api/v1/workforce/competence/board', {
         params: { family },
       }),
+    getCoverage: () => api.get<CompetenceCoverageResponse>('/api/v1/workforce/competence/coverage'),
   }
 }
