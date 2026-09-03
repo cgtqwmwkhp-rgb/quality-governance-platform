@@ -57,6 +57,7 @@ import {
   type DeviceLedgerStatus,
 } from '../services/auditDraftStore'
 import { primeDeviceLedgerIdentity } from '../services/deviceLedgerIdentity'
+import { useKeyboardInset } from '../hooks/useKeyboardInset'
 import {
   ackCapture,
   appendCapture,
@@ -555,7 +556,7 @@ const ResponseButton = ({
       aria-label={accessibleLabel}
       aria-pressed={selected}
       data-selected={selected ? 'true' : 'false'}
-      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed
+      className={`relative flex-1 flex items-center justify-center gap-2 whitespace-nowrap py-4 px-3 sm:px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed
         ${
           selected
             ? `${selectedStyles[variant]} shadow-md ring-2 ring-offset-2 ring-offset-background ring-current`
@@ -993,6 +994,12 @@ export default function AuditExecution() {
   const goPrevRef = useRef<() => void>(() => {})
 
   const runIdNum = runId ? Number(runId) : null
+
+  // AUD-P3. Keep the fixed action bar (Back / counter / Next) and the scroll
+  // padding under the answer pane above the virtual keyboard. Mounted here,
+  // unconditionally and before every early return, because hooks cannot live
+  // behind the loading / summary branches below.
+  useKeyboardInset()
 
   /** Record an unsaved edit. Every path that changes an answer goes through here. */
   const markDirty = () => {
@@ -2388,6 +2395,43 @@ export default function AuditExecution() {
     }, 600)
   }
 
+  /**
+   * AUD-P3. Enter on a single-line answer field advances, so a phone auditor
+   * can commit from the virtual keyboard.
+   *
+   * The `AUTO_ADVANCE_TYPES` widgets are real `<button>`s, so Enter already
+   * reaches `handleBinaryResponse` natively and nothing here touches them. The
+   * gap was typed answers: the window-level Arrow handler deliberately ignores
+   * events from an INPUT, which left Enter doing nothing at all and the auditor
+   * dismissing the keyboard to hunt for Next.
+   *
+   * This is exactly the Next button and nothing more — same `canAdvance`, same
+   * `goNext`, so the fail-evidence gate and per-question save behave
+   * identically whether the auditor taps or types.
+   *
+   * Only the two typed widgets use it. `text_long` needs Enter as a newline,
+   * and `date` / `datetime` open a native picker rather than the keyboard this
+   * slice is about, where Enter already means "commit the picker" — taking
+   * that over would break a control that is not currently broken.
+   */
+  const handleAnswerFieldKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return
+    // A modified Enter is not "next question", and an IME uses Enter to commit
+    // the candidate it is showing rather than to navigate.
+    if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return
+    if (event.nativeEvent.isComposing) return
+    event.preventDefault()
+    // Completing an audit stays a deliberate act: Enter never opens the review
+    // or completion flow. On the last question it drops the keyboard instead,
+    // which is what puts Finish back on screen.
+    if (isLastQuestion) {
+      event.currentTarget.blur()
+      return
+    }
+    if (!canAdvance) return
+    goNext()
+  }
+
   // Render question input based on type
   const isInverted = currentQuestion.positiveAnswer === 'no'
   const yesVariant: 'success' | 'danger' = isInverted ? 'danger' : 'success'
@@ -2529,6 +2573,8 @@ export default function AuditExecution() {
             type="text"
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
+            onKeyDown={handleAnswerFieldKeyDown}
+            enterKeyHint={isLastQuestion ? 'done' : 'next'}
             placeholder="Enter your response..."
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
           />
@@ -2551,6 +2597,8 @@ export default function AuditExecution() {
             type="number"
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
+            onKeyDown={handleAnswerFieldKeyDown}
+            enterKeyHint={isLastQuestion ? 'done' : 'next'}
             placeholder="Enter number..."
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
           />
@@ -2781,28 +2829,37 @@ export default function AuditExecution() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="field-shell bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border">
         <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          {/* Stacks rather than clips. At 390 CSS px the timer, pause,
+              details, Save and (when scheduled) Start fieldwork cannot share a
+              row with the template name — the previous single row pushed them
+              off-screen. Below `sm` the control group takes its own full-width
+              line and wraps within it, which is deterministic; from `sm` up it
+              is the original row, with the title truncating rather than
+              shoving the controls out. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3">
+            <div className="flex items-center gap-3 min-w-0 sm:flex-1">
               <button
                 onClick={() => navigate('/audits')}
                 aria-label="Go back"
-                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                className="p-2 shrink-0 hover:bg-secondary rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5 text-muted-foreground" />
               </button>
-              <div>
-                <h1 className="text-lg font-bold text-foreground">{audit.templateName}</h1>
-                <p className="text-xs text-muted-foreground">
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-foreground truncate">
+                  {audit.templateName}
+                </h1>
+                <p className="text-xs text-muted-foreground truncate">
                   {audit.asset} • {audit.location}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               {/* Timer */}
               <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-lg">
                 <Timer className="w-4 h-4 text-muted-foreground" />
@@ -2968,7 +3025,10 @@ export default function AuditExecution() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto p-4 pb-32">
+        {/* `px-4 pt-4`, not `p-4`: .field-answer-pane owns padding-bottom, and
+            a `p-4` utility would beat it — Tailwind emits the utilities layer
+            after the components layer, so equal specificity goes to `p-4`. */}
+        <div className="max-w-2xl mx-auto px-4 pt-4 field-answer-pane">
           {/* Soft-recovery prompt: shows when we found a stashed local draft
               that's newer than the server (e.g. user got logged out
               mid-audit). Lets them restore or discard. */}
