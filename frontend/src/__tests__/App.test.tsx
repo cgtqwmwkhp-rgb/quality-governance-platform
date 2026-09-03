@@ -11,6 +11,26 @@ function createToken(expOffsetSeconds: number): string {
   return `header.${payload}.signature`
 }
 
+/**
+ * RequireRole reads the role claim off the token, so a workforce route needs
+ * one. Supervisor rather than admin on purpose: admin also opens the Layout's
+ * pending-safety-lookups badge, which would drag an unrelated API call into a
+ * routing assertion.
+ */
+function createSupervisorToken(expOffsetSeconds: number): string {
+  const payload = btoa(
+    JSON.stringify({
+      sub: '1',
+      role: 'supervisor',
+      exp: Math.floor(Date.now() / 1000) + expOffsetSeconds,
+    }),
+  )
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+  return `header.${payload}.signature`
+}
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -135,6 +155,9 @@ vi.mock('../pages/workforce/TrainingExecution', () => ({
 }))
 vi.mock('../pages/workforce/Engineers', () => ({ default: () => <div>Engineers</div> }))
 vi.mock('../pages/workforce/EngineerProfile', () => ({ default: () => <div>EngineerProfile</div> }))
+vi.mock('../pages/workforce/CompetenceBoard', () => ({
+  default: () => <div>CompetenceBoard</div>,
+}))
 vi.mock('../pages/workforce/CompetencyDashboard', () => ({
   default: () => <div>CompetencyDashboard</div>,
 }))
@@ -327,6 +350,37 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/actions')
     expect(window.location.search).toBe('?sourceType=competence_gap')
     expect(screen.getByText('Actions')).toBeInTheDocument()
+  })
+
+  // CB-UI-1: Workforce → Competency is the competence board, not the WDP
+  // workshop asset-type matrix it used to land on.
+  it('serves the competence board at /workforce/dashboard', async () => {
+    localStorage.setItem('access_token', createSupervisorToken(3600))
+    window.history.pushState({}, '', '/workforce/dashboard')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByText('CompetenceBoard')).toBeInTheDocument()
+    expect(screen.queryByText('CompetencyDashboard')).not.toBeInTheDocument()
+  })
+
+  // The WDP matrix stays reachable as the kill switch for that swap.
+  it('keeps the WDP analytics matrix at /workforce/dashboard/analytics', async () => {
+    localStorage.setItem('access_token', createSupervisorToken(3600))
+    window.history.pushState({}, '', '/workforce/dashboard/analytics')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByText('CompetencyDashboard')).toBeInTheDocument()
+    expect(screen.queryByText('CompetenceBoard')).not.toBeInTheDocument()
   })
 
   // Wave 1 PR-A: Standards absorbed into /compliance programme shell.

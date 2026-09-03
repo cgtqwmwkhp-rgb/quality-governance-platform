@@ -17,6 +17,7 @@ import {
   revokeSession,
   stashReturnPath,
 } from './utils/auth'
+import { purgeDeviceLedgerForCurrentSession } from './services/auditDraftStore'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
 import { isAIIntelligenceRouteEnabled } from './config/aiIntelligenceRoute'
 import { LegacyActionItemRedirect } from './pages/actionLinks'
@@ -108,6 +109,7 @@ const WorkforceTraining = lazy(() => import('./pages/workforce/Training'))
 const WorkforceTrainingExecution = lazy(() => import('./pages/workforce/TrainingExecution'))
 const WorkforceEngineers = lazy(() => import('./pages/workforce/Engineers'))
 const WorkforceEngineerProfile = lazy(() => import('./pages/workforce/EngineerProfile'))
+const WorkforceCompetenceBoard = lazy(() => import('./pages/workforce/CompetenceBoard'))
 const WorkforceCompetencyDashboard = lazy(() => import('./pages/workforce/CompetencyDashboard'))
 const PortalNotFound = lazy(() => import('./pages/PortalNotFound'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -267,6 +269,14 @@ function App() {
 
   const handleLogout = async () => {
     await revokeSession()
+    // AUD-F6: before the token goes. The device ledger is namespaced by the
+    // token's `sub`, so once `clearAuthState()` has run there is no way to tell
+    // which rows were this auditor's — and a shared tablet handed to the next
+    // auditor must not still hold the last one's answers or photos. Deliberately
+    // NOT wired into `clearAuthState()` itself: the auth-loss path in
+    // api/client.ts calls that too, straight after flushing unsaved answers here
+    // on purpose, and a session that timed out is not a handover.
+    await purgeDeviceLedgerForCurrentSession()
     clearAuthState()
     // Signing out deliberately is not a session loss: drop the return path
     // clearAuthState() just recorded so the next sign-in starts clean.
@@ -527,8 +537,24 @@ function App() {
                   path="workforce/calendar"
                   element={<Navigate to="/calendar?types=training" replace />}
                 />
+                {/* Workforce → Competency is the competence board (CB-UI-1). It used to
+                    be the WDP workshop asset-type matrix, which reads competency_records
+                    — a table this tenant has none of — so the screen answered "who is
+                    competent on what" with grey. PAMS and Atlas hold that answer and the
+                    board API serves both families. */}
                 <Route
                   path="workforce/dashboard"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceCompetenceBoard />
+                    </RequireRole>
+                  }
+                />
+                {/* Kill switch for CB-UI-1, and the home of the WDP analytics matrix while
+                    anything still needs it. Not in the nav: it is not the competence
+                    answer, and it should not be the Competency landing again by default. */}
+                <Route
+                  path="workforce/dashboard/analytics"
                   element={
                     <RequireRole allowed={['admin', 'supervisor']}>
                       <WorkforceCompetencyDashboard />
