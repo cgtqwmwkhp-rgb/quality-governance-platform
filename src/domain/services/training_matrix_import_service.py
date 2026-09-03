@@ -15,6 +15,7 @@ from src.domain.models.training_matrix import (
     TrainingMatrixNameMap,
     TrainingMatrixPerson,
 )
+from src.domain.services.competence_coverage_due_service import apply_coverage_shortfall_dues_async
 from src.domain.services.training_matrix_parser import ParsedMatrix, normalize_course_key, normalize_person_name
 
 
@@ -290,4 +291,9 @@ async def persist_training_matrix_import(
             )
 
     await db.flush()
+    await apply_coverage_shortfall_dues_async(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=uploaded_by_user_id,
+    )
     return imp
