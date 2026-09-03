@@ -964,6 +964,7 @@ export type {
   AuditResponse,
   AuditResponseCreate,
   AuditResponseUpdate,
+  AuditQuestionEvidenceUpload,
   ResponseApplicability,
   AuditFindingCreate,
   AuditFindingUpdate,

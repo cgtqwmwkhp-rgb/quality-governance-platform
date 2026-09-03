@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   XCircle,
   Camera,
+  ImagePlus,
   MessageSquare,
   ChevronDown,
   ChevronUp,
@@ -546,7 +547,17 @@ const ScaleInput = ({
   )
 }
 
-// Photo Capture Component — files are uploaded by the parent onto evidence-assets.
+// Photo Capture Component — files are uploaded by the parent through the
+// audit-scoped capture endpoint (AUD-F5), which writes the question link.
+//
+// Two inputs, not one. A single `<input type="file" capture="environment">` is
+// camera-only on iOS: the file picker never opens, so an auditor cannot attach a
+// photo taken earlier — of the plant before it was moved, of a document back at
+// the office, of anything the shift before. `capture` is a hint the browser is
+// allowed to ignore, which is why this reads as "works fine" on desktop Chrome
+// and silently removes half the feature in the field. The library input
+// therefore omits `capture` entirely rather than setting it to a different
+// value.
 const PhotoCapture = ({
   photos,
   onAdd,
@@ -570,7 +581,8 @@ const PhotoCapture = ({
   uploading?: boolean
   loadingStored?: boolean
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const libraryInputRef = useRef<HTMLInputElement>(null)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -589,30 +601,54 @@ const PhotoCapture = ({
   return (
     <div className="space-y-3">
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         onChange={handleCapture}
         className="hidden"
         disabled={readOnly || uploading}
+        data-testid="audit-photo-camera-input"
+      />
+      <input
+        ref={libraryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleCapture}
+        className="hidden"
+        disabled={readOnly || uploading}
+        data-testid="audit-photo-library-input"
       />
 
       {!readOnly && (
-        <button
-          ref={captureButtonRef}
-          id={captureButtonId}
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-          aria-label="Take photo or upload evidence"
-          aria-invalid={ariaInvalid || undefined}
-          aria-describedby={ariaDescribedBy}
-          className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
-        >
-          {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
-          {uploading ? 'Uploading photo…' : 'Take Photo / Upload'}
-        </button>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            ref={captureButtonRef}
+            id={captureButtonId}
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Take photo"
+            aria-invalid={ariaInvalid || undefined}
+            aria-describedby={ariaDescribedBy}
+            className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
+          >
+            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+            {uploading ? 'Uploading photo…' : 'Take Photo'}
+          </button>
+          <button
+            type="button"
+            onClick={() => libraryInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Choose photo from library"
+            aria-invalid={ariaInvalid || undefined}
+            aria-describedby={ariaDescribedBy}
+            className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
+          >
+            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+            {uploading ? 'Uploading photo…' : 'Choose from Library'}
+          </button>
+        </div>
       )}
 
       {loadingStored && photos.length === 0 ? (
@@ -1888,7 +1924,15 @@ export default function AuditExecution() {
     }))
   }
 
-  /** Upload photo to evidence-assets and keep preview + asset id on the answer. */
+  /**
+   * Upload a capture through the audit-scoped endpoint and keep the preview.
+   *
+   * The server writes the answer row, the evidence asset and the join between
+   * them in one transaction (AUD-F5), so the id this returns is already linked
+   * to the question — the client no longer has to land a second save for the
+   * link to exist. The ids are still kept on the answer because that is what
+   * the fail-evidence gate and the completion resolve read.
+   */
   const attachPhotoToCurrentQuestion = async (
     previewDataUrl: string,
     file?: File,
@@ -1929,13 +1973,12 @@ export default function AuditExecution() {
 
     setUploadingPhotoFor(questionId)
     try {
-      const uploaded = await evidenceAssetsApi.upload(uploadFile, {
-        source_module: 'audit',
-        source_id: runIdNum,
+      // Local state keys questions by string; the wire wants the template id,
+      // the same conversion the per-question save does.
+      const uploaded = await auditsApi.uploadQuestionEvidence(runIdNum, Number(questionId), uploadFile, {
         title: `Audit photo — question ${questionId}`,
-        description: auditQuestionEvidenceDescription(questionId),
       })
-      const assetId = uploaded.data.id
+      const assetId = uploaded.data.evidence_asset_id
       setResponses((prev) => {
         const current = prev[questionId]
         if (!current) return prev
