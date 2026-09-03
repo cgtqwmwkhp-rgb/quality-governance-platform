@@ -4,17 +4,19 @@ All business logic and data access is delegated to
 :class:`~src.domain.services.audit_service.AuditService`.
 """
 
+import hashlib
 import html
 import logging
 import time
 import traceback
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,6 +29,7 @@ from src.api.schemas.audit import (
     AuditFindingResponse,
     AuditFindingUpdate,
     AuditQuestionCreate,
+    AuditQuestionEvidenceUploadResponse,
     AuditQuestionResponse,
     AuditQuestionUpdate,
     AuditResponseCreate,
@@ -74,6 +77,14 @@ from src.domain.models.audit import (
     AuditTemplate,
     FindingStatus,
 )
+from src.domain.models.audit_response_evidence import AuditEvidenceRole, AuditResponseEvidence
+from src.domain.models.evidence_asset import (
+    EvidenceAsset,
+    EvidenceAssetType,
+    EvidenceRetentionPolicy,
+    EvidenceSourceModule,
+    EvidenceVisibility,
+)
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.audit_analytics_service import SUPPORTED_GROUP_BY, AuditAnalyticsService
@@ -98,6 +109,12 @@ from src.domain.services.audit_service import (
     AuditService,
     question_belongs_to_run,
     require_run_tenant_id,
+)
+from src.domain.services.evidence_service import (
+    ALLOWED_CONTENT_TYPES,
+    MAX_FILE_SIZE_BYTES,
+    MIN_FILE_SIZE_BYTES,
+    resolve_evidence_content_type,
 )
 from src.domain.services.external_audit_intake_template_resolver import (
     ExternalAuditIntakeTemplateResolver,
@@ -1954,6 +1971,293 @@ async def create_response(
     http_response.status_code = status_code
     _record_audit_endpoint_event(endpoint, status_code, _elapsed_ms(started))
     return response_payload
+
+
+#: Where a capture's evidence-asset ids are projected onto the answer.
+EVIDENCE_ASSET_IDS_KEY = "evidence_asset_ids"
+
+#: Roles the join table accepts, keyed by the asset type the upload resolved to.
+#: Anything not named here is an ``attachment`` — a role is a claim about what
+#: the file is to the answer, and calling a spreadsheet a photo is a small lie
+#: that a reader of the evidence pack would have to unpick.
+_ROLE_BY_ASSET_TYPE = {
+    EvidenceAssetType.PHOTO: AuditEvidenceRole.PHOTO.value,
+    EvidenceAssetType.SIGNATURE: AuditEvidenceRole.SIGNATURE.value,
+}
+
+
+def _evidence_role_for(asset_type: EvidenceAssetType) -> str:
+    return _ROLE_BY_ASSET_TYPE.get(asset_type, AuditEvidenceRole.ATTACHMENT.value)
+
+
+def _projected_evidence_ids(existing: Optional[AuditResponse], asset_id: int) -> tuple[dict[str, Any], list[int]]:
+    """The answer's ``response_json`` with ``asset_id`` added to its id list.
+
+    The rest of the stored payload is carried over rather than replaced: the
+    answer write path merges ``response_json`` wholesale (see
+    ``AuditService.update_audit_response``), so building a fresh dict here would
+    drop ``client_revision`` and the answer's own content, and dropping the
+    revision is how a later legitimate save gets mistaken for a replay.
+
+    Two captures for the same question racing each other can still leave one id
+    off this list — both read the same base payload. That is why the join row is
+    the record and this is a projection; the frontend already unions the run's
+    listed evidence over the answer's ids, and AUD-F4 resolves what it is given
+    against the run's live assets rather than trusting the list to be complete.
+    """
+    stored = existing.response_json if existing is not None else None
+    payload: dict[str, Any] = dict(stored) if isinstance(stored, dict) else {}
+    raw = payload.get(EVIDENCE_ASSET_IDS_KEY)
+    ids: list[int] = []
+    if isinstance(raw, list):
+        for item in raw:
+            try:
+                candidate = int(item)
+            except (TypeError, ValueError):
+                continue
+            if candidate > 0 and candidate not in ids:
+                ids.append(candidate)
+    if asset_id not in ids:
+        ids.append(asset_id)
+    payload[EVIDENCE_ASSET_IDS_KEY] = ids
+    return payload, ids
+
+
+@router.post(
+    "/runs/{run_id}/evidence",
+    response_model=AuditQuestionEvidenceUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_question_evidence(
+    run_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    http_response: Response,
+    file: UploadFile = File(..., description="Captured photo or attachment"),
+    question_id: int = Form(..., description="Template question this evidence answers"),
+    title: Optional[str] = Form(None, description="Asset title"),
+    captured_at: Optional[str] = Form(None, description="When the evidence was captured (ISO datetime)"),
+    latitude: Optional[float] = Form(None, description="GPS latitude"),
+    longitude: Optional[float] = Form(None, description="GPS longitude"),
+) -> AuditQuestionEvidenceUploadResponse:
+    """Attach a capture to one question, and write the link the schema can see.
+
+    This exists because the generic ``POST /evidence-assets/upload`` cannot: it
+    knows a ``source_module`` and a ``source_id``, so the furthest it can go is
+    "this file belongs to run 87". Which *question* it answered was carried only
+    by the client, in ``response_json.evidence_asset_ids``, and on
+    AUD-2026-0087 the save that would have carried it never landed — the photos
+    were in Azure and no ``audit_responses`` row referenced them. Here the
+    answer row, the asset row and the join row are one transaction, so there is
+    no window in which the photo exists and its answer does not.
+
+    It is an *audit* route rather than a variant of the evidence route on
+    purpose. The evidence router is generic and must not learn about audit runs,
+    questions, assignees or the answer-upsert rules; teaching it those would
+    make ``src.api.routes.evidence_assets`` import audit services, which audit
+    code already imports the other way round. What is reused from that side is
+    infrastructure only: the content-type allowlist and size bounds from
+    ``evidence_service`` (a domain module that imports nothing from audits) and
+    ``src.infrastructure.storage``.
+
+    Authorisation is the execute gate — assignee, or ``audit:update`` — not
+    ``evidence:create``. ``evidence:create`` is held by anyone who may attach a
+    file to any record, which would let one tenant member push photos into a
+    colleague's audit and have them counted as that auditor's evidence.
+    """
+    endpoint = "POST /api/v1/audits/runs/{id}/evidence"
+    started = time.perf_counter()
+
+    run = await _load_run_for_answer_write(db, run_id, current_user, endpoint=endpoint, started=started)
+    question = await _load_question_for_answer_write(db, run, question_id, endpoint=endpoint, started=started)
+
+    content_type = resolve_evidence_content_type(file.filename, file.content_type)
+    if content_type is None:
+        _record_audit_endpoint_event(endpoint, 400, _elapsed_ms(started), "invalid_content_type")
+        raise BadRequestError(
+            f"Content type {file.content_type or 'unknown'} is not allowed",
+            code="INVALID_CONTENT_TYPE",
+            details={"allowed_types": sorted(ALLOWED_CONTENT_TYPES)},
+        )
+
+    file_content = await file.read()
+    file_size = len(file_content)
+    if file_size < MIN_FILE_SIZE_BYTES:
+        _record_audit_endpoint_event(endpoint, 400, _elapsed_ms(started), "file_too_small")
+        raise BadRequestError(
+            f"File is empty ({file_size} bytes) and cannot be stored as evidence",
+            code="FILE_TOO_SMALL",
+            details={"file_size": file_size, "min_size": MIN_FILE_SIZE_BYTES},
+        )
+    if file_size > MAX_FILE_SIZE_BYTES:
+        _record_audit_endpoint_event(endpoint, 400, _elapsed_ms(started), "file_too_large")
+        raise BadRequestError(
+            f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes",
+            code="FILE_TOO_LARGE",
+            details={"file_size": file_size, "max_size": MAX_FILE_SIZE_BYTES},
+        )
+
+    asset_type = EvidenceAssetType(ALLOWED_CONTENT_TYPES.get(content_type, "other"))
+    role = _evidence_role_for(asset_type)
+    checksum = hashlib.sha256(file_content).hexdigest()
+    safe_filename = (file.filename or "unnamed").replace("/", "_").replace("\\", "_")
+    storage_key = f"evidence/{EvidenceSourceModule.AUDIT.value}/{run.id}/{uuid.uuid4()}_{safe_filename}"
+
+    parsed_captured_at: Optional[datetime] = None
+    if captured_at:
+        try:
+            parsed_captured_at = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
+        except ValueError:
+            # Same tolerance as the generic upload: a clock the device could not
+            # format is not a reason to lose the photo.
+            parsed_captured_at = None
+
+    # The blob goes first. A row pointing at a blob that was never written is a
+    # broken evidence pack; a blob with no row is an orphan the storage account
+    # can be swept for, and is what the failure path below deletes.
+    from src.infrastructure.storage import StorageDependencyError, StorageError, storage_service
+
+    try:
+        await storage_service().upload(
+            storage_key=storage_key,
+            content=file_content,
+            content_type=content_type,
+            metadata={
+                "source_module": EvidenceSourceModule.AUDIT.value,
+                "source_id": str(run.id),
+                "audit_question_id": str(question.id),
+                "uploaded_by": str(current_user.id),
+                "checksum_sha256": checksum,
+            },
+        )
+    except StorageDependencyError:
+        logger.exception(
+            "Audit evidence upload blocked by storage dependency failure",
+            extra={"run_id": run.id, "question_id": question.id, "content_type": content_type},
+        )
+        _record_audit_endpoint_event(endpoint, 503, _elapsed_ms(started), "storage_dependency_unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "STORAGE_DEPENDENCY_UNAVAILABLE",
+                "message": "Evidence upload is temporarily unavailable. Please try again later or contact support.",
+            },
+        )
+    except StorageError:
+        logger.exception(
+            "Audit evidence upload failed",
+            extra={"run_id": run.id, "question_id": question.id, "content_type": content_type},
+        )
+        _record_audit_endpoint_event(endpoint, 500, _elapsed_ms(started), "storage_upload_failed")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "STORAGE_UPLOAD_FAILED",
+                "message": "Failed to upload evidence. Please retry, and contact support if the issue continues.",
+            },
+        )
+
+    try:
+        asset = EvidenceAsset(
+            storage_key=storage_key,
+            original_filename=file.filename,
+            content_type=content_type,
+            file_size_bytes=file_size,
+            checksum_sha256=checksum,
+            asset_type=asset_type,
+            source_module=EvidenceSourceModule.AUDIT,
+            source_id=str(run.id),
+            title=title,
+            # AUD-PHOTO-02's tag, still written: it is what the execute UI reads
+            # to group a run's blobs by question when an answer row is missing,
+            # and pre-F5 runs have nothing else.
+            description=f"audit_question:{question.id}",
+            captured_at=parsed_captured_at,
+            latitude=latitude,
+            longitude=longitude,
+            render_hint="thumbnail" if asset_type == EvidenceAssetType.PHOTO else "link",
+            visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+            retention_policy=EvidenceRetentionPolicy.STANDARD,
+            tenant_id=require_run_tenant_id(run),
+            created_by_id=current_user.id,
+            updated_by_id=current_user.id,
+        )
+        db.add(asset)
+        await db.flush()
+        asset_id = asset.id
+
+        existing = await _answer_row(db, run.id, question.id)
+        next_json, projected_ids = _projected_evidence_ids(existing, asset_id)
+        row, outcome = await _upsert_answer_row(
+            db,
+            run,
+            question,
+            {"response_json": next_json},
+            tenant_id=current_user.tenant_id,
+        )
+        response_id = row.id
+
+        db.add(
+            AuditResponseEvidence(
+                response_id=response_id,
+                evidence_asset_id=asset_id,
+                role=role,
+                created_by_id=current_user.id,
+            )
+        )
+        if outcome != ANSWER_REVISION_NOOP:
+            _touch_run(run)
+        # Ids are read out before the commit deliberately (AUD-F4): reading an
+        # attribute back off an instance after a commit is how this suite met
+        # MissingGreenlet on asyncpg.
+        await db.commit()
+    # Deliberately ``Exception`` and not just ``SQLAlchemyError``: the blob is
+    # already written by this point, so anything that stops the rows landing
+    # leaves an unreferenced object in the storage account. A domain error is
+    # re-raised so it still maps to its own status code — the cleanup is the
+    # only thing being added to its path.
+    except Exception as exc:
+        await db.rollback()
+        try:
+            await storage_service().delete(storage_key)
+        except StorageError:
+            logger.exception(
+                "Audit evidence cleanup failed after metadata persistence error",
+                extra={"run_id": run_id, "question_id": question_id, "storage_key": storage_key},
+            )
+        logger.exception(
+            "Audit evidence link persistence failed after blob upload",
+            extra={"run_id": run_id, "question_id": question_id, "content_type": content_type},
+        )
+        if not isinstance(exc, SQLAlchemyError):
+            raise
+        _record_audit_endpoint_event(endpoint, 500, _elapsed_ms(started), "evidence_link_persist_failed")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "AUDIT_EVIDENCE_LINK_PERSIST_FAILED",
+                "message": (
+                    "The file upload completed but it could not be linked to the answer. "
+                    "Please retry, and contact support if the issue continues."
+                ),
+            },
+        ) from exc
+
+    _set_run_etag(http_response, run)
+    _record_audit_endpoint_event(endpoint, 201, _elapsed_ms(started))
+    return AuditQuestionEvidenceUploadResponse(
+        evidence_asset_id=asset_id,
+        response_id=response_id,
+        run_id=run_id,
+        question_id=question_id,
+        role=role,
+        storage_key=storage_key,
+        original_filename=file.filename or "unnamed",
+        content_type=content_type,
+        file_size_bytes=file_size,
+        evidence_asset_ids=projected_ids,
+        message="Evidence uploaded and linked to the answer",
+    )
 
 
 @router.patch("/responses/{response_id}", response_model=AuditResponseResponse)
