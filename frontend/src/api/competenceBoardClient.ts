@@ -12,6 +12,7 @@
  * answer and callers must render it as "not enabled", never as zero coverage.
  */
 import type { AxiosInstance } from 'axios'
+import type { CompetenceBindMode } from './competenceBindClient'
 
 export type CompetenceBoardFamily = 'pams' | 'atlas'
 
@@ -39,6 +40,31 @@ export type CompetenceBoardCell = {
 export type CompetenceBoardColumn = {
   key: string
   label: string
+  /**
+   * CB-UI-3. Modes this characteristic has a bound template for. An empty (or
+   * absent) list means **unbound**: the column is still listed and the cell says
+   * no family template is mapped yet. That is a gap in QGP's mapping, not a
+   * finding against the person on the row, and it must never be greyed or
+   * painted as a fail. Always empty for the Atlas family.
+   */
+  bound_modes?: CompetenceBindMode[] | null
+}
+
+/**
+ * Whether the person *reading* the board could assess on it (CB-UI-3).
+ *
+ * Advisory. It exists so the board can offer a start only where one would be
+ * accepted, instead of letting an assessor fill a form and then be refused. The
+ * gate itself is server-side on create: ignoring this block gets a 403, not a
+ * run.
+ */
+export type CompetenceBoardAssessor = {
+  /** The viewer's own `engineers.id`, or null when their user has no record. */
+  engineer_id?: number | null
+  /** Characteristics the current PAMS snapshot issues to *this* viewer. */
+  issued_characteristic_keys?: string[] | null
+  /** Why they cannot assess anything here. Absent when they can. */
+  blocked_reason?: string | null
 }
 
 export type CompetenceBoardPerson = {
@@ -70,6 +96,7 @@ export type CompetenceBoardResponse = {
   columns: CompetenceBoardColumn[]
   people: CompetenceBoardPerson[]
   unmapped_count: number
+  assessor?: CompetenceBoardAssessor | null
   /** Honest stale/empty notice from the server. Never a grey not-assessed cell. */
   banner?: string | null
 }

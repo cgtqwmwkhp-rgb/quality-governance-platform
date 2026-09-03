@@ -39,6 +39,10 @@ from src.domain.models.user import User
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competence_change_request_service import try_send_change_request_email
 from src.domain.services.competence_demonstration_service import OverlayResult, record_assessment_demonstration_async
+from src.domain.services.competence_family_start_service import (
+    enforce_bound_template_assessor_gate_async,
+    normalise_plant_evidence,
+)
 from src.domain.services.competency_scoring_service import CompetencyScoringService
 from src.domain.services.governance_service import GovernanceService
 from src.domain.services.notification_service import NotificationService
@@ -89,6 +93,7 @@ def _to_assessment_run_response(run: AssessmentRun, **extra: Any) -> AssessmentR
         title=run.title,
         location=run.location,
         notes=run.notes,
+        plant_evidence=run.plant_evidence,
         latitude=run.latitude,
         longitude=run.longitude,
         status=_enum_str(run.status) or AssessmentStatus.DRAFT.value,
@@ -298,6 +303,24 @@ async def create_assessment_run(
     if not template_check["approved"]:
         raise _validation_error(template_check.get("reason") or "Template approval check failed")
 
+    # CB-UI-3: a run against a bound template will write a PAMS-characteristic
+    # demonstration when it completes, so it needs an assessor PAMS itself has
+    # issued. Enforced here rather than only on the board's start endpoint,
+    # because this route accepts a bound ``template_id`` directly and would
+    # otherwise be the way around the gate. Returns None — and changes nothing —
+    # for an unbound template or with the board flag off.
+    await enforce_bound_template_assessor_gate_async(
+        db,
+        tenant_id=user.tenant_id,
+        assessor_user_id=user.id,
+        engineer_id=data.engineer_id,
+        template_id=data.template_id,
+    )
+
+    plant_evidence = normalise_plant_evidence(
+        data.plant_evidence.model_dump() if data.plant_evidence is not None else None
+    )
+
     for attempt in range(_REFERENCE_RETRY_LIMIT):
         reference_number = await _generate_assessment_reference_number(db)
         run = AssessmentRun(
@@ -310,6 +333,7 @@ async def create_assessment_run(
             title=data.title,
             location=data.location,
             notes=data.notes,
+            plant_evidence=plant_evidence,
             scheduled_date=data.scheduled_date,
             status=AssessmentStatus.DRAFT,
             tenant_id=user.tenant_id,
