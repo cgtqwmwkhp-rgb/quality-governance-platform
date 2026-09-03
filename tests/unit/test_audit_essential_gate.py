@@ -99,10 +99,29 @@ class TestMissingRequiredQuestionIds:
         )
         assert missing_when_applicable == [1]
 
-    def test_hidden_by_logic_response_is_skipped(self):
+    def test_row_declared_hidden_by_logic_does_not_excuse_a_required_question(self):
+        """AUD-F4: ``applicability`` is client-written, so it cannot skip a question.
+
+        The template carries no rule that hides question 1, so the server's own
+        reading of it says the question applies. Honouring the row's snapshot
+        instead let a run mark every question ``hidden_by_logic`` and complete
+        with nothing answered.
+        """
         questions = [_question(1, criticality="essential")]
         responses = [_response(1, applicability="hidden_by_logic")]
         missing = AuditService._missing_required_question_ids(questions=questions, responses=responses)
+        assert missing == [1]
+
+    def test_a_question_the_template_really_hides_is_still_skipped(self):
+        """The row's claim is redundant when the rules agree with it, not required."""
+        q1 = _question(1, criticality="required")
+        q2 = _question(
+            2,
+            criticality="essential",
+            conditional_logic_json=[{"source_question_id": 1, "operator": "equals", "value": "yes", "action": "show"}],
+        )
+        responses = [_response(1, response_value="no"), _response(2, applicability="hidden_by_logic")]
+        missing = AuditService._missing_required_question_ids(questions=[q1, q2], responses=responses)
         assert missing == []
 
     def test_conditional_logic_hides_question_from_live_answers(self):
