@@ -55,6 +55,7 @@ from src.domain.models.audit_challenge import (
     AuditChallengeTurn,
     AuditChallengeTurnRole,
 )
+from src.domain.models.audit_response_evidence import AuditEvidenceRole, AuditResponseEvidence
 from src.domain.models.base import AuditTrailMixin, Base, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.capa import CAPAAction
 from src.domain.models.competence_assessment_bind import CompetenceAssessmentBind
@@ -351,6 +352,8 @@ __all__ = [
     "AuditRun",
     "AuditSection",
     "AuditResponse",
+    "AuditResponseEvidence",
+    "AuditEvidenceRole",
     "ComplianceEvidenceLink",
     "EvidenceLinkMethod",
     "EvidenceLinkStatus",

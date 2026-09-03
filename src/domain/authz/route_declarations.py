@@ -307,6 +307,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("GET", "/api/v1/audits/runs/{run_id}"),
         ("POST", "/api/v1/audits/runs/{run_id}/acknowledge"),
         ("POST", "/api/v1/audits/runs/{run_id}/complete"),
+        ("POST", "/api/v1/audits/runs/{run_id}/evidence"),
         ("POST", "/api/v1/audits/runs/{run_id}/responses"),
         ("PUT", "/api/v1/audits/runs/{run_id}/responses/by-question/{question_id}"),
         ("POST", "/api/v1/audits/runs/{run_id}/start"),
@@ -815,7 +816,17 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: inherits the posture of the endpoint it replaces. Closing it means a shared
 #: execute permission across the whole assignee execute path, not a gate on this
 #: one route.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 470
+#: Raised 470 -> 471 for POST /api/v1/audits/runs/{run_id}/evidence (AUD-F5).
+#: It is an answer write that happens to carry a file, and it runs the identical
+#: in-handler gate as the two answer writes above it (assignee-or-audit:update,
+#: exact tenant match, run must be writable). The alternative was worse in a way
+#: that matters: the generic evidence upload it replaces for this path is gated
+#: on ``evidence:create``, which every tenant member with attach rights holds,
+#: so declaring this route that way would let one member push photos into a
+#: colleague's audit and have them counted as that auditor's evidence. Closing
+#: it means the same shared execute permission as the rest of the assignee
+#: execute path, not a gate on this one route.
+MAX_AUTHENTICATED_ONLY_DEBT: int = 471
 #: Raised 50 -> 51 for GET /api/v1/meta/features. The alternative was to make it
 #: require authentication, which would land it in AUTHENTICATED_ONLY_DEBT — a list
 #: that is at its ceiling and deliberately closed to new entries. Requiring a

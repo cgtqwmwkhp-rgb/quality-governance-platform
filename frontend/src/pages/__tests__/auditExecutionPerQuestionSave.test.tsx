@@ -40,6 +40,9 @@ vi.mock('../../api/client', () => ({
     startRun: vi.fn().mockResolvedValue({ data: {} }),
     acknowledgeRun: vi.fn().mockResolvedValue({ data: {} }),
     completeRun: (...args: unknown[]) => mockCompleteRun(...args),
+    uploadQuestionEvidence: vi
+      .fn()
+      .mockResolvedValue({ data: { evidence_asset_id: 99, response_id: 7, evidence_asset_ids: [99] } }),
   },
   evidenceAssetsApi: {
     upload: vi.fn().mockResolvedValue({ data: { id: 99 } }),
