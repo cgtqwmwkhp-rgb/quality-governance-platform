@@ -159,10 +159,9 @@ async def test_shortfall_eager_loads_template_with_async_session(monkeypatch, si
                 today=TODAY,
             )
             requirement = await db.get(ComplianceRequirement, 31)
-
-        assert requirement is not None
-        assert requirement.next_due_date == TODAY
-        assert [row.requirement_id for row in pulled] == [31]
+            assert requirement is not None
+            assert requirement.next_due_date == TODAY
+            assert [row.requirement_id for row in pulled] == [31]
     finally:
         await engine.dispose()
 
