@@ -14,6 +14,7 @@ from typing import Annotated, Any, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1608,6 +1609,283 @@ async def complete_run(
 
 # ============== Response Endpoints ==============
 
+#: Answer-write outcomes, so the routes can pick a status code without
+#: re-reading the row to work out what happened.
+ANSWER_CREATED = "created"
+ANSWER_UPDATED = "updated"
+ANSWER_REVISION_NOOP = "revision_noop"
+
+#: Where a client's monotonic answer revision lives. Deliberately inside
+#: ``response_json`` rather than a new column: AUD-F3 is a save-path fix and
+#: must not need a migration to land (the run that lost its answers is already
+#: in production). It is echoed back on every read, so a client can see what
+#: the server believes its revision to be.
+CLIENT_REVISION_KEY = "client_revision"
+
+
+def _elapsed_ms(started: float) -> float:
+    return (time.perf_counter() - started) * 1000
+
+
+def _client_revision(response_json: Any) -> Optional[int]:
+    """Read a client revision out of a stored/incoming ``response_json``.
+
+    Tolerant reader: anything that is not a whole number is treated as "no
+    revision supplied" rather than as an error, so a client that has never
+    heard of revisions keeps working.
+    """
+    if not isinstance(response_json, dict):
+        return None
+    raw = response_json.get(CLIENT_REVISION_KEY)
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        return int(raw) if raw.is_integer() else None
+    if isinstance(raw, str):
+        try:
+            return int(raw.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _incoming_revision_is_older(existing: AuditResponse, payload: dict[str, Any]) -> bool:
+    """True when this write is a replay of an answer the row has already moved past.
+
+    Equal revisions apply: a client retrying the same write after a timeout must
+    not be told nothing happened. Only a *lower* revision is refused, and it is
+    refused as a 200 no-op — the client is not wrong, it is just late.
+    """
+    if "response_json" not in payload:
+        return False
+    incoming = _client_revision(payload["response_json"])
+    if incoming is None:
+        return False
+    stored = _client_revision(existing.response_json)
+    return stored is not None and incoming < stored
+
+
+async def _answer_row(db: AsyncSession, run_id: int, question_id: int) -> Optional[AuditResponse]:
+    result = await db.execute(
+        select(AuditResponse).where(
+            and_(
+                AuditResponse.run_id == run_id,
+                AuditResponse.question_id == question_id,
+            )
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _load_run_for_answer_write(
+    db: AsyncSession,
+    run_id: int,
+    current_user: User,
+    *,
+    endpoint: str,
+    started: float,
+) -> AuditRun:
+    """Tenant, access, and writability gates shared by every answer write.
+
+    Exact tenant match only: an earlier filter also matched runs with a NULL
+    tenant_id, which is a live set of rows in the migrated schema (the column is
+    still nullable there), so any authenticated caller could write into an
+    unattributed run belonging to another organisation. Nothing below the
+    application enforces this.
+
+    No ``If-Match`` here, deliberately (AUD-F3). Every answer write bumps
+    ``run.updated_at``, so a run-level token made a single client conflict with
+    itself: question 2's save carried the token question 1's save had already
+    invalidated, and the field client reported "updated on another device" to an
+    auditor working alone. The token still guards acknowledge / start / complete
+    / dimensions, where two devices really can disagree about a state change.
+    """
+    result = await db.execute(
+        apply_tenant_filter(
+            select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.id == run_id),
+            AuditRun,
+            current_user.tenant_id,
+        )
+    )
+    run = result.scalar_one_or_none()
+
+    if not run:
+        _record_audit_endpoint_event(endpoint, 404, _elapsed_ms(started), "run_not_found")
+        raise NotFoundError("Audit run not found")
+
+    assert_can_execute_run(current_user, run)
+
+    if _is_external_import_intake_template(run.template):
+        _record_audit_endpoint_event(endpoint, 400, _elapsed_ms(started), "external_import_non_executable")
+        raise BadRequestError("Imported external audit outcomes cannot be executed from the audit run workflow")
+
+    if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
+        _record_audit_endpoint_event(endpoint, 400, _elapsed_ms(started), "run_not_writable")
+        raise BadRequestError("Cannot submit responses to a completed audit")
+
+    if run.status == AuditStatus.SCHEDULED:
+        run.status = AuditStatus.IN_PROGRESS
+        run.started_at = datetime.now(timezone.utc)
+
+    return run
+
+
+async def _load_question_for_answer_write(
+    db: AsyncSession,
+    run: AuditRun,
+    question_id: int,
+    *,
+    endpoint: str,
+    started: float,
+) -> AuditQuestion:
+    question_result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == question_id))
+    question = question_result.scalar_one_or_none()
+    if not question or not question_belongs_to_run(run, question):
+        _record_audit_endpoint_event(
+            endpoint,
+            404,
+            _elapsed_ms(started),
+            "question_not_found" if question is None else "question_not_in_run_template",
+        )
+        # Deliberately the same message either way: a distinct one would confirm
+        # that a question the caller cannot see exists.
+        raise NotFoundError("Audit question not found")
+    return question
+
+
+def _expunge_if_present(db: AsyncSession, instance: Any) -> None:
+    """Drop a failed pending insert so the outer commit does not retry it.
+
+    The SAVEPOINT rollback is documented to expunge objects added inside the
+    block, so this is usually a no-op; it is here so that a session which does
+    still hold the instance cannot turn a recovered race into a second
+    IntegrityError at commit time.
+    """
+    try:
+        db.expunge(instance)
+    except InvalidRequestError:
+        pass
+
+
+async def _upsert_answer_row(
+    db: AsyncSession,
+    run: AuditRun,
+    question: AuditQuestion,
+    payload: dict[str, Any],
+    *,
+    tenant_id: Optional[int],
+) -> tuple[AuditResponse, str]:
+    """Insert or update the one answer row for ``(run, question)``.
+
+    Leans on the existing ``uq_audit_responses_run_question`` constraint rather
+    than on the read that precedes the write: if a concurrent writer wins the
+    insert, the IntegrityError is recovered as an update instead of surfacing as
+    a 400. That read-then-insert gap is what made a duplicate answer fatal on
+    AUD-2026-0087, where the first 400 aborted the client's remaining saves.
+
+    The insert runs inside a SAVEPOINT so that recovering from the conflict does
+    not discard the auto-start already applied to ``run`` in this transaction.
+    """
+    existing = await _answer_row(db, run.id, question.id)
+    if existing is not None and _incoming_revision_is_older(existing, payload):
+        return existing, ANSWER_REVISION_NOOP
+
+    if existing is None:
+        insert_payload = AuditScoringService.apply_derived_scores(question, payload)
+        insert_payload.setdefault("is_na", False)
+        row = AuditResponse(
+            run_id=run.id,
+            question_id=question.id,
+            tenant_id=require_run_tenant_id(run),
+            **insert_payload,
+        )
+        try:
+            async with db.begin_nested():
+                db.add(row)
+                await db.flush()
+        except IntegrityError:
+            _expunge_if_present(db, row)
+            existing = await _answer_row(db, run.id, question.id)
+            if existing is None:
+                # Not the unique constraint — a NOT NULL or FK problem we must
+                # not swallow into a silent "update".
+                raise
+            if _incoming_revision_is_older(existing, payload):
+                return existing, ANSWER_REVISION_NOOP
+        else:
+            return row, ANSWER_CREATED
+
+    service = AuditService(db)
+    updated = await service.update_audit_response(existing.id, dict(payload), tenant_id=tenant_id)
+    return updated, ANSWER_UPDATED
+
+
+async def _finish_answer_write(
+    db: AsyncSession,
+    run: AuditRun,
+    row: AuditResponse,
+    outcome: str,
+    http_response: Response,
+) -> AuditResponseResponse:
+    """Commit an answer write and stamp the fresh run token on the reply.
+
+    The ETag is returned even for a no-op so a client that has fallen behind
+    still leaves with a usable token for complete/start/acknowledge.
+    """
+    if outcome != ANSWER_REVISION_NOOP:
+        _touch_run(run)
+    await db.commit()
+    await db.refresh(row)
+    await db.refresh(run)
+    _set_run_etag(http_response, run)
+    return AuditResponseResponse.model_validate(row)
+
+
+@router.put(
+    "/runs/{run_id}/responses/by-question/{question_id}",
+    response_model=AuditResponseResponse,
+)
+async def upsert_response_by_question(
+    run_id: int,
+    question_id: int,
+    response_data: AuditResponseUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+    http_response: Response,
+) -> AuditResponseResponse:
+    """Save one question's answer, addressed by the answer's real identity.
+
+    The execute client cannot reliably know whether a row exists — that is the
+    whole defect: AUD-2026-0087 held photos in Azure with zero
+    ``audit_responses`` rows because the client's create/update decision was
+    made from state a failed save had already invalidated. Addressing the answer
+    by ``(run, question)`` removes the decision, and the unique constraint makes
+    the write idempotent.
+
+    Fields omitted from the body are left as they are. This is not a byte-for-
+    byte replace: a PUT that blanked every field the caller happened not to send
+    would let a partial retry erase an answer, which is the failure mode this
+    endpoint exists to close.
+    """
+    endpoint = "PUT /api/v1/audits/runs/{id}/responses/by-question/{question_id}"
+    started = time.perf_counter()
+
+    run = await _load_run_for_answer_write(db, run_id, current_user, endpoint=endpoint, started=started)
+    question = await _load_question_for_answer_write(db, run, question_id, endpoint=endpoint, started=started)
+
+    row, outcome = await _upsert_answer_row(
+        db,
+        run,
+        question,
+        response_data.model_dump(exclude_unset=True),
+        tenant_id=current_user.tenant_id,
+    )
+    payload = await _finish_answer_write(db, run, row, outcome, http_response)
+    _record_audit_endpoint_event(endpoint, 200, _elapsed_ms(started))
+    return payload
+
 
 @router.post(
     "/runs/{run_id}/responses",
@@ -1620,109 +1898,39 @@ async def create_response(
     db: DbSession,
     current_user: CurrentUser,
     http_response: Response,
-    if_match: IfMatchHeader = None,
 ) -> AuditResponseResponse:
-    """Submit a response to an audit question."""
+    """Submit a response to an audit question.
+
+    Kept for clients that still POST, and upsert-safe since AUD-F3: a second
+    POST for the same question updates the row and answers 200 instead of the
+    400 ``duplicate_response`` that used to abort the remaining questions in the
+    field client's save loop. Prefer
+    ``PUT /runs/{id}/responses/by-question/{question_id}``.
+
+    Takes no ``If-Match`` — see ``_load_run_for_answer_write``.
+    """
+    endpoint = "POST /api/v1/audits/runs/{id}/responses"
     started = time.perf_counter()
-    # Verify run exists and is in progress. Exact tenant match only: the
-    # previous filter also matched runs with a NULL tenant_id, which is a live
-    # set of rows in the migrated schema (the column is still nullable there),
-    # so any authenticated caller could write into an unattributed run belonging
-    # to another organisation. Nothing below the application enforces this.
-    result = await db.execute(
-        apply_tenant_filter(
-            select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.id == run_id),
-            AuditRun,
-            current_user.tenant_id,
-        )
-    )
-    run = result.scalar_one_or_none()
 
-    if not run:
-        _record_audit_endpoint_event(
-            "POST /api/v1/audits/runs/{id}/responses",
-            404,
-            (time.perf_counter() - started) * 1000,
-            "run_not_found",
-        )
-        raise NotFoundError("Audit run not found")
-
-    _gate_execute(current_user, run, if_match)
-
-    if _is_external_import_intake_template(run.template):
-        _record_audit_endpoint_event(
-            "POST /api/v1/audits/runs/{id}/responses",
-            400,
-            (time.perf_counter() - started) * 1000,
-            "external_import_non_executable",
-        )
-        raise BadRequestError("Imported external audit outcomes cannot be executed from the audit run workflow")
-
-    if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
-        _record_audit_endpoint_event(
-            "POST /api/v1/audits/runs/{id}/responses",
-            400,
-            (time.perf_counter() - started) * 1000,
-            "run_not_writable",
-        )
-        raise BadRequestError("Cannot submit responses to a completed audit")
-
-    # Auto-start if scheduled
-    if run.status == AuditStatus.SCHEDULED:
-        run.status = AuditStatus.IN_PROGRESS
-        run.started_at = datetime.now(timezone.utc)
-
-    # Check if response already exists for this question
-    existing = await db.execute(
-        select(AuditResponse).where(
-            and_(
-                AuditResponse.run_id == run_id,
-                AuditResponse.question_id == response_data.question_id,
-            )
-        )
-    )
-    if existing.scalar_one_or_none():
-        _record_audit_endpoint_event(
-            "POST /api/v1/audits/runs/{id}/responses",
-            400,
-            (time.perf_counter() - started) * 1000,
-            "duplicate_response",
-        )
-        raise BadRequestError("Response already exists for this question. Use PATCH to update.")
-
-    question_result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == response_data.question_id))
-    question = question_result.scalar_one_or_none()
-    if not question or not question_belongs_to_run(run, question):
-        _record_audit_endpoint_event(
-            "POST /api/v1/audits/runs/{id}/responses",
-            404,
-            (time.perf_counter() - started) * 1000,
-            "question_not_found" if question is None else "question_not_in_run_template",
-        )
-        # Deliberately the same message either way: a distinct one would confirm
-        # that a question the caller cannot see exists.
-        raise NotFoundError("Audit question not found")
-
-    payload = AuditScoringService.apply_derived_scores(question, response_data.model_dump())
-    response = AuditResponse(
-        run_id=run_id,
-        tenant_id=require_run_tenant_id(run),
-        **payload,
+    run = await _load_run_for_answer_write(db, run_id, current_user, endpoint=endpoint, started=started)
+    question = await _load_question_for_answer_write(
+        db, run, response_data.question_id, endpoint=endpoint, started=started
     )
 
-    db.add(response)
-    _touch_run(run)
-    await db.commit()
-    await db.refresh(response)
-    await db.refresh(run)
-
-    response_payload = AuditResponseResponse.model_validate(response)
-    _set_run_etag(http_response, run)
-    _record_audit_endpoint_event(
-        "POST /api/v1/audits/runs/{id}/responses",
-        201,
-        (time.perf_counter() - started) * 1000,
+    payload = response_data.model_dump(exclude_unset=True)
+    payload.pop("question_id", None)
+    row, outcome = await _upsert_answer_row(
+        db,
+        run,
+        question,
+        payload,
+        tenant_id=current_user.tenant_id,
     )
+
+    status_code = status.HTTP_201_CREATED if outcome == ANSWER_CREATED else status.HTTP_200_OK
+    response_payload = await _finish_answer_write(db, run, row, outcome, http_response)
+    http_response.status_code = status_code
+    _record_audit_endpoint_event(endpoint, status_code, _elapsed_ms(started))
     return response_payload
 
 
@@ -1733,9 +1941,14 @@ async def update_response(
     db: DbSession,
     current_user: CurrentUser,
     http_response: Response,
-    if_match: IfMatchHeader = None,
 ) -> AuditResponseResponse:
-    """Update an audit response."""
+    """Update an audit response.
+
+    Takes no ``If-Match`` since AUD-F3: an answer write must not fail because an
+    earlier answer in the same save bumped the run's token, and advertising a
+    precondition the handler ignores would be worse than not offering one. See
+    ``_load_run_for_answer_write``.
+    """
     result = await db.execute(
         select(AuditResponse)
         .options(selectinload(AuditResponse.run).selectinload(AuditRun.template))
@@ -1746,7 +1959,7 @@ async def update_response(
         raise NotFoundError("Audit response not found")
     if current_user.tenant_id is not None and existing.run.tenant_id != current_user.tenant_id:
         raise NotFoundError("Audit response not found")
-    _gate_execute(current_user, existing.run, if_match)
+    assert_can_execute_run(current_user, existing.run)
     service = AuditService(db)
     response = await service.update_audit_response(
         response_id,

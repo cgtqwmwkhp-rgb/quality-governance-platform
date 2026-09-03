@@ -308,6 +308,7 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
         ("POST", "/api/v1/audits/runs/{run_id}/acknowledge"),
         ("POST", "/api/v1/audits/runs/{run_id}/complete"),
         ("POST", "/api/v1/audits/runs/{run_id}/responses"),
+        ("PUT", "/api/v1/audits/runs/{run_id}/responses/by-question/{question_id}"),
         ("POST", "/api/v1/audits/runs/{run_id}/start"),
         ("DELETE", "/api/v1/audits/sections/{section_id}"),
         ("PATCH", "/api/v1/audits/sections/{section_id}"),
@@ -804,7 +805,17 @@ AUTHENTICATED_ONLY_DEBT: frozenset[EndpointKey] = frozenset(
 #: handler is assignee-or-audit:update (same gate as start/complete). A named
 #: audit:update dependency would lock portal assignees out of ack. In-handler
 #: checks do not change census posture.
-MAX_AUTHENTICATED_ONLY_DEBT: int = 469
+#: Raised 469 -> 470 for PUT
+#: /api/v1/audits/runs/{run_id}/responses/by-question/{question_id} (AUD-F3).
+#: It is the same write as the POST directly above it, addressed by the answer's
+#: real identity instead of by insert-or-update, and carries the identical
+#: in-handler gate (assignee-or-audit:update, exact tenant match). Declaring it
+#: with a named audit:update dependency would lock portal assignees out of
+#: saving their own answers — which is the defect AUD-F3 exists to fix — so it
+#: inherits the posture of the endpoint it replaces. Closing it means a shared
+#: execute permission across the whole assignee execute path, not a gate on this
+#: one route.
+MAX_AUTHENTICATED_ONLY_DEBT: int = 470
 #: Raised 50 -> 51 for GET /api/v1/meta/features. The alternative was to make it
 #: require authentication, which would land it in AUTHENTICATED_ONLY_DEBT — a list
 #: that is at its ceiling and deliberately closed to new entries. Requiring a

@@ -268,6 +268,31 @@ export function isStaleWriteError(error: unknown): boolean {
   return ax.response?.status === 409 && ax.response.data?.error?.code === 'STALE_WRITE'
 }
 
+/**
+ * Read the run's conflict token from an *answer* write's response headers.
+ *
+ * `captureAuditRunEtag` falls back to `data.updated_at`, which is correct when
+ * the body is the run and wrong here: the body is the answer row, whose
+ * `updated_at` is a different timestamp microseconds away from the run's.
+ * Keeping it guaranteed a false "updated on another device" the next time the
+ * auditor pressed Submit — the same self-inflicted conflict AUD-F3 removes from
+ * the answer path itself.
+ *
+ * Header only, therefore. When no ETag is readable, the token is dropped rather
+ * than kept: the run has demonstrably moved, so the token we hold is stale, and
+ * a request with no If-Match is explicitly supported server-side while a token
+ * we know is stale is a certain 409.
+ */
+export function runEtagFromAnswerWrite(response: unknown): string | null {
+  const headers = (
+    response as { headers?: { etag?: unknown; ETag?: unknown; get?: (name: string) => unknown } }
+  ).headers
+  const fromGet = typeof headers?.get === 'function' ? headers.get('etag') : undefined
+  const raw = fromGet ?? headers?.etag ?? headers?.ETag
+  if (raw == null || raw === '') return null
+  return String(raw).replace(/"/g, '')
+}
+
 export function scorePayloadForQuestion(
   question: SavePayloadQuestion,
   response: { response: unknown },
@@ -845,6 +870,11 @@ export default function AuditExecution() {
   // single setInterval and the snapshot provider always see fresh values
   // without re-arming the timer on every keystroke.
   const dirtyRef = useRef(false)
+  // Counts edits, so a save can tell whether the auditor typed anything while
+  // it was in flight. Without it, a pass that started before an edit would
+  // clear dirtyRef and delete the local draft on the strength of answers that
+  // never left the device (AUD-F3).
+  const editSeqRef = useRef(0)
   const responsesRef = useRef<Record<string, QuestionResponse>>({})
   const responseIdMapRef = useRef<Record<string, number>>({})
   const sectionIndexRef = useRef(0)
@@ -863,6 +893,12 @@ export default function AuditExecution() {
   const goPrevRef = useRef<() => void>(() => {})
 
   const runIdNum = runId ? Number(runId) : null
+
+  /** Record an unsaved edit. Every path that changes an answer goes through here. */
+  const markDirty = () => {
+    dirtyRef.current = true
+    editSeqRef.current += 1
+  }
 
   useEffect(
     () => () => {
@@ -1462,18 +1498,30 @@ export default function AuditExecution() {
   const isQuestionCurrentlyVisible = (question: AuditQuestion) =>
     isQuestionVisible(question.conditionalLogicRules, liveAnswers)
 
+  // Save each question on its own request, and let each one fail on its own.
+  //
+  // AUD-2026-0087 lost fourteen answers because this was one sequential loop
+  // that aborted on the first rejected question, and because the tail of a
+  // later, partially-successful pass still cleared dirtyRef and deleted the
+  // local draft. So: PUT by (run, question) — the server upserts, so we no
+  // longer have to guess whether a row exists — collect failures instead of
+  // throwing out of the loop, and only declare the server the source of truth
+  // when every question we attempted landed *and* nothing was edited while we
+  // were saving.
   const saveAllResponses = async (): Promise<boolean> => {
     if (!runIdNum || !audit) return false
 
     setSaving(true)
     setError(null)
+    const editSeqAtStart = editSeqRef.current
     try {
       const updatedIdMap = { ...responseIdMap }
+      const failures: unknown[] = []
 
       for (const [questionId, resp] of Object.entries(responses)) {
         const existingId = updatedIdMap[questionId]
         const isEmpty = responseRowIsEmpty(resp)
-        // Skip brand-new empty rows, but still PATCH clears for previously saved answers.
+        // Skip brand-new empty rows, but still persist clears for previously saved answers.
         if (isEmpty && !existingId) continue
 
         const question = allQuestions.find((candidate) => candidate.id === questionId)
@@ -1486,36 +1534,46 @@ export default function AuditExecution() {
         // completion gate + analytics can skip questions the auditor never saw.
         payload.applicability = question && !isQuestionCurrentlyVisible(question) ? 'hidden_by_logic' : 'applicable'
 
-        if (existingId) {
-          const updated = await auditsApi.updateResponse(existingId, payload, runEtagRef.current)
-          const next = captureRunEtag(updated)
-          if (next) runEtagRef.current = next
-        } else {
-          const res = await auditsApi.createResponse(runIdNum, {
-            question_id: Number(questionId),
-            ...payload,
-          }, runEtagRef.current)
-          updatedIdMap[questionId] = res.data.id
-          const next = captureRunEtag(res)
-          if (next) runEtagRef.current = next
+        try {
+          const saved = await auditsApi.upsertByQuestion(runIdNum, Number(questionId), payload)
+          updatedIdMap[questionId] = saved.data.id
+          // Answer writes send no If-Match, but they do bump the run, so the
+          // token complete/start/acknowledge will send has to be re-read here.
+          runEtagRef.current = runEtagFromAnswerWrite(saved)
+        } catch (err) {
+          failures.push(err)
         }
       }
 
       setResponseIdMap(updatedIdMap)
-      // Successful server-side save: clear the dirty flag and drop any
-      // stashed local-only draft now that the server is the source of truth.
-      dirtyRef.current = false
-      setAutosaveError(null)
-      if (runIdNum) {
-        void deleteAuditDraft(runIdNum)
-      }
-      return true
-    } catch (err) {
-      if (isStaleWriteError(err)) {
-        setConflictReload(true)
-        setError('This audit was updated on another device. Reload to continue.')
+
+      if (failures.length > 0) {
+        const stale = failures.find((err) => isStaleWriteError(err))
+        if (stale) {
+          setConflictReload(true)
+          setError('This audit was updated on another device. Reload to continue.')
+        } else {
+          setError(getApiErrorMessage(failures[0]))
+        }
         return false
       }
+
+      // Every attempted question landed. Only now is it safe to drop the local
+      // draft — and only if the auditor has not typed anything since we
+      // snapshotted, because those edits were never in this pass.
+      if (editSeqRef.current === editSeqAtStart) {
+        dirtyRef.current = false
+        if (runIdNum) {
+          void deleteAuditDraft(runIdNum)
+        }
+      }
+      setAutosaveError(null)
+      return true
+    } catch (err) {
+      // Nothing in the loop above should reach here — every request failure is
+      // collected per question. Kept so an unexpected throw is still reported
+      // as a failed save rather than as an unhandled rejection that leaves the
+      // caller thinking the answers are safe.
       setError(getApiErrorMessage(err))
       return false
     } finally {
@@ -1591,7 +1649,7 @@ export default function AuditExecution() {
     setResponseIdMap(recoveryPrompt.responseIdMap)
     setCurrentSectionIndex(recoveryPrompt.currentSectionIndex)
     setCurrentQuestionIndex(recoveryPrompt.currentQuestionIndex)
-    dirtyRef.current = true
+    markDirty()
     setRecoveryPrompt(null)
   }
 
@@ -1803,7 +1861,7 @@ export default function AuditExecution() {
   // Update response
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
     if (runCompleted) return
-    dirtyRef.current = true
+    markDirty()
     if (highlightedQuestionId === currentQuestion.id) {
       setHighlightedQuestionId(null)
     }
@@ -1870,7 +1928,7 @@ export default function AuditExecution() {
         const current = prev[questionId]
         if (!current) return prev
         const evidenceAssetIds = [...(current.evidenceAssetIds || []), assetId]
-        dirtyRef.current = true
+        markDirty()
         return {
           ...prev,
           [questionId]: {
@@ -1941,7 +1999,7 @@ export default function AuditExecution() {
       setResponses((prev) => {
         const current = prev[questionId]
         if (!current) return prev
-        dirtyRef.current = true
+        markDirty()
         return {
           ...prev,
           [questionId]: {
