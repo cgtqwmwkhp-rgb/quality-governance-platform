@@ -60,6 +60,7 @@ import {
   type AuditResponseSavePayload,
   type SavePayloadQuestion,
   formatMissingQuestionsMessage,
+  parseCompleteIntegrityRefusal,
   parseMissingQuestionIdsFromError,
   responseRowIsEmpty,
 } from './auditAnswerIntegrity'
@@ -1703,6 +1704,17 @@ export default function AuditExecution() {
         setError(message)
         setShowSummary(false)
         navigateToQuestion(String(missingQuestionIds[0]))
+        return
+      }
+      const integrityRefusal = parseCompleteIntegrityRefusal(err)
+      if (integrityRefusal) {
+        // Refused, not failed: submitting again unchanged would be refused again,
+        // so say what is missing and put the auditor back on the questions.
+        toast.error(integrityRefusal.message)
+        setError(integrityRefusal.message)
+        setShowSummary(false)
+        const firstAffected = integrityRefusal.questionIds[0]
+        if (firstAffected !== undefined) navigateToQuestion(String(firstAffected))
         return
       }
       if (isStaleWriteError(err)) {
