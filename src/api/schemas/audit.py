@@ -772,6 +772,30 @@ class AuditResponseResponse(AuditResponseBase):
     updated_at: datetime
 
 
+class AuditQuestionEvidenceUploadResponse(BaseModel):
+    """What one capture wrote (AUD-F5).
+
+    ``response_id`` and ``evidence_asset_id`` are both returned because both
+    rows are new information to the caller: the answer row may have been created
+    by this very request, and the client can no longer be the only thing that
+    knows the two are related. ``evidence_asset_ids`` is the answer's projected
+    list after the write, so a client does not have to re-read the answer to
+    know what the server now believes is attached.
+    """
+
+    evidence_asset_id: int
+    response_id: int
+    run_id: int
+    question_id: int
+    role: str
+    storage_key: str
+    original_filename: str
+    content_type: str
+    file_size_bytes: int
+    evidence_asset_ids: List[int]
+    message: str
+
+
 # ============== Audit Finding Schemas ==============
 
 
