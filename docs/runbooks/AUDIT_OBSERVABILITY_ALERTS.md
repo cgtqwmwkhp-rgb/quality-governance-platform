@@ -12,13 +12,18 @@ Audit endpoints emit structured log events with:
 - `endpoint`: bounded endpoint identifier
 - `status_code`: HTTP status
 - `duration_ms`: request execution time
-- `error_class`: bounded error category (`none`, `template_not_published`, `run_not_found`, `run_not_writable`, `duplicate_response`, `invalid_status_transition`)
+- `error_class`: bounded error category (`none`, `template_not_published`, `run_not_found`, `run_not_writable`, `external_import_non_executable`, `question_not_found`, `question_not_in_run_template`, `invalid_status_transition`)
+
+`duplicate_response` is retired as of AUD-F3: a second answer for the same
+question is now an upsert rather than a 400, so the class can no longer be
+emitted. Any historical occurrences in Log Analytics predate that change.
 
 ## Covered Endpoints
 
 - `GET /api/v1/audits/templates`
 - `POST /api/v1/audits/runs`
 - `POST /api/v1/audits/runs/{id}/responses`
+- `PUT /api/v1/audits/runs/{id}/responses/by-question/{question_id}`
 - `POST /api/v1/audits/runs/{id}/complete`
 - `POST /api/v1/audits/runs/{id}/findings`
 
@@ -72,11 +77,16 @@ AppTraces
 - Severity: Warning
 - Action: investigate DB/API performance
 
-### Warning: Duplicate Response Anomaly
+### Warning: Answer Save Failure Spike
 
-- Condition: `error_class == duplicate_response` > 20 in 15 minutes
+- Condition: `POST /api/v1/audits/runs/{id}/responses` or
+  `PUT /api/v1/audits/runs/{id}/responses/by-question/{question_id}`
+  `status_code >= 400` > 20 in 15 minutes
 - Severity: Warning
-- Action: check client retries and idempotency handling
+- Action: check for a run whose answers are being refused per question. This
+  replaces the retired `duplicate_response` alert: a duplicate answer is no
+  longer an error, so the thing worth watching is answers failing at all —
+  AUD-2026-0087 finished with photos stored and zero answer rows.
 
 ## Incident Response
 

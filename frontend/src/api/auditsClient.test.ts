@@ -5,6 +5,7 @@ function mockApi() {
   return {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
   }
@@ -146,30 +147,51 @@ describe('createAuditsApi', () => {
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/acknowledge', {}, undefined)
   })
 
-  it('forwards If-Match on execute writes only when an etag was read', () => {
+  it('forwards If-Match on run lifecycle writes only when an etag was read', () => {
     const api = mockApi()
     const audits = createAuditsApi(api as never)
     const config = { headers: { 'If-Match': 'c9fc19e955ab' } }
     audits.startRun(4, 'c9fc19e955ab')
     audits.completeRun(4, 'c9fc19e955ab')
     audits.acknowledgeRun(4, 'c9fc19e955ab')
-    audits.createResponse(9, { question_id: 1 } as never, 'c9fc19e955ab')
-    audits.updateResponse(2, { notes: 'n' } as never, 'c9fc19e955ab')
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/start', {}, config)
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/complete', {}, config)
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/4/acknowledge', {}, config)
-    expect(api.post).toHaveBeenCalledWith(
-      '/api/v1/audits/runs/9/responses',
-      { question_id: 1 },
-      config,
-    )
-    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/responses/2', { notes: 'n' }, config)
 
     audits.startRun(4, '')
     audits.startRun(4, null)
     const startCalls = api.post.mock.calls.filter((c) => c[0] === '/api/v1/audits/runs/4/start')
     expect(startCalls[1][2]).toBeUndefined()
     expect(startCalls[2][2]).toBeUndefined()
+  })
+
+  // AUD-F3 contract change, not a relaxed assertion. The If-Match token is the
+  // run's updated_at and every answer write bumps it, so sending it on answer
+  // writes made one auditor's second question conflict with their own first
+  // one. The lifecycle test above still holds the header where it means
+  // something; here the requirement is that it is absent.
+  it('never sends If-Match on answer writes, only on lifecycle writes', () => {
+    const api = mockApi()
+    const audits = createAuditsApi(api as never)
+    audits.upsertByQuestion(9, 151, { response_value: 'yes' })
+    audits.createResponse(9, { question_id: 1 } as never)
+    audits.updateResponse(2, { notes: 'n' } as never)
+
+    expect(api.put).toHaveBeenCalledWith('/api/v1/audits/runs/9/responses/by-question/151', {
+      response_value: 'yes',
+    })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/9/responses', { question_id: 1 })
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/responses/2', { notes: 'n' })
+
+    const answerCalls = [
+      ...api.put.mock.calls,
+      ...api.post.mock.calls,
+      ...api.patch.mock.calls,
+    ]
+    for (const call of answerCalls) {
+      const config = call[2] as { headers?: Record<string, string> } | undefined
+      expect(config?.headers?.['If-Match']).toBeUndefined()
+    }
   })
 
   it('findings and responses list includes optional run_id', () => {
@@ -185,12 +207,8 @@ describe('createAuditsApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/findings?page=1&page_size=10')
     audits.listFindings(1, 1, undefined, 'open')
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/findings?page=1&page_size=1&status=open')
-    expect(api.post).toHaveBeenCalledWith(
-      '/api/v1/audits/runs/9/responses',
-      { question_id: 1 },
-      undefined,
-    )
-    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/responses/2', { notes: 'n' }, undefined)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/9/responses', { question_id: 1 })
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/responses/2', { notes: 'n' })
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/9/findings', {
       title: 'f',
       description: 'd',

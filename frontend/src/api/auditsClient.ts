@@ -689,10 +689,21 @@ export function createAuditsApi(api: AxiosInstance) {
     api.post<AuditRun>(`/api/v1/audits/runs/${id}/acknowledge`, {}, ifMatchConfig(etag)),
 
   // Responses
-  createResponse: (runId: number, data: AuditResponseCreate, etag?: string | null) =>
-    api.post<AuditResponse>(`/api/v1/audits/runs/${runId}/responses`, data, ifMatchConfig(etag)),
-  updateResponse: (responseId: number, data: AuditResponseUpdate, etag?: string | null) =>
-    api.patch<AuditResponse>(`/api/v1/audits/responses/${responseId}`, data, ifMatchConfig(etag)),
+  //
+  // No If-Match on any answer write (AUD-F3). The token is the run's
+  // updated_at, and every answer bumps it, so forwarding it made one auditor's
+  // own second question conflict with their first and report "updated on
+  // another device". Lifecycle writes (acknowledge/start/complete) still send
+  // it, because there two devices really can disagree.
+  upsertByQuestion: (runId: number, questionId: number, data: AuditResponseUpdate) =>
+    api.put<AuditResponse>(
+      `/api/v1/audits/runs/${runId}/responses/by-question/${questionId}`,
+      data,
+    ),
+  createResponse: (runId: number, data: AuditResponseCreate) =>
+    api.post<AuditResponse>(`/api/v1/audits/runs/${runId}/responses`, data),
+  updateResponse: (responseId: number, data: AuditResponseUpdate) =>
+    api.patch<AuditResponse>(`/api/v1/audits/responses/${responseId}`, data),
 
   // Findings
   listFindings: (page = 1, pageSize = 10, runId?: number, status?: string) => {
