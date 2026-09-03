@@ -7,11 +7,13 @@ separate write after Atlas import / quota save. QGP never writes PAMS.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.domain.models.competence_coverage_quota import COVERAGE_ROLE_KEYS, CompetenceCoverageQuota
-from src.domain.models.compliance_schedule import ComplianceRequirement
+from src.domain.models.compliance_schedule import ComplianceRequirement, ComplianceRequirementTemplate
 from src.domain.models.training_matrix import (
     TrainingMatrixCell,
     TrainingMatrixCourse,
@@ -87,6 +89,82 @@ async def test_shortfall_pulls_the_location_due_to_today_and_not_a_person_row(si
     assert silent_audit[0]["event_type"] == "compliance_schedule.coverage_shortfall_due"
     assert silent_audit[0]["changed_fields"] == ["next_due_date"]
     assert silent_audit[0]["tenant_id"] == TENANT
+
+
+@pytest.mark.asyncio
+async def test_shortfall_eager_loads_template_with_async_session(monkeypatch, silent_audit):
+    """A fresh async session must not lazy-load ``requirement.template``."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(ComplianceRequirementTemplate.__table__.create)
+            await connection.run_sync(ComplianceRequirement.__table__.create)
+
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        template = _template()
+        async with session_factory() as db:
+            db.add_all(
+                [
+                    template,
+                    ComplianceRequirement(
+                        id=31,
+                        tenant_id=TENANT,
+                        reference_number="CSR-2026-0031",
+                        template_id=template.id,
+                        location_id=LOCATION_ID,
+                        title=template.title,
+                        taxonomy_id=template.taxonomy_id,
+                        frequency_months=12,
+                        next_due_date=date(2027, 3, 1),
+                        is_active=True,
+                    ),
+                ]
+            )
+            await db.commit()
+
+        async def _list_quotas(*args, **kwargs):
+            return [object()]
+
+        async def _load_snapshot(*args, **kwargs):
+            return object()
+
+        monkeypatch.setattr(
+            "src.domain.services.competence_coverage_due_service.list_quotas_async",
+            _list_quotas,
+        )
+        monkeypatch.setattr(
+            "src.domain.services.competence_coverage_due_service.load_atlas_snapshot_async",
+            _load_snapshot,
+        )
+        monkeypatch.setattr(
+            "src.domain.services.competence_coverage_due_service.assemble_coverage",
+            lambda **kwargs: [
+                SimpleNamespace(
+                    gap=True,
+                    unknown=False,
+                    location_id=LOCATION_ID,
+                    template_key=TEMPLATE_KEY,
+                    quota_id=1,
+                    role_key="first_aider",
+                    current_m=1,
+                    required_n=2,
+                )
+            ],
+        )
+
+        async with session_factory() as db:
+            pulled = await apply_coverage_shortfall_dues_async(
+                db,
+                tenant_id=TENANT,
+                today=TODAY,
+            )
+            requirement = await db.get(ComplianceRequirement, 31)
+
+        assert requirement is not None
+        assert requirement.next_due_date == TODAY
+        assert [row.requirement_id for row in pulled] == [31]
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

@@ -22,6 +22,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.domain.models.compliance_schedule import ComplianceRequirement, ComplianceRequirementTemplate
 from src.domain.services.audit_service import record_audit_event
@@ -74,7 +75,9 @@ async def apply_coverage_shortfall_dues_async(
         row
         for row in (
             await db.scalars(
-                select(ComplianceRequirement).where(
+                select(ComplianceRequirement)
+                .options(selectinload(ComplianceRequirement.template))
+                .where(
                     ComplianceRequirement.tenant_id == tenant_id,
                     ComplianceRequirement.location_id.in_(list(location_ids)),
                 )
@@ -102,8 +105,9 @@ async def apply_coverage_shortfall_dues_async(
     pulled: list[CoverageDuePull] = []
     for requirement in requirements:
         template = getattr(requirement, "template", None)
-        if template is None:
-            template = templates_by_id.get(getattr(requirement, "template_id", None))
+        template_id = getattr(requirement, "template_id", None)
+        if template is None and template_id is not None:
+            template = templates_by_id.get(template_id)
         template_key = getattr(template, "template_key", None) if template is not None else None
         if not template_key:
             continue
