@@ -162,6 +162,22 @@ class _FakeResult:
         return self._entity
 
 
+class _Savepoint:
+    """Stands in for ``AsyncSession.begin_nested()``.
+
+    The route wraps its insert in a SAVEPOINT so a lost unique-constraint race
+    can be recovered as an update without discarding the rest of the
+    transaction. Nothing here races, so the savepoint is a no-op; the recovery
+    itself is exercised in tests/integration/test_audit_response_upsert_by_question.py.
+    """
+
+    async def __aenter__(self) -> "_Savepoint":
+        return self
+
+    async def __aexit__(self, *_exc: object) -> bool:
+        return False
+
+
 class _RecordingSession:
     """Returns queued results in order and records what was added.
 
@@ -183,6 +199,12 @@ class _RecordingSession:
     def add(self, entity: object) -> None:
         self.added.append(entity)
 
+    def begin_nested(self) -> _Savepoint:
+        return _Savepoint()
+
+    async def flush(self) -> None:
+        return None
+
     async def commit(self) -> None:
         return None
 
@@ -202,9 +224,6 @@ class _ServiceRecordingSession(_RecordingSession):
         assert model is AuditQuestion
         assert entity_id == self.question.id
         return self.question
-
-    async def flush(self) -> None:
-        return None
 
 
 def _run(*, tenant_id: int | None, template_id: int = 1) -> SimpleNamespace:
@@ -229,11 +248,14 @@ def _question(*, question_id: int = 5, template_id: int = 1) -> AuditQuestion:
     )
 
 
+# Queued in the order the route asks for them: the run, the question, then the
+# existing answer row for (run, question). The question is resolved before the
+# row because the upsert needs it to score whichever branch it takes.
 @pytest.mark.asyncio
 async def test_created_response_is_stamped_with_the_runs_tenant_not_the_callers() -> None:
     """Fails if the stamp is ever "simplified" to ``current_user.tenant_id``."""
     run = _run(tenant_id=RUN_TENANT)
-    db = _RecordingSession([run, None, _question()])
+    db = _RecordingSession([run, _question(), None])
 
     await create_response(
         run_id=run.id,
@@ -277,7 +299,7 @@ async def test_service_discards_a_caller_supplied_tenant_id_before_constructing_
 async def test_create_response_refuses_a_run_that_is_not_attributed_to_a_tenant() -> None:
     """No row is written, rather than one carrying the caller's tenant."""
     run = _run(tenant_id=None)
-    db = _RecordingSession([run, None, _question()])
+    db = _RecordingSession([run, _question(), None])
 
     with pytest.raises(BadRequestError, match="not attributed to a tenant"):
         await create_response(
@@ -341,13 +363,23 @@ async def test_create_response_matches_nothing_when_the_caller_has_no_tenant() -
     assert "FALSE" in sql or "1 != 1" in sql
 
 
-def test_create_response_source_has_no_permissive_tenant_branch() -> None:
-    """Guards the shape as well as one compiled statement."""
+def test_answer_write_run_lookup_has_no_permissive_tenant_branch() -> None:
+    """Guards the shape as well as one compiled statement.
+
+    The lookup itself now lives in ``_load_run_for_answer_write``, which the
+    POST and the by-question PUT both go through, so both handlers and the
+    shared helper are scanned. Scanning only ``create_response`` would leave the
+    branch that matched NULL-tenant runs free to come back one level down.
+    """
     import inspect
 
-    source = inspect.getsource(create_response)
-    assert "is_(None)" not in source
-    assert "AuditRun.tenant_id" not in source
+    from src.api.routes.audits import _load_run_for_answer_write, upsert_response_by_question
+
+    for handler in (create_response, upsert_response_by_question, _load_run_for_answer_write):
+        source = inspect.getsource(handler)
+        assert "is_(None)" not in source, handler.__name__
+        assert "or_(" not in source, handler.__name__
+        assert "AuditRun.tenant_id" not in source, handler.__name__
 
 
 # ---------------------------------------------------------------------------

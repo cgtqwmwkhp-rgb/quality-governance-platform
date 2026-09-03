@@ -52,6 +52,7 @@ import {
   auditQuestionEvidenceDescription,
   dataUrlToFile,
   extractEvidenceAssetIds,
+  mergeListedEvidenceIdsIntoMap,
   signatureUploadFilename,
 } from './auditExecutionPhotoEvidence'
 import {
@@ -59,6 +60,7 @@ import {
   type AuditResponseSavePayload,
   type SavePayloadQuestion,
   formatMissingQuestionsMessage,
+  parseCompleteIntegrityRefusal,
   parseMissingQuestionIdsFromError,
   responseRowIsEmpty,
 } from './auditAnswerIntegrity'
@@ -265,6 +267,31 @@ export function canAdvancePastFailEvidenceGate(
 export function isStaleWriteError(error: unknown): boolean {
   const ax = error as { response?: { status?: number; data?: { error?: { code?: string } } } }
   return ax.response?.status === 409 && ax.response.data?.error?.code === 'STALE_WRITE'
+}
+
+/**
+ * Read the run's conflict token from an *answer* write's response headers.
+ *
+ * `captureAuditRunEtag` falls back to `data.updated_at`, which is correct when
+ * the body is the run and wrong here: the body is the answer row, whose
+ * `updated_at` is a different timestamp microseconds away from the run's.
+ * Keeping it guaranteed a false "updated on another device" the next time the
+ * auditor pressed Submit — the same self-inflicted conflict AUD-F3 removes from
+ * the answer path itself.
+ *
+ * Header only, therefore. When no ETag is readable, the token is dropped rather
+ * than kept: the run has demonstrably moved, so the token we hold is stale, and
+ * a request with no If-Match is explicitly supported server-side while a token
+ * we know is stale is a certain 409.
+ */
+export function runEtagFromAnswerWrite(response: unknown): string | null {
+  const headers = (
+    response as { headers?: { etag?: unknown; ETag?: unknown; get?: (name: string) => unknown } }
+  ).headers
+  const fromGet = typeof headers?.get === 'function' ? headers.get('etag') : undefined
+  const raw = fromGet ?? headers?.etag ?? headers?.ETag
+  if (raw == null || raw === '') return null
+  return String(raw).replace(/"/g, '')
 }
 
 export function scorePayloadForQuestion(
@@ -530,6 +557,7 @@ const PhotoCapture = ({
   ariaDescribedBy,
   readOnly = false,
   uploading = false,
+  loadingStored = false,
 }: {
   photos: string[]
   onAdd: (photo: string, file?: File) => void
@@ -540,6 +568,7 @@ const PhotoCapture = ({
   ariaDescribedBy?: string
   readOnly?: boolean
   uploading?: boolean
+  loadingStored?: boolean
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
@@ -586,6 +615,16 @@ const PhotoCapture = ({
         </button>
       )}
 
+      {loadingStored && photos.length === 0 ? (
+        <p
+          className="text-sm text-muted-foreground flex items-center justify-center gap-2 py-2"
+          data-testid="audit-stored-photos-loading"
+        >
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading stored photos…
+        </p>
+      ) : null}
+
       {photos.length > 0 ? (
         <div className="grid grid-cols-3 gap-2">
           {photos.map((photo, idx) => (
@@ -616,7 +655,7 @@ const PhotoCapture = ({
             </div>
           ))}
         </div>
-      ) : readOnly ? (
+      ) : loadingStored ? null : readOnly ? (
         <p className="text-sm text-muted-foreground">No photo evidence stored for this question.</p>
       ) : null}
 
@@ -804,7 +843,12 @@ export default function AuditExecution() {
   const [showGuidance, setShowGuidance] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [runCompleted, setRunCompleted] = useState(false)
+  const [runStatus, setRunStatus] = useState<string | null>(null)
+  const [fieldworkStarting, setFieldworkStarting] = useState(false)
   const [uploadingPhotoFor, setUploadingPhotoFor] = useState<string | null>(null)
+  const [hydratingEvidenceQuestionId, setHydratingEvidenceQuestionId] = useState<string | null>(
+    null,
+  )
   const [completionSummary, setCompletionSummary] = useState<CompletionSummary | null>(null)
   const [stayOnCompletionProof, setStayOnCompletionProof] = useState(false)
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
@@ -827,6 +871,11 @@ export default function AuditExecution() {
   // single setInterval and the snapshot provider always see fresh values
   // without re-arming the timer on every keystroke.
   const dirtyRef = useRef(false)
+  // Counts edits, so a save can tell whether the auditor typed anything while
+  // it was in flight. Without it, a pass that started before an edit would
+  // clear dirtyRef and delete the local draft on the strength of answers that
+  // never left the device (AUD-F3).
+  const editSeqRef = useRef(0)
   const responsesRef = useRef<Record<string, QuestionResponse>>({})
   const responseIdMapRef = useRef<Record<string, number>>({})
   const sectionIndexRef = useRef(0)
@@ -845,6 +894,12 @@ export default function AuditExecution() {
   const goPrevRef = useRef<() => void>(() => {})
 
   const runIdNum = runId ? Number(runId) : null
+
+  /** Record an unsaved edit. Every path that changes an answer goes through here. */
+  const markDirty = () => {
+    dirtyRef.current = true
+    editSeqRef.current += 1
+  }
 
   useEffect(
     () => () => {
@@ -873,6 +928,81 @@ export default function AuditExecution() {
   useEffect(() => {
     savingRef.current = saving
   }, [saving])
+
+  const previewQuestionId =
+    audit?.sections[currentSectionIndex]?.questions[currentQuestionIndex]?.id ?? null
+  const previewEvidenceKey = previewQuestionId
+    ? `${previewQuestionId}:${(responses[previewQuestionId]?.evidenceAssetIds || []).join(',')}`
+    : ''
+
+  // AUD-F2: download preview bytes for the *current* question only. Listing
+  // every JPEG on open is what made 0087 feel like a 14-question blank form
+  // while Azure still held 3.5MB files. Do not mark dirty — this is display.
+  useEffect(() => {
+    if (!audit) return
+    const section = audit.sections[currentSectionIndex]
+    const question = section?.questions[currentQuestionIndex]
+    if (!question) return
+
+    const resp = responsesRef.current[question.id]
+    const ids = resp?.evidenceAssetIds || []
+    if (ids.length === 0) return
+
+    const isSignatureQuestion = question.type === 'signature'
+    if (isSignatureQuestion && resp?.signature) return
+    if (!isSignatureQuestion && (resp?.photos?.length ?? 0) > 0) return
+
+    let cancelled = false
+    const createdPreviewUrls: string[] = []
+
+    const loadPreviews = async () => {
+      setHydratingEvidenceQuestionId(question.id)
+      try {
+        const urls = await Promise.all(
+          ids.map(async (assetId) => {
+            try {
+              const content = await evidenceAssetsApi.getContent(assetId, 'inline')
+              if (cancelled) return null
+              const url = URL.createObjectURL(content.data)
+              createdPreviewUrls.push(url)
+              return url
+            } catch {
+              return null
+            }
+          }),
+        )
+        if (cancelled) {
+          createdPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+          return
+        }
+        const previewUrls = urls.filter((url): url is string => Boolean(url))
+        hydratedPreviewUrls.current.push(...createdPreviewUrls)
+        setResponses((prev) => {
+          const current = prev[question.id]
+          if (!current) return prev
+          if (isSignatureQuestion && current.signature) return prev
+          if (!isSignatureQuestion && (current.photos?.length ?? 0) > 0) return prev
+          return {
+            ...prev,
+            [question.id]: {
+              ...current,
+              photos: isSignatureQuestion ? current.photos : previewUrls,
+              signature: isSignatureQuestion ? previewUrls[0] : current.signature,
+            },
+          }
+        })
+      } finally {
+        if (!cancelled) {
+          setHydratingEvidenceQuestionId((id) => (id === question.id ? null : id))
+        }
+      }
+    }
+
+    void loadPreviews()
+    return () => {
+      cancelled = true
+    }
+  }, [audit, currentSectionIndex, currentQuestionIndex, previewEvidenceKey])
 
   useEffect(() => {
     if (!completionSummary || stayOnCompletionProof) return
@@ -1063,68 +1193,46 @@ export default function AuditExecution() {
           idMap[qId] = r.id
         }
 
-        // Hydrate thumbnails from evidence-assets, reading the bytes through the API
-        // rather than a blob SAS URL so previews do not depend on storage CORS.
-        // Also recover links for older runs that only stored "captured" by listing run evidence.
-        const listed =
-          Object.values(existingResponses).some((r) => (r.evidenceAssetIds?.length ?? 0) === 0)
-            ? await evidenceAssetsApi
-                .list({ source_module: 'audit', source_id: runIdNum, page_size: 100 })
-                .then((res) => res.data.items || [])
-                .catch(() => [])
-            : []
+        // AUD-F2: always list run evidence (page_size 100). Empty
+        // `audit_responses` used to skip the list (`.some()` on {}), so
+        // 0087's Azure blobs never attached. Attach by description even when
+        // there is no response row. Preview bytes load lazily for the
+        // current question — not every JPEG on open.
+        const listed = await evidenceAssetsApi
+          .list({ source_module: 'audit', source_id: runIdNum, page_size: 100 })
+          .then((res) => res.data.items || [])
+          .catch(() => [])
 
-        const createdPreviewUrls: string[] = []
-
-        await Promise.all(
-          Object.entries(existingResponses).map(async ([qId, resp]) => {
-            let ids = resp.evidenceAssetIds || []
-            if (ids.length === 0 && listed.length > 0) {
-              const needle = auditQuestionEvidenceDescription(qId)
-              ids = listed
-                .filter((asset) => (asset.description || '').includes(needle))
-                .map((asset) => asset.id)
-            }
-            if (ids.length === 0) return
-            const urls = await Promise.all(
-              ids.map(async (assetId) => {
-                try {
-                  const content = await evidenceAssetsApi.getContent(assetId, 'inline')
-                  const url = URL.createObjectURL(content.data)
-                  createdPreviewUrls.push(url)
-                  return url
-                } catch {
-                  return null
-                }
-              }),
-            )
-            const previewUrls = urls.filter((url): url is string => Boolean(url))
-            const isSignatureQuestion = questionTypeMap[qId] === 'signature'
-            existingResponses[qId] = {
-              ...resp,
-              evidenceAssetIds: ids,
-              photos: isSignatureQuestion ? [] : previewUrls,
-              signature: isSignatureQuestion ? previewUrls[0] : resp.signature,
-              response:
-                resp.response ??
-                (ids.length > 0
-                  ? isSignatureQuestion
-                    ? 'signed'
-                    : 'captured'
-                  : resp.response),
-            }
-          }),
+        const mergedIds = mergeListedEvidenceIdsIntoMap(
+          Object.fromEntries(
+            Object.entries(existingResponses).map(([qId, resp]) => [
+              qId,
+              resp.evidenceAssetIds || [],
+            ]),
+          ),
+          listed,
+          new Set(Object.keys(questionTypeMap)),
         )
 
-        if (cancelled) {
-          // Nothing will render these, so nothing else will ever revoke them.
-          createdPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
-          return
+        for (const [qId, ids] of Object.entries(mergedIds)) {
+          if (ids.length === 0) continue
+          const current = existingResponses[qId]
+          existingResponses[qId] = {
+            questionId: qId,
+            response: current?.response ?? null,
+            notes: current?.notes,
+            timestamp: current?.timestamp || '',
+            entityLabel: current?.entityLabel,
+            evidenceAssetIds: ids,
+            photos: current?.photos || [],
+            signature: current?.signature,
+          }
         }
 
-        // The previous load's thumbnails are about to be replaced in state.
+        if (cancelled) return
+
         hydratedPreviewUrls.current.forEach((url) => URL.revokeObjectURL(url))
-        hydratedPreviewUrls.current = createdPreviewUrls
+        hydratedPreviewUrls.current = []
 
         setAudit({
           id: String(runData.id),
@@ -1146,6 +1254,7 @@ export default function AuditExecution() {
         setResponseIdMap(idMap)
         const alreadyCompleted = runData.status === 'completed'
         setRunCompleted(alreadyCompleted)
+        setRunStatus(runData.status || null)
 
         if (alreadyCompleted) {
           const findings = runData.findings || []
@@ -1162,36 +1271,9 @@ export default function AuditExecution() {
 
         runEtagRef.current = runData.updated_at || null
         setConflictReload(false)
-        let stale = false
-
-        if (!alreadyCompleted && !runData.acknowledged_at) {
-          try {
-            const ack = await auditsApi.acknowledgeRun(runIdNum, runEtagRef.current)
-            const next = captureRunEtag(ack)
-            if (next) runEtagRef.current = next
-          } catch (err) {
-            if (isStaleWriteError(err)) {
-              stale = true
-              setConflictReload(true)
-            } else {
-              throw err
-            }
-          }
-        }
-
-        if (runData.status === 'scheduled' && !stale) {
-          try {
-            const started = await auditsApi.startRun(runIdNum, runEtagRef.current)
-            const next = captureRunEtag(started)
-            if (next) runEtagRef.current = next
-          } catch (err) {
-            if (isStaleWriteError(err)) {
-              setConflictReload(true)
-            } else {
-              throw err
-            }
-          }
-        }
+        // AUD-F1: open is GET-only. Acknowledge/start are an explicit
+        // "Start fieldwork" action. A failed write must not run after a
+        // successful GET and paint Network error over a loaded run.
       } catch (err) {
         if (!cancelled) {
           setError(getApiErrorMessage(err))
@@ -1417,18 +1499,30 @@ export default function AuditExecution() {
   const isQuestionCurrentlyVisible = (question: AuditQuestion) =>
     isQuestionVisible(question.conditionalLogicRules, liveAnswers)
 
+  // Save each question on its own request, and let each one fail on its own.
+  //
+  // AUD-2026-0087 lost fourteen answers because this was one sequential loop
+  // that aborted on the first rejected question, and because the tail of a
+  // later, partially-successful pass still cleared dirtyRef and deleted the
+  // local draft. So: PUT by (run, question) — the server upserts, so we no
+  // longer have to guess whether a row exists — collect failures instead of
+  // throwing out of the loop, and only declare the server the source of truth
+  // when every question we attempted landed *and* nothing was edited while we
+  // were saving.
   const saveAllResponses = async (): Promise<boolean> => {
     if (!runIdNum || !audit) return false
 
     setSaving(true)
     setError(null)
+    const editSeqAtStart = editSeqRef.current
     try {
       const updatedIdMap = { ...responseIdMap }
+      const failures: unknown[] = []
 
       for (const [questionId, resp] of Object.entries(responses)) {
         const existingId = updatedIdMap[questionId]
         const isEmpty = responseRowIsEmpty(resp)
-        // Skip brand-new empty rows, but still PATCH clears for previously saved answers.
+        // Skip brand-new empty rows, but still persist clears for previously saved answers.
         if (isEmpty && !existingId) continue
 
         const question = allQuestions.find((candidate) => candidate.id === questionId)
@@ -1441,36 +1535,46 @@ export default function AuditExecution() {
         // completion gate + analytics can skip questions the auditor never saw.
         payload.applicability = question && !isQuestionCurrentlyVisible(question) ? 'hidden_by_logic' : 'applicable'
 
-        if (existingId) {
-          const updated = await auditsApi.updateResponse(existingId, payload, runEtagRef.current)
-          const next = captureRunEtag(updated)
-          if (next) runEtagRef.current = next
-        } else {
-          const res = await auditsApi.createResponse(runIdNum, {
-            question_id: Number(questionId),
-            ...payload,
-          }, runEtagRef.current)
-          updatedIdMap[questionId] = res.data.id
-          const next = captureRunEtag(res)
-          if (next) runEtagRef.current = next
+        try {
+          const saved = await auditsApi.upsertByQuestion(runIdNum, Number(questionId), payload)
+          updatedIdMap[questionId] = saved.data.id
+          // Answer writes send no If-Match, but they do bump the run, so the
+          // token complete/start/acknowledge will send has to be re-read here.
+          runEtagRef.current = runEtagFromAnswerWrite(saved)
+        } catch (err) {
+          failures.push(err)
         }
       }
 
       setResponseIdMap(updatedIdMap)
-      // Successful server-side save: clear the dirty flag and drop any
-      // stashed local-only draft now that the server is the source of truth.
-      dirtyRef.current = false
-      setAutosaveError(null)
-      if (runIdNum) {
-        void deleteAuditDraft(runIdNum)
-      }
-      return true
-    } catch (err) {
-      if (isStaleWriteError(err)) {
-        setConflictReload(true)
-        setError('This audit was updated on another device. Reload to continue.')
+
+      if (failures.length > 0) {
+        const stale = failures.find((err) => isStaleWriteError(err))
+        if (stale) {
+          setConflictReload(true)
+          setError('This audit was updated on another device. Reload to continue.')
+        } else {
+          setError(getApiErrorMessage(failures[0]))
+        }
         return false
       }
+
+      // Every attempted question landed. Only now is it safe to drop the local
+      // draft — and only if the auditor has not typed anything since we
+      // snapshotted, because those edits were never in this pass.
+      if (editSeqRef.current === editSeqAtStart) {
+        dirtyRef.current = false
+        if (runIdNum) {
+          void deleteAuditDraft(runIdNum)
+        }
+      }
+      setAutosaveError(null)
+      return true
+    } catch (err) {
+      // Nothing in the loop above should reach here — every request failure is
+      // collected per question. Kept so an unexpected throw is still reported
+      // as a failed save rather than as an unhandled rejection that leaves the
+      // caller thinking the answers are safe.
       setError(getApiErrorMessage(err))
       return false
     } finally {
@@ -1484,6 +1588,30 @@ export default function AuditExecution() {
 
   const handleSaveDraft = async () => {
     await saveAllResponses()
+  }
+
+  const handleStartFieldwork = async () => {
+    if (!runIdNum || runCompleted || runStatus !== 'scheduled') return
+    setFieldworkStarting(true)
+    try {
+      const ack = await auditsApi.acknowledgeRun(runIdNum, runEtagRef.current)
+      const afterAck = captureRunEtag(ack)
+      if (afterAck) runEtagRef.current = afterAck
+      const started = await auditsApi.startRun(runIdNum, runEtagRef.current)
+      const afterStart = captureRunEtag(started)
+      if (afterStart) runEtagRef.current = afterStart
+      setRunStatus('in_progress')
+      setError(null)
+    } catch (err) {
+      if (isStaleWriteError(err)) {
+        setConflictReload(true)
+        setError('This audit was updated on another device. Reload to continue.')
+        return
+      }
+      setError(getApiErrorMessage(err, 'Could not start fieldwork. The audit is still open on this device.'))
+    } finally {
+      setFieldworkStarting(false)
+    }
   }
 
   const handleSaveDimensions = async (next: AssessmentDimensionsValue) => {
@@ -1522,7 +1650,7 @@ export default function AuditExecution() {
     setResponseIdMap(recoveryPrompt.responseIdMap)
     setCurrentSectionIndex(recoveryPrompt.currentSectionIndex)
     setCurrentQuestionIndex(recoveryPrompt.currentQuestionIndex)
-    dirtyRef.current = true
+    markDirty()
     setRecoveryPrompt(null)
   }
 
@@ -1576,6 +1704,17 @@ export default function AuditExecution() {
         setError(message)
         setShowSummary(false)
         navigateToQuestion(String(missingQuestionIds[0]))
+        return
+      }
+      const integrityRefusal = parseCompleteIntegrityRefusal(err)
+      if (integrityRefusal) {
+        // Refused, not failed: submitting again unchanged would be refused again,
+        // so say what is missing and put the auditor back on the questions.
+        toast.error(integrityRefusal.message)
+        setError(integrityRefusal.message)
+        setShowSummary(false)
+        const firstAffected = integrityRefusal.questionIds[0]
+        if (firstAffected !== undefined) navigateToQuestion(String(firstAffected))
         return
       }
       if (isStaleWriteError(err)) {
@@ -1734,7 +1873,7 @@ export default function AuditExecution() {
   // Update response
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
     if (runCompleted) return
-    dirtyRef.current = true
+    markDirty()
     if (highlightedQuestionId === currentQuestion.id) {
       setHighlightedQuestionId(null)
     }
@@ -1801,7 +1940,7 @@ export default function AuditExecution() {
         const current = prev[questionId]
         if (!current) return prev
         const evidenceAssetIds = [...(current.evidenceAssetIds || []), assetId]
-        dirtyRef.current = true
+        markDirty()
         return {
           ...prev,
           [questionId]: {
@@ -1872,7 +2011,7 @@ export default function AuditExecution() {
       setResponses((prev) => {
         const current = prev[questionId]
         if (!current) return prev
-        dirtyRef.current = true
+        markDirty()
         return {
           ...prev,
           [questionId]: {
@@ -2229,6 +2368,7 @@ export default function AuditExecution() {
             photos={currentResponse?.photos || []}
             readOnly={runCompleted}
             uploading={uploadingPhotoFor === currentQuestion.id}
+            loadingStored={hydratingEvidenceQuestionId === currentQuestion.id}
             onAdd={(photo, file) => {
               void attachPhotoToCurrentQuestion(photo, file, { markCaptured: true })
             }}
@@ -2440,6 +2580,23 @@ export default function AuditExecution() {
                 )}
                 Save
               </button>
+
+              {runStatus === 'scheduled' ? (
+                <button
+                  type="button"
+                  onClick={() => void handleStartFieldwork()}
+                  disabled={fieldworkStarting}
+                  data-testid="start-fieldwork"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:opacity-90 disabled:opacity-50"
+                >
+                  {fieldworkStarting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4" />
+                  )}
+                  Start fieldwork
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -2476,6 +2633,15 @@ export default function AuditExecution() {
           error={dimensionsError}
         />
       )}
+
+      {runStatus === 'scheduled' ? (
+        <div
+          className="bg-warning/10 border-b border-warning/20 px-4 py-2 text-sm text-warning"
+          data-testid="planned-not-started"
+        >
+          Planned — not started. Opening this screen does not begin fieldwork.
+        </div>
+      ) : null}
 
       {/* Error Banner */}
       {error && (
@@ -2714,6 +2880,7 @@ export default function AuditExecution() {
                     photos={currentResponse?.photos || []}
                     readOnly={runCompleted}
                     uploading={uploadingPhotoFor === currentQuestion.id}
+                    loadingStored={hydratingEvidenceQuestionId === currentQuestion.id}
                     captureButtonRef={evidenceCaptureRef}
                     captureButtonId={`fail-evidence-capture-${currentQuestion.id}`}
                     ariaInvalid={failEvidenceGateError}

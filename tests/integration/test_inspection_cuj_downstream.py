@@ -14,10 +14,12 @@ from src.domain.models.audit import (
     AuditSection,
     AuditStatus,
     AuditTemplate,
+    QuestionCriticality,
     audit_finding_risks,
 )
 from src.domain.models.capa import CAPAAction, CAPASource
 from src.domain.models.risk_register import EnterpriseRisk
+from src.domain.services.audit_service import COMPLETE_NO_APPLICABLE_ANSWERS
 from src.infrastructure.database import engine
 from tests.conftest import generate_test_reference
 
@@ -235,6 +237,53 @@ async def test_complete_run_materializes_finding_capa_and_risk(
     assert action.reference_number in (risks[0].linked_actions or [])
     assert finding.risk_ids_json == [risks[0].id]
     assert await _junction_risk_ids(test_session, finding.id) == [risks[0].id]
+
+
+async def test_complete_run_refuses_a_run_with_no_answers(
+    client,
+    test_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    """AUD-F4: nothing required outstanding is not the same as something audited.
+
+    Every question here is ``good_to_have``, so the required-question gate has
+    nothing to report — which is exactly how a run reached "completed" carrying no
+    answers, and a verdict about nothing. The refusal carries its own code and
+    leaves no finding, action or risk behind.
+    """
+    run, _ = await _inspection_run(test_session, with_failed_response=False)
+    section = AuditSection(template_id=run.template_id, title="Optional observations", sort_order=1)
+    test_session.add(section)
+    await test_session.flush()
+    test_session.add(
+        AuditQuestion(
+            template_id=run.template_id,
+            section_id=section.id,
+            question_text="Anything else worth noting?",
+            question_type="yes_no",
+            positive_answer="yes",
+            is_required=False,
+            criticality=QuestionCriticality.GOOD_TO_HAVE,
+            failure_triggers_action=True,
+            sort_order=1,
+        )
+    )
+    await test_session.commit()
+    run_id = run.id
+
+    refused = await client.post(f"/api/v1/audits/runs/{run_id}/complete", headers=auth_headers)
+    assert refused.status_code == 400, refused.text
+    error = refused.json().get("error", {})
+    assert error.get("code") == COMPLETE_NO_APPLICABLE_ANSWERS
+    assert error.get("details", {}).get("applicable_answer_count") == 0
+
+    test_session.expire_all()
+    stored = await test_session.get(AuditRun, run_id)
+    assert stored is not None
+    assert stored.status == AuditStatus.IN_PROGRESS
+
+    findings = await test_session.execute(select(AuditFinding).where(AuditFinding.run_id == run_id))
+    assert findings.scalars().all() == []
 
 
 async def test_complete_run_requires_all_required_questions(

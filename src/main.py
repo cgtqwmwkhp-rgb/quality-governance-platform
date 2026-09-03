@@ -500,6 +500,7 @@ def create_application() -> FastAPI:
             "Content-Disposition",
             "X-Export-Truncated",
             "X-Export-Register",
+            "ETag",
         ],
         max_age=86400,  # Cache preflight for 24 hours
     )

@@ -190,6 +190,17 @@ async function networkFirstApi(request) {
     return response;
   } catch (error) {
     console.log('[SW] API fetch failed - network unavailable');
+    // AUD-F1: keep in sync with swFetchPolicy.serviceWorkerShouldSynthesizeApiOffline.
+    // Synthetic 503 on audit GET hides transport failure from axios.
+    let pathname = '';
+    try {
+      pathname = new URL(request.url).pathname;
+    } catch (_) {
+      pathname = '';
+    }
+    if (request.method === 'GET' && pathname.startsWith('/api/v1/audits')) {
+      throw error;
+    }
     // Return error response, do NOT serve stale cached data for API calls
     return new Response(JSON.stringify({ error: 'Offline', message: 'Network unavailable' }), {
       status: 503,
