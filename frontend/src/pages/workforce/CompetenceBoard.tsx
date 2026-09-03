@@ -32,6 +32,8 @@ import {
   type CompetenceBoardFamily,
   type CompetenceBoardPerson,
   type CompetenceBoardResponse,
+  type CompetenceCoverageForecastItem,
+  type CompetenceCoverageResponse,
   type CompetencePlantEvidence,
 } from '../../api/client'
 import { toast } from '../../contexts/ToastContext'
@@ -58,6 +60,53 @@ import {
   isUnbound,
   normaliseEvidence,
 } from './competenceBoard/competenceStart'
+
+type CoverageState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; data: CompetenceCoverageResponse }
+  | { status: 'unavailable' }
+  | { status: 'error' }
+
+const ROLE_LABEL: Record<string, string> = {
+  first_aider: 'First aider',
+  fire_marshal: 'Fire marshal',
+  mhfa: 'Mental health first aider',
+}
+
+function roleLabel(roleKey: string): string {
+  return ROLE_LABEL[roleKey] ?? roleKey
+}
+
+function ForecastPanel({ forecast }: { forecast: CompetenceCoverageForecastItem[] }) {
+  if (forecast.length === 0) return null
+  return (
+    <section
+      aria-labelledby="competence-coverage-forecast-heading"
+      data-testid="competence-coverage-forecast"
+      className="rounded-lg border border-border bg-muted/30 px-4 py-3"
+    >
+      <h3 id="competence-coverage-forecast-heading" className="text-sm font-semibold text-foreground">
+        Cover that will drop below the site quota in the next 30 days
+      </h3>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Names stay on Atlas. The duty stays on the location schedule — QGP does not create a person
+        row or a user account.
+      </p>
+      <ul className="mt-2 space-y-1 text-sm text-foreground">
+        {forecast.map((row) => (
+          <li
+            key={`${row.quota_id}-${row.atlas_person_id}-${row.expires_on}`}
+            data-testid={`competence-coverage-forecast-${row.atlas_person_id}`}
+          >
+            {row.atlas_name} ({roleLabel(row.role_key)}) expires {row.expires_on} — site needs{' '}
+            {row.required_n}, currently {row.current_m}.
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
 
 type TabId = 'plant' | 'people'
 
@@ -639,6 +688,8 @@ export default function CompetenceBoard() {
   const activeFamily = FAMILY_BY_TAB[activeTab]
   const [startTarget, setStartTarget] = useState<StartTarget | null>(null)
   const [starting, setStarting] = useState(false)
+  const [coverage, setCoverage] = useState<CoverageState>({ status: 'idle' })
+  const coverageRequested = useRef(false)
 
   const [boards, setBoards] = useState<Partial<Record<CompetenceBoardFamily, BoardState>>>({})
   const requested = useRef<Set<CompetenceBoardFamily>>(new Set())
@@ -678,6 +729,29 @@ export default function CompetenceBoard() {
     requested.current.add(activeFamily)
     void load(activeFamily)
   }, [activeFamily, load])
+
+  useEffect(() => {
+    if (activeTab !== 'people' || coverageRequested.current) return
+    coverageRequested.current = true
+    setCoverage({ status: 'loading' })
+    void competenceBoardApi
+      .getCoverage()
+      .then((response) => {
+        const data = response.data
+        setCoverage({
+          status: 'ready',
+          data: {
+            items: Array.isArray(data?.items) ? data.items : [],
+            forecast: Array.isArray(data?.forecast) ? data.forecast : [],
+            banner: data?.banner ?? null,
+          },
+        })
+      })
+      .catch((error) => {
+        const status = apiErrorStatus(error)
+        setCoverage(status === 404 ? { status: 'unavailable' } : { status: 'error' })
+      })
+  }, [activeTab])
 
   const startAssessment = async (mode: CompetenceBindMode, evidence: CompetencePlantEvidence) => {
     if (!startTarget) return
@@ -780,7 +854,10 @@ export default function CompetenceBoard() {
                 anyone with no QGP employee record.
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {coverage.status === 'ready' ? (
+                <ForecastPanel forecast={coverage.data.forecast} />
+              ) : null}
               <BoardPanel
                 family="atlas"
                 state={boards.atlas}
