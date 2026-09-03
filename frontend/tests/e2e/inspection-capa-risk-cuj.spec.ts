@@ -246,16 +246,32 @@ async function installLiveCompletionMocks(page: Page) {
       return;
     }
 
-    if (path.endsWith(`/audits/runs/${RUN_ID}/responses`) && method === "POST") {
+    // AUD-F3 moved the answer write to an idempotent upsert keyed by
+    // question_id. The execute page no longer POSTs /responses, so this CUJ
+    // has to watch the PUT or it proves nothing about the answer reaching the
+    // server.
+    if (path.includes(`/audits/runs/${RUN_ID}/responses/by-question/`) && method === "PUT") {
       responseCreated = true;
+      await json(route, {
+        id: 701,
+        run_id: RUN_ID,
+        question_id: Number(path.split("/").pop()),
+        response_value: "no",
+        created_at: "2026-07-12T09:05:00Z",
+        updated_at: "2026-07-12T09:05:00Z",
+      });
+      return;
+    }
+
+    // AUD-F5 attaches a capture to one question instead of uploading a
+    // run-scoped evidence asset.
+    if (path.endsWith(`/audits/runs/${RUN_ID}/evidence`) && method === "POST") {
       await json(
         route,
         {
-          id: 701,
+          evidence_asset_id: 4201,
           run_id: RUN_ID,
           question_id: 81,
-          response_value: "no",
-          created_at: "2026-07-12T09:05:00Z",
         },
         201,
       );
@@ -492,7 +508,9 @@ test.describe("Inspection → CAPA → Risk CUJ", () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
       "base64",
     );
-    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+    // AUD-F5 split capture into camera and library inputs, so an accept-only
+    // locator is ambiguous. A desktop auditor picks from the library.
+    await page.getByTestId("audit-photo-library-input").setInputFiles({
       name: "ppe-fail-evidence.png",
       mimeType: "image/png",
       buffer: tinyPng,
