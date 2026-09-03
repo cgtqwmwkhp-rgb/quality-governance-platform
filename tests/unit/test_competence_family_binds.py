@@ -49,7 +49,7 @@ from src.domain.services.competence_demonstration_service import (
 
 # The CB-PR4 session double already models ``scalars`` dispatch on the selected
 # entity; reusing it keeps one double in the tree rather than two that drift.
-from tests.unit.test_competence_assessment_overlay import _FakeDb, _bind, _engineer, _published_template
+from tests.unit.test_competence_assessment_overlay import _bind, _engineer, _FakeDb, _published_template
 
 TENANT = 1
 ENGINEER_ID = 9

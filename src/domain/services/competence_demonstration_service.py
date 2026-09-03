@@ -29,11 +29,7 @@ from sqlalchemy import select
 
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
 from src.domain.models.audit import AuditTemplate
-from src.domain.models.competence_assessment_bind import (
-    BIND_MODES,
-    FIELD_MODE,
-    CompetenceAssessmentBind,
-)
+from src.domain.models.competence_assessment_bind import BIND_MODES, FIELD_MODE, CompetenceAssessmentBind
 from src.domain.models.competence_change_request import CompetenceChangeRequest
 from src.domain.models.competence_demonstration import CompetenceDemonstration
 from src.domain.models.engineer import CompetencyLifecycleState

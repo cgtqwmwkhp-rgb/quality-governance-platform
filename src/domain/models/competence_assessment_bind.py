@@ -17,7 +17,6 @@ same clock as the field assessment.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-
 from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
