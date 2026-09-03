@@ -104,6 +104,7 @@ async def _seed_run(
             question_type=spec.get("question_type", "yes_no"),
             positive_answer="yes",
             is_required=spec.get("is_required", True),
+            is_active=spec.get("is_active", True),
             criticality=spec.get("criticality"),
             failure_triggers_action=True,
             risk_weight=4,
@@ -372,6 +373,72 @@ async def test_soft_deleted_evidence_does_not_resolve(session_factory):
             await AuditService(db).complete_run(run.id, tenant_id=TENANT_ID, actor_user_id=1)
 
         assert refused.value.code == COMPLETE_EVIDENCE_NOT_RESOLVED
+
+
+@pytest.mark.asyncio
+async def test_hidden_question_evidence_does_not_block_completion(session_factory):
+    """A stale hidden response must not point the auditor at an unreachable question."""
+    async with session_factory() as db:
+        run, _ = await _seed_run(
+            db,
+            auto_create_findings=False,
+            questions=[
+                {"answer": {"response_value": "yes"}},
+                {
+                    "question_type": "photo",
+                    "show_when": (1, "no"),
+                    "answer": {"response_json": {"evidence_asset_ids": [4242]}},
+                },
+            ],
+        )
+
+        completed = await AuditService(db).complete_run(run.id, tenant_id=TENANT_ID, actor_user_id=1)
+
+        assert completed.status == AuditStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_inactive_question_evidence_does_not_block_completion(session_factory):
+    async with session_factory() as db:
+        run, _ = await _seed_run(
+            db,
+            auto_create_findings=False,
+            questions=[
+                {"answer": {"response_value": "yes"}},
+                {
+                    "question_type": "photo",
+                    "is_active": False,
+                    "answer": {"response_json": {"evidence_asset_ids": [4242]}},
+                },
+            ],
+        )
+
+        completed = await AuditService(db).complete_run(run.id, tenant_id=TENANT_ID, actor_user_id=1)
+
+        assert completed.status == AuditStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_off_template_question_evidence_does_not_block_completion(session_factory):
+    async with session_factory() as db:
+        run, questions = await _seed_run(
+            db,
+            auto_create_findings=False,
+            questions=[{"answer": {"response_value": "yes"}}],
+        )
+        db.add(
+            AuditResponse(
+                run_id=run.id,
+                question_id=questions[0].id + 1000,
+                tenant_id=TENANT_ID,
+                response_json={"evidence_asset_ids": [4242]},
+            )
+        )
+        await db.commit()
+
+        completed = await AuditService(db).complete_run(run.id, tenant_id=TENANT_ID, actor_user_id=1)
+
+        assert completed.status == AuditStatus.COMPLETED
 
 
 @pytest.mark.asyncio

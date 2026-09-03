@@ -2265,22 +2265,38 @@ class AuditService:
         self,
         run: AuditRun,
         responses: list[AuditResponse],
+        *,
+        questions: list[AuditQuestion],
+        sections: list[AuditSection],
     ) -> dict[int, list[int]]:
-        """Claimed evidence ids that are not evidence for this run, by question.
+        """Applicable-question evidence ids not attached to this run.
 
         ``response_json.evidence_asset_ids`` is written by the client, and an id
         in it is enough on its own to make a row count as answered and to satisfy
         a ``require_photo`` / ``min_attachments`` rule. Nothing previously read
         the ids back, so a run could claim evidence it never had. An id resolves
         only when a live ``evidence_assets`` row carries it for this run
-        (``source_module=audit``, ``source_id=<run id>``); uploads already prove
-        the run belongs to the caller's tenant, so pinning the source pins the
-        tenant too. Soft-deleted assets do not resolve — every read path in the
-        evidence module treats them as gone, so counting one as present would be
-        the same untruth in a different place.
+        (``source_module=audit``, ``source_id=<run id>``) in the run's tenant.
+        Soft-deleted assets do not resolve — every read path in the evidence
+        module treats them as gone, so counting one as present would be the same
+        untruth in a different place.
+
+        Responses outside the server-derived applicable question set are ignored,
+        matching the required-answer and non-empty-run gates. This prevents stale
+        hidden, inactive, or off-template rows from blocking completion with a
+        question the auditor cannot navigate to.
         """
+        applicable_question_ids = self._server_applicable_question_ids(
+            questions=questions,
+            responses=responses,
+            sections=sections,
+            assessment_mode=run.assessment_mode,
+            asset_type_id=run.asset_type_id,
+        )
         claimed: dict[int, list[int]] = {}
         for response in responses:
+            if response.question_id not in applicable_question_ids:
+                continue
             asset_ids = AuditScoringService.referenced_evidence_asset_ids(response)
             if asset_ids:
                 claimed[response.question_id] = asset_ids
@@ -2296,6 +2312,7 @@ class AuditService:
             select(EvidenceAsset.id).where(
                 EvidenceAsset.source_module == EvidenceSourceModule.AUDIT,
                 EvidenceAsset.source_id == str(run.id),
+                EvidenceAsset.tenant_id == run.tenant_id,
                 EvidenceAsset.deleted_at.is_(None),
             )
         )
@@ -2357,7 +2374,12 @@ class AuditService:
         # completion leaves nothing behind: no rescored rows, no findings, no
         # CAPA actions, no risks. Completion is the only place those are created
         # from scoring, and it is reached only once all three gates pass.
-        unresolved_evidence = await self._unresolved_evidence_by_question(run, stored_responses)
+        unresolved_evidence = await self._unresolved_evidence_by_question(
+            run,
+            stored_responses,
+            questions=active_questions,
+            sections=template_sections,
+        )
         if unresolved_evidence:
             raise ValidationError(
                 "Some answers reference evidence that is not attached to this audit run",
