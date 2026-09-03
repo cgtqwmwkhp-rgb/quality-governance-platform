@@ -125,6 +125,13 @@ const QUICK_ACTIONS: QuickAction[] = [
     color: 'bg-emerald-100 text-emerald-700',
   },
   {
+    title: 'Competence binds',
+    description: 'Map published templates onto PAMS characteristics',
+    icon: <ClipboardList className="w-6 h-6" />,
+    href: '/admin/competence-binds',
+    color: 'bg-sky-100 text-sky-700',
+  },
+  {
     title: 'Partner Webhooks',
     description: 'Manage partner event subscriptions',
     icon: <Webhook className="w-6 h-6" />,

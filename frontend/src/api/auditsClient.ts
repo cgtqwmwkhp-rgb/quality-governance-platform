@@ -542,6 +542,29 @@ export interface CriticalQueueResponse {
   items: CriticalQueueItem[]
 }
 
+/**
+ * Extended timeout for a field upload over mobile data, matching the generic
+ * evidence upload in `client.ts`. A capture that times out at the default is
+ * reported to the auditor as a failure while the blob may still land, which is
+ * how a run ends up with evidence nobody linked (AUD-2026-0087).
+ */
+const AUDIT_EVIDENCE_UPLOAD_TIMEOUT_MS = 120000
+
+/** What one AUD-F5 capture wrote: the asset, the answer row, and the join. */
+export interface AuditQuestionEvidenceUpload {
+  evidence_asset_id: number
+  response_id: number
+  run_id: number
+  question_id: number
+  role: string
+  storage_key: string
+  original_filename: string
+  content_type: string
+  file_size_bytes: number
+  evidence_asset_ids: number[]
+  message: string
+}
+
 function ifMatchConfig(etag?: string | null): AxiosRequestConfig | undefined {
   const token = (etag || '').trim()
   if (!token) return undefined
@@ -700,6 +723,36 @@ export function createAuditsApi(api: AxiosInstance) {
       `/api/v1/audits/runs/${runId}/responses/by-question/${questionId}`,
       data,
     ),
+
+  /**
+   * Attach a capture to one question (AUD-F5).
+   *
+   * Replaces `evidenceAssetsApi.upload({ source_module: 'audit' })` on the
+   * execute path. That call could only say which *run* the file belonged to, so
+   * the question link lived in a client-written `evidence_asset_ids` list — and
+   * when the save carrying it failed, the photo was in Azure with nothing
+   * pointing at it. This endpoint writes the asset, the answer row and the join
+   * row in one server transaction.
+   */
+  uploadQuestionEvidence: (
+    runId: number,
+    questionId: number,
+    file: File,
+    data?: { title?: string; capturedAt?: string; latitude?: number; longitude?: number },
+  ) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('question_id', String(questionId))
+    if (data?.title) formData.append('title', data.title)
+    if (data?.capturedAt) formData.append('captured_at', data.capturedAt)
+    if (data?.latitude != null) formData.append('latitude', String(data.latitude))
+    if (data?.longitude != null) formData.append('longitude', String(data.longitude))
+    return api.post<AuditQuestionEvidenceUpload>(
+      `/api/v1/audits/runs/${runId}/evidence`,
+      formData,
+      { timeout: AUDIT_EVIDENCE_UPLOAD_TIMEOUT_MS },
+    )
+  },
   createResponse: (runId: number, data: AuditResponseCreate) =>
     api.post<AuditResponse>(`/api/v1/audits/runs/${runId}/responses`, data),
   updateResponse: (responseId: number, data: AuditResponseUpdate) =>

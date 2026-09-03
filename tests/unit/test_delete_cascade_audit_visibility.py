@@ -50,6 +50,16 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("audit_challenge_sessions", "audit_challenge_proposals"),
         ("audit_challenge_sessions", "audit_challenge_turns"),
         ("audit_findings", "audit_finding_risks"),
+        # AUD-F5 capture join. A link row says "this evidence answers this
+        # question", so it cannot outlive the answer; deleting a run already
+        # removes its answers, and this follows them. No relationship is mapped
+        # from AuditResponse on purpose — a lazy collection hanging off an answer
+        # row loads on any attribute touch outside a greenlet, which is the
+        # MissingGreenlet failure AUD-F4 met on asyncpg — so PostgreSQL removes
+        # the links with no per-row event. The evidence_assets side of the join
+        # declares no ondelete at all, so it is not a cascade and is absent here:
+        # a physical delete of cited evidence is refused instead.
+        ("audit_responses", "audit_response_evidence"),
         ("audit_runs", "external_audit_import_drafts"),
         ("audit_runs", "external_audit_import_jobs"),
         ("audit_templates", "template_asset_types"),

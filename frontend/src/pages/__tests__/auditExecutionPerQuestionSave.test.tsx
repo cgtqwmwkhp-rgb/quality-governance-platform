@@ -40,6 +40,9 @@ vi.mock('../../api/client', () => ({
     startRun: vi.fn().mockResolvedValue({ data: {} }),
     acknowledgeRun: vi.fn().mockResolvedValue({ data: {} }),
     completeRun: (...args: unknown[]) => mockCompleteRun(...args),
+    uploadQuestionEvidence: vi
+      .fn()
+      .mockResolvedValue({ data: { evidence_asset_id: 99, response_id: 7, evidence_asset_ids: [99] } }),
   },
   evidenceAssetsApi: {
     upload: vi.fn().mockResolvedValue({ data: { id: 99 } }),
@@ -56,7 +59,25 @@ vi.mock('../../services/auditDraftStore', () => ({
   registerDraftSnapshot: vi.fn(),
   getAuditDraft: vi.fn().mockResolvedValue(null),
   deleteAuditDraft: vi.fn(),
-  saveAuditDraft: vi.fn(),
+  saveAuditDraft: vi.fn().mockResolvedValue({ ok: true }),
+  putCaptureBlob: vi.fn().mockResolvedValue({ ok: true }),
+  deleteCaptureBlob: vi.fn().mockResolvedValue(undefined),
+  listCaptureBlobs: vi.fn().mockResolvedValue([]),
+  ensureDeviceLedgerDurability: vi.fn().mockResolvedValue({
+    durable: true,
+    reason: 'ok',
+    writeFailed: false,
+    usageBytes: null,
+    quotaBytes: null,
+  }),
+  subscribeDeviceLedgerStatus: vi.fn(() => () => {}),
+  getDeviceLedgerStatus: vi.fn(() => ({
+    durable: true,
+    reason: 'ok',
+    writeFailed: false,
+    usageBytes: null,
+    quotaBytes: null,
+  })),
 }))
 
 const FIRST_QUESTION_ID = 151

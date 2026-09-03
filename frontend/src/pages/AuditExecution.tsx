@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   XCircle,
   Camera,
+  ImagePlus,
   MessageSquare,
   ChevronDown,
   ChevronUp,
@@ -46,8 +47,33 @@ import {
   getAuditDraft,
   deleteAuditDraft,
   saveAuditDraft,
+  putCaptureBlob,
+  deleteCaptureBlob,
+  listCaptureBlobs,
+  ensureDeviceLedgerDurability,
+  subscribeDeviceLedgerStatus,
+  getDeviceLedgerStatus,
   type AuditDraft,
+  type DeviceLedgerStatus,
 } from '../services/auditDraftStore'
+import { primeDeviceLedgerIdentity } from '../services/deviceLedgerIdentity'
+import { useKeyboardInset } from '../hooks/useKeyboardInset'
+import {
+  ackCapture,
+  appendCapture,
+  captureEvidenceIds,
+  capturePreviews,
+  capturesFromAssetIds,
+  evidenceViewOf,
+  findCapture,
+  newCaptureId,
+  photoCaptures,
+  removeCapture,
+  setCapturePreview,
+  signatureCapture,
+  type AuditCapture,
+  type CapturePreview,
+} from './auditExecutionCaptures'
 import {
   auditQuestionEvidenceDescription,
   dataUrlToFile,
@@ -76,11 +102,14 @@ interface QuestionResponse {
   questionId: string
   response: ResponseType
   notes?: string
-  /** Preview URLs (blob/data/signed) for thumbnails in the UI. */
-  photos?: string[]
-  /** Persisted evidence-asset IDs linked via response_json. */
-  evidenceAssetIds?: number[]
-  signature?: string
+  /**
+   * Every photo and signature on this answer, as one list keyed by `captureId`
+   * (AUD-F6). Replaces the parallel `photos[]` / `evidenceAssetIds[]` arrays,
+   * whose entries only lined up until an upload ACKed out of order. The legacy
+   * pair is still what the wire payload and the fail-evidence gate consume —
+   * `evidenceViewOf` computes it, nothing stores it.
+   */
+  captures?: AuditCapture[]
   flagged?: boolean
   timestamp: string
   duration?: number // seconds spent on question
@@ -143,6 +172,34 @@ interface CompletionSummary {
   findings: number
   actions: number
   risks: number
+}
+
+/**
+ * AUD-F6 banner copy, keyed by the reason the ledger reported.
+ *
+ * Every line has to survive one test: would an auditor about to walk out of
+ * signal read it and know whether their answers are safe? So none of them says
+ * "will sync" — nothing in this page retries a server write — and the two
+ * quota/write failures say plainly that the answer is *not* on the device,
+ * which is what the old `return false` hid.
+ *
+ * Plain English rather than i18n keys, deliberately: a key pair costs the app
+ * shell (`en.json` is not lazy) while this map sits on the execute route chunk.
+ */
+const DEVICE_LEDGER_COPY: Record<DeviceLedgerStatus['reason'], string> = {
+  ok: '',
+  'indexeddb-unavailable':
+    'This audit is not durable on this device: the browser will not store anything locally. Stay online and press Save after every few answers.',
+  'no-identity':
+    'This audit is not durable on this device: the app cannot tell which account it belongs to, so nothing is stored locally. Stay online and press Save.',
+  'persist-denied':
+    'This audit is not durable on this device: the browser refused durable storage and may clear these answers without warning. Press Save while you have signal.',
+  'persist-unsupported':
+    'This audit is not durable on this device: the browser cannot promise to keep local answers. Press Save while you have signal.',
+  'quota-exceeded':
+    'Device storage is full — this answer was NOT saved on this device. Free up space, then press Save while you have signal.',
+  'write-failed':
+    'Saving to this device failed — nothing was stored locally for this audit. Press Save while you have signal.',
 }
 
 const SECTION_COLORS = [
@@ -499,7 +556,7 @@ const ResponseButton = ({
       aria-label={accessibleLabel}
       aria-pressed={selected}
       data-selected={selected ? 'true' : 'false'}
-      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed
+      className={`relative flex-1 flex items-center justify-center gap-2 whitespace-nowrap py-4 px-3 sm:px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed
         ${
           selected
             ? `${selectedStyles[variant]} shadow-md ring-2 ring-offset-2 ring-offset-background ring-current`
@@ -546,7 +603,17 @@ const ScaleInput = ({
   )
 }
 
-// Photo Capture Component — files are uploaded by the parent onto evidence-assets.
+// Photo Capture Component — files are uploaded by the parent through the
+// audit-scoped capture endpoint (AUD-F5), which writes the question link.
+//
+// Two inputs, not one. A single `<input type="file" capture="environment">` is
+// camera-only on iOS: the file picker never opens, so an auditor cannot attach a
+// photo taken earlier — of the plant before it was moved, of a document back at
+// the office, of anything the shift before. `capture` is a hint the browser is
+// allowed to ignore, which is why this reads as "works fine" on desktop Chrome
+// and silently removes half the feature in the field. The library input
+// therefore omits `capture` entirely rather than setting it to a different
+// value.
 const PhotoCapture = ({
   photos,
   onAdd,
@@ -559,9 +626,11 @@ const PhotoCapture = ({
   uploading = false,
   loadingStored = false,
 }: {
-  photos: string[]
+  /** One entry per capture that has something to show, in capture order. */
+  photos: CapturePreview[]
   onAdd: (photo: string, file?: File) => void
-  onRemove: (index: number) => void
+  /** By `captureId`, never by index: the thumbnail order is not the id order. */
+  onRemove: (captureId: string) => void
   captureButtonRef?: React.RefObject<HTMLButtonElement>
   captureButtonId?: string
   ariaInvalid?: boolean
@@ -570,7 +639,8 @@ const PhotoCapture = ({
   uploading?: boolean
   loadingStored?: boolean
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const libraryInputRef = useRef<HTMLInputElement>(null)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -584,35 +654,59 @@ const PhotoCapture = ({
     e.target.value = ''
   }
 
-  const previewUrl = previewIndex != null ? photos[previewIndex] : null
+  const previewUrl = previewIndex != null ? (photos[previewIndex]?.url ?? null) : null
 
   return (
     <div className="space-y-3">
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         onChange={handleCapture}
         className="hidden"
         disabled={readOnly || uploading}
+        data-testid="audit-photo-camera-input"
+      />
+      <input
+        ref={libraryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleCapture}
+        className="hidden"
+        disabled={readOnly || uploading}
+        data-testid="audit-photo-library-input"
       />
 
       {!readOnly && (
-        <button
-          ref={captureButtonRef}
-          id={captureButtonId}
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-          aria-label="Take photo or upload evidence"
-          aria-invalid={ariaInvalid || undefined}
-          aria-describedby={ariaDescribedBy}
-          className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
-        >
-          {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
-          {uploading ? 'Uploading photo…' : 'Take Photo / Upload'}
-        </button>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            ref={captureButtonRef}
+            id={captureButtonId}
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Take photo"
+            aria-invalid={ariaInvalid || undefined}
+            aria-describedby={ariaDescribedBy}
+            className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
+          >
+            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+            {uploading ? 'Uploading photo…' : 'Take Photo'}
+          </button>
+          <button
+            type="button"
+            onClick={() => libraryInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Choose photo from library"
+            aria-invalid={ariaInvalid || undefined}
+            aria-describedby={ariaDescribedBy}
+            className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
+          >
+            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+            {uploading ? 'Uploading photo…' : 'Choose from Library'}
+          </button>
+        </div>
       )}
 
       {loadingStored && photos.length === 0 ? (
@@ -628,7 +722,7 @@ const PhotoCapture = ({
       {photos.length > 0 ? (
         <div className="grid grid-cols-3 gap-2">
           {photos.map((photo, idx) => (
-            <div key={`${photo.slice(0, 32)}-${idx}`} className="relative group">
+            <div key={photo.captureId} className="relative group">
               <button
                 type="button"
                 className="block w-full overflow-hidden rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -637,7 +731,7 @@ const PhotoCapture = ({
                 data-testid={`audit-photo-preview-${idx}`}
               >
                 <img
-                  src={photo}
+                  src={photo.url}
                   alt={`Evidence ${idx + 1}`}
                   className="h-24 w-full object-cover"
                 />
@@ -645,7 +739,7 @@ const PhotoCapture = ({
               {!readOnly && (
                 <button
                   type="button"
-                  onClick={() => onRemove(idx)}
+                  onClick={() => onRemove(photo.captureId)}
                   aria-label="Remove photo"
                   className="absolute top-1 right-1 p-1 bg-destructive rounded-full text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                 >
@@ -887,6 +981,12 @@ export default function AuditExecution() {
   // (which builds a fresh set) and unmount.
   const hydratedPreviewUrls = useRef<string[]>([])
   const [autosaveError, setAutosaveError] = useState<string | null>(null)
+  // AUD-F6: whether this device will actually keep answers the server has not
+  // got, and whether the last attempt to store one landed. Both come from the
+  // ledger itself, so a `QuotaExceeded` on any write path reaches the screen.
+  const [ledgerStatus, setLedgerStatus] = useState<DeviceLedgerStatus>(() =>
+    getDeviceLedgerStatus(),
+  )
   const [recoveryPrompt, setRecoveryPrompt] = useState<AuditDraft | null>(null)
   const [conflictReload, setConflictReload] = useState(false)
   const runEtagRef = useRef<string | null>(null)
@@ -894,6 +994,12 @@ export default function AuditExecution() {
   const goPrevRef = useRef<() => void>(() => {})
 
   const runIdNum = runId ? Number(runId) : null
+
+  // AUD-P3. Keep the fixed action bar (Back / counter / Next) and the scroll
+  // padding under the answer pane above the virtual keyboard. Mounted here,
+  // unconditionally and before every early return, because hooks cannot live
+  // behind the loading / summary branches below.
+  useKeyboardInset()
 
   /** Record an unsaved edit. Every path that changes an answer goes through here. */
   const markDirty = () => {
@@ -932,7 +1038,7 @@ export default function AuditExecution() {
   const previewQuestionId =
     audit?.sections[currentSectionIndex]?.questions[currentQuestionIndex]?.id ?? null
   const previewEvidenceKey = previewQuestionId
-    ? `${previewQuestionId}:${(responses[previewQuestionId]?.evidenceAssetIds || []).join(',')}`
+    ? `${previewQuestionId}:${captureEvidenceIds(responses[previewQuestionId]?.captures).join(',')}`
     : ''
 
   // AUD-F2: download preview bytes for the *current* question only. Listing
@@ -945,12 +1051,13 @@ export default function AuditExecution() {
     if (!question) return
 
     const resp = responsesRef.current[question.id]
-    const ids = resp?.evidenceAssetIds || []
-    if (ids.length === 0) return
-
-    const isSignatureQuestion = question.type === 'signature'
-    if (isSignatureQuestion && resp?.signature) return
-    if (!isSignatureQuestion && (resp?.photos?.length ?? 0) > 0) return
+    // Per capture, by id. The old version fetched the whole id list and wrote a
+    // fresh `photos` array positionally, so one failed download silently
+    // re-pointed every later thumbnail at the wrong asset.
+    const pending = (resp?.captures ?? []).filter(
+      (capture) => !capture.previewUrl && (capture.evidenceAssetId ?? 0) > 0,
+    )
+    if (pending.length === 0) return
 
     let cancelled = false
     const createdPreviewUrls: string[] = []
@@ -958,14 +1065,17 @@ export default function AuditExecution() {
     const loadPreviews = async () => {
       setHydratingEvidenceQuestionId(question.id)
       try {
-        const urls = await Promise.all(
-          ids.map(async (assetId) => {
+        const hydrated = await Promise.all(
+          pending.map(async (capture) => {
             try {
-              const content = await evidenceAssetsApi.getContent(assetId, 'inline')
+              const content = await evidenceAssetsApi.getContent(
+                capture.evidenceAssetId as number,
+                'inline',
+              )
               if (cancelled) return null
               const url = URL.createObjectURL(content.data)
               createdPreviewUrls.push(url)
-              return url
+              return { captureId: capture.captureId, url }
             } catch {
               return null
             }
@@ -975,21 +1085,17 @@ export default function AuditExecution() {
           createdPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
           return
         }
-        const previewUrls = urls.filter((url): url is string => Boolean(url))
         hydratedPreviewUrls.current.push(...createdPreviewUrls)
         setResponses((prev) => {
           const current = prev[question.id]
           if (!current) return prev
-          if (isSignatureQuestion && current.signature) return prev
-          if (!isSignatureQuestion && (current.photos?.length ?? 0) > 0) return prev
-          return {
-            ...prev,
-            [question.id]: {
-              ...current,
-              photos: isSignatureQuestion ? current.photos : previewUrls,
-              signature: isSignatureQuestion ? previewUrls[0] : current.signature,
-            },
+          let captures = current.captures
+          for (const entry of hydrated) {
+            if (!entry) continue
+            captures = setCapturePreview(captures, entry.captureId, entry.url)
           }
+          if (captures === current.captures) return prev
+          return { ...prev, [question.id]: { ...current, captures } }
         })
       } finally {
         if (!cancelled) {
@@ -1187,8 +1293,7 @@ export default function AuditExecution() {
             notes: r.notes || undefined,
             timestamp: r.created_at,
             entityLabel: responseJson.entity_label,
-            evidenceAssetIds: assetIds,
-            photos: [],
+            captures: capturesFromAssetIds(assetIds, qType, r.created_at),
           }
           idMap[qId] = r.id
         }
@@ -1207,7 +1312,7 @@ export default function AuditExecution() {
           Object.fromEntries(
             Object.entries(existingResponses).map(([qId, resp]) => [
               qId,
-              resp.evidenceAssetIds || [],
+              captureEvidenceIds(resp.captures),
             ]),
           ),
           listed,
@@ -1223,9 +1328,12 @@ export default function AuditExecution() {
             notes: current?.notes,
             timestamp: current?.timestamp || '',
             entityLabel: current?.entityLabel,
-            evidenceAssetIds: ids,
-            photos: current?.photos || [],
-            signature: current?.signature,
+            captures: capturesFromAssetIds(
+              ids,
+              questionTypeMap[qId] || 'photo',
+              current?.timestamp || '',
+              current?.captures,
+            ),
           }
         }
 
@@ -1292,28 +1400,53 @@ export default function AuditExecution() {
     }
   }, [runIdNum, reloadToken])
 
+  // AUD-F6: ask the browser to keep this origin's storage and publish what it
+  // said. The namespace is `tenant:user` and the tenant id is not a token claim,
+  // so identity is resolved first — an unresolved namespace is itself a reason
+  // this audit is not durable here, and the auditor is told so.
+  useEffect(() => {
+    if (!runIdNum) return
+    let cancelled = false
+    const unsubscribe = subscribeDeviceLedgerStatus((next) => {
+      if (!cancelled) setLedgerStatus(next)
+    })
+    void primeDeviceLedgerIdentity()
+      .then(() => ensureDeviceLedgerDurability())
+      .then((next) => {
+        if (!cancelled) setLedgerStatus(next)
+      })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [runIdNum])
+
   // Soft-recovery: on mount, see if we have a stashed local draft that's
   // newer than what came back from the server (e.g. user got logged out
-  // mid-audit and we flushed answers to IndexedDB before redirecting).
+  // mid-audit and we flushed answers to the device ledger before redirecting).
   useEffect(() => {
     if (!runIdNum || !audit || runCompleted) return
     let cancelled = false
-    void getAuditDraft(runIdNum).then((draft) => {
-      if (cancelled || !draft) return
-      const draftHasMore =
-        Object.keys(draft.responses).length > Object.keys(responsesRef.current).length
-      const draftHasNewer = Object.values(draft.responses).some((d) => {
-        const existing = responsesRef.current[d.questionId]
-        if (!existing) return true
-        return new Date(d.timestamp).getTime() > new Date(existing.timestamp).getTime()
+    // Identity before read: the ledger is namespaced, and asking for a draft
+    // before the namespace is known answers "no draft" for a draft that exists.
+    void primeDeviceLedgerIdentity()
+      .then(() => getAuditDraft(runIdNum))
+      .then((draft) => {
+        if (cancelled || !draft) return
+        const draftHasMore =
+          Object.keys(draft.responses).length > Object.keys(responsesRef.current).length
+        const draftHasNewer = Object.values(draft.responses).some((d) => {
+          const existing = responsesRef.current[d.questionId]
+          if (!existing) return true
+          return new Date(d.timestamp).getTime() > new Date(existing.timestamp).getTime()
+        })
+        if (draftHasMore || draftHasNewer) {
+          setRecoveryPrompt(draft)
+        } else {
+          // Stale draft (everything is already on the server) — clean it up.
+          void deleteAuditDraft(runIdNum)
+        }
       })
-      if (draftHasMore || draftHasNewer) {
-        setRecoveryPrompt(draft)
-      } else {
-        // Stale draft (everything is already on the server) — clean it up.
-        void deleteAuditDraft(runIdNum)
-      }
-    })
     return () => {
       cancelled = true
     }
@@ -1521,15 +1654,21 @@ export default function AuditExecution() {
 
       for (const [questionId, resp] of Object.entries(responses)) {
         const existingId = updatedIdMap[questionId]
-        const isEmpty = responseRowIsEmpty(resp)
+        // The wire still speaks `{ photos, evidenceAssetIds }`; the capture list
+        // is what the page holds. Projected here, at the boundary, so the two
+        // lists exist for the length of one request and cannot drift.
+        const wireView = evidenceViewOf(resp)
+        const isEmpty = responseRowIsEmpty(wireView)
         // Skip brand-new empty rows, but still persist clears for previously saved answers.
         if (isEmpty && !existingId) continue
 
         const question = allQuestions.find((candidate) => candidate.id === questionId)
         const payload: AuditResponseSavePayload & {
           applicability?: 'applicable' | 'hidden_by_logic'
-        } = buildAuditResponseSavePayload(resp, question as SavePayloadQuestion | undefined, (q, r) =>
-          scorePayloadForQuestion(q, r),
+        } = buildAuditResponseSavePayload(
+          wireView,
+          question as SavePayloadQuestion | undefined,
+          (q, r) => scorePayloadForQuestion(q, r),
         )
         // Persist conditional-logic applicability (Phase 2) so the backend's
         // completion gate + analytics can skip questions the auditor never saw.
@@ -1644,14 +1783,49 @@ export default function AuditExecution() {
     }
   }
 
+  /**
+   * Restore the device ledger, then put the thumbnails back from the bytes it
+   * still holds.
+   *
+   * The ledger record names captures; it does not contain them. Captures the
+   * server already ACKed have no local blob (they were dropped on ACK) and their
+   * previews come from the API content endpoint as usual — a signed URL is never
+   * stored, so there is nothing stale to resurrect. Captures with a blob are the
+   * ones whose upload never landed, which is exactly what the auditor stands to
+   * lose and what has to reappear on screen.
+   */
   const handleRestoreDraft = () => {
     if (!recoveryPrompt) return
-    setResponses(recoveryPrompt.responses as Record<string, QuestionResponse>)
+    const restored = recoveryPrompt.responses as Record<string, QuestionResponse>
+    setResponses(restored)
     setResponseIdMap(recoveryPrompt.responseIdMap)
     setCurrentSectionIndex(recoveryPrompt.currentSectionIndex)
     setCurrentQuestionIndex(recoveryPrompt.currentQuestionIndex)
     markDirty()
     setRecoveryPrompt(null)
+
+    if (!runIdNum) return
+    void listCaptureBlobs(runIdNum).then((stored) => {
+      if (stored.length === 0) return
+      const urls = stored.map((capture) => ({
+        questionId: capture.questionId,
+        captureId: capture.captureId,
+        url: URL.createObjectURL(capture.blob),
+      }))
+      hydratedPreviewUrls.current.push(...urls.map((entry) => entry.url))
+      setResponses((prev) => {
+        const next = { ...prev }
+        for (const entry of urls) {
+          const current = next[entry.questionId]
+          if (!current) continue
+          next[entry.questionId] = {
+            ...current,
+            captures: setCapturePreview(current.captures, entry.captureId, entry.url),
+          }
+        }
+        return next
+      })
+    })
   }
 
   const handleDiscardDraft = () => {
@@ -1833,15 +2007,18 @@ export default function AuditExecution() {
 
   // Navigation helpers — "last" means no visible question remains after this one.
   const isLastQuestion = !flatQuestionPositions.slice(currentFlatIndex + 1).some(isPositionVisible)
+  // The gate helpers still take `{ photos, evidenceAssetIds }`; that shape is
+  // projected from the capture list per render rather than stored.
+  const currentEvidenceView = currentResponse ? evidenceViewOf(currentResponse) : undefined
   const canAdvance =
     isCurrentQuestionHidden ||
     ((!currentQuestion.required ||
       Boolean(currentResponse?.response) ||
-      (currentQuestion.type === 'photo' && (currentResponse?.photos?.length ?? 0) > 0)) &&
-      canAdvancePastFailEvidenceGate(currentQuestion, currentResponse))
+      (currentQuestion.type === 'photo' && (currentResponse?.captures?.length ?? 0) > 0)) &&
+      canAdvancePastFailEvidenceGate(currentQuestion, currentEvidenceView))
   const failEvidenceErrorId = `fail-evidence-error-${currentQuestion.id}`
-  const showEvidencePanel = shouldShowFailEvidencePanel(currentQuestion, currentResponse)
-  const failEvidenceGateActive = isFailEvidenceGateActive(currentQuestion, currentResponse)
+  const showEvidencePanel = shouldShowFailEvidencePanel(currentQuestion, currentEvidenceView)
+  const failEvidenceGateActive = isFailEvidenceGateActive(currentQuestion, currentEvidenceView)
   // Position within *visible* questions only, so the counter matches totalQuestions below.
   const globalQuestionIndex = Math.max(
     0,
@@ -1888,7 +2065,55 @@ export default function AuditExecution() {
     }))
   }
 
-  /** Upload photo to evidence-assets and keep preview + asset id on the answer. */
+  /**
+   * Change the capture list from whatever it is *at apply time*, not from a
+   * snapshot read before the await.
+   *
+   * Two photos picked in quick succession both used to read the same `photos`
+   * array and the second write dropped the first — survivable when the array held
+   * a thumbnail, not survivable now that a capture id is the only handle on bytes
+   * already written to the device ledger.
+   */
+  const updateCaptures = (
+    questionId: string,
+    mutate: (captures: AuditCapture[] | undefined) => AuditCapture[],
+    resolveResponse?: (next: AuditCapture[]) => ResponseType,
+  ) => {
+    if (runCompleted) return
+    markDirty()
+    if (highlightedQuestionId === questionId) {
+      setHighlightedQuestionId(null)
+    }
+    setResponses((prev) => {
+      const current = prev[questionId]
+      const captures = mutate(current?.captures)
+      return {
+        ...prev,
+        [questionId]: {
+          ...current,
+          ...(resolveResponse ? { response: resolveResponse(captures) } : {}),
+          captures,
+          questionId,
+          timestamp: new Date().toISOString(),
+        },
+      }
+    })
+  }
+
+  /**
+   * Mint a capture, put its bytes in the device ledger, then upload it.
+   *
+   * Order matters. The bytes go to the ledger *before* the request, keyed by the
+   * `captureId` the answer record names, so a failed or interrupted upload leaves
+   * a photo the auditor can still see and re-send rather than a thumbnail that
+   * disappears with the tab. On ACK the local copy is deleted: the AUD-F5 join
+   * plus Azure is the record from then on, and a second copy is only quota the
+   * next photo needs.
+   *
+   * The evidence id is attached to *this* capture by id. Appending it to a
+   * parallel array is what let two concurrent uploads land against each other's
+   * thumbnails.
+   */
   const attachPhotoToCurrentQuestion = async (
     previewDataUrl: string,
     file?: File,
@@ -1896,15 +2121,36 @@ export default function AuditExecution() {
   ) => {
     const questionId = currentQuestion.id
     const markCaptured = options?.markCaptured !== false
-    const existing = responsesRef.current[questionId]
-    const nextPhotos = [...(existing?.photos || []), previewDataUrl]
-    updateResponse({
-      photos: nextPhotos,
-      ...(markCaptured ? { response: 'captured' as ResponseType } : {}),
-    })
+    const captureId = newCaptureId()
+    updateCaptures(
+      questionId,
+      (captures) =>
+        appendCapture(captures, {
+          captureId,
+          kind: 'photo',
+          capturedAt: new Date().toISOString(),
+          previewUrl: previewDataUrl,
+        }),
+      markCaptured ? () => 'captured' : undefined,
+    )
     setFailEvidenceGateError(false)
 
     if (!runIdNum || runCompleted) return
+
+    const uploadFile =
+      file || dataUrlToFile(previewDataUrl, `audit-q${questionId}-${Date.now()}.jpg`)
+
+    // One blob write per capture, here and nowhere else. Autosave never reaches
+    // the blob store, so a 30-photo run does not rewrite 30 photos a minute.
+    if (uploadFile) {
+      await putCaptureBlob({
+        runId: runIdNum,
+        captureId,
+        questionId,
+        kind: 'photo',
+        blob: uploadFile,
+      })
+    }
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       void saveAuditDraft({
@@ -1919,9 +2165,6 @@ export default function AuditExecution() {
       return
     }
 
-    const uploadFile =
-      file ||
-      dataUrlToFile(previewDataUrl, `audit-q${questionId}-${Date.now()}.jpg`)
     if (!uploadFile) {
       setError('Could not prepare photo for upload. Please try again.')
       return
@@ -1929,28 +2172,28 @@ export default function AuditExecution() {
 
     setUploadingPhotoFor(questionId)
     try {
-      const uploaded = await evidenceAssetsApi.upload(uploadFile, {
-        source_module: 'audit',
-        source_id: runIdNum,
+      // Local state keys questions by string; the wire wants the template id,
+      // the same conversion the per-question save does.
+      const uploaded = await auditsApi.uploadQuestionEvidence(runIdNum, Number(questionId), uploadFile, {
         title: `Audit photo — question ${questionId}`,
-        description: auditQuestionEvidenceDescription(questionId),
       })
-      const assetId = uploaded.data.id
+      const assetId = uploaded.data.evidence_asset_id
       setResponses((prev) => {
         const current = prev[questionId]
         if (!current) return prev
-        const evidenceAssetIds = [...(current.evidenceAssetIds || []), assetId]
         markDirty()
         return {
           ...prev,
           [questionId]: {
             ...current,
-            evidenceAssetIds,
+            captures: ackCapture(current.captures, captureId, assetId),
             response: markCaptured ? 'captured' : current.response,
             timestamp: new Date().toISOString(),
           },
         }
       })
+      // The server holds it now, and this store is not the photo SSOT.
+      void deleteCaptureBlob(runIdNum, captureId)
     } catch (err) {
       setError(getApiErrorMessage(err, 'Photo upload failed. Retry before finishing the audit.'))
     } finally {
@@ -1958,32 +2201,55 @@ export default function AuditExecution() {
     }
   }
 
-  const removePhotoFromCurrentQuestion = (idx: number, options?: { markCaptured?: boolean }) => {
+  const removePhotoFromCurrentQuestion = (
+    captureId: string,
+    options?: { markCaptured?: boolean },
+  ) => {
     const questionId = currentQuestion.id
-    const existing = responsesRef.current[questionId]
-    const nextPhotos = (existing?.photos || []).filter((_, i) => i !== idx)
-    const nextIds = (existing?.evidenceAssetIds || []).filter((_, i) => i !== idx)
-    const removedId = existing?.evidenceAssetIds?.[idx]
-    updateResponse({
-      photos: nextPhotos,
-      evidenceAssetIds: nextIds,
-      ...(options?.markCaptured !== false
-        ? { response: nextPhotos.length || nextIds.length ? 'captured' : null }
-        : {}),
-    })
-    if (removedId && !runCompleted) {
-      void evidenceAssetsApi.delete(removedId).catch(() => {
-        /* soft-delete best effort — answer ids are source of truth */
+    const removed = findCapture(responsesRef.current[questionId]?.captures, captureId)
+    updateCaptures(
+      questionId,
+      (captures) => removeCapture(captures, captureId),
+      options?.markCaptured !== false
+        ? (next) => (next.length > 0 ? 'captured' : null)
+        : undefined,
+    )
+    if (runIdNum) void deleteCaptureBlob(runIdNum, captureId)
+    if (removed?.evidenceAssetId && !runCompleted) {
+      void evidenceAssetsApi.delete(removed.evidenceAssetId).catch(() => {
+        /* soft-delete best effort — the answer's own ids are what complete reads */
       })
     }
   }
 
-  /** Upload signature PNG to evidence-assets (AUD-PHOTO-03 parity with photos). */
+  /**
+   * Upload signature PNG to evidence-assets (AUD-PHOTO-03 parity with photos).
+   *
+   * A signature is a capture like any other — one entry in the same list, kind
+   * `signature` — so the bytes reach the device ledger before the upload and the
+   * ACK lands on that entry by id. A question carries at most one, so the prior
+   * one is replaced rather than appended.
+   */
   const attachSignatureToCurrentQuestion = async (signatureDataUrl: string) => {
     const questionId = currentQuestion.id
-    updateResponse({ signature: signatureDataUrl, response: 'signed' })
+    const prior = signatureCapture(responsesRef.current[questionId]?.captures)
+    const captureId = newCaptureId()
+    updateCaptures(
+      questionId,
+      (captures) => {
+        const replaced = signatureCapture(captures)
+        return appendCapture(replaced ? removeCapture(captures, replaced.captureId) : captures, {
+          captureId,
+          kind: 'signature',
+          capturedAt: new Date().toISOString(),
+          previewUrl: signatureDataUrl,
+        })
+      },
+      () => 'signed',
+    )
 
     if (!runIdNum || runCompleted) return
+    if (prior) void deleteCaptureBlob(runIdNum, prior.captureId)
 
     const uploadFile = dataUrlToFile(signatureDataUrl, signatureUploadFilename(questionId))
     if (!uploadFile) {
@@ -1991,12 +2257,19 @@ export default function AuditExecution() {
       return
     }
 
+    await putCaptureBlob({
+      runId: runIdNum,
+      captureId,
+      questionId,
+      kind: 'signature',
+      blob: uploadFile,
+    })
+
     setUploadingPhotoFor(questionId)
     try {
       // Replace any prior signature asset for this question.
-      const priorIds = responsesRef.current[questionId]?.evidenceAssetIds || []
-      for (const priorId of priorIds) {
-        void evidenceAssetsApi.delete(priorId).catch(() => {
+      if (prior?.evidenceAssetId) {
+        void evidenceAssetsApi.delete(prior.evidenceAssetId).catch(() => {
           /* best effort */
         })
       }
@@ -2016,13 +2289,13 @@ export default function AuditExecution() {
           ...prev,
           [questionId]: {
             ...current,
-            signature: signatureDataUrl,
-            evidenceAssetIds: [assetId],
+            captures: ackCapture(current.captures, captureId, assetId),
             response: 'signed',
             timestamp: new Date().toISOString(),
           },
         }
       })
+      void deleteCaptureBlob(runIdNum, captureId)
     } catch (err) {
       setError(
         getApiErrorMessage(err, 'Signature upload failed. Retry before finishing the audit.'),
@@ -2034,19 +2307,20 @@ export default function AuditExecution() {
 
   const clearSignatureFromCurrentQuestion = () => {
     const questionId = currentQuestion.id
-    const existing = responsesRef.current[questionId]
-    const removedIds = existing?.evidenceAssetIds || []
-    updateResponse({
-      signature: undefined,
-      response: null,
-      evidenceAssetIds: [],
-    })
-    if (!runCompleted) {
-      for (const removedId of removedIds) {
-        void evidenceAssetsApi.delete(removedId).catch(() => {
-          /* soft-delete best effort */
-        })
-      }
+    const removed = signatureCapture(responsesRef.current[questionId]?.captures)
+    updateCaptures(
+      questionId,
+      (captures) => {
+        const current = signatureCapture(captures)
+        return current ? removeCapture(captures, current.captureId) : (captures ?? [])
+      },
+      () => null,
+    )
+    if (removed && runIdNum) void deleteCaptureBlob(runIdNum, removed.captureId)
+    if (removed?.evidenceAssetId && !runCompleted) {
+      void evidenceAssetsApi.delete(removed.evidenceAssetId).catch(() => {
+        /* soft-delete best effort */
+      })
     }
   }
 
@@ -2058,7 +2332,7 @@ export default function AuditExecution() {
   }
 
   const goNext = () => {
-    if (isFailEvidenceGateActive(currentQuestion, currentResponse)) {
+    if (isFailEvidenceGateActive(currentQuestion, currentEvidenceView)) {
       blockForFailEvidenceGate()
       return
     }
@@ -2102,7 +2376,7 @@ export default function AuditExecution() {
 
     const gateActive = isFailEvidenceGateActive(currentQuestion, {
       response: value as ResponseType,
-      evidenceAssetIds: currentResponse?.evidenceAssetIds,
+      evidenceAssetIds: captureEvidenceIds(currentResponse?.captures),
     })
 
     if (gateActive) {
@@ -2119,6 +2393,43 @@ export default function AuditExecution() {
       autoAdvanceTimerRef.current = null
       goNext()
     }, 600)
+  }
+
+  /**
+   * AUD-P3. Enter on a single-line answer field advances, so a phone auditor
+   * can commit from the virtual keyboard.
+   *
+   * The `AUTO_ADVANCE_TYPES` widgets are real `<button>`s, so Enter already
+   * reaches `handleBinaryResponse` natively and nothing here touches them. The
+   * gap was typed answers: the window-level Arrow handler deliberately ignores
+   * events from an INPUT, which left Enter doing nothing at all and the auditor
+   * dismissing the keyboard to hunt for Next.
+   *
+   * This is exactly the Next button and nothing more — same `canAdvance`, same
+   * `goNext`, so the fail-evidence gate and per-question save behave
+   * identically whether the auditor taps or types.
+   *
+   * Only the two typed widgets use it. `text_long` needs Enter as a newline,
+   * and `date` / `datetime` open a native picker rather than the keyboard this
+   * slice is about, where Enter already means "commit the picker" — taking
+   * that over would break a control that is not currently broken.
+   */
+  const handleAnswerFieldKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return
+    // A modified Enter is not "next question", and an IME uses Enter to commit
+    // the candidate it is showing rather than to navigate.
+    if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return
+    if (event.nativeEvent.isComposing) return
+    event.preventDefault()
+    // Completing an audit stays a deliberate act: Enter never opens the review
+    // or completion flow. On the last question it drops the keyboard instead,
+    // which is what puts Finish back on screen.
+    if (isLastQuestion) {
+      event.currentTarget.blur()
+      return
+    }
+    if (!canAdvance) return
+    goNext()
   }
 
   // Render question input based on type
@@ -2262,6 +2573,8 @@ export default function AuditExecution() {
             type="text"
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
+            onKeyDown={handleAnswerFieldKeyDown}
+            enterKeyHint={isLastQuestion ? 'done' : 'next'}
             placeholder="Enter your response..."
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
           />
@@ -2284,6 +2597,8 @@ export default function AuditExecution() {
             type="number"
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
+            onKeyDown={handleAnswerFieldKeyDown}
+            enterKeyHint={isLastQuestion ? 'done' : 'next'}
             placeholder="Enter number..."
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
           />
@@ -2365,21 +2680,23 @@ export default function AuditExecution() {
       case 'photo':
         return (
           <PhotoCapture
-            photos={currentResponse?.photos || []}
+            photos={capturePreviews(currentResponse?.captures)}
             readOnly={runCompleted}
             uploading={uploadingPhotoFor === currentQuestion.id}
             loadingStored={hydratingEvidenceQuestionId === currentQuestion.id}
             onAdd={(photo, file) => {
               void attachPhotoToCurrentQuestion(photo, file, { markCaptured: true })
             }}
-            onRemove={(idx) => removePhotoFromCurrentQuestion(idx, { markCaptured: true })}
+            onRemove={(captureId) =>
+              removePhotoFromCurrentQuestion(captureId, { markCaptured: true })
+            }
           />
         )
 
       case 'signature':
         return (
           <SignaturePad
-            signature={currentResponse?.signature}
+            signature={signatureCapture(currentResponse?.captures)?.previewUrl}
             uploading={uploadingPhotoFor === currentQuestion.id}
             readOnly={runCompleted}
             onCapture={(sig) => {
@@ -2454,7 +2771,7 @@ export default function AuditExecution() {
             </div>
             <div className="bg-secondary rounded-xl p-4">
               <p className="text-2xl font-bold text-foreground">
-                {Object.values(responses).filter((r) => r.photos && r.photos.length > 0).length}
+                {Object.values(responses).filter((r) => photoCaptures(r.captures).length > 0).length}
               </p>
               <p className="text-xs text-muted-foreground">Photos</p>
             </div>
@@ -2512,28 +2829,37 @@ export default function AuditExecution() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="field-shell bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border">
         <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          {/* Stacks rather than clips. At 390 CSS px the timer, pause,
+              details, Save and (when scheduled) Start fieldwork cannot share a
+              row with the template name — the previous single row pushed them
+              off-screen. Below `sm` the control group takes its own full-width
+              line and wraps within it, which is deterministic; from `sm` up it
+              is the original row, with the title truncating rather than
+              shoving the controls out. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3">
+            <div className="flex items-center gap-3 min-w-0 sm:flex-1">
               <button
                 onClick={() => navigate('/audits')}
                 aria-label="Go back"
-                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                className="p-2 shrink-0 hover:bg-secondary rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5 text-muted-foreground" />
               </button>
-              <div>
-                <h1 className="text-lg font-bold text-foreground">{audit.templateName}</h1>
-                <p className="text-xs text-muted-foreground">
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-foreground truncate">
+                  {audit.templateName}
+                </h1>
+                <p className="text-xs text-muted-foreground truncate">
                   {audit.asset} • {audit.location}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               {/* Timer */}
               <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-lg">
                 <Timer className="w-4 h-4 text-muted-foreground" />
@@ -2699,7 +3025,10 @@ export default function AuditExecution() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto p-4 pb-32">
+        {/* `px-4 pt-4`, not `p-4`: .field-answer-pane owns padding-bottom, and
+            a `p-4` utility would beat it — Tailwind emits the utilities layer
+            after the components layer, so equal specificity goes to `p-4`. */}
+        <div className="max-w-2xl mx-auto px-4 pt-4 field-answer-pane">
           {/* Soft-recovery prompt: shows when we found a stashed local draft
               that's newer than the server (e.g. user got logged out
               mid-audit). Lets them restore or discard. */}
@@ -2768,6 +3097,36 @@ export default function AuditExecution() {
             >
               <Info className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{autosaveError}</span>
+            </div>
+          )}
+
+          {/* AUD-F6. Two different facts, deliberately two different banners.
+              A failed write means this answer is NOT on the device — blocking,
+              because the previous behaviour returned false and said nothing, so
+              a full tablet looked exactly like a working one. A device that
+              merely refused durable storage did keep the write, but may drop it,
+              which is a warning. Neither says anything will sync: nothing here
+              retries a server write. */}
+          {ledgerStatus.writeFailed && (
+            <div
+              role="alert"
+              data-testid="device-ledger-write-failed"
+              className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-3 text-sm text-destructive flex items-start gap-2"
+            >
+              <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{DEVICE_LEDGER_COPY[ledgerStatus.reason]}</span>
+            </div>
+          )}
+
+          {!ledgerStatus.durable && !ledgerStatus.writeFailed && (
+            <div
+              role="status"
+              aria-live="polite"
+              data-testid="device-ledger-not-durable"
+              className="mb-4 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-3 py-3 text-sm text-yellow-300 flex items-start gap-2"
+            >
+              <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{DEVICE_LEDGER_COPY[ledgerStatus.reason]}</span>
             </div>
           )}
 
@@ -2877,7 +3236,7 @@ export default function AuditExecution() {
                     </div>
                   )}
                   <PhotoCapture
-                    photos={currentResponse?.photos || []}
+                    photos={capturePreviews(currentResponse?.captures)}
                     readOnly={runCompleted}
                     uploading={uploadingPhotoFor === currentQuestion.id}
                     loadingStored={hydratingEvidenceQuestionId === currentQuestion.id}
@@ -2890,14 +3249,15 @@ export default function AuditExecution() {
                     onAdd={(photo, file) => {
                       void attachPhotoToCurrentQuestion(photo, file, { markCaptured: false })
                     }}
-                    onRemove={(idx) => {
+                    onRemove={(captureId) => {
                       const existing = responsesRef.current[currentQuestion.id]
-                      removePhotoFromCurrentQuestion(idx, { markCaptured: false })
-                      const nextIds = (existing?.evidenceAssetIds || []).filter((_, i) => i !== idx)
+                      removePhotoFromCurrentQuestion(captureId, { markCaptured: false })
                       if (
                         isFailEvidenceGateActive(currentQuestion, {
                           response: currentResponse?.response ?? null,
-                          evidenceAssetIds: nextIds,
+                          evidenceAssetIds: captureEvidenceIds(
+                            removeCapture(existing?.captures, captureId),
+                          ),
                         })
                       ) {
                         setFailEvidenceGateError(true)
@@ -2982,7 +3342,7 @@ export default function AuditExecution() {
           {isAutoAdvanceType && currentResponse?.response && !autoAdvancePending && (
             <button
               onClick={goNext}
-              disabled={!canAdvancePastFailEvidenceGate(currentQuestion, currentResponse)}
+              disabled={!canAdvancePastFailEvidenceGate(currentQuestion, currentEvidenceView)}
               className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary text-foreground rounded-xl text-sm font-medium transition-colors hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Continue <ArrowRight className="w-4 h-4" />
