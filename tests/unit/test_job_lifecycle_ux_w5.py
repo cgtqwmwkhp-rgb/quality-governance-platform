@@ -118,8 +118,8 @@ def test_migration_chains_serially_from_the_w4_head():
 def test_the_w5_revision_is_the_only_head(tmp_path):
     heads = _alembic_revision_map(tmp_path)["heads"]
     assert heads == [
-        "20261119_aud_f5_resp_evid"
-    ], f"expected the AUD-F5 response-evidence join as the single head, found {heads}"
+        "20260903_cb_bind_mode"
+    ], f"expected the CB-UI-2 bind mode/interval revision as the single head, found {heads}"
 
 
 def test_only_the_w5_revision_sits_on_the_w4_head(tmp_path):

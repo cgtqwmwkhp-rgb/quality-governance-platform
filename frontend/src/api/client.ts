@@ -63,6 +63,7 @@ import { createDocumentControlApi } from './documentControlClient'
 import { createDocumentCampaignApi } from './documentCampaignClient'
 import { createTrainingMatrixApi } from './trainingMatrixClient'
 import { createCompetenceBoardApi } from './competenceBoardClient'
+import { createCompetenceBindApi } from './competenceBindClient'
 import { createPortalComplianceApi } from './portalComplianceClient'
 import {
   beginGlobalLoading,
@@ -1160,6 +1161,16 @@ export type {
   CompetenceBoardResponse,
   CompetenceBoardSnapshotMeta,
 } from './competenceBoardClient'
+
+// ============ Competence assessment binds (CB-UI-2 — QGP tables only) ============
+export const competenceBindApi = createCompetenceBindApi(api)
+export type {
+  CompetenceAssessmentBind,
+  CompetenceBindCreate,
+  CompetenceBindListResponse,
+  CompetenceBindMode,
+  CompetenceCharacteristic,
+} from './competenceBindClient'
 
 // ============ Portal tool + van compliance (person-scoped) ============
 export const portalComplianceApi = createPortalComplianceApi(api)

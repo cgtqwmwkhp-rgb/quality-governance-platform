@@ -175,14 +175,38 @@ class _FakeDb:
         return [obj for obj in self.added if isinstance(obj, model)]
 
 
-def _bind(*, characteristic=CHARACTERISTIC, template_id=TEMPLATE_ID, tenant_id=TENANT, bind_id=3):
+def _bind(
+    *,
+    characteristic=CHARACTERISTIC,
+    template_id=TEMPLATE_ID,
+    tenant_id=TENANT,
+    bind_id=3,
+    mode="field",
+    interval_days=None,
+):
+    """``mode`` is explicit because the column is NOT NULL after CB-UI-2.
+
+    The model default lands at flush and the session double never flushes, so a
+    row left without it would not represent anything the database can hold.
+    """
     return CompetenceAssessmentBind(
         id=bind_id,
         tenant_id=tenant_id,
         template_id=template_id,
         characteristic_key=characteristic,
+        mode=mode,
+        interval_days=interval_days,
         created_at=datetime(2026, 9, 1, 9, 0),
     )
+
+
+def _published_template(*, template_id=TEMPLATE_ID, tenant_id=TENANT):
+    """CB-UI-2 only binds a published, active template.
+
+    SQLAlchemy column defaults land at flush, and the session double never
+    flushes, so the flags have to be set explicitly here.
+    """
+    return AuditTemplate(id=template_id, tenant_id=tenant_id, is_published=True, is_active=True)
 
 
 def _engineer(*, engineer_id=ENGINEER_ID, tenant_id=TENANT):
@@ -343,7 +367,7 @@ def test_flag_default_is_on_since_cb_pr6():
 
 @pytest.mark.asyncio
 async def test_bind_is_explicit_and_created_once():
-    db = _FakeDb(rows={AuditTemplate: [AuditTemplate(id=TEMPLATE_ID, tenant_id=TENANT)]})
+    db = _FakeDb(rows={AuditTemplate: [_published_template()]})
 
     row, created = await create_bind_async(
         db, tenant_id=TENANT, template_id=TEMPLATE_ID, characteristic_key=CHARACTERISTIC
@@ -395,7 +419,7 @@ async def test_matching_asset_type_name_does_not_auto_bind():
 async def test_second_template_cannot_take_a_bound_characteristic():
     db = _FakeDb(
         rows={
-            AuditTemplate: [AuditTemplate(id=TEMPLATE_ID, tenant_id=TENANT), AuditTemplate(id=99, tenant_id=TENANT)],
+            AuditTemplate: [_published_template(), _published_template(template_id=99)],
             CompetenceAssessmentBind: [_bind()],
         }
     )
@@ -587,7 +611,7 @@ async def test_open_issue_request_blocks_the_revoke_without_failing_the_run():
 @pytest.mark.asyncio
 async def test_bind_endpoints_create_list_and_revert(monkeypatch):
     monkeypatch.setattr(settings, "competence_board_enabled", True)
-    db = _FakeDb(rows={AuditTemplate: [AuditTemplate(id=TEMPLATE_ID, tenant_id=TENANT)]})
+    db = _FakeDb(rows={AuditTemplate: [_published_template()]})
     user = types.SimpleNamespace(id=42, tenant_id=TENANT)
     payload = board_routes.CompetenceAssessmentBindCreate(
         template_id=TEMPLATE_ID,
@@ -691,6 +715,10 @@ async def test_board_attaches_demonstration_only_where_a_run_exists(monkeypatch)
     db = _FakeDb(
         rows={
             Engineer: [_engineer()],
+            # The bind is what produced these demonstrations; CB-UI-2 only
+            # overlays cells whose bind still exists, so the fixture has to
+            # hold the state the rows could actually have come from.
+            CompetenceAssessmentBind: [_bind()],
             CompetenceDemonstration: [older, latest, unmapped_person_demo],
         }
     )
