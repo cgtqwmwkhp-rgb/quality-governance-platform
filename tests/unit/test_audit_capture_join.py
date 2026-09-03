@@ -460,7 +460,7 @@ def test_the_new_revision_is_the_only_head(tmp_path) -> None:
     say so.
     """
     chain = _alembic_chain(tmp_path)
-    assert chain["heads"] == ["20261119_aud_f5_resp_evid"], f"expected a single head, found {chain['heads']}"
+    assert chain["heads"] == ["20260903_cb_bind_mode"], f"expected a single head, found {chain['heads']}"
     assert chain["parents"] == ["20260901_comp_cov"]
 
 
