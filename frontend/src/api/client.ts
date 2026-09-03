@@ -64,6 +64,7 @@ import { createDocumentCampaignApi } from './documentCampaignClient'
 import { createTrainingMatrixApi } from './trainingMatrixClient'
 import { createCompetenceBoardApi } from './competenceBoardClient'
 import { createCompetenceBindApi } from './competenceBindClient'
+import { createCompetenceStartApi } from './competenceStartClient'
 import { createPortalComplianceApi } from './portalComplianceClient'
 import {
   beginGlobalLoading,
@@ -784,7 +785,49 @@ export function getApiErrorCode(error: unknown): string | null {
 }
 
 /**
- * The message for a 403, which is two different failures wearing one status code.
+ * Codes whose 403 already carries the sentence the user needs, so rewriting it
+ * would destroy the only actionable part of the response.
+ *
+ * A generic rewrite is right for a genuine permission failure, where the server
+ * has nothing to add and the fix is an administrator granting something. It is
+ * wrong wherever the refusal is a specific, unfixable-by-admin fact — the
+ * assessor gate refuses four different ways (you are the engineer, PAMS has not
+ * issued you this, you have no employee record, no snapshot is loaded) and no
+ * permission grant changes any of them.
+ */
+const FORBIDDEN_CODES_WITH_OWN_MESSAGE = new Set(['ASSESSOR_NOT_ELIGIBLE'])
+
+/**
+ * True when the server wrote this message for a user to read, so nothing should
+ * tidy it up on the way to the screen.
+ *
+ * `humaniseCodedText` exists to clean coded tokens out of messages that were
+ * never written for a user — a leaked `Status.IN_REVIEW`, a quoted column name.
+ * Run over prose that deliberately quotes an identifier the UI also displays, it
+ * does damage instead: `COUNTERBALANCE_FLT` becomes `Counterbalance flt` and
+ * `MEWP_3A` becomes `Mewp 3 a`, so the toast names something the assessor cannot
+ * find on the board they are looking at. The characteristic key is the label on
+ * the column header, so the refusal has to spell it the same way.
+ */
+function carriesItsOwnMessage(error: unknown): boolean {
+  const code = getApiErrorCode(error)
+  return code !== null && FORBIDDEN_CODES_WITH_OWN_MESSAGE.has(code)
+}
+
+/** The server's own message from the unified envelope, when it sent one. */
+function serverEnvelopeMessage(error: unknown): string | null {
+  if (!axios.isAxiosError(error)) return null
+  const data = error.response?.data as Record<string, unknown> | undefined
+  const envelope = data?.['error']
+  if (envelope && typeof envelope === 'object') {
+    const message = (envelope as Record<string, unknown>)['message']
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return null
+}
+
+/**
+ * The message for a 403, which is several different failures wearing one status code.
  *
  * A user whose account carries no tenant is refused by ``_resolve_user_tenant_context``
  * on every request, including endpoints that check no permission at all. Telling them
@@ -792,12 +835,19 @@ export function getApiErrorCode(error: unknown): string | null {
  * grant, and the fix is an administrator assigning their organisation.
  */
 export function forbiddenMessageFor(error: unknown): string {
-  if (getApiErrorCode(error) === 'TENANT_ACCESS_DENIED') {
+  const code = getApiErrorCode(error)
+  if (code === 'TENANT_ACCESS_DENIED') {
     return (
       'Your account is not linked to an organisation yet, so it cannot load any data. ' +
       'This is an account setup issue rather than a permissions one — ask an administrator ' +
       'to assign your organisation.'
     )
+  }
+  if (carriesItsOwnMessage(error)) {
+    // Falls through to the generic line when the envelope carried a code but no
+    // message, rather than showing an empty toast.
+    const message = serverEnvelopeMessage(error)
+    if (message) return message
   }
   return "You don't have permission to perform this action."
 }
@@ -815,6 +865,13 @@ export function isUnprovisionedError(error: unknown): boolean {
 export function getApiErrorMessage(error: unknown, fallback?: string): string {
   if (axios.isAxiosError(error)) {
     const classified = error as ClassifiedAxiosError
+    // Checked before either source is read, because it is the same message
+    // whichever branch finds it: the interceptor's copy when a request went
+    // through the shared client, the envelope directly when it did not.
+    if (carriesItsOwnMessage(error)) {
+      const verbatim = classified.classifiedMessage || serverEnvelopeMessage(error)
+      if (verbatim) return verbatim
+    }
     if (classified.classifiedMessage) {
       return presentServerErrorMessage(classified.classifiedMessage)
     }
@@ -1154,6 +1211,7 @@ export {
 // ============ Competence board (CB-PR1/PR3/PR4 — read-only, ADR-0026) ============
 export const competenceBoardApi = createCompetenceBoardApi(api)
 export type {
+  CompetenceBoardAssessor,
   CompetenceBoardCell,
   CompetenceBoardColumn,
   CompetenceBoardFamily,
@@ -1171,6 +1229,15 @@ export type {
   CompetenceBindMode,
   CompetenceCharacteristic,
 } from './competenceBindClient'
+
+// ====== Family assessment start (CB-UI-3 — creates a QGP assessment run only) ======
+export const competenceStartApi = createCompetenceStartApi(api)
+export { competenceAssessmentExecutePath } from './competenceStartClient'
+export type {
+  CompetenceAssessmentStart,
+  CompetenceAssessmentStartCreate,
+  CompetencePlantEvidence,
+} from './competenceStartClient'
 
 // ============ Portal tool + van compliance (person-scoped) ============
 export const portalComplianceApi = createPortalComplianceApi(api)
