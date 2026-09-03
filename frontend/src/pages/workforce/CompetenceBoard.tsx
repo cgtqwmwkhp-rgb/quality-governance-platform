@@ -20,15 +20,21 @@
  * ever renders (same call as AUD-F6's device-ledger banners).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Loader2, PlugZap } from 'lucide-react'
 import {
+  competenceAssessmentExecutePath,
   competenceBoardApi,
+  competenceStartApi,
   getApiErrorMessage,
+  type CompetenceBindMode,
+  type CompetenceBoardColumn,
   type CompetenceBoardFamily,
   type CompetenceBoardPerson,
   type CompetenceBoardResponse,
+  type CompetencePlantEvidence,
 } from '../../api/client'
+import { toast } from '../../contexts/ToastContext'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -44,6 +50,14 @@ import {
   plantCellSummary,
   todayIso,
 } from './competenceBoard/competenceBoardCells'
+import {
+  MODE_LABEL,
+  cellStartability,
+  defaultMode,
+  isUnbound,
+  normaliseEvidence,
+  startabilitySummary,
+} from './competenceBoard/competenceStart'
 
 type TabId = 'plant' | 'people'
 
@@ -98,6 +112,10 @@ function normaliseBoard(
     columns: Array.isArray(data?.columns) ? data.columns : [],
     people: Array.isArray(data?.people) ? data.people : [],
     unmapped_count: typeof data?.unmapped_count === 'number' ? data.unmapped_count : 0,
+    // An absent assessor block stays absent rather than becoming an empty
+    // permissive one: `cellStartability` reads "cannot prove issuance" from it,
+    // which is the fail-closed reading.
+    assessor: data?.assessor ?? null,
   }
 }
 
@@ -114,6 +132,142 @@ function personRowKey(
     if (person.pams_technician_id != null) return `pams-${person.pams_technician_id}`
   }
   return `row-${index}`
+}
+
+/** A cell the viewer may start a demonstration from (CB-UI-3). */
+type StartTarget = {
+  person: CompetenceBoardPerson
+  engineerId: number
+  column: CompetenceBoardColumn
+  modes: CompetenceBindMode[]
+}
+
+const EVIDENCE_FIELDS: { name: keyof CompetencePlantEvidence; label: string }[] = [
+  { name: 'make', label: 'Make' },
+  { name: 'model', label: 'Model' },
+  { name: 'serial', label: 'Serial number' },
+  { name: 'pams_plant_id', label: 'PAMS plant ID' },
+]
+
+/**
+ * The start form for one cell (CB-UI-3).
+ *
+ * Inline rather than a modal, matching the CB-UI-2 bind screen: plain labelled
+ * controls, no focus trap to get wrong. It is a labelled region that receives
+ * focus when it opens, so a keyboard user who activated a square lands in the
+ * form rather than back at the top of an eighty-five row table.
+ *
+ * The plant boxes are evidence about the machine and nothing else. They grant
+ * no competence, they are not board columns, and leaving them blank does not
+ * make the demonstration invalid — an assessment can legitimately be carried
+ * out on a machine whose plate is unreadable.
+ */
+function StartPanel({
+  target,
+  onCancel,
+  onSubmit,
+  submitting,
+}: {
+  target: StartTarget
+  onCancel: () => void
+  onSubmit: (mode: CompetenceBindMode, evidence: CompetencePlantEvidence) => void
+  submitting: boolean
+}) {
+  const [mode, setMode] = useState<CompetenceBindMode>(() => defaultMode(target.modes))
+  const [evidence, setEvidence] = useState<CompetencePlantEvidence>({})
+  const heading = useRef<HTMLHeadingElement>(null)
+
+  // Re-key on the cell so switching cells resets the form rather than carrying
+  // the previous machine's serial onto a different person's assessment.
+  useEffect(() => {
+    setMode(defaultMode(target.modes))
+    setEvidence({})
+    heading.current?.focus()
+  }, [target])
+
+  return (
+    // A named `section` is already a landmark region — naming it is what makes
+    // it one — so an explicit role="region" would be redundant.
+    <section
+      aria-labelledby="competence-start-heading"
+      data-testid="competence-start-panel"
+      className="rounded-lg border border-primary/40 bg-primary/5 px-4 py-3"
+    >
+      <h3
+        ref={heading}
+        tabIndex={-1}
+        id="competence-start-heading"
+        className="text-sm font-semibold text-foreground focus-visible:outline-none"
+      >
+        Start a demonstration — {target.person.display_name}, {target.column.label}
+      </h3>
+      <p className="mt-1 text-xs text-muted-foreground">
+        This creates a QGP assessment and opens it. A pass records the demonstration on this board;
+        it does not issue anything in PAMS, because QGP never writes to PAMS.
+      </p>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-5">
+        <div>
+          <label className="block text-sm font-medium mb-1" htmlFor="competence-start-mode">
+            Mode
+          </label>
+          <select
+            id="competence-start-mode"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            value={mode}
+            onChange={(event) => setMode(event.target.value as CompetenceBindMode)}
+          >
+            {target.modes.map((value) => (
+              <option key={value} value={value}>
+                {MODE_LABEL[value]}
+              </option>
+            ))}
+          </select>
+        </div>
+        {EVIDENCE_FIELDS.map((field) => (
+          <div key={field.name}>
+            <label className="block text-sm font-medium mb-1" htmlFor={`competence-start-${field.name}`}>
+              {field.label}
+            </label>
+            <input
+              id={`competence-start-${field.name}`}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              maxLength={120}
+              placeholder="Optional"
+              value={evidence[field.name] ?? ''}
+              onChange={(event) =>
+                setEvidence((prev) => ({ ...prev, [field.name]: event.target.value }))
+              }
+            />
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Make, model, serial and plant ID are evidence of which machine was used. They are optional,
+        they are not columns on this board, and they do not narrow what the demonstration covers.
+      </p>
+
+      <div className="mt-3 flex gap-2">
+        <Button
+          type="button"
+          data-testid="competence-start-submit"
+          disabled={submitting}
+          onClick={() => onSubmit(mode, evidence)}
+        >
+          {submitting ? 'Starting…' : `Start ${MODE_LABEL[mode].toLowerCase()}`}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          data-testid="competence-start-cancel"
+          disabled={submitting}
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+      </div>
+    </section>
+  )
 }
 
 function BoardNotice({
@@ -183,7 +337,15 @@ function SnapshotLine({ data }: { data: CompetenceBoardResponse }) {
   )
 }
 
-function BoardTable({ data, today }: { data: CompetenceBoardResponse; today: string }) {
+function BoardTable({
+  data,
+  today,
+  onStart,
+}: {
+  data: CompetenceBoardResponse
+  today: string
+  onStart: (target: StartTarget) => void
+}) {
   const isPlant = data.family === 'pams'
   const tones = isPlant ? PLANT_CELL_TONE : PEOPLE_CELL_TONE
   const legend = isPlant ? PLANT_LEGEND : PEOPLE_LEGEND
@@ -213,6 +375,21 @@ function BoardTable({ data, today }: { data: CompetenceBoardResponse; today: str
                   className="p-2 font-medium text-muted-foreground border-b border-border text-center whitespace-nowrap"
                 >
                   {column.label}
+                  {/*
+                    The unbound fact belongs to the column, not to a person, so
+                    it is stated once here instead of eighty-five times down the
+                    rows. The squares underneath keep their PAMS colour: an
+                    unmapped characteristic is a gap in QGP, and greying the
+                    column would read as a finding against everyone in it.
+                  */}
+                  {isPlant && isUnbound(column) ? (
+                    <span
+                      className="mt-0.5 block text-[0.65rem] font-normal normal-case text-muted-foreground"
+                      data-testid={`competence-column-unbound-${column.key}`}
+                    >
+                      No family template yet
+                    </span>
+                  ) : null}
                 </th>
               ))}
             </tr>
@@ -264,19 +441,59 @@ function BoardTable({ data, today }: { data: CompetenceBoardResponse; today: str
                     const summary = isPlant
                       ? plantCellSummary(column.label, cell, today)
                       : peopleCellSummary(column.label, cell, today)
+                    const sentence = `${person.display_name} — ${summary}`
+                    const startability = cellStartability({
+                      family: data.family,
+                      column,
+                      person,
+                      assessor: data.assessor,
+                    })
+                    const square = (
+                      <span
+                        aria-hidden="true"
+                        title={sentence}
+                        data-testid={`competence-cell-${data.family}-${rowKey}-${column.key}`}
+                        data-cell-state={state}
+                        className={cn(
+                          'mx-auto block h-5 w-5 rounded-sm',
+                          (tones as Record<string, string>)[state],
+                        )}
+                      />
+                    )
                     return (
                       <td key={column.key} className="p-1.5 border-b border-border text-center">
-                        <span
-                          aria-hidden="true"
-                          title={`${person.display_name} — ${summary}`}
-                          data-testid={`competence-cell-${data.family}-${rowKey}-${column.key}`}
-                          data-cell-state={state}
-                          className={cn(
-                            'mx-auto block h-5 w-5 rounded-sm',
-                            (tones as Record<string, string>)[state],
-                          )}
-                        />
-                        <span className="sr-only">{`${person.display_name} — ${summary}`}</span>
+                        {startability.status === 'startable' && person.engineer_id != null ? (
+                          // The square becomes a button only where a start
+                          // would be accepted. The gate is still the server's:
+                          // this only avoids offering a form that ends in 403.
+                          <button
+                            type="button"
+                            data-testid={`competence-start-${rowKey}-${column.key}`}
+                            // A marker every start control shares, so a test can
+                            // assert the *set* of startable cells rather than the
+                            // absence of one id it may have spelled wrongly.
+                            data-start-cell={`${rowKey}-${column.key}`}
+                            className="mx-auto block rounded-sm p-1 hover:ring-2 hover:ring-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            onClick={() =>
+                              onStart({
+                                person,
+                                engineerId: person.engineer_id as number,
+                                column,
+                                modes: startability.modes,
+                              })
+                            }
+                          >
+                            {square}
+                            <span className="sr-only">
+                              {`${sentence} — ${startabilitySummary(startability)}`}
+                            </span>
+                          </button>
+                        ) : (
+                          <>
+                            {square}
+                            <span className="sr-only">{sentence}</span>
+                          </>
+                        )}
                       </td>
                     )
                   })}
@@ -307,12 +524,14 @@ function BoardPanel({
   today,
   onRetry,
   footnote,
+  onStart,
 }: {
   family: CompetenceBoardFamily
   state: BoardState | undefined
   today: string
   onRetry: () => void
   footnote: string
+  onStart: (target: StartTarget) => void
 }) {
   if (!state || state.status === 'loading') {
     return (
@@ -377,6 +596,20 @@ function BoardPanel({
           <span>{data.banner}</span>
         </div>
       ) : null}
+      {/*
+        Said once, above the table, so a viewer who can start nothing knows why
+        rather than concluding the feature is broken. The server owns the
+        sentence; the board does not guess a friendlier one.
+      */}
+      {family === 'pams' && !empty && data.assessor?.blocked_reason ? (
+        <p
+          role="status"
+          className="text-xs text-muted-foreground"
+          data-testid="competence-assessor-blocked"
+        >
+          {data.assessor.blocked_reason}
+        </p>
+      ) : null}
       {empty ? (
         <div
           className="flex flex-col items-center justify-center h-48 gap-2 text-center text-muted-foreground"
@@ -390,7 +623,7 @@ function BoardPanel({
           </p>
         </div>
       ) : (
-        <BoardTable data={data} today={today} />
+        <BoardTable data={data} today={today} onStart={onStart} />
       )}
       <p className="text-xs text-muted-foreground">{footnote}</p>
     </div>
@@ -399,8 +632,11 @@ function BoardPanel({
 
 export default function CompetenceBoard() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const activeTab: TabId = searchParams.get('tab') === 'people' ? 'people' : 'plant'
   const activeFamily = FAMILY_BY_TAB[activeTab]
+  const [startTarget, setStartTarget] = useState<StartTarget | null>(null)
+  const [starting, setStarting] = useState(false)
 
   const [boards, setBoards] = useState<Partial<Record<CompetenceBoardFamily, BoardState>>>({})
   const requested = useRef<Set<CompetenceBoardFamily>>(new Set())
@@ -441,7 +677,36 @@ export default function CompetenceBoard() {
     void load(activeFamily)
   }, [activeFamily, load])
 
+  const startAssessment = async (mode: CompetenceBindMode, evidence: CompetencePlantEvidence) => {
+    if (!startTarget) return
+    setStarting(true)
+    try {
+      const response = await competenceStartApi.start({
+        engineer_id: startTarget.engineerId,
+        characteristic_key: startTarget.column.key,
+        mode,
+        // Blank boxes are sent as absent rather than as empty strings, so an
+        // untouched form does not record "the serial is ''" as a fact.
+        plant_evidence: normaliseEvidence(evidence),
+      })
+      setStartTarget(null)
+      // The run is created and not yet carried out. Landing anywhere other than
+      // its execution shell would leave a started assessment nobody is looking
+      // at, so this goes straight there rather than reloading the board.
+      navigate(competenceAssessmentExecutePath(response.data.run_id))
+    } catch (error) {
+      // The assessor gate, the flag and the 1:1 bind rule are all the server's
+      // to state. Show its sentence; never soften a refusal into a retry.
+      toast.error(getApiErrorMessage(error, 'The assessment could not be started.'))
+    } finally {
+      setStarting(false)
+    }
+  }
+
   const onTabChange = (value: string) => {
+    // A half-filled start form belongs to a Plant cell; leaving it open behind
+    // the People tab would let it be submitted against a cell nobody can see.
+    setStartTarget(null)
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
@@ -479,16 +744,26 @@ export default function CompetenceBoard() {
               <p className="text-sm text-muted-foreground">
                 Columns are PAMS characteristics. A square that is only outlined means PAMS holds no
                 record for that person and characteristic; it is not a failure and not a gap QGP has
-                measured.
+                measured. Activate a square to start a demonstration where a family template is
+                bound and PAMS has issued that characteristic to you.
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {startTarget ? (
+                <StartPanel
+                  target={startTarget}
+                  submitting={starting}
+                  onCancel={() => setStartTarget(null)}
+                  onSubmit={(mode, evidence) => void startAssessment(mode, evidence)}
+                />
+              ) : null}
               <BoardPanel
                 family="pams"
                 state={boards.pams}
                 today={today}
                 onRetry={() => void load('pams')}
-                footnote="Issued competencies are a read-only snapshot of PAMS. Demonstrations come from QGP assessments bound to a characteristic; until those binds exist, every issued square correctly reads as not yet demonstrated."
+                onStart={setStartTarget}
+                footnote="Issued competencies are a read-only snapshot of PAMS. A square you can activate starts a demonstration bound to that characteristic; a pass records it here and changes nothing in PAMS."
               />
             </CardContent>
           </Card>
@@ -509,6 +784,9 @@ export default function CompetenceBoard() {
                 state={boards.atlas}
                 today={today}
                 onRetry={() => void load('atlas')}
+                // Atlas courses are issued by a course pass, so there is no
+                // characteristic to bind and nothing here is startable.
+                onStart={() => undefined}
                 footnote="Names come from the Atlas training matrix import and are never matched by name. A row with no QGP employee record stays on the board unlinked — QGP creates no user account from it."
               />
             </CardContent>

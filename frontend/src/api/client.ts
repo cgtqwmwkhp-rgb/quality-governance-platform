@@ -64,6 +64,7 @@ import { createDocumentCampaignApi } from './documentCampaignClient'
 import { createTrainingMatrixApi } from './trainingMatrixClient'
 import { createCompetenceBoardApi } from './competenceBoardClient'
 import { createCompetenceBindApi } from './competenceBindClient'
+import { createCompetenceStartApi } from './competenceStartClient'
 import { createPortalComplianceApi } from './portalComplianceClient'
 import {
   beginGlobalLoading,
@@ -1154,6 +1155,7 @@ export {
 // ============ Competence board (CB-PR1/PR3/PR4 — read-only, ADR-0026) ============
 export const competenceBoardApi = createCompetenceBoardApi(api)
 export type {
+  CompetenceBoardAssessor,
   CompetenceBoardCell,
   CompetenceBoardColumn,
   CompetenceBoardFamily,
@@ -1171,6 +1173,15 @@ export type {
   CompetenceBindMode,
   CompetenceCharacteristic,
 } from './competenceBindClient'
+
+// ====== Family assessment start (CB-UI-3 — creates a QGP assessment run only) ======
+export const competenceStartApi = createCompetenceStartApi(api)
+export { competenceAssessmentExecutePath } from './competenceStartClient'
+export type {
+  CompetenceAssessmentStart,
+  CompetenceAssessmentStartCreate,
+  CompetencePlantEvidence,
+} from './competenceStartClient'
 
 // ============ Portal tool + van compliance (person-scoped) ============
 export const portalComplianceApi = createPortalComplianceApi(api)
