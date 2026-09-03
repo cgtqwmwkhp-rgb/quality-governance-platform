@@ -61,7 +61,6 @@ vi.mock('../../api/client', () => ({
 const DURABLE: DeviceLedgerStatus = {
   durable: true,
   reason: 'ok',
-  message: '',
   writeFailed: false,
   usageBytes: null,
   quotaBytes: null,
@@ -178,8 +177,6 @@ describe('AuditExecution device ledger (AUD-F6)', () => {
     vi.mocked(ensureDeviceLedgerDurability).mockResolvedValue({
       durable: false,
       reason: 'persist-denied',
-      message:
-        'This audit is not durable on this device: the browser refused durable storage and may clear these answers without warning. Press Save while you have signal.',
       writeFailed: false,
       usageBytes: 1_024,
       quotaBytes: 2_048,
@@ -195,6 +192,40 @@ describe('AuditExecution device ledger (AUD-F6)', () => {
     expect(banner.textContent ?? '').not.toMatch(/will sync|syncing|synced/i)
   })
 
+  /**
+   * The copy is the deliverable of this slice, so it is asserted as a contract
+   * rather than one example: every reason the ledger can publish must produce
+   * words, and none of them may imply a sync that no code performs.
+   */
+  it.each([
+    ['indexeddb-unavailable', false] as const,
+    ['no-identity', false] as const,
+    ['persist-denied', false] as const,
+    ['persist-unsupported', false] as const,
+    ['quota-exceeded', true] as const,
+    ['write-failed', true] as const,
+  ])('has honest copy for %s', async (reason, writeFailed) => {
+    mockPhotoRun()
+    renderPage()
+
+    expect(await screen.findByText('Photograph the guarding')).toBeInTheDocument()
+    await waitFor(() => expect(ledgerSubscribers.size).toBeGreaterThan(0))
+
+    for (const listener of ledgerSubscribers) {
+      listener({ durable: false, reason, writeFailed, usageBytes: null, quotaBytes: null })
+    }
+
+    const banner = await screen.findByTestId(
+      writeFailed ? 'device-ledger-write-failed' : 'device-ledger-not-durable',
+    )
+    const text = banner.textContent ?? ''
+    expect(text.length).toBeGreaterThan(20)
+    expect(text).not.toMatch(/will sync|syncing|synced|sync automatically/i)
+    // A failed write says the answer is not held here; a merely unpromising
+    // browser did keep the write, so it says the audit is not durable instead.
+    expect(text).toMatch(writeFailed ? /NOT saved|failed/ : /not durable on this device/)
+  })
+
   it('blocks with an alert when a ledger write actually failed on quota', async () => {
     mockPhotoRun()
     renderPage()
@@ -207,8 +238,6 @@ describe('AuditExecution device ledger (AUD-F6)', () => {
       listener({
         durable: false,
         reason: 'quota-exceeded',
-        message:
-          'Device storage is full — this answer was NOT saved on this device. Free up space, then press Save while you have signal.',
         writeFailed: true,
         usageBytes: 5,
         quotaBytes: 5,

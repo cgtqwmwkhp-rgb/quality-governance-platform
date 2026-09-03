@@ -66,7 +66,6 @@ vi.mock('../../services/auditDraftStore', () => ({
   ensureDeviceLedgerDurability: vi.fn().mockResolvedValue({
     durable: true,
     reason: 'ok',
-    message: '',
     writeFailed: false,
     usageBytes: null,
     quotaBytes: null,
@@ -75,7 +74,6 @@ vi.mock('../../services/auditDraftStore', () => ({
   getDeviceLedgerStatus: vi.fn(() => ({
     durable: true,
     reason: 'ok',
-    message: '',
     writeFailed: false,
     usageBytes: null,
     quotaBytes: null,

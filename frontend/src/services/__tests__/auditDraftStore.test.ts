@@ -214,11 +214,7 @@ describe('device ledger — namespace', () => {
 
     const result = await saveAuditDraft(makeDraft())
 
-    expect(result).toEqual({
-      ok: false,
-      reason: 'no-identity',
-      message: expect.stringContaining('not durable on this device'),
-    })
+    expect(result).toEqual({ ok: false, reason: 'no-identity' })
     expect(storeRows('ledger')).toEqual([])
     expect(getDeviceLedgerStatus().writeFailed).toBe(true)
   })
@@ -344,7 +340,7 @@ describe('device ledger — a failed write is blocking, not a silent false', () 
   it('reports QuotaExceeded to the auditor instead of swallowing it', async () => {
     const seen: string[] = []
     subscribeDeviceLedgerStatus((next) => {
-      if (next.writeFailed) seen.push(next.message)
+      if (next.writeFailed) seen.push(next.reason)
     })
     const quota = new DOMException('The quota has been exceeded.', 'QuotaExceededError')
     putFailures.set('ledger', quota)
@@ -353,11 +349,11 @@ describe('device ledger — a failed write is blocking, not a silent false', () 
 
     expect(result.ok).toBe(false)
     expect(result).toMatchObject({ reason: 'quota-exceeded' })
-    // "Not saved" has to be the message. The old code returned false and the
-    // page said nothing at all, which is how a full tablet passed for a working
-    // one until the run was opened somewhere else.
-    expect(seen[0]).toContain('NOT saved on this device')
-    expect(seen[0]).not.toMatch(/sync/i)
+    // The old code returned false and published nothing, which is how a full
+    // tablet passed for a working one until the run was opened somewhere else.
+    // A subscriber must hear about it, and hear *why*, so the page can say the
+    // answer is not on the device rather than guess.
+    expect(seen).toEqual(['quota-exceeded'])
     expect(getDeviceLedgerStatus()).toMatchObject({
       durable: false,
       reason: 'quota-exceeded',
@@ -386,7 +382,7 @@ describe('device ledger — a failed write is blocking, not a silent false', () 
     const result = await saveAuditDraft(makeDraft())
 
     expect(result).toMatchObject({ ok: false, reason: 'write-failed' })
-    expect(getDeviceLedgerStatus().message).toContain('failed')
+    expect(getDeviceLedgerStatus().reason).toBe('write-failed')
   })
 
   it('clears the failed-write flag once a write lands, without claiming durability', async () => {
@@ -430,9 +426,9 @@ describe('device ledger — persist() and estimate()', () => {
       usageBytes: 1_024,
       quotaBytes: 2_048,
     })
-    expect(status.message).toContain('not durable on this device')
-    // Nothing here retries a server write, so nothing may imply one.
-    expect(status.message).not.toMatch(/sync/i)
+    // Nothing here retries a server write, so `durable: false` is the only
+    // honest answer even though the write itself succeeded.
+    expect(status.writeFailed).toBe(false)
   })
 
   it('does not ask again when the browser has already granted persistence', async () => {
@@ -447,7 +443,6 @@ describe('device ledger — persist() and estimate()', () => {
 
     expect(persist).not.toHaveBeenCalled()
     expect(status).toMatchObject({ durable: true, reason: 'ok', usageBytes: 10, quotaBytes: 20 })
-    expect(status.message).toBe('')
   })
 
   it('treats a browser with no Storage API as not durable rather than assuming', async () => {
@@ -456,7 +451,6 @@ describe('device ledger — persist() and estimate()', () => {
     const status = await ensureDeviceLedgerDurability()
 
     expect(status).toMatchObject({ durable: false, reason: 'persist-unsupported' })
-    expect(status.message).toContain('not durable on this device')
   })
 
   it('says the audit is not durable here when the namespace is unknown', async () => {

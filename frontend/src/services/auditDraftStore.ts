@@ -126,16 +126,20 @@ export type DeviceLedgerReason =
   | DeviceLedgerFailureReason
 
 /** What a ledger write actually did. Never a bare boolean. */
-export type DraftWriteResult =
-  | { ok: true }
-  | { ok: false; reason: DeviceLedgerFailureReason; message: string }
+export type DraftWriteResult = { ok: true } | { ok: false; reason: DeviceLedgerFailureReason }
 
+/**
+ * Why this device can or cannot be trusted with unsent answers.
+ *
+ * `reason` is the whole contract. The auditor-facing wording lives with the
+ * banner that renders it, not here — a storage module has no business owning
+ * copy, and the execute page is a lazily loaded chunk whereas this module is
+ * pulled into the app shell by the auth-loss flush.
+ */
 export interface DeviceLedgerStatus {
   /** True only when this device will hold answers the server has not got. */
   durable: boolean
   reason: DeviceLedgerReason
-  /** Auditor-facing copy. Never promises a sync that does not exist. */
-  message: string
   /**
    * True when a write was attempted and did not land. Distinct from `!durable`,
    * which can mean "the browser will not promise to keep what we did write".
@@ -143,22 +147,6 @@ export interface DeviceLedgerStatus {
   writeFailed: boolean
   usageBytes: number | null
   quotaBytes: number | null
-}
-
-const MESSAGES: Record<DeviceLedgerReason, string> = {
-  ok: '',
-  'indexeddb-unavailable':
-    'This audit is not durable on this device: the browser will not store anything locally. Stay online and press Save after every few answers.',
-  'no-identity':
-    'This audit is not durable on this device: the app cannot tell which account it belongs to, so nothing is stored locally. Stay online and press Save.',
-  'persist-denied':
-    'This audit is not durable on this device: the browser refused durable storage and may clear these answers without warning. Press Save while you have signal.',
-  'persist-unsupported':
-    'This audit is not durable on this device: the browser cannot promise to keep local answers. Press Save while you have signal.',
-  'quota-exceeded':
-    'Device storage is full — this answer was NOT saved on this device. Free up space, then press Save while you have signal.',
-  'write-failed':
-    'Saving to this device failed — nothing was stored locally for this audit. Press Save while you have signal.',
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +257,6 @@ function blobKey(namespace: string, runId: number, captureId: string): string {
 const OK_STATUS: DeviceLedgerStatus = {
   durable: true,
   reason: 'ok',
-  message: '',
   writeFailed: false,
   usageBytes: null,
   quotaBytes: null,
@@ -322,14 +309,13 @@ function reportFailure(reason: DeviceLedgerFailureReason): DraftWriteResult {
   publish({
     durable: false,
     reason,
-    message: MESSAGES[reason],
     // A write was attempted and did not land — the auditor must be told, not
     // reassured. This is the flag the execute page renders as a blocking alert.
     writeFailed: true,
     usageBytes: status.usageBytes,
     quotaBytes: status.quotaBytes,
   })
-  return { ok: false, reason, message: MESSAGES[reason] }
+  return { ok: false, reason }
 }
 
 function reportWriteSucceeded(): void {
@@ -381,7 +367,6 @@ export async function ensureDeviceLedgerDurability(): Promise<DeviceLedgerStatus
     return publish({
       durable: false,
       reason: 'indexeddb-unavailable',
-      message: MESSAGES['indexeddb-unavailable'],
       writeFailed: false,
       usageBytes: null,
       quotaBytes: null,
@@ -392,7 +377,6 @@ export async function ensureDeviceLedgerDurability(): Promise<DeviceLedgerStatus
     return publish({
       durable: false,
       reason: 'no-identity',
-      message: MESSAGES['no-identity'],
       writeFailed: false,
       usageBytes: null,
       quotaBytes: null,
@@ -433,7 +417,6 @@ export async function ensureDeviceLedgerDurability(): Promise<DeviceLedgerStatus
     return publish({
       durable: false,
       reason: 'persist-unsupported',
-      message: MESSAGES['persist-unsupported'],
       writeFailed: status.writeFailed,
       usageBytes,
       quotaBytes,
@@ -443,7 +426,6 @@ export async function ensureDeviceLedgerDurability(): Promise<DeviceLedgerStatus
     return publish({
       durable: false,
       reason: 'persist-denied',
-      message: MESSAGES['persist-denied'],
       writeFailed: status.writeFailed,
       usageBytes,
       quotaBytes,
@@ -453,7 +435,6 @@ export async function ensureDeviceLedgerDurability(): Promise<DeviceLedgerStatus
   return publish({
     durable: true,
     reason: 'ok',
-    message: '',
     writeFailed: status.writeFailed,
     usageBytes,
     quotaBytes,

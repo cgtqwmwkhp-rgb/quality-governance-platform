@@ -173,6 +173,34 @@ interface CompletionSummary {
   risks: number
 }
 
+/**
+ * AUD-F6 banner copy, keyed by the reason the ledger reported.
+ *
+ * Every line has to survive one test: would an auditor about to walk out of
+ * signal read it and know whether their answers are safe? So none of them says
+ * "will sync" — nothing in this page retries a server write — and the two
+ * quota/write failures say plainly that the answer is *not* on the device,
+ * which is what the old `return false` hid.
+ *
+ * Plain English rather than i18n keys, deliberately: a key pair costs the app
+ * shell (`en.json` is not lazy) while this map sits on the execute route chunk.
+ */
+const DEVICE_LEDGER_COPY: Record<DeviceLedgerStatus['reason'], string> = {
+  ok: '',
+  'indexeddb-unavailable':
+    'This audit is not durable on this device: the browser will not store anything locally. Stay online and press Save after every few answers.',
+  'no-identity':
+    'This audit is not durable on this device: the app cannot tell which account it belongs to, so nothing is stored locally. Stay online and press Save.',
+  'persist-denied':
+    'This audit is not durable on this device: the browser refused durable storage and may clear these answers without warning. Press Save while you have signal.',
+  'persist-unsupported':
+    'This audit is not durable on this device: the browser cannot promise to keep local answers. Press Save while you have signal.',
+  'quota-exceeded':
+    'Device storage is full — this answer was NOT saved on this device. Free up space, then press Save while you have signal.',
+  'write-failed':
+    'Saving to this device failed — nothing was stored locally for this audit. Press Save while you have signal.',
+}
+
 const SECTION_COLORS = [
   'from-blue-500/20 to-blue-600/20',
   'from-green-500/20 to-green-600/20',
@@ -3026,7 +3054,7 @@ export default function AuditExecution() {
               className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-3 text-sm text-destructive flex items-start gap-2"
             >
               <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>{ledgerStatus.message}</span>
+              <span>{DEVICE_LEDGER_COPY[ledgerStatus.reason]}</span>
             </div>
           )}
 
@@ -3038,7 +3066,7 @@ export default function AuditExecution() {
               className="mb-4 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-3 py-3 text-sm text-yellow-300 flex items-start gap-2"
             >
               <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>{ledgerStatus.message}</span>
+              <span>{DEVICE_LEDGER_COPY[ledgerStatus.reason]}</span>
             </div>
           )}
 
