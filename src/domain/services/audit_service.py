@@ -47,6 +47,7 @@ from src.domain.models.audit import (
 )
 from src.domain.models.audit_log import AuditEvent
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
+from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.user import User
 from src.domain.services.audit_composition import section_is_applicable
@@ -122,6 +123,15 @@ _FINDING_JSON_REMAPS: dict[str, str] = {
     "control_ids": "control_ids_json",
     "risk_ids": "risk_ids_json",
 }
+
+#: Wire-visible reasons a completion was refused on integrity grounds. Module
+#: constants rather than ``ErrorCode`` members, following ``LEGAL_HOLD_ACTIVE``:
+#: each is a specific reason inside the generic 400 envelope, not a new class of
+#: error, and a client that only needs "completion was refused" keeps matching
+#: the status code. Distinct from the required-question refusal, which names the
+#: questions to answer — these two say the run has nothing to close on at all.
+COMPLETE_NO_APPLICABLE_ANSWERS = "AUDIT_COMPLETE_NO_APPLICABLE_ANSWERS"
+COMPLETE_EVIDENCE_NOT_RESOLVED = "AUDIT_COMPLETE_EVIDENCE_NOT_RESOLVED"
 
 _CHOICE_QUESTION_TYPES = {"radio", "dropdown", "checkbox"}
 
@@ -811,6 +821,82 @@ class AuditService:
         )
 
     @classmethod
+    def _server_applicable_question_ids(
+        cls,
+        *,
+        questions: list[AuditQuestion],
+        responses: list[AuditResponse],
+        sections: list[AuditSection] | None = None,
+        assessment_mode: str | None = None,
+        asset_type_id: int | None = None,
+    ) -> set[int]:
+        """Ids of the questions the *server* currently treats as applicable.
+
+        Derived only from the live template — section composition plus each
+        question's ``conditional_logic_json`` evaluated against the stored
+        answers. The response row's ``applicability`` is deliberately not
+        consulted: it is client-supplied on both answer-write schemas, so a run
+        that could declare its own questions ``hidden_by_logic`` would be able to
+        excuse itself from every required question and close on nothing. The
+        rules that hid a question are on the template, so the server can always
+        re-derive the same fact for itself.
+        """
+        answers_by_question = {
+            response.question_id: cls._response_answer_for_conditional(response) for response in responses
+        }
+        section_by_id = {section.id: section for section in (sections or [])}
+        applicable: set[int] = set()
+        for question in questions:
+            if not getattr(question, "is_active", True):
+                continue
+            if not cls._question_section_applicable(
+                question,
+                section_by_id=section_by_id,
+                assessment_mode=assessment_mode,
+                asset_type_id=asset_type_id,
+            ):
+                continue
+            rules = getattr(question, "conditional_logic_json", None)
+            if rules and not is_question_visible(rules, answers_by_question):
+                continue
+            applicable.add(question.id)
+        return applicable
+
+    @classmethod
+    def _applicable_answered_question_ids(
+        cls,
+        *,
+        questions: list[AuditQuestion],
+        responses: list[AuditResponse],
+        sections: list[AuditSection] | None = None,
+        assessment_mode: str | None = None,
+        asset_type_id: int | None = None,
+    ) -> list[int]:
+        """Questions carrying a persisted answer the server counts towards the run.
+
+        An answer counts when its row is answered under the same rule the
+        required-question gate applies (``is_na`` included: an explicit "not
+        applicable here" is a recorded judgement, not an absence) *and* the
+        question is applicable on the server's own reading of the template.
+        Rows for questions outside the run's template, or for questions the
+        template currently hides, are not answers to this audit.
+        """
+        applicable_ids = cls._server_applicable_question_ids(
+            questions=questions,
+            responses=responses,
+            sections=sections,
+            assessment_mode=assessment_mode,
+            asset_type_id=asset_type_id,
+        )
+        return sorted(
+            {
+                response.question_id
+                for response in responses
+                if response.question_id in applicable_ids and AuditScoringService.response_is_answered(response)
+            }
+        )
+
+    @classmethod
     def _missing_required_question_ids(
         cls,
         *,
@@ -821,38 +907,19 @@ class AuditService:
         asset_type_id: int | None = None,
     ) -> list[int]:
         response_by_question = {response.question_id: response for response in responses}
-        answers_by_question = {
-            response.question_id: cls._response_answer_for_conditional(response) for response in responses
-        }
-        section_by_id = {section.id: section for section in (sections or [])}
+        applicable_ids = cls._server_applicable_question_ids(
+            questions=questions,
+            responses=responses,
+            sections=sections,
+            assessment_mode=assessment_mode,
+            asset_type_id=asset_type_id,
+        )
         missing: list[int] = []
         for question in questions:
-            if not getattr(question, "is_active", True):
-                continue
-
-            # Composition: skip questions whose section is out of scope for this
-            # run's assessment_mode / asset_type_id.
-            if not cls._question_section_applicable(
-                question,
-                section_by_id=section_by_id,
-                assessment_mode=assessment_mode,
-                asset_type_id=asset_type_id,
-            ):
+            if question.id not in applicable_ids:
                 continue
 
             response = response_by_question.get(question.id)
-
-            # Conditional logic: skip questions explicitly marked hidden on their
-            # response, or currently evaluated as hidden given live answers.
-            if (
-                response is not None
-                and getattr(response, "applicability", None) == ResponseApplicability.HIDDEN_BY_LOGIC.value
-            ):
-                continue
-            rules = getattr(question, "conditional_logic_json", None)
-            if rules and not is_question_visible(rules, answers_by_question):
-                continue
-
             criticality_value = cls._question_criticality_value(question)
             is_required_effective = bool(getattr(question, "is_required", True)) or criticality_value in (
                 QuestionCriticality.ESSENTIAL.value,
@@ -2194,6 +2261,51 @@ class AuditService:
                 actor_user_id=actor_user_id,
             )
 
+    async def _unresolved_evidence_by_question(
+        self,
+        run: AuditRun,
+        responses: list[AuditResponse],
+    ) -> dict[int, list[int]]:
+        """Claimed evidence ids that are not evidence for this run, by question.
+
+        ``response_json.evidence_asset_ids`` is written by the client, and an id
+        in it is enough on its own to make a row count as answered and to satisfy
+        a ``require_photo`` / ``min_attachments`` rule. Nothing previously read
+        the ids back, so a run could claim evidence it never had. An id resolves
+        only when a live ``evidence_assets`` row carries it for this run
+        (``source_module=audit``, ``source_id=<run id>``); uploads already prove
+        the run belongs to the caller's tenant, so pinning the source pins the
+        tenant too. Soft-deleted assets do not resolve — every read path in the
+        evidence module treats them as gone, so counting one as present would be
+        the same untruth in a different place.
+        """
+        claimed: dict[int, list[int]] = {}
+        for response in responses:
+            asset_ids = AuditScoringService.referenced_evidence_asset_ids(response)
+            if asset_ids:
+                claimed[response.question_id] = asset_ids
+        if not claimed:
+            return {}
+
+        # Ask what the run actually has rather than filtering by the ids claimed:
+        # the claim is client-supplied and unbounded, so an ``IN`` built from it
+        # would let a stuffed ``response_json`` size the query. The run's real
+        # uploads are bounded by what was uploaded, and this is the index
+        # (source_module, source_id) that the evidence list endpoint already uses.
+        result = await self.db.execute(
+            select(EvidenceAsset.id).where(
+                EvidenceAsset.source_module == EvidenceSourceModule.AUDIT,
+                EvidenceAsset.source_id == str(run.id),
+                EvidenceAsset.deleted_at.is_(None),
+            )
+        )
+        resolved = set(result.scalars().all())
+        unresolved = {
+            question_id: [asset_id for asset_id in asset_ids if asset_id not in resolved]
+            for question_id, asset_ids in claimed.items()
+        }
+        return {question_id: asset_ids for question_id, asset_ids in unresolved.items() if asset_ids}
+
     async def complete_run(
         self,
         run_id: int,
@@ -2239,9 +2351,30 @@ class AuditService:
         active_questions = list(question_result.scalars().all())
         section_result = await self.db.execute(select(AuditSection).where(AuditSection.template_id == run.template_id))
         template_sections = list(section_result.scalars().all())
+        stored_responses = list(run.responses or [])
+
+        # Every refusal below runs before the score backfill so a refused
+        # completion leaves nothing behind: no rescored rows, no findings, no
+        # CAPA actions, no risks. Completion is the only place those are created
+        # from scoring, and it is reached only once all three gates pass.
+        unresolved_evidence = await self._unresolved_evidence_by_question(run, stored_responses)
+        if unresolved_evidence:
+            raise ValidationError(
+                "Some answers reference evidence that is not attached to this audit run",
+                code=COMPLETE_EVIDENCE_NOT_RESOLVED,
+                details={
+                    "run_id": run.id,
+                    "template_id": run.template_id,
+                    "question_ids": sorted(unresolved_evidence),
+                    "unresolved_evidence_asset_ids": sorted(
+                        {asset_id for asset_ids in unresolved_evidence.values() for asset_id in asset_ids}
+                    ),
+                },
+            )
+
         missing_question_ids = self._missing_required_question_ids(
             questions=active_questions,
-            responses=list(run.responses or []),
+            responses=stored_responses,
             sections=template_sections,
             assessment_mode=run.assessment_mode,
             asset_type_id=run.asset_type_id,
@@ -2253,6 +2386,30 @@ class AuditService:
                     "run_id": run.id,
                     "template_id": run.template_id,
                     "missing_question_ids": missing_question_ids,
+                },
+            )
+
+        # Nothing required was outstanding, which is not the same as something
+        # having been audited: a template of optional questions, or one whose
+        # questions the server currently hides, leaves a run with no answers at
+        # all. Such a run has no observation to score, pass, or raise findings
+        # from, so completing it would publish a verdict about nothing.
+        applicable_answers = self._applicable_answered_question_ids(
+            questions=active_questions,
+            responses=stored_responses,
+            sections=template_sections,
+            assessment_mode=run.assessment_mode,
+            asset_type_id=run.asset_type_id,
+        )
+        if not applicable_answers:
+            raise ValidationError(
+                "This audit has no answers recorded against it, so it cannot be completed",
+                code=COMPLETE_NO_APPLICABLE_ANSWERS,
+                details={
+                    "run_id": run.id,
+                    "template_id": run.template_id,
+                    "applicable_answer_count": 0,
+                    "stored_response_count": len(stored_responses),
                 },
             )
 

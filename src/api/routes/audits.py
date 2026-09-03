@@ -92,7 +92,13 @@ from src.domain.services.audit_execute_access import (
     run_etag,
 )
 from src.domain.services.audit_scoring_service import AuditScoringService
-from src.domain.services.audit_service import AuditService, question_belongs_to_run, require_run_tenant_id
+from src.domain.services.audit_service import (
+    COMPLETE_EVIDENCE_NOT_RESOLVED,
+    COMPLETE_NO_APPLICABLE_ANSWERS,
+    AuditService,
+    question_belongs_to_run,
+    require_run_tenant_id,
+)
 from src.domain.services.external_audit_intake_template_resolver import (
     ExternalAuditIntakeTemplateResolver,
     IntakeTemplateResolution,
@@ -1555,6 +1561,21 @@ async def start_run(
     return payload
 
 
+#: Completion refusals that keep their own code on the wire. Everything else a
+#: refused completion raises stays ``BAD_REQUEST``, which is what this response
+#: has always carried: forwarding ``ValidationError``'s default would relabel
+#: refusals clients already match on, and ``VALIDATION_ERROR`` says nothing about
+#: audits anyway.
+_COMPLETE_REFUSAL_CODES = frozenset({COMPLETE_EVIDENCE_NOT_RESOLVED, COMPLETE_NO_APPLICABLE_ANSWERS})
+
+
+def _complete_refusal(exc: ValidationError) -> tuple[Optional[str], str]:
+    """The (wire code, telemetry reason) pair for a refused completion."""
+    if exc.code in _COMPLETE_REFUSAL_CODES:
+        return exc.code, exc.code.lower()
+    return None, "invalid_status_transition"
+
+
 @router.post("/runs/{run_id}/complete", response_model=AuditRunResponse)
 async def complete_run(
     run_id: int,
@@ -1583,13 +1604,14 @@ async def complete_run(
         )
         raise NotFoundError("Audit run not found")
     except ValidationError as exc:
+        refusal_code, refusal_reason = _complete_refusal(exc)
         _record_audit_endpoint_event(
             "POST /api/v1/audits/runs/{id}/complete",
             400,
             (time.perf_counter() - started) * 1000,
-            "invalid_status_transition",
+            refusal_reason,
         )
-        raise BadRequestError(exc.message, details=exc.details)
+        raise BadRequestError(exc.message, code=refusal_code, details=exc.details)
 
     await db.commit()
     await db.refresh(run)
