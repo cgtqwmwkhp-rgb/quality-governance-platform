@@ -109,6 +109,7 @@ const WorkforceTraining = lazy(() => import('./pages/workforce/Training'))
 const WorkforceTrainingExecution = lazy(() => import('./pages/workforce/TrainingExecution'))
 const WorkforceEngineers = lazy(() => import('./pages/workforce/Engineers'))
 const WorkforceEngineerProfile = lazy(() => import('./pages/workforce/EngineerProfile'))
+const WorkforceCompetenceBoard = lazy(() => import('./pages/workforce/CompetenceBoard'))
 const WorkforceCompetencyDashboard = lazy(() => import('./pages/workforce/CompetencyDashboard'))
 const PortalNotFound = lazy(() => import('./pages/PortalNotFound'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -536,8 +537,24 @@ function App() {
                   path="workforce/calendar"
                   element={<Navigate to="/calendar?types=training" replace />}
                 />
+                {/* Workforce → Competency is the competence board (CB-UI-1). It used to
+                    be the WDP workshop asset-type matrix, which reads competency_records
+                    — a table this tenant has none of — so the screen answered "who is
+                    competent on what" with grey. PAMS and Atlas hold that answer and the
+                    board API serves both families. */}
                 <Route
                   path="workforce/dashboard"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceCompetenceBoard />
+                    </RequireRole>
+                  }
+                />
+                {/* Kill switch for CB-UI-1, and the home of the WDP analytics matrix while
+                    anything still needs it. Not in the nav: it is not the competence
+                    answer, and it should not be the Competency landing again by default. */}
+                <Route
+                  path="workforce/dashboard/analytics"
                   element={
                     <RequireRole allowed={['admin', 'supervisor']}>
                       <WorkforceCompetencyDashboard />
