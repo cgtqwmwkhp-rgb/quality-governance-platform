@@ -17,6 +17,7 @@ import {
   revokeSession,
   stashReturnPath,
 } from './utils/auth'
+import { purgeDeviceLedgerForCurrentSession } from './services/auditDraftStore'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
 import { isAIIntelligenceRouteEnabled } from './config/aiIntelligenceRoute'
 import { LegacyActionItemRedirect } from './pages/actionLinks'
@@ -267,6 +268,14 @@ function App() {
 
   const handleLogout = async () => {
     await revokeSession()
+    // AUD-F6: before the token goes. The device ledger is namespaced by the
+    // token's `sub`, so once `clearAuthState()` has run there is no way to tell
+    // which rows were this auditor's — and a shared tablet handed to the next
+    // auditor must not still hold the last one's answers or photos. Deliberately
+    // NOT wired into `clearAuthState()` itself: the auth-loss path in
+    // api/client.ts calls that too, straight after flushing unsaved answers here
+    // on purpose, and a session that timed out is not a handover.
+    await purgeDeviceLedgerForCurrentSession()
     clearAuthState()
     // Signing out deliberately is not a session loss: drop the return path
     // clearAuthState() just recorded so the next sign-in starts clean.
