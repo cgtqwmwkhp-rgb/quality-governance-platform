@@ -127,30 +127,34 @@ async def test_photo_answer_requires_evidence_asset_ids_for_complete(
     assert error.get("code") == COMPLETE_EVIDENCE_NOT_RESOLVED
     assert 2_000_000_001 in (error.get("details", {}).get("unresolved_evidence_asset_ids") or [])
 
+    # expire_all() drops loaded columns, including PK, so the next attribute
+    # access would lazy-load and MissingGreenlet on asyncpg. Snapshot ids first.
+    run_id = run.id
+    question_id = question.id
     test_session.expire_all()
-    stored_run = await test_session.get(AuditRun, run.id)
+    stored_run = await test_session.get(AuditRun, run_id)
     assert stored_run is not None
     assert stored_run.status == AuditStatus.IN_PROGRESS
 
     asset = EvidenceAsset(
         tenant_id=1,
-        storage_key=f"audits/{run.id}/{generate_test_reference('EV')}.jpg",
+        storage_key=f"audits/{run_id}/{generate_test_reference('EV')}.jpg",
         content_type="image/jpeg",
         asset_type=EvidenceAssetType.PHOTO,
         source_module=EvidenceSourceModule.AUDIT,
-        source_id=str(run.id),
-        description=f"audit_question:{question.id}",
+        source_id=str(run_id),
+        description=f"audit_question:{question_id}",
     )
     test_session.add(asset)
     await test_session.commit()
     await test_session.refresh(asset)
 
     answered = await client.put(
-        f"/api/v1/audits/runs/{run.id}/responses/by-question/{question.id}",
+        f"/api/v1/audits/runs/{run_id}/responses/by-question/{question_id}",
         headers=auth_headers,
         json={"response_json": {"evidence_asset_ids": [asset.id]}},
     )
     assert answered.status_code in (200, 201), answered.text
 
-    complete = await client.post(f"/api/v1/audits/runs/{run.id}/complete", headers=auth_headers)
+    complete = await client.post(f"/api/v1/audits/runs/{run_id}/complete", headers=auth_headers)
     assert complete.status_code == 200, complete.text
