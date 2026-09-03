@@ -33,9 +33,26 @@ import type {
   CompetenceBoardPerson,
 } from '../../../api/competenceBoardClient'
 
+/**
+ * Where a block is already explained on screen.
+ *
+ * `context` means surrounding copy states it once already — the Plant/People tab
+ * for a wrong-family block, the column header's "No family template yet" for an
+ * unbound characteristic, the row's "No QGP employee record" badge for an
+ * unlinked person, and the notice above the table for an assessor who cannot
+ * assess anything. Repeating those on every square would read the same paragraph
+ * out hundreds of times to a screen-reader user without adding a fact.
+ *
+ * `cell` means this square is the only place the reason appears, because it is
+ * true of this row or this column and not of the grid — you cannot assess
+ * yourself (your row only), or PAMS has not issued you this characteristic (that
+ * column only). Those must be announced or the square is silently inert.
+ */
+export type StartBlockScope = 'context' | 'cell'
+
 export type CellStartability =
   | { status: 'startable'; modes: CompetenceBindMode[] }
-  | { status: 'blocked'; reason: string }
+  | { status: 'blocked'; reason: string; scope: StartBlockScope }
 
 export const NOT_PLANT_FAMILY =
   'Starting a demonstration applies to the Plant family. People courses are issued in Atlas and QGP records no assessment against them.'
@@ -80,46 +97,69 @@ export function cellStartability({
   person: Pick<CompetenceBoardPerson, 'engineer_id' | 'mapped'>
   assessor: CompetenceBoardAssessor | null | undefined
 }): CellStartability {
-  if (family !== 'pams') return { status: 'blocked', reason: NOT_PLANT_FAMILY }
+  if (family !== 'pams') return { status: 'blocked', reason: NOT_PLANT_FAMILY, scope: 'context' }
 
   const modes = boundModes(column)
-  if (modes.length === 0) return { status: 'blocked', reason: NO_FAMILY_TEMPLATE }
+  if (modes.length === 0) return { status: 'blocked', reason: NO_FAMILY_TEMPLATE, scope: 'context' }
 
   if (!person.mapped || person.engineer_id == null) {
-    return { status: 'blocked', reason: PERSON_NOT_LINKED }
+    return { status: 'blocked', reason: PERSON_NOT_LINKED, scope: 'context' }
   }
 
   // An absent assessor block is treated as "cannot prove it", not as "allowed".
-  // A server that has not been upgraded must not silently open the gate.
-  if (!assessor) return { status: 'blocked', reason: assessorNotIssued(column.label) }
-  if (assessor.blocked_reason) return { status: 'blocked', reason: assessor.blocked_reason }
-  if (assessor.engineer_id == null) return { status: 'blocked', reason: assessorNotIssued(column.label) }
+  // A server that has not been upgraded must not silently open the gate. Scoped
+  // to the cell because an old server sends no notice above the table either, so
+  // the square would otherwise be the only place this could be said, and it says
+  // nothing.
+  if (!assessor) {
+    return { status: 'blocked', reason: assessorNotIssued(column.label), scope: 'cell' }
+  }
+  if (assessor.blocked_reason) {
+    return { status: 'blocked', reason: assessor.blocked_reason, scope: 'context' }
+  }
+  if (assessor.engineer_id == null) {
+    return { status: 'blocked', reason: assessorNotIssued(column.label), scope: 'cell' }
+  }
   if (assessor.engineer_id === person.engineer_id) {
-    return { status: 'blocked', reason: CANNOT_ASSESS_SELF }
+    return { status: 'blocked', reason: CANNOT_ASSESS_SELF, scope: 'cell' }
   }
 
   const issued = Array.isArray(assessor.issued_characteristic_keys)
     ? assessor.issued_characteristic_keys
     : []
   if (!issued.includes(column.key)) {
-    return { status: 'blocked', reason: assessorNotIssued(column.label) }
+    return { status: 'blocked', reason: assessorNotIssued(column.label), scope: 'cell' }
   }
 
   return { status: 'startable', modes }
 }
 
 /**
- * The sentence appended to the cell's existing screen-reader summary.
- *
- * A startable cell gets an action; a blocked one gets the reason. Nothing is
- * silently omitted, because a square that is a button for one person and inert
- * for another with no explanation is the thing this slice must not ship.
+ * The startability half of a cell's screen-reader summary: an action when it can
+ * be started, otherwise the reason it cannot.
  */
 export function startabilitySummary(startability: CellStartability): string {
   if (startability.status === 'startable') {
     return `can start ${startability.modes.join(' or ')} assessment`
   }
   return startability.reason
+}
+
+/**
+ * The cell's full screen-reader sentence: its PAMS state, plus its startability
+ * where that adds a fact the surrounding copy does not already state.
+ *
+ * A square that is a button for one person and inert for another with no
+ * explanation is the thing this slice must not ship — so `cell`-scoped blocks
+ * are always announced. `context`-scoped ones are left to the copy that already
+ * carries them, because reading an identical paragraph on every square of a
+ * twenty-column grid buries the state the square exists to convey.
+ */
+export function cellAnnouncement(stateSentence: string, startability: CellStartability): string {
+  if (startability.status === 'blocked' && startability.scope === 'context') {
+    return stateSentence
+  }
+  return `${stateSentence} — ${startabilitySummary(startability)}`
 }
 
 export const MODE_LABEL: Record<CompetenceBindMode, string> = {

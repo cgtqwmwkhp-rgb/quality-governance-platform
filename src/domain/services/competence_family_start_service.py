@@ -45,6 +45,7 @@ from typing import Any, Mapping, Optional
 from sqlalchemy import select
 
 from src.core.config import settings
+from src.domain.error_codes import ErrorCode
 from src.domain.exceptions import AuthorizationError, BadRequestError
 from src.domain.models.competence_assessment_bind import BIND_MODES, FIELD_MODE, CompetenceAssessmentBind
 from src.domain.models.engineer import Engineer
@@ -324,6 +325,12 @@ async def enforce_bound_template_assessor_gate_async(
     if not gate.allowed:
         raise AuthorizationError(
             gate.reason or ASSESSOR_NOT_ISSUED.format(characteristic=bind.characteristic_key),
+            # Coded so the client can render this sentence instead of the generic
+            # 403 line. Which of the four refusals applies is the whole value of
+            # the gate to the assessor standing in front of the machine, and
+            # "You don't have permission to perform this action." tells them
+            # none of it and implies an admin could grant something.
+            code=ErrorCode.ASSESSOR_NOT_ELIGIBLE.value,
             details={
                 "characteristic_key": bind.characteristic_key,
                 "mode": bind.mode or FIELD_MODE,

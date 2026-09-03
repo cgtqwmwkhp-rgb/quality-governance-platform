@@ -34,6 +34,7 @@ from src.api.routes import workforce_competence_board as board_routes
 from src.api.routes.assessments import complete_assessment, create_assessment_run
 from src.api.schemas.assessment import AssessmentPlantEvidence, AssessmentRunCreate
 from src.core.config import settings
+from src.domain.error_codes import ErrorCode
 from src.domain.exceptions import AuthorizationError, BadRequestError
 from src.domain.models.assessment import AssessmentRun, AssessmentStatus, CompetencyVerdict
 from src.domain.models.audit import AuditTemplate
@@ -333,6 +334,42 @@ async def test_the_assessor_cannot_be_the_engineer_being_assessed(monkeypatch):
     assert exc_info.value.http_status == 403
     assert exc_info.value.details["characteristic_key"] == CHARACTERISTIC
     assert db.added_of(AssessmentRun) == []
+
+
+@pytest.mark.asyncio
+async def test_a_gate_refusal_is_coded_so_the_client_can_render_its_sentence(monkeypatch):
+    """403 is several failures wearing one status code, and this is one of them.
+
+    The frontend interceptor rewrites an uncoded 403 to "You don't have
+    permission to perform this action.", which tells an assessor standing at the
+    machine none of the four things the gate actually decided and implies an
+    administrator could grant something. The code is what lets the client keep
+    the server's sentence, so it is asserted here rather than left to the UI.
+
+    It must not be ``COMPETENCY_GATE_BLOCKED``: that code means the *engineer*
+    is not competent for the asset type, and two execution screens already
+    branch on it to explain the subject's gap. This refusal is about the viewer.
+    """
+    monkeypatch.setattr(settings, "competence_board_enabled", True)
+    _patch_create_collaborators(monkeypatch)
+    _patch_snapshot(monkeypatch, [_issued_row(engineer_id=ASSESSOR_ENGINEER_ID, characteristic=CHARACTERISTIC)])
+
+    with pytest.raises(AuthorizationError) as exc_info:
+        await board_routes.start_competence_assessment(
+            payload=board_routes.CompetenceAssessmentStartCreate(
+                engineer_id=ASSESSOR_ENGINEER_ID,
+                characteristic_key=CHARACTERISTIC,
+            ),
+            db=_startable_db(),
+            current_user=_user(),
+        )
+
+    assert exc_info.value.code == ErrorCode.ASSESSOR_NOT_ELIGIBLE.value
+    assert exc_info.value.code == "ASSESSOR_NOT_ELIGIBLE"
+    assert exc_info.value.code != ErrorCode.COMPETENCY_GATE_BLOCKED.value
+    # The coded refusal must still carry the prose; a code with a generic
+    # message would move the problem rather than fix it.
+    assert ASSESSOR_IS_THE_ENGINEER in exc_info.value.message
 
 
 @pytest.mark.asyncio

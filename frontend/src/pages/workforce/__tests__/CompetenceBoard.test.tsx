@@ -21,9 +21,18 @@ vi.mock('../../../api/client', () => ({
   workforceApi: {
     analytics: { getEngineerMatrix },
   },
+  // A stub, not the real precedence. It reads whichever of the two shapes the
+  // error carries so the fixtures below can use the ones the server really
+  // sends. What it deliberately does NOT prove is that a coded 403 survives the
+  // response interceptor's generic "You don't have permission" rewrite — that
+  // rule lives in `forbiddenMessageFor` and is tested against the real function
+  // in `api/__tests__/forbiddenMessage.test.ts`. The assertions here are about
+  // this page's wiring: that a refusal is surfaced and nothing is navigated to.
   getApiErrorMessage: (error: unknown, fallback?: string) => {
-    const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    return detail ?? fallback ?? 'API failed'
+    const data = (
+      error as { response?: { data?: { detail?: string; error?: { message?: string } } } }
+    )?.response?.data
+    return data?.error?.message ?? data?.detail ?? fallback ?? 'API failed'
   },
 }))
 
@@ -36,6 +45,13 @@ vi.mock('../../../contexts/ToastContext', () => ({
 
 function httpError(status: number, detail?: string) {
   return { response: { status, data: detail ? { detail } : {} } }
+}
+
+/** The unified envelope the assessor gate actually returns on a 403. */
+function gateRefusal(message: string) {
+  return {
+    response: { status: 403, data: { error: { code: 'ASSESSOR_NOT_ELIGIBLE', message } } },
+  }
 }
 
 const PAMS_BOARD: CompetenceBoardResponse = {
@@ -484,6 +500,43 @@ describe('CompetenceBoard start-from-cell (CB-UI-3)', () => {
     expect(startableCells()).toEqual([])
   })
 
+  it('says on the square why the assessor\u2019s own row cannot be started', async () => {
+    // A square that is a button on every other row and inert on yours, with
+    // nothing said about why, is indistinguishable from a broken board. The
+    // reason is viewer-specific, so no surrounding copy carries it.
+    getBoard.mockResolvedValue({
+      data: {
+        ...BOUND_BOARD,
+        assessor: {
+          engineer_id: 10,
+          issued_characteristic_keys: ['COUNTERBALANCE_FLT'],
+          blocked_reason: null,
+        },
+      },
+    })
+
+    await renderBoard()
+    const table = await screen.findByTestId('competence-board-table-pams')
+
+    expect(table).toHaveTextContent('You cannot assess yourself')
+    // Said as an explanation of the square, not as a finding against Alex.
+    expect(table).not.toHaveTextContent(/Alex Reid — .*failed/i)
+  })
+
+  it('does not repeat the unbound reason on every square in the column', async () => {
+    // The header says it once. Twenty rows repeating it would bury the PAMS
+    // state each square exists to convey.
+    getBoard.mockResolvedValue({ data: BOUND_BOARD })
+
+    await renderBoard()
+    const table = await screen.findByTestId('competence-board-table-pams')
+
+    expect(screen.getByTestId('competence-column-pams-MEWP_3A')).toHaveTextContent(
+      'No family template yet',
+    )
+    expect(table.textContent ?? '').not.toMatch(/No family assessment template is mapped/)
+  })
+
   it('offers no start where PAMS has not issued the characteristic to the viewer', async () => {
     getBoard.mockResolvedValue({
       data: {
@@ -560,7 +613,7 @@ describe('CompetenceBoard start-from-cell (CB-UI-3)', () => {
     const user = userEvent.setup()
     getBoard.mockResolvedValue({ data: BOUND_BOARD })
     startAssessment.mockRejectedValue(
-      httpError(403, 'PAMS has not issued COUNTERBALANCE_FLT to you, so you cannot assess it.'),
+      gateRefusal('PAMS has not issued COUNTERBALANCE_FLT to you, so you cannot assess it.'),
     )
 
     await renderBoard()

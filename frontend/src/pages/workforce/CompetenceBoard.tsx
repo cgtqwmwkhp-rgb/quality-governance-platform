@@ -52,11 +52,11 @@ import {
 } from './competenceBoard/competenceBoardCells'
 import {
   MODE_LABEL,
+  cellAnnouncement,
   cellStartability,
   defaultMode,
   isUnbound,
   normaliseEvidence,
-  startabilitySummary,
 } from './competenceBoard/competenceStart'
 
 type TabId = 'plant' | 'people'
@@ -485,13 +485,15 @@ function BoardTable({
                           >
                             {square}
                             <span className="sr-only">
-                              {`${sentence} — ${startabilitySummary(startability)}`}
+                              {cellAnnouncement(sentence, startability)}
                             </span>
                           </button>
                         ) : (
                           <>
                             {square}
-                            <span className="sr-only">{sentence}</span>
+                            <span className="sr-only">
+                              {cellAnnouncement(sentence, startability)}
+                            </span>
                           </>
                         )}
                       </td>

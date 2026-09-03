@@ -60,9 +60,20 @@ export function competenceAssessmentExecutePath(runId: string): string {
   return `/workforce/assessments/${runId}/execute`
 }
 
+/**
+ * The board owns the refusal message for this call.
+ *
+ * Without this the response interceptor toasts as well, and the page is left
+ * relying on a five-second identical-message dedupe to stop the assessor being
+ * told twice. That works today and would stop working the moment either message
+ * is worded differently. One owner is the honest arrangement: the caller
+ * catches, and renders the server's sentence.
+ */
+const PAGE_OWNS_THE_ERROR = { suppressErrorToast: true } as const
+
 export function createCompetenceStartApi(api: AxiosInstance) {
   return {
     start: (payload: CompetenceAssessmentStartCreate) =>
-      api.post<CompetenceAssessmentStart>(BASE, payload),
+      api.post<CompetenceAssessmentStart>(BASE, payload, PAGE_OWNS_THE_ERROR),
   }
 }

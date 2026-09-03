@@ -6,6 +6,7 @@ import {
   NO_FAMILY_TEMPLATE,
   PERSON_NOT_LINKED,
   boundModes,
+  cellAnnouncement,
   cellStartability,
   defaultMode,
   isUnbound,
@@ -53,7 +54,7 @@ describe('cellStartability (CB-UI-3)', () => {
   it('blocks an unbound characteristic as a missing template, never as a failure', () => {
     const result = startability({ column: UNBOUND })
 
-    expect(result).toEqual({ status: 'blocked', reason: NO_FAMILY_TEMPLATE })
+    expect(result).toEqual({ status: 'blocked', reason: NO_FAMILY_TEMPLATE, scope: 'context' })
     expect(NO_FAMILY_TEMPLATE).not.toMatch(/fail/i)
     expect(NO_FAMILY_TEMPLATE).not.toMatch(/not competent/i)
     // It points at who can fix it, because the reader cannot.
@@ -64,6 +65,8 @@ describe('cellStartability (CB-UI-3)', () => {
     expect(startability({ assessor: { ...SAM, engineer_id: 10 } })).toEqual({
       status: 'blocked',
       reason: CANNOT_ASSESS_SELF,
+      // Only true of Sam's own row, so the square is the only place it appears.
+      scope: 'cell',
     })
   })
 
@@ -95,6 +98,8 @@ describe('cellStartability (CB-UI-3)', () => {
     expect(startability({ assessor: { engineer_id: 22, blocked_reason: reason } })).toEqual({
       status: 'blocked',
       reason,
+      // Already stated once in the notice above the table.
+      scope: 'context',
     })
   })
 
@@ -102,11 +107,13 @@ describe('cellStartability (CB-UI-3)', () => {
     expect(startability({ person: { engineer_id: null, mapped: false } })).toEqual({
       status: 'blocked',
       reason: PERSON_NOT_LINKED,
+      scope: 'context',
     })
     // A row flagged mapped but carrying no id is still unusable, not startable.
     expect(startability({ person: { engineer_id: null, mapped: true } })).toEqual({
       status: 'blocked',
       reason: PERSON_NOT_LINKED,
+      scope: 'context',
     })
     expect(PERSON_NOT_LINKED).not.toMatch(/fail/i)
   })
@@ -117,6 +124,7 @@ describe('cellStartability (CB-UI-3)', () => {
     expect(startability({ family: 'atlas', column: BOUND })).toEqual({
       status: 'blocked',
       reason: NOT_PLANT_FAMILY,
+      scope: 'context',
     })
   })
 
@@ -126,7 +134,7 @@ describe('cellStartability (CB-UI-3)', () => {
     // can assess would send them to the wrong screen.
     const result = startability({ column: UNBOUND, assessor: { ...SAM, engineer_id: 10 } })
 
-    expect(result).toEqual({ status: 'blocked', reason: NO_FAMILY_TEMPLATE })
+    expect(result).toEqual({ status: 'blocked', reason: NO_FAMILY_TEMPLATE, scope: 'context' })
   })
 })
 
@@ -147,9 +155,64 @@ describe('startabilitySummary (CB-UI-3)', () => {
   })
 
   it('gives the reason verbatim when blocked, so the square is never silently inert', () => {
-    expect(startabilitySummary({ status: 'blocked', reason: NO_FAMILY_TEMPLATE })).toBe(
+    expect(
+      startabilitySummary({ status: 'blocked', reason: NO_FAMILY_TEMPLATE, scope: 'context' }),
+    ).toBe(
       NO_FAMILY_TEMPLATE,
     )
+  })
+})
+
+describe('cellAnnouncement (CB-UI-3)', () => {
+  const STATE = 'Alex Reid — COUNTERBALANCE_FLT issued, expires 2027-01-04'
+
+  it('offers the action on a square that can be started', () => {
+    expect(cellAnnouncement(STATE, { status: 'startable', modes: ['field'] })).toBe(
+      `${STATE} — can start field assessment`,
+    )
+  })
+
+  it('explains a square that is inert for this viewer only', () => {
+    // Without this the square is a button on every other row and silent on
+    // yours, with nothing said about why — which is indistinguishable from the
+    // board being broken.
+    expect(
+      cellAnnouncement(STATE, {
+        status: 'blocked',
+        reason: CANNOT_ASSESS_SELF,
+        scope: 'cell',
+      }),
+    ).toBe(`${STATE} — ${CANNOT_ASSESS_SELF}`)
+  })
+
+  it('does not repeat a reason the surrounding copy already carries', () => {
+    // The column header says "No family template yet" once. Appending it to
+    // every square would read the same paragraph out for the whole column and
+    // bury the PAMS state the square exists to convey.
+    expect(
+      cellAnnouncement(STATE, {
+        status: 'blocked',
+        reason: NO_FAMILY_TEMPLATE,
+        scope: 'context',
+      }),
+    ).toBe(STATE)
+  })
+
+  it('announces every viewer-specific refusal the gate can reach', () => {
+    // The set that must never be silent, asserted through cellStartability so
+    // a reordered check cannot quietly demote one to context scope.
+    const viewerSpecific = [
+      startability({ assessor: { ...SAM, engineer_id: 10 } }),
+      startability({ assessor: { ...SAM, issued_characteristic_keys: ['MEWP_3A'] } }),
+      startability({ assessor: undefined }),
+      startability({ assessor: {} }),
+    ]
+
+    for (const result of viewerSpecific) {
+      expect(result.status).toBe('blocked')
+      expect(cellAnnouncement(STATE, result)).not.toBe(STATE)
+      expect(cellAnnouncement(STATE, result).startsWith(`${STATE} — `)).toBe(true)
+    }
   })
 })
 

@@ -785,7 +785,32 @@ export function getApiErrorCode(error: unknown): string | null {
 }
 
 /**
- * The message for a 403, which is two different failures wearing one status code.
+ * Codes whose 403 already carries the sentence the user needs, so rewriting it
+ * would destroy the only actionable part of the response.
+ *
+ * A generic rewrite is right for a genuine permission failure, where the server
+ * has nothing to add and the fix is an administrator granting something. It is
+ * wrong wherever the refusal is a specific, unfixable-by-admin fact — the
+ * assessor gate refuses four different ways (you are the engineer, PAMS has not
+ * issued you this, you have no employee record, no snapshot is loaded) and no
+ * permission grant changes any of them.
+ */
+const FORBIDDEN_CODES_WITH_OWN_MESSAGE = new Set(['ASSESSOR_NOT_ELIGIBLE'])
+
+/** The server's own message from the unified envelope, when it sent one. */
+function serverEnvelopeMessage(error: unknown): string | null {
+  if (!axios.isAxiosError(error)) return null
+  const data = error.response?.data as Record<string, unknown> | undefined
+  const envelope = data?.['error']
+  if (envelope && typeof envelope === 'object') {
+    const message = (envelope as Record<string, unknown>)['message']
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return null
+}
+
+/**
+ * The message for a 403, which is several different failures wearing one status code.
  *
  * A user whose account carries no tenant is refused by ``_resolve_user_tenant_context``
  * on every request, including endpoints that check no permission at all. Telling them
@@ -793,12 +818,19 @@ export function getApiErrorCode(error: unknown): string | null {
  * grant, and the fix is an administrator assigning their organisation.
  */
 export function forbiddenMessageFor(error: unknown): string {
-  if (getApiErrorCode(error) === 'TENANT_ACCESS_DENIED') {
+  const code = getApiErrorCode(error)
+  if (code === 'TENANT_ACCESS_DENIED') {
     return (
       'Your account is not linked to an organisation yet, so it cannot load any data. ' +
       'This is an account setup issue rather than a permissions one — ask an administrator ' +
       'to assign your organisation.'
     )
+  }
+  if (code !== null && FORBIDDEN_CODES_WITH_OWN_MESSAGE.has(code)) {
+    // Falls through to the generic line when the envelope carried a code but no
+    // message, rather than showing an empty toast.
+    const message = serverEnvelopeMessage(error)
+    if (message) return message
   }
   return "You don't have permission to perform this action."
 }
