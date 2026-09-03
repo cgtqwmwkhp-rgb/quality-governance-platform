@@ -9,7 +9,11 @@ import {
   type RegisterBand,
   type RegisterEntry,
 } from '../data/registerCatalogue'
-import { BAND_LABEL, hubOpenKind, registerHref } from '../components/register/registerCatalogueHonesty'
+import {
+  BAND_LABEL,
+  hubOpenKind,
+  registerHref,
+} from '../components/register/registerCatalogueHonesty'
 import NotFound from './NotFound'
 
 const BAND_FILTERS: Array<{ id: 'all' | RegisterBand; label: string }> = [
@@ -20,6 +24,8 @@ const BAND_FILTERS: Array<{ id: 'all' | RegisterBand; label: string }> = [
   { id: 'absent', label: 'Not captured' },
   { id: 'hub', label: 'This hub' },
 ]
+
+const SCHEDULE_OFF_LABEL = 'Schedule module is off in this deployment'
 
 /** Function clusters over existing spines. Not a second catalogue field. */
 type HubCluster =
@@ -59,7 +65,8 @@ const CLUSTER_LABEL: Record<HubCluster, string> = {
 
 /**
  * EMPTY is a catalogue fact (absent band or note), never a counted zero.
- * Dual-SoR is externalSor. Do not treat “module may be off” as empty.
+ * Dual-SoR requires QGP participation plus externalSor. Do not treat
+ * “module may be off” as empty.
  */
 const EMPTY_NOTE_RE =
   /\b(no tenant |no premises |no dedicated |may still be empty|not a qgp spine|privacy stub|inventory locked)/i
@@ -153,10 +160,7 @@ function HubOpenCell({
   const open = hubOpenKind(entry, { compliance_schedule: scheduleEnabled })
   if (open === 'link' && entry.to) {
     return (
-      <Link
-        to={registerHref(entry)}
-        className="text-primary underline-offset-2 hover:underline"
-      >
+      <Link to={registerHref(entry)} className="text-primary underline-offset-2 hover:underline">
         {openLabel}
       </Link>
     )
@@ -173,7 +177,7 @@ function HubOpenCell({
 
 function OccupancyChips({ entry }: { entry: RegisterEntry }) {
   const empty = isEmptyOccurrence(entry)
-  const dual = Boolean(entry.externalSor)
+  const dual = Boolean(entry.externalSor && entry.band !== 'absent')
   if (!empty && !dual) return null
   return (
     <span className="inline-flex flex-wrap gap-1 mt-1">
@@ -192,7 +196,9 @@ function OccupancyChips({ entry }: { entry: RegisterEntry }) {
 }
 
 export default function RegisterOfRegisters() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const useWelshCopy = i18n.language.toLowerCase().startsWith('cy')
+  const copy = (key: string, english: string) => (useWelshCopy ? t(key, english) : english)
   const enabled = useFeatureFlag('register_catalogue')
   const scheduleEnabled = useFeatureFlag('compliance_schedule')
   const [query, setQuery] = useState('')
@@ -235,10 +241,10 @@ export default function RegisterOfRegisters() {
     <div className="space-y-6" data-testid="register-of-registers">
       <div>
         <h1 className="text-2xl font-bold text-foreground">
-          {t('registers.hub.title', 'Registers')}
+          {copy('registers.hub.title', 'Registers')}
         </h1>
         <p className="text-muted-foreground mt-1">
-          {t(
+          {copy(
             'registers.hub.subtitle',
             'PEL-HSEQ-5062 Register of Registers. Caption of where each register lives — not a second copy of the rows.',
           )}
@@ -247,14 +253,17 @@ export default function RegisterOfRegisters() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
-          <label htmlFor="register-catalogue-search" className="text-sm font-medium text-foreground">
-            {t('registers.hub.search', 'Search')}
+          <label
+            htmlFor="register-catalogue-search"
+            className="text-sm font-medium text-foreground"
+          >
+            {copy('registers.hub.search', 'Search')}
           </label>
           <Input
             id="register-catalogue-search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={t('registers.hub.search_placeholder', 'PEL ref, title, standard…')}
+            placeholder={copy('registers.hub.search_placeholder', 'PEL ref, title, standard…')}
             className="mt-1"
           />
         </div>
@@ -263,7 +272,7 @@ export default function RegisterOfRegisters() {
       <div
         className="inline-flex flex-wrap rounded-md border border-border p-0.5 gap-0.5"
         role="tablist"
-        aria-label={t('registers.hub.filter', 'Filter by status')}
+        aria-label={copy('registers.hub.filter', 'Filter by status')}
       >
         {BAND_FILTERS.map((item) => (
           <button
@@ -286,24 +295,24 @@ export default function RegisterOfRegisters() {
       <div className="overflow-x-auto border border-border rounded-lg">
         <table className="w-full text-sm">
           <caption className="sr-only">
-            {t('registers.hub.caption', 'Named registers and their system of record')}
+            {copy('registers.hub.caption', 'Named registers and their system of record')}
           </caption>
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left">
               <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
-                {t('registers.hub.col_ref', 'Reference')}
+                {copy('registers.hub.col_ref', 'Reference')}
               </th>
               <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
-                {t('registers.hub.col_title', 'Register')}
+                {copy('registers.hub.col_title', 'Register')}
               </th>
               <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
-                {t('registers.hub.col_status', 'Status')}
+                {copy('registers.hub.col_status', 'Status')}
               </th>
               <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
-                {t('registers.hub.col_sor', 'System of record')}
+                {copy('registers.hub.col_sor', 'System of record')}
               </th>
               <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
-                {t('registers.hub.col_open', 'Open')}
+                {copy('registers.hub.col_open', 'Open')}
               </th>
             </tr>
           </thead>
@@ -342,12 +351,9 @@ export default function RegisterOfRegisters() {
                     <HubOpenCell
                       entry={entry}
                       scheduleEnabled={scheduleEnabled}
-                      openLabel={t('registers.hub.open', 'Open')}
-                      scheduleOffLabel={t(
-                        'registers.hub.schedule_off',
-                        'Schedule module is off in this deployment',
-                      )}
-                      noLinkLabel={t('registers.hub.no_link', 'No QGP list')}
+                      openLabel={copy('registers.hub.open', 'Open')}
+                      scheduleOffLabel={SCHEDULE_OFF_LABEL}
+                      noLinkLabel={copy('registers.hub.no_link', 'No QGP list')}
                     />
                   </td>
                 </tr>

@@ -28,6 +28,18 @@ import { parseStatutoryParam } from '../components/register/scheduleServerFilter
 
 const SCHEDULE_VIEWS = ['obligations', 'certificates'] as const
 type ScheduleView = (typeof SCHEDULE_VIEWS)[number]
+const SCHEDULE_TITLE = 'Compliance Schedule'
+const SCHEDULE_SUBTITLE = 'Organisation and location obligations — Current, Due soon, or Overdue.'
+const REQUIREMENTS_LABEL = 'Requirements'
+const CATALOGUE_LABEL = 'Catalogue'
+const EMPTY_REQUIREMENTS_COPY = 'No active requirements yet. Activate a catalogue template below.'
+const LOAD_ERROR_TITLE = 'Could not load Compliance Schedule'
+const RETIRED_LABEL = 'Retired'
+const RETIRED_REQUIREMENTS_LABEL = 'Retired obligations'
+const RETIRED_EMPTY_COPY =
+  'Nothing has been retired. Obligations you retire are kept here and can be reactivated.'
+const LOAD_ERROR_HINT =
+  'The register could not be read, so this is not a statement that you have no obligations. Nothing has been changed.'
 
 function parseScheduleView(raw: string | null): ScheduleView {
   return raw === 'certificates' ? 'certificates' : 'obligations'
@@ -46,6 +58,16 @@ export default function ComplianceSchedule() {
   const registerParam = searchParams.get('register')
   const statutoryParam = searchParams.get('statutory')
   const statutoryFilter = parseStatutoryParam(statutoryParam)
+  const useWelshCopy = i18n.language.toLowerCase().startsWith('cy')
+  const copy = (key: string, english: string, values: Record<string, string> = {}) => {
+    if (useWelshCopy) {
+      return t(key, { defaultValue: english, ...values })
+    }
+    return Object.entries(values).reduce(
+      (text, [name, value]) => text.replace(`{{${name}}}`, value),
+      english,
+    )
+  }
   const cov = coverageCopy(i18n.language)
   const imp = importCopy(i18n.language)
   const [items, setItems] = useState<ComplianceRequirement[]>([])
@@ -117,24 +139,12 @@ export default function ComplianceSchedule() {
   const listItems = clauseMatches && clauseMatches.length > 0 ? clauseMatches : items
   const showingClauseFilter = Boolean(clauseMatches && clauseMatches.length > 0)
   const emptyRequirementsCopy = showInactive
-    ? t(
-        'compliance.schedule.empty_inactive',
-        'Nothing has been retired. Obligations you retire are kept here and can be reactivated.',
-      )
+    ? RETIRED_EMPTY_COPY
     : statutoryFilter === true
-      ? t(
-          'compliance.schedule.empty_statutory',
-          'No active statutory requirements match this filter. Mark an obligation as required by law to include it.',
-        )
+      ? 'No active statutory requirements match this filter. Mark an obligation as required by law to include it.'
       : statutoryFilter === false
-        ? t(
-            'compliance.schedule.empty_non_statutory',
-            'No active non-statutory requirements match this filter.',
-          )
-        : t(
-            'compliance.schedule.empty',
-            'No active requirements yet. Activate a catalogue template below.',
-          )
+        ? 'No active non-statutory requirements match this filter.'
+        : copy('compliance.schedule.empty', EMPTY_REQUIREMENTS_COPY)
 
   const clearProgrammeContext = () => {
     const params = new URLSearchParams(searchParams)
@@ -232,14 +242,11 @@ export default function ComplianceSchedule() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <CalendarClock className="h-6 w-6" />
-            {t('compliance.schedule.title', 'Compliance Schedule')}
+            {copy('compliance.schedule.title', SCHEDULE_TITLE)}
           </h1>
           {view === 'obligations' && (
             <p className="text-sm text-muted-foreground mt-1">
-              {t(
-                'compliance.schedule.subtitle',
-                'Organisation and location obligations — Current, Due soon, or Overdue.',
-              )}
+              {copy('compliance.schedule.subtitle', SCHEDULE_SUBTITLE)}
             </p>
           )}
           {view === 'obligations' && (
@@ -261,7 +268,7 @@ export default function ComplianceSchedule() {
                 onClick={() => setStatusFilter(s)}
                 data-testid={`compliance-schedule-filter-${s || 'all'}`}
               >
-                {s ? statusLabel(s) : t('compliance.schedule.filter.all', 'All')}
+                {s ? statusLabel(s) : copy('compliance.schedule.filter.all', 'All')}
               </Button>
             ))}
             <Button
@@ -271,7 +278,7 @@ export default function ComplianceSchedule() {
               onClick={() => setShowInactive((v) => !v)}
               data-testid="compliance-schedule-toggle-inactive"
             >
-              {t('compliance.schedule.filter.inactive', 'Retired')}
+              {RETIRED_LABEL}
             </Button>
             {!showInactive && (
               <Button
@@ -303,7 +310,7 @@ export default function ComplianceSchedule() {
       <div
         className="flex w-fit rounded-xl border border-border bg-surface p-1"
         role="group"
-        aria-label={t('compliance.schedule.view.label', 'Schedule view')}
+        aria-label={copy('compliance.schedule.view.label', 'Schedule view')}
         data-testid="compliance-schedule-view-switcher"
       >
         {SCHEDULE_VIEWS.map((mode) => (
@@ -334,16 +341,19 @@ export default function ComplianceSchedule() {
         >
           <p>
             {showingClauseFilter
-              ? t('compliance.schedule.programme_context', {
-                  defaultValue:
-                    'From {{framework}} · {{clause}} — Schedule remains the obligation register.',
-                  framework: programmeFramework || '—',
-                  clause: programmeClause || '—',
-                })
-              : t('compliance.schedule.programme_context_none', {
-                  defaultValue: 'No obligation cites {{clause}}. Full register shown.',
-                  clause: programmeClause || '—',
-                })}
+              ? copy(
+                  'compliance.schedule.programme_context',
+                  'From {{framework}} · {{clause}} — Schedule remains the obligation register.',
+                  {
+                    framework: programmeFramework || '—',
+                    clause: programmeClause || '—',
+                  },
+                )
+              : copy(
+                  'compliance.schedule.programme_context_none',
+                  'No obligation cites {{clause}}. Full register shown.',
+                  { clause: programmeClause || '—' },
+                )}
           </p>
           <button
             type="button"
@@ -360,11 +370,8 @@ export default function ComplianceSchedule() {
         <AssuranceCertShelfPanel />
       ) : loadError ? (
         <ErrorState
-          title={t('compliance.schedule.load_error', 'Could not load Compliance Schedule')}
-          description={t(
-            'compliance.schedule.load_error_hint',
-            'The register could not be read, so this is not a statement that you have no obligations. Nothing has been changed.',
-          )}
+          title={copy('compliance.schedule.load_error', LOAD_ERROR_TITLE)}
+          description={LOAD_ERROR_HINT}
           message={loadError}
           onRetry={() => void load()}
           retryLabel={t('common.retry', 'Try again')}
@@ -396,8 +403,8 @@ export default function ComplianceSchedule() {
           <section className="rounded-lg border border-border bg-card">
             <div className="border-b border-border px-4 py-3 font-medium">
               {showInactive
-                ? t('compliance.schedule.retired_requirements', 'Retired obligations')
-                : t('compliance.schedule.requirements', 'Requirements')}
+                ? RETIRED_REQUIREMENTS_LABEL
+                : copy('compliance.schedule.requirements', REQUIREMENTS_LABEL)}
             </div>
             {loading ? (
               <p className="p-6 text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>
@@ -442,7 +449,7 @@ export default function ComplianceSchedule() {
                         className="shrink-0 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
                         data-testid={`compliance-schedule-retired-${item.id}`}
                       >
-                        {t('compliance.schedule.filter.inactive', 'Retired')}
+                        {RETIRED_LABEL}
                       </span>
                     ) : (
                       <span
@@ -526,7 +533,7 @@ export default function ComplianceSchedule() {
           {!showInactive && (
             <section className="rounded-lg border border-border bg-card">
               <div className="border-b border-border px-4 py-3 font-medium">
-                {t('compliance.schedule.catalogue', 'Catalogue')}
+                {copy('compliance.schedule.catalogue', CATALOGUE_LABEL)}
               </div>
               <ul className="divide-y divide-border" data-testid="compliance-schedule-catalogue">
                 {catalogue.map((tpl) => (
