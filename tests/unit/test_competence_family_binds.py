@@ -43,6 +43,7 @@ from src.domain.services.competence_demonstration_service import (
     TEMPLATE_NOT_PUBLISHED,
     create_bind_async,
     delete_bind_async,
+    governing_template_by_characteristic,
     load_demonstration_overlay_async,
     record_assessment_demonstration_async,
 )
@@ -446,6 +447,155 @@ async def test_a_demonstration_from_a_rebound_template_does_not_reappear_on_the_
     overlay = await load_demonstration_overlay_async(db, tenant_id=TENANT, engineer_ids={ENGINEER_ID})
 
     assert overlay == {}
+
+
+# ------------- AC-07 two modes, one square: the field assessment governs it
+
+
+def _induction_bind():
+    return _bind(
+        characteristic=CHARACTERISTIC,
+        template_id=INDUCTION_TEMPLATE_ID,
+        bind_id=4,
+        mode="induction",
+    )
+
+
+def _failed_induction_demonstration():
+    return CompetenceDemonstration(
+        id=6,
+        tenant_id=TENANT,
+        engineer_id=ENGINEER_ID,
+        characteristic_key=CHARACTERISTIC,
+        template_id=INDUCTION_TEMPLATE_ID,
+        source_run_id="asm-run-induction",
+        outcome="fail",
+        state=CompetencyLifecycleState.FAILED.value,
+        # Later than the field pass, so recency alone would let it win.
+        assessed_at=datetime(2026, 8, 25, 9, 0),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_later_induction_fail_does_not_overwrite_the_field_pass_on_the_cell():
+    """The defect the mode split would otherwise introduce.
+
+    CB-PR4 could key the overlay on (engineer, characteristic) because one
+    characteristic had one bind. Two binds means two templates writing onto one
+    square, and last-write-wins would show a passed engineer as failed.
+    """
+    field_pass = _demonstration()
+    induction_fail = _failed_induction_demonstration()
+    db = _FakeDb(
+        rows={
+            CompetenceAssessmentBind: [_bind(), _induction_bind()],
+            CompetenceDemonstration: [field_pass, induction_fail],
+        }
+    )
+
+    overlay = await load_demonstration_overlay_async(db, tenant_id=TENANT, engineer_ids={ENGINEER_ID})
+
+    assert overlay[(ENGINEER_ID, CHARACTERISTIC)] is field_pass
+    assert overlay[(ENGINEER_ID, CHARACTERISTIC)].outcome == "pass"
+
+
+@pytest.mark.asyncio
+async def test_the_governing_bind_does_not_depend_on_the_order_rows_come_back():
+    """Deterministic: field wins whichever way the query happens to sort."""
+    field, induction = _bind(), _induction_bind()
+
+    assert governing_template_by_characteristic([field, induction]) == {CHARACTERISTIC: FIELD_TEMPLATE_ID}
+    assert governing_template_by_characteristic([induction, field]) == {CHARACTERISTIC: FIELD_TEMPLATE_ID}
+
+
+@pytest.mark.asyncio
+async def test_an_induction_only_characteristic_is_governed_by_its_induction():
+    """No field bind means the induction is the only claim there is — show it."""
+    induction_fail = _failed_induction_demonstration()
+    db = _FakeDb(
+        rows={
+            CompetenceAssessmentBind: [_induction_bind()],
+            CompetenceDemonstration: [induction_fail],
+        }
+    )
+
+    overlay = await load_demonstration_overlay_async(db, tenant_id=TENANT, engineer_ids={ENGINEER_ID})
+
+    assert overlay[(ENGINEER_ID, CHARACTERISTIC)] is induction_fail
+
+
+@pytest.mark.asyncio
+async def test_removing_the_field_bind_hands_the_cell_to_the_remaining_induction():
+    """One rule, applied consistently — not a special case for deletion."""
+    field, induction = _bind(), _induction_bind()
+    field_pass, induction_fail = _demonstration(), _failed_induction_demonstration()
+    db = _FakeDb(
+        rows={
+            CompetenceAssessmentBind: [field, induction],
+            CompetenceDemonstration: [field_pass, induction_fail],
+        }
+    )
+
+    await delete_bind_async(db, tenant_id=TENANT, bind_id=field.id)
+    overlay = await load_demonstration_overlay_async(db, tenant_id=TENANT, engineer_ids={ENGINEER_ID})
+
+    assert overlay[(ENGINEER_ID, CHARACTERISTIC)] is induction_fail
+
+
+@pytest.mark.asyncio
+async def test_binds_on_different_characteristics_do_not_compete():
+    """The rule is per characteristic, not one governing template per tenant."""
+    other = _bind(characteristic="Trailer", template_id=INDUCTION_TEMPLATE_ID, bind_id=5)
+
+    assert governing_template_by_characteristic([_bind(), other]) == {
+        CHARACTERISTIC: FIELD_TEMPLATE_ID,
+        "Trailer": INDUCTION_TEMPLATE_ID,
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_failed_induction_names_its_mode_in_the_change_request():
+    """ "Failed Compressor" alone would not tell the reviewer which assessment."""
+    db = _FakeDb(rows={CompetenceAssessmentBind: [_induction_bind()], Engineer: [_engineer()]})
+
+    result = await record_assessment_demonstration_async(
+        db,
+        tenant_id=TENANT,
+        engineer_id=ENGINEER_ID,
+        template_id=INDUCTION_TEMPLATE_ID,
+        source_run_id="asm-run-induction-fail",
+        outcome="fail",
+    )
+
+    assert result is not None
+    assert result.change_request is not None
+    assert "induction" in result.change_request.notes
+    # Still a review item, never a PAMS write.
+    assert "does not write PAMS" in result.change_request.notes
+
+
+@pytest.mark.asyncio
+async def test_rebinding_the_same_template_to_the_other_mode_says_what_is_actually_wrong():
+    """It is not bound to a different characteristic — saying so would be false."""
+    db = _FakeDb(
+        rows={
+            AuditTemplate: _both_templates(),
+            CompetenceAssessmentBind: [_bind()],
+        }
+    )
+
+    with pytest.raises(ConflictError) as raised:
+        await create_bind_async(
+            db,
+            tenant_id=TENANT,
+            template_id=FIELD_TEMPLATE_ID,
+            characteristic_key=CHARACTERISTIC,
+            mode="induction",
+        )
+
+    message = str(raised.value)
+    assert "other mode" in message
+    assert "different PAMS characteristic" not in message
 
 
 # ------------------------------------------------------------- AC-06 the flag

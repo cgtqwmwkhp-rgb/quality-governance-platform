@@ -317,6 +317,9 @@ export default function CompetenceBinds() {
           <p className="text-sm text-muted-foreground">
             One published template per characteristic per mode. A characteristic can carry both a
             field assessment and an induction; a second template for the same mode is refused.
+            Where both are bound, the Plant board square shows the field assessment — it is one
+            square per characteristic, so the induction is recorded and reviewable but does not
+            paint the cell.
           </p>
         </CardHeader>
         <CardContent>

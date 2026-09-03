@@ -12,6 +12,10 @@ is refused. A characteristic nobody has bound stays unbound — that is a
 statement about QGP's mapping, not about the person's competence, and it must
 never be rendered as a failure.
 
+The board cell stays one square per characteristic, so exactly one bound mode
+governs what it shows — the field assessment where one is bound, otherwise the
+only mode that is. See ``governing_template_by_characteristic``.
+
 Completing a bound assessment writes a QGP demonstration row. It never writes
 PAMS: a pass records the demonstration, a fail records it as FAILED and opens a
 plant change request for the IT-Admin mailbox. Issuance stays in PAMS either
@@ -39,6 +43,10 @@ logger = logging.getLogger(__name__)
 
 PASS_OUTCOME = "pass"
 TEMPLATE_ALREADY_BOUND = "This template is already bound to a different PAMS characteristic."
+TEMPLATE_ALREADY_BOUND_OTHER_MODE = (
+    "This template is already bound to that characteristic in the other mode. "
+    "One template is bound once: use a separate published template for the second mode."
+)
 CHARACTERISTIC_ALREADY_BOUND = (
     "This PAMS characteristic already has a different template bound for that mode. "
     "Remove the existing bind first — field and induction are separate binds."
@@ -160,11 +168,15 @@ async def create_bind_async(
 
     by_template = await get_bind_for_template_async(db, tenant_id=tenant_id, template_id=template_id)
     if by_template is not None:
-        if by_template.characteristic_key == key and (by_template.mode or FIELD_MODE) == bind_mode:
-            by_template.interval_days = interval
-            await db.flush()
-            return by_template, False
-        raise ConflictError(TEMPLATE_ALREADY_BOUND)
+        if by_template.characteristic_key != key:
+            raise ConflictError(TEMPLATE_ALREADY_BOUND)
+        if (by_template.mode or FIELD_MODE) != bind_mode:
+            # Same characteristic, other mode. Saying "a different characteristic"
+            # here would be false, and the form offers this combination.
+            raise ConflictError(TEMPLATE_ALREADY_BOUND_OTHER_MODE)
+        by_template.interval_days = interval
+        await db.flush()
+        return by_template, False
 
     by_characteristic = await db.scalars(
         select(CompetenceAssessmentBind).where(
@@ -276,9 +288,13 @@ async def record_assessment_demonstration_async(
         create_change_request_async,
     )
 
+    # Name the mode: a characteristic can carry both a field assessment and an
+    # induction (CB-UI-2), so "failed COUNTERBALANCE_FLT" alone would not tell
+    # the reviewer which assessment they are being asked to act on.
     notes = (
         f"Assessment run {source_run_id} scored {outcome} against bound PAMS characteristic "
-        f"{bind.characteristic_key}. QGP does not write PAMS — review the issuance in PAMS."
+        f"{bind.characteristic_key} ({bind.mode or FIELD_MODE} mode). "
+        "QGP does not write PAMS — review the issuance in PAMS."
     )
     try:
         row, created = await create_change_request_async(
@@ -313,6 +329,31 @@ def _recency(row: CompetenceDemonstration) -> tuple[datetime, int]:
     return (row.assessed_at or datetime.min, row.id or 0)
 
 
+def governing_template_by_characteristic(
+    binds: list[CompetenceAssessmentBind],
+) -> dict[str, int]:
+    """Which template's demonstrations may paint each characteristic's board cell.
+
+    CB-PR4 could assume one bind per characteristic, so keying the overlay by
+    ``(engineer, characteristic)`` and taking the most recent row was safe.
+    CB-UI-2 widened that constraint to ``(characteristic, mode)``, which breaks
+    the assumption: two templates can now write demonstrations onto one board
+    cell, and last-write-wins would let a later induction silently replace an
+    earlier field verdict — a pass shown as a fail, or the wrong expiry.
+
+    The board cell is per characteristic and has nowhere to show two verdicts,
+    so exactly one bound mode governs it: the **field assessment** where one is
+    bound, otherwise the only mode that is. Deterministic, and it keeps the cell
+    meaning exactly what CB-UI-1 shipped rather than inventing a rule for
+    combining two modes into one square — that belongs to whoever gives the
+    board somewhere to put the second verdict.
+    """
+    governing: dict[str, int] = {}
+    for bind in sorted(binds, key=lambda row: ((row.mode or FIELD_MODE) != FIELD_MODE, row.id or 0)):
+        governing.setdefault(bind.characteristic_key, bind.template_id)
+    return governing
+
+
 async def load_demonstration_overlay_async(
     db: Any,
     *,
@@ -326,12 +367,15 @@ async def load_demonstration_overlay_async(
     that column and the cell falls back to what PAMS says — issued, not
     demonstrated — rather than to an invented "not assessed" grey. The
     demonstration rows themselves are kept as history and are not deleted.
+
+    Only the governing bind's demonstrations are considered — see
+    ``governing_template_by_characteristic``.
     """
     if not engineer_ids:
         return {}
     binds = await db.scalars(select(CompetenceAssessmentBind).where(CompetenceAssessmentBind.tenant_id == tenant_id))
-    bound_pairs = {(bind.template_id, bind.characteristic_key) for bind in binds.all()}
-    if not bound_pairs:
+    governing = governing_template_by_characteristic(list(binds.all()))
+    if not governing:
         return {}
     result = await db.scalars(
         select(CompetenceDemonstration).where(
@@ -341,7 +385,7 @@ async def load_demonstration_overlay_async(
     )
     latest: dict[tuple[int, str], CompetenceDemonstration] = {}
     for row in result.all():
-        if (row.template_id, row.characteristic_key) not in bound_pairs:
+        if governing.get(row.characteristic_key) != row.template_id:
             continue
         cell = (row.engineer_id, row.characteristic_key)
         current = latest.get(cell)
