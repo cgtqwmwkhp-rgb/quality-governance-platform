@@ -1218,6 +1218,9 @@ export type {
   CompetenceBoardPerson,
   CompetenceBoardResponse,
   CompetenceBoardSnapshotMeta,
+  CompetenceCoverageForecastItem,
+  CompetenceCoverageItem,
+  CompetenceCoverageResponse,
 } from './competenceBoardClient'
 
 // ============ Competence assessment binds (CB-UI-2 — QGP tables only) ============
