@@ -4229,8 +4229,6 @@
   "compliance.schedule.deactivate.success": "Obligation retired. Reminders have stopped.",
   "compliance.schedule.reactivate.cta": "Reactivate",
   "compliance.schedule.reactivate.success": "Obligation restored. Reminders resume.",
-  "compliance.schedule.inactive.banner_title": "This obligation is retired",
-  "compliance.schedule.inactive.banner_body": "It is off the active register and generates no reminders. Its history below is unchanged. Reactivate it to put it back on the schedule.",
   "compliance.schedule.status.current": "Current",
   "compliance.schedule.status.due_soon": "Due soon",
   "compliance.schedule.status.overdue": "Overdue",
