@@ -29,6 +29,7 @@ from src.domain.services.competence_coverage_service import (
     list_quotas_async,
 )
 from src.domain.services.competence_demonstration_service import (
+    MAX_INTERVAL_DAYS,
     PASS_OUTCOME,
     create_bind_async,
     delete_bind_async,
@@ -38,6 +39,11 @@ from src.domain.services.competence_demonstration_service import (
 from src.domain.services.pams_competence_snapshot_service import load_current_snapshot_async, snapshot_stale_reason
 
 DISABLED_DETAIL = "Competence board is not enabled in this environment."
+
+#: Wire spelling of ``competence_assessment_binds.mode``. Kept in step with
+#: ``BIND_MODES`` on the model by a unit test rather than an import, because a
+#: Literal cannot be built from a tuple at runtime.
+BindMode = Literal["field", "induction"]
 
 router = APIRouter()
 
@@ -380,6 +386,10 @@ class CompetenceAssessmentBindCreate(BaseModel):
 
     template_id: int
     characteristic_key: str = Field(min_length=1, max_length=80)
+    # Defaulted so CB-PR4 callers that predate the field|induction split keep
+    # posting a valid body.
+    mode: BindMode = "field"
+    interval_days: Optional[int] = Field(default=None, ge=1, le=MAX_INTERVAL_DAYS)
 
 
 class CompetenceAssessmentBindOut(BaseModel):
@@ -388,13 +398,34 @@ class CompetenceAssessmentBindOut(BaseModel):
     id: int
     template_id: int
     characteristic_key: str
+    mode: str
+    # Absent means this bind declares no interval and the demonstration falls
+    # back to the CompetencyRequirement resolution. It is not "never expires".
+    interval_days: Optional[int] = None
     created_at: datetime
+
+
+class CompetenceCharacteristicOut(BaseModel):
+    """One PAMS characteristic in the current snapshot, bound or not."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
 
 
 class CompetenceAssessmentBindList(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[CompetenceAssessmentBindOut]
+    # Every characteristic the snapshot holds, including the ones nobody has
+    # bound. An unbound characteristic is a gap in QGP's mapping, not a gap in
+    # anyone's competence, so it stays listed rather than being filtered out.
+    characteristics: list[CompetenceCharacteristicOut] = Field(default_factory=list)
+    banner: Optional[str] = Field(
+        default=None,
+        description="Honest empty/stale notice for the characteristic inventory.",
+    )
 
 
 def _serialize_bind(row) -> CompetenceAssessmentBindOut:
@@ -402,6 +433,8 @@ def _serialize_bind(row) -> CompetenceAssessmentBindOut:
         id=row.id,
         template_id=row.template_id,
         characteristic_key=row.characteristic_key,
+        mode=row.mode or "field",
+        interval_days=row.interval_days,
         created_at=row.created_at,
     )
 
@@ -417,13 +450,18 @@ async def create_competence_assessment_bind(
     current_user: Annotated[User, Depends(require_permission("engineer:update"))],
     response: Response,
 ):
-    """Bind one template to one PAMS characteristic. Explicit only — never by name."""
+    """Bind one published template to one PAMS characteristic in one mode.
+
+    Explicit only — never by name, and never a PAMS write.
+    """
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     row, created = await create_bind_async(
         db,
         tenant_id=tenant_id,
         template_id=payload.template_id,
         characteristic_key=payload.characteristic_key,
+        mode=payload.mode,
+        interval_days=payload.interval_days,
     )
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     await db.commit()
@@ -436,9 +474,27 @@ async def list_competence_assessment_binds(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
+    """The binds, plus the characteristic inventory they are mapped against.
+
+    Both come from QGP state: the binds from ``competence_assessment_binds`` and
+    the inventory from the read-only PAMS snapshot already cached by CB-PR1. No
+    PAMS connection is opened here.
+    """
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     rows = await list_binds_async(db, tenant_id=tenant_id)
-    return CompetenceAssessmentBindList(items=[_serialize_bind(row) for row in rows])
+    snapshot, snapshot_rows = await load_current_snapshot_async(db, tenant_id)
+    keys = sorted({row.characteristic_key for row in snapshot_rows if row.characteristic_key})
+    if snapshot is None:
+        banner = "No PAMS competence snapshot yet, so there is no characteristic to bind against."
+    elif not keys:
+        banner = "The current PAMS snapshot holds no characteristics."
+    else:
+        banner = snapshot_stale_reason(snapshot.completed_at)
+    return CompetenceAssessmentBindList(
+        items=[_serialize_bind(row) for row in rows],
+        characteristics=[CompetenceCharacteristicOut(key=key, label=key) for key in keys],
+        banner=banner,
+    )
 
 
 @_enabled_router.delete("/assessment-binds/{bind_id}", status_code=status.HTTP_204_NO_CONTENT)

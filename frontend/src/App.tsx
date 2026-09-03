@@ -126,6 +126,7 @@ const HsecQuestionInbox = lazy(() => import('./pages/admin/HsecQuestionInbox'))
 const PartnerWebhooks = lazy(() => import('./pages/admin/PartnerWebhooks'))
 const LibraryRoles = lazy(() => import('./pages/admin/LibraryRoles'))
 const EngineerGroups = lazy(() => import('./pages/admin/EngineerGroups'))
+const AdminCompetenceBinds = lazy(() => import('./pages/admin/CompetenceBinds'))
 const HsReportingHours = lazy(() => import('./pages/admin/HsReportingHours'))
 const StaffHelp = lazy(() => import('./pages/StaffHelp'))
 const RequireRole = lazy(() => import('./components/RequireRole'))
@@ -692,6 +693,18 @@ function App() {
                   element={
                     <RequireRole allowed={['admin', 'manager']}>
                       <EngineerGroups />
+                    </RequireRole>
+                  }
+                />
+                {/* CB-UI-2. Admin only: a bind decides what a completed
+                    assessment claims on the Plant board, and it is an IT-Admin
+                    mapping job rather than a supervisor one. It writes QGP's
+                    own bind table — never PAMS. */}
+                <Route
+                  path="admin/competence-binds"
+                  element={
+                    <RequireRole allowed={['admin']}>
+                      <AdminCompetenceBinds />
                     </RequireRole>
                   }
                 />
