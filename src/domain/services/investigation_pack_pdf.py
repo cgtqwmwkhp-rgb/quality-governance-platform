@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 _MAX_FIELD_CHARS = 4000
 _MAX_ASSET_ROWS = 200
-_DEFAULT_BRAND_RGB = (59, 130, 246)
+# Plantexpand primary — HSL 82 85% 25% (the web --primary token), not Tailwind blue.
+_DEFAULT_BRAND_RGB = (78, 118, 10)
+_WORDMARK = "PLANTEXPAND"
 
 _AUDIENCE_LABELS: dict[str, str] = {
     "internal_customer": "Internal customer pack",
@@ -146,6 +148,29 @@ def _write_line(pdf: Any, text: str, *, height: float = 5) -> None:
     pdf.multi_cell(0, height, _pdf_safe(text), new_x="LMARGIN", new_y="NEXT")
 
 
+def _make_pack_pdf_class(fpdf_cls: Any) -> Any:
+    """FPDF subclass with a branded footer. Built here so a missing fpdf2 still fails closed."""
+
+    class PackPdf(fpdf_cls):
+        def __init__(self, brand: tuple[int, int, int], org: str, audience_label: str) -> None:
+            super().__init__(orientation="P", unit="mm", format="A4")
+            self._brand = brand
+            self._org = org
+            self._audience_label = audience_label
+
+        def footer(self) -> None:  # noqa: N802 - fpdf2 hook
+            self.set_y(-14)
+            self.set_text_color(*self._brand)
+            self.set_font("Helvetica", "", 8)
+            left = _pdf_safe(f"{self._org}  |  {_WORDMARK}" if self._org else _WORDMARK)
+            right = _pdf_safe(f"{self._audience_label}  |  Page {self.page_no()} of {{nb}}")
+            self.cell(95, 8, left, align="L")
+            self.cell(0, 8, right, align="R")
+            self.set_text_color(0, 0, 0)
+
+    return PackPdf
+
+
 class InvestigationPackPdfService:
     """Render a stored investigation customer pack as a branded PDF."""
 
@@ -171,35 +196,34 @@ class InvestigationPackPdfService:
         raw_content = pack.get("content")
         content: dict[str, Any] = raw_content if isinstance(raw_content, dict) else {}
         audience = str(pack.get("audience") or "")
+        audience_label = _AUDIENCE_LABELS.get(audience, humanise_key(audience) or "Customer pack")
         reference = pack.get("investigation_reference") or content.get("investigation_reference") or "Unknown"
         title = pack.get("investigation_title") or content.get("title") or "Investigation report"
         generated_at = pack.get("generated_at") or datetime.now(timezone.utc).isoformat()
         org = (organisation_name or "").strip()
         brand = _brand_rgb(primary_color)
 
-        pdf = FPDF(orientation="P", unit="mm", format="A4")
+        pdf = _make_pack_pdf_class(FPDF)(brand, org, audience_label)
+        pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=18)
         pdf.set_margins(left=16, top=14, right=16)
         pdf.add_page()
 
-        # Branded header band — tenant name and brand colour, no remote assets fetched.
+        # Branded header band — tenant colour, bundled wordmark. No remote logo fetch.
         pdf.set_fill_color(*brand)
-        pdf.rect(0, 0, 210, 22, style="F")
+        pdf.rect(0, 0, 210, 26, style="F")
         pdf.set_text_color(255, 255, 255)
-        pdf.set_xy(16, 6)
+        pdf.set_xy(16, 7)
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 6, _pdf_safe(org or "Investigation report"), new_x="LMARGIN", new_y="NEXT")
-        pdf.set_x(16)
+        pdf.cell(110, 6, _pdf_safe(org or "Investigation report"), align="L")
+        pdf.set_xy(126, 7)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(68, 6, _WORDMARK, align="R")
+        pdf.set_xy(16, 15)
         pdf.set_font("Helvetica", "", 9)
-        pdf.cell(
-            0,
-            5,
-            _pdf_safe(_AUDIENCE_LABELS.get(audience, humanise_key(audience) or "Customer pack")),
-            new_x="LMARGIN",
-            new_y="NEXT",
-        )
+        pdf.cell(0, 5, _pdf_safe(audience_label), align="L")
         pdf.set_text_color(0, 0, 0)
-        pdf.set_y(28)
+        pdf.set_y(32)
 
         pdf.set_font("Helvetica", "B", 16)
         _write_line(pdf, str(title), height=8)
