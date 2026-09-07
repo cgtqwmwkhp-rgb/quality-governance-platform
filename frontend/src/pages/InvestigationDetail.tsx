@@ -108,6 +108,7 @@ import {
   triggerPackPdfDownload,
 } from './investigation/investigationReportHelpers'
 import { getReportSectionsForLevel } from './investigation/hsg245ReportSections'
+import { readWorkspaceText, withWorkspaceFields } from './investigation/investigationNestedData'
 import {
   addManualTimelineEntry,
   approveCustomerPackOmit,
@@ -353,16 +354,18 @@ export default function InvestigationDetail() {
     setPackCapability(capability)
   }, [investigationId])
 
+  // INV-C4: hydrate from the nested section when the flat key is empty, so RCA and findings
+  // written by the template run show up in these editors instead of a blank box.
   const initializeRcaData = useCallback(() => {
     if (!investigation) return
     const data = (investigation.data as Record<string, unknown>) || {}
     const rcaFields: Record<string, string> = {}
     for (let i = 1; i <= 5; i++) {
-      rcaFields[`why_${i}`] = String(data[`why_${i}`] || '')
+      rcaFields[`why_${i}`] = readWorkspaceText(data, `why_${i}`)
     }
-    rcaFields['root_cause'] = String(data['root_cause'] || '')
-    rcaFields['problem_statement'] = String(data['problem_statement'] || '')
-    rcaFields['contributing_factors'] = String(data['contributing_factors'] || '')
+    rcaFields['root_cause'] = readWorkspaceText(data, 'root_cause')
+    rcaFields['problem_statement'] = readWorkspaceText(data, 'problem_statement')
+    rcaFields['contributing_factors'] = readWorkspaceText(data, 'contributing_factors')
     setRcaData(rcaFields)
     setRcaUnsaved(false)
   }, [investigation])
@@ -370,9 +373,9 @@ export default function InvestigationDetail() {
   const initializeSummaryData = useCallback(() => {
     if (!investigation) return
     const data = (investigation.data as Record<string, unknown>) || {}
-    setSummaryFindings(String(data['findings'] || ''))
-    setSummaryConclusion(String(data['conclusion'] || ''))
-    setSummaryLead(String(data['lead_investigator'] || ''))
+    setSummaryFindings(readWorkspaceText(data, 'findings'))
+    setSummaryConclusion(readWorkspaceText(data, 'conclusion'))
+    setSummaryLead(readWorkspaceText(data, 'lead_investigator'))
     setSummaryLeadUserId(investigation.assigned_to_user_id ?? null)
     setSummaryUnsaved(false)
     setSummarySaveError(null)
@@ -461,7 +464,11 @@ export default function InvestigationDetail() {
     setRcaSaveSuccess(false)
     try {
       const existingData = (investigation.data as Record<string, unknown>) || {}
-      await investigationsApi.update(investigationId, { data: { ...existingData, ...rcaData } })
+      // Dual-write (INV-C4): the flat keys this page has always written, plus the nested
+      // sections the closure walk and the pack read.
+      await investigationsApi.update(investigationId, {
+        data: withWorkspaceFields(existingData, rcaData),
+      })
       await loadInvestigation()
       setRcaUnsaved(false)
       setRcaSaveSuccess(true)
@@ -664,12 +671,12 @@ export default function InvestigationDetail() {
       const existingData = (investigation.data as Record<string, unknown>) || {}
       await investigationsApi.update(investigationId, {
         assigned_to_user_id: summaryLeadUserId,
-        data: {
-          ...existingData,
+        // Dual-write (INV-C4): flat keys plus the nested findings section.
+        data: withWorkspaceFields(existingData, {
           findings: summaryFindings,
           conclusion: summaryConclusion,
           lead_investigator: summaryLead,
-        },
+        }),
       })
       await loadInvestigation()
       setSummaryUnsaved(false)

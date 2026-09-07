@@ -765,6 +765,102 @@ describe('InvestigationDetail', () => {
     })
   })
 
+  // INV-C4: the report path walks data.sections only, so a save must land in both shapes.
+  it('saves findings to the nested section as well as the flat key', async () => {
+    client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
+    client.investigationsApi.get.mockResolvedValue({
+      data: {
+        ...mockInvestigation,
+        data: { source_snapshot: { reference_number: 'RTA-42' }, sections: { section_1_details: { location: 'yard' } } },
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-findings-input')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByTestId('investigation-findings-input'), {
+      target: { value: 'Guard was removed before the shift' },
+    })
+    fireEvent.click(screen.getByTestId('investigation-summary-save'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.update).toHaveBeenCalled()
+    })
+
+    const payload = client.investigationsApi.update.mock.calls[0][1].data
+    expect(payload.findings).toBe('Guard was removed before the shift')
+    expect(payload.sections.section_3_investigation_findings.findings).toBe(
+      'Guard was removed before the shift',
+    )
+    // Unrelated data survives the dual-write.
+    expect(payload.sections.section_1_details).toEqual({ location: 'yard' })
+    expect(payload.source_snapshot).toEqual({ reference_number: 'RTA-42' })
+  })
+
+  it('saves RCA whys to the contract section and the legacy rca alias', async () => {
+    client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+
+    fireEvent.change(await screen.findByLabelText('Why 1?'), {
+      target: { value: 'The driver could not see the walkway' },
+    })
+    fireEvent.change(screen.getByTestId('investigation-root-cause-input'), {
+      target: { value: 'No banksman on site' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'investigations.save_rca' }))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.update).toHaveBeenCalled()
+    })
+
+    const payload = client.investigationsApi.update.mock.calls[0][1].data
+    expect(payload.why_1).toBe('The driver could not see the walkway')
+    for (const sectionKey of ['section_4_root_cause', 'rca']) {
+      expect(payload.sections[sectionKey].why_1).toBe('The driver could not see the walkway')
+      expect(payload.sections[sectionKey].root_cause).toBe('No banksman on site')
+    }
+  })
+
+  it('hydrates findings and whys from nested sections when the flat keys are empty', async () => {
+    client.investigationsApi.get.mockResolvedValue({
+      data: {
+        ...mockInvestigation,
+        data: {
+          findings: '',
+          sections: {
+            section_3_investigation_findings: {
+              findings: 'Nested finding from the template run',
+              conclusion: 'Nested conclusion',
+            },
+            section_4_root_cause: { why_1: 'Nested why one' },
+          },
+        },
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-findings-input')).toHaveValue(
+        'Nested finding from the template run',
+      )
+    })
+    expect(screen.getByTestId('investigation-conclusion-input')).toHaveValue('Nested conclusion')
+
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+    expect(await screen.findByLabelText('Why 1?')).toHaveValue('Nested why one')
+  })
+
   it('lists source-linked evidence as well as investigation uploads', async () => {
     renderPage()
 

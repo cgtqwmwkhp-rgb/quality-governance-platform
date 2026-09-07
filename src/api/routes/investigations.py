@@ -41,6 +41,7 @@ from src.domain.models.investigation import (
     InvestigationTemplate,
 )
 from src.domain.models.user import User
+from src.domain.services.investigation_data_writer import merge_nested_workspace_fields
 from src.domain.services.investigation_service import InvestigationService
 
 logger = logging.getLogger(__name__)
@@ -1189,6 +1190,13 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
 
     update_data = investigation_data.model_dump(exclude_unset=True)
 
+    # INV-C4: a client that still sends only flat keys (`data.findings`) must not leave the
+    # report path blind — the closure walk and the pack read `data.sections` only. Merge before
+    # anything else reads `update_data["data"]`, so the lessons promotion and the revision event
+    # see the blob that is actually stored. Flat keys are kept in sync, not replaced (C18).
+    if "data" in update_data:
+        update_data["data"] = merge_nested_workspace_fields(update_data["data"])
+
     # PX-168b: refuse lead/reviewer ids that do not resolve to an active tenant user.
     for field_name in ("assigned_to_user_id", "reviewer_user_id"):
         if field_name not in update_data:
@@ -1739,6 +1747,9 @@ async def autosave_investigation(
 
     # Store old data for revision event
     old_data = investigation.data
+
+    # INV-C4: same dual-write as PATCH — an autosaved flat key must also land nested.
+    data = merge_nested_workspace_fields(data)
 
     # Update data and increment version
     investigation.data = data  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
