@@ -203,9 +203,7 @@ class TestConfidentialityNotice:
         assert "1 field was redacted" in confidentiality_notice(
             "external_customer", [{"redaction_type": "IDENTITY_REDACTION"}]
         )
-        assert "2 fields were redacted" in confidentiality_notice(
-            "external_customer", _pack()["redaction_log"]
-        )
+        assert "2 fields were redacted" in confidentiality_notice("external_customer", _pack()["redaction_log"])
 
     def test_external_pack_always_states_that_narrative_is_not_redacted(self) -> None:
         for log in ([], [{"redaction_type": "IDENTITY_REDACTION"}]):
