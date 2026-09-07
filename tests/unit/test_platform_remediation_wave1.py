@@ -30,7 +30,7 @@ async def test_evidence_upload_rejects_empty_file_before_storage(monkeypatch):
     monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
     monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _UnexpectedStorage())
     monkeypatch.setattr(
-        "src.domain.services.evidence_investigation_link.resolve_linked_investigation_id",
+        "src.api.routes.evidence_assets.resolve_linked_investigation_id",
         _resolve_linked_investigation_id,
     )
 
@@ -80,7 +80,7 @@ async def test_evidence_upload_returns_safe_error_when_storage_dependency_is_una
     monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
     monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _FailingStorage())
     monkeypatch.setattr(
-        "src.domain.services.evidence_investigation_link.resolve_linked_investigation_id",
+        "src.api.routes.evidence_assets.resolve_linked_investigation_id",
         _resolve_linked_investigation_id,
     )
 
@@ -149,7 +149,7 @@ async def test_evidence_upload_returns_safe_error_when_metadata_persistence_fail
     monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
     monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _Storage())
     monkeypatch.setattr(
-        "src.domain.services.evidence_investigation_link.resolve_linked_investigation_id",
+        "src.api.routes.evidence_assets.resolve_linked_investigation_id",
         _resolve_linked_investigation_id,
     )
 
@@ -185,12 +185,12 @@ async def test_evidence_upload_returns_safe_error_when_metadata_persistence_fail
 
 
 @pytest.mark.asyncio
-async def test_evidence_upload_persists_source_id_as_string(monkeypatch):
+async def test_evidence_upload_persists_source_id_and_investigation_link(monkeypatch):
     async def _validate_source_exists(*args, **kwargs):
         return True
 
     async def _resolve_linked_investigation_id(*args, **kwargs):
-        return None
+        return 88
 
     class _Storage:
         async def upload(self, **kwargs):
@@ -216,7 +216,7 @@ async def test_evidence_upload_persists_source_id_as_string(monkeypatch):
     monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
     monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _Storage())
     monkeypatch.setattr(
-        "src.domain.services.evidence_investigation_link.resolve_linked_investigation_id",
+        "src.api.routes.evidence_assets.resolve_linked_investigation_id",
         _resolve_linked_investigation_id,
     )
 
@@ -247,6 +247,7 @@ async def test_evidence_upload_persists_source_id_as_string(monkeypatch):
     )
 
     assert db.added[0].source_id == "7"
+    assert db.added[0].linked_investigation_id == 88
     assert response.id == 101
 
 

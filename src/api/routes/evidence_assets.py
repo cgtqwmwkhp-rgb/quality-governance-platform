@@ -41,6 +41,7 @@ from src.domain.models.evidence_asset import (
     EvidenceVisibility,
 )
 from src.domain.models.user import User
+from src.domain.services.evidence_investigation_link import resolve_linked_investigation_id
 from src.domain.services.evidence_service import (
     ALLOWED_CONTENT_TYPES,
     MAX_FILE_SIZE_BYTES,
@@ -338,8 +339,6 @@ async def upload_evidence_asset(
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
-
-    from src.domain.services.evidence_investigation_link import resolve_linked_investigation_id
 
     linked_id = await resolve_linked_investigation_id(
         db,
