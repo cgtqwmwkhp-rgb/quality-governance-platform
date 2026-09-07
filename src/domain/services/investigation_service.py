@@ -435,6 +435,8 @@ class InvestigationService:
             else:
                 if isinstance(source_value, datetime):
                     source_value = source_value.isoformat()
+                elif hasattr(source_value, "value"):
+                    source_value = source_value.value
                 mapping_log.append(
                     {
                         "source_field": source_field,
@@ -522,6 +524,19 @@ class InvestigationService:
             map_field("incident_date", "section_1_details", "incident_date")
             map_field("location", "section_1_details", "location")
             map_field("description", "section_1_details", "description")
+            map_field("people_involved", "section_1_details", "persons_involved")
+            map_field("witnesses", "section_1_details", "witnesses")
+            map_field("severity", "section_1_details", "severity")
+            map_field("department", "section_1_details", "department")
+            map_field("is_injury", "section_1_details", "is_injury")
+            map_field("body_parts", "section_1_details", "body_parts")
+            map_field("is_lti", "section_1_details", "is_lti")
+            map_field("days_lost", "section_1_details", "days_lost")
+            map_field("is_minor_injury", "section_1_details", "is_minor_injury")
+            map_field("immediate_actions", "section_2_immediate_actions", "actions_taken")
+            map_field("first_aid_given", "section_2_immediate_actions", "first_aid_given")
+            map_field("emergency_services_called", "section_2_immediate_actions", "emergency_services_called")
+            map_field("medical_assistance", "section_2_immediate_actions", "medical_assistance")
 
             severity = getattr(record, "severity", None)
             if severity:
