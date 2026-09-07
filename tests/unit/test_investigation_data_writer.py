@@ -8,14 +8,8 @@ from __future__ import annotations
 
 import copy
 
-from src.domain.services.investigation_data_reader import (
-    read_investigation_field,
-    read_investigation_section_field,
-)
-from src.domain.services.investigation_data_writer import (
-    WORKSPACE_FIELD_SECTIONS,
-    merge_nested_workspace_fields,
-)
+from src.domain.services.investigation_data_reader import read_investigation_field, read_investigation_section_field
+from src.domain.services.investigation_data_writer import WORKSPACE_FIELD_SECTIONS, merge_nested_workspace_fields
 
 FINDINGS_SECTION = "section_3_investigation_findings"
 ROOT_CAUSE_SECTION = "section_4_root_cause"
@@ -185,6 +179,14 @@ class TestNothingIsInvented:
 
         assert merged["sections"][ROOT_CAUSE_SECTION]["contributing_factors"] == []
         assert merged["contributing_factors"] == "poor lighting"
+
+    def test_nested_structured_values_are_not_copied_to_flat_text_keys(self) -> None:
+        for structured_value in (["poor lighting"], {"factor": "poor lighting"}):
+            merged = merge_nested_workspace_fields(
+                {"sections": {ROOT_CAUSE_SECTION: {"contributing_factors": structured_value}}}
+            )
+
+            assert "contributing_factors" not in merged
 
     def test_a_malformed_sections_payload_is_left_alone(self) -> None:
         assert merge_nested_workspace_fields({"findings": "x", "sections": "broken"}) == {

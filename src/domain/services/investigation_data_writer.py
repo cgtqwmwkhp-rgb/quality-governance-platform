@@ -219,7 +219,7 @@ def merge_nested_workspace_fields(data: Any) -> Any:
         flat_value = merged.get(field, _MISSING)
 
         if nested_value is not _MISSING:
-            if _is_fillable(flat_value):
+            if _is_fillable(flat_value) and isinstance(nested_value, str):
                 merged[field] = nested_value
             source = nested_value
         elif _is_usable(flat_value):
