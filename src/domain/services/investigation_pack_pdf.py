@@ -23,16 +23,22 @@ _AUDIENCE_LABELS: dict[str, str] = {
     "external_customer": "External customer pack",
 }
 
-_AUDIENCE_CONFIDENTIALITY: dict[str, str] = {
-    "internal_customer": (
-        "Confidential. Issued for the named customer's internal use. Identities are retained; "
-        "internal commentary is excluded."
-    ),
-    "external_customer": (
-        "Confidential. Issued externally. Personal identities are redacted and only "
-        "externally-releasable evidence is listed."
-    ),
-}
+_INTERNAL_CONFIDENTIALITY = (
+    "Confidential. Issued for the named customer's internal use. Identities are retained; "
+    "internal commentary is excluded."
+)
+
+# Section omits are approved withholdings, not field redactions. Everything else in the
+# log is a field the redaction pass actually rewrote.
+_SECTION_OMIT_TYPE = "SECTION_OMIT_APPROVED"
+
+# Redaction matches an allow-list of identity field names, so it cannot reach a name written
+# inside a description or a findings narrative. Saying so is the difference between a pack
+# that is safe to release and one that only claims to be.
+_REDACTION_SCOPE_NOTE = (
+    "Redaction covers recorded identity fields only. Narrative text is reproduced as written "
+    "and may still identify individuals - review this pack before releasing it."
+)
 
 
 def _pdf_safe(value: Any, *, max_len: Optional[int] = None) -> str:
@@ -88,6 +94,39 @@ def summarise_redactions(redaction_log: Any) -> list[tuple[str, int]]:
             kind = str(entry.get("redaction_type") or "REDACTION")
             counts[kind] = counts.get(kind, 0) + 1
     return sorted(counts.items())
+
+
+def count_field_redactions(redaction_log: Any) -> int:
+    """Count field rewrites actually applied. Section omits are withholdings, not redactions."""
+    if not isinstance(redaction_log, list):
+        return 0
+    return sum(
+        1
+        for entry in redaction_log
+        if isinstance(entry, dict) and str(entry.get("redaction_type") or "") != _SECTION_OMIT_TYPE
+    )
+
+
+def confidentiality_notice(audience: Any, redaction_log: Any) -> str:
+    """Audience notice stating what redaction did to *this* pack, never what it intends to do."""
+    key = str(audience or "")
+    if key == "internal_customer":
+        return _INTERNAL_CONFIDENTIALITY
+    if key != "external_customer":
+        return ""
+
+    applied = count_field_redactions(redaction_log)
+    if applied == 1:
+        applied_line = "1 field was redacted from the sections below."
+    elif applied > 1:
+        applied_line = f"{applied} fields were redacted from the sections below."
+    else:
+        applied_line = "No fields were redacted from the sections below."
+
+    return (
+        f"Confidential. Issued externally. {applied_line} Only externally-releasable evidence "
+        f"is listed. {_REDACTION_SCOPE_NOTE}"
+    )
 
 
 def _brand_rgb(primary_color: Optional[str]) -> tuple[int, int, int]:
@@ -171,7 +210,7 @@ class InvestigationPackPdfService:
         _write_line(pdf, f"Generated: {generated_at}")
         pdf.ln(2)
 
-        confidentiality = _AUDIENCE_CONFIDENTIALITY.get(audience)
+        confidentiality = confidentiality_notice(audience, pack.get("redaction_log"))
         if confidentiality:
             pdf.set_font("Helvetica", "I", 9)
             _write_line(pdf, confidentiality, height=4.5)
