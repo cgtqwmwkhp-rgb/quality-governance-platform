@@ -10,7 +10,8 @@ import { Input } from './ui/Input'
 import { cn } from '../helpers/utils'
 
 export type EngineerPeopleSelection = {
-  engineerId: number
+  /** Present when the name came from the employee roster. Absent when it was typed. */
+  engineerId?: number
   label: string
   /** Present when the person has a QGP login — required for case/task assignment. */
   user?: UserSearchResult
@@ -93,9 +94,18 @@ export function EngineerPeoplePicker({
         <Input
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value)
+            const next = e.target.value
+            setQuery(next)
             setOpen(true)
-            onChange(null)
+            // Assignment surfaces must pick from the roster. Naming surfaces
+            // (investigation lead) keep the typed text — calling onChange(null)
+            // here is what made a typed lead impossible to save.
+            if (requireLogin) {
+              onChange(null)
+              return
+            }
+            const trimmed = next.trim()
+            onChange(trimmed ? { label: next, hasLogin: false } : null)
           }}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}

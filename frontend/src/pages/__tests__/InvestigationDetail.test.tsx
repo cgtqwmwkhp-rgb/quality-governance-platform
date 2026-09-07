@@ -114,21 +114,36 @@ vi.mock('../investigation/investigationDetailApi', async (importOriginal) => ({
 
 vi.mock('../../components/EngineerPeoplePicker', () => ({
   EngineerPeoplePicker: ({
-    value,
+    valueLabel,
     onChange,
     testId,
   }: {
-    value?: { label?: string } | null
-    onChange?: (next: { label: string } | null) => void
+    valueLabel?: string
+    onChange?: (next: { label: string; user?: { id: number; email: string }; hasLogin: boolean } | null) => void
     testId?: string
   }) => (
-    <button
-      type="button"
-      data-testid={testId || 'mock-engineer-people-picker'}
-      onClick={() => onChange?.({ label: 'Roster Engineer' })}
-    >
-      {value?.label || 'Pick engineer'}
-    </button>
+    <div>
+      <input
+        data-testid={testId || 'mock-engineer-people-picker'}
+        value={valueLabel || ''}
+        onChange={(event) =>
+          onChange?.({ label: event.target.value, hasLogin: false })
+        }
+      />
+      <button
+        type="button"
+        data-testid={`${testId || 'mock-engineer-people-picker'}-pick`}
+        onClick={() =>
+          onChange?.({
+            label: 'Roster Engineer',
+            user: { id: 4, email: 'david@example.com' },
+            hasLogin: true,
+          })
+        }
+      >
+        Pick engineer
+      </button>
+    </div>
   ),
 }))
 
@@ -700,5 +715,77 @@ describe('InvestigationDetail', () => {
 
     expect(screen.getByTestId('report-section-omit-request-event-details')).toBeInTheDocument()
     expect(screen.getByTestId('report-section-omit-approve-event-details')).toBeInTheDocument()
+  })
+
+  it('saves a typed lead investigator name and clears the user FK', async () => {
+    client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-assignee-input')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByTestId('investigation-assignee-input'), {
+      target: { value: 'External investigator' },
+    })
+    fireEvent.click(screen.getByTestId('investigation-summary-save'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.update).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({
+          assigned_to_user_id: null,
+          data: expect.objectContaining({ lead_investigator: 'External investigator' }),
+        }),
+      )
+    })
+  })
+
+  it('writes assigned_to_user_id when a roster colleague is picked', async () => {
+    client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-assignee-input-pick')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('investigation-assignee-input-pick'))
+    fireEvent.click(screen.getByTestId('investigation-summary-save'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.update).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({
+          assigned_to_user_id: 4,
+          data: expect.objectContaining({ lead_investigator: 'david@example.com' }),
+        }),
+      )
+    })
+  })
+
+  it('lists source-linked evidence as well as investigation uploads', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Evidence' }))
+
+    await waitFor(() => {
+      expect(client.evidenceAssetsApi.list).toHaveBeenCalledWith({
+        source_module: 'investigation',
+        source_id: 7,
+        page: 1,
+        page_size: 50,
+      })
+      expect(client.evidenceAssetsApi.list).toHaveBeenCalledWith({
+        linked_investigation_id: 7,
+        page: 1,
+        page_size: 50,
+      })
+    })
   })
 })
