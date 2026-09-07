@@ -201,6 +201,9 @@ async def test_start_assessment_wires_soft_gate(monkeypatch):
         debrief_signature=None,
         debrief_signed_at=None,
         responses=[],
+        # CB-UI-3 added the column; a real run always carries the attribute, so
+        # the stand-in has to as well. Absent evidence is None, not missing.
+        plant_evidence=None,
         tenant_id=1,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),

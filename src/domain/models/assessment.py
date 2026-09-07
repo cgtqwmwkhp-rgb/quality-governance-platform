@@ -63,6 +63,13 @@ class AssessmentRun(Base, TimestampMixin, AuditTrailMixin):
     location: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Which machine the demonstration happened on (CB-UI-3): make / model /
+    # serial / PAMS plant id, any subset, all optional. Evidence attached to
+    # this run and nothing more — it is not a competence claim, not a board
+    # column, and not an OEM registry (that is CB-OEM). Null means the assessor
+    # recorded none, which is a valid family assessment.
+    plant_evidence: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
     # GPS
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

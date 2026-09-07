@@ -31,6 +31,19 @@ class ErrorCode(str, Enum):
     INSUFFICIENT_ROLE = "INSUFFICIENT_ROLE"
     COMPETENCY_GATE_BLOCKED = "COMPETENCY_GATE_BLOCKED"
 
+    # Deliberately not COMPETENCY_GATE_BLOCKED, which is a statement about the
+    # person being assessed — they are not competent for the asset type, so the
+    # run must not start. This one is a statement about the *assessor*: the
+    # subject may well be due a demonstration, but the viewer cannot be the one
+    # to witness it. Two clients already branch on COMPETENCY_GATE_BLOCKED to
+    # explain the subject's gap, and folding the assessor's ineligibility into
+    # it would make both of them say the wrong thing.
+    #
+    # It also carries an actionable sentence rather than "you lack permission" —
+    # there is no permission to grant for "you cannot assess yourself" — so the
+    # client is expected to render the server's message verbatim.
+    ASSESSOR_NOT_ELIGIBLE = "ASSESSOR_NOT_ELIGIBLE"
+
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
     TENANT_QUOTA_EXCEEDED = "TENANT_QUOTA_EXCEEDED"
 

@@ -59,7 +59,25 @@ vi.mock('../../services/auditDraftStore', () => ({
   registerDraftSnapshot: vi.fn(),
   getAuditDraft: vi.fn().mockResolvedValue(null),
   deleteAuditDraft: vi.fn(),
-  saveAuditDraft: vi.fn(),
+  saveAuditDraft: vi.fn().mockResolvedValue({ ok: true }),
+  putCaptureBlob: vi.fn().mockResolvedValue({ ok: true }),
+  deleteCaptureBlob: vi.fn().mockResolvedValue(undefined),
+  listCaptureBlobs: vi.fn().mockResolvedValue([]),
+  ensureDeviceLedgerDurability: vi.fn().mockResolvedValue({
+    durable: true,
+    reason: 'ok',
+    writeFailed: false,
+    usageBytes: null,
+    quotaBytes: null,
+  }),
+  subscribeDeviceLedgerStatus: vi.fn(() => () => {}),
+  getDeviceLedgerStatus: vi.fn(() => ({
+    durable: true,
+    reason: 'ok',
+    writeFailed: false,
+    usageBytes: null,
+    quotaBytes: null,
+  })),
 }))
 
 const FIRST_QUESTION_ID = 151

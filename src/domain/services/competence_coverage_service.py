@@ -23,7 +23,7 @@ Three rules the counting obeys, and one it refuses:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Final, Iterable, Optional, Sequence
 
 from sqlalchemy import select
@@ -97,9 +97,32 @@ class CoverageState:
 
 
 @dataclass(frozen=True)
+class CoverageForecastRow:
+    """One Atlas person whose expiry will take a currently-met site below n.
+
+    Names stay on Atlas. The duty stays on the location schedule. This row is a
+    projection, not a person-scoped requirement.
+    """
+
+    quota_id: int
+    location_id: int
+    role_key: str
+    template_key: str
+    atlas_person_id: int
+    atlas_name: str
+    expires_on: date
+    current_m: int
+    required_n: int
+
+
+FORECAST_HORIZON_DAYS: Final[int] = 30
+
+
+@dataclass(frozen=True)
 class CoverageView:
     items: list[CoverageState]
     banner: Optional[str]
+    forecast: list[CoverageForecastRow]
 
 
 @dataclass(frozen=True)
@@ -126,6 +149,47 @@ def role_for_course_key(course_key: str | None) -> Optional[str]:
     return None
 
 
+def _holds_by_role(
+    snapshot: AtlasCoverageSnapshot,
+    *,
+    as_of: date,
+) -> dict[str, dict[int, Optional[date]]]:
+    """person_id → covering_until for people who currently cover each role.
+
+    ``covering_until`` is ``None`` when any counting cell has no expiry — that
+    person stays in the count after dated certificates lapse. Two matching
+    courses on one person collapse to the later of the two dated expiries, or
+    to never, never to two people.
+    """
+    roles_by_course_id: dict[int, set[str]] = {}
+    for course in snapshot.courses:
+        role = role_for_course_key(getattr(course, "course_key", None))
+        if role is not None:
+            roles_by_course_id.setdefault(course.id, set()).add(role)
+
+    people_ids = {person.id for person in snapshot.people}
+    holds: dict[str, dict[int, Optional[date]]] = {role: {} for role in COVERAGE_ROLE_KEYS}
+    for cell in snapshot.cells:
+        roles = roles_by_course_id.get(cell.course_id)
+        if not roles:
+            continue
+        if cell.person_id not in people_ids:
+            continue
+        if cell.passed_on is None:
+            continue
+        if cell.expires_on is not None and cell.expires_on < as_of:
+            continue
+        for role in roles:
+            existing = holds.setdefault(role, {})
+            if cell.person_id not in existing:
+                existing[cell.person_id] = cell.expires_on
+            elif existing[cell.person_id] is None or cell.expires_on is None:
+                existing[cell.person_id] = None
+            elif cell.expires_on > existing[cell.person_id]:
+                existing[cell.person_id] = cell.expires_on
+    return holds
+
+
 def assemble_coverage(
     *,
     quotas: Sequence[CompetenceCoverageQuota],
@@ -134,30 +198,8 @@ def assemble_coverage(
 ) -> list[CoverageState]:
     """Count current cover per quota. Pure — no IO, no clock beyond ``today``."""
     as_of = today or _today()
-
-    roles_by_course_id: dict[int, set[str]] = {}
-    for course in snapshot.courses:
-        role = role_for_course_key(getattr(course, "course_key", None))
-        if role is not None:
-            roles_by_course_id.setdefault(course.id, set()).add(role)
-
     department_by_person: dict[int, Optional[str]] = {person.id: person.department for person in snapshot.people}
-
-    # Sets of person ids, so two matching courses on one person are one person.
-    covering: dict[str, set[int]] = {role: set() for role in COVERAGE_ROLE_KEYS}
-    for cell in snapshot.cells:
-        roles = roles_by_course_id.get(cell.course_id)
-        if not roles:
-            continue
-        if cell.person_id not in department_by_person:
-            # A cell from an earlier import, or a person this import dropped.
-            continue
-        if cell.passed_on is None:
-            continue
-        if cell.expires_on is not None and cell.expires_on < as_of:
-            continue
-        for role in roles:
-            covering.setdefault(role, set()).add(cell.person_id)
+    holds = _holds_by_role(snapshot, as_of=as_of)
 
     states: list[CoverageState] = []
     for quota in quotas:
@@ -169,7 +211,7 @@ def assemble_coverage(
         else:
             current_m = sum(
                 1
-                for person_id in covering.get(quota.role_key, set())
+                for person_id in holds.get(quota.role_key, {})
                 if department_by_person.get(person_id) == quota.match_department
             )
             met = current_m >= quota.required_n
@@ -189,6 +231,62 @@ def assemble_coverage(
             )
         )
     return states
+
+
+def assemble_coverage_forecast(
+    *,
+    quotas: Sequence[CompetenceCoverageQuota],
+    snapshot: AtlasCoverageSnapshot,
+    today: Optional[date] = None,
+    horizon_days: int = FORECAST_HORIZON_DAYS,
+) -> list[CoverageForecastRow]:
+    """People whose expiry, in date order, will take a currently-met site below n.
+
+    Already-short quotas are omitted — the location duty is already due. Unknown
+    quotas are omitted — a missing department is not a forecast. Names come from
+    Atlas; nothing here creates a User or a person-scoped schedule row.
+    """
+    as_of = today or _today()
+    horizon = as_of + timedelta(days=horizon_days)
+    name_by_person = {person.id: person.atlas_name for person in snapshot.people}
+    department_by_person: dict[int, Optional[str]] = {person.id: person.department for person in snapshot.people}
+    holds = _holds_by_role(snapshot, as_of=as_of)
+    states = {state.quota_id: state for state in assemble_coverage(quotas=quotas, snapshot=snapshot, today=as_of)}
+
+    rows: list[CoverageForecastRow] = []
+    for quota in quotas:
+        state = states.get(quota.id)
+        if state is None or state.unknown or not state.met:
+            continue
+        candidates: list[tuple[date, str, int]] = []
+        for person_id, covering_until in holds.get(quota.role_key, {}).items():
+            if department_by_person.get(person_id) != quota.match_department:
+                continue
+            if covering_until is None:
+                continue
+            if covering_until < as_of or covering_until > horizon:
+                continue
+            candidates.append((covering_until, name_by_person.get(person_id) or "", person_id))
+        candidates.sort()
+        remaining = state.current_m
+        for expires_on, atlas_name, person_id in candidates:
+            remaining -= 1
+            if remaining >= quota.required_n:
+                continue
+            rows.append(
+                CoverageForecastRow(
+                    quota_id=quota.id,
+                    location_id=quota.location_id,
+                    role_key=quota.role_key,
+                    template_key=quota.template_key,
+                    atlas_person_id=person_id,
+                    atlas_name=atlas_name,
+                    expires_on=expires_on,
+                    current_m=state.current_m,
+                    required_n=quota.required_n,
+                )
+            )
+    return rows
 
 
 def coverage_banner(*, quotas: Sequence[CompetenceCoverageQuota], snapshot: AtlasCoverageSnapshot) -> Optional[str]:
@@ -254,11 +352,12 @@ async def list_quotas_async(db: Any, *, tenant_id: int) -> list[CompetenceCovera
 async def build_coverage_view_async(db: Any, tenant_id: int, *, today: Optional[date] = None) -> CoverageView:
     quotas = await list_quotas_async(db, tenant_id=tenant_id)
     if not quotas:
-        return CoverageView(items=[], banner=None)
+        return CoverageView(items=[], banner=None, forecast=[])
     snapshot = await load_atlas_snapshot_async(db, tenant_id)
     return CoverageView(
         items=assemble_coverage(quotas=quotas, snapshot=snapshot, today=today),
         banner=coverage_banner(quotas=quotas, snapshot=snapshot),
+        forecast=assemble_coverage_forecast(quotas=quotas, snapshot=snapshot, today=today),
     )
 
 
@@ -439,13 +538,16 @@ def coverage_targets(requirements: Iterable[Any]) -> list[tuple[int, int, str]]:
 
 __all__ = [
     "COVERAGE_ROLE_KEYS",
+    "FORECAST_HORIZON_DAYS",
     "ROLE_COURSE_KEYS",
     "ROLE_COURSE_LABELS",
     "UNKNOWN_DEPARTMENT_BANNER",
     "AtlasCoverageSnapshot",
+    "CoverageForecastRow",
     "CoverageState",
     "CoverageView",
     "assemble_coverage",
+    "assemble_coverage_forecast",
     "build_coverage_view_async",
     "coverage_banner",
     "coverage_targets",

@@ -101,4 +101,13 @@ describe('AdminDashboard soft-fail honesty', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('0')).toBeInTheDocument()
   })
+
+  it('offers the competence bind screen as a quick action, so it is reachable without typing a URL', async () => {
+    render(<AdminDashboard />)
+
+    expect(await screen.findByText('Competence binds')).toBeInTheDocument()
+    expect(
+      screen.getByText('Map published templates onto PAMS characteristics'),
+    ).toBeInTheDocument()
+  })
 })

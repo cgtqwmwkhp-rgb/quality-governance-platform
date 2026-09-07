@@ -7,6 +7,7 @@ import {
   getValidPlatformToken,
   revokeSession,
 } from '../utils/auth'
+import { purgeDeviceLedgerForCurrentSession } from '../services/auditDraftStore'
 
 // Microsoft Entra ID (Azure AD) configuration
 const MSAL_CONFIG = {
@@ -398,6 +399,11 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
 
     // Revoke server-side session while tokens are still available
     await revokeSession()
+
+    // AUD-F6: also while the token is still available. The audit device ledger is
+    // namespaced by the token's `sub`, so this is the last moment the app can
+    // tell which rows belong to the auditor signing out.
+    await purgeDeviceLedgerForCurrentSession()
 
     setUser(null)
     setPlatformToken(null)

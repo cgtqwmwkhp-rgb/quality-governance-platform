@@ -10,18 +10,26 @@ over issued plant cells. QGP still never writes PAMS.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from src.api.dependencies import DbSession, require_permission
+
+# CB-UI-3 starts a family demonstration by creating an ``AssessmentRun`` on the
+# existing create path rather than inventing a second execute shell. Imported at
+# module level like `analytics` → `actions`: a deferred import would move an
+# import failure from startup to whenever someone first started an assessment.
+from src.api.routes.assessments import create_assessment_run
+from src.api.schemas.assessment import AssessmentPlantEvidence, AssessmentRunCreate
 from src.api.utils.tenant import require_tenant_id
 from src.core.config import settings
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
 from src.domain.services.atlas_competence_board_service import build_atlas_board_async
+from src.domain.services.competence_coverage_due_service import apply_coverage_shortfall_dues_async
 from src.domain.services.competence_coverage_service import (
     build_coverage_view_async,
     create_quota_async,
@@ -29,15 +37,45 @@ from src.domain.services.competence_coverage_service import (
     list_quotas_async,
 )
 from src.domain.services.competence_demonstration_service import (
+    MAX_INTERVAL_DAYS,
     PASS_OUTCOME,
     create_bind_async,
     delete_bind_async,
     list_binds_async,
     load_demonstration_overlay_async,
 )
+from src.domain.services.competence_family_start_service import (
+    ASSESSOR_HAS_NO_EMPLOYEE_RECORD,
+    ASSESSOR_SNAPSHOT_MISSING,
+    ENGINEER_NOT_ON_THE_BOARD,
+    bound_modes_by_characteristic,
+    resolve_assessor_engineer_async,
+    resolve_startable_bind_async,
+)
 from src.domain.services.pams_competence_snapshot_service import load_current_snapshot_async, snapshot_stale_reason
 
 DISABLED_DETAIL = "Competence board is not enabled in this environment."
+
+#: Why no Atlas square offers a start. Statutory training is issued by a course
+#: pass held in Atlas, and the binds this slice starts from are PAMS
+#: characteristics; there is no Atlas equivalent to bind, so saying so beats
+#: rendering an inert control.
+ATLAS_START_NOT_APPLICABLE = (
+    "Starting a demonstration applies to the Plant family. People courses are issued in Atlas and "
+    "QGP records no assessment against them."
+)
+
+#: Wire spelling of ``competence_assessment_binds.mode``. Kept in step with
+#: ``BIND_MODES`` on the model by a unit test rather than an import, because a
+#: Literal cannot be built from a tuple at runtime.
+BindMode = Literal["field", "induction"]
+
+#: The wire values of :data:`BindMode`, in the order the picker offers them.
+#: Derived from the annotation rather than retyped, so the two cannot drift.
+#: ``competence_assessment_binds.mode`` is a plain ``String(16)``, so filtering
+#: through this is what keeps a hand-written third value in that column out of
+#: the board response instead of leaking it to clients as a startable mode.
+BIND_MODE_VALUES: tuple[BindMode, ...] = get_args(BindMode)
 
 router = APIRouter()
 
@@ -69,6 +107,34 @@ class CompetenceBoardColumn(BaseModel):
 
     key: str
     label: str
+    # CB-UI-3. Which modes this characteristic can be demonstrated in, from the
+    # binds that exist. Empty means *unbound*: the column stays listed and the
+    # cell says no family template is mapped yet, which is a gap in QGP's
+    # mapping and not a finding against anyone on the row. Always empty for the
+    # Atlas family, which has nothing to bind.
+    bound_modes: list[BindMode] = Field(default_factory=list)
+
+
+class CompetenceBoardAssessor(BaseModel):
+    """Whether the person *reading* the board could assess on it (CB-UI-3).
+
+    Advisory, so the UI can offer a start only where one would be accepted
+    rather than letting the assessor discover a refusal after filling a form.
+    It is not the authority: the gate is re-checked server-side on create, and
+    a client that ignores this block gets a 403 rather than a run.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    engineer_id: Optional[int] = None
+    # Characteristics the current PAMS snapshot issues to *this* viewer. Read
+    # from the same snapshot the cells are painted from — there is no parallel
+    # QGP competence table behind it.
+    issued_characteristic_keys: list[str] = Field(default_factory=list)
+    blocked_reason: Optional[str] = Field(
+        default=None,
+        description="Why this viewer cannot assess anything here. Absent when they can.",
+    )
 
 
 class CompetenceBoardPerson(BaseModel):
@@ -105,6 +171,7 @@ class CompetenceBoardResponse(BaseModel):
     columns: list[CompetenceBoardColumn]
     people: list[CompetenceBoardPerson]
     unmapped_count: int
+    assessor: CompetenceBoardAssessor = Field(default_factory=CompetenceBoardAssessor)
     banner: Optional[str] = Field(
         default=None,
         description="Honest stale/empty notice. Never a grey not_assessed cell.",
@@ -155,6 +222,33 @@ async def _attach_demonstrations(
             )
 
 
+async def _resolve_board_assessor(
+    db: DbSession,
+    *,
+    tenant_id: int,
+    current_user: User,
+    rows: list,
+) -> CompetenceBoardAssessor:
+    """What this viewer is issued on, from the snapshot rows already loaded.
+
+    No extra snapshot read: the issued set is filtered out of the same rows the
+    cells are built from, so the board cannot tell the viewer they are issued on
+    something the cells disagree about.
+
+    A user with no id (an internal caller passing a bare tenant context) gets
+    the blocked answer rather than an unscoped lookup. That is the fail-closed
+    reading: no identity means no proof of issuance.
+    """
+    user_id = getattr(current_user, "id", None)
+    assessor = await resolve_assessor_engineer_async(db, tenant_id=tenant_id, user_id=user_id)
+    if assessor is None:
+        return CompetenceBoardAssessor(blocked_reason=ASSESSOR_HAS_NO_EMPLOYEE_RECORD)
+    issued = sorted(
+        {row.characteristic_key for row in rows if row.engineer_id == assessor.id and row.characteristic_key}
+    )
+    return CompetenceBoardAssessor(engineer_id=assessor.id, issued_characteristic_keys=issued)
+
+
 @_enabled_router.get("/board", response_model=CompetenceBoardResponse)
 async def get_competence_board(
     db: DbSession,
@@ -195,6 +289,7 @@ async def get_competence_board(
                 for person in view.people
             ],
             unmapped_count=view.unmapped_count,
+            assessor=CompetenceBoardAssessor(blocked_reason=ATLAS_START_NOT_APPLICABLE),
             banner=view.banner,
         )
 
@@ -210,6 +305,7 @@ async def get_competence_board(
             columns=[],
             people=[],
             unmapped_count=0,
+            assessor=CompetenceBoardAssessor(blocked_reason=ASSESSOR_SNAPSHOT_MISSING),
             banner="No PAMS competence snapshot yet.",
         )
 
@@ -253,6 +349,8 @@ async def get_competence_board(
 
     people = sorted(people_acc.values(), key=lambda p: (not p.mapped, p.display_name.lower()))
     await _attach_demonstrations(db, tenant_id=tenant_id, people=people)
+    bound_modes = bound_modes_by_characteristic(await list_binds_async(db, tenant_id=tenant_id))
+    assessor = await _resolve_board_assessor(db, tenant_id=tenant_id, current_user=current_user, rows=rows)
     banner = stale_reason
     return CompetenceBoardResponse(
         family="pams",
@@ -265,9 +363,17 @@ async def get_competence_board(
             stale=banner is not None,
             stale_reason=banner,
         ),
-        columns=[CompetenceBoardColumn(key=key, label=key) for key in columns_keys],
+        columns=[
+            CompetenceBoardColumn(
+                key=key,
+                label=key,
+                bound_modes=[mode for mode in BIND_MODE_VALUES if mode in bound_modes.get(key, ())],
+            )
+            for key in columns_keys
+        ],
         people=people,
         unmapped_count=sum(1 for person in people if not person.mapped),
+        assessor=assessor,
         banner=banner,
     )
 
@@ -380,6 +486,10 @@ class CompetenceAssessmentBindCreate(BaseModel):
 
     template_id: int
     characteristic_key: str = Field(min_length=1, max_length=80)
+    # Defaulted so CB-PR4 callers that predate the field|induction split keep
+    # posting a valid body.
+    mode: BindMode = "field"
+    interval_days: Optional[int] = Field(default=None, ge=1, le=MAX_INTERVAL_DAYS)
 
 
 class CompetenceAssessmentBindOut(BaseModel):
@@ -388,13 +498,34 @@ class CompetenceAssessmentBindOut(BaseModel):
     id: int
     template_id: int
     characteristic_key: str
+    mode: str
+    # Absent means this bind declares no interval and the demonstration falls
+    # back to the CompetencyRequirement resolution. It is not "never expires".
+    interval_days: Optional[int] = None
     created_at: datetime
+
+
+class CompetenceCharacteristicOut(BaseModel):
+    """One PAMS characteristic in the current snapshot, bound or not."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
 
 
 class CompetenceAssessmentBindList(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[CompetenceAssessmentBindOut]
+    # Every characteristic the snapshot holds, including the ones nobody has
+    # bound. An unbound characteristic is a gap in QGP's mapping, not a gap in
+    # anyone's competence, so it stays listed rather than being filtered out.
+    characteristics: list[CompetenceCharacteristicOut] = Field(default_factory=list)
+    banner: Optional[str] = Field(
+        default=None,
+        description="Honest empty/stale notice for the characteristic inventory.",
+    )
 
 
 def _serialize_bind(row) -> CompetenceAssessmentBindOut:
@@ -402,6 +533,8 @@ def _serialize_bind(row) -> CompetenceAssessmentBindOut:
         id=row.id,
         template_id=row.template_id,
         characteristic_key=row.characteristic_key,
+        mode=row.mode or "field",
+        interval_days=row.interval_days,
         created_at=row.created_at,
     )
 
@@ -417,13 +550,18 @@ async def create_competence_assessment_bind(
     current_user: Annotated[User, Depends(require_permission("engineer:update"))],
     response: Response,
 ):
-    """Bind one template to one PAMS characteristic. Explicit only — never by name."""
+    """Bind one published template to one PAMS characteristic in one mode.
+
+    Explicit only — never by name, and never a PAMS write.
+    """
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     row, created = await create_bind_async(
         db,
         tenant_id=tenant_id,
         template_id=payload.template_id,
         characteristic_key=payload.characteristic_key,
+        mode=payload.mode,
+        interval_days=payload.interval_days,
     )
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     await db.commit()
@@ -436,9 +574,28 @@ async def list_competence_assessment_binds(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
+    """The binds, plus the characteristic inventory they are mapped against.
+
+    Both come from QGP state: the binds from ``competence_assessment_binds`` and
+    the inventory from the read-only PAMS snapshot already cached by CB-PR1. No
+    PAMS connection is opened here.
+    """
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     rows = await list_binds_async(db, tenant_id=tenant_id)
-    return CompetenceAssessmentBindList(items=[_serialize_bind(row) for row in rows])
+    snapshot, snapshot_rows = await load_current_snapshot_async(db, tenant_id)
+    keys = sorted({row.characteristic_key for row in snapshot_rows if row.characteristic_key})
+    banner: str | None
+    if snapshot is None:
+        banner = "No PAMS competence snapshot yet, so there is no characteristic to bind against."
+    elif not keys:
+        banner = "The current PAMS snapshot holds no characteristics."
+    else:
+        banner = snapshot_stale_reason(snapshot.completed_at)
+    return CompetenceAssessmentBindList(
+        items=[_serialize_bind(row) for row in rows],
+        characteristics=[CompetenceCharacteristicOut(key=key, label=key) for key in keys],
+        banner=banner,
+    )
 
 
 @_enabled_router.delete("/assessment-binds/{bind_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -451,6 +608,123 @@ async def delete_competence_assessment_bind(
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     await delete_bind_async(db, tenant_id=tenant_id, bind_id=bind_id)
     await db.commit()
+
+
+class CompetencePlantEvidenceIn(BaseModel):
+    """Which machine the demonstration happens on. Evidence, never issuance."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    make: Optional[str] = Field(default=None, max_length=120)
+    model: Optional[str] = Field(default=None, max_length=120)
+    serial: Optional[str] = Field(default=None, max_length=120)
+    pams_plant_id: Optional[str] = Field(default=None, max_length=120)
+
+
+class CompetenceAssessmentStartCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    engineer_id: int = Field(ge=1, description="The engineer being assessed (engineers.id)")
+    characteristic_key: str = Field(min_length=1, max_length=80)
+    # The two modes CB-UI-2 made unique on the bind. There is no third.
+    mode: BindMode = "field"
+    plant_evidence: Optional[CompetencePlantEvidenceIn] = None
+
+
+class CompetenceAssessmentStartOut(BaseModel):
+    """The run that was created, and the cell it will demonstrate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    reference_number: str
+    template_id: int
+    engineer_id: int
+    characteristic_key: str
+    mode: str
+    status: str
+    plant_evidence: Optional[dict] = None
+
+
+@_enabled_router.post(
+    "/assessments",
+    response_model=CompetenceAssessmentStartOut,
+    status_code=status.HTTP_201_CREATED,
+    # This route creates an ``AssessmentRun``, so it has to demand what the
+    # assessment router demands. Calling ``create_assessment_run`` as a function
+    # runs its body but not its ``Depends``, and a board permission must not
+    # become a way to create assessments without holding `assessment:create`.
+    # Same shape as compliance_schedule's file-to-library route, which declares
+    # `document:create` for the write it performs in the other domain.
+    dependencies=[Depends(require_permission("assessment:create"))],
+)
+async def start_competence_assessment(
+    payload: CompetenceAssessmentStartCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Start a family demonstration from a plant board cell (CB-UI-3).
+
+    This resolves a *cell* — one person, one PAMS characteristic, one mode — to
+    the template CB-UI-2 bound to it, and then creates the run on the existing
+    assessment create path. It is deliberately a thin front door rather than a
+    second execute shell: ``AssessmentRun`` completion is the only code path
+    that writes a ``CompetenceDemonstration``, so the run this returns will hit
+    the CB-PR4 overlay on ``POST /api/v1/assessments/{run_id}/complete`` — a
+    pass records the demonstration and a fail records FAILED *and* opens the
+    IT-Admin revoke change request. No new revoke channel exists here.
+
+    The assessor gate lives on that shared create path, not on this handler, so
+    it cannot be walked around by posting a bound ``template_id`` directly.
+
+    QGP never writes PAMS. Nothing on this path opens a PAMS connection, and a
+    pass changes no issuance.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+
+    bind = await resolve_startable_bind_async(
+        db,
+        tenant_id=tenant_id,
+        characteristic_key=payload.characteristic_key,
+        mode=payload.mode,
+    )
+
+    engineer = await db.get(Engineer, payload.engineer_id)
+    if engineer is None or engineer.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ENGINEER_NOT_ON_THE_BOARD,
+        )
+
+    # The assessor gate is not called here. ``create_assessment_run`` runs it
+    # for any bound template and raises 403 with the cell in ``details``, so
+    # checking again first would be two extra queries and a second copy of a
+    # rule that must have exactly one enforcement point.
+    mode = bind.mode or "field"
+    run = await create_assessment_run(
+        AssessmentRunCreate(
+            template_id=bind.template_id,
+            engineer_id=payload.engineer_id,
+            title=f"{bind.characteristic_key} — {mode} assessment"[:300],
+            plant_evidence=(
+                AssessmentPlantEvidence(**payload.plant_evidence.model_dump())
+                if payload.plant_evidence is not None
+                else None
+            ),
+        ),
+        db,
+        current_user,
+    )
+    return CompetenceAssessmentStartOut(
+        run_id=run.id,
+        reference_number=run.reference_number,
+        template_id=run.template_id,
+        engineer_id=run.engineer_id,
+        characteristic_key=bind.characteristic_key,
+        mode=mode,
+        status=run.status,
+        plant_evidence=run.plant_evidence,
+    )
 
 
 CoverageRoleKey = Literal["first_aider", "fire_marshal", "mhfa"]
@@ -504,10 +778,27 @@ class CompetenceCoverageItem(BaseModel):
     unknown: bool
 
 
+class CompetenceCoverageForecastItem(BaseModel):
+    """Atlas person whose expiry will drop a currently-met site below n."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quota_id: int
+    location_id: int
+    role_key: str
+    template_key: str
+    atlas_person_id: int
+    atlas_name: str
+    expires_on: date
+    current_m: int
+    required_n: int
+
+
 class CompetenceCoverageResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[CompetenceCoverageItem]
+    forecast: list[CompetenceCoverageForecastItem] = Field(default_factory=list)
     banner: Optional[str] = Field(
         default=None,
         description="Honest empty/unknown notice. No Atlas import means unknown, not zero cover.",
@@ -531,7 +822,7 @@ async def get_competence_coverage(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
-    """Location coverage quorum (n of m). Never a named person, never a PAMS write."""
+    """Location coverage quorum (n of m). Forecast names stay on Atlas."""
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     view = await build_coverage_view_async(db, tenant_id)
     return CompetenceCoverageResponse(
@@ -549,6 +840,20 @@ async def get_competence_coverage(
                 unknown=state.unknown,
             )
             for state in view.items
+        ],
+        forecast=[
+            CompetenceCoverageForecastItem(
+                quota_id=row.quota_id,
+                location_id=row.location_id,
+                role_key=row.role_key,
+                template_key=row.template_key,
+                atlas_person_id=row.atlas_person_id,
+                atlas_name=row.atlas_name,
+                expires_on=row.expires_on,
+                current_m=row.current_m,
+                required_n=row.required_n,
+            )
+            for row in view.forecast
         ],
         banner=view.banner,
     )
@@ -579,6 +884,12 @@ async def create_competence_coverage_quota(
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     await db.commit()
     await db.refresh(row)
+    await apply_coverage_shortfall_dues_async(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=getattr(current_user, "id", None),
+    )
+    await db.commit()
     return _serialize_quota(row)
 
 

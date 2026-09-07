@@ -60,6 +60,7 @@ def test_to_assessment_run_response_serializes_without_lazy_responses():
         title="Probe",
         location=None,
         notes=None,
+        plant_evidence=None,
         latitude=None,
         longitude=None,
         status=AssessmentStatus.DRAFT,
@@ -96,6 +97,13 @@ async def test_create_assessment_run_rolls_back_when_serialize_fails(monkeypatch
     monkeypatch.setattr(
         "src.api.routes.assessments.GovernanceService.check_template_approval",
         AsyncMock(return_value={"approved": True, "reason": None}),
+    )
+    # Template 10 is bound to no PAMS characteristic here, which is what the
+    # CB-UI-3 gate returns None for; the session double has no ``scalars`` for
+    # it to discover that on its own.
+    monkeypatch.setattr(
+        "src.api.routes.assessments.enforce_bound_template_assessor_gate_async",
+        AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
         "src.api.routes.assessments._to_assessment_run_response",
@@ -135,6 +143,10 @@ async def test_create_assessment_run_maps_integrity_error_to_422(monkeypatch):
     monkeypatch.setattr(
         "src.api.routes.assessments.GovernanceService.check_template_approval",
         AsyncMock(return_value={"approved": True, "reason": None}),
+    )
+    monkeypatch.setattr(
+        "src.api.routes.assessments.enforce_bound_template_assessor_gate_async",
+        AsyncMock(return_value=None),
     )
 
     db = types.SimpleNamespace(
@@ -203,6 +215,9 @@ async def test_start_assessment_commits_serialized_payload(monkeypatch):
         debrief_signature=None,
         debrief_signed_at=None,
         responses=[],
+        # CB-UI-3 added the column; a real run always carries the attribute, so
+        # the stand-in has to as well. Absent evidence is None, not missing.
+        plant_evidence=None,
         tenant_id=1,
         created_at=now,
         updated_at=now,

@@ -11,6 +11,41 @@ function createToken(expOffsetSeconds: number): string {
   return `header.${payload}.signature`
 }
 
+/**
+ * RequireRole reads the role claim off the token, so a workforce route needs
+ * one. Supervisor rather than admin on purpose: admin also opens the Layout's
+ * pending-safety-lookups badge, which would drag an unrelated API call into a
+ * routing assertion.
+ */
+function createSupervisorToken(expOffsetSeconds: number): string {
+  const payload = btoa(
+    JSON.stringify({
+      sub: '1',
+      role: 'supervisor',
+      exp: Math.floor(Date.now() / 1000) + expOffsetSeconds,
+    }),
+  )
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+  return `header.${payload}.signature`
+}
+
+/** CB-UI-2's bind screen is admin-only, so its route assertion needs the claim. */
+function createAdminToken(expOffsetSeconds: number): string {
+  const payload = btoa(
+    JSON.stringify({
+      sub: '1',
+      role: 'admin',
+      exp: Math.floor(Date.now() / 1000) + expOffsetSeconds,
+    }),
+  )
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+  return `header.${payload}.signature`
+}
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -42,6 +77,16 @@ vi.mock('../config/aiIntelligenceRoute', () => ({
 vi.mock('../api/client', () => ({
   notificationsApi: {
     getUnreadCount: vi.fn().mockResolvedValue({ data: { unread_count: 0 } }),
+  },
+}))
+
+// Layout only fetches the pending-safety-lookups badge on an admin/manager/hsec
+// token, and the real client reaches for the axios instance this file mocks
+// away. Without the stub an admin-gated route cannot be asserted through the
+// real route table at all — the call throws into the route error boundary.
+vi.mock('../api/safetyAssetsClient', () => ({
+  safetyAssetsApi: {
+    listPendingSafetyLookups: vi.fn().mockResolvedValue({ data: { total: 0, items: [] } }),
   },
 }))
 
@@ -135,8 +180,14 @@ vi.mock('../pages/workforce/TrainingExecution', () => ({
 }))
 vi.mock('../pages/workforce/Engineers', () => ({ default: () => <div>Engineers</div> }))
 vi.mock('../pages/workforce/EngineerProfile', () => ({ default: () => <div>EngineerProfile</div> }))
+vi.mock('../pages/workforce/CompetenceBoard', () => ({
+  default: () => <div>CompetenceBoard</div>,
+}))
 vi.mock('../pages/workforce/CompetencyDashboard', () => ({
   default: () => <div>CompetencyDashboard</div>,
+}))
+vi.mock('../pages/admin/CompetenceBinds', () => ({
+  default: () => <div>AdminCompetenceBinds</div>,
 }))
 vi.mock('../pages/admin/AdminDashboard', () => ({ default: () => <div>AdminDashboard</div> }))
 vi.mock('../pages/admin/FormsList', () => ({ default: () => <div>FormsList</div> }))
@@ -327,6 +378,65 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/actions')
     expect(window.location.search).toBe('?sourceType=competence_gap')
     expect(screen.getByText('Actions')).toBeInTheDocument()
+  })
+
+  // CB-UI-1: Workforce → Competency is the competence board, not the WDP
+  // workshop asset-type matrix it used to land on.
+  it('serves the competence board at /workforce/dashboard', async () => {
+    localStorage.setItem('access_token', createSupervisorToken(3600))
+    window.history.pushState({}, '', '/workforce/dashboard')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByText('CompetenceBoard')).toBeInTheDocument()
+    expect(screen.queryByText('CompetencyDashboard')).not.toBeInTheDocument()
+  })
+
+  // The WDP matrix stays reachable as the kill switch for that swap.
+  it('keeps the WDP analytics matrix at /workforce/dashboard/analytics', async () => {
+    localStorage.setItem('access_token', createSupervisorToken(3600))
+    window.history.pushState({}, '', '/workforce/dashboard/analytics')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByText('CompetencyDashboard')).toBeInTheDocument()
+    expect(screen.queryByText('CompetenceBoard')).not.toBeInTheDocument()
+  })
+
+  // CB-UI-2: the bind screen is an IT-Admin mapping job, so it is admin-gated
+  // rather than sharing the supervisor board's role set.
+  it('serves the competence bind screen at /admin/competence-binds for an admin', async () => {
+    localStorage.setItem('access_token', createAdminToken(3600))
+    window.history.pushState({}, '', '/admin/competence-binds')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByText('AdminCompetenceBinds')).toBeInTheDocument()
+  })
+
+  it('keeps the competence bind screen away from a supervisor', async () => {
+    localStorage.setItem('access_token', createSupervisorToken(3600))
+    window.history.pushState({}, '', '/admin/competence-binds')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.queryByText('AdminCompetenceBinds')).not.toBeInTheDocument()
   })
 
   // Wave 1 PR-A: Standards absorbed into /compliance programme shell.
