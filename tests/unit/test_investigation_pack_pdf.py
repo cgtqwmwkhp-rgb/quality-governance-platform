@@ -9,6 +9,8 @@ import pytest
 
 from src.domain.services.investigation_pack_pdf import (
     InvestigationPackPdfService,
+    confidentiality_notice,
+    count_field_redactions,
     format_field_value,
     humanise_key,
     summarise_redactions,
@@ -164,3 +166,70 @@ class TestRedactionSummary:
         assert summarise_redactions(None) == []
         assert summarise_redactions("nonsense") == []
         assert summarise_redactions([None, 3, {}]) == [("REDACTION", 1)]
+
+
+class TestFieldRedactionCount:
+    def test_counts_rewritten_fields_and_ignores_approved_section_omits(self) -> None:
+        assert count_field_redactions(_pack()["redaction_log"]) == 2
+
+    def test_counts_every_field_redaction_label_the_service_emits(self) -> None:
+        # The service writes IDENTITY_REDACTION, the contract doc says REDACTED_PII and the
+        # fixture above says PII_REDACTED. Counting one name would undercount real packs.
+        log = [
+            {"redaction_type": "IDENTITY_REDACTION"},
+            {"redaction_type": "PII_REDACTED"},
+            {"redaction_type": "REDACTED_PII"},
+            {"redaction_type": "SECTION_OMIT_APPROVED"},
+        ]
+
+        assert count_field_redactions(log) == 3
+
+    def test_tolerates_missing_or_malformed_logs(self) -> None:
+        assert count_field_redactions(None) == 0
+        assert count_field_redactions("nonsense") == 0
+        assert count_field_redactions([None, 3]) == 0
+
+
+class TestConfidentialityNotice:
+    def test_external_pack_does_not_claim_redaction_that_did_not_happen(self) -> None:
+        # REF-2026-0012 shipped externally with an empty log: the description held the only
+        # identifying content and no field matched the identity allow-list.
+        notice = confidentiality_notice("external_customer", [])
+
+        assert "No fields were redacted from the sections below." in notice
+        assert "Personal identities are redacted" not in notice
+
+    def test_external_pack_reports_the_number_actually_redacted(self) -> None:
+        assert "1 field was redacted" in confidentiality_notice(
+            "external_customer", [{"redaction_type": "IDENTITY_REDACTION"}]
+        )
+        assert "2 fields were redacted" in confidentiality_notice("external_customer", _pack()["redaction_log"])
+
+    def test_external_pack_always_states_that_narrative_is_not_redacted(self) -> None:
+        for log in ([], [{"redaction_type": "IDENTITY_REDACTION"}]):
+            notice = confidentiality_notice("external_customer", log)
+
+            assert "Narrative text is reproduced as written" in notice
+            assert "review this pack before releasing it" in notice
+
+    def test_external_notice_survives_a_malformed_log(self) -> None:
+        notice = confidentiality_notice("external_customer", "nonsense")
+
+        assert "No fields were redacted from the sections below." in notice
+        assert "Narrative text is reproduced as written" in notice
+
+    def test_internal_pack_wording_is_unchanged(self) -> None:
+        notice = confidentiality_notice("internal_customer", [])
+
+        assert "Identities are retained" in notice
+        assert "Narrative text is reproduced as written" not in notice
+
+    def test_unknown_audience_gets_no_notice_rather_than_a_wrong_one(self) -> None:
+        assert confidentiality_notice("regulator", []) == ""
+        assert confidentiality_notice(None, []) == ""
+
+    def test_notice_is_latin1_safe_for_the_pdf_font(self) -> None:
+        for audience in ("internal_customer", "external_customer"):
+            notice = confidentiality_notice(audience, [{"redaction_type": "IDENTITY_REDACTION"}])
+
+            assert notice.encode("latin-1").decode("latin-1") == notice
