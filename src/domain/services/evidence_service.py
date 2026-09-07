@@ -215,6 +215,12 @@ class EvidenceService:
         file_uuid = str(uuid.uuid4())
         safe_filename = (filename or "unnamed").replace("/", "_").replace("\\", "_")
         storage_key = f"evidence/{source_module}/{source_id}/{file_uuid}_{safe_filename}"
+        linked_investigation_id = await resolve_linked_investigation_id(
+            self.db,
+            source_module=source_module_enum,
+            source_id=normalized_source_id,
+            tenant_id=tenant_id,
+        )
 
         from src.infrastructure.storage import StorageError, storage_service
 
@@ -267,18 +273,10 @@ class EvidenceService:
             contains_pii=contains_pii,
             redaction_required=redaction_required,
             retention_policy=EvidenceRetentionPolicy.STANDARD,
+            linked_investigation_id=linked_investigation_id,
             created_by_id=user_id,
             updated_by_id=user_id,
         )
-
-        linked_id = await resolve_linked_investigation_id(
-            self.db,
-            source_module=source_module_enum,
-            source_id=normalized_source_id,
-            tenant_id=tenant_id,
-        )
-        if linked_id is not None:
-            evidence_asset.linked_investigation_id = linked_id
 
         self.db.add(evidence_asset)
         await self.db.commit()

@@ -258,6 +258,12 @@ async def upload_evidence_asset(
     file_uuid = str(uuid.uuid4())
     safe_filename = (file.filename or "unnamed").replace("/", "_").replace("\\", "_")
     storage_key = f"evidence/{source_module}/{effective_source_id_for_paths}/{file_uuid}_{safe_filename}"
+    linked_investigation_id = await resolve_linked_investigation_id(
+        db,
+        source_module=source_module_enum,
+        source_id=normalized_source_id,
+        tenant_id=current_user.tenant_id,
+    )
 
     # Upload to blob storage
     from src.infrastructure.storage import StorageDependencyError, StorageError, storage_service
@@ -336,15 +342,9 @@ async def upload_evidence_asset(
         redaction_required=redaction_required,
         retention_policy=EvidenceRetentionPolicy.STANDARD,
         tenant_id=current_user.tenant_id,
+        linked_investigation_id=linked_investigation_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
-    )
-
-    evidence_asset.linked_investigation_id = await resolve_linked_investigation_id(
-        db,
-        source_module=source_module_enum,
-        source_id=normalized_source_id,
-        tenant_id=current_user.tenant_id,
     )
 
     db.add(evidence_asset)
