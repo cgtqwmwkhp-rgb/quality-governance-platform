@@ -87,6 +87,11 @@ import InvestigationActions from './investigation/InvestigationActions'
 import type { ActionFormData } from './investigation/InvestigationActions'
 import InvestigationEvidence from './investigation/InvestigationEvidence'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
+import {
+  investigationLinkedEvidenceParams,
+  investigationNativeEvidenceParams,
+  mergeEvidenceAssetsById,
+} from './investigation/investigationEvidenceQuery'
 import { resolveInvestigationAssigneeSelection } from './workforce/employeePickerUtils'
 import {
   formatCapaActionsCount,
@@ -204,6 +209,7 @@ export default function InvestigationDetail() {
   const [summaryFindings, setSummaryFindings] = useState('')
   const [summaryConclusion, setSummaryConclusion] = useState('')
   const [summaryLead, setSummaryLead] = useState('')
+  const [summaryLeadUserId, setSummaryLeadUserId] = useState<number | null>(null)
   const [summaryUnsaved, setSummaryUnsaved] = useState(false)
   const [savingSummary, setSavingSummary] = useState(false)
   const [summarySaveError, setSummarySaveError] = useState<string | null>(null)
@@ -326,13 +332,13 @@ export default function InvestigationDetail() {
     setEvidenceLoading(true)
     setEvidenceError(null)
     try {
-      const response = await evidenceAssetsApi.list({
-        source_module: 'investigation',
-        source_id: investigationId,
-        page: 1,
-        page_size: 50,
-      })
-      setEvidenceAssets(response.data.items)
+      const [native, linked] = await Promise.all([
+        evidenceAssetsApi.list(investigationNativeEvidenceParams(investigationId)),
+        evidenceAssetsApi.list(investigationLinkedEvidenceParams(investigationId)),
+      ])
+      setEvidenceAssets(
+        mergeEvidenceAssetsById([linked.data.items || [], native.data.items || []]),
+      )
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'loadEvidence' })
       setEvidenceError(getApiErrorMessage(err))
@@ -367,6 +373,7 @@ export default function InvestigationDetail() {
     setSummaryFindings(String(data['findings'] || ''))
     setSummaryConclusion(String(data['conclusion'] || ''))
     setSummaryLead(String(data['lead_investigator'] || ''))
+    setSummaryLeadUserId(investigation.assigned_to_user_id ?? null)
     setSummaryUnsaved(false)
     setSummarySaveError(null)
   }, [investigation])
@@ -656,6 +663,7 @@ export default function InvestigationDetail() {
     try {
       const existingData = (investigation.data as Record<string, unknown>) || {}
       await investigationsApi.update(investigationId, {
+        assigned_to_user_id: summaryLeadUserId,
         data: {
           ...existingData,
           findings: summaryFindings,
@@ -1329,6 +1337,7 @@ export default function InvestigationDetail() {
                           const next =
                             payload.assignee_email || payload.assignee_name || selection?.label || ''
                           setSummaryLead(next)
+                          setSummaryLeadUserId(payload.assignee_id ?? null)
                           setSummaryUnsaved(true)
                         }}
                         placeholder={t('investigations.meta.assignee_placeholder')}

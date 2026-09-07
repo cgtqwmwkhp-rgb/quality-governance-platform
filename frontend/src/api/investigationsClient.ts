@@ -32,6 +32,7 @@ export interface Investigation {
   data: Record<string, unknown>
   started_at?: string
   completed_at?: string
+  assigned_to_user_id?: number | null
   created_at: string
   updated_at?: string
 }
@@ -96,6 +97,7 @@ export interface InvestigationUpdate {
   status?: string
   data?: Record<string, unknown>
   notes?: string
+  assigned_to_user_id?: number | null
   closure_override?: boolean
   closure_override_reason?: string
 }
