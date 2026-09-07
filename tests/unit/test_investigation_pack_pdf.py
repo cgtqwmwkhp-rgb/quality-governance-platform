@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import builtins
+import io
 import re
 
 import pytest
 
+from src.domain.services import investigation_pack_pdf as pack_pdf
 from src.domain.services.investigation_pack_pdf import (
     InvestigationPackPdfService,
     confidentiality_notice,
@@ -15,6 +17,12 @@ from src.domain.services.investigation_pack_pdf import (
     humanise_key,
     summarise_redactions,
 )
+
+
+def _pdf_text(data: bytes) -> str:
+    from pypdf import PdfReader
+
+    return "\n".join((page.extract_text() or "") for page in PdfReader(io.BytesIO(data)).pages)
 
 
 def _pack(**overrides) -> dict:
@@ -227,6 +235,54 @@ class TestConfidentialityNotice:
     def test_unknown_audience_gets_no_notice_rather_than_a_wrong_one(self) -> None:
         assert confidentiality_notice("regulator", []) == ""
         assert confidentiality_notice(None, []) == ""
+
+
+class TestPackBranding:
+    def test_default_brand_is_plantexpand_primary_not_tailwind_blue(self) -> None:
+        assert pack_pdf._DEFAULT_BRAND_RGB == (78, 118, 10)
+        assert pack_pdf._DEFAULT_BRAND_RGB != (59, 130, 246)
+
+    def test_fixed_cell_text_is_ellipsized_to_its_rendered_width(self) -> None:
+        from fpdf import FPDF
+
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+
+        fitted = pack_pdf._fit_cell_text(pdf, "A very long tenant organisation name " * 10, 110)
+
+        assert fitted.endswith("...")
+        assert pdf.get_string_width(fitted) <= 110
+
+    def test_header_wordmark_footer_and_page_numbers_are_on_the_page(self) -> None:
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack(), organisation_name="Plantexpand Ltd")
+        text = _pdf_text(out)
+
+        assert "PLANTEXPAND" in text
+        assert "Plantexpand Ltd" in text
+        assert "Page 1 of" in text
+        assert "External customer pack" in text
+        assert "2 fields were redacted" in text
+
+    def test_long_organisation_name_cannot_displace_wordmark_or_page_number(self) -> None:
+        organisation_name = "A very long tenant organisation name " * 10
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack(), organisation_name=organisation_name)
+        text = _pdf_text(out)
+
+        assert organisation_name not in text
+        assert "..." in text
+        assert "PLANTEXPAND" in text
+        assert "Page 1 of" in text
+
+    def test_c1_honesty_notice_still_renders_on_a_branded_external_pack(self) -> None:
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack(redaction_log=[]), organisation_name="Plantexpand")
+        text = _pdf_text(out)
+
+        assert "No fields were redacted from the sections below." in text
+        assert "Personal identities are redacted" not in text
+        assert "Narrative text is reproduced as written" in text
+        assert "PLANTEXPAND" in text
 
     def test_notice_is_latin1_safe_for_the_pdf_font(self) -> None:
         for audience in ("internal_customer", "external_customer"):
