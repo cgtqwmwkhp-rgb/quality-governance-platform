@@ -148,6 +148,27 @@ def _write_line(pdf: Any, text: str, *, height: float = 5) -> None:
     pdf.multi_cell(0, height, _pdf_safe(text), new_x="LMARGIN", new_y="NEXT")
 
 
+def _fit_cell_text(pdf: Any, text: Any, max_width: float) -> str:
+    """Ellipsize latin-1-safe text so it cannot paint outside a fixed-width PDF cell."""
+    safe_text = _pdf_safe(text)
+    if pdf.get_string_width(safe_text) <= max_width:
+        return safe_text
+
+    ellipsis = "..."
+    available_width = max_width - pdf.get_string_width(ellipsis)
+    if available_width <= 0:
+        return ""
+
+    low, high = 0, len(safe_text)
+    while low < high:
+        midpoint = (low + high + 1) // 2
+        if pdf.get_string_width(safe_text[:midpoint].rstrip()) <= available_width:
+            low = midpoint
+        else:
+            high = midpoint - 1
+    return safe_text[:low].rstrip() + ellipsis
+
+
 def _make_pack_pdf_class(fpdf_cls: Any) -> Any:
     """FPDF subclass with a branded footer. Built here so a missing fpdf2 still fails closed."""
 
@@ -162,7 +183,12 @@ def _make_pack_pdf_class(fpdf_cls: Any) -> Any:
             self.set_y(-14)
             self.set_text_color(*self._brand)
             self.set_font("Helvetica", "", 8)
-            left = _pdf_safe(f"{self._org}  |  {_WORDMARK}" if self._org else _WORDMARK)
+            if self._org:
+                separator_and_wordmark = f"  |  {_WORDMARK}"
+                org_width = 95 - self.get_string_width(separator_and_wordmark)
+                left = f"{_fit_cell_text(self, self._org, org_width)}{separator_and_wordmark}"
+            else:
+                left = _WORDMARK
             right = _pdf_safe(f"{self._audience_label}  |  Page {self.page_no()} of {{nb}}")
             self.cell(95, 8, left, align="L")
             self.cell(0, 8, right, align="R")
@@ -215,7 +241,7 @@ class InvestigationPackPdfService:
         pdf.set_text_color(255, 255, 255)
         pdf.set_xy(16, 7)
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(110, 6, _pdf_safe(org or "Investigation report"), align="L")
+        pdf.cell(110, 6, _fit_cell_text(pdf, org or "Investigation report", 110), align="L")
         pdf.set_xy(126, 7)
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(68, 6, _WORDMARK, align="R")

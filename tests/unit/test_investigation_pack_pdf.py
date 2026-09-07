@@ -242,6 +242,18 @@ class TestPackBranding:
         assert pack_pdf._DEFAULT_BRAND_RGB == (78, 118, 10)
         assert pack_pdf._DEFAULT_BRAND_RGB != (59, 130, 246)
 
+    def test_fixed_cell_text_is_ellipsized_to_its_rendered_width(self) -> None:
+        from fpdf import FPDF
+
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+
+        fitted = pack_pdf._fit_cell_text(pdf, "A very long tenant organisation name " * 10, 110)
+
+        assert fitted.endswith("...")
+        assert pdf.get_string_width(fitted) <= 110
+
     def test_header_wordmark_footer_and_page_numbers_are_on_the_page(self) -> None:
         out = InvestigationPackPdfService().build_pdf_bytes(_pack(), organisation_name="Plantexpand Ltd")
         text = _pdf_text(out)
@@ -251,6 +263,17 @@ class TestPackBranding:
         assert "Page 1 of" in text
         assert "External customer pack" in text
         assert "2 fields were redacted" in text
+
+    def test_long_organisation_name_cannot_displace_wordmark_or_page_number(self) -> None:
+        organisation_name = "A very long tenant organisation name " * 10
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack(), organisation_name=organisation_name)
+        text = _pdf_text(out)
+
+        assert organisation_name not in text
+        assert "..." in text
+        assert "PLANTEXPAND" in text
+        assert "Page 1 of" in text
 
     def test_c1_honesty_notice_still_renders_on_a_branded_external_pack(self) -> None:
         out = InvestigationPackPdfService().build_pdf_bytes(_pack(redaction_log=[]), organisation_name="Plantexpand")
