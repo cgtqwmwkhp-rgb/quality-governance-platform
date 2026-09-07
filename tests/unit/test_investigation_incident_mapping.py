@@ -30,9 +30,7 @@ def test_incident_mapping_copies_people_actions_severity_and_injury() -> None:
         medical_assistance="first_aider",
     )
 
-    data, log, level = InvestigationService.map_source_to_investigation(
-        record, AssignedEntityType.REPORTING_INCIDENT
-    )
+    data, log, level = InvestigationService.map_source_to_investigation(record, AssignedEntityType.REPORTING_INCIDENT)
 
     details = data["sections"]["section_1_details"]
     actions = data["sections"]["section_2_immediate_actions"]
@@ -73,9 +71,7 @@ def test_incident_mapping_still_copies_the_original_four_fields() -> None:
         medical_assistance=None,
     )
 
-    data, _log, _level = InvestigationService.map_source_to_investigation(
-        record, AssignedEntityType.REPORTING_INCIDENT
-    )
+    data, _log, _level = InvestigationService.map_source_to_investigation(record, AssignedEntityType.REPORTING_INCIDENT)
     details = data["sections"]["section_1_details"]
 
     assert details["reference_number"] == "INC-1"
