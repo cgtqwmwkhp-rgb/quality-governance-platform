@@ -69,4 +69,6 @@ def read_investigation_section_field(data: Any, section: str, field: str) -> Opt
         for key, fields in _section_items(blob):
             if key == section_key and field_key in fields:
                 return fields[field_key]
-    return read_investigation_field(blob, field_key)
+    if field_key in blob and field_key != "sections":
+        return blob[field_key]
+    return None

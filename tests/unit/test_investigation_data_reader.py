@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from src.domain.services.investigation_data_reader import (
-    read_investigation_field,
-    read_investigation_section_field,
-)
+from src.domain.services.investigation_data_reader import read_investigation_field, read_investigation_section_field
 
 
 class TestReadInvestigationField:
@@ -49,9 +46,18 @@ class TestReadInvestigationSectionField:
         }
 
         assert (
-            read_investigation_section_field(data, "section_3_investigation_findings", "description")
-            == "investigation"
+            read_investigation_section_field(data, "section_3_investigation_findings", "description") == "investigation"
         )
 
     def test_falls_back_to_the_flat_key_when_the_section_is_missing(self) -> None:
         assert read_investigation_section_field({"lead_investigator": "Ada"}, "summary", "lead_investigator") == "Ada"
+
+    def test_does_not_fall_back_to_a_different_section(self) -> None:
+        data = {
+            "sections": {
+                "summary": {},
+                "unrelated": {"lead_investigator": "wrong section"},
+            }
+        }
+
+        assert read_investigation_section_field(data, "summary", "lead_investigator") is None
