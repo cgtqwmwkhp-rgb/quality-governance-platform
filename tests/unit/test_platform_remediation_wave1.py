@@ -20,12 +20,19 @@ async def test_evidence_upload_rejects_empty_file_before_storage(monkeypatch):
     async def _validate_source_exists(*args, **kwargs):
         return True
 
+    async def _resolve_linked_investigation_id(*args, **kwargs):
+        return None
+
     class _UnexpectedStorage:
         async def upload(self, **kwargs):
             pytest.fail("empty evidence must be rejected before storage upload")
 
     monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
     monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _UnexpectedStorage())
+    monkeypatch.setattr(
+        "src.domain.services.evidence_investigation_link.resolve_linked_investigation_id",
+        _resolve_linked_investigation_id,
+    )
 
     file = UploadFile(
         file=io.BytesIO(b""),
@@ -63,12 +70,19 @@ async def test_evidence_upload_returns_safe_error_when_storage_dependency_is_una
     async def _validate_source_exists(*args, **kwargs):
         return True
 
+    async def _resolve_linked_investigation_id(*args, **kwargs):
+        return None
+
     class _FailingStorage:
         async def upload(self, **kwargs):
             raise StorageDependencyError("container missing")
 
     monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
     monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _FailingStorage())
+    monkeypatch.setattr(
+        "src.domain.services.evidence_investigation_link.resolve_linked_investigation_id",
+        _resolve_linked_investigation_id,
+    )
 
     file = UploadFile(
         file=io.BytesIO(b"jpeg-bytes"),
@@ -106,6 +120,9 @@ async def test_evidence_upload_returns_safe_error_when_metadata_persistence_fail
     async def _validate_source_exists(*args, **kwargs):
         return True
 
+    async def _resolve_linked_investigation_id(*args, **kwargs):
+        return None
+
     cleanup_calls: list[str] = []
 
     class _Storage:
@@ -131,6 +148,10 @@ async def test_evidence_upload_returns_safe_error_when_metadata_persistence_fail
 
     monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
     monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _Storage())
+    monkeypatch.setattr(
+        "src.domain.services.evidence_investigation_link.resolve_linked_investigation_id",
+        _resolve_linked_investigation_id,
+    )
 
     file = UploadFile(
         file=io.BytesIO(b"jpeg-bytes"),
@@ -168,6 +189,9 @@ async def test_evidence_upload_persists_source_id_as_string(monkeypatch):
     async def _validate_source_exists(*args, **kwargs):
         return True
 
+    async def _resolve_linked_investigation_id(*args, **kwargs):
+        return None
+
     class _Storage:
         async def upload(self, **kwargs):
             return "ok"
@@ -191,6 +215,10 @@ async def test_evidence_upload_persists_source_id_as_string(monkeypatch):
 
     monkeypatch.setattr("src.api.routes.evidence_assets.validate_source_exists", _validate_source_exists)
     monkeypatch.setattr("src.infrastructure.storage.storage_service", lambda: _Storage())
+    monkeypatch.setattr(
+        "src.domain.services.evidence_investigation_link.resolve_linked_investigation_id",
+        _resolve_linked_investigation_id,
+    )
 
     file = UploadFile(
         file=io.BytesIO(b"jpeg-bytes"),
