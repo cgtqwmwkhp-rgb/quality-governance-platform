@@ -340,14 +340,12 @@ async def upload_evidence_asset(
         updated_by_id=current_user.id,
     )
 
-    linked_id = await resolve_linked_investigation_id(
+    evidence_asset.linked_investigation_id = await resolve_linked_investigation_id(
         db,
         source_module=source_module_enum,
         source_id=normalized_source_id,
         tenant_id=current_user.tenant_id,
     )
-    if linked_id is not None:
-        evidence_asset.linked_investigation_id = linked_id
 
     db.add(evidence_asset)
     try:
