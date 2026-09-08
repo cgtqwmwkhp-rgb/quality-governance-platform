@@ -48,7 +48,12 @@ import {
   type InvestigationFinding,
   getApiErrorMessage,
 } from '../api/client'
-import type { InvestigationRcaWhy } from './investigation/investigationDetailApi'
+import type {
+  InvestigationFactor as InvestigationContributingFactor,
+  InvestigationFactorInput,
+  InvestigationFactorListResponse,
+  InvestigationRcaWhy,
+} from './investigation/investigationDetailApi'
 import { Button } from '../components/ui/Button'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
@@ -86,6 +91,7 @@ import InvestigationActions from './investigation/InvestigationActions'
 import type { ActionFormData } from './investigation/InvestigationActions'
 import InvestigationEvidence from './investigation/InvestigationEvidence'
 import InvestigationFindingsEditor from './investigation/InvestigationFindingsEditor'
+import InvestigationFactorsEditor from './investigation/InvestigationFactorsEditor'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import {
   investigationLinkedEvidenceParams,
@@ -112,11 +118,15 @@ import { readWorkspaceText, withWorkspaceFields } from './investigation/investig
 import {
   addManualTimelineEntry,
   approveCustomerPackOmit,
+  createFactor,
+  deleteFactor,
   fetchCustomerPackPdf,
   getRca,
+  listFactors,
   readCustomerPackVisibility,
   requestCustomerPackOmit,
   saveRca,
+  updateFactor,
   createCapaFromWhy,
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
@@ -242,6 +252,10 @@ export default function InvestigationDetail() {
   const [rcaWhys, setRcaWhys] = useState<InvestigationRcaWhy[]>(EMPTY_RCA_WHYS)
   const [rcaProblem, setRcaProblem] = useState('')
   const [rcaRootCause, setRcaRootCause] = useState('')
+  // INV-C12: read-only after this PR. The RCA endpoint still returns the
+  // contributing-factors paragraph, but the ICAM factor list below is now its
+  // author; this holds it only so a run whose prose predates the picker still
+  // shows what was typed instead of appearing to have lost it.
   const [rcaContributing, setRcaContributing] = useState('')
   const [rcaAnalysisId, setRcaAnalysisId] = useState<number | null>(null)
   const [rcaUnsaved, setRcaUnsaved] = useState(false)
@@ -282,6 +296,17 @@ export default function InvestigationDetail() {
   const [findingsLoading, setFindingsLoading] = useState(false)
   const [findingsSaving, setFindingsSaving] = useState(false)
   const [findingsError, setFindingsError] = useState<string | null>(null)
+
+  // INV-C12: ICAM contributing factors, behind their own endpoint on
+  // fishbone_diagrams. Not part of the RCA save — that save still owns the
+  // problem statement, the Whys and the root cause.
+  const [factors, setFactors] = useState<InvestigationContributingFactor[]>([])
+  const [factorsLoading, setFactorsLoading] = useState(false)
+  const [factorsSaving, setFactorsSaving] = useState(false)
+  const [factorsError, setFactorsError] = useState<string | null>(null)
+  const [factorsText, setFactorsText] = useState('')
+  const [factorsUnmapped, setFactorsUnmapped] = useState<string[]>([])
+  const [factorsUnreadable, setFactorsUnreadable] = useState(0)
 
   const [summaryConclusion, setSummaryConclusion] = useState('')
   const [summaryLead, setSummaryLead] = useState('')
@@ -488,6 +513,46 @@ export default function InvestigationDetail() {
     }
   }, [investigationId])
 
+  /**
+   * Replace the factor list from a server response.
+   *
+   * Every factor endpoint answers with the whole ordered list plus the derived
+   * paragraph, so state is replaced rather than patched locally: the grouping
+   * on screen is then always the grouping stored, and the paragraph on screen
+   * is the one the closure gate and the pack will read.
+   */
+  const applyFactorsResponse = useCallback((payload: InvestigationFactorListResponse) => {
+    setFactors(payload.items || [])
+    setFactorsText(payload.contributing_factors_text || '')
+    setFactorsUnmapped(payload.unmapped_categories || [])
+    setFactorsUnreadable(payload.unreadable_total || 0)
+  }, [])
+
+  /**
+   * INV-C12: hydrate the ICAM contributing factors.
+   *
+   * Read-only: unlike findings and RCA there is no conversion here. The
+   * leftover contributing-factors paragraph is one box of prose, and splitting
+   * it into categorised factors would mean guessing which ICAM category
+   * somebody else's sentence belongs to. It stays visible below the list until
+   * an investigator files real factors, at which point the server overwrites it
+   * from them.
+   */
+  const loadFactors = useCallback(async () => {
+    if (!investigationId) return
+    setFactorsLoading(true)
+    setFactorsError(null)
+    try {
+      const response = await listFactors(investigationId)
+      applyFactorsResponse(response.data)
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'loadFactors' })
+      setFactorsError(getApiErrorMessage(err))
+    } finally {
+      setFactorsLoading(false)
+    }
+  }, [investigationId, applyFactorsResponse])
+
   const initializeSummaryData = useCallback(() => {
     if (!investigation) return
     const data = (investigation.data as Record<string, unknown>) || {}
@@ -568,6 +633,24 @@ export default function InvestigationDetail() {
     }
   }
 
+  /**
+   * The contributing-factors prose as it stands: derived from the ICAM factors
+   * once there are any, and the leftover paragraph the RCA endpoint returns
+   * until then. Not a second store — whichever of the two is non-empty is what
+   * the server has, and after the first factor is filed they are the same text.
+   */
+  const contributingFactorsText = factorsText || rcaContributing
+
+  /**
+   * True when the run still holds prose that no ICAM factor accounts for.
+   *
+   * Shown read-only rather than converted: nothing here may decide which ICAM
+   * category somebody else's sentence belongs to, and nothing may make it
+   * vanish from the screen either.
+   */
+  const hasLeftoverFactorProse =
+    factors.length === 0 && rcaContributing.trim().length > 0 && !factorsText.trim()
+
   const markRcaDirty = () => {
     setRcaUnsaved(true)
     setRcaSaveSuccess(false)
@@ -594,7 +677,10 @@ export default function InvestigationDetail() {
           evidence: item.evidence,
         })),
         root_cause: rcaRootCause,
-        contributing_factors: rcaContributing,
+        // INV-C12: `contributing_factors` is no longer written here. The ICAM
+        // factor list is its only author, and the server derives the paragraph
+        // from those factors — sending a stale copy from this tab would
+        // overwrite whatever the factor editor just saved.
       })
       const payload = response.data
       setRcaProblem(payload.problem_statement || '')
@@ -872,6 +958,55 @@ export default function InvestigationDetail() {
     )
   }
 
+  /**
+   * INV-C12: run one contributing-factor mutation.
+   *
+   * The same shape as `runFindingsMutation`: the server's whole list replaces
+   * local state, a failure leaves the previous list untouched and says why, and
+   * the run is re-read afterwards because the server rewrites the paragraph the
+   * closure gate and the generated pack still read.
+   */
+  const runFactorsMutation = useCallback(
+    async (action: string, mutate: () => Promise<{ data: InvestigationFactorListResponse }>) => {
+      setFactorsSaving(true)
+      setFactorsError(null)
+      try {
+        const response = await mutate()
+        applyFactorsResponse(response.data)
+        await loadInvestigation()
+        await loadRca()
+      } catch (err) {
+        trackError(err, { component: 'InvestigationDetail', action })
+        const message = getApiErrorMessage(err)
+        setFactorsError(message)
+        toast.error(message)
+      } finally {
+        setFactorsSaving(false)
+      }
+    },
+    [applyFactorsResponse, loadInvestigation, loadRca],
+  )
+
+  const handleAddFactor = async (factor: InvestigationFactorInput) => {
+    if (!investigationId) return
+    await runFactorsMutation('addFactor', () => createFactor(investigationId, factor))
+  }
+
+  const handleUpdateFactor = async (
+    factorId: number,
+    changes: Partial<InvestigationFactorInput>,
+  ) => {
+    if (!investigationId) return
+    await runFactorsMutation('updateFactor', () =>
+      updateFactor(investigationId, factorId, changes),
+    )
+  }
+
+  const handleDeleteFactor = async (factorId: number) => {
+    if (!investigationId) return
+    await runFactorsMutation('deleteFactor', () => deleteFactor(investigationId, factorId))
+  }
+
   const handleSaveSummary = async () => {
     if (!investigationId || !investigation) return
     setSavingSummary(true)
@@ -986,6 +1121,12 @@ export default function InvestigationDetail() {
   useEffect(() => {
     loadRca()
   }, [loadRca])
+  // INV-C12: ICAM contributing factors live behind their own endpoint on
+  // fishbone_diagrams, so they are fetched for the run rather than re-derived
+  // from `investigation.data`.
+  useEffect(() => {
+    loadFactors()
+  }, [loadFactors])
 
   useEffect(() => {
     if (!investigationId) return
@@ -1009,6 +1150,7 @@ export default function InvestigationDetail() {
         break
       case 'rca':
         if (!rcaUnsaved) loadRca()
+        loadFactors()
         break
     }
   }, [
@@ -1023,6 +1165,7 @@ export default function InvestigationDetail() {
     loadEvidence,
     loadRca,
     rcaUnsaved,
+    loadFactors,
   ])
 
   useEffect(() => {
@@ -1115,7 +1258,7 @@ export default function InvestigationDetail() {
       description: [
         root ? `Root cause: ${root}` : '',
         rcaProblem ? `Problem: ${rcaProblem}` : '',
-        rcaContributing ? `Contributing factors: ${rcaContributing}` : '',
+        contributingFactorsText ? `Contributing factors: ${contributingFactorsText}` : '',
       ]
         .filter(Boolean)
         .join('\n\n'),
@@ -1964,7 +2107,7 @@ export default function InvestigationDetail() {
             {!rcaLoading &&
             !rcaProblem.trim() &&
             !rcaRootCause.trim() &&
-            !rcaContributing.trim() &&
+            !contributingFactorsText.trim() &&
             rcaWhys.every((item) => !item.answer.trim() && !item.evidence.trim()) ? (
               <p className="text-sm text-muted-foreground" data-testid="investigation-rca-empty">
                 No 5 Whys recorded yet. Empty answers stay empty — nothing is invented.
@@ -2083,19 +2226,43 @@ export default function InvestigationDetail() {
                 data-testid="investigation-root-cause-input"
               />
             </Card>
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
+            <Card className="p-6" data-testid="investigation-factors-editor">
+              <h3 className="text-lg font-semibold text-foreground">
                 {t('investigations.contributing_factors')}
               </h3>
-              <Textarea
-                rows={3}
-                placeholder="List any contributing factors that led to the issue..."
-                value={rcaContributing}
-                onChange={(e) => {
-                  setRcaContributing(e.target.value)
-                  markRcaDirty()
-                }}
-                data-testid="investigation-rca-contributing"
+              <p className="mt-1 mb-4 text-sm text-muted-foreground">
+                Each factor sits under one ICAM category and states how far back it sits under
+                HSG245. Saved on its own as you add them, not with the RCA Save button.
+              </p>
+              {hasLeftoverFactorProse ? (
+                <div
+                  className="mb-4 rounded-md border border-border bg-muted/40 p-3"
+                  data-testid="investigation-factors-legacy"
+                >
+                  <p className="text-sm font-medium text-foreground">
+                    Recorded before this page used ICAM categories
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {rcaContributing}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Left exactly as written — nothing here decides which ICAM category somebody
+                    else&apos;s sentence belongs to. Adding a factor below replaces this text with
+                    the categorised list.
+                  </p>
+                </div>
+              ) : null}
+              <InvestigationFactorsEditor
+                factors={factors}
+                loading={factorsLoading}
+                saving={factorsSaving}
+                error={factorsError}
+                unmappedCategories={factorsUnmapped}
+                unreadableTotal={factorsUnreadable}
+                onAdd={handleAddFactor}
+                onUpdate={handleUpdateFactor}
+                onDelete={handleDeleteFactor}
+                onRetry={loadFactors}
               />
             </Card>
             <div className="flex items-center justify-between">

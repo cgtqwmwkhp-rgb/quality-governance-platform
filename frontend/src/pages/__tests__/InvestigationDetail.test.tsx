@@ -1,7 +1,32 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import InvestigationDetail from '../InvestigationDetail'
+
+beforeAll(() => {
+  // INV-C12: the ICAM category and causal-depth pickers are Radix Selects,
+  // which need pointer-capture APIs jsdom does not implement.
+  const proto = Element.prototype as unknown as Record<string, unknown>
+  if (!proto.hasPointerCapture) proto.hasPointerCapture = () => false
+  if (!proto.setPointerCapture) proto.setPointerCapture = () => undefined
+  if (!proto.releasePointerCapture) proto.releasePointerCapture = () => undefined
+  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => undefined
+  if (!('ResizeObserver' in globalThis)) {
+    ;(globalThis as unknown as Record<string, unknown>).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  }
+})
+
+/** Open a Radix Select by test id and choose the option with this label. */
+async function selectOption(triggerTestId: string, optionLabel: string) {
+  const user = userEvent.setup()
+  await user.click(await screen.findByTestId(triggerTestId))
+  await user.click(await screen.findByRole('option', { name: optionLabel }))
+}
 
 const mockNavigate = vi.fn()
 
@@ -113,6 +138,11 @@ vi.mock('../investigation/investigationDetailApi', async (importOriginal) => ({
   getRca: vi.fn(),
   saveRca: vi.fn(),
   createCapaFromWhy: vi.fn(),
+  // INV-C12: ICAM contributing factors behind their own endpoints.
+  listFactors: vi.fn(),
+  createFactor: vi.fn(),
+  updateFactor: vi.fn(),
+  deleteFactor: vi.fn(),
 }))
 
 vi.mock('../../components/EngineerPeoplePicker', () => ({
@@ -251,6 +281,38 @@ function rcaResponse(
   }
 }
 
+/** INV-C12: build a factors list response the way the API returns it. */
+function factorsResponse(
+  items: Array<{
+    id: number
+    category: string
+    cause: string
+    sub_causes?: string[]
+    depth?: string | null
+  }> = [],
+  overrides: { unmapped_categories?: string[]; unreadable_total?: number } = {},
+) {
+  const rows = items.map((item) => ({
+    id: item.id,
+    investigation_id: 7,
+    category: item.category,
+    cause: item.cause,
+    sub_causes: item.sub_causes || [],
+    depth: item.depth === undefined ? 'underlying' : item.depth,
+  }))
+  return {
+    data: {
+      items: rows,
+      total: rows.length,
+      investigation_id: 7,
+      diagram_id: rows.length ? 3 : null,
+      contributing_factors_text: rows.map((row) => `${row.category}: ${row.cause}`).join('\n'),
+      unmapped_categories: overrides.unmapped_categories || [],
+      unreadable_total: overrides.unreadable_total || 0,
+    },
+  }
+}
+
 function renderPage() {
   return render(
     <BrowserRouter>
@@ -300,6 +362,10 @@ describe('InvestigationDetail', () => {
     })
     client.investigationsApi.listFindings.mockResolvedValue(findingsResponse([]))
     vi.mocked(detailApi.getRca).mockResolvedValue(rcaResponse())
+    vi.mocked(detailApi.listFactors).mockResolvedValue(factorsResponse())
+    vi.mocked(detailApi.createFactor).mockResolvedValue(factorsResponse())
+    vi.mocked(detailApi.updateFactor).mockResolvedValue(factorsResponse())
+    vi.mocked(detailApi.deleteFactor).mockResolvedValue(factorsResponse())
     vi.mocked(detailApi.createCapaFromWhy).mockResolvedValue({
       data: { id: 99, reference_number: 'CAPA-99', title: 'CAPA: the interlock was bypassed' },
     })
@@ -982,6 +1048,128 @@ describe('InvestigationDetail', () => {
       evidence: 'CCTV still 14:02',
     })
     expect(payload.root_cause).toBe('No banksman on site')
+    // INV-C12: the ICAM factor list is the only author of the paragraph. A save
+    // carrying a copy of the string would overwrite whatever the factor editor
+    // just filed.
+    expect(payload).not.toHaveProperty('contributing_factors')
+  })
+
+  // INV-C12 -------------------------------------------------------------------
+
+  it('adds an ICAM contributing factor with its HSG245 depth', async () => {
+    vi.mocked(detailApi.createFactor).mockResolvedValue(
+      factorsResponse([
+        {
+          id: 1,
+          category: 'absent_failed_defences',
+          cause: 'The interlock was bypassed',
+          sub_causes: ['No pre-use check'],
+          depth: 'immediate',
+        },
+      ]),
+    )
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+
+    // Nothing is filled in for the investigator: the add button stays disabled
+    // until a category, a factor and a depth have all been chosen.
+    const add = await screen.findByTestId('investigation-factor-add')
+    expect(add).toBeDisabled()
+
+    fireEvent.change(screen.getByTestId('investigation-factor-new-cause'), {
+      target: { value: 'The interlock was bypassed' },
+    })
+    fireEvent.change(screen.getByTestId('investigation-factor-new-subs'), {
+      target: { value: 'No pre-use check\n\n' },
+    })
+    expect(add).toBeDisabled()
+
+    await selectOption('investigation-factor-new-category', 'Absent or failed defences')
+    await selectOption('investigation-factor-new-depth', 'Immediate')
+
+    await waitFor(() => expect(add).not.toBeDisabled())
+    fireEvent.click(add)
+
+    await waitFor(() => {
+      expect(detailApi.createFactor).toHaveBeenCalledWith(7, {
+        category: 'absent_failed_defences',
+        cause: 'The interlock was bypassed',
+        sub_causes: ['No pre-use check'],
+        depth: 'immediate',
+      })
+    })
+    // The server's list is what is shown, grouped under its ICAM category.
+    expect(
+      await screen.findByTestId('investigation-factor-group-absent_failed_defences'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-factor-cause-1')).toHaveTextContent(
+      'The interlock was bypassed',
+    )
+    expect(screen.getByTestId('investigation-factor-depth-1')).toHaveTextContent('Immediate')
+    // The RCA tab no longer offers a free-text contributing-factors box.
+    expect(screen.queryByTestId('investigation-rca-contributing')).not.toBeInTheDocument()
+  })
+
+  it('deletes a contributing factor and keeps the failure visible when the API refuses', async () => {
+    vi.mocked(detailApi.listFactors).mockResolvedValue(
+      factorsResponse([
+        { id: 4, category: 'organisational_factors', cause: 'No refresher schedule' },
+      ]),
+    )
+    vi.mocked(detailApi.deleteFactor).mockRejectedValue(new Error('Network down'))
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+
+    fireEvent.click(await screen.findByTestId('investigation-factor-delete-4'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-factors-error')).toBeInTheDocument()
+    })
+    // A failed delete leaves the factor on screen: nothing is removed optimistically.
+    expect(screen.getByTestId('investigation-factor-cause-4')).toHaveTextContent(
+      'No refresher schedule',
+    )
+  })
+
+  it('shows leftover contributing-factor prose instead of guessing an ICAM category for it', async () => {
+    vi.mocked(detailApi.getRca).mockResolvedValue(
+      rcaResponse({ id: 11, contributing_factors: 'Nobody had checked the guard for months' }),
+    )
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+
+    const legacy = await screen.findByTestId('investigation-factors-legacy')
+    expect(legacy).toHaveTextContent('Nobody had checked the guard for months')
+    // Read-only: the prose is shown, never posted back as a categorised factor.
+    expect(detailApi.createFactor).not.toHaveBeenCalled()
+  })
+
+  it('reports stored causes it cannot classify rather than dropping them', async () => {
+    vi.mocked(detailApi.listFactors).mockResolvedValue(
+      factorsResponse([], { unmapped_categories: ['manpower'], unreadable_total: 2 }),
+    )
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+
+    const notice = await screen.findByTestId('investigation-factors-unmapped')
+    expect(notice).toHaveTextContent('manpower')
+    expect(notice).toHaveTextContent('Nothing has been deleted or re-categorised')
   })
 
   it('hydrates the conclusion from nested sections and the Whys from the RCA endpoint', async () => {

@@ -49,7 +49,18 @@ class InvestigationRcaUpsert(BaseModel):
     problem_statement: str = Field("", max_length=RCA_TEXT_MAX_LENGTH)
     whys: List[InvestigationRcaWhyInput] = Field(default_factory=list)
     root_cause: str = Field("", max_length=RCA_TEXT_MAX_LENGTH)
-    contributing_factors: str = Field("", max_length=RCA_TEXT_MAX_LENGTH)
+    #: Omitted (or null) leaves the stored contributing factors alone.
+    #:
+    #: INV-C12 made the ICAM factor list on ``/investigations/{id}/factors`` the
+    #: author of this text; it is derived from the factors and written to both
+    #: legacy readers on every factor mutation. A workspace save that also sent
+    #: a copy of it would be a second writer racing the first, which is PX-168's
+    #: shape. The field stays on the contract, and a string is still honoured,
+    #: because a caller that has not moved to the factor endpoints must keep the
+    #: box it has — the structured factors live on ``fishbone_diagrams`` and are
+    #: not lost when it does, only the derived paragraph is overwritten until
+    #: the next factor mutation rewrites it.
+    contributing_factors: Optional[str] = Field(default=None, max_length=RCA_TEXT_MAX_LENGTH)
 
     @field_validator("whys")
     @classmethod

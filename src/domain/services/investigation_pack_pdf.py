@@ -97,6 +97,15 @@ _CHRONOLOGY_PROVENANCE = {
     ),
 }
 
+_EMPTY_FINDINGS = "No findings were recorded."
+_EMPTY_WHYS = "No 5-Whys were recorded."
+_EMPTY_ROOT_CAUSE = "No root-cause statement was recorded."
+_EMPTY_CONTRIBUTING = "No contributing-factor text was recorded."
+_EMPTY_CAPA = "No CAPA actions were recorded."
+_PACK_FINDINGS = "findings"
+_PACK_ROOT_CAUSE = "root-cause"
+_PACK_CAPA = "capa"
+
 
 def format_field_value(value: Any) -> str:
     """Render a stored field value without inventing or hiding content."""
@@ -331,26 +340,7 @@ class InvestigationPackPdfService:
             pdf.ln(1)
 
         self._section_heading(pdf, "Report sections", brand)
-        raw_sections = content.get("sections")
-        sections: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
-        if not sections:
-            pdf.set_font("Helvetica", "", 10)
-            _write_line(pdf, "No report sections were recorded on this investigation.")
-        else:
-            for section_key, fields in sections.items():
-                pdf.set_font("Helvetica", "B", 11)
-                _write_line(pdf, humanise_key(section_key), height=6)
-                pdf.set_font("Helvetica", "", 10)
-                if not isinstance(fields, dict) or not fields:
-                    _write_line(pdf, "No content recorded for this section.", height=4.5)
-                    pdf.ln(1)
-                    continue
-                for field_key, field_value in fields.items():
-                    pdf.set_font("Helvetica", "B", 9)
-                    _write_line(pdf, humanise_key(field_key), height=4.5)
-                    pdf.set_font("Helvetica", "", 10)
-                    _write_line(pdf, _pdf_safe(format_field_value(field_value), max_len=_MAX_FIELD_CHARS), height=4.5)
-                pdf.ln(1)
+        self._render_report_sections(pdf, content.get("sections"))
         pdf.ln(1)
 
         omitted = content.get("omitted_sections")
@@ -427,6 +417,143 @@ class InvestigationPackPdfService:
         except Exception as exc:  # noqa: BLE001 - surfaced to the caller as a 500
             logger.exception("Investigation pack PDF render failed for pack %s", pack.get("pack_uuid"))
             raise RuntimeError(f"Investigation pack PDF build failed: {exc}") from exc
+
+    def _render_report_sections(self, pdf: Any, raw_sections: Any) -> None:
+        """Report sections. Investigation lists (findings, Whys, CAPA) are shaped, not dumped."""
+        sections: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
+        if not sections:
+            pdf.set_font("Helvetica", "", 10)
+            _write_line(pdf, "No report sections were recorded on this investigation.")
+            return
+        for section_key, fields in sections.items():
+            pdf.set_font("Helvetica", "B", 11)
+            _write_line(pdf, humanise_key(section_key), height=6)
+            pdf.set_font("Helvetica", "", 10)
+            if not isinstance(fields, dict) or not fields:
+                _write_line(pdf, "No content recorded for this section.", height=4.5)
+                pdf.ln(1)
+                continue
+            renderer = {
+                _PACK_FINDINGS: self._render_findings_section,
+                _PACK_ROOT_CAUSE: self._render_rca_section,
+                _PACK_CAPA: self._render_capa_section,
+            }.get(str(section_key))
+            if renderer is not None:
+                renderer(pdf, fields)
+            else:
+                self._render_generic_section_fields(pdf, fields)
+            pdf.ln(1)
+
+    @staticmethod
+    def _render_generic_section_fields(pdf: Any, fields: dict[str, Any]) -> None:
+        for field_key, field_value in fields.items():
+            pdf.set_font("Helvetica", "B", 9)
+            _write_line(pdf, humanise_key(field_key), height=4.5)
+            pdf.set_font("Helvetica", "", 10)
+            _write_line(pdf, _pdf_safe(format_field_value(field_value), max_len=_MAX_FIELD_CHARS), height=4.5)
+
+    @staticmethod
+    def _render_findings_section(pdf: Any, fields: dict[str, Any]) -> None:
+        items = fields.get("items")
+        if not isinstance(items, list) or not items:
+            _write_line(pdf, _EMPTY_FINDINGS, height=4.5)
+            return
+        for index, item in enumerate(items, start=1):
+            if isinstance(item, dict):
+                body = item.get("body")
+            else:
+                body = item
+            rendered = format_field_value(body)
+            pdf.set_font("Helvetica", "", 10)
+            _write_line(pdf, _pdf_safe(f"{index}. {rendered}", max_len=_MAX_FIELD_CHARS), height=4.5)
+
+    @staticmethod
+    def _render_why_entries(pdf: Any, whys: Any) -> None:
+        pdf.set_font("Helvetica", "B", 9)
+        _write_line(pdf, "5 Whys", height=4.5)
+        pdf.set_font("Helvetica", "", 10)
+        if not isinstance(whys, list) or not whys:
+            _write_line(pdf, _EMPTY_WHYS, height=4.5)
+            return
+        for raw in whys:
+            if not isinstance(raw, dict):
+                continue
+            level_raw = raw.get("level")
+            if level_raw is None:
+                continue
+            try:
+                level = int(level_raw)
+            except (TypeError, ValueError):
+                continue
+            pdf.set_font("Helvetica", "B", 9)
+            _write_line(pdf, f"Why {level}", height=4.5)
+            pdf.set_font("Helvetica", "", 10)
+            _write_line(
+                pdf,
+                _pdf_safe(f"Why: {format_field_value(raw.get('why'))}", max_len=_MAX_FIELD_CHARS),
+                height=4.5,
+            )
+            _write_line(
+                pdf,
+                _pdf_safe(f"Answer: {format_field_value(raw.get('answer'))}", max_len=_MAX_FIELD_CHARS),
+                height=4.5,
+            )
+            if raw.get("evidence"):
+                _write_line(
+                    pdf,
+                    _pdf_safe(f"Evidence: {format_field_value(raw.get('evidence'))}", max_len=_MAX_FIELD_CHARS),
+                    height=4.5,
+                )
+
+    @staticmethod
+    def _render_stated_field(pdf: Any, heading: str, value: Any, empty_message: str) -> None:
+        pdf.set_font("Helvetica", "B", 9)
+        _write_line(pdf, heading, height=4.5)
+        pdf.set_font("Helvetica", "", 10)
+        if isinstance(value, str) and not value.strip():
+            _write_line(pdf, empty_message, height=4.5)
+            return
+        if isinstance(value, list) and not value:
+            _write_line(pdf, empty_message, height=4.5)
+            return
+        _write_line(pdf, _pdf_safe(format_field_value(value), max_len=_MAX_FIELD_CHARS), height=4.5)
+
+    @staticmethod
+    def _render_rca_section(pdf: Any, fields: dict[str, Any]) -> None:
+        InvestigationPackPdfService._render_stated_field(
+            pdf, "Problem statement", fields.get("problem_statement"), "No problem statement was recorded."
+        )
+        InvestigationPackPdfService._render_why_entries(pdf, fields.get("whys"))
+        InvestigationPackPdfService._render_stated_field(pdf, "Root cause", fields.get("root_cause"), _EMPTY_ROOT_CAUSE)
+        InvestigationPackPdfService._render_stated_field(
+            pdf, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING
+        )
+
+    @staticmethod
+    def _render_capa_section(pdf: Any, fields: dict[str, Any]) -> None:
+        items = fields.get("items")
+        if not isinstance(items, list) or not items:
+            _write_line(pdf, _EMPTY_CAPA, height=4.5)
+            return
+        for item in items:
+            if not isinstance(item, dict):
+                _write_line(pdf, f"- {format_field_value(item)}", height=4.5)
+                continue
+            title = str(item.get("title") or "").strip()
+            reference = str(item.get("reference") or "").strip()
+            if reference and title:
+                line = f"- {reference} - {title}"
+            elif reference:
+                line = f"- {reference}"
+            else:
+                line = f"- {title}"
+            why_level = item.get("why_level")
+            if why_level is not None:
+                try:
+                    line = f"{line} (Why {int(why_level)})"
+                except (TypeError, ValueError):
+                    pass
+            _write_line(pdf, _pdf_safe(line, max_len=_MAX_FIELD_CHARS), height=4.5)
 
     def _render_chronology(
         self,

@@ -53,6 +53,7 @@ from src.api.routes import (
     ims_dashboard,
     incidents,
     inductions,
+    investigation_factors,
     investigation_findings,
     investigation_rca,
     investigation_templates,
@@ -146,6 +147,14 @@ router.include_router(
 # collection. Path is the literal /rca segment; nothing else uses it.
 router.include_router(
     investigation_rca.router,
+    prefix="/investigations",
+    tags=["Investigations"],
+)
+# INV-C12: ICAM contributing factors on fishbone_diagrams. Same prefix, own
+# module, mounted after the run and RCA routers. Path is the literal /factors
+# segment; nothing else uses it.
+router.include_router(
+    investigation_factors.router,
     prefix="/investigations",
     tags=["Investigations"],
 )
