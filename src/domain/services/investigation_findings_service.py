@@ -4,12 +4,13 @@ Three jobs, in order of how much can go wrong:
 
 1. **Split** the legacy ``findings`` string into rows without inventing content
    (:func:`split_legacy_findings`).
-2. **Keep the string in step** with the rows, because the closure gate and the
-   generated pack still read it (:func:`sync_findings_text`). INV-C8 moves the
-   gate onto rows; until then a run whose rows and string disagree would close
-   on stale text, so the string is rewritten on every mutation.
-3. **Own the rows** — list, create, update, delete, reorder, and the one-shot
-   lazy conversion (:class:`InvestigationFindingsService`).
+2. **Keep the string in step** with the rows, because the generated pack still
+   reads it (:func:`sync_findings_text`). INV-C8 moved the *closure gate* onto
+   rows; the pack still prints the concatenated string until C13/C15, so a
+   mutation that left the string stale would still print the wrong paragraph.
+   The string is therefore rewritten on every mutation.
+3. **Own the rows** — list, create, update, delete, reorder, the one-shot
+   lazy conversion, and the closure-gate read (:meth:`InvestigationFindingsService.has_non_empty_findings`).
 
 Why the string is *overwritten* rather than merged
 --------------------------------------------------
@@ -266,6 +267,52 @@ class InvestigationFindingsService:
             db, investigation_id=int(investigation.id), tenant_id=tenant_id
         )
         return rows, join_findings_bodies([row.body for row in rows])
+
+    @staticmethod
+    async def has_non_empty_findings(
+        db: AsyncSession,
+        *,
+        investigation: InvestigationRun,
+        tenant_id: int,
+    ) -> bool:
+        """True iff this run has at least one non-empty finding row.
+
+        Tenant-scoped on the row query even though the caller has already
+        tenant-checked the run: a crafted tenant id must not see another
+        organisation's findings, and must not convert the legacy string into
+        the wrong tenant.
+
+        When the table is empty, converts the leftover C4/C7 string once via
+        :meth:`ensure_converted`. That split does not invent text — a blank
+        or missing string stays empty and this returns False.
+
+        Fail closed on a tenant mismatch or a missing run id. Probe errors
+        propagate so the closure helper can refuse the close rather than
+        guessing.
+        """
+        record_tenant = getattr(investigation, "tenant_id", None)
+        investigation_id = getattr(investigation, "id", None)
+        if investigation_id is None or record_tenant is None:
+            return False
+        try:
+            if int(record_tenant) != int(tenant_id):
+                return False
+        except (TypeError, ValueError):
+            return False
+
+        scoped_investigation_id = int(investigation_id)
+        scoped_tenant_id = int(tenant_id)
+
+        async def _any_non_empty() -> bool:
+            rows = await InvestigationFindingsService._ordered_rows(
+                db, investigation_id=scoped_investigation_id, tenant_id=scoped_tenant_id
+            )
+            return any(str(getattr(row, "body", "") or "").strip() for row in rows)
+
+        if await _any_non_empty():
+            return True
+        await InvestigationFindingsService.ensure_converted(db, investigation=investigation, tenant_id=scoped_tenant_id)
+        return await _any_non_empty()
 
     @staticmethod
     async def ensure_converted(
