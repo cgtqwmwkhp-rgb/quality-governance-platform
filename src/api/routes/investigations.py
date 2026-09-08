@@ -2,6 +2,7 @@
 
 import logging
 import math
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
@@ -41,6 +42,16 @@ from src.domain.models.investigation import (
     InvestigationTemplate,
 )
 from src.domain.models.user import User
+from src.domain.services.investigation_data_writer import merge_nested_workspace_fields
+from src.domain.services.investigation_parent_timeline import (
+    INVESTIGATION_ROW_CAP,
+    ORIGIN_INVESTIGATION,
+    ParentTimelineRow,
+    as_utc,
+    load_parent_timeline_rows,
+    resolved_actor_name,
+    timeline_sort_key,
+)
 from src.domain.services.investigation_service import InvestigationService
 
 logger = logging.getLogger(__name__)
@@ -284,7 +295,11 @@ async def _collect_readiness_reasons(
     if not investigation.level:
         reasons.append(ClosureReasonCode.LEVEL_NOT_SET)
 
-    summary_reasons, summary_items = collect_summary_readiness_blockers(investigation)
+    summary_reasons, summary_items = await collect_summary_readiness_blockers(
+        investigation,
+        db=db,
+        tenant_id=tenant_id,
+    )
     for code in summary_reasons:
         if code not in reasons:
             reasons.append(code)
@@ -633,14 +648,61 @@ def _revision_event_value(value: Any) -> Any:
 
 async def _actor_names_for_events(
     db: AsyncSession,
-    events: "list[InvestigationRevisionEvent]",
+    events: "Sequence[Any]",
 ) -> dict[int, str]:
-    """Resolve actor_id -> display name for a page of revision events."""
+    """Resolve actor_id -> display name for a page of timeline rows.
+
+    Takes anything exposing ``actor_id``: revision events and the parent-source
+    rows INV-C9 merges alongside them share one ``users`` lookup per page.
+    """
     actor_ids = {e.actor_id for e in events if e.actor_id is not None}
     if not actor_ids:
         return {}
     result = await db.execute(select(User).where(User.id.in_(actor_ids)))
     return {user.id: (user.full_name.strip() or user.email) for user in result.scalars().all()}
+
+
+def _revision_event_item(e: Any, actor_names: dict[int, str]) -> dict[str, Any]:
+    """Serialize one investigation revision event, stamped with its origin.
+
+    ``event_metadata`` is copied rather than mutated: the ORM row is attached to
+    the request's session and stamping it in place would mark the JSON column
+    dirty and write ``origin`` back on the next flush.
+    """
+    metadata = dict(e.event_metadata) if isinstance(e.event_metadata, dict) else {}
+    metadata.setdefault("origin", ORIGIN_INVESTIGATION)
+    return {
+        "id": e.id,
+        "event_type": e.event_type,
+        "field_path": e.field_path,
+        "old_value": (
+            e.old_value if isinstance(e.old_value, str) else (str(e.old_value) if e.old_value is not None else None)
+        ),
+        "new_value": (
+            e.new_value if isinstance(e.new_value, str) else (str(e.new_value) if e.new_value is not None else None)
+        ),
+        "actor_id": e.actor_id,
+        "actor_name": actor_names.get(e.actor_id) if e.actor_id is not None else None,
+        "event_metadata": metadata,
+        "version": e.version,
+        "created_at": as_utc(e.created_at) or e.created_at,
+    }
+
+
+def _parent_timeline_item(row: ParentTimelineRow, actor_names: dict[int, str]) -> dict[str, Any]:
+    """Serialize one parent-source row into the same shape as a revision event."""
+    return {
+        "id": row.id,
+        "event_type": row.event_type,
+        "field_path": row.field_path,
+        "old_value": row.old_value,
+        "new_value": row.new_value,
+        "actor_id": row.actor_id,
+        "actor_name": resolved_actor_name(row, actor_names),
+        "event_metadata": row.event_metadata,
+        "version": row.version,
+        "created_at": row.created_at,
+    }
 
 
 @router.get("/{investigation_id:int}/timeline", response_model=InvestigationTimelineResponse)
@@ -652,48 +714,54 @@ async def get_investigation_timeline(
     page_size: int = Query(20, ge=1, le=100),
     event_type: Optional[str] = Query(None),
 ):
-    """List revision events for an investigation (deterministic ordering)."""
-    await _get_investigation_or_404(investigation_id, db, current_user)
+    """List the investigation's own events merged with its parent source chronology.
+
+    INV-C9 / D7: this used to read ``investigation_revision_events`` alone, so the
+    chronology began the moment the investigation was raised and ignored
+    everything the source case recorded before and after. It now also carries the
+    parent record's ``audit_log_entries`` and its running sheet, tagged
+    ``event_metadata.origin == "source"``; the investigation's own events are
+    tagged ``"investigation"``. The response schema is unchanged — origin travels
+    in ``event_metadata``, and parent rows take collision-free negative ids (see
+    :mod:`src.domain.services.investigation_parent_timeline`).
+
+    Ordering stays created_at DESC, id DESC, but the two feeds have to be ordered
+    *together* before the page is cut, which rules out an SQL OFFSET on either.
+    The merge window is therefore bounded: the newest ``INVESTIGATION_ROW_CAP``
+    revision events and the newest ``PARENT_ROW_CAP`` rows per parent feed.
+    ``total`` counts that window, so it stays consistent with what paging can
+    actually reach rather than reporting rows no page would return.
+    """
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
 
     query = select(InvestigationRevisionEvent).where(InvestigationRevisionEvent.investigation_id == investigation_id)
     if event_type:
         query = query.where(InvestigationRevisionEvent.event_type == event_type)
-
-    count_query = select(func.count(InvestigationRevisionEvent.id)).where(
-        InvestigationRevisionEvent.investigation_id == investigation_id
-    )
-    if event_type:
-        count_query = count_query.where(InvestigationRevisionEvent.event_type == event_type)
-    total = await db.scalar(count_query) or 0
-    query = query.order_by(InvestigationRevisionEvent.created_at.desc(), InvestigationRevisionEvent.id.desc())
-    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(
+        InvestigationRevisionEvent.created_at.desc(),
+        InvestigationRevisionEvent.id.desc(),
+    ).limit(INVESTIGATION_ROW_CAP)
     result = await db.execute(query)
-    events = result.scalars().all()
-    actor_names = await _actor_names_for_events(db, list(events))
+    events = list(result.scalars().all())
+
+    parent_rows = await load_parent_timeline_rows(db, investigation=investigation, event_type=event_type)
+
+    merged: list[Any] = [*events, *parent_rows]
+    merged.sort(key=lambda row: timeline_sort_key(row.created_at, row.id), reverse=True)
+
+    total = len(merged)
+    offset = (page - 1) * page_size
+    window = merged[offset : offset + page_size]
+    actor_names = await _actor_names_for_events(db, window)
 
     return {
         "items": [
-            {
-                "id": e.id,
-                "event_type": e.event_type,
-                "field_path": e.field_path,
-                "old_value": (
-                    e.old_value
-                    if isinstance(e.old_value, str)
-                    else (str(e.old_value) if e.old_value is not None else None)
-                ),
-                "new_value": (
-                    e.new_value
-                    if isinstance(e.new_value, str)
-                    else (str(e.new_value) if e.new_value is not None else None)
-                ),
-                "actor_id": e.actor_id,
-                "actor_name": actor_names.get(e.actor_id) if e.actor_id is not None else None,
-                "event_metadata": e.event_metadata,
-                "version": e.version,
-                "created_at": e.created_at,
-            }
-            for e in events
+            (
+                _parent_timeline_item(row, actor_names)
+                if isinstance(row, ParentTimelineRow)
+                else _revision_event_item(row, actor_names)
+            )
+            for row in window
         ],
         "total": total,
         "page": page,
@@ -729,7 +797,9 @@ async def add_manual_timeline_entry(
         actor_id=current_user.id,
         field_path="timeline.manual",
         new_value=payload.content.strip(),
-        metadata={"source": "manual_timeline"},
+        # origin is stamped at write time so a manual entry is honest at rest;
+        # GET only has to infer it for rows written before INV-C9.
+        metadata={"source": "manual_timeline", "origin": ORIGIN_INVESTIGATION},
     )
     await db.commit()
     await db.refresh(event)
@@ -1159,6 +1229,8 @@ async def create_capa_for_investigation(
             assignee_name=payload.assignee_name,
             due_date=payload.due_date,
             priority=payload.priority,
+            why_level=payload.why_level,
+            five_whys_id=payload.five_whys_id,
         )
     except LookupError as exc:
         raise NotFoundError(str(exc)) from exc
@@ -1188,6 +1260,13 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
     tenant_id = _assert_investigation_tenant(investigation, current_user)
 
     update_data = investigation_data.model_dump(exclude_unset=True)
+
+    # INV-C4: a client that still sends only flat keys (`data.findings`) must not leave the
+    # report path blind — the closure walk and the pack read `data.sections` only. Merge before
+    # anything else reads `update_data["data"]`, so the lessons promotion and the revision event
+    # see the blob that is actually stored. Flat keys are kept in sync, not replaced (C18).
+    if "data" in update_data:
+        update_data["data"] = merge_nested_workspace_fields(update_data["data"])
 
     # PX-168b: refuse lead/reviewer ids that do not resolve to an active tenant user.
     for field_name in ("assigned_to_user_id", "reviewer_user_id"):
@@ -1740,6 +1819,9 @@ async def autosave_investigation(
     # Store old data for revision event
     old_data = investigation.data
 
+    # INV-C4: same dual-write as PATCH — an autosaved flat key must also land nested.
+    data = merge_nested_workspace_fields(data)
+
     # Update data and increment version
     investigation.data = data  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
     investigation.version += 1  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
@@ -1990,7 +2072,7 @@ async def generate_customer_pack(
     # Get investigation. A pack is the exportable copy of the record, so this is
     # a read of it and is gated exactly as the detail read is.
     investigation = await _load_investigation_or_404(investigation_id, db)
-    _assert_investigation_tenant(investigation, current_user)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
 
     pending = InvestigationService.pending_customer_omits(investigation)
     if pending:
@@ -2000,13 +2082,22 @@ async def generate_customer_pack(
 
     # Get linked evidence assets
     from src.domain.models.evidence_asset import EvidenceAsset
+    from src.domain.services.investigation_pack_content import load_investigation_pack_sources
 
     assets_query = select(EvidenceAsset).where(
         EvidenceAsset.linked_investigation_id == investigation_id,
+        EvidenceAsset.tenant_id == tenant_id,
         EvidenceAsset.deleted_at.is_(None),
     )
     assets_result = await db.execute(assets_query)
     evidence_assets = list(assets_result.scalars().all())
+
+    sources = await load_investigation_pack_sources(
+        db,
+        investigation=investigation,
+        tenant_id=tenant_id,
+        actor_id=current_user.id,
+    )
 
     # Generate pack with redaction
     content, redaction_log, included_assets = InvestigationService.generate_customer_pack(
@@ -2015,6 +2106,10 @@ async def generate_customer_pack(
         evidence_assets=evidence_assets,
         generated_by_id=current_user.id,
         generated_by_role=getattr(current_user, "role", None),
+        findings=sources.findings,
+        rca=sources.rca,
+        capa_actions=sources.capa_actions,
+        factors=sources.factors,
     )
 
     # Create pack entity

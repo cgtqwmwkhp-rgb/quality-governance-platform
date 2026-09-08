@@ -32,6 +32,7 @@ export interface Investigation {
   data: Record<string, unknown>
   started_at?: string
   completed_at?: string
+  assigned_to_user_id?: number | null
   created_at: string
   updated_at?: string
 }
@@ -96,6 +97,7 @@ export interface InvestigationUpdate {
   status?: string
   data?: Record<string, unknown>
   notes?: string
+  assigned_to_user_id?: number | null
   closure_override?: boolean
   closure_override_reason?: string
 }
@@ -252,6 +254,37 @@ export interface InvestigationTemplateListResponse {
   pages: number
 }
 
+/**
+ * One investigation finding, as a row (INV-C7).
+ *
+ * Before C7 `findings` was a single string on `investigation.data`. It is still
+ * written there — the closure gate and the generated pack read it — but the rows
+ * are now what the editor edits, and the string is derived from them server-side.
+ */
+export interface InvestigationFinding {
+  id: number
+  investigation_id: number
+  body: string
+  sort_order: number
+  created_by_id?: number | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+/**
+ * The run's findings, in order.
+ *
+ * `items: []` is a normal, successful answer. `findings_text` is the exact string
+ * the server stored back onto `investigation.data`, returned so callers never have
+ * to re-derive it (and risk deriving it differently).
+ */
+export interface InvestigationFindingsResponse {
+  items: InvestigationFinding[]
+  total: number
+  investigation_id: number
+  findings_text: string
+}
+
 /** Optional filters for investigation list (status / entity_type / smart search q). */
 export interface InvestigationListParams {
   status?: string
@@ -262,170 +295,213 @@ export interface InvestigationListParams {
 
 export function createInvestigationsApi(api: AxiosInstance) {
   return {
-  /**
-   * List investigations.
-   * Third arg accepts legacy `status` string or `{ status, entity_type, q }`.
-   * `q` is forwarded for smart search; ignored by API until PR-5 BE lands.
-   */
-  list: (
-    page = 1,
-    pageSize = 10,
-    statusOrOptions?: string | InvestigationListParams,
-  ) => {
-    const options: InvestigationListParams =
-      typeof statusOrOptions === 'string'
-        ? { status: statusOrOptions }
-        : statusOrOptions ?? {}
-    const params = new URLSearchParams({
-      page: String(page),
-      page_size: String(pageSize),
-    })
-    if (options.status) params.set('status', options.status)
-    if (options.entity_type) params.set('entity_type', options.entity_type)
-    if (options.q?.trim()) params.set('q', options.q.trim())
-    return api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?${params}`)
-  },
-  create: (data: InvestigationCreate) => api.post<Investigation>('/api/v1/investigations/', data),
-  get: (id: number) => api.get<Investigation>(`/api/v1/investigations/${id}`),
-  /**
-   * Update investigation with partial data.
-   * Returns updated investigation on success.
-   */
-  update: (id: number, data: InvestigationUpdate) =>
-    api.patch<Investigation>(`/api/v1/investigations/${id}`, data),
-  /**
-   * Autosave investigation with version-based optimistic locking.
-   * Returns 409 CONFLICT if version mismatch (stale data).
-   */
-  autosave: (id: number, data: InvestigationAutosave) =>
-    api.patch<Investigation>(`/api/v1/investigations/${id}/autosave`, data),
-  /**
-   * Create investigation from source record using proper JSON body.
-   * Returns 201 on success, 404 if source not found, 409 if already investigated.
-   */
-  createFromRecord: (data: CreateFromRecordRequest) =>
-    api.post<Investigation>('/api/v1/investigations/from-record', data),
-  /**
-   * List source records available for investigation creation.
-   * Records with investigation_id !== null are already investigated.
-   */
-  listSourceRecords: (
-    source_type: string,
-    options?: { q?: string; page?: number; size?: number },
-  ) => {
-    const params = new URLSearchParams({ source_type })
-    if (options?.q) params.set('q', options.q)
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.size) params.set('page_size', String(options.size))
-    return api.get<SourceRecordsResponse>(`/api/v1/investigations/source-records?${params}`)
-  },
-
-  // ============ Stage 1 Endpoints ============
-
-  /**
-   * Get timeline events for an investigation.
-   * Ordered by created_at DESC, id DESC.
-   */
-  getTimeline: (id: number, options?: { page?: number; page_size?: number; type?: string }) => {
-    const params = new URLSearchParams()
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.page_size) params.set('page_size', String(options.page_size))
-    if (options?.type) params.set('event_type', options.type)
-    return api.get<TimelineResponse>(`/api/v1/investigations/${id}/timeline?${params}`)
-  },
-
-  /**
-   * Get comments for an investigation.
-   * Ordered by created_at DESC, id DESC.
-   */
-  getComments: (id: number, options?: { page?: number; page_size?: number }) => {
-    const params = new URLSearchParams()
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.page_size) params.set('page_size', String(options.page_size))
-    return api.get<CommentsResponse>(`/api/v1/investigations/${id}/comments?${params}`)
-  },
-
-  /**
-   * Add a comment to an investigation.
-   */
-  addComment: (id: number, body: string) =>
-    api.post<InvestigationComment>(`/api/v1/investigations/${id}/comments`, {
-      content: body,
-    }),
-
-  /**
-   * Get customer pack summaries for an investigation.
-   * Does NOT include full content for security.
-   */
-  getPacks: (id: number, options?: { page?: number; page_size?: number }) => {
-    const params = new URLSearchParams()
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.page_size) params.set('page_size', String(options.page_size))
-    return api.get<PacksResponse>(`/api/v1/investigations/${id}/packs?${params}`)
-  },
-
-  /**
-   * Generate a new customer pack for an investigation.
-   */
-  generatePack: (id: number, audience: string) =>
-    api.post<GeneratedCustomerPack>(
-      `/api/v1/investigations/${id}/customer-pack?audience=${encodeURIComponent(audience)}`,
-    ),
-
-  /**
-   * Get closure validation status for an investigation.
-   * Inline honesty UI on InvestigationDetail — do not global-toast on probe failure.
-   */
-  getClosureValidation: (id: number) =>
-    api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`, {
-      suppressErrorToast: true,
-    }),
-
-  /**
-   * Create a formal CAPA linked to this investigation (parent auto-set server-side).
-   */
-  createCapa: (
-    id: number,
-    body?: {
-      title?: string
-      description?: string
-      assignee_id?: number
-      assignee_email?: string
-      assignee_name?: string
-      due_date?: string
-      priority?: string
+    /**
+     * List investigations.
+     * Third arg accepts legacy `status` string or `{ status, entity_type, q }`.
+     * `q` is forwarded for smart search; ignored by API until PR-5 BE lands.
+     */
+    list: (page = 1, pageSize = 10, statusOrOptions?: string | InvestigationListParams) => {
+      const options: InvestigationListParams =
+        typeof statusOrOptions === 'string' ? { status: statusOrOptions } : (statusOrOptions ?? {})
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      })
+      if (options.status) params.set('status', options.status)
+      if (options.entity_type) params.set('entity_type', options.entity_type)
+      if (options.q?.trim()) params.set('q', options.q.trim())
+      return api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?${params}`)
     },
-  ) =>
-    api.post<{
-      id: number
-      reference_number: string
-      title: string
-      source_type?: string
-      source_id?: number
-    }>(`/api/v1/investigations/${id}/capa`, body ?? {}),
+    create: (data: InvestigationCreate) => api.post<Investigation>('/api/v1/investigations/', data),
+    get: (id: number) => api.get<Investigation>(`/api/v1/investigations/${id}`),
+    /**
+     * Update investigation with partial data.
+     * Returns updated investigation on success.
+     */
+    update: (id: number, data: InvestigationUpdate) =>
+      api.patch<Investigation>(`/api/v1/investigations/${id}`, data),
+    /**
+     * Autosave investigation with version-based optimistic locking.
+     * Returns 409 CONFLICT if version mismatch (stale data).
+     */
+    autosave: (id: number, data: InvestigationAutosave) =>
+      api.patch<Investigation>(`/api/v1/investigations/${id}/autosave`, data),
+    /**
+     * Create investigation from source record using proper JSON body.
+     * Returns 201 on success, 404 if source not found, 409 if already investigated.
+     */
+    createFromRecord: (data: CreateFromRecordRequest) =>
+      api.post<Investigation>('/api/v1/investigations/from-record', data),
+    /**
+     * List source records available for investigation creation.
+     * Records with investigation_id !== null are already investigated.
+     */
+    listSourceRecords: (
+      source_type: string,
+      options?: { q?: string; page?: number; size?: number },
+    ) => {
+      const params = new URLSearchParams({ source_type })
+      if (options?.q) params.set('q', options.q)
+      if (options?.page) params.set('page', String(options.page))
+      if (options?.size) params.set('page_size', String(options.size))
+      return api.get<SourceRecordsResponse>(`/api/v1/investigations/source-records?${params}`)
+    },
 
-  // ============ Investigation Template Endpoints ============
+    // ============ Stage 1 Endpoints ============
 
-  listTemplates: (options?: { page?: number; page_size?: number; is_active?: boolean }) => {
-    const params = new URLSearchParams()
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.page_size) params.set('page_size', String(options.page_size))
-    if (options?.is_active != null) params.set('is_active', String(options.is_active))
-    const query = params.toString()
-    return api.get<InvestigationTemplateListResponse>(
-      query ? `/api/v1/investigation-templates/?${query}` : '/api/v1/investigation-templates/',
-    )
-  },
+    /**
+     * Get timeline events for an investigation.
+     * Ordered by created_at DESC, id DESC.
+     */
+    getTimeline: (id: number, options?: { page?: number; page_size?: number; type?: string }) => {
+      const params = new URLSearchParams()
+      if (options?.page) params.set('page', String(options.page))
+      if (options?.page_size) params.set('page_size', String(options.page_size))
+      if (options?.type) params.set('event_type', options.type)
+      return api.get<TimelineResponse>(`/api/v1/investigations/${id}/timeline?${params}`)
+    },
 
-  getTemplate: (id: number) =>
-    api.get<InvestigationTemplate>(`/api/v1/investigation-templates/${id}`),
+    /**
+     * Get comments for an investigation.
+     * Ordered by created_at DESC, id DESC.
+     */
+    getComments: (id: number, options?: { page?: number; page_size?: number }) => {
+      const params = new URLSearchParams()
+      if (options?.page) params.set('page', String(options.page))
+      if (options?.page_size) params.set('page_size', String(options.page_size))
+      return api.get<CommentsResponse>(`/api/v1/investigations/${id}/comments?${params}`)
+    },
 
-  createTemplate: (data: InvestigationTemplateCreate) =>
-    api.post<InvestigationTemplate>('/api/v1/investigation-templates/', data),
+    /**
+     * Add a comment to an investigation.
+     */
+    addComment: (id: number, body: string) =>
+      api.post<InvestigationComment>(`/api/v1/investigations/${id}/comments`, {
+        content: body,
+      }),
 
-  updateTemplate: (id: number, data: InvestigationTemplateUpdate) =>
-    api.patch<InvestigationTemplate>(`/api/v1/investigation-templates/${id}`, data),
+    // ============ Findings rows (INV-C7) ============
 
-  deleteTemplate: (id: number) => api.delete<void>(`/api/v1/investigation-templates/${id}`),
-}
+    /**
+     * List an investigation's findings, in order.
+     *
+     * The first call for a run that still holds only the legacy `data.findings`
+     * string converts that string into rows server-side, once. Every call after
+     * that returns the stored rows, so calling this repeatedly is safe.
+     */
+    listFindings: (id: number) =>
+      api.get<InvestigationFindingsResponse>(`/api/v1/investigations/${id}/findings`),
+
+    /**
+     * Append a finding.
+     *
+     * All four mutations resolve to the whole ordered list, because `sort_order` is
+     * assigned server-side — a caller holding only the row it just changed would
+     * have to guess the new order.
+     */
+    createFinding: (id: number, body: string) =>
+      api.post<InvestigationFindingsResponse>(`/api/v1/investigations/${id}/findings`, { body }),
+
+    /** Rewrite one finding's text. Position is unaffected. */
+    updateFinding: (id: number, findingId: number, body: string) =>
+      api.patch<InvestigationFindingsResponse>(
+        `/api/v1/investigations/${id}/findings/${findingId}`,
+        { body },
+      ),
+
+    /** Remove one finding. Removing the last one leaves a valid empty list. */
+    deleteFinding: (id: number, findingId: number) =>
+      api.delete<InvestigationFindingsResponse>(
+        `/api/v1/investigations/${id}/findings/${findingId}`,
+      ),
+
+    /**
+     * Apply a new order.
+     *
+     * `findingIds` must be every one of this run's findings, each once — the server
+     * refuses a partial list with 400 rather than applying it, so a stale editor
+     * cannot drop a finding another tab added.
+     */
+    reorderFindings: (id: number, findingIds: number[]) =>
+      api.post<InvestigationFindingsResponse>(`/api/v1/investigations/${id}/findings/reorder`, {
+        finding_ids: findingIds,
+      }),
+
+    /**
+     * Get customer pack summaries for an investigation.
+     * Does NOT include full content for security.
+     */
+    getPacks: (id: number, options?: { page?: number; page_size?: number }) => {
+      const params = new URLSearchParams()
+      if (options?.page) params.set('page', String(options.page))
+      if (options?.page_size) params.set('page_size', String(options.page_size))
+      return api.get<PacksResponse>(`/api/v1/investigations/${id}/packs?${params}`)
+    },
+
+    /**
+     * Generate a new customer pack for an investigation.
+     */
+    generatePack: (id: number, audience: string) =>
+      api.post<GeneratedCustomerPack>(
+        `/api/v1/investigations/${id}/customer-pack?audience=${encodeURIComponent(audience)}`,
+      ),
+
+    /**
+     * Get closure validation status for an investigation.
+     * Inline honesty UI on InvestigationDetail — do not global-toast on probe failure.
+     */
+    getClosureValidation: (id: number) =>
+      api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`, {
+        suppressErrorToast: true,
+      }),
+
+    /**
+     * Create a formal CAPA linked to this investigation (parent auto-set server-side).
+     */
+    createCapa: (
+      id: number,
+      body?: {
+        title?: string
+        description?: string
+        assignee_id?: number
+        assignee_email?: string
+        assignee_name?: string
+        due_date?: string
+        priority?: string
+        why_level?: number
+        five_whys_id?: number
+      },
+    ) =>
+      api.post<{
+        id: number
+        reference_number: string
+        title: string
+        source_type?: string
+        source_id?: number
+      }>(`/api/v1/investigations/${id}/capa`, body ?? {}),
+
+    // ============ Investigation Template Endpoints ============
+
+    listTemplates: (options?: { page?: number; page_size?: number; is_active?: boolean }) => {
+      const params = new URLSearchParams()
+      if (options?.page) params.set('page', String(options.page))
+      if (options?.page_size) params.set('page_size', String(options.page_size))
+      if (options?.is_active != null) params.set('is_active', String(options.is_active))
+      const query = params.toString()
+      return api.get<InvestigationTemplateListResponse>(
+        query ? `/api/v1/investigation-templates/?${query}` : '/api/v1/investigation-templates/',
+      )
+    },
+
+    getTemplate: (id: number) =>
+      api.get<InvestigationTemplate>(`/api/v1/investigation-templates/${id}`),
+
+    createTemplate: (data: InvestigationTemplateCreate) =>
+      api.post<InvestigationTemplate>('/api/v1/investigation-templates/', data),
+
+    updateTemplate: (id: number, data: InvestigationTemplateUpdate) =>
+      api.patch<InvestigationTemplate>(`/api/v1/investigation-templates/${id}`, data),
+
+    deleteTemplate: (id: number) => api.delete<void>(`/api/v1/investigation-templates/${id}`),
+  }
 }
