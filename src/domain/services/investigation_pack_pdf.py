@@ -25,23 +25,26 @@ from src.domain.services.investigation_pack_draw import (
     icam_summary_line,
     normalise_chronology_events,
     normalise_icam_factors,
-    pdf_safe,
     plural,
 )
+from src.domain.services import investigation_pack_brand as pack_brand
+from src.domain.services.investigation_pack_ir import (
+    DocumentMeta,
+    PackDocument,
+    Section,
+)
+from src.domain.services.investigation_pack_pdf_writer import create_pack_pdf, write_contents, write_cover
 
 logger = logging.getLogger(__name__)
 
 # Text and geometry helpers live in investigation_pack_draw (INV-C15) so the
 # drawing layer and this renderer cannot drift apart. Aliased at their original
 # private names because that is what the rest of this module already calls.
-_pdf_safe = pdf_safe
+_pdf_safe = pack_brand.text_safe
 _fit_cell_text = fit_text
 
 _MAX_FIELD_CHARS = 4000
 _MAX_ASSET_ROWS = 200
-# Plantexpand primary — HSL 82 85% 25% (the web --primary token), not Tailwind blue.
-_DEFAULT_BRAND_RGB = (78, 118, 10)
-_WORDMARK = "PLANTEXPAND"
 
 _AUDIENCE_LABELS: dict[str, str] = {
     "internal_customer": "Internal customer pack",
@@ -244,49 +247,43 @@ def chronology_feed(
     return None, ""
 
 
-def _brand_rgb(primary_color: Optional[str]) -> tuple[int, int, int]:
-    """Parse a `#rrggbb` tenant brand colour; fall back to the platform default."""
-    raw = (primary_color or "").strip().lstrip("#")
-    if len(raw) != 6:
-        return _DEFAULT_BRAND_RGB
+def _human_generated_label(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "Not recorded"
     try:
-        return (int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16))
+        stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
-        return _DEFAULT_BRAND_RGB
+        return raw
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    stamp = stamp.astimezone(timezone.utc)
+    return f"{stamp.day} {stamp.strftime('%B %Y')}, {stamp.strftime('%H:%M')} UTC"
+
+
+def _incident_reference(pack: dict[str, Any], content: dict[str, Any]) -> str:
+    sections = content.get("sections")
+    details = sections.get("section_1_details") if isinstance(sections, dict) else None
+    if isinstance(details, dict):
+        for key in ("reference_number", "incident_reference", "incident_ref"):
+            found = details.get(key)
+            if found:
+                return str(found)
+    title = str(pack.get("investigation_title") or content.get("title") or "")
+    return title
 
 
 def _write_line(pdf: Any, text: str, *, height: float = 5) -> None:
     """Write wrapped text from the left margin (avoids fpdf2 mid-line multi_cell errors)."""
     pdf.set_x(pdf.l_margin)
+    pdf.set_text_color(*pack_brand.JET_GREY)
     pdf.multi_cell(0, height, _pdf_safe(text), new_x="LMARGIN", new_y="NEXT")
 
 
-def _make_pack_pdf_class(fpdf_cls: Any) -> Any:
-    """FPDF subclass with a branded footer. Built here so a missing fpdf2 still fails closed."""
-
-    class PackPdf(fpdf_cls):
-        def __init__(self, brand: tuple[int, int, int], org: str, audience_label: str) -> None:
-            super().__init__(orientation="P", unit="mm", format="A4")
-            self._brand = brand
-            self._org = org
-            self._audience_label = audience_label
-
-        def footer(self) -> None:  # noqa: N802 - fpdf2 hook
-            self.set_y(-14)
-            self.set_text_color(*self._brand)
-            self.set_font("Helvetica", "", 8)
-            if self._org:
-                separator_and_wordmark = f"  |  {_WORDMARK}"
-                org_width = 95 - self.get_string_width(separator_and_wordmark)
-                left = f"{_fit_cell_text(self, self._org, org_width)}{separator_and_wordmark}"
-            else:
-                left = _WORDMARK
-            right = _pdf_safe(f"{self._audience_label}  |  Page {self.page_no()} of {{nb}}")
-            self.cell(95, 8, left, align="L")
-            self.cell(0, 8, right, align="R")
-            self.set_text_color(0, 0, 0)
-
-    return PackPdf
+def _set_pack_font(pdf: Any, *, bold: bool = False, size: float = 10) -> None:
+    """Body type on a pack page. Never italic — Inter has no italic slot in this lock."""
+    pdf.set_font(pack_brand.FAMILY_REGULAR, "B" if bold else "", size)
+    pdf.set_text_color(*pack_brand.JET_GREY)
 
 
 class InvestigationPackPdfService:
@@ -308,14 +305,11 @@ class InvestigationPackPdfService:
     ) -> bytes:
         """Render pack bytes. Raises RuntimeError when fpdf2 is unavailable or rendering fails.
 
-        ``timeline_events`` is the optional chronology feed described in
-        :func:`chronology_feed`, in the shape the timeline endpoint serialises.
-        Omit it and the pack renders exactly as it did before INV-C15.
+        ``organisation_name`` and ``primary_color`` are accepted and ignored.
+        Letterhead is the brand kit, not the tenant row (INV-PACK-R1).
         """
-        try:
-            from fpdf import FPDF
-        except ModuleNotFoundError as exc:
-            raise RuntimeError("PDF export unavailable: fpdf2 is not installed in this environment") from exc
+        # Fail closed before a page is drawn if Inter or the lockup is missing.
+        pack_brand.resolve_typeface()
 
         raw_content = pack.get("content")
         content: dict[str, Any] = raw_content if isinstance(raw_content, dict) else {}
@@ -324,45 +318,39 @@ class InvestigationPackPdfService:
         reference = pack.get("investigation_reference") or content.get("investigation_reference") or "Unknown"
         title = pack.get("investigation_title") or content.get("title") or "Investigation report"
         generated_at = pack.get("generated_at") or datetime.now(timezone.utc).isoformat()
-        org = (organisation_name or "").strip()
-        brand = _brand_rgb(primary_color)
-
-        pdf = _make_pack_pdf_class(FPDF)(brand, org, audience_label)
-        pdf.alias_nb_pages()
-        pdf.set_auto_page_break(auto=True, margin=18)
-        pdf.set_margins(left=16, top=14, right=16)
-        pdf.add_page()
-
-        # Branded header band — tenant colour, bundled wordmark. No remote logo fetch.
-        pdf.set_fill_color(*brand)
-        pdf.rect(0, 0, 210, 26, style="F")
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_xy(16, 7)
-        pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(110, 6, _fit_cell_text(pdf, org or "Investigation report", 110), align="L")
-        pdf.set_xy(126, 7)
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(68, 6, _WORDMARK, align="R")
-        pdf.set_xy(16, 15)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.cell(0, 5, _pdf_safe(audience_label), align="L")
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_y(32)
-
-        pdf.set_font("Helvetica", "B", 16)
-        _write_line(pdf, str(title), height=8)
-        pdf.set_font("Helvetica", "", 10)
-        _write_line(pdf, f"Investigation reference: {reference}")
-        _write_line(pdf, f"Status: {humanise_key(content.get('status') or 'unknown')}")
-        _write_line(pdf, f"Investigation level: {humanise_key(content.get('level') or 'unknown')}")
-        _write_line(pdf, f"Generated: {generated_at}")
-        pdf.ln(2)
-
+        _ = organisation_name
+        _ = primary_color
+        brand = pack_brand.CRIMSON
         confidentiality = confidentiality_notice(audience, pack.get("redaction_log"))
-        if confidentiality:
-            pdf.set_font("Helvetica", "I", 9)
-            _write_line(pdf, confidentiality, height=4.5)
-            pdf.ln(1)
+
+        meta = DocumentMeta(
+            reference=str(reference),
+            title=str(title),
+            audience_label=audience_label,
+            status_label=humanise_key(content.get("status") or "unknown"),
+            level_label=humanise_key(content.get("level") or "unknown"),
+            generated_at_label=_human_generated_label(generated_at),
+            pack_uuid=str(pack.get("pack_uuid") or "unknown"),
+            content_sha256=str(pack.get("checksum_sha256") or "not recorded"),
+            classification=pack_brand.CLASSIFICATION,
+            confidentiality=confidentiality,
+            incident_reference=_incident_reference(pack, content),
+        )
+        contents_sections = (
+            Section(id="report", heading="Incident details", blocks=(), in_contents=True),
+            Section(id="findings", heading="Findings", blocks=(), in_contents=True),
+            Section(id="rca", heading="Root cause analysis", blocks=(), in_contents=True),
+            Section(id="capa", heading="CAPA", blocks=(), in_contents=True),
+            Section(id="evidence", heading="Evidence schedule", blocks=(), in_contents=True),
+            Section(id="redaction", heading="Redaction summary", blocks=(), in_contents=True),
+            Section(id="integrity", heading="Pack integrity", blocks=(), in_contents=True),
+        )
+        document = PackDocument(meta=meta, sections=contents_sections)
+
+        pdf = create_pack_pdf(meta)
+        write_cover(pdf, meta)
+        write_contents(pdf, document)
+        pdf.add_page()
 
         self._section_heading(pdf, "Report sections", brand)
         self._render_report_sections(pdf, content.get("sections"), brand=brand, pack_uuid=pack.get("pack_uuid"))
@@ -371,7 +359,7 @@ class InvestigationPackPdfService:
         omitted = content.get("omitted_sections")
         if isinstance(omitted, list) and omitted:
             self._section_heading(pdf, "Sections withheld from this pack", brand)
-            pdf.set_font("Helvetica", "", 10)
+            _set_pack_font(pdf, size=10)
             _write_line(
                 pdf,
                 "The following sections were approved for omission and are not reproduced above:",
@@ -393,7 +381,7 @@ class InvestigationPackPdfService:
         self._section_heading(pdf, "Evidence schedule", brand)
         raw_assets = pack.get("included_assets")
         assets: list[Any] = raw_assets if isinstance(raw_assets, list) else []
-        pdf.set_font("Helvetica", "", 10)
+        _set_pack_font(pdf, size=10)
         if not assets:
             _write_line(pdf, "No evidence assets are linked to this investigation.")
         else:
@@ -418,7 +406,7 @@ class InvestigationPackPdfService:
 
         redactions = summarise_redactions(pack.get("redaction_log"))
         self._section_heading(pdf, "Redaction summary", brand)
-        pdf.set_font("Helvetica", "", 10)
+        _set_pack_font(pdf, size=10)
         if not redactions:
             _write_line(pdf, "No redactions were applied to this pack.")
         else:
@@ -427,7 +415,7 @@ class InvestigationPackPdfService:
         pdf.ln(1)
 
         self._section_heading(pdf, "Pack integrity", brand)
-        pdf.set_font("Helvetica", "", 9)
+        _set_pack_font(pdf, size=9)
         _write_line(pdf, f"Pack UUID: {pack.get('pack_uuid') or 'unknown'}", height=4.5)
         _write_line(pdf, f"Content SHA-256: {pack.get('checksum_sha256') or 'not recorded'}", height=4.5)
         _write_line(
@@ -459,7 +447,7 @@ class InvestigationPackPdfService:
         """
         sections: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
         if not sections:
-            pdf.set_font("Helvetica", "", 10)
+            _set_pack_font(pdf, size=10)
             _write_line(pdf, "No report sections were recorded on this investigation.")
             return
         renderers: dict[str, Callable[[Any, dict[str, Any]], None]] = {
@@ -468,9 +456,9 @@ class InvestigationPackPdfService:
             _PACK_CAPA: self._render_capa_section,
         }
         for section_key, fields in sections.items():
-            pdf.set_font("Helvetica", "B", 11)
+            _set_pack_font(pdf, bold=True, size=11)
             _write_line(pdf, humanise_key(section_key), height=6)
-            pdf.set_font("Helvetica", "", 10)
+            _set_pack_font(pdf, size=10)
             if not isinstance(fields, dict) or not fields:
                 _write_line(pdf, "No content recorded for this section.", height=4.5)
                 pdf.ln(1)
@@ -485,9 +473,9 @@ class InvestigationPackPdfService:
     @staticmethod
     def _render_generic_section_fields(pdf: Any, fields: dict[str, Any]) -> None:
         for field_key, field_value in fields.items():
-            pdf.set_font("Helvetica", "B", 9)
+            _set_pack_font(pdf, bold=True, size=9)
             _write_line(pdf, humanise_key(field_key), height=4.5)
-            pdf.set_font("Helvetica", "", 10)
+            _set_pack_font(pdf, size=10)
             _write_line(pdf, _pdf_safe(format_field_value(field_value), max_len=_MAX_FIELD_CHARS), height=4.5)
 
     @staticmethod
@@ -502,14 +490,14 @@ class InvestigationPackPdfService:
             else:
                 body = item
             rendered = format_field_value(body)
-            pdf.set_font("Helvetica", "", 10)
+            _set_pack_font(pdf, size=10)
             _write_line(pdf, _pdf_safe(f"{index}. {rendered}", max_len=_MAX_FIELD_CHARS), height=4.5)
 
     @staticmethod
     def _render_why_entries(pdf: Any, whys: Any) -> None:
-        pdf.set_font("Helvetica", "B", 9)
+        _set_pack_font(pdf, bold=True, size=9)
         _write_line(pdf, "5 Whys", height=4.5)
-        pdf.set_font("Helvetica", "", 10)
+        _set_pack_font(pdf, size=10)
         if not isinstance(whys, list) or not whys:
             _write_line(pdf, _EMPTY_WHYS, height=4.5)
             return
@@ -523,9 +511,9 @@ class InvestigationPackPdfService:
                 level = int(level_raw)
             except (TypeError, ValueError):
                 continue
-            pdf.set_font("Helvetica", "B", 9)
+            _set_pack_font(pdf, bold=True, size=9)
             _write_line(pdf, f"Why {level}", height=4.5)
-            pdf.set_font("Helvetica", "", 10)
+            _set_pack_font(pdf, size=10)
             _write_line(
                 pdf,
                 _pdf_safe(f"Why: {format_field_value(raw.get('why'))}", max_len=_MAX_FIELD_CHARS),
@@ -545,9 +533,9 @@ class InvestigationPackPdfService:
 
     @staticmethod
     def _render_stated_field(pdf: Any, heading: str, value: Any, empty_message: str) -> None:
-        pdf.set_font("Helvetica", "B", 9)
+        _set_pack_font(pdf, bold=True, size=9)
         _write_line(pdf, heading, height=4.5)
-        pdf.set_font("Helvetica", "", 10)
+        _set_pack_font(pdf, size=10)
         if isinstance(value, str) and not value.strip():
             _write_line(pdf, empty_message, height=4.5)
             return
@@ -561,7 +549,7 @@ class InvestigationPackPdfService:
         pdf: Any,
         fields: dict[str, Any],
         *,
-        brand: tuple[int, int, int] = _DEFAULT_BRAND_RGB,
+        brand: tuple[int, int, int] = pack_brand.CRIMSON,
         pack_uuid: Any = None,
     ) -> None:
         self._render_stated_field(
@@ -614,9 +602,9 @@ class InvestigationPackPdfService:
             return
 
         factors = normalise_icam_factors(raw)
-        pdf.set_font("Helvetica", "B", 9)
+        _set_pack_font(pdf, bold=True, size=9)
         _write_line(pdf, _ICAM_HEADING, height=4.5)
-        pdf.set_font("Helvetica", "", 10)
+        _set_pack_font(pdf, size=10)
         _write_line(pdf, icam_summary_line(factors), height=4.5)
 
         if factors.factors:
@@ -624,11 +612,11 @@ class InvestigationPackPdfService:
                 draw_icam_factors_figure(pdf, factors, brand=brand)
             except Exception:  # noqa: BLE001 - a pack without its figure beats a failed export
                 logger.exception("Investigation pack ICAM figure failed for pack %s", pack_uuid)
-                pdf.set_font("Helvetica", "I", 9)
+                _set_pack_font(pdf, size=9)
                 _write_line(pdf, _ICAM_FIGURE_FAILED, height=4.5)
                 self._render_icam_entries(pdf, factors)
             else:
-                pdf.set_font("Helvetica", "I", 8)
+                _set_pack_font(pdf, size=8)
                 _write_line(pdf, _ICAM_FIGURE_NOTE, height=4)
 
         self._render_icam_gaps(pdf, factors)
@@ -636,7 +624,7 @@ class InvestigationPackPdfService:
     @staticmethod
     def _render_icam_entries(pdf: Any, factors: IcamFactorSet) -> None:
         """The factors in words, in the line shape INV-C12 already writes them in."""
-        pdf.set_font("Helvetica", "", 9)
+        _set_pack_font(pdf, size=9)
         for factor in factors.factors:
             line = f"- {factor.category_label}: {factor.label}"
             depth_label = factor.depth_label
@@ -649,7 +637,7 @@ class InvestigationPackPdfService:
         """State what the diagram could not show, rather than quietly showing less."""
         if not factors.omitted and not factors.unpresentable:
             return
-        pdf.set_font("Helvetica", "", 9)
+        _set_pack_font(pdf, size=9)
         if factors.omitted:
             _write_line(
                 pdf,
@@ -733,7 +721,7 @@ class InvestigationPackPdfService:
 
         chronology = normalise_chronology_events(feed)
         self._section_heading(pdf, "Chronology", brand)
-        pdf.set_font("Helvetica", "", 10)
+        _set_pack_font(pdf, size=10)
 
         if not chronology.events:
             _write_line(pdf, chronology_summary_line(chronology), height=4.5)
@@ -742,7 +730,7 @@ class InvestigationPackPdfService:
             return
 
         if audience not in _CHRONOLOGY_AUDIENCES:
-            pdf.set_font("Helvetica", "I", 9)
+            _set_pack_font(pdf, size=9)
             _write_line(pdf, _CHRONOLOGY_WITHHELD, height=4.5)
             pdf.ln(1)
             return
@@ -752,7 +740,7 @@ class InvestigationPackPdfService:
             draw_chronology_figure(pdf, chronology, brand=brand)
         except Exception:  # noqa: BLE001 - a pack without its figure beats a failed export
             logger.exception("Investigation pack chronology figure failed for pack %s", pack.get("pack_uuid"))
-            pdf.set_font("Helvetica", "I", 9)
+            _set_pack_font(pdf, size=9)
             _write_line(
                 pdf,
                 "The chronology figure could not be drawn for this pack. The entries are listed below.",
@@ -761,7 +749,7 @@ class InvestigationPackPdfService:
 
         self._render_chronology_entries(pdf, chronology)
         self._render_chronology_gaps(pdf, chronology)
-        pdf.set_font("Helvetica", "I", 8)
+        _set_pack_font(pdf, size=8)
         _write_line(pdf, _CHRONOLOGY_PROVENANCE[provenance], height=4)
         pdf.ln(1)
 
@@ -769,9 +757,9 @@ class InvestigationPackPdfService:
     def _render_chronology_entries(pdf: Any, chronology: ChronologySet) -> None:
         """The newest entries in words, because markers alone cannot be read."""
         events = list(reversed(chronology.events))[:_CHRONOLOGY_ENTRY_ROWS]
-        pdf.set_font("Helvetica", "B", 9)
+        _set_pack_font(pdf, bold=True, size=9)
         _write_line(pdf, f"Most recent entries ({len(events)} of {len(chronology.events)})", height=5)
-        pdf.set_font("Helvetica", "", 9)
+        _set_pack_font(pdf, size=9)
         for event in events:
             line = f"- {format_stamp(event.at)} - {event.origin_label} - {event.label}"
             if event.detail:
@@ -783,7 +771,7 @@ class InvestigationPackPdfService:
         """State what the chronology could not show, rather than quietly showing less."""
         if not chronology.omitted and not chronology.unplaceable:
             return
-        pdf.set_font("Helvetica", "", 9)
+        _set_pack_font(pdf, size=9)
         if chronology.omitted:
             _write_line(
                 pdf,
@@ -803,7 +791,7 @@ class InvestigationPackPdfService:
     @staticmethod
     def _section_heading(pdf: Any, title: str, brand: tuple[int, int, int]) -> None:
         pdf.set_text_color(*brand)
-        pdf.set_font("Helvetica", "B", 12)
+        _set_pack_font(pdf, bold=True, size=12)
         _write_line(pdf, title, height=7)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Helvetica", "", 10)
+        _set_pack_font(pdf, size=10)
