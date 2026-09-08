@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import desc, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +38,13 @@ from src.domain.models.investigation import (
     InvestigationTemplate,
 )
 from src.domain.models.user import User
+from src.domain.services.investigation_pack_content import (
+    expand_omitted_pack_keys,
+    iter_source_section_items,
+    load_investigation_pack_sources,
+    overlay_investigation_sections,
+    source_keys_replaced_by_overlay,
+)
 from src.domain.services.investigation_structure_normalize import (
     build_run_data_json_from_rows,
     build_structure_json_from_rows,
@@ -681,66 +688,78 @@ class InvestigationService:
         return redacted_value
 
     @classmethod
+    def _copy_redacted_pack_section(
+        cls,
+        audience: CustomerPackAudience,
+        section_key: str,
+        section_data: Any,
+        redaction_log: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        copied: Dict[str, Any] = {}
+        if not isinstance(section_data, dict):
+            return copied
+        for field_id, field_value in section_data.items():
+            if field_id in {"id", "section_id", "title", "name", "fields"}:
+                continue
+            copied[field_id] = cls._redact_customer_pack_field(
+                audience,
+                section_key,
+                field_id,
+                field_value,
+                redaction_log,
+            )
+        return copied
+
+    @classmethod
     def _build_customer_pack_sections(
         cls,
         investigation: InvestigationRun,
         audience: CustomerPackAudience,
         approved_omits: set[str],
+        *,
+        findings: Optional[Sequence[Any]] = None,
+        rca: Optional[Dict[str, Any]] = None,
+        capa_actions: Optional[Sequence[Any]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         redaction_log: List[Dict[str, Any]] = []
         sections: Dict[str, Any] = {}
-        source_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
-        raw_sections = source_data.get("sections", {})
-        # Support dict map ({section_id: fields}) and list/from-record shapes.
-        if isinstance(raw_sections, dict):
-            section_items = list(raw_sections.items())
-        elif isinstance(raw_sections, list):
-            section_items = []
-            for idx, entry in enumerate(raw_sections):
-                if not isinstance(entry, dict):
-                    continue
-                section_key = str(entry.get("id") or entry.get("section_id") or f"section_{idx}")
-                fields = entry.get("fields") if isinstance(entry.get("fields"), dict) else entry
-                section_items.append((section_key, fields))
-        else:
-            section_items = []
+        section_items = iter_source_section_items(investigation)
+        overlay = overlay_investigation_sections(findings=findings, rca=rca, capa_actions=capa_actions)
+        replaced = source_keys_replaced_by_overlay(findings=findings, rca=rca, capa_actions=capa_actions)
+        present_keys = {key for key, _ in section_items} | set(overlay)
+        withheld = expand_omitted_pack_keys(approved_omits, present_keys)
+        logged_omits: set[str] = set()
 
-        section_keys_present = {str(key) for key, _ in section_items}
+        def _log_omit(section_key: str) -> None:
+            if section_key in logged_omits:
+                return
+            logged_omits.add(section_key)
+            redaction_log.append(
+                {
+                    "field_path": section_key,
+                    "redaction_type": "SECTION_OMIT_APPROVED",
+                    "original_type": "section",
+                }
+            )
 
         for section_id, section_data in section_items:
             section_key = str(section_id)
-            if section_key in approved_omits:
-                redaction_log.append(
-                    {
-                        "field_path": section_key,
-                        "redaction_type": "SECTION_OMIT_APPROVED",
-                        "original_type": "section",
-                    }
-                )
+            if section_key in withheld:
+                _log_omit(section_key)
                 continue
+            if section_key in replaced:
+                continue
+            sections[section_key] = cls._copy_redacted_pack_section(audience, section_key, section_data, redaction_log)
 
-            sections[section_key] = {}
-            if isinstance(section_data, dict):
-                for field_id, field_value in section_data.items():
-                    if field_id in {"id", "section_id", "title", "name", "fields"}:
-                        continue
-                    sections[section_key][field_id] = cls._redact_customer_pack_field(
-                        audience,
-                        section_key,
-                        field_id,
-                        field_value,
-                        redaction_log,
-                    )
+        for section_key, section_data in overlay.items():
+            if section_key in withheld:
+                _log_omit(section_key)
+                continue
+            sections[section_key] = cls._copy_redacted_pack_section(audience, section_key, section_data, redaction_log)
 
-        for section_key in approved_omits:
-            if section_key not in section_keys_present:
-                redaction_log.append(
-                    {
-                        "field_path": section_key,
-                        "redaction_type": "SECTION_OMIT_APPROVED",
-                        "original_type": "section",
-                    }
-                )
+        for omit_id in approved_omits:
+            if omit_id not in present_keys:
+                _log_omit(str(omit_id))
 
         return sections, redaction_log
 
@@ -790,8 +809,16 @@ class InvestigationService:
         evidence_assets: List[EvidenceAsset],
         generated_by_id: int,
         generated_by_role: Optional[str] = None,
+        findings: Optional[Sequence[Any]] = None,
+        rca: Optional[Dict[str, Any]] = None,
+        capa_actions: Optional[Sequence[Any]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
         """Generate customer pack with redaction rules applied.
+
+        ``findings``, ``rca`` and ``capa_actions`` are optional overlays the
+        generate path loads tenant-scoped. ``None`` means that overlay was not
+        consulted (unit tests, older callers). An empty list/dict is an honest
+        empty investigation section — nothing is invented.
 
         Returns:
             Tuple of (pack_content, redaction_log, included_assets)
@@ -801,6 +828,9 @@ class InvestigationService:
             investigation,
             audience,
             approved_omits,
+            findings=findings,
+            rca=rca,
+            capa_actions=capa_actions,
         )
         content: Dict[str, Any] = {
             "investigation_reference": investigation.reference_number,
@@ -1689,12 +1719,22 @@ class InvestigationService:
         assets_result = await db.execute(assets_query)
         evidence_assets = list(assets_result.scalars().all())
 
+        sources = await load_investigation_pack_sources(
+            db,
+            investigation=investigation,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+        )
+
         content, redaction_log, included_assets = cls.generate_customer_pack(
             investigation=investigation,
             audience=audience_enum,
             evidence_assets=evidence_assets,
             generated_by_id=user_id,
             generated_by_role=None,
+            findings=sources.findings,
+            rca=sources.rca,
+            capa_actions=sources.capa_actions,
         )
 
         pack = cls.create_customer_pack_entity(
