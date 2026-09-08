@@ -1,4 +1,4 @@
-"""Unit tests for the pack drawing helpers and the chronology figure (INV-C15)."""
+"""Unit tests for the pack drawing helpers, the chronology figure (INV-C15) and the ICAM diagram (INV-C16)."""
 
 from __future__ import annotations
 
@@ -10,16 +10,24 @@ import pytest
 
 from src.domain.services import investigation_pack_draw as draw
 from src.domain.services.investigation_pack_draw import (
+    ICAM_CATEGORIES,
+    ICAM_CATEGORY_LABELS,
+    ICAM_DEPTH_LABELS,
+    ICAM_DEPTH_SHAPES,
+    ICAM_DEPTHS,
     ORIGIN_INVESTIGATION,
     ORIGIN_SOURCE,
     ChronologyEvent,
     ChronologySet,
     Frame,
+    IcamFactor,
+    IcamFactorSet,
     LegendEntry,
     chronology_summary_line,
     content_width,
     draw_arrow,
     draw_chronology_figure,
+    draw_icam_factors_figure,
     draw_legend,
     draw_marker,
     draw_text,
@@ -27,9 +35,12 @@ from src.domain.services.investigation_pack_draw import (
     format_date,
     format_stamp,
     humanise_key,
+    icam_figure_height,
+    icam_summary_line,
     linear_positions,
     mix,
     normalise_chronology_events,
+    normalise_icam_factors,
     pdf_safe,
     plural,
     readable_text_rgb,
@@ -590,3 +601,480 @@ class TestChronologyEventShape:
         assert chronology.count_for(ORIGIN_SOURCE) == 4
         assert bool(ChronologySet()) is False
         assert ChronologySet().first is None
+
+
+# ---------------------------------------------------------------------------
+# ICAM contributing-factor figure (INV-C16)
+# ---------------------------------------------------------------------------
+
+BRAND = (78, 118, 10)
+
+ORGANISATIONAL = "organisational_factors"
+TASK_ENVIRONMENTAL = "task_environmental_conditions"
+INDIVIDUAL_TEAM = "individual_team_actions"
+ABSENT_DEFENCES = "absent_failed_defences"
+
+
+def _factor(**overrides: object) -> dict:
+    """One stored ICAM factor in the shape the pack payload carries."""
+    entry: dict = {
+        "id": 1,
+        "category": ORGANISATIONAL,
+        "cause": "No refresher training schedule",
+        "sub_causes": [],
+        "depth": None,
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _fixture_factors() -> dict:
+    """Factors in all four ICAM categories: sub-causes, all three depths, and one unclassified."""
+    return {
+        "factors": [
+            _factor(
+                id=4,
+                cause="No refresher training schedule",
+                sub_causes=["Budget withdrawn", "No owner named"],
+                depth="underlying",
+            ),
+            _factor(id=7, cause="Guard removal needs no permit to work", depth="root"),
+            _factor(
+                id=2,
+                category=TASK_ENVIRONMENTAL,
+                cause="Mill floor poorly lit at shift change",
+                depth="immediate",
+            ),
+            _factor(id=9, category=INDIVIDUAL_TEAM, cause="Operator reached into the running mill"),
+            _factor(
+                id=5,
+                category=ABSENT_DEFENCES,
+                cause="Interlock bypassed with a spare key",
+                depth="immediate",
+            ),
+        ],
+        "unmapped_categories": [],
+        "unpresentable": 0,
+    }
+
+
+def _texts(ops: list[dict]) -> list[str]:
+    return [op["args"][2] for op in ops if op["op"] == "text"]
+
+
+def _baseline_of(ops: list[dict], needle: str) -> float:
+    return next(op["args"][1] for op in ops if op["op"] == "text" and needle in op["args"][2])
+
+
+class TestIcamVocabularyContract:
+    def test_categories_labels_and_depths_are_pinned_to_the_c12_service(self) -> None:
+        # The drawing layer copies this vocabulary rather than importing the
+        # factors service, which pulls in four ORM models. This test is what
+        # stops a taxonomy change silently emptying a band.
+        from src.domain.models.rca_tools import CausalDepth
+        from src.domain.services import investigation_factors_service as c12
+
+        assert ICAM_CATEGORIES == tuple(category.value for category in c12.ICAM_CATEGORY_ORDER)
+        assert ICAM_CATEGORY_LABELS == {
+            category.value: c12.CATEGORY_LABELS[category] for category in c12.ICAM_CATEGORY_ORDER
+        }
+        assert ICAM_DEPTHS == tuple(depth.value for depth in CausalDepth)
+        assert ICAM_DEPTH_LABELS == {depth.value: c12.DEPTH_LABELS[depth].capitalize() for depth in CausalDepth}
+        assert draw._ICAM_SUB_CAUSE_CAP == c12.FACTOR_SUB_CAUSES_MAX
+
+    def test_every_depth_has_its_own_marker_shape_so_mono_print_still_reads(self) -> None:
+        assert set(ICAM_DEPTH_SHAPES) == set(ICAM_DEPTHS)
+        assert len(set(ICAM_DEPTH_SHAPES.values())) == len(ICAM_DEPTHS)
+
+    def test_there_is_no_fifth_taxonomy_and_no_6m_band(self) -> None:
+        for legacy in ("people", "machine", "material", "measurement", "method", "mother_nature"):
+            assert legacy not in ICAM_CATEGORIES
+            assert legacy not in ICAM_CATEGORY_LABELS
+
+
+class TestNormaliseIcamFactors:
+    def test_reads_ids_categories_sub_causes_and_depth_from_the_stored_causes(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+
+        assert [(f.id, f.category, f.depth) for f in factors.factors] == [
+            (4, ORGANISATIONAL, "underlying"),
+            (7, ORGANISATIONAL, "root"),
+            (2, TASK_ENVIRONMENTAL, "immediate"),
+            (9, INDIVIDUAL_TEAM, None),
+            (5, ABSENT_DEFENCES, "immediate"),
+        ]
+        assert factors.factors[0].sub_causes == ("Budget withdrawn", "No owner named")
+        assert factors.with_depth == 4
+
+    def test_orders_by_icam_category_then_stored_position_not_by_id(self) -> None:
+        raw = {
+            "factors": [
+                _factor(id=99, category=ABSENT_DEFENCES, cause="last category, lowest position"),
+                _factor(id=1, category=ORGANISATIONAL, cause="first category, second position"),
+                _factor(id=2, category=ORGANISATIONAL, cause="first category, first position"),
+            ]
+        }
+
+        factors = normalise_icam_factors(raw)
+
+        assert [f.cause for f in factors.factors] == [
+            "first category, second position",
+            "first category, first position",
+            "last category, lowest position",
+        ]
+
+    def test_a_bare_list_is_accepted_as_well_as_the_payload_mapping(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors()["factors"])
+
+        assert len(factors.factors) == 5
+        assert factors.unpresentable == 0
+
+    def test_an_investigation_factor_object_from_c12_reads_unchanged(self) -> None:
+        # Proves the enum members are unwrapped to their stored values rather
+        # than str()-ed into "FishboneCategory.ORGANISATIONAL".
+        from src.domain.models.rca_tools import CausalDepth, FishboneCategory
+        from src.domain.services.investigation_factors_service import InvestigationFactor
+
+        row = InvestigationFactor(
+            id=3,
+            investigation_id=11,
+            category=FishboneCategory.ABSENT_FAILED_DEFENCES,
+            cause="Interlock bypassed",
+            sub_causes=["Spare key kept on the panel"],
+            depth=CausalDepth.ROOT,
+        )
+
+        factors = normalise_icam_factors([row])
+
+        assert [(f.id, f.category, f.depth) for f in factors.factors] == [(3, ABSENT_DEFENCES, "root")]
+        assert factors.factors[0].label == "Interlock bypassed (Spare key kept on the panel)"
+
+    def test_a_pre_dec1_6m_key_is_counted_and_named_never_recategorised(self) -> None:
+        raw = {
+            "factors": [
+                _factor(id=1, cause="A real ICAM factor"),
+                _factor(id=2, category="machine", cause="Conveyor belt worn"),
+                _factor(id=3, category="people", cause="Operator not briefed"),
+            ]
+        }
+
+        factors = normalise_icam_factors(raw)
+
+        assert [f.cause for f in factors.factors] == ["A real ICAM factor"]
+        assert factors.unmapped_categories == ("machine", "people")
+        assert factors.unpresentable == 2
+        for category in ICAM_CATEGORIES:
+            assert "Conveyor belt worn" not in [f.cause for f in factors.for_category(category)]
+
+    def test_c12_counts_on_the_payload_are_carried_not_recomputed(self) -> None:
+        raw = {
+            "factors": [_factor(id=1)],
+            "unmapped_categories": ["mother_nature"],
+            "unpresentable": 3,
+        }
+
+        factors = normalise_icam_factors(raw)
+
+        assert factors.unmapped_categories == ("mother_nature",)
+        assert factors.unpresentable == 3
+
+    def test_an_entry_with_no_usable_cause_is_counted_not_guessed_at(self) -> None:
+        raw = {
+            "factors": [
+                _factor(id=1, cause="   "),
+                _factor(id=2, cause=None),
+                _factor(id=3, cause={"nested": "object"}),
+                _factor(id=4, cause="Kept"),
+            ]
+        }
+
+        factors = normalise_icam_factors(raw)
+
+        assert [f.cause for f in factors.factors] == ["Kept"]
+        assert factors.unpresentable == 3
+
+    def test_an_unrecognised_depth_reads_as_no_recorded_depth_not_as_immediate(self) -> None:
+        factors = normalise_icam_factors([_factor(id=1, depth="catastrophic"), _factor(id=2, depth="")])
+
+        assert [f.depth for f in factors.factors] == [None, None]
+        assert [f.depth_label for f in factors.factors] == [None, None]
+
+    def test_depth_is_case_insensitive_but_never_invented(self) -> None:
+        assert normalise_icam_factors([_factor(depth="ROOT")]).factors[0].depth == "root"
+        assert normalise_icam_factors([_factor(depth=" Underlying ")]).factors[0].depth == "underlying"
+
+    def test_junk_and_malformed_input_yields_an_empty_set_rather_than_raising(self) -> None:
+        for raw in (None, "nonsense", 7, {"factors": "nonsense"}, {}):
+            assert normalise_icam_factors(raw).factors == ()
+
+    def test_junk_entries_inside_a_list_are_counted_as_unpresentable(self) -> None:
+        factors = normalise_icam_factors([None, 3, "x", _factor(id=1)])
+
+        assert (len(factors.factors), factors.unpresentable) == (1, 3)
+
+    def test_counts_survive_a_payload_whose_factor_list_is_unusable(self) -> None:
+        factors = normalise_icam_factors({"factors": None, "unmapped_categories": ["people"], "unpresentable": 2})
+
+        assert factors.factors == ()
+        assert factors.unmapped_categories == ("people",)
+        assert factors.unpresentable == 2
+
+    def test_sub_causes_are_bounded_latin1_and_keep_their_order(self) -> None:
+        factors = normalise_icam_factors(
+            [_factor(sub_causes=["\u2014 first", "", None, {"a": 1}, "x" * 5000] + [f"s{i}" for i in range(40)])]
+        )
+
+        sub_causes = factors.factors[0].sub_causes
+        assert sub_causes[0] == "? first"
+        assert len(sub_causes) <= draw._ICAM_SUB_CAUSE_CAP
+        for text in sub_causes:
+            assert len(text) <= draw._ICAM_SUB_CAUSE_CHARS
+            assert text.encode("latin-1").decode("latin-1") == text
+
+    def test_cause_text_is_bounded_and_latin1_safe(self) -> None:
+        factors = normalise_icam_factors([_factor(cause="\u2014 " + "x" * 5000)])
+
+        cause = factors.factors[0].cause
+        assert len(cause) <= draw._ICAM_CAUSE_CHARS
+        assert cause.startswith("? ")
+
+    def test_a_missing_id_reads_as_zero_rather_than_raising(self) -> None:
+        factors = normalise_icam_factors([_factor(id=None), _factor(id="not a number"), _factor(id="12")])
+
+        assert [f.id for f in factors.factors] == [0, 0, 12]
+
+    def test_the_cap_keeps_icam_order_and_reports_what_it_dropped(self) -> None:
+        raw = [_factor(id=index, cause=f"Factor {index}") for index in range(40)]
+
+        factors = normalise_icam_factors(raw, cap=10)
+
+        assert len(factors.factors) == 10
+        assert factors.omitted == 30
+        assert [f.cause for f in factors.factors] == [f"Factor {index}" for index in range(10)]
+
+    def test_default_cap_keeps_the_figure_inside_one_page(self) -> None:
+        assert draw.ICAM_FACTOR_CAP == 24
+        capped = normalise_icam_factors([_factor(id=index) for index in range(200)])
+        assert len(capped.factors) == 24
+        assert icam_figure_height(capped) < draw.usable_page_height(figure_pdf())
+
+    def test_factor_label_is_the_c12_line_without_its_prefix_or_bracket(self) -> None:
+        from src.domain.models.rca_tools import CausalDepth, FishboneCategory
+        from src.domain.services.investigation_factors_service import factor_line
+
+        factor = normalise_icam_factors(
+            [_factor(cause="No refresher schedule", sub_causes=["Budget withdrawn"], depth="underlying")]
+        ).factors[0]
+        c12_line = factor_line(
+            FishboneCategory.ORGANISATIONAL,
+            "No refresher schedule",
+            ["Budget withdrawn"],
+            CausalDepth.UNDERLYING,
+        )
+
+        assert factor.label == "No refresher schedule (Budget withdrawn)"
+        assert c12_line == f"{factor.category_label}: {factor.label} [{factor.depth_label.lower()}]"
+
+    def test_set_helpers_report_their_own_shape(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+
+        assert bool(factors) is True
+        assert bool(IcamFactorSet()) is False
+        assert len(factors.for_category(ORGANISATIONAL)) == 2
+        assert factors.for_category("machine") == ()
+        assert IcamFactor(id=1, category="machine", cause="x").category_label == "Machine"
+
+
+class TestIcamSummaryLine:
+    def test_states_the_count_and_how_many_carry_a_depth(self) -> None:
+        line = icam_summary_line(normalise_icam_factors(_fixture_factors()))
+
+        assert line == (
+            "5 contributing factors recorded across the four ICAM categories, " "4 with a recorded HSG245 causal depth."
+        )
+
+    def test_single_factor_reads_as_one(self) -> None:
+        line = icam_summary_line(normalise_icam_factors([_factor(depth=None)]))
+
+        assert line == (
+            "1 contributing factor recorded across the four ICAM categories, " "0 with a recorded HSG245 causal depth."
+        )
+
+    def test_empty_set_says_so_rather_than_claiming_a_diagram(self) -> None:
+        assert icam_summary_line(IcamFactorSet()) == (
+            "No ICAM contributing factors are recorded for this investigation."
+        )
+
+    def test_a_capped_diagram_reports_what_is_recorded_not_what_it_drew(self) -> None:
+        # "10 contributing factors recorded" would be false on an investigation
+        # with 40 of them, even with the shortfall stated a line later.
+        factors = normalise_icam_factors([_factor(id=index, depth="root") for index in range(40)], cap=10)
+
+        assert factors.recorded == 40
+        assert icam_summary_line(factors) == (
+            "40 contributing factors recorded across the four ICAM categories; the diagram shows the first 10, "
+            "10 of them with a recorded HSG245 causal depth."
+        )
+
+
+class TestIcamFigure:
+    def test_four_band_figure_matches_the_golden_fixture(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+
+        ops, pdf_bytes, frame = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+
+        assert_matches_golden("investigation_icam_four_bands", ops)
+        assert pdf_bytes.startswith(b"%PDF-")
+        assert frame.h == pytest.approx(icam_figure_height(factors))
+
+    def test_partly_populated_figure_matches_the_golden_fixture(self) -> None:
+        raw = {"factors": [_factor(id=1, depth="root"), _factor(id=2, category=INDIVIDUAL_TEAM, cause="Reached in")]}
+        factors = normalise_icam_factors(raw)
+
+        ops, pdf_bytes, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+
+        assert_matches_golden("investigation_icam_partial_bands", ops)
+        assert pdf_bytes.startswith(b"%PDF-")
+
+    def test_draws_all_four_icam_bands_in_c12_order(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+
+        ops, _, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+
+        baselines = [_baseline_of(ops, ICAM_CATEGORY_LABELS[category]) for category in ICAM_CATEGORIES]
+        assert baselines == sorted(baselines)
+        assert len(baselines) == 4
+
+    def test_each_factor_is_drawn_inside_its_own_category_band(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+
+        ops, _, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+
+        organisational = _baseline_of(ops, ICAM_CATEGORY_LABELS[ORGANISATIONAL])
+        task = _baseline_of(ops, ICAM_CATEGORY_LABELS[TASK_ENVIRONMENTAL])
+        individual = _baseline_of(ops, ICAM_CATEGORY_LABELS[INDIVIDUAL_TEAM])
+        assert organisational < _baseline_of(ops, "No refresher training schedule") < task
+        assert organisational < _baseline_of(ops, "Guard removal needs no permit") < task
+        assert task < _baseline_of(ops, "Mill floor poorly lit") < individual
+
+    def test_sub_causes_and_depth_words_reach_the_page(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+
+        ops, _, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+        texts = _texts(ops)
+
+        assert "No refresher training schedule (Budget withdrawn; No owner named)" in texts
+        # Three legend keys plus one chip per classified factor; the unclassified
+        # factor contributes no chip.
+        assert texts.count("Underlying cause") == 2
+        assert texts.count("Root cause") == 2
+        assert texts.count("Immediate cause") == 3
+
+    def test_a_factor_with_no_recorded_depth_is_drawn_without_a_depth_claim(self) -> None:
+        factors = normalise_icam_factors([_factor(cause="Operator reached in", depth=None)])
+
+        ops, _, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+        texts = _texts(ops)
+
+        assert "Operator reached in" in texts
+        # Only the three legend keys, so no chip was drawn against the row.
+        assert [texts.count(ICAM_DEPTH_LABELS[depth]) for depth in ICAM_DEPTHS] == [1, 1, 1]
+
+    def test_an_empty_category_says_so_rather_than_being_dropped(self) -> None:
+        factors = normalise_icam_factors([_factor(id=1)])
+
+        ops, _, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+        texts = _texts(ops)
+
+        assert texts.count("None recorded.") == 3
+        assert texts.count("0 factors") == 3
+        assert texts.count("1 factor") == 2  # the populated band, plus the figure total
+
+    def test_an_empty_set_reserves_nothing_and_draws_nothing(self) -> None:
+        pdf = figure_pdf()
+        start = pdf.get_y()
+
+        ops, _, frame = record(lambda recorder: draw_icam_factors_figure(recorder, IcamFactorSet(), brand=BRAND))
+
+        assert ops == []
+        assert frame.h == 0.0
+        assert icam_figure_height(IcamFactorSet()) == 0.0
+        assert draw_icam_factors_figure(pdf, IcamFactorSet(), brand=BRAND).y == pytest.approx(start)
+        assert pdf.get_y() == pytest.approx(start)
+
+    def test_figure_stays_inside_its_frame_and_the_printable_page(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+        pdf = figure_pdf()
+
+        frame = draw_icam_factors_figure(pdf, factors, brand=BRAND)
+
+        assert frame.bottom <= pdf.h - pdf.b_margin
+        assert frame.right <= pdf.w - pdf.r_margin
+
+    def test_figure_breaks_the_page_rather_than_drawing_over_the_footer(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+        pdf = figure_pdf()
+        pdf.set_y(pdf.h - pdf.b_margin - 12)
+
+        frame = draw_icam_factors_figure(pdf, factors, brand=BRAND)
+
+        assert pdf.page_no() == 2
+        assert frame.bottom <= pdf.h - pdf.b_margin
+
+    def test_a_hand_built_oversized_set_is_clipped_not_painted_over_the_footer(self) -> None:
+        # Unreachable through normalise_icam_factors, which caps the rows. A
+        # caller that builds a set directly must still not reach the footer.
+        oversized = IcamFactorSet(
+            factors=tuple(IcamFactor(id=i, category=ORGANISATIONAL, cause=f"Factor {i}") for i in range(400))
+        )
+
+        ops, pdf_bytes, frame = record(lambda pdf: draw_icam_factors_figure(pdf, oversized, brand=BRAND))
+
+        assert pdf_bytes.startswith(b"%PDF-")
+        for op in ops:
+            if op["op"] in {"text", "rect"}:
+                assert op["args"][1] <= frame.bottom + 0.05
+
+    def test_colour_and_font_state_is_left_clean_for_the_next_section(self) -> None:
+        factors = normalise_icam_factors(_fixture_factors())
+        pdf = figure_pdf()
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_line_width(0.6)
+
+        draw_icam_factors_figure(pdf, factors, brand=BRAND)
+
+        assert (pdf.font_style, round(pdf.font_size_pt), pdf.line_width) == ("B", 11, 0.6)
+
+    def test_figure_text_is_latin1_safe(self) -> None:
+        factors = normalise_icam_factors(
+            [_factor(cause="Ystrad \u2014 Mynach", sub_causes=["20\u00b0C"], depth="root")]
+        )
+
+        ops, _, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+
+        for text in _texts(ops):
+            assert text.encode("latin-1").decode("latin-1") == text
+
+    def test_long_cause_text_is_shortened_rather_than_painted_over_the_depth_chip(self) -> None:
+        factors = normalise_icam_factors([_factor(cause="An extremely long contributing factor " * 20, depth="root")])
+
+        ops, _, frame = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+        row = next(op for op in ops if op["op"] == "text" and op["args"][2].startswith("An extremely long"))
+
+        assert row["args"][2].endswith("...")
+        assert row["args"][0] + 100 < frame.right
+
+    def test_depth_colours_are_a_single_hue_not_a_rag_scale(self) -> None:
+        # A root cause sits further back than an immediate one; it is not worse.
+        shades = [draw._icam_depth_rgb(BRAND, depth) for depth in ICAM_DEPTHS]
+
+        assert shades[0] > shades[1] > shades[2]
+        assert draw._icam_depth_rgb(BRAND, None) == BRAND
+        assert draw._icam_depth_rgb(BRAND, "catastrophic") == BRAND
+
+    def test_committed_fixtures_are_json_a_reviewer_can_read(self) -> None:
+        from tests.unit._pdf_golden import GOLDEN_DIR
+
+        for name in ("investigation_icam_four_bands", "investigation_icam_partial_bands"):
+            payload = json.loads((GOLDEN_DIR / f"{name}.json").read_text(encoding="utf-8"))
+            assert payload and all({"op", "args", "kwargs"} == set(entry) for entry in payload)
