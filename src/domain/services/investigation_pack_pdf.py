@@ -9,6 +9,7 @@ redaction rules removed stays removed, because this only sees the stored pack.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from functools import partial
 from typing import Any, Callable, Optional
@@ -28,8 +29,15 @@ from src.domain.services.investigation_pack_draw import (
     normalise_icam_factors,
     plural,
 )
-from src.domain.services.investigation_pack_ir import DocumentMeta, PackDocument, Section
-from src.domain.services.investigation_pack_pdf_writer import create_pack_pdf, write_contents, write_cover
+from src.domain.services.investigation_pack_ir import (
+    DocumentMeta,
+    KeyValueBlock,
+    KeyValueRow,
+    PackDocument,
+    Section,
+    TableBlock,
+)
+from src.domain.services.investigation_pack_pdf_writer import create_pack_pdf, write_block, write_contents, write_cover
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +118,17 @@ _PACK_FINDINGS = "findings"
 _PACK_ROOT_CAUSE = "root-cause"
 _PACK_CAPA = "capa"
 
+# Catalogue titles replace humanised snake_case so contents and body match the
+# template's 01 Incident details … 09 Pack integrity numbering.
+_CATALOGUE_TITLES = {
+    "section_1_details": "Incident details",
+    _PACK_FINDINGS: "Findings",
+    _PACK_ROOT_CAUSE: "Root cause analysis",
+    _PACK_CAPA: "CAPA",
+}
+
+_ISO_DATE = re.compile(r"^(\d{4}-\d{2}-\d{2})([Tt ].+)?$")
+
 # ---------------------------------------------------------------------------
 # ICAM contributing-factor diagram (INV-C16)
 # ---------------------------------------------------------------------------
@@ -124,7 +143,7 @@ _PACK_ICAM_FACTORS = "icam_factors"
 _ICAM_HEADING = "ICAM contributing factors"
 _ICAM_FIGURE_NOTE = (
     "The diagram groups the recorded contributing factors by ICAM category and shows the HSG245 causal depth "
-    "recorded against each. Where an entry is too long for its row it is shortened with an ellipsis."
+    "recorded against each. Factor wording is wrapped in the category block; it is not shortened with an ellipsis."
 )
 _ICAM_FIGURE_FAILED = (
     "The ICAM contributing-factor diagram could not be drawn for this pack. The factors are listed below."
@@ -150,6 +169,37 @@ def format_field_value(value: Any) -> str:
             return "None recorded"
         return "\n".join(f"{humanise_key(k)}: {format_field_value(v)}" for k, v in value.items())
     return str(value)
+
+
+def _catalogue_title(section_key: Any) -> str:
+    key = str(section_key or "")
+    return _CATALOGUE_TITLES.get(key, humanise_key(key))
+
+
+def _uk_stamp(value: str) -> str | None:
+    """UK date (and optional UTC time) from an ISO-8601 stored stamp, else None."""
+    raw = value.strip()
+    if not _ISO_DATE.match(raw):
+        return None
+    try:
+        stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None and len(raw) == 10:
+        return f"{stamp.day} {stamp.strftime('%B %Y')}"
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    stamp = stamp.astimezone(timezone.utc)
+    return f"{stamp.day} {stamp.strftime('%B %Y')}, {stamp.strftime('%H:%M')} UTC"
+
+
+def format_pack_field(value: Any) -> str:
+    """Like format_field_value, but ISO timestamps in the body become UK dates."""
+    if isinstance(value, str):
+        uk = _uk_stamp(value)
+        if uk is not None:
+            return uk
+    return format_field_value(value)
 
 
 def summarise_redactions(redaction_log: Any) -> list[tuple[str, int]]:
@@ -331,25 +381,31 @@ class InvestigationPackPdfService:
             confidentiality=confidentiality,
             incident_reference=_incident_reference(pack, content),
         )
-        contents_sections = (
-            Section(id="report", heading="Incident details", blocks=(), in_contents=True),
-            Section(id="findings", heading="Findings", blocks=(), in_contents=True),
-            Section(id="rca", heading="Root cause analysis", blocks=(), in_contents=True),
-            Section(id="capa", heading="CAPA", blocks=(), in_contents=True),
-            Section(id="evidence", heading="Evidence schedule", blocks=(), in_contents=True),
-            Section(id="redaction", heading="Redaction summary", blocks=(), in_contents=True),
-            Section(id="integrity", heading="Pack integrity", blocks=(), in_contents=True),
+        raw_sections = content.get("sections")
+        section_map: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
+        chronology_feed_data, _chronology_provenance = chronology_feed(pack, content, timeline_events)
+        contents_list = [
+            Section(id=str(key), heading=_catalogue_title(key), blocks=(), in_contents=True) for key in section_map
+        ]
+        if chronology_feed_data is not None:
+            contents_list.append(Section(id="chronology", heading="Chronology", blocks=(), in_contents=True))
+        contents_list.extend(
+            (
+                Section(id="evidence", heading="Evidence schedule", blocks=(), in_contents=True),
+                Section(id="redaction", heading="Redaction summary", blocks=(), in_contents=True),
+                Section(id="integrity", heading="Pack integrity", blocks=(), in_contents=True),
+            )
         )
-        document = PackDocument(meta=meta, sections=contents_sections)
+        document = PackDocument(meta=meta, sections=tuple(contents_list))
 
         pdf = create_pack_pdf(meta)
         write_cover(pdf, meta)
         write_contents(pdf, document)
         pdf.add_page()
 
-        self._section_heading(pdf, "Report sections", brand)
-        self._render_report_sections(pdf, content.get("sections"), brand=brand, pack_uuid=pack.get("pack_uuid"))
-        pdf.ln(1)
+        chapter = self._render_report_sections(
+            pdf, section_map, brand=brand, pack_uuid=pack.get("pack_uuid"), start_at=1
+        )
 
         omitted = content.get("omitted_sections")
         if isinstance(omitted, list) and omitted:
@@ -361,19 +417,23 @@ class InvestigationPackPdfService:
                 height=4.5,
             )
             for section_key in omitted:
-                _write_line(pdf, f"- {humanise_key(section_key)}", height=4.5)
+                _write_line(pdf, f"- {_catalogue_title(section_key)}", height=4.5)
             pdf.ln(1)
 
-        self._render_chronology(
-            pdf,
-            pack=pack,
-            content=content,
-            audience=audience,
-            brand=brand,
-            timeline_events=timeline_events,
-        )
+        if chronology_feed_data is not None:
+            self._render_chronology(
+                pdf,
+                pack=pack,
+                content=content,
+                audience=audience,
+                brand=brand,
+                timeline_events=timeline_events,
+                heading=f"{chapter:02d} Chronology",
+            )
+            chapter += 1
 
-        self._section_heading(pdf, "Evidence schedule", brand)
+        self._section_heading(pdf, f"{chapter:02d} Evidence schedule", brand)
+        chapter += 1
         raw_assets = pack.get("included_assets")
         assets: list[Any] = raw_assets if isinstance(raw_assets, list) else []
         _set_pack_font(pdf, size=10)
@@ -400,7 +460,8 @@ class InvestigationPackPdfService:
         pdf.ln(1)
 
         redactions = summarise_redactions(pack.get("redaction_log"))
-        self._section_heading(pdf, "Redaction summary", brand)
+        self._section_heading(pdf, f"{chapter:02d} Redaction summary", brand)
+        chapter += 1
         _set_pack_font(pdf, size=10)
         if not redactions:
             _write_line(pdf, "No redactions were applied to this pack.")
@@ -409,7 +470,7 @@ class InvestigationPackPdfService:
                 _write_line(pdf, f"{humanise_key(kind)}: {count}")
         pdf.ln(1)
 
-        self._section_heading(pdf, "Pack integrity", brand)
+        self._section_heading(pdf, f"{chapter:02d} Pack integrity", brand)
         _set_pack_font(pdf, size=9)
         _write_line(pdf, f"Pack UUID: {pack.get('pack_uuid') or 'unknown'}", height=4.5)
         _write_line(pdf, f"Content SHA-256: {pack.get('checksum_sha256') or 'not recorded'}", height=4.5)
@@ -433,26 +494,29 @@ class InvestigationPackPdfService:
         *,
         brand: tuple[int, int, int],
         pack_uuid: Any = None,
-    ) -> None:
+        start_at: int = 1,
+    ) -> int:
         """Report sections. Investigation lists (findings, Whys, CAPA) are shaped, not dumped.
 
         ``brand`` and ``pack_uuid`` are only needed by the RCA section, which
         draws the ICAM figure (INV-C16) and logs the pack when it cannot. They
         are bound onto that one renderer rather than pushed onto every section.
+        Returns the next unused chapter number so contents and body stay aligned.
         """
         sections: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
         if not sections:
             _set_pack_font(pdf, size=10)
             _write_line(pdf, "No report sections were recorded on this investigation.")
-            return
+            return start_at
         renderers: dict[str, Callable[[Any, dict[str, Any]], None]] = {
             _PACK_FINDINGS: self._render_findings_section,
             _PACK_ROOT_CAUSE: partial(self._render_rca_section, brand=brand, pack_uuid=pack_uuid),
             _PACK_CAPA: self._render_capa_section,
         }
+        chapter = start_at
         for section_key, fields in sections.items():
-            _set_pack_font(pdf, bold=True, size=11)
-            _write_line(pdf, humanise_key(section_key), height=6)
+            self._section_heading(pdf, f"{chapter:02d} {_catalogue_title(section_key)}", brand)
+            chapter += 1
             _set_pack_font(pdf, size=10)
             if not isinstance(fields, dict) or not fields:
                 _write_line(pdf, "No content recorded for this section.", height=4.5)
@@ -464,14 +528,19 @@ class InvestigationPackPdfService:
             else:
                 self._render_generic_section_fields(pdf, fields)
             pdf.ln(1)
+        return chapter
 
     @staticmethod
     def _render_generic_section_fields(pdf: Any, fields: dict[str, Any]) -> None:
-        for field_key, field_value in fields.items():
-            _set_pack_font(pdf, bold=True, size=9)
-            _write_line(pdf, humanise_key(field_key), height=4.5)
-            _set_pack_font(pdf, size=10)
-            _write_line(pdf, _pdf_safe(format_field_value(field_value), max_len=_MAX_FIELD_CHARS), height=4.5)
+        write_block(
+            pdf,
+            KeyValueBlock(
+                rows=tuple(
+                    KeyValueRow(label=humanise_key(field_key), value=format_pack_field(field_value))
+                    for field_key, field_value in fields.items()
+                )
+            ),
+        )
 
     @staticmethod
     def _render_findings_section(pdf: Any, fields: dict[str, Any]) -> None:
@@ -486,7 +555,7 @@ class InvestigationPackPdfService:
                 body = item
             rendered = format_field_value(body)
             _set_pack_font(pdf, size=10)
-            _write_line(pdf, _pdf_safe(f"{index}. {rendered}", max_len=_MAX_FIELD_CHARS), height=4.5)
+            _write_line(pdf, _pdf_safe(f"{index:02d}. {rendered}", max_len=_MAX_FIELD_CHARS), height=4.5)
 
     @staticmethod
     def _render_why_entries(pdf: Any, whys: Any) -> None:
@@ -509,20 +578,23 @@ class InvestigationPackPdfService:
             _set_pack_font(pdf, bold=True, size=9)
             _write_line(pdf, f"Why {level}", height=4.5)
             _set_pack_font(pdf, size=10)
-            _write_line(
-                pdf,
-                _pdf_safe(f"Why: {format_field_value(raw.get('why'))}", max_len=_MAX_FIELD_CHARS),
-                height=4.5,
-            )
-            _write_line(
-                pdf,
-                _pdf_safe(f"Answer: {format_field_value(raw.get('answer'))}", max_len=_MAX_FIELD_CHARS),
-                height=4.5,
-            )
-            if raw.get("evidence"):
+            question = raw.get("why")
+            if isinstance(question, str) and question.strip():
                 _write_line(
                     pdf,
-                    _pdf_safe(f"Evidence: {format_field_value(raw.get('evidence'))}", max_len=_MAX_FIELD_CHARS),
+                    _pdf_safe(f"Question: {question.strip()}", max_len=_MAX_FIELD_CHARS),
+                    height=4.5,
+                )
+            _write_line(
+                pdf,
+                _pdf_safe(f"Answer: {format_pack_field(raw.get('answer'))}", max_len=_MAX_FIELD_CHARS),
+                height=4.5,
+            )
+            evidence = raw.get("evidence")
+            if isinstance(evidence, str) and evidence.strip():
+                _write_line(
+                    pdf,
+                    _pdf_safe(f"Evidence: {evidence.strip()}", max_len=_MAX_FIELD_CHARS),
                     height=4.5,
                 )
 
@@ -663,25 +735,28 @@ class InvestigationPackPdfService:
         if not isinstance(items, list) or not items:
             _write_line(pdf, _EMPTY_CAPA, height=4.5)
             return
+        rows: list[tuple[str, str]] = []
         for item in items:
             if not isinstance(item, dict):
-                _write_line(pdf, f"- {format_field_value(item)}", height=4.5)
+                rows.append(("", format_pack_field(item)))
                 continue
             title = str(item.get("title") or "").strip()
             reference = str(item.get("reference") or "").strip()
-            if reference and title:
-                line = f"- {reference} - {title}"
-            elif reference:
-                line = f"- {reference}"
-            else:
-                line = f"- {title}"
+            action = title or "—"
             why_level = item.get("why_level")
             if why_level is not None:
                 try:
-                    line = f"{line} (Why {int(why_level)})"
+                    action = f"{action} (Why {int(why_level)})"
                 except (TypeError, ValueError):
                     pass
-            _write_line(pdf, _pdf_safe(line, max_len=_MAX_FIELD_CHARS), height=4.5)
+            rows.append((reference or "—", action))
+        write_block(
+            pdf,
+            TableBlock(
+                columns=("Reference", "Action"),
+                rows=tuple(rows),
+            ),
+        )
 
     def _render_chronology(
         self,
@@ -692,6 +767,7 @@ class InvestigationPackPdfService:
         audience: str,
         brand: tuple[int, int, int],
         timeline_events: Any = None,
+        heading: str = "Chronology",
     ) -> None:
         """Chronology section (INV-C15): the figure, its entries, or an honest gap.
 
@@ -715,7 +791,7 @@ class InvestigationPackPdfService:
             return
 
         chronology = normalise_chronology_events(feed)
-        self._section_heading(pdf, "Chronology", brand)
+        self._section_heading(pdf, heading, brand)
         _set_pack_font(pdf, size=10)
 
         if not chronology.events:
