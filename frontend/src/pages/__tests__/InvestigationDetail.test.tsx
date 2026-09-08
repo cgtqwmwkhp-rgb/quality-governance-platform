@@ -110,6 +110,8 @@ vi.mock('../investigation/investigationReportHelpers', () => ({
 vi.mock('../investigation/investigationDetailApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../investigation/investigationDetailApi')>()),
   fetchCustomerPackPdf: vi.fn(),
+  getRca: vi.fn(),
+  saveRca: vi.fn(),
 }))
 
 vi.mock('../../components/EngineerPeoplePicker', () => ({
@@ -119,16 +121,16 @@ vi.mock('../../components/EngineerPeoplePicker', () => ({
     testId,
   }: {
     valueLabel?: string
-    onChange?: (next: { label: string; user?: { id: number; email: string }; hasLogin: boolean } | null) => void
+    onChange?: (
+      next: { label: string; user?: { id: number; email: string }; hasLogin: boolean } | null,
+    ) => void
     testId?: string
   }) => (
     <div>
       <input
         data-testid={testId || 'mock-engineer-people-picker'}
         value={valueLabel || ''}
-        onChange={(event) =>
-          onChange?.({ label: event.target.value, hasLogin: false })
-        }
+        onChange={(event) => onChange?.({ label: event.target.value, hasLogin: false })}
       />
       <button
         type="button"
@@ -217,6 +219,37 @@ function findingsResponse(bodies: string[], startId = 1) {
   }
 }
 
+/** INV-C10: build a workspace RCA response the way the API returns it. */
+function rcaResponse(
+  overrides: {
+    id?: number | null
+    problem_statement?: string
+    answers?: string[]
+    evidence?: string[]
+    root_cause?: string
+    contributing_factors?: string
+  } = {},
+) {
+  const answers = overrides.answers || []
+  const evidence = overrides.evidence || []
+  const whys = [1, 2, 3, 4, 5].map((level) => ({
+    level,
+    why: '',
+    answer: answers[level - 1] || '',
+    evidence: evidence[level - 1] || '',
+  }))
+  return {
+    data: {
+      id: overrides.id ?? (answers.some(Boolean) ? 11 : null),
+      investigation_id: 7,
+      problem_statement: overrides.problem_statement || '',
+      whys,
+      root_cause: overrides.root_cause || '',
+      contributing_factors: overrides.contributing_factors || '',
+    },
+  }
+}
+
 function renderPage() {
   return render(
     <BrowserRouter>
@@ -227,11 +260,13 @@ function renderPage() {
 
 describe('InvestigationDetail', () => {
   let client: Awaited<typeof import('../../api/client')>
+  let detailApi: Awaited<typeof import('../investigation/investigationDetailApi')>
 
   beforeEach(async () => {
     vi.clearAllMocks()
     mockNavigate.mockReset()
     client = await import('../../api/client')
+    detailApi = await import('../investigation/investigationDetailApi')
 
     client.investigationsApi.get.mockResolvedValue({ data: mockInvestigation })
     client.investigationsApi.getTimeline.mockResolvedValue({
@@ -263,6 +298,7 @@ describe('InvestigationDetail', () => {
       data: { can_close: false, reasons: ['STATUS_NOT_COMPLETE'] },
     })
     client.investigationsApi.listFindings.mockResolvedValue(findingsResponse([]))
+    vi.mocked(detailApi.getRca).mockResolvedValue(rcaResponse())
     client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
     client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
     client.checkPackCapability.mockResolvedValue({ canGenerate: true })
@@ -599,7 +635,6 @@ describe('InvestigationDetail', () => {
     })
   })
 
-
   it('shows Close CTA when can_close and PATCHes status=closed', async () => {
     client.investigationsApi.getClosureValidation.mockResolvedValue({
       data: { can_close: true, reasons: [], open_work_count: 0, open_work: [] },
@@ -802,7 +837,10 @@ describe('InvestigationDetail', () => {
     client.investigationsApi.get.mockResolvedValue({
       data: {
         ...mockInvestigation,
-        data: { source_snapshot: { reference_number: 'RTA-42' }, sections: { section_1_details: { location: 'yard' } } },
+        data: {
+          source_snapshot: { reference_number: 'RTA-42' },
+          sections: { section_1_details: { location: 'yard' } },
+        },
       },
     })
 
@@ -838,9 +876,7 @@ describe('InvestigationDetail', () => {
     client.investigationsApi.get.mockResolvedValue({
       data: { ...mockInvestigation, data: { findings: 'Guard was removed' } },
     })
-    client.investigationsApi.listFindings.mockResolvedValue(
-      findingsResponse(['Guard was removed']),
-    )
+    client.investigationsApi.listFindings.mockResolvedValue(findingsResponse(['Guard was removed']))
 
     renderPage()
 
@@ -862,8 +898,15 @@ describe('InvestigationDetail', () => {
     expect(payload.sections?.section_3_investigation_findings?.findings).toBeUndefined()
   })
 
-  it('saves RCA whys to the contract section and the legacy rca alias', async () => {
-    client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
+  it('saves RCA whys through the analyses endpoint, not the run JSON', async () => {
+    vi.mocked(detailApi.saveRca).mockResolvedValue(
+      rcaResponse({
+        id: 11,
+        answers: ['The driver could not see the walkway'],
+        evidence: ['CCTV still 14:02'],
+        root_cause: 'No banksman on site',
+      }),
+    )
 
     renderPage()
 
@@ -876,24 +919,29 @@ describe('InvestigationDetail', () => {
     fireEvent.change(await screen.findByLabelText('Why 1?'), {
       target: { value: 'The driver could not see the walkway' },
     })
+    fireEvent.change(screen.getByTestId('investigation-rca-why-1-evidence'), {
+      target: { value: 'CCTV still 14:02' },
+    })
     fireEvent.change(screen.getByTestId('investigation-root-cause-input'), {
       target: { value: 'No banksman on site' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'investigations.save_rca' }))
 
     await waitFor(() => {
-      expect(client.investigationsApi.update).toHaveBeenCalled()
+      expect(detailApi.saveRca).toHaveBeenCalled()
     })
+    expect(client.investigationsApi.update).not.toHaveBeenCalled()
 
-    const payload = client.investigationsApi.update.mock.calls[0][1].data
-    expect(payload.why_1).toBe('The driver could not see the walkway')
-    for (const sectionKey of ['section_4_root_cause', 'rca']) {
-      expect(payload.sections[sectionKey].why_1).toBe('The driver could not see the walkway')
-      expect(payload.sections[sectionKey].root_cause).toBe('No banksman on site')
-    }
+    const payload = vi.mocked(detailApi.saveRca).mock.calls[0][1]
+    expect(payload.whys[0]).toEqual({
+      level: 1,
+      answer: 'The driver could not see the walkway',
+      evidence: 'CCTV still 14:02',
+    })
+    expect(payload.root_cause).toBe('No banksman on site')
   })
 
-  it('hydrates the conclusion and whys from nested sections when the flat keys are empty', async () => {
+  it('hydrates the conclusion from nested sections and the Whys from the RCA endpoint', async () => {
     client.investigationsApi.get.mockResolvedValue({
       data: {
         ...mockInvestigation,
@@ -914,6 +962,10 @@ describe('InvestigationDetail', () => {
     client.investigationsApi.listFindings.mockResolvedValue(
       findingsResponse(['Nested finding from the template run']),
     )
+    // INV-C10: leftover why_1 is converted server-side; the page reads the analysis.
+    vi.mocked(detailApi.getRca).mockResolvedValue(
+      rcaResponse({ id: 11, answers: ['Nested why one'] }),
+    )
 
     renderPage()
 
@@ -926,6 +978,15 @@ describe('InvestigationDetail', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
     expect(await screen.findByLabelText('Why 1?')).toHaveValue('Nested why one')
+    expect(screen.getByTestId('investigation-rca-why-1-evidence')).toHaveValue('')
+  })
+
+  it('says so plainly when a run has no 5 Whys yet', async () => {
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'RCA' }))
+    expect(await screen.findByTestId('investigation-rca-empty')).toBeInTheDocument()
+    expect(screen.getByLabelText('Why 1?')).toHaveValue('')
   })
 
   // ── INV-C7: the findings list editor ─────────────────────
@@ -1003,11 +1064,7 @@ describe('InvestigationDetail', () => {
     fireEvent.click(screen.getByTestId('investigation-finding-save-1'))
 
     await waitFor(() => {
-      expect(client.investigationsApi.updateFinding).toHaveBeenCalledWith(
-        7,
-        1,
-        'Guard was removed',
-      )
+      expect(client.investigationsApi.updateFinding).toHaveBeenCalledWith(7, 1, 'Guard was removed')
     })
     expect(await screen.findByTestId('investigation-finding-body-1')).toHaveTextContent(
       'Guard was removed',

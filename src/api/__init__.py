@@ -54,6 +54,7 @@ from src.api.routes import (
     incidents,
     inductions,
     investigation_findings,
+    investigation_rca,
     investigation_templates,
     investigations,
     iso27001,
@@ -137,6 +138,14 @@ router.include_router(investigations.router, prefix="/investigations", tags=["In
 # can shadow it and it can shadow nothing there.
 router.include_router(
     investigation_findings.router,
+    prefix="/investigations",
+    tags=["Investigations"],
+)
+# INV-C10: workspace 5-Whys on five_whys_analyses. Same prefix, own module, so
+# investigations.py (run lifecycle / timeline) does not grow another child
+# collection. Path is the literal /rca segment; nothing else uses it.
+router.include_router(
+    investigation_rca.router,
     prefix="/investigations",
     tags=["Investigations"],
 )
