@@ -114,6 +114,14 @@ def _probe(items):
     )
 
 
+def _findings_present():
+    """These fixtures still carry a findings string; C8 reads rows instead."""
+    return patch(
+        "src.domain.services.investigation_closure_helpers.investigation_has_findings_for_closure",
+        AsyncMock(return_value=True),
+    )
+
+
 def _quiet_template_validation():
     return patch.object(
         InvestigationService,
@@ -137,7 +145,7 @@ class TestProbeScopeIsTheRecords:
     async def test_same_tenant_probes_the_records_tenant_and_reports_its_work(self):
         run = _run(tenant_id=7)
 
-        with _probe([_open_action()]) as probe, _quiet_template_validation():
+        with _probe([_open_action()]) as probe, _quiet_template_validation(), _findings_present():
             reasons, open_work, _missing = await _collect_readiness_reasons(
                 _db_returning(run),
                 investigation=run,
