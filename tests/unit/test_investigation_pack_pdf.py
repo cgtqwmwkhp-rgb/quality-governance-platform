@@ -15,6 +15,7 @@ from src.domain.services.investigation_pack_pdf import (
     confidentiality_notice,
     count_field_redactions,
     format_field_value,
+    format_pack_field,
     humanise_key,
     summarise_redactions,
 )
@@ -162,6 +163,12 @@ class TestFieldRendering:
     def test_lists_and_maps_render_every_entry(self) -> None:
         assert format_field_value(["a", "b"]) == "- a\n- b"
         assert format_field_value({"root_cause": "Wear"}) == "Root cause: Wear"
+
+    def test_iso_body_stamps_render_as_uk_dates(self) -> None:
+        assert format_pack_field("2026-05-17") == "17 May 2026"
+        assert format_pack_field("2026-05-17T11:00:00+00:00") == "17 May 2026, 11:00 UTC"
+        assert format_pack_field("Wet road surface") == "Wet road surface"
+        assert format_pack_field(None) == "Not recorded"
 
 
 class TestRedactionSummary:
@@ -576,7 +583,7 @@ class TestPackChronology:
         )
 
         for expected in (
-            "Report sections",
+            "01 Incident details",
             "Brake maintenance interval exceeded",
             "Sections withheld from this pack",
             "Chronology",
@@ -588,6 +595,9 @@ class TestPackChronology:
             "UNCONTROLLED WHEN PRINTED",
         ):
             assert expected in text
+        assert "Report sections" not in text
+        assert "17 May 2026" in text
+        assert "2026-05-17" not in text
 
     def test_non_latin1_chronology_text_does_not_break_the_render(self) -> None:
         events = _timeline_events()
@@ -640,14 +650,19 @@ class TestInvestigationSectionRendering:
         )
         text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
 
-        assert "1. Guard was missing from the mill" in text
+        assert "01. Guard was missing from the mill" in text
         assert "Why 1" in text
         assert "It had been removed for cleaning" in text
         assert "No permit for guard removal" in text
         assert "Cleaning was treated as informal" in text
-        assert "CAPA-2026-0042 - Replace the guard (Why 1)" in text
+        assert "CAPA-2026-0042" in text
+        assert "Replace the guard (Why 1)" in text
         assert "Items:" not in text
         assert "Body: Guard" not in text
+        assert "17 May 2026" in text
+        assert "01 Incident details" in text
+        assert "02 Findings" in text
+        assert "Root cause analysis" in text
 
     def test_empty_investigation_lists_are_stated_empty(self) -> None:
         pack = _pack(
@@ -671,6 +686,28 @@ class TestInvestigationSectionRendering:
         assert "No root-cause statement was recorded." in text
         assert "No contributing-factor text was recorded." in text
         assert "No CAPA actions were recorded." in text
+
+    def test_empty_why_question_is_omitted_not_printed_as_not_recorded(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "root-cause": {
+                        "whys": [
+                            {"level": 1, "why": "", "answer": "The guard had been removed"},
+                            {"level": 2, "why": None, "answer": "Cleaning was informal"},
+                        ],
+                        "root_cause": "No permit",
+                        "contributing_factors": "",
+                    }
+                }
+            }
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+
+        assert "Why 1" in text
+        assert "The guard had been removed" in text
+        assert "Why: Not recorded" not in text
+        assert "Question:" not in text
 
     def test_omitted_findings_do_not_appear_in_the_pdf(self) -> None:
         pack = _pack(
@@ -701,7 +738,7 @@ class TestInvestigationSectionRendering:
         )
         text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack, timeline_events=_timeline_events()))
 
-        assert "1. Guard was missing from the mill" in text
+        assert "01. Guard was missing from the mill" in text
         assert "The chronology is withheld from this pack." in text
         assert "Dana Reporter" not in text
         assert "Brake wear noted" not in text
@@ -983,11 +1020,12 @@ class TestPackIcamDiagram:
         )
 
         for expected in (
-            "Report sections",
-            "1. Guard was missing from the mill",
+            "01 Incident details",
+            "01. Guard was missing from the mill",
             "No permit for guard removal",
             "ICAM contributing factors",
-            "CAPA-2026-0042 - Replace the guard",
+            "CAPA-2026-0042",
+            "Replace the guard",
             "Sections withheld from this pack",
             "Chronology",
             "Evidence schedule",
@@ -997,3 +1035,30 @@ class TestPackIcamDiagram:
             "UNCONTROLLED WHEN PRINTED",
         ):
             assert expected in text
+        assert "Report sections" not in text
+
+    def test_pack_icam_wraps_long_causes_instead_of_ellipsizing(self) -> None:
+        cause = (
+            "The mill guard had been removed for a cleaning cycle that was treated as informal "
+            "work and was therefore never captured on a permit-to-work, leaving the operator "
+            "exposed to the running mill for the whole of the shift."
+        )
+        section = _rca_section(
+            icam_factors=_icam_factors(
+                factors=[
+                    {
+                        "id": 1,
+                        "category": "organisational_factors",
+                        "cause": cause,
+                        "sub_causes": [],
+                        "depth": "root",
+                    }
+                ]
+            )
+        )
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "permit-to-work" in text
+        assert "the whole of the shift" in text
+        assert "Factor wording is wrapped in the category block" in text
+        assert "permit-to-work..." not in text
