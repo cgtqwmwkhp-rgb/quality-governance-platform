@@ -222,10 +222,19 @@
   symptoms: `test_admin_grant_statement.py` forbids any `src/**/*.py` outside
   `src/domain/authz/` from naming the proposed admin grant constant — the route docstring
   cited it by name and now describes it instead; `test_delete_cascade_audit_visibility.py`
-  required the new cascade to be registered (see the Compliance Delta); and this file's own
-  route-mount test read Starlette's `path_format`, which does not exist in the starlette 1.3.1
-  that CI resolves out of the unpinned `fastapi` range, so it matched nothing there while passing
-  on a local 0.52.1. It now reads `route.path` like every other route census in the suite.
+  required the new cascade to be registered (see the Compliance Delta).
+- [x] The third CI failure was the route-mount test, and the first diagnosis of it was wrong.
+  `app.routes` is not a flat list of endpoints across the unpinned `fastapi>=0.109.0,<1.0.0`
+  range this repository allows: from 0.140 — what CI resolves — `include_router` leaves a
+  wrapper on `app.routes` instead of copying the leaves onto it, so a flat comprehension sees
+  only the top-level mounts and never the findings collection, while the local 0.135.1 flattens
+  them and shows all five. Reading Starlette's `path_format` was a second, smaller version
+  dependency on the same line and not the cause. The test now walks
+  `fastapi.routing.iter_route_contexts` with a fallback for the pre-0.137 shape — the same split
+  `test_partner_bearer_scopes` already carries — and both branches are verified: the fallback by
+  the local run, the walker by installing fastapi 0.140.7 in a scratch venv and confirming it
+  yields all five fully-prefixed paths. **Adjacent, not fixed here:** an unpinned FastAPI range
+  means a local test run is not evidence about CI. That is a requirements decision, not a C7 one.
 - [x] Contract — `tests/unit/test_gt_openapi_list_routes.py`,
   `test_gt_api_honesty_contract.py`, `test_copilot_openapi_exclusion.py`,
   `test_audit_contract_freeze.py` → 22 passed;
