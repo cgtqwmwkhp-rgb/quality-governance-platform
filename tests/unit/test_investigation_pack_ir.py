@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-from src.domain.services.investigation_pack_ir import (
-    DocumentMeta,
-    PackDocument,
-    Paragraph,
-    Section,
-)
+from src.domain.services.investigation_pack_ir import DocumentMeta, PackDocument, Paragraph, Section
 
 
 def test_document_meta_has_no_tenant_fields() -> None:

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from functools import partial
 from typing import Any, Callable, Optional
 
+from src.domain.services import investigation_pack_brand as pack_brand
 from src.domain.services.investigation_pack_draw import (
     ChronologySet,
     IcamFactorSet,
@@ -27,12 +28,7 @@ from src.domain.services.investigation_pack_draw import (
     normalise_icam_factors,
     plural,
 )
-from src.domain.services import investigation_pack_brand as pack_brand
-from src.domain.services.investigation_pack_ir import (
-    DocumentMeta,
-    PackDocument,
-    Section,
-)
+from src.domain.services.investigation_pack_ir import DocumentMeta, PackDocument, Section
 from src.domain.services.investigation_pack_pdf_writer import create_pack_pdf, write_contents, write_cover
 
 logger = logging.getLogger(__name__)
