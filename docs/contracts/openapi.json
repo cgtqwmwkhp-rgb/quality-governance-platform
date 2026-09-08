@@ -31602,6 +31602,193 @@
         "title": "InvestigationPacksResponse",
         "type": "object"
       },
+      "InvestigationRcaResponse": {
+        "description": "The run's workspace RCA.\n\n``analysis_id`` is null when the run has no analysis yet \u2014 a successful\nempty answer, not a 404. ``why_1``..``why_5`` are the exact strings written\nback onto ``investigation_runs.data`` so a caller can see what closure and\nthe pack will still read.",
+        "properties": {
+          "analysis_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Id"
+          },
+          "contributing_factors": {
+            "title": "Contributing Factors",
+            "type": "string"
+          },
+          "investigation_id": {
+            "title": "Investigation Id",
+            "type": "integer"
+          },
+          "problem_statement": {
+            "title": "Problem Statement",
+            "type": "string"
+          },
+          "root_cause": {
+            "title": "Root Cause",
+            "type": "string"
+          },
+          "why_1": {
+            "default": "",
+            "title": "Why 1",
+            "type": "string"
+          },
+          "why_2": {
+            "default": "",
+            "title": "Why 2",
+            "type": "string"
+          },
+          "why_3": {
+            "default": "",
+            "title": "Why 3",
+            "type": "string"
+          },
+          "why_4": {
+            "default": "",
+            "title": "Why 4",
+            "type": "string"
+          },
+          "why_5": {
+            "default": "",
+            "title": "Why 5",
+            "type": "string"
+          },
+          "whys": {
+            "items": {
+              "$ref": "#/components/schemas/InvestigationRcaWhy"
+            },
+            "title": "Whys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "investigation_id",
+          "problem_statement",
+          "whys",
+          "root_cause",
+          "contributing_factors"
+        ],
+        "title": "InvestigationRcaResponse",
+        "type": "object"
+      },
+      "InvestigationRcaUpsert": {
+        "additionalProperties": false,
+        "description": "Replace the run's workspace 5-Whys analysis.\n\n``whys`` may be empty (treated as five blank slots) or name levels 1\u20135.\nDuplicate levels are refused rather than last-write-wins, so a stale editor\ncannot silently drop a Why another tab added at the same level.",
+        "properties": {
+          "contributing_factors": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Contributing Factors",
+            "type": "string"
+          },
+          "problem_statement": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Problem Statement",
+            "type": "string"
+          },
+          "root_cause": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Root Cause",
+            "type": "string"
+          },
+          "whys": {
+            "items": {
+              "$ref": "#/components/schemas/InvestigationRcaWhyInput"
+            },
+            "title": "Whys",
+            "type": "array"
+          }
+        },
+        "title": "InvestigationRcaUpsert",
+        "type": "object"
+      },
+      "InvestigationRcaWhy": {
+        "additionalProperties": false,
+        "description": "One Why step as the workspace renders it.",
+        "properties": {
+          "answer": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Answer",
+            "type": "string"
+          },
+          "evidence": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Evidence",
+            "type": "string"
+          },
+          "level": {
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Level",
+            "type": "integer"
+          },
+          "why": {
+            "default": "",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level"
+        ],
+        "title": "InvestigationRcaWhy",
+        "type": "object"
+      },
+      "InvestigationRcaWhyInput": {
+        "additionalProperties": false,
+        "description": "One Why step on save. Empty answer and evidence are honest empty, not 400.",
+        "properties": {
+          "answer": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Answer",
+            "type": "string"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "level": {
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Level",
+            "type": "integer"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
+          }
+        },
+        "required": [
+          "level"
+        ],
+        "title": "InvestigationRcaWhyInput",
+        "type": "object"
+      },
       "InvestigationRunCreate": {
         "description": "Schema for creating an investigation run.",
         "properties": {
@@ -91237,6 +91424,110 @@
           }
         ],
         "summary": "Download Customer Pack Pdf",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
+    "/api/v1/investigations/{investigation_id}/rca": {
+      "get": {
+        "description": "Return this run's workspace 5-Whys analysis.\n\nFirst call for a run with no tenant-scoped analysis converts leftover\n``why_1``..``why_5`` strings into ``five_whys_analyses`` and commits that\nconversion \u2014 a read that writes, once, deliberately. Empty Whys are a\nsuccessful payload with blank answers, not a 404 and not a 500.",
+        "operationId": "get_investigation_rca_api_v1_investigations__investigation_id__rca_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationRcaResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Investigation Rca",
+        "tags": [
+          "Investigations"
+        ]
+      },
+      "put": {
+        "description": "Replace this run's workspace 5-Whys analysis and dual-write the legacy strings.",
+        "operationId": "put_investigation_rca_api_v1_investigations__investigation_id__rca_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationRcaUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationRcaResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Investigation Rca",
         "tags": [
           "Investigations"
         ]
