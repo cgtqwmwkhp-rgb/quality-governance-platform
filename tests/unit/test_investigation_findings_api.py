@@ -20,13 +20,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-try:  # FastAPI >= 0.137.2 — include_router no longer flattens onto app.routes
-    from fastapi.routing import iter_route_contexts as _iter_route_contexts
-except ImportError:  # FastAPI < 0.137, where include_router flattened routes onto the app
-
-    def _iter_route_contexts(routes: Any) -> Any:
-        return routes
-
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -41,6 +34,14 @@ from src.api.schemas.investigation_finding import (
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.investigation import InvestigationRun
 from src.domain.models.investigation_finding import InvestigationFinding
+
+try:  # FastAPI >= 0.137.2 — include_router no longer flattens onto app.routes
+    from fastapi.routing import iter_route_contexts as _iter_route_contexts
+except ImportError:  # FastAPI < 0.137, where include_router flattened routes onto the app
+
+    def _iter_route_contexts(routes: Any) -> Any:
+        return routes
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = REPO_ROOT / "alembic/versions/20261120_inv_c7_findings_rows.py"
