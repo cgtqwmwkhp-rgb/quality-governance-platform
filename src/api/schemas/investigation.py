@@ -327,6 +327,89 @@ class InvestigationCustomerPackResponse(BaseModel):
     audience: str
     generated_at: datetime
     checksum_sha256: Optional[str] = None
+    # INV-C17. All server-owned: a review is recorded by the review endpoint and
+    # an issue by the issue endpoint, never by writing a pack.
+    redaction_review_cleared_at: Optional[datetime] = None
+    redaction_review_at: Optional[datetime] = None
+    redaction_review_by_id: Optional[int] = None
+    issued_at: Optional[datetime] = None
+    issued_by_id: Optional[int] = None
+    # SHA-256 of the retained PDF bytes, distinct from checksum_sha256 above,
+    # which is the checksum of the pack JSON.
+    issued_pdf_sha256: Optional[str] = None
+    disclosure_count: int = 0
+
+
+class InvestigationPackRedactionReviewRequest(BaseModel):
+    """Record the outcome of a human redaction review on a pack (INV-C17 / DEC-4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cleared: bool = Field(
+        description="True when the reviewer is content the pack is safe to issue to this audience.",
+    )
+    note: Optional[str] = Field(
+        default=None,
+        max_length=2000,
+        description="What the reviewer checked, or what still needs redacting.",
+    )
+
+
+class InvestigationPackRedactionReviewResponse(BaseModel):
+    """The redaction review as recorded."""
+
+    pack_id: int
+    investigation_id: int
+    cleared: bool
+    note: Optional[str] = None
+    reviewed_at: datetime
+    reviewed_by_id: int
+    # Present so a client can see immediately whether issue is now possible.
+    issue_blockers: List[str] = Field(default_factory=list)
+
+
+class InvestigationPackIssueRequest(BaseModel):
+    """Issue a generated pack to a named recipient (INV-C17 / DEC-5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    recipient: str = Field(
+        min_length=1,
+        max_length=300,
+        description="Who is receiving this pack — a person, an organisation, or a regulator.",
+    )
+    recipient_email: Optional[str] = Field(
+        default=None,
+        max_length=320,
+        description="Address the pack was sent to, when there was one.",
+    )
+    note: Optional[str] = Field(
+        default=None,
+        max_length=2000,
+        description="Why it was issued, or under what request.",
+    )
+
+
+class InvestigationPackIssuedResponse(BaseModel):
+    """Confirmation of an issue, naming the bytes the recipient was given."""
+
+    pack_id: int
+    pack_uuid: str
+    investigation_id: int
+    audience: str
+    recipient: str
+    recipient_email: Optional[str] = None
+    note: Optional[str] = None
+    disclosure_id: int
+    issued_at: datetime
+    issued_by_id: int
+    pdf_sha256: str
+    pdf_size_bytes: int
+    evidence_asset_id: Optional[int] = None
+    # False when this disclosure re-used bytes retained by an earlier issue,
+    # which is how a re-issue is prevented from replacing the issued record.
+    pdf_newly_retained: bool
+    disclosure_count: int
 
 
 class InvestigationPacksResponse(BaseModel):
