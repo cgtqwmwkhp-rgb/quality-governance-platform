@@ -35,110 +35,58 @@ class UnknownBlockError(RuntimeError):
     """A writer must not skip a block type it does not know."""
 
 
-class PackPdf:
-    """FPDF document with Plantexpand letterhead. Construct via :func:`create_pack_pdf`."""
+def _attach_chrome(pdf: Any, meta: DocumentMeta) -> None:
+    """Bind header/footer as instance callables so mypy is not asked to subclass a variable."""
 
-    def __init__(self, pdf: Any, meta: DocumentMeta) -> None:
-        self.pdf = pdf
-        self.meta = meta
-        self._cover_done = False
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.pdf, name)
-
-    def header(self) -> None:  # noqa: N802 - fpdf2 hook
-        if self.pdf.page_no() == 1:
+    def header() -> None:  # noqa: N802 - fpdf2 hook
+        if pdf.page_no() == 1:
             return
-        lockup = brand.lockup_path()
-        self.pdf.set_y(8)
-        self.pdf.image(str(lockup), x=self.pdf.l_margin, y=8, w=42)
-        self.pdf.set_xy(self.pdf.l_margin + 46, 10)
-        self.pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
-        self.pdf.set_text_color(*brand.JET_GREY)
-        self.pdf.cell(
+        pdf.set_y(8)
+        pdf.image(str(brand.lockup_path()), x=pdf.l_margin, y=8, w=42)
+        pdf.set_xy(pdf.l_margin + 46, 10)
+        pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
+        pdf.set_text_color(*brand.JET_GREY)
+        pdf.cell(
             0,
             5,
-            brand.text_safe(f"Investigation report · {self.meta.reference}"),
+            brand.text_safe(f"Investigation report · {meta.reference}"),
             align="R",
         )
-        self.pdf.set_draw_color(*brand.CRIMSON)
-        self.pdf.set_line_width(0.35)
-        self.pdf.line(self.pdf.l_margin, 22, 210 - self.pdf.r_margin, 22)
-        self.pdf.set_y(26)
-        self.pdf.set_text_color(*brand.JET_GREY)
+        pdf.set_draw_color(*brand.CRIMSON)
+        pdf.set_line_width(0.35)
+        pdf.line(pdf.l_margin, 22, 210 - pdf.r_margin, 22)
+        pdf.set_y(26)
+        pdf.set_text_color(*brand.JET_GREY)
 
-    def footer(self) -> None:  # noqa: N802 - fpdf2 hook
-        self.pdf.set_y(-18)
-        self.pdf.set_draw_color(*brand.JET_GREY)
-        self.pdf.set_line_width(0.2)
-        self.pdf.line(self.pdf.l_margin, self.pdf.get_y(), 210 - self.pdf.r_margin, self.pdf.get_y())
-        self.pdf.set_y(-16)
-        self.pdf.set_font(brand.FAMILY_REGULAR, "", 7)
-        self.pdf.set_text_color(*brand.JET_GREY)
-        left = brand.text_safe(f"Investigation report · {self.meta.reference}")
+    def footer() -> None:  # noqa: N802 - fpdf2 hook
+        pdf.set_y(-18)
+        pdf.set_draw_color(*brand.JET_GREY)
+        pdf.set_line_width(0.2)
+        pdf.line(pdf.l_margin, pdf.get_y(), 210 - pdf.r_margin, pdf.get_y())
+        pdf.set_y(-16)
+        pdf.set_font(brand.FAMILY_REGULAR, "", 7)
+        pdf.set_text_color(*brand.JET_GREY)
+        left = brand.text_safe(f"Investigation report · {meta.reference}")
         right = brand.text_safe(
-            f"{self.meta.reference} · {self.meta.classification} · "
-            f"{self.meta.audience_label} · Page {self.pdf.page_no()} of {{nb}}"
+            f"{meta.reference} · {meta.classification} · " f"{meta.audience_label} · Page {pdf.page_no()} of {{nb}}"
         )
-        self.pdf.cell(95, 4, left, align="L")
-        self.pdf.cell(0, 4, right, align="R")
-        self.pdf.set_y(-12)
-        self.pdf.set_font(brand.FAMILY_REGULAR, "", 6.5)
-        self.pdf.cell(0, 4, brand.text_safe(brand.legal_footer_line()), align="C")
+        pdf.cell(95, 4, left, align="L")
+        pdf.cell(0, 4, right, align="R")
+        pdf.set_y(-12)
+        pdf.set_font(brand.FAMILY_REGULAR, "", 6.5)
+        pdf.cell(0, 4, brand.text_safe(brand.legal_footer_line()), align="C")
+
+    pdf.header = header
+    pdf.footer = footer
 
 
 def create_pack_pdf(meta: DocumentMeta) -> Any:
     """Build a branded FPDF instance with Inter registered and chrome hooked."""
     fpdf_cls = _require_fpdf()
-    typeface = brand.resolve_typeface()
-    del typeface  # presence is the check; slots are used at write time
-
-    class _PackPdf(fpdf_cls):
-        def __init__(self) -> None:
-            super().__init__(orientation="P", unit="mm", format="A4")
-            self._meta = meta
-            brand.register_fonts(self)
-
-        def header(self) -> None:  # noqa: N802
-            if self.page_no() == 1:
-                return
-            self.set_y(8)
-            self.image(str(brand.lockup_path()), x=self.l_margin, y=8, w=42)
-            self.set_xy(self.l_margin + 46, 10)
-            self.set_font(brand.FAMILY_MEDIUM, "", 8)
-            self.set_text_color(*brand.JET_GREY)
-            self.cell(
-                0,
-                5,
-                brand.text_safe(f"Investigation report · {self._meta.reference}"),
-                align="R",
-            )
-            self.set_draw_color(*brand.CRIMSON)
-            self.set_line_width(0.35)
-            self.line(self.l_margin, 22, 210 - self.r_margin, 22)
-            self.set_y(26)
-            self.set_text_color(*brand.JET_GREY)
-
-        def footer(self) -> None:  # noqa: N802
-            self.set_y(-18)
-            self.set_draw_color(*brand.JET_GREY)
-            self.set_line_width(0.2)
-            self.line(self.l_margin, self.get_y(), 210 - self.r_margin, self.get_y())
-            self.set_y(-16)
-            self.set_font(brand.FAMILY_REGULAR, "", 7)
-            self.set_text_color(*brand.JET_GREY)
-            left = brand.text_safe(f"Investigation report · {self._meta.reference}")
-            right = brand.text_safe(
-                f"{self._meta.reference} · {self._meta.classification} · "
-                f"{self._meta.audience_label} · Page {self.page_no()} of {{nb}}"
-            )
-            self.cell(95, 4, left, align="L")
-            self.cell(0, 4, right, align="R")
-            self.set_y(-12)
-            self.set_font(brand.FAMILY_REGULAR, "", 6.5)
-            self.cell(0, 4, brand.text_safe(brand.legal_footer_line()), align="C")
-
-    pdf = _PackPdf()
+    brand.resolve_typeface()
+    pdf = fpdf_cls(orientation="P", unit="mm", format="A4")
+    brand.register_fonts(pdf)
+    _attach_chrome(pdf, meta)
     pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=24)
     pdf.set_margins(left=16, top=28, right=16)
