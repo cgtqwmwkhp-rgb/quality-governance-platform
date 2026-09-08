@@ -677,3 +677,292 @@ class TestInvestigationSectionRendering:
         assert "The chronology is withheld from this pack." in text
         assert "Dana Reporter" not in text
         assert "Brake wear noted" not in text
+
+
+# ---------------------------------------------------------------------------
+# ICAM contributing-factor diagram (INV-C16)
+# ---------------------------------------------------------------------------
+
+_CONTRIBUTING_TEXT = (
+    "Organisational factors: No refresher training schedule (Budget withdrawn) [underlying cause]\n"
+    "Individual and team actions: Operator reached into the running mill"
+)
+
+
+def _icam_factors(**overrides) -> dict:
+    """The stored ICAM payload `serialize_rca_section` writes into the pack content."""
+    payload = {
+        "factors": [
+            {
+                "id": 4,
+                "category": "organisational_factors",
+                "cause": "No refresher training schedule",
+                "sub_causes": ["Budget withdrawn"],
+                "depth": "underlying",
+            },
+            {
+                "id": 9,
+                "category": "individual_team_actions",
+                "cause": "Operator reached into the running mill",
+                "sub_causes": [],
+                "depth": None,
+            },
+        ],
+        "unmapped_categories": [],
+        "unpresentable": 0,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _rca_section(**overrides) -> dict:
+    section = {
+        "problem_statement": "Operator reached into the mill",
+        "whys": [],
+        "root_cause": "No permit for guard removal",
+        "contributing_factors": _CONTRIBUTING_TEXT,
+        "icam_factors": _icam_factors(),
+    }
+    section.update(overrides)
+    return section
+
+
+def _icam_pack(section: dict, *, audience: str = "internal_customer") -> dict:
+    return _pack(audience=audience, content={"sections": {"root-cause": section}})
+
+
+class TestPackIcamDiagram:
+    def test_a_pack_with_no_icam_key_renders_exactly_as_before(self) -> None:
+        # C13 and earlier packs never consulted the factors. Printing "none are
+        # recorded" for one would claim something had been checked that was not.
+        section = _rca_section()
+        section.pop("icam_factors")
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "ICAM contributing factors" not in text
+        assert "No ICAM contributing factors are recorded" not in text
+        assert "No refresher training schedule" in text  # the C13 text is untouched
+
+    def test_stored_factors_render_the_heading_summary_bands_and_note(self) -> None:
+        out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(_rca_section()), organisation_name="Plantexpand")
+        text = _flat(_pdf_text(out))
+
+        assert out.startswith(b"%PDF-")
+        assert "ICAM contributing factors" in text
+        assert "2 contributing factors recorded across the four ICAM categories, 1 with a recorded HSG245" in text
+        for label in (
+            "Organisational factors",
+            "Task and environmental conditions",
+            "Individual and team actions",
+            "Absent or failed defences",
+        ):
+            assert label in text
+        assert "No refresher training schedule (Budget withdrawn)" in text
+        assert "groups the recorded contributing factors by ICAM category" in text
+
+    def test_the_figure_geometry_reaches_the_document(self) -> None:
+        service = InvestigationPackPdfService()
+        section = _rca_section()
+        without = service.build_pdf_bytes(_icam_pack({**section, "icam_factors": None}))
+        with_figure = service.build_pdf_bytes(_icam_pack(section))
+
+        # Bands, borders and depth markers are vector operations, not text: the
+        # document must grow by more than the words added to it.
+        assert len(with_figure) > len(without) + 400
+
+    def test_an_empty_stored_diagram_says_so_and_invents_no_factor(self) -> None:
+        section = _rca_section(
+            contributing_factors="",
+            icam_factors=_icam_factors(factors=[]),
+        )
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "No ICAM contributing factors are recorded for this investigation." in text
+        assert "No contributing-factor text was recorded." in text
+        assert "None recorded." not in text  # no empty bands were drawn
+        assert "groups the recorded contributing factors" not in text
+
+    def test_an_approved_omit_of_root_cause_withholds_the_diagram_with_the_section(self) -> None:
+        # The generator drops a withheld section from content["sections"], so
+        # there is nothing for the diagram to be drawn from — the withholding is
+        # structural rather than a rule here that could be forgotten.
+        pack = _pack(
+            audience="internal_customer",
+            content={
+                "sections": {"section_1_details": {"location": "Mill floor"}},
+                "omitted_sections": ["root-cause"],
+            },
+        )
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "Sections withheld from this pack" in text
+        assert "Root cause" in text  # named as withheld
+        assert "ICAM contributing factors" not in text
+        assert "No refresher training schedule" not in text
+        assert "Organisational factors" not in text
+
+    def test_a_failing_figure_degrades_to_the_factors_in_words_instead_of_a_500(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def boom(*args: object, **kwargs: object) -> None:
+            raise ValueError("fpdf blew up")
+
+        monkeypatch.setattr(pack_pdf, "draw_icam_factors_figure", boom)
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(_rca_section()))
+        text = _flat(_pdf_text(out))
+
+        assert out.startswith(b"%PDF-")
+        assert "The ICAM contributing-factor diagram could not be drawn for this pack." in text
+        assert "Organisational factors: No refresher training schedule (Budget withdrawn) [underlying cause]" in text
+        assert "Individual and team actions: Operator reached into the running mill" in text
+        assert "groups the recorded contributing factors" not in text
+
+    def test_causes_outside_the_icam_four_are_counted_and_named_not_recategorised(self) -> None:
+        section = _rca_section(
+            icam_factors=_icam_factors(unmapped_categories=["machine", "mother_nature"], unpresentable=3)
+        )
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "3 stored causes could not be presented on the diagram." in text
+        assert "That count includes causes stored under Machine, Mother nature" in text
+        assert "counted here rather than recategorised" in text
+
+    def test_a_single_unpresentable_cause_is_stated_in_the_singular(self) -> None:
+        section = _rca_section(icam_factors=_icam_factors(unpresentable=1))
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "1 stored cause could not be presented on the diagram." in text
+        assert "That count includes causes stored under" not in text
+
+    def test_a_long_diagram_is_bounded_and_says_what_it_did_not_draw(self) -> None:
+        factors = [
+            {
+                "id": index + 1,
+                "category": "organisational_factors",
+                "cause": f"Contributing factor {index + 1}",
+                "sub_causes": [],
+                "depth": "root",
+            }
+            for index in range(60)
+        ]
+        section = _rca_section(icam_factors=_icam_factors(factors=factors))
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))
+        text = _flat(_pdf_text(out))
+
+        assert out.startswith(b"%PDF-")
+        # The count stated is what is recorded, not what the figure fitted.
+        assert "60 contributing factors recorded across the four ICAM categories; the diagram shows the first 24" in (
+            text
+        )
+        assert "36 further factors are not shown in the diagram, which is capped at the first 24" in text
+        assert "Contributing factor 24" in text
+        assert "Contributing factor 25" not in text
+
+    def test_an_unrecognised_stored_depth_is_not_drawn_as_a_recorded_one(self) -> None:
+        section = _rca_section(
+            icam_factors=_icam_factors(
+                factors=[
+                    {
+                        "id": 1,
+                        "category": "organisational_factors",
+                        "cause": "Depth never classified",
+                        "sub_causes": [],
+                        "depth": "catastrophic",
+                    }
+                ]
+            )
+        )
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "Depth never classified" in text
+        assert "0 with a recorded HSG245 causal depth" in text
+        assert "catastrophic" not in text
+
+    def test_an_external_pack_draws_the_same_diagram_as_the_internal_one(self) -> None:
+        # Unlike the chronology, nothing in the diagram is outside the redaction
+        # pass: INV-C12 derives the contributing-factor text above it from these
+        # same rows, so withholding the figure would hide nothing already
+        # withheld while making the analysis look undone.
+        service = InvestigationPackPdfService()
+        internal = _flat(_pdf_text(service.build_pdf_bytes(_icam_pack(_rca_section()))))
+        external = _flat(_pdf_text(service.build_pdf_bytes(_icam_pack(_rca_section(), audience="external_customer"))))
+
+        for expected in ("ICAM contributing factors", "No refresher training schedule (Budget withdrawn)"):
+            assert expected in internal
+            assert expected in external
+        assert "withheld" not in external.replace("Sections withheld from this pack", "")
+
+    def test_a_malformed_stored_diagram_neither_raises_nor_invents(self) -> None:
+        for stored in ("nonsense", 7, [], {}, {"factors": "nonsense"}, [None, 3]):
+            out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(_rca_section(icam_factors=stored)))
+            text = _flat(_pdf_text(out))
+
+            assert out.startswith(b"%PDF-")
+            assert "No ICAM contributing factors are recorded for this investigation." in text
+
+    def test_non_latin1_factor_text_does_not_break_the_render(self) -> None:
+        section = _rca_section(
+            icam_factors=_icam_factors(
+                factors=[
+                    {
+                        "id": 1,
+                        "category": "task_environmental_conditions",
+                        "cause": "Ystrad \u2014 Mynach yard at 20\u00b0C",
+                        "sub_causes": ["Driver said \u201cno warning\u201d"],
+                        "depth": "immediate",
+                    }
+                ]
+            )
+        )
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))
+
+        # The degree sign is latin-1 and survives; the em dash and the curly
+        # quotes are not, and are replaced rather than dropped or guessed.
+        assert out.startswith(b"%PDF-")
+        assert "Ystrad ? Mynach yard at 20\u00b0C (Driver said ?no warning?)" in _flat(_pdf_text(out))
+
+    def test_the_diagram_does_not_displace_the_rest_of_the_pack(self) -> None:
+        pack = _pack(
+            audience="internal_customer",
+            content={
+                "sections": {
+                    "section_1_details": {"location": "Mill floor"},
+                    "findings": {"items": [{"body": "Guard was missing from the mill"}]},
+                    "root-cause": _rca_section(),
+                    "capa": {"items": [{"title": "Replace the guard", "reference": "CAPA-2026-0042"}]},
+                },
+                "omitted_sections": ["section_5_internal_commentary"],
+            },
+        )
+
+        text = _flat(
+            _pdf_text(
+                InvestigationPackPdfService().build_pdf_bytes(
+                    pack, organisation_name="Plantexpand Ltd", timeline_events=_timeline_events()
+                )
+            )
+        )
+
+        for expected in (
+            "Report sections",
+            "1. Guard was missing from the mill",
+            "No permit for guard removal",
+            "ICAM contributing factors",
+            "CAPA-2026-0042 - Replace the guard",
+            "Sections withheld from this pack",
+            "Chronology",
+            "Evidence schedule",
+            "Redaction summary",
+            "Pack integrity",
+            "PLANTEXPAND",
+        ):
+            assert expected in text

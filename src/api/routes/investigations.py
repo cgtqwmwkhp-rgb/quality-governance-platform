@@ -2109,6 +2109,7 @@ async def generate_customer_pack(
         findings=sources.findings,
         rca=sources.rca,
         capa_actions=sources.capa_actions,
+        factors=sources.factors,
     )
 
     # Create pack entity
