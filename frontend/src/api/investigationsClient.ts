@@ -468,6 +468,8 @@ export function createInvestigationsApi(api: AxiosInstance) {
         assignee_name?: string
         due_date?: string
         priority?: string
+        why_level?: number
+        five_whys_id?: number
       },
     ) =>
       api.post<{

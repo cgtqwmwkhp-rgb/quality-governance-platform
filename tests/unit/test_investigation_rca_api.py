@@ -177,7 +177,7 @@ def test_every_rca_endpoint_declares_a_permission():
         for node in ast.walk(tree)
         if isinstance(node, ast.AsyncFunctionDef) and any(isinstance(d, ast.Call) for d in node.decorator_list)
     ]
-    assert len(decorated) == 2, "get, put"
+    assert len(decorated) == 3, "get, put, create_capa_from_why"
     for handler in decorated:
         source = ast.dump(handler)
         assert "require_permission" in source, f"{handler.name} is not permission-gated"
@@ -190,9 +190,10 @@ def test_the_rca_paths_are_mounted_where_the_client_calls_them():
         (method, _PATH_CONVERTER.sub("}", route.path))
         for route in _iter_route_contexts(app.routes)
         for method in getattr(route, "methods", set()) or set()
-        if "/investigations/" in getattr(route, "path", "") and route.path.rstrip("/").endswith("/rca")
+        if "/investigations/" in getattr(route, "path", "") and "/rca" in getattr(route, "path", "")
     }
     assert rca == {
         ("GET", "/api/v1/investigations/{investigation_id}/rca"),
         ("PUT", "/api/v1/investigations/{investigation_id}/rca"),
+        ("POST", "/api/v1/investigations/{investigation_id}/rca/capa"),
     }
