@@ -58,6 +58,38 @@ def test_generate_customer_pack_skips_approved_omitted_sections():
     assert any(r.get("redaction_type") == "SECTION_OMIT_APPROVED" for r in redaction_log)
 
 
+def test_generate_customer_pack_hsg245_findings_omit_withholds_overlay_findings():
+    from src.domain.models.investigation import CustomerPackAudience
+
+    investigation = SimpleNamespace(
+        reference_number="REF-2",
+        title="T",
+        status=SimpleNamespace(value="completed"),
+        level=SimpleNamespace(value="high"),
+        data={
+            "sections": {"section_1_details": {"location": "yard"}},
+            "customer_pack_visibility": {
+                "findings": {"omit_requested": True, "omit_approved": True},
+            },
+        },
+    )
+    content, redaction_log, _assets = InvestigationService.generate_customer_pack(
+        investigation=investigation,
+        audience=CustomerPackAudience.INTERNAL_CUSTOMER,
+        evidence_assets=[],
+        generated_by_id=1,
+        findings=[{"body": "The guard was missing"}],
+        rca={"whys": [{"level": 1, "why": "", "answer": "guard off"}], "root_cause": "no permit"},
+        capa_actions=[],
+    )
+    assert "findings" not in content["sections"]
+    assert "section_1_details" in content["sections"]
+    assert "root-cause" in content["sections"]
+    assert "findings" in content.get("omitted_sections", [])
+    assert "The guard was missing" not in str(content["sections"])
+    assert any(r.get("redaction_type") == "SECTION_OMIT_APPROVED" for r in redaction_log)
+
+
 def test_apply_smart_search_filter_is_noop_for_blank_q():
     sentinel = object()
     assert InvestigationService.apply_smart_search_filter(sentinel, "   ") is sentinel

@@ -572,3 +572,108 @@ class TestPackChronology:
         )
 
         assert out.startswith(b"%PDF-")
+
+
+class TestInvestigationSectionRendering:
+    def test_findings_whys_and_capa_render_as_lists_not_only_incident_details(self) -> None:
+        pack = _pack(
+            audience="internal_customer",
+            content={
+                "investigation_reference": "INV-2026-0007",
+                "title": "Collision on the A1",
+                "status": "completed",
+                "level": "high",
+                "sections": {
+                    "section_1_details": {"incident_date": "2026-05-17"},
+                    "findings": {"items": [{"body": "Guard was missing from the mill"}]},
+                    "root-cause": {
+                        "problem_statement": "Operator reached into the mill",
+                        "whys": [
+                            {
+                                "level": 1,
+                                "why": "Why was the guard off?",
+                                "answer": "It had been removed for cleaning",
+                            }
+                        ],
+                        "root_cause": "No permit for guard removal",
+                        "contributing_factors": "Cleaning was treated as informal",
+                    },
+                    "capa": {
+                        "items": [
+                            {
+                                "title": "Replace the guard",
+                                "reference": "CAPA-2026-0042",
+                                "why_level": 1,
+                            }
+                        ]
+                    },
+                },
+            },
+        )
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "1. Guard was missing from the mill" in text
+        assert "Why 1" in text
+        assert "It had been removed for cleaning" in text
+        assert "No permit for guard removal" in text
+        assert "Cleaning was treated as informal" in text
+        assert "CAPA-2026-0042 - Replace the guard (Why 1)" in text
+        assert "Items:" not in text
+        assert "Body: Guard" not in text
+
+    def test_empty_investigation_lists_are_stated_empty(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "findings": {"items": []},
+                    "root-cause": {
+                        "problem_statement": "",
+                        "whys": [],
+                        "root_cause": "",
+                        "contributing_factors": "",
+                    },
+                    "capa": {"items": []},
+                }
+            }
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+
+        assert "No findings were recorded." in text
+        assert "No 5-Whys were recorded." in text
+        assert "No root-cause statement was recorded." in text
+        assert "No contributing-factor text was recorded." in text
+        assert "No CAPA actions were recorded." in text
+
+    def test_omitted_findings_do_not_appear_in_the_pdf(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "section_1_details": {"location": "Mill floor"},
+                    "root-cause": {"root_cause": "No permit", "whys": [], "contributing_factors": ""},
+                },
+                "omitted_sections": ["findings"],
+            }
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+
+        assert "Mill floor" in text
+        assert "No permit" in text
+        assert "Sections withheld from this pack" in text
+        assert "Findings" in text
+        assert "Guard was missing" not in text
+
+    def test_external_pack_still_withholds_chronology_when_investigation_sections_render(self) -> None:
+        pack = _pack(
+            audience="external_customer",
+            content={
+                "sections": {
+                    "findings": {"items": [{"body": "Guard was missing from the mill"}]},
+                }
+            },
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack, timeline_events=_timeline_events()))
+
+        assert "1. Guard was missing from the mill" in text
+        assert "The chronology is withheld from this pack." in text
+        assert "Dana Reporter" not in text
+        assert "Brake wear noted" not in text
