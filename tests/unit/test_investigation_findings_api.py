@@ -17,7 +17,15 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
+
+try:  # FastAPI >= 0.137.2 — include_router no longer flattens onto app.routes
+    from fastapi.routing import iter_route_contexts as _iter_route_contexts
+except ImportError:  # FastAPI < 0.137, where include_router flattened routes onto the app
+
+    def _iter_route_contexts(routes: Any) -> Any:
+        return routes
 
 import pytest
 from sqlalchemy import func, select
@@ -233,6 +241,13 @@ def test_every_findings_endpoint_declares_a_permission():
 #: resolves out of the unpinned ``fastapi>=0.109.0,<1.0.0`` range, while a local venv on
 #: starlette 0.52.1 still has it. Reading it made this test pass locally and match
 #: nothing at all in CI. Every other route census in the suite reads ``route.path``.
+#:
+#: The walk itself has to go through ``iter_route_contexts``. From FastAPI 0.140
+#: ``include_router`` keeps a wrapper on ``app.routes`` instead of copying leaves
+#: onto it, so a flat loop sees six top-level mounts and never the findings
+#: collection. That is how this test reported ``set()`` in CI while the OpenAPI
+#: artefact — generated with the same walker FastAPI uses — already listed the
+#: five paths. ``test_partner_bearer_scopes`` carries the same split.
 _PATH_CONVERTER = re.compile(r":(?:int|str|float|path|uuid)\}")
 
 
@@ -241,7 +256,7 @@ def test_the_findings_paths_are_mounted_where_the_client_calls_them():
 
     findings = {
         (method, _PATH_CONVERTER.sub("}", route.path))
-        for route in app.routes
+        for route in _iter_route_contexts(app.routes)
         for method in getattr(route, "methods", set()) or set()
         if "/investigations/" in getattr(route, "path", "") and "findings" in route.path
     }
