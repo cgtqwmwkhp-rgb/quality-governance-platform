@@ -32,7 +32,42 @@ export interface InvestigationRcaUpsert {
     why?: string
   }>
   root_cause: string
-  contributing_factors: string
+  /**
+   * INV-C12: deliberately not sent by this page any more.
+   *
+   * The ICAM factor list below is the author of that text; the server derives
+   * it from the factors on every factor mutation. Sending a copy from here
+   * would be a second writer for one field, which is the PX-168 shape. Omitted
+   * means "leave it alone", which is exactly what this page wants.
+   */
+  contributing_factors?: string
+}
+
+/** ICAM contributing factor (INV-C12). `category` and `depth` are server enums. */
+export interface InvestigationFactor {
+  id: number
+  investigation_id: number
+  category: string
+  cause: string
+  sub_causes: string[]
+  depth: string | null
+}
+
+export interface InvestigationFactorListResponse {
+  items: InvestigationFactor[]
+  total: number
+  investigation_id: number
+  diagram_id: number | null
+  contributing_factors_text: string
+  unmapped_categories: string[]
+  unreadable_total: number
+}
+
+export interface InvestigationFactorInput {
+  category: string
+  cause: string
+  sub_causes?: string[]
+  depth?: string | null
 }
 
 export function getRca(id: number) {
@@ -61,6 +96,31 @@ export function createCapaFromWhy(
     five_whys_id?: number | null
     why_level?: number | null
   }>(`/api/v1/investigations/${id}/rca/capa`, body)
+}
+
+export function listFactors(id: number) {
+  return api.get<InvestigationFactorListResponse>(`/api/v1/investigations/${id}/factors`)
+}
+
+export function createFactor(id: number, body: InvestigationFactorInput) {
+  return api.post<InvestigationFactorListResponse>(`/api/v1/investigations/${id}/factors`, body)
+}
+
+export function updateFactor(
+  id: number,
+  factorId: number,
+  body: Partial<InvestigationFactorInput>,
+) {
+  return api.patch<InvestigationFactorListResponse>(
+    `/api/v1/investigations/${id}/factors/${factorId}`,
+    body,
+  )
+}
+
+export function deleteFactor(id: number, factorId: number) {
+  return api.delete<InvestigationFactorListResponse>(
+    `/api/v1/investigations/${id}/factors/${factorId}`,
+  )
 }
 
 export type CustomerPackVisibilityMeta = {
