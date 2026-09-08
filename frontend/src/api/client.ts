@@ -1271,6 +1271,8 @@ export type {
   PacksResponse,
   GeneratedCustomerPack,
   ClosureValidation,
+  InvestigationFinding,
+  InvestigationFindingsResponse,
 } from './investigationsClient'
 export const investigationsApi = createInvestigationsApi(api)
 

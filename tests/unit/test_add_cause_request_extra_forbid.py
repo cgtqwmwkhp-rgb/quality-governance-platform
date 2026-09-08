@@ -8,24 +8,24 @@ from src.api.routes.rca_tools import AddCauseRequest
 
 def test_add_cause_request_accepts_known_fields() -> None:
     m = AddCauseRequest(
-        category="method",
+        category="task_environmental_conditions",
         cause="Missing checklist",
         sub_causes=["No template", "Skipped step"],
     )
-    assert m.category == "method"
+    assert m.category == "task_environmental_conditions"
     assert m.cause == "Missing checklist"
     assert m.sub_causes == ["No template", "Skipped step"]
 
 
 def test_add_cause_request_sub_causes_optional() -> None:
-    m = AddCauseRequest(category="manpower", cause="Fatigue")
+    m = AddCauseRequest(category="individual_team_actions", cause="Fatigue")
     assert m.sub_causes is None
 
 
 def test_add_cause_request_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError) as exc_info:
         AddCauseRequest(
-            category="machine",
+            category="individual_team_actions",
             cause="Worn brake",
             diagram_id=99,  # type: ignore[call-arg]
         )

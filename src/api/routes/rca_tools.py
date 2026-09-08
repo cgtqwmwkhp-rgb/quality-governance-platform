@@ -102,7 +102,10 @@ class AddCauseRequest(BaseModel):
 
     category: str = Field(
         ...,
-        description="manpower, method, machine, material, measurement, mother_nature",
+        description=(
+            "ICAM category (INV-C12): organisational_factors, "
+            "task_environmental_conditions, individual_team_actions, absent_failed_defences"
+        ),
     )
     cause: str
     sub_causes: Optional[List[str]] = None

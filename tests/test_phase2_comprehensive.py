@@ -110,11 +110,11 @@ class TestFishboneDiagram:
         )
 
         assert diagram.effect_statement == "Product quality defect"
-        assert len(diagram.causes) == 6  # 6M categories
+        assert len(diagram.causes) == 4  # INV-C12: the four ICAM categories
 
     def test_add_cause_to_category(self):
         """Test adding causes to categories."""
-        from src.domain.models.rca_tools import FishboneCategory, FishboneDiagram
+        from src.domain.models.rca_tools import CausalDepth, FishboneCategory, FishboneDiagram
 
         diagram = FishboneDiagram(
             effect_statement="Defect",
@@ -122,14 +122,53 @@ class TestFishboneDiagram:
         )
 
         diagram.add_cause(
-            FishboneCategory.MANPOWER,
+            FishboneCategory.ORGANISATIONAL,
             "Inadequate training",
             ["No refresher courses", "Outdated materials"],
+            CausalDepth.UNDERLYING,
         )
 
-        assert len(diagram.causes["manpower"]) == 1
-        assert diagram.causes["manpower"][0]["cause"] == "Inadequate training"
-        assert len(diagram.causes["manpower"][0]["sub_causes"]) == 2
+        stored = diagram.causes["organisational_factors"]
+        assert len(stored) == 1
+        assert stored[0]["cause"] == "Inadequate training"
+        assert len(stored[0]["sub_causes"]) == 2
+        assert stored[0]["depth"] == "underlying"
+        assert stored[0]["id"] == 1
+
+    def test_add_cause_without_a_depth_records_none(self):
+        """A cause added through the generic RCA-tools route states no depth,
+        and must not read back as though somebody had chosen one."""
+        from src.domain.models.rca_tools import FishboneCategory, FishboneDiagram
+
+        diagram = FishboneDiagram(
+            effect_statement="Defect",
+            causes={cat.value: [] for cat in FishboneCategory},
+        )
+
+        diagram.add_cause(FishboneCategory.INDIVIDUAL_TEAM, "Banksman stood clear")
+
+        assert "depth" not in diagram.causes["individual_team_actions"][0]
+
+    def test_cause_ids_are_not_reissued_after_a_delete(self):
+        """A returned id would silently re-point a stale editor at another factor."""
+        from src.domain.models.rca_tools import FishboneCategory, FishboneDiagram
+
+        diagram = FishboneDiagram(
+            effect_statement="Defect",
+            causes={cat.value: [] for cat in FishboneCategory},
+        )
+
+        first = diagram.add_cause(FishboneCategory.ORGANISATIONAL, "First")
+        second = diagram.add_cause(FishboneCategory.ORGANISATIONAL, "Second")
+        causes = {key: list(value) if isinstance(value, list) else value for key, value in diagram.causes.items()}
+        causes["organisational_factors"] = [
+            entry for entry in causes["organisational_factors"] if entry["id"] != second["id"]
+        ]
+        diagram.causes = causes
+
+        third = diagram.add_cause(FishboneCategory.ORGANISATIONAL, "Third")
+
+        assert {first["id"], second["id"], third["id"]} == {1, 2, 3}
 
     def test_add_causes_multiple_categories(self):
         """Test adding causes to multiple categories."""
@@ -140,15 +179,17 @@ class TestFishboneDiagram:
             causes={cat.value: [] for cat in FishboneCategory},
         )
 
-        diagram.add_cause(FishboneCategory.MANPOWER, "Training gap")
-        diagram.add_cause(FishboneCategory.METHOD, "Incorrect procedure")
-        diagram.add_cause(FishboneCategory.MACHINE, "Worn tooling")
+        diagram.add_cause(FishboneCategory.ORGANISATIONAL, "No training schedule")
+        diagram.add_cause(FishboneCategory.TASK_ENVIRONMENTAL, "Unlit yard")
+        diagram.add_cause(FishboneCategory.ABSENT_FAILED_DEFENCES, "Interlock bypassed")
 
         counts = diagram.count_causes()
 
-        assert counts["manpower"] == 1
-        assert counts["method"] == 1
-        assert counts["machine"] == 1
+        assert counts["organisational_factors"] == 1
+        assert counts["task_environmental_conditions"] == 1
+        assert counts["absent_failed_defences"] == 1
+        # The id high-water mark lives in the same JSON and is not a category.
+        assert FishboneDiagram.NEXT_FACTOR_ID_KEY not in counts
 
     def test_get_all_causes(self):
         """Test getting all causes across categories."""
@@ -157,19 +198,21 @@ class TestFishboneDiagram:
         diagram = FishboneDiagram(
             effect_statement="Defect",
             causes={
-                "manpower": [{"cause": "Cause 1", "sub_causes": []}],
-                "method": [{"cause": "Cause 2", "sub_causes": []}],
-                "machine": [],
-                "material": [],
-                "measurement": [],
-                "mother_nature": [],
+                "organisational_factors": [{"cause": "Cause 1", "sub_causes": []}],
+                "task_environmental_conditions": [{"cause": "Cause 2", "sub_causes": []}],
+                "individual_team_actions": [],
+                "absent_failed_defences": [],
+                FishboneDiagram.NEXT_FACTOR_ID_KEY: 3,
             },
         )
 
         all_causes = diagram.get_all_causes()
 
         assert len(all_causes) == 2
-        assert all_causes[0]["category"] in ["manpower", "method"]
+        assert all_causes[0]["category"] in [
+            FishboneCategory.ORGANISATIONAL.value,
+            FishboneCategory.TASK_ENVIRONMENTAL.value,
+        ]
 
 
 class TestBarrierAnalysis:
@@ -487,9 +530,9 @@ class TestRCAIntegration:
         diagram = FishboneDiagram(
             id=1,
             effect_statement="Defect",
-            causes={"manpower": [{"cause": "Training gap", "sub_causes": []}]},
+            causes={"organisational_factors": [{"cause": "Training gap", "sub_causes": []}]},
             root_cause="Training gap",
-            root_cause_category="manpower",
+            root_cause_category="organisational_factors",
         )
 
         # Create CAPA

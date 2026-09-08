@@ -12,11 +12,31 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from src.domain.services.investigation_pack_draw import (
+    ChronologySet,
+    chronology_summary_line,
+    draw_chronology_figure,
+    fit_text,
+    format_stamp,
+    humanise_key,
+    normalise_chronology_events,
+    pdf_safe,
+    plural,
+)
+
 logger = logging.getLogger(__name__)
+
+# Text and geometry helpers live in investigation_pack_draw (INV-C15) so the
+# drawing layer and this renderer cannot drift apart. Aliased at their original
+# private names because that is what the rest of this module already calls.
+_pdf_safe = pdf_safe
+_fit_cell_text = fit_text
 
 _MAX_FIELD_CHARS = 4000
 _MAX_ASSET_ROWS = 200
-_DEFAULT_BRAND_RGB = (59, 130, 246)
+# Plantexpand primary — HSL 82 85% 25% (the web --primary token), not Tailwind blue.
+_DEFAULT_BRAND_RGB = (78, 118, 10)
+_WORDMARK = "PLANTEXPAND"
 
 _AUDIENCE_LABELS: dict[str, str] = {
     "internal_customer": "Internal customer pack",
@@ -40,27 +60,51 @@ _REDACTION_SCOPE_NOTE = (
     "and may still identify individuals - review this pack before releasing it."
 )
 
+# ---------------------------------------------------------------------------
+# Chronology figure (INV-C15)
+# ---------------------------------------------------------------------------
 
-def _pdf_safe(value: Any, *, max_len: Optional[int] = None) -> str:
-    """Helvetica (latin-1) safe text; never invent content on failure."""
-    text = "" if value is None else str(value)
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = text.encode("latin-1", errors="replace").decode("latin-1")
-    if max_len is not None and len(text) > max_len:
-        text = text[: max_len - 3].rstrip() + "..."
-    return text
+# Internal audiences only. Timeline entries are *not* covered by the pack
+# redaction pass — that pass walks `content["sections"]` and rewrites recorded
+# identity fields, and a chronology entry carries an actor name and the source
+# record's running-sheet narrative instead. Drawing them into an external pack
+# would release identities the pack claims to have redacted, so an external or
+# unrecognised audience gets a stated withholding, not a figure. Widening this
+# set is a product decision about redacting timeline data, not a rendering one.
+_CHRONOLOGY_AUDIENCES = frozenset({"internal_customer"})
 
+_CHRONOLOGY_ENTRY_ROWS = 12
 
-def humanise_key(key: Any) -> str:
-    """Turn a stored section/field key into a report label (`root_cause` -> `Root cause`)."""
-    raw = str(key or "").strip()
-    if not raw:
-        return "Untitled"
-    words = raw.replace("-", " ").replace("_", " ").replace(".", " ").split()
-    if not words:
-        return raw
-    first, *rest = words
-    return " ".join([first[:1].upper() + first[1:], *(w.lower() for w in rest)])
+_CHRONOLOGY_WITHHELD = (
+    "The chronology is withheld from this pack. Timeline entries are outside the redaction pass "
+    "applied to the sections above, so they are not released to this audience."
+)
+
+# Where the events came from, which decides whether the checksum in Pack
+# integrity covers them. Saying so is the difference between a figure a reader
+# can verify against the stored record and one they cannot.
+_PROVENANCE_PACK = "pack"
+_PROVENANCE_RENDER = "render"
+_CHRONOLOGY_PROVENANCE = {
+    _PROVENANCE_PACK: (
+        "Chronology compiled from the stored pack payload, so it is covered by the content "
+        "checksum recorded under Pack integrity."
+    ),
+    _PROVENANCE_RENDER: (
+        "Chronology compiled from the investigation timeline when this document was rendered. "
+        "It is not part of the stored pack payload and is not covered by the content checksum "
+        "recorded under Pack integrity."
+    ),
+}
+
+_EMPTY_FINDINGS = "No findings were recorded."
+_EMPTY_WHYS = "No 5-Whys were recorded."
+_EMPTY_ROOT_CAUSE = "No root-cause statement was recorded."
+_EMPTY_CONTRIBUTING = "No contributing-factor text was recorded."
+_EMPTY_CAPA = "No CAPA actions were recorded."
+_PACK_FINDINGS = "findings"
+_PACK_ROOT_CAUSE = "root-cause"
+_PACK_CAPA = "capa"
 
 
 def format_field_value(value: Any) -> str:
@@ -129,6 +173,52 @@ def confidentiality_notice(audience: Any, redaction_log: Any) -> str:
     )
 
 
+def chronology_feed(
+    pack: dict[str, Any],
+    content: dict[str, Any],
+    timeline_events: Any = None,
+) -> tuple[Any, str]:
+    """Find the chronology events for this pack, and say where they came from.
+
+    Three accepted sources, highest precedence first:
+
+    1. ``timeline_events`` passed by the caller — render-time.
+    2. ``pack["timeline_events"]`` on the payload dict — render-time.
+    3. ``content["chronology"]`` inside the stored pack content, either a list of
+       events or a mapping with an ``events`` list — checksum-covered.
+
+    Every one of them takes the shape ``GET /investigations/{id}/timeline``
+    serialises, so origin is read from ``event_metadata["origin"]`` exactly as
+    INV-C9 writes it. This renderer only ever sees the payload handed to it: it
+    does not query the timeline, the parent audit log or the running sheets, so
+    it cannot reach content the pack withheld.
+
+    That also fixes where tenant scoping lives. The feed must already be the
+    authorised, tenant-scoped timeline for this investigation — which is what
+    ``load_parent_timeline_rows`` produces, tenant-filtered and fail-closed. This
+    function has no session and no tenant id, so it can neither verify that nor
+    widen it; supplying an unscoped feed would be a defect in the caller.
+
+    Returns ``(None, "")`` when no source supplied a list at all — meaning the
+    section is omitted entirely. That is not the same as an empty list, which
+    means a source said there is nothing to show and the pack can say so.
+    """
+    if isinstance(timeline_events, list):
+        return timeline_events, _PROVENANCE_RENDER
+
+    payload_events = pack.get("timeline_events")
+    if isinstance(payload_events, list):
+        return payload_events, _PROVENANCE_RENDER
+
+    stored = content.get("chronology")
+    if isinstance(stored, dict):
+        stored = stored.get("events")
+    if isinstance(stored, list):
+        return stored, _PROVENANCE_PACK
+
+    return None, ""
+
+
 def _brand_rgb(primary_color: Optional[str]) -> tuple[int, int, int]:
     """Parse a `#rrggbb` tenant brand colour; fall back to the platform default."""
     raw = (primary_color or "").strip().lstrip("#")
@@ -146,6 +236,34 @@ def _write_line(pdf: Any, text: str, *, height: float = 5) -> None:
     pdf.multi_cell(0, height, _pdf_safe(text), new_x="LMARGIN", new_y="NEXT")
 
 
+def _make_pack_pdf_class(fpdf_cls: Any) -> Any:
+    """FPDF subclass with a branded footer. Built here so a missing fpdf2 still fails closed."""
+
+    class PackPdf(fpdf_cls):
+        def __init__(self, brand: tuple[int, int, int], org: str, audience_label: str) -> None:
+            super().__init__(orientation="P", unit="mm", format="A4")
+            self._brand = brand
+            self._org = org
+            self._audience_label = audience_label
+
+        def footer(self) -> None:  # noqa: N802 - fpdf2 hook
+            self.set_y(-14)
+            self.set_text_color(*self._brand)
+            self.set_font("Helvetica", "", 8)
+            if self._org:
+                separator_and_wordmark = f"  |  {_WORDMARK}"
+                org_width = 95 - self.get_string_width(separator_and_wordmark)
+                left = f"{_fit_cell_text(self, self._org, org_width)}{separator_and_wordmark}"
+            else:
+                left = _WORDMARK
+            right = _pdf_safe(f"{self._audience_label}  |  Page {self.page_no()} of {{nb}}")
+            self.cell(95, 8, left, align="L")
+            self.cell(0, 8, right, align="R")
+            self.set_text_color(0, 0, 0)
+
+    return PackPdf
+
+
 class InvestigationPackPdfService:
     """Render a stored investigation customer pack as a branded PDF."""
 
@@ -161,8 +279,14 @@ class InvestigationPackPdfService:
         *,
         organisation_name: Optional[str] = None,
         primary_color: Optional[str] = None,
+        timeline_events: Any = None,
     ) -> bytes:
-        """Render pack bytes. Raises RuntimeError when fpdf2 is unavailable or rendering fails."""
+        """Render pack bytes. Raises RuntimeError when fpdf2 is unavailable or rendering fails.
+
+        ``timeline_events`` is the optional chronology feed described in
+        :func:`chronology_feed`, in the shape the timeline endpoint serialises.
+        Omit it and the pack renders exactly as it did before INV-C15.
+        """
         try:
             from fpdf import FPDF
         except ModuleNotFoundError as exc:
@@ -171,35 +295,34 @@ class InvestigationPackPdfService:
         raw_content = pack.get("content")
         content: dict[str, Any] = raw_content if isinstance(raw_content, dict) else {}
         audience = str(pack.get("audience") or "")
+        audience_label = _AUDIENCE_LABELS.get(audience, humanise_key(audience) or "Customer pack")
         reference = pack.get("investigation_reference") or content.get("investigation_reference") or "Unknown"
         title = pack.get("investigation_title") or content.get("title") or "Investigation report"
         generated_at = pack.get("generated_at") or datetime.now(timezone.utc).isoformat()
         org = (organisation_name or "").strip()
         brand = _brand_rgb(primary_color)
 
-        pdf = FPDF(orientation="P", unit="mm", format="A4")
+        pdf = _make_pack_pdf_class(FPDF)(brand, org, audience_label)
+        pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=18)
         pdf.set_margins(left=16, top=14, right=16)
         pdf.add_page()
 
-        # Branded header band — tenant name and brand colour, no remote assets fetched.
+        # Branded header band — tenant colour, bundled wordmark. No remote logo fetch.
         pdf.set_fill_color(*brand)
-        pdf.rect(0, 0, 210, 22, style="F")
+        pdf.rect(0, 0, 210, 26, style="F")
         pdf.set_text_color(255, 255, 255)
-        pdf.set_xy(16, 6)
+        pdf.set_xy(16, 7)
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 6, _pdf_safe(org or "Investigation report"), new_x="LMARGIN", new_y="NEXT")
-        pdf.set_x(16)
+        pdf.cell(110, 6, _fit_cell_text(pdf, org or "Investigation report", 110), align="L")
+        pdf.set_xy(126, 7)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(68, 6, _WORDMARK, align="R")
+        pdf.set_xy(16, 15)
         pdf.set_font("Helvetica", "", 9)
-        pdf.cell(
-            0,
-            5,
-            _pdf_safe(_AUDIENCE_LABELS.get(audience, humanise_key(audience) or "Customer pack")),
-            new_x="LMARGIN",
-            new_y="NEXT",
-        )
+        pdf.cell(0, 5, _pdf_safe(audience_label), align="L")
         pdf.set_text_color(0, 0, 0)
-        pdf.set_y(28)
+        pdf.set_y(32)
 
         pdf.set_font("Helvetica", "B", 16)
         _write_line(pdf, str(title), height=8)
@@ -217,26 +340,7 @@ class InvestigationPackPdfService:
             pdf.ln(1)
 
         self._section_heading(pdf, "Report sections", brand)
-        raw_sections = content.get("sections")
-        sections: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
-        if not sections:
-            pdf.set_font("Helvetica", "", 10)
-            _write_line(pdf, "No report sections were recorded on this investigation.")
-        else:
-            for section_key, fields in sections.items():
-                pdf.set_font("Helvetica", "B", 11)
-                _write_line(pdf, humanise_key(section_key), height=6)
-                pdf.set_font("Helvetica", "", 10)
-                if not isinstance(fields, dict) or not fields:
-                    _write_line(pdf, "No content recorded for this section.", height=4.5)
-                    pdf.ln(1)
-                    continue
-                for field_key, field_value in fields.items():
-                    pdf.set_font("Helvetica", "B", 9)
-                    _write_line(pdf, humanise_key(field_key), height=4.5)
-                    pdf.set_font("Helvetica", "", 10)
-                    _write_line(pdf, _pdf_safe(format_field_value(field_value), max_len=_MAX_FIELD_CHARS), height=4.5)
-                pdf.ln(1)
+        self._render_report_sections(pdf, content.get("sections"))
         pdf.ln(1)
 
         omitted = content.get("omitted_sections")
@@ -251,6 +355,15 @@ class InvestigationPackPdfService:
             for section_key in omitted:
                 _write_line(pdf, f"- {humanise_key(section_key)}", height=4.5)
             pdf.ln(1)
+
+        self._render_chronology(
+            pdf,
+            pack=pack,
+            content=content,
+            audience=audience,
+            brand=brand,
+            timeline_events=timeline_events,
+        )
 
         self._section_heading(pdf, "Evidence schedule", brand)
         raw_assets = pack.get("included_assets")
@@ -304,6 +417,243 @@ class InvestigationPackPdfService:
         except Exception as exc:  # noqa: BLE001 - surfaced to the caller as a 500
             logger.exception("Investigation pack PDF render failed for pack %s", pack.get("pack_uuid"))
             raise RuntimeError(f"Investigation pack PDF build failed: {exc}") from exc
+
+    def _render_report_sections(self, pdf: Any, raw_sections: Any) -> None:
+        """Report sections. Investigation lists (findings, Whys, CAPA) are shaped, not dumped."""
+        sections: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
+        if not sections:
+            pdf.set_font("Helvetica", "", 10)
+            _write_line(pdf, "No report sections were recorded on this investigation.")
+            return
+        for section_key, fields in sections.items():
+            pdf.set_font("Helvetica", "B", 11)
+            _write_line(pdf, humanise_key(section_key), height=6)
+            pdf.set_font("Helvetica", "", 10)
+            if not isinstance(fields, dict) or not fields:
+                _write_line(pdf, "No content recorded for this section.", height=4.5)
+                pdf.ln(1)
+                continue
+            renderer = {
+                _PACK_FINDINGS: self._render_findings_section,
+                _PACK_ROOT_CAUSE: self._render_rca_section,
+                _PACK_CAPA: self._render_capa_section,
+            }.get(str(section_key))
+            if renderer is not None:
+                renderer(pdf, fields)
+            else:
+                self._render_generic_section_fields(pdf, fields)
+            pdf.ln(1)
+
+    @staticmethod
+    def _render_generic_section_fields(pdf: Any, fields: dict[str, Any]) -> None:
+        for field_key, field_value in fields.items():
+            pdf.set_font("Helvetica", "B", 9)
+            _write_line(pdf, humanise_key(field_key), height=4.5)
+            pdf.set_font("Helvetica", "", 10)
+            _write_line(pdf, _pdf_safe(format_field_value(field_value), max_len=_MAX_FIELD_CHARS), height=4.5)
+
+    @staticmethod
+    def _render_findings_section(pdf: Any, fields: dict[str, Any]) -> None:
+        items = fields.get("items")
+        if not isinstance(items, list) or not items:
+            _write_line(pdf, _EMPTY_FINDINGS, height=4.5)
+            return
+        for index, item in enumerate(items, start=1):
+            if isinstance(item, dict):
+                body = item.get("body")
+            else:
+                body = item
+            rendered = format_field_value(body)
+            pdf.set_font("Helvetica", "", 10)
+            _write_line(pdf, _pdf_safe(f"{index}. {rendered}", max_len=_MAX_FIELD_CHARS), height=4.5)
+
+    @staticmethod
+    def _render_why_entries(pdf: Any, whys: Any) -> None:
+        pdf.set_font("Helvetica", "B", 9)
+        _write_line(pdf, "5 Whys", height=4.5)
+        pdf.set_font("Helvetica", "", 10)
+        if not isinstance(whys, list) or not whys:
+            _write_line(pdf, _EMPTY_WHYS, height=4.5)
+            return
+        for raw in whys:
+            if not isinstance(raw, dict):
+                continue
+            level_raw = raw.get("level")
+            if level_raw is None:
+                continue
+            try:
+                level = int(level_raw)
+            except (TypeError, ValueError):
+                continue
+            pdf.set_font("Helvetica", "B", 9)
+            _write_line(pdf, f"Why {level}", height=4.5)
+            pdf.set_font("Helvetica", "", 10)
+            _write_line(
+                pdf,
+                _pdf_safe(f"Why: {format_field_value(raw.get('why'))}", max_len=_MAX_FIELD_CHARS),
+                height=4.5,
+            )
+            _write_line(
+                pdf,
+                _pdf_safe(f"Answer: {format_field_value(raw.get('answer'))}", max_len=_MAX_FIELD_CHARS),
+                height=4.5,
+            )
+            if raw.get("evidence"):
+                _write_line(
+                    pdf,
+                    _pdf_safe(f"Evidence: {format_field_value(raw.get('evidence'))}", max_len=_MAX_FIELD_CHARS),
+                    height=4.5,
+                )
+
+    @staticmethod
+    def _render_stated_field(pdf: Any, heading: str, value: Any, empty_message: str) -> None:
+        pdf.set_font("Helvetica", "B", 9)
+        _write_line(pdf, heading, height=4.5)
+        pdf.set_font("Helvetica", "", 10)
+        if isinstance(value, str) and not value.strip():
+            _write_line(pdf, empty_message, height=4.5)
+            return
+        if isinstance(value, list) and not value:
+            _write_line(pdf, empty_message, height=4.5)
+            return
+        _write_line(pdf, _pdf_safe(format_field_value(value), max_len=_MAX_FIELD_CHARS), height=4.5)
+
+    @staticmethod
+    def _render_rca_section(pdf: Any, fields: dict[str, Any]) -> None:
+        InvestigationPackPdfService._render_stated_field(
+            pdf, "Problem statement", fields.get("problem_statement"), "No problem statement was recorded."
+        )
+        InvestigationPackPdfService._render_why_entries(pdf, fields.get("whys"))
+        InvestigationPackPdfService._render_stated_field(pdf, "Root cause", fields.get("root_cause"), _EMPTY_ROOT_CAUSE)
+        InvestigationPackPdfService._render_stated_field(
+            pdf, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING
+        )
+
+    @staticmethod
+    def _render_capa_section(pdf: Any, fields: dict[str, Any]) -> None:
+        items = fields.get("items")
+        if not isinstance(items, list) or not items:
+            _write_line(pdf, _EMPTY_CAPA, height=4.5)
+            return
+        for item in items:
+            if not isinstance(item, dict):
+                _write_line(pdf, f"- {format_field_value(item)}", height=4.5)
+                continue
+            title = str(item.get("title") or "").strip()
+            reference = str(item.get("reference") or "").strip()
+            if reference and title:
+                line = f"- {reference} - {title}"
+            elif reference:
+                line = f"- {reference}"
+            else:
+                line = f"- {title}"
+            why_level = item.get("why_level")
+            if why_level is not None:
+                try:
+                    line = f"{line} (Why {int(why_level)})"
+                except (TypeError, ValueError):
+                    pass
+            _write_line(pdf, _pdf_safe(line, max_len=_MAX_FIELD_CHARS), height=4.5)
+
+    def _render_chronology(
+        self,
+        pdf: Any,
+        *,
+        pack: dict[str, Any],
+        content: dict[str, Any],
+        audience: str,
+        brand: tuple[int, int, int],
+        timeline_events: Any = None,
+    ) -> None:
+        """Chronology section (INV-C15): the figure, its entries, or an honest gap.
+
+        Four outcomes, and the difference between them matters:
+
+        * No feed supplied at all — the section is omitted. Printing "no events"
+          when nobody asked the timeline would be inventing a fact about the
+          investigation.
+        * A feed that yields no placeable event — the section says so.
+        * A feed on a pack whose audience is not allowed the chronology — the
+          section states the withholding instead of drawing it.
+        * Otherwise — summary line, figure, the most recent entries, and where
+          the events came from.
+
+        A figure that fails to draw degrades to the entry list with the failure
+        stated. A pack export is a client deliverable; losing the graphic is
+        recoverable, returning a 500 to someone trying to issue a report is not.
+        """
+        feed, provenance = chronology_feed(pack, content, timeline_events)
+        if feed is None:
+            return
+
+        chronology = normalise_chronology_events(feed)
+        self._section_heading(pdf, "Chronology", brand)
+        pdf.set_font("Helvetica", "", 10)
+
+        if not chronology.events:
+            _write_line(pdf, chronology_summary_line(chronology), height=4.5)
+            self._render_chronology_gaps(pdf, chronology)
+            pdf.ln(1)
+            return
+
+        if audience not in _CHRONOLOGY_AUDIENCES:
+            pdf.set_font("Helvetica", "I", 9)
+            _write_line(pdf, _CHRONOLOGY_WITHHELD, height=4.5)
+            pdf.ln(1)
+            return
+
+        _write_line(pdf, chronology_summary_line(chronology), height=4.5)
+        try:
+            draw_chronology_figure(pdf, chronology, brand=brand)
+        except Exception:  # noqa: BLE001 - a pack without its figure beats a failed export
+            logger.exception("Investigation pack chronology figure failed for pack %s", pack.get("pack_uuid"))
+            pdf.set_font("Helvetica", "I", 9)
+            _write_line(
+                pdf,
+                "The chronology figure could not be drawn for this pack. The entries are listed below.",
+                height=4.5,
+            )
+
+        self._render_chronology_entries(pdf, chronology)
+        self._render_chronology_gaps(pdf, chronology)
+        pdf.set_font("Helvetica", "I", 8)
+        _write_line(pdf, _CHRONOLOGY_PROVENANCE[provenance], height=4)
+        pdf.ln(1)
+
+    @staticmethod
+    def _render_chronology_entries(pdf: Any, chronology: ChronologySet) -> None:
+        """The newest entries in words, because markers alone cannot be read."""
+        events = list(reversed(chronology.events))[:_CHRONOLOGY_ENTRY_ROWS]
+        pdf.set_font("Helvetica", "B", 9)
+        _write_line(pdf, f"Most recent entries ({len(events)} of {len(chronology.events)})", height=5)
+        pdf.set_font("Helvetica", "", 9)
+        for event in events:
+            line = f"- {format_stamp(event.at)} - {event.origin_label} - {event.label}"
+            if event.detail:
+                line = f"{line}: {event.detail}"
+            _write_line(pdf, line, height=4.2)
+
+    @staticmethod
+    def _render_chronology_gaps(pdf: Any, chronology: ChronologySet) -> None:
+        """State what the chronology could not show, rather than quietly showing less."""
+        if not chronology.omitted and not chronology.unplaceable:
+            return
+        pdf.set_font("Helvetica", "", 9)
+        if chronology.omitted:
+            _write_line(
+                pdf,
+                f"{plural(chronology.omitted, 'earlier entry', 'earlier entries')} "
+                f"{'is' if chronology.omitted == 1 else 'are'} not shown: the chronology is capped at "
+                f"the newest {len(chronology.events)}.",
+                height=4.2,
+            )
+        if chronology.unplaceable:
+            _write_line(
+                pdf,
+                f"{plural(chronology.unplaceable, 'timeline entry', 'timeline entries')} carried no readable "
+                "date and could not be placed on the chronology.",
+                height=4.2,
+            )
 
     @staticmethod
     def _section_heading(pdf: Any, title: str, brand: tuple[int, int, int]) -> None:
