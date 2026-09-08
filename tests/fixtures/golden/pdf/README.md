@@ -1,4 +1,4 @@
-# PDF figure golden fixtures (INV-C15)
+# PDF figure golden fixtures (INV-C15 / INV-C16)
 
 Each file is the recorded sequence of drawing calls one figure makes on the PDF
 object — geometry in millimetres, colours as RGB triples, fonts, shapes, and the
@@ -28,12 +28,17 @@ what the drawing layer asked for, not what fpdf2 did about it.
 |---|---|
 | `investigation_chronology_two_lane.json` | Chronology with both origins: source-record entries above the time axis, the investigation's own below it |
 | `investigation_chronology_single_event.json` | Chronology with one entry — zero time span, so the axis has a single centred stamp instead of two end dates |
+| `investigation_icam_four_bands.json` | ICAM contributing factors with all four categories populated: sub-causes, all three HSG245 depths, and one factor whose depth nobody recorded (no chip, same text column) |
+| `investigation_icam_partial_bands.json` | ICAM contributing factors in two categories only — the other two bands state "None recorded" rather than being dropped |
 
 ## Regenerating
 
 ```bash
 UPDATE_PDF_GOLDEN=1 python -m pytest tests/unit/test_investigation_pack_draw.py
 ```
+
+Regenerating rewrites **every** fixture, so check `git diff` shows only the
+figures you meant to change.
 
 That rewrites the fixtures and **fails on purpose**, so the diff has to be read
 before it is committed. Re-run without the variable to confirm green.

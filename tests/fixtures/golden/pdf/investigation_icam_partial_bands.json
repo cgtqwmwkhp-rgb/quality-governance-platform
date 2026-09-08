@@ -1,0 +1,988 @@
+[
+  {
+    "op": "set_y",
+    "args": [
+      99.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      158,
+      180,
+      120
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      158,
+      180,
+      120
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "ellipse",
+    "args": [
+      16.0,
+      43.3,
+      1.8,
+      1.8
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      19.0,
+      44.8,
+      "Immediate cause"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      78,
+      118,
+      10
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      78,
+      118,
+      10
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      42.8,
+      43.3,
+      1.8,
+      1.8
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      45.8,
+      44.8,
+      "Underlying cause"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      51,
+      77,
+      6
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      51,
+      77,
+      6
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "polygon",
+    "args": [
+      [
+        [
+          70.78,
+          43.3
+        ],
+        [
+          71.68,
+          44.2
+        ],
+        [
+          70.78,
+          45.1
+        ],
+        [
+          69.88,
+          44.2
+        ]
+      ]
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      72.88,
+      44.8,
+      "Root cause"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      62,
+      94,
+      8
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      184.53,
+      44.8,
+      "2 factors"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      216,
+      225,
+      201
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      216,
+      225,
+      201
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.3
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      16.0,
+      47.0,
+      178.0,
+      5.4
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      199,
+      199,
+      199
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.3
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      16.0,
+      47.0,
+      178.0,
+      11.4
+    ],
+    "kwargs": {
+      "style": "D"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "B",
+      7.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      18.0,
+      50.7,
+      "Organisational factors"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      183.77,
+      50.7,
+      "1 factor"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      51,
+      77,
+      6
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      51,
+      77,
+      6
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "polygon",
+    "args": [
+      [
+        [
+          19.1,
+          54.9
+        ],
+        [
+          20.0,
+          55.8
+        ],
+        [
+          19.1,
+          56.7
+        ],
+        [
+          18.2,
+          55.8
+        ]
+      ]
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      58,
+      88,
+      8
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      179.31,
+      56.9,
+      "Root cause"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      21.6,
+      56.9,
+      "No refresher training schedule"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      216,
+      225,
+      201
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      216,
+      225,
+      201
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.3
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      16.0,
+      60.0,
+      178.0,
+      5.4
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      199,
+      199,
+      199
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.3
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      16.0,
+      60.0,
+      178.0,
+      11.4
+    ],
+    "kwargs": {
+      "style": "D"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "B",
+      7.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      18.0,
+      63.7,
+      "Task and environmental conditions"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      182.53,
+      63.7,
+      "0 factors"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "I",
+      7.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      115,
+      115,
+      115
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      21.6,
+      69.9,
+      "None recorded."
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      216,
+      225,
+      201
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      216,
+      225,
+      201
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.3
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      16.0,
+      73.0,
+      178.0,
+      5.4
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      199,
+      199,
+      199
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.3
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      16.0,
+      73.0,
+      178.0,
+      11.4
+    ],
+    "kwargs": {
+      "style": "D"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "B",
+      7.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      18.0,
+      76.7,
+      "Individual and team actions"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      183.77,
+      76.7,
+      "1 factor"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      21.6,
+      82.9,
+      "Reached in"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      216,
+      225,
+      201
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      216,
+      225,
+      201
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.3
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      16.0,
+      86.0,
+      178.0,
+      5.4
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      199,
+      199,
+      199
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.3
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      16.0,
+      86.0,
+      178.0,
+      11.4
+    ],
+    "kwargs": {
+      "style": "D"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "B",
+      7.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      18.0,
+      89.7,
+      "Absent or failed defences"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      182.53,
+      89.7,
+      "0 factors"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "I",
+      7.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      115,
+      115,
+      115
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      21.6,
+      95.9,
+      "None recorded."
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_dash_pattern",
+    "args": [],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      255,
+      255,
+      255
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "helvetica",
+      "",
+      10.0
+    ],
+    "kwargs": {}
+  }
+]

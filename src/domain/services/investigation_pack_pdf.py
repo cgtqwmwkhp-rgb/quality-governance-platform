@@ -10,16 +10,21 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from functools import partial
+from typing import Any, Callable, Optional
 
 from src.domain.services.investigation_pack_draw import (
     ChronologySet,
+    IcamFactorSet,
     chronology_summary_line,
     draw_chronology_figure,
+    draw_icam_factors_figure,
     fit_text,
     format_stamp,
     humanise_key,
+    icam_summary_line,
     normalise_chronology_events,
+    normalise_icam_factors,
     pdf_safe,
     plural,
 )
@@ -105,6 +110,26 @@ _EMPTY_CAPA = "No CAPA actions were recorded."
 _PACK_FINDINGS = "findings"
 _PACK_ROOT_CAUSE = "root-cause"
 _PACK_CAPA = "capa"
+
+# ---------------------------------------------------------------------------
+# ICAM contributing-factor diagram (INV-C16)
+# ---------------------------------------------------------------------------
+
+# Field inside the stored `root-cause` section, written by
+# investigation_pack_content.serialize_rca_section. Nothing else supplies it:
+# the diagram is drawn from the stored, checksum-covered payload, so an approved
+# omit of `root-cause` withholds the figure by taking the section away rather
+# than by a rule here that could be forgotten.
+_PACK_ICAM_FACTORS = "icam_factors"
+
+_ICAM_HEADING = "ICAM contributing factors"
+_ICAM_FIGURE_NOTE = (
+    "The diagram groups the recorded contributing factors by ICAM category and shows the HSG245 causal depth "
+    "recorded against each. Where an entry is too long for its row it is shortened with an ellipsis."
+)
+_ICAM_FIGURE_FAILED = (
+    "The ICAM contributing-factor diagram could not be drawn for this pack. The factors are listed below."
+)
 
 
 def format_field_value(value: Any) -> str:
@@ -340,7 +365,7 @@ class InvestigationPackPdfService:
             pdf.ln(1)
 
         self._section_heading(pdf, "Report sections", brand)
-        self._render_report_sections(pdf, content.get("sections"))
+        self._render_report_sections(pdf, content.get("sections"), brand=brand, pack_uuid=pack.get("pack_uuid"))
         pdf.ln(1)
 
         omitted = content.get("omitted_sections")
@@ -418,13 +443,30 @@ class InvestigationPackPdfService:
             logger.exception("Investigation pack PDF render failed for pack %s", pack.get("pack_uuid"))
             raise RuntimeError(f"Investigation pack PDF build failed: {exc}") from exc
 
-    def _render_report_sections(self, pdf: Any, raw_sections: Any) -> None:
-        """Report sections. Investigation lists (findings, Whys, CAPA) are shaped, not dumped."""
+    def _render_report_sections(
+        self,
+        pdf: Any,
+        raw_sections: Any,
+        *,
+        brand: tuple[int, int, int],
+        pack_uuid: Any = None,
+    ) -> None:
+        """Report sections. Investigation lists (findings, Whys, CAPA) are shaped, not dumped.
+
+        ``brand`` and ``pack_uuid`` are only needed by the RCA section, which
+        draws the ICAM figure (INV-C16) and logs the pack when it cannot. They
+        are bound onto that one renderer rather than pushed onto every section.
+        """
         sections: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
         if not sections:
             pdf.set_font("Helvetica", "", 10)
             _write_line(pdf, "No report sections were recorded on this investigation.")
             return
+        renderers: dict[str, Callable[[Any, dict[str, Any]], None]] = {
+            _PACK_FINDINGS: self._render_findings_section,
+            _PACK_ROOT_CAUSE: partial(self._render_rca_section, brand=brand, pack_uuid=pack_uuid),
+            _PACK_CAPA: self._render_capa_section,
+        }
         for section_key, fields in sections.items():
             pdf.set_font("Helvetica", "B", 11)
             _write_line(pdf, humanise_key(section_key), height=6)
@@ -433,11 +475,7 @@ class InvestigationPackPdfService:
                 _write_line(pdf, "No content recorded for this section.", height=4.5)
                 pdf.ln(1)
                 continue
-            renderer = {
-                _PACK_FINDINGS: self._render_findings_section,
-                _PACK_ROOT_CAUSE: self._render_rca_section,
-                _PACK_CAPA: self._render_capa_section,
-            }.get(str(section_key))
+            renderer = renderers.get(str(section_key))
             if renderer is not None:
                 renderer(pdf, fields)
             else:
@@ -518,16 +556,123 @@ class InvestigationPackPdfService:
             return
         _write_line(pdf, _pdf_safe(format_field_value(value), max_len=_MAX_FIELD_CHARS), height=4.5)
 
-    @staticmethod
-    def _render_rca_section(pdf: Any, fields: dict[str, Any]) -> None:
-        InvestigationPackPdfService._render_stated_field(
+    def _render_rca_section(
+        self,
+        pdf: Any,
+        fields: dict[str, Any],
+        *,
+        brand: tuple[int, int, int] = _DEFAULT_BRAND_RGB,
+        pack_uuid: Any = None,
+    ) -> None:
+        self._render_stated_field(
             pdf, "Problem statement", fields.get("problem_statement"), "No problem statement was recorded."
         )
-        InvestigationPackPdfService._render_why_entries(pdf, fields.get("whys"))
-        InvestigationPackPdfService._render_stated_field(pdf, "Root cause", fields.get("root_cause"), _EMPTY_ROOT_CAUSE)
-        InvestigationPackPdfService._render_stated_field(
-            pdf, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING
-        )
+        self._render_why_entries(pdf, fields.get("whys"))
+        self._render_stated_field(pdf, "Root cause", fields.get("root_cause"), _EMPTY_ROOT_CAUSE)
+        self._render_stated_field(pdf, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING)
+        self._render_icam_factors(pdf, fields, brand=brand, pack_uuid=pack_uuid)
+
+    def _render_icam_factors(
+        self,
+        pdf: Any,
+        fields: dict[str, Any],
+        *,
+        brand: tuple[int, int, int],
+        pack_uuid: Any = None,
+    ) -> None:
+        """The ICAM contributing-factor diagram (INV-C16), or an honest line instead of one.
+
+        Three outcomes, and the difference between them matters:
+
+        * The stored section carries no ``icam_factors`` key — nothing is
+          rendered. A pack generated before this change never consulted the
+          factors, and printing "none are recorded" for it would claim something
+          was checked that was not. Same rule as the chronology feed.
+        * The key is present and yields no factor — the pack says so. "None were
+          ever recorded" and "every one was deleted" are the same fact, and it is
+          the one the reader needs.
+        * Otherwise — the summary line, the four-band figure, the note that says
+          what the figure is, and what the figure could not show.
+
+        An approved omit of ``root-cause`` withholds the diagram without a check
+        here: the withheld section never reaches ``content["sections"]``, so this
+        method is never reached for it.
+
+        Unlike the chronology, the figure is *not* audience-gated. Every word it
+        draws is already in the ``Contributing factors`` text above it — INV-C12
+        derives that text from these same rows — and both go through the same
+        redaction pass. Withholding the diagram would hide nothing the pack has
+        not already released, while making an external pack look as though the
+        ICAM analysis had not been done.
+
+        A figure that fails to draw degrades to the factors in words with the
+        failure stated. Losing a graphic is recoverable; failing a client's pack
+        export is not.
+        """
+        raw = fields.get(_PACK_ICAM_FACTORS)
+        if raw is None:
+            return
+
+        factors = normalise_icam_factors(raw)
+        pdf.set_font("Helvetica", "B", 9)
+        _write_line(pdf, _ICAM_HEADING, height=4.5)
+        pdf.set_font("Helvetica", "", 10)
+        _write_line(pdf, icam_summary_line(factors), height=4.5)
+
+        if factors.factors:
+            try:
+                draw_icam_factors_figure(pdf, factors, brand=brand)
+            except Exception:  # noqa: BLE001 - a pack without its figure beats a failed export
+                logger.exception("Investigation pack ICAM figure failed for pack %s", pack_uuid)
+                pdf.set_font("Helvetica", "I", 9)
+                _write_line(pdf, _ICAM_FIGURE_FAILED, height=4.5)
+                self._render_icam_entries(pdf, factors)
+            else:
+                pdf.set_font("Helvetica", "I", 8)
+                _write_line(pdf, _ICAM_FIGURE_NOTE, height=4)
+
+        self._render_icam_gaps(pdf, factors)
+
+    @staticmethod
+    def _render_icam_entries(pdf: Any, factors: IcamFactorSet) -> None:
+        """The factors in words, in the line shape INV-C12 already writes them in."""
+        pdf.set_font("Helvetica", "", 9)
+        for factor in factors.factors:
+            line = f"- {factor.category_label}: {factor.label}"
+            depth_label = factor.depth_label
+            if depth_label:
+                line = f"{line} [{depth_label.lower()}]"
+            _write_line(pdf, _pdf_safe(line, max_len=_MAX_FIELD_CHARS), height=4.2)
+
+    @staticmethod
+    def _render_icam_gaps(pdf: Any, factors: IcamFactorSet) -> None:
+        """State what the diagram could not show, rather than quietly showing less."""
+        if not factors.omitted and not factors.unpresentable:
+            return
+        pdf.set_font("Helvetica", "", 9)
+        if factors.omitted:
+            _write_line(
+                pdf,
+                f"{plural(factors.omitted, 'further factor', 'further factors')} "
+                f"{'is' if factors.omitted == 1 else 'are'} not shown in the diagram, which is capped at the "
+                f"first {len(factors.factors)} in ICAM category order.",
+                height=4.2,
+            )
+        if factors.unpresentable:
+            _write_line(
+                pdf,
+                f"{plural(factors.unpresentable, 'stored cause', 'stored causes')} could not be presented "
+                "on the diagram.",
+                height=4.2,
+            )
+            if factors.unmapped_categories:
+                named = ", ".join(humanise_key(name) for name in factors.unmapped_categories)
+                _write_line(
+                    pdf,
+                    f"That count includes causes stored under {named} - outside the four ICAM categories, so "
+                    "they are counted here rather than recategorised.",
+                    height=4.2,
+                )
 
     @staticmethod
     def _render_capa_section(pdf: Any, fields: dict[str, Any]) -> None:
