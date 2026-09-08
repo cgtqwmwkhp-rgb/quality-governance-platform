@@ -1093,6 +1093,60 @@ async def download_customer_pack_pdf(
     )
 
 
+@router.get(
+    "/{investigation_id:int}/packs/{pack_id:int}/docx",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {},
+            },
+            "description": "Editable working copy (.docx). Not retained at issue.",
+        }
+    },
+)
+async def download_customer_pack_docx(
+    investigation_id: int,
+    pack_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
+) -> Response:
+    """Return a Word working copy of an unissued pack (INV-PACK-R3).
+
+    Issued packs keep the C17 retained PDF as the disclosure. Word is how the
+    report is amended *before* issue; after issue the working copy is closed so
+    this cannot become a live re-render of what a customer was given.
+    """
+    from src.domain.services.investigation_pack_docx import (
+        DOCX_MEDIA_TYPE,
+        WORKING_COPY_CLOSED,
+        WORKING_COPY_CLOSED_MESSAGE,
+        InvestigationPackDocxService,
+    )
+    from src.domain.services.investigation_pack_issue import has_retained_pdf, pack_render_payload
+
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
+    pack = await _pack_for_investigation_or_404(
+        db, investigation_id=investigation_id, pack_id=pack_id, tenant_id=tenant_id
+    )
+
+    if has_retained_pdf(pack):
+        raise ConflictError(WORKING_COPY_CLOSED_MESSAGE, code=WORKING_COPY_CLOSED)
+
+    filename = InvestigationPackDocxService.docx_filename(investigation.reference_number, pack.pack_uuid)
+    try:
+        docx_bytes = InvestigationPackDocxService().build_docx_bytes(pack_render_payload(investigation, pack))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return Response(
+        content=docx_bytes,
+        media_type=DOCX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 async def _pack_for_investigation_or_404(
     db: AsyncSession,
     *,
