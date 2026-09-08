@@ -50,6 +50,7 @@ from src.domain.services.investigation_pack_draw import (
     space_remaining,
     tint,
     vector_state,
+    wrap_text,
 )
 from tests.unit._pdf_golden import assert_matches_golden, figure_pdf, record
 
@@ -122,6 +123,18 @@ class TestTextPrimitives:
 
         assert fitted.endswith("...")
         assert pdf.get_string_width(fitted) <= 40
+
+    def test_wrap_text_splits_without_an_ellipsis(self) -> None:
+        pdf = figure_pdf()
+        pdf.set_font("Helvetica", "", 8)
+        lines = wrap_text(pdf, "A very long chronology entry label " * 6, 40)
+
+        assert lines
+        assert all("..." not in line for line in lines)
+        assert all(pdf.get_string_width(line) <= 40 for line in lines)
+        assert "".join(line.replace(" ", "") for line in lines) == ("A very long chronology entry label " * 6).replace(
+            " ", ""
+        )
 
     def test_fit_text_returns_empty_rather_than_overflowing_a_tiny_cell(self) -> None:
         pdf = figure_pdf()
