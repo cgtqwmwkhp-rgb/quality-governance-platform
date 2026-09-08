@@ -147,11 +147,6 @@ def write_cover(pdf: Any, meta: DocumentMeta) -> None:
         pdf.set_text_color(*brand.JET_GREY)
         pdf.multi_cell(0, 4.5, brand.text_safe(meta.confidentiality), new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_y(270)
-    pdf.set_font(brand.FAMILY_REGULAR, "", 7)
-    pdf.set_text_color(*brand.JET_GREY)
-    pdf.multi_cell(0, 4, brand.text_safe(brand.legal_footer_line()), align="C", new_x="LMARGIN", new_y="NEXT")
-
 
 def write_contents(pdf: Any, document: PackDocument) -> None:
     entries = document.contents_entries()

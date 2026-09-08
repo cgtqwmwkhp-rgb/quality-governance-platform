@@ -265,8 +265,7 @@ def _incident_reference(pack: dict[str, Any], content: dict[str, Any]) -> str:
             found = details.get(key)
             if found:
                 return str(found)
-    title = str(pack.get("investigation_title") or content.get("title") or "")
-    return title
+    return ""
 
 
 def _write_line(pdf: Any, text: str, *, height: float = 5) -> None:

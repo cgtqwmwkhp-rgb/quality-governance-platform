@@ -247,6 +247,21 @@ class TestPackBranding:
         assert brand.CRIMSON != (59, 130, 246)
         assert brand.JET_GREY != (59, 130, 246)
 
+    def test_cover_does_not_create_a_footer_only_page(self) -> None:
+        from pypdf import PdfReader
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack())
+        pages = PdfReader(io.BytesIO(out)).pages
+
+        assert "Contents" in (pages[1].extract_text() or "")
+
+    def test_missing_incident_reference_uses_investigation_reference_not_title(self) -> None:
+        pack = _pack()
+
+        assert pack_pdf._incident_reference(pack, pack["content"]) == ""
+        cover = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+        assert "INCIDENT REFERENCE INV-2026-0007" in cover
+
     def test_fixed_cell_text_is_ellipsized_to_its_rendered_width(self) -> None:
         from fpdf import FPDF
 
