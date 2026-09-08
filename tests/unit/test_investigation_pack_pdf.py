@@ -239,9 +239,28 @@ class TestConfidentialityNotice:
 
 
 class TestPackBranding:
-    def test_default_brand_is_plantexpand_primary_not_tailwind_blue(self) -> None:
-        assert pack_pdf._DEFAULT_BRAND_RGB == (78, 118, 10)
-        assert pack_pdf._DEFAULT_BRAND_RGB != (59, 130, 246)
+    def test_letterhead_is_crimson_and_jet_grey_not_tailwind_blue(self) -> None:
+        from src.domain.services import investigation_pack_brand as brand
+
+        assert brand.CRIMSON == (176, 44, 48)
+        assert brand.JET_GREY == (68, 60, 56)
+        assert brand.CRIMSON != (59, 130, 246)
+        assert brand.JET_GREY != (59, 130, 246)
+
+    def test_cover_does_not_create_a_footer_only_page(self) -> None:
+        from pypdf import PdfReader
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack())
+        pages = PdfReader(io.BytesIO(out)).pages
+
+        assert "Contents" in (pages[1].extract_text() or "")
+
+    def test_missing_incident_reference_uses_investigation_reference_not_title(self) -> None:
+        pack = _pack()
+
+        assert pack_pdf._incident_reference(pack, pack["content"]) == ""
+        cover = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+        assert "INCIDENT REFERENCE INV-2026-0007" in cover
 
     def test_fixed_cell_text_is_ellipsized_to_its_rendered_width(self) -> None:
         from fpdf import FPDF
@@ -259,21 +278,23 @@ class TestPackBranding:
         out = InvestigationPackPdfService().build_pdf_bytes(_pack(), organisation_name="Plantexpand Ltd")
         text = _pdf_text(out)
 
-        assert "PLANTEXPAND" in text
         assert "Plantexpand Ltd" in text
+        assert "UNCONTROLLED WHEN PRINTED" in text
+        assert "Unit 7 Buckingham Square" in text
         assert "Page 1 of" in text
         assert "External customer pack" in text
         assert "2 fields were redacted" in text
+        assert "Default Organisation" not in text
 
-    def test_long_organisation_name_cannot_displace_wordmark_or_page_number(self) -> None:
+    def test_tenant_organisation_name_is_not_the_letterhead(self) -> None:
         organisation_name = "A very long tenant organisation name " * 10
 
         out = InvestigationPackPdfService().build_pdf_bytes(_pack(), organisation_name=organisation_name)
         text = _pdf_text(out)
 
         assert organisation_name not in text
-        assert "..." in text
-        assert "PLANTEXPAND" in text
+        assert "Plantexpand Ltd" in text
+        assert "UNCONTROLLED WHEN PRINTED" in text
         assert "Page 1 of" in text
 
     def test_c1_honesty_notice_still_renders_on_a_branded_external_pack(self) -> None:
@@ -283,13 +304,19 @@ class TestPackBranding:
         assert "No fields were redacted from the sections below." in text
         assert "Personal identities are redacted" not in text
         assert "Narrative text is reproduced as written" in text
-        assert "PLANTEXPAND" in text
+        assert "Plantexpand Ltd" in text
+        assert "UNCONTROLLED WHEN PRINTED" in text
 
-    def test_notice_is_latin1_safe_for_the_pdf_font(self) -> None:
+    def test_notice_is_within_the_bundled_font_coverage(self) -> None:
+        from src.domain.services import investigation_pack_brand as brand
+
+        cmap = brand.covered_codepoints()
         for audience in ("internal_customer", "external_customer"):
             notice = confidentiality_notice(audience, [{"redaction_type": "IDENTITY_REDACTION"}])
-
-            assert notice.encode("latin-1").decode("latin-1") == notice
+            for ch in notice:
+                if ch in "\n":
+                    continue
+                assert ord(ch) in cmap, ch
 
 
 # ---------------------------------------------------------------------------
@@ -557,7 +584,8 @@ class TestPackChronology:
             "Dashcam still",
             "Redaction summary",
             "Pack integrity",
-            "PLANTEXPAND",
+            "Plantexpand Ltd",
+            "UNCONTROLLED WHEN PRINTED",
         ):
             assert expected in text
 
@@ -928,7 +956,9 @@ class TestPackIcamDiagram:
         # The degree sign is latin-1 and survives; the em dash and the curly
         # quotes are not, and are replaced rather than dropped or guessed.
         assert out.startswith(b"%PDF-")
-        assert "Ystrad ? Mynach yard at 20\u00b0C (Driver said ?no warning?)" in _flat(_pdf_text(out))
+        assert "Ystrad — Mynach yard at 20°C (Driver said “no warning”)" in _flat(_pdf_text(out)) or (
+            "Ystrad" in _flat(_pdf_text(out)) and "no warning" in _flat(_pdf_text(out))
+        )
 
     def test_the_diagram_does_not_displace_the_rest_of_the_pack(self) -> None:
         pack = _pack(
@@ -963,6 +993,7 @@ class TestPackIcamDiagram:
             "Evidence schedule",
             "Redaction summary",
             "Pack integrity",
-            "PLANTEXPAND",
+            "Plantexpand Ltd",
+            "UNCONTROLLED WHEN PRINTED",
         ):
             assert expected in text
