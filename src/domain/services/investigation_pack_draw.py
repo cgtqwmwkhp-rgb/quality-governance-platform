@@ -128,6 +128,59 @@ def fit_text(pdf: Any, text: Any, max_width: float) -> str:
     return safe_text[:low].rstrip() + ellipsis
 
 
+def wrap_text(pdf: Any, text: Any, max_width: float) -> list[str]:
+    """Split document-safe text onto lines that fit ``max_width``. Never ellipsizes.
+
+    The chronology/ICAM Helvetica figures still use :func:`fit_text` so their
+    golden fixtures stay byte-identical. The pack path (Inter) wraps instead of
+    treating an ellipsis as layout.
+    """
+    safe_text = _safe_for_document(pdf, text)
+    if not safe_text or max_width <= 0:
+        return []
+    if pdf.get_string_width(safe_text) <= max_width:
+        return [safe_text]
+
+    def _split_overlong(token: str) -> list[str]:
+        parts: list[str] = []
+        rest = token
+        while rest:
+            if pdf.get_string_width(rest) <= max_width:
+                parts.append(rest)
+                break
+            low, high, cut = 1, len(rest), 1
+            while low <= high:
+                mid = (low + high) // 2
+                if pdf.get_string_width(rest[:mid]) <= max_width:
+                    cut = mid
+                    low = mid + 1
+                else:
+                    high = mid - 1
+            parts.append(rest[:cut])
+            rest = rest[cut:]
+        return parts
+
+    lines: list[str] = []
+    current = ""
+    for word in safe_text.split(" "):
+        candidate = word if not current else f"{current} {word}"
+        if pdf.get_string_width(candidate) <= max_width:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+            current = ""
+        chunks = _split_overlong(word)
+        if not chunks:
+            continue
+        *full, last = chunks
+        lines.extend(full)
+        current = last
+    if current:
+        lines.append(current)
+    return lines
+
+
 @dataclass(frozen=True)
 class Frame:
     """A rectangular region in millimetres, top-left origin (PDF user space)."""
@@ -830,6 +883,7 @@ _ICAM_SUB_CAUSE_CHARS = 120
 _ICAM_HEADER_H = 6.0
 _ICAM_STRIP_H = 5.4
 _ICAM_ROW_H = 4.8
+_ICAM_WRAP_LEADING = 3.2
 _ICAM_BAND_PAD = 1.2
 _ICAM_BAND_GAP = 1.6
 _ICAM_ROW_INSET = 2.2
@@ -1065,6 +1119,42 @@ def icam_figure_height(factors: IcamFactorSet) -> float:
     return _ICAM_HEADER_H + bands + rows * _ICAM_ROW_H
 
 
+def _icam_wraps(pdf: Any) -> bool:
+    return bool(getattr(pdf, "_pack_font_family", None))
+
+
+def _icam_cause_width(frame: Frame, factor: IcamFactor) -> float:
+    available = frame.right - _ICAM_ROW_INSET - _icam_row_text_x(frame)
+    if factor.depth_label is not None and factor.depth is not None:
+        available -= _ICAM_DEPTH_COL
+    return max(6.0, available)
+
+
+def _icam_row_step(pdf: Any, frame: Frame, factor: IcamFactor) -> float:
+    if not _icam_wraps(pdf):
+        return _ICAM_ROW_H
+    pdf.set_font(str(pdf._pack_font_family), "", 7.5)
+    lines = wrap_text(pdf, factor.label, _icam_cause_width(frame, factor))
+    return max(_ICAM_ROW_H, 2.0 + max(1, len(lines)) * _ICAM_WRAP_LEADING)
+
+
+def _icam_band_box_height(pdf: Any, frame: Frame, entries: Sequence[IcamFactor]) -> float:
+    if not entries:
+        return _ICAM_STRIP_H + _ICAM_BAND_PAD + _ICAM_ROW_H
+    if not _icam_wraps(pdf):
+        return _ICAM_STRIP_H + _ICAM_BAND_PAD + len(entries) * _ICAM_ROW_H
+    return _ICAM_STRIP_H + _ICAM_BAND_PAD + sum(_icam_row_step(pdf, frame, entry) for entry in entries)
+
+
+def _icam_wrapped_figure_height(pdf: Any, factors: IcamFactorSet, width: float) -> float:
+    probe = Frame(float(pdf.l_margin), 0.0, width, 10_000.0)
+    bands = sum(
+        _icam_band_box_height(pdf, probe, factors.for_category(category)) + _ICAM_BAND_GAP
+        for category in ICAM_CATEGORIES
+    )
+    return _ICAM_HEADER_H + bands
+
+
 def draw_icam_factors_figure(
     pdf: Any,
     factors: IcamFactorSet,
@@ -1095,7 +1185,9 @@ def draw_icam_factors_figure(
             0.0,
         )
 
-    frame = reserve_frame(pdf, icam_figure_height(factors), width=width, top_gap=1.0)
+    width_mm = content_width(pdf) if width is None else width
+    height = _icam_wrapped_figure_height(pdf, factors, width_mm) if _icam_wraps(pdf) else icam_figure_height(factors)
+    frame = reserve_frame(pdf, height, width=width, top_gap=1.0)
     with vector_state(pdf):
         _draw_icam_body(pdf, frame, factors, brand)
     return frame
@@ -1151,13 +1243,12 @@ def _draw_icam_band(
     brand: RGB,
 ) -> float:
     """One category band: a titled strip, then a row per factor. Returns the next band's top."""
-    rows = max(1, len(entries))
-    height = _ICAM_STRIP_H + _ICAM_BAND_PAD + rows * _ICAM_ROW_H
+    height = _icam_band_box_height(pdf, frame, entries)
     if y + height > frame.bottom + 0.05:
         # Unreachable through normalise_icam_factors, which caps the row count
         # so every band fits. A hand-built set can still overrun, and painting
         # over the footer is worse than stopping and saying so in the log.
-        logger.warning("pack_draw_icam_band_clipped category=%s rows=%d", category, rows)
+        logger.warning("pack_draw_icam_band_clipped category=%s rows=%d", category, len(entries))
         return frame.bottom
 
     strip_rgb = tint(brand, 0.78)
@@ -1200,7 +1291,7 @@ def _draw_icam_band(
         )
     for entry in entries:
         _draw_icam_row(pdf, frame, row_y, entry, brand)
-        row_y += _ICAM_ROW_H
+        row_y += _icam_row_step(pdf, frame, entry)
 
     return y + height + _ICAM_BAND_GAP
 
@@ -1221,6 +1312,7 @@ def _draw_icam_row(pdf: Any, frame: Frame, y: float, factor: IcamFactor, brand: 
     text_x = _icam_row_text_x(frame)
     available = frame.right - _ICAM_ROW_INSET - text_x
     depth_label = factor.depth_label
+    wrap = bool(getattr(pdf, "_pack_font_family", None))
 
     if depth_label is not None and factor.depth is not None:
         draw_marker(
@@ -1245,4 +1337,13 @@ def _draw_icam_row(pdf: Any, frame: Frame, y: float, factor: IcamFactor, brand: 
         # an unclassified factor gets the full width for its own words.
         available -= _ICAM_DEPTH_COL
 
-    draw_text(pdf, text_x, baseline, factor.label, size=7.5, max_width=max(6.0, available))
+    cause_width = max(6.0, available)
+    if wrap:
+        pdf.set_font(str(pdf._pack_font_family), "", 7.5)
+        pdf.set_text_color(*BLACK)
+        line_y = baseline
+        for line in wrap_text(pdf, factor.label, cause_width):
+            pdf.text(text_x, line_y, line)
+            line_y += _ICAM_WRAP_LEADING
+        return
+    draw_text(pdf, text_x, baseline, factor.label, size=7.5, max_width=cause_width)
