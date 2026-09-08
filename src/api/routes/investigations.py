@@ -21,6 +21,10 @@ from src.api.schemas.investigation import (
     InvestigationCommentsResponse,
     InvestigationCustomerPackResponse,
     InvestigationPackGeneratedResponse,
+    InvestigationPackIssuedResponse,
+    InvestigationPackIssueRequest,
+    InvestigationPackRedactionReviewRequest,
+    InvestigationPackRedactionReviewResponse,
     InvestigationPacksResponse,
     InvestigationRunCreate,
     InvestigationRunListResponse,
@@ -36,6 +40,7 @@ from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
     InvestigationCustomerPack,
+    InvestigationPackDisclosure,
     InvestigationRevisionEvent,
     InvestigationRun,
     InvestigationStatus,
@@ -961,7 +966,8 @@ async def get_investigation_packs(
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List customer pack metadata without exposing full content payloads."""
-    await _get_investigation_or_404(investigation_id, db, current_user)
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
 
     query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
     count_query = select(func.count(InvestigationCustomerPack.id)).where(
@@ -973,6 +979,25 @@ async def get_investigation_packs(
     result = await db.execute(query)
     packs = result.scalars().all()
 
+    # INV-C17: how many times each pack on this page has actually been issued.
+    # Tenant-scoped as well as investigation-scoped so a disclosure that somehow
+    # carried another tenant's id cannot be counted into this one's total.
+    disclosure_counts: dict[int, int] = {}
+    page_pack_ids = [int(p.id) for p in packs]
+    if page_pack_ids:
+        counts = await db.execute(
+            select(
+                InvestigationPackDisclosure.pack_id,
+                func.count(InvestigationPackDisclosure.id),
+            )
+            .where(
+                InvestigationPackDisclosure.pack_id.in_(page_pack_ids),
+                InvestigationPackDisclosure.tenant_id == tenant_id,
+            )
+            .group_by(InvestigationPackDisclosure.pack_id)
+        )
+        disclosure_counts = {int(pack_id): int(count or 0) for pack_id, count in counts.all()}
+
     return {
         "items": [
             {
@@ -982,6 +1007,13 @@ async def get_investigation_packs(
                 "audience": p.audience.value if hasattr(p.audience, "value") else str(p.audience),
                 "generated_at": p.created_at,
                 "checksum_sha256": p.checksum_sha256,
+                "redaction_review_cleared_at": p.redaction_review_cleared_at,
+                "redaction_review_at": p.redaction_review_at,
+                "redaction_review_by_id": p.redaction_review_by_id,
+                "issued_at": p.issued_at,
+                "issued_by_id": p.issued_by_id,
+                "issued_pdf_sha256": p.issued_pdf_sha256,
+                "disclosure_count": disclosure_counts.get(int(p.id), 0),
             }
             for p in packs
         ],
@@ -1004,63 +1036,296 @@ async def download_customer_pack_pdf(
     db: DbSession,
     current_user: CurrentUser,
 ) -> Response:
-    """Render a previously generated customer pack as a branded PDF (PX-143).
+    """Return a customer pack as a branded PDF (PX-143).
 
-    Renders the stored, already-redacted pack payload — this endpoint never
+    Two paths, and which one runs is a fact about the pack rather than a
+    setting. A pack that has been **issued** (INV-C17 / DEC-5) is served from
+    the bytes retained at that moment, so a later renderer change cannot alter
+    what a customer was given. A pack that has not been issued is rendered from
+    the stored, already-redacted payload as before — this endpoint never
     re-reads the investigation, so it cannot leak content the pack omitted.
     """
-    from src.domain.models.tenant import Tenant
+    from src.domain.services.investigation_pack_issue import (
+        RetainedPackUnavailableError,
+        has_retained_pdf,
+        load_pack_branding,
+        pack_render_payload,
+        read_retained_pdf,
+        render_pack_pdf,
+    )
     from src.domain.services.investigation_pack_pdf import InvestigationPackPdfService
 
     investigation = await _get_investigation_or_404(investigation_id, db, current_user)
-
-    result = await db.execute(
-        select(InvestigationCustomerPack).where(
-            InvestigationCustomerPack.id == pack_id,
-            InvestigationCustomerPack.investigation_id == investigation_id,
-        )
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
+    pack = await _pack_for_investigation_or_404(
+        db, investigation_id=investigation_id, pack_id=pack_id, tenant_id=tenant_id
     )
-    pack = result.scalar_one_or_none()
-    if pack is None:
-        raise NotFoundError(f"Customer pack {pack_id} not found for investigation {investigation_id}")
 
-    organisation_name: Optional[str] = None
-    primary_color: Optional[str] = None
-    if investigation.tenant_id is not None:
-        tenant = await db.scalar(select(Tenant).where(Tenant.id == investigation.tenant_id))
-        if tenant is not None:
-            organisation_name = tenant.name
-            primary_color = tenant.primary_color
+    filename = InvestigationPackPdfService.pdf_filename(investigation.reference_number, pack.pack_uuid)
 
-    payload = {
-        "pack_uuid": pack.pack_uuid,
-        "audience": pack.audience.value if hasattr(pack.audience, "value") else str(pack.audience),
-        "investigation_reference": investigation.reference_number,
-        "investigation_title": investigation.title,
-        "generated_at": pack.created_at.isoformat() if pack.created_at else None,
-        "checksum_sha256": pack.checksum_sha256,
-        "content": pack.content,
-        "redaction_log": pack.redaction_log,
-        "included_assets": pack.included_assets,
-    }
-
-    service = InvestigationPackPdfService()
-    try:
-        pdf_bytes = service.build_pdf_bytes(
-            payload,
-            organisation_name=organisation_name,
-            primary_color=primary_color,
+    if has_retained_pdf(pack):
+        try:
+            retained = await read_retained_pdf(pack)
+        except RetainedPackUnavailableError as exc:
+            # Deliberately not a re-render. An issued pack whose retained copy
+            # cannot be verified is a failure to report, not one to paper over
+            # with a document nobody was actually sent.
+            logger.error(
+                "investigation_pack_retained_download_failed",
+                extra={"pack_id": pack_id, "investigation_id": investigation_id, "reason": exc.code},
+            )
+            raise HTTPException(status_code=500, detail={"error_code": exc.code, "message": exc.message}) from exc
+        return Response(
+            content=retained,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+    branding = await load_pack_branding(db, investigation.tenant_id)
+    try:
+        pdf_bytes = render_pack_pdf(pack_render_payload(investigation, pack), branding)
     except RuntimeError as exc:
         # Fail loudly rather than handing back an empty or half-rendered file.
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    filename = service.pdf_filename(investigation.reference_number, pack.pack_uuid)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+async def _pack_for_investigation_or_404(
+    db: AsyncSession,
+    *,
+    investigation_id: int,
+    pack_id: int,
+    tenant_id: int,
+    for_update: bool = False,
+) -> InvestigationCustomerPack:
+    """Load one pack, scoped to both its investigation and the caller's tenant.
+
+    ``for_update`` takes a row lock, which the issue path needs: two concurrent
+    issues of the same pack would otherwise both find no retained bytes, render
+    separately, and leave a disclosure row naming a checksum the retained copy
+    no longer has. SQLite ignores ``FOR UPDATE``; the serialisation this buys is
+    a PostgreSQL one, matching the lock the RCA and findings services take.
+    """
+    query = select(InvestigationCustomerPack).where(
+        InvestigationCustomerPack.id == pack_id,
+        InvestigationCustomerPack.investigation_id == investigation_id,
+        InvestigationCustomerPack.tenant_id == tenant_id,
+    )
+    if for_update:
+        query = query.with_for_update()
+    result = await db.execute(query)
+    pack = result.scalar_one_or_none()
+    if pack is None:
+        raise NotFoundError(f"Customer pack {pack_id} not found for investigation {investigation_id}")
+    return pack
+
+
+@router.post(
+    "/{investigation_id:int}/packs/{pack_id:int}/redaction-review",
+    response_model=InvestigationPackRedactionReviewResponse,
+)
+async def review_customer_pack_redaction(
+    investigation_id: int,
+    pack_id: int,
+    payload: InvestigationPackRedactionReviewRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("investigation:approve_customer_omit"))],
+):
+    """Record a human redaction review on a generated pack (INV-C17 / DEC-4).
+
+    Gated on the same permission as approving a section omit, because it is the
+    same class of act: someone accountable deciding what a customer may see.
+    The review is only ever recorded here — the issue endpoint reads it and
+    never creates one.
+    """
+    from src.domain.services.investigation_pack_issue import external_issue_blockers, utc_now
+
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
+    pack = await _pack_for_investigation_or_404(
+        db, investigation_id=investigation_id, pack_id=pack_id, tenant_id=tenant_id
+    )
+
+    reviewed_at = utc_now()
+    pack.redaction_review_at = reviewed_at
+    pack.redaction_review_by_id = current_user.id
+    pack.redaction_review_note = payload.note
+    # A review that found changes were required is still a review: it is
+    # recorded, and it withdraws any earlier clearance rather than leaving a
+    # stale one standing.
+    pack.redaction_review_cleared_at = reviewed_at if payload.cleared else None
+
+    await InvestigationService.create_revision_event(
+        db=db,
+        investigation=investigation,
+        event_type="PACK_REDACTION_REVIEWED",
+        actor_id=current_user.id,
+        metadata={
+            "pack_uuid": pack.pack_uuid,
+            "audience": pack.audience.value if hasattr(pack.audience, "value") else str(pack.audience),
+            "cleared": payload.cleared,
+        },
+    )
+    await db.commit()
+    await db.refresh(pack)
+
+    return {
+        "pack_id": pack.id,
+        "investigation_id": investigation_id,
+        "cleared": pack.redaction_review_cleared_at is not None,
+        "note": pack.redaction_review_note,
+        "reviewed_at": pack.redaction_review_at,
+        "reviewed_by_id": pack.redaction_review_by_id,
+        "issue_blockers": external_issue_blockers(investigation, pack),
+    }
+
+
+@router.post(
+    "/{investigation_id:int}/packs/{pack_id:int}/issue",
+    response_model=InvestigationPackIssuedResponse,
+)
+async def issue_customer_pack(
+    investigation_id: int,
+    pack_id: int,
+    payload: InvestigationPackIssueRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
+):
+    """Issue a generated pack to a named recipient (INV-C17 / DEC-4 + DEC-5).
+
+    Issuing an **external** pack requires a complete investigation and a cleared
+    redaction review; without both this refuses with 422 and records nothing.
+    Issuing renders the PDF once, retains those bytes in the evidence library
+    with their checksum, and writes a disclosure row. A second disclosure of the
+    same pack re-uses the retained bytes rather than re-rendering them.
+    """
+    from src.domain.services.investigation_pack_issue import (
+        assert_issuable,
+        record_disclosure,
+        retain_issued_pdf,
+        utc_now,
+    )
+    from src.infrastructure.storage import StorageDependencyError, StorageError
+
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
+    pack = await _pack_for_investigation_or_404(
+        db,
+        investigation_id=investigation_id,
+        pack_id=pack_id,
+        tenant_id=tenant_id,
+        for_update=True,
+    )
+
+    assert_issuable(investigation, pack)
+
+    try:
+        retained = await retain_issued_pdf(
+            db,
+            investigation=investigation,
+            pack=pack,
+            tenant_id=tenant_id,
+            actor_id=current_user.id,
+        )
+    except RuntimeError as exc:
+        # The renderer could not produce a document. Nothing is recorded as
+        # issued, because nothing was.
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except StorageDependencyError as exc:
+        logger.exception(
+            "investigation_pack_issue_storage_unavailable",
+            extra={"pack_id": pack_id, "investigation_id": investigation_id},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "STORAGE_DEPENDENCY_UNAVAILABLE",
+                "message": "Issuing is temporarily unavailable because evidence storage cannot be reached.",
+            },
+        ) from exc
+    except StorageError as exc:
+        logger.exception(
+            "investigation_pack_issue_storage_failed",
+            extra={"pack_id": pack_id, "investigation_id": investigation_id},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "STORAGE_UPLOAD_FAILED",
+                "message": "The pack could not be retained, so it has not been issued.",
+            },
+        ) from exc
+
+    issued_at = utc_now()
+    disclosure = record_disclosure(
+        db,
+        investigation=investigation,
+        pack=pack,
+        tenant_id=tenant_id,
+        actor_id=current_user.id,
+        recipient=payload.recipient,
+        recipient_email=payload.recipient_email,
+        note=payload.note,
+        pdf_sha256=retained.sha256,
+        issued_at=issued_at,
+    )
+
+    # issued_at/issued_by_id name the moment the retained bytes were created.
+    # A later disclosure adds a row; it does not restamp the issued record.
+    if pack.issued_at is None:
+        pack.issued_at = issued_at
+        pack.issued_by_id = current_user.id
+
+    await InvestigationService.create_revision_event(
+        db=db,
+        investigation=investigation,
+        event_type="PACK_ISSUED",
+        actor_id=current_user.id,
+        metadata={
+            "pack_uuid": pack.pack_uuid,
+            "audience": pack.audience.value if hasattr(pack.audience, "value") else str(pack.audience),
+            "recipient": payload.recipient,
+            "pdf_sha256": retained.sha256,
+            "pdf_newly_retained": retained.newly_retained,
+        },
+    )
+
+    await db.commit()
+    await db.refresh(pack)
+    await db.refresh(disclosure)
+
+    disclosure_count = int(
+        await db.scalar(
+            select(func.count(InvestigationPackDisclosure.id)).where(
+                InvestigationPackDisclosure.pack_id == pack.id,
+                InvestigationPackDisclosure.tenant_id == tenant_id,
+            )
+        )
+        or 0
+    )
+
+    return {
+        "pack_id": pack.id,
+        "pack_uuid": pack.pack_uuid,
+        "investigation_id": investigation_id,
+        "audience": pack.audience.value if hasattr(pack.audience, "value") else str(pack.audience),
+        "recipient": disclosure.recipient,
+        "recipient_email": disclosure.recipient_email,
+        "note": disclosure.note,
+        "disclosure_id": disclosure.id,
+        "issued_at": disclosure.issued_at,
+        "issued_by_id": disclosure.actor_id,
+        "pdf_sha256": retained.sha256,
+        "pdf_size_bytes": retained.size_bytes,
+        "evidence_asset_id": retained.asset_id,
+        "pdf_newly_retained": retained.newly_retained,
+        "disclosure_count": disclosure_count,
+    }
 
 
 @router.get(
@@ -2081,14 +2346,10 @@ async def generate_customer_pack(
         )
 
     # Get linked evidence assets
-    from src.domain.models.evidence_asset import EvidenceAsset
     from src.domain.services.investigation_pack_content import load_investigation_pack_sources
+    from src.domain.services.investigation_pack_issue import pack_evidence_assets_query
 
-    assets_query = select(EvidenceAsset).where(
-        EvidenceAsset.linked_investigation_id == investigation_id,
-        EvidenceAsset.tenant_id == tenant_id,
-        EvidenceAsset.deleted_at.is_(None),
-    )
+    assets_query = pack_evidence_assets_query(investigation_id=investigation_id, tenant_id=tenant_id)
     assets_result = await db.execute(assets_query)
     evidence_assets = list(assets_result.scalars().all())
 

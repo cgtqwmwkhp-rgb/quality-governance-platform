@@ -197,6 +197,7 @@ from src.domain.models.investigation import (
     InvestigationComment,
     InvestigationCustomerPack,
     InvestigationLevel,
+    InvestigationPackDisclosure,
     InvestigationRevisionEvent,
     InvestigationRun,
     InvestigationStatus,
@@ -555,6 +556,7 @@ __all__ = [
     "InvestigationComment",
     "InvestigationRevisionEvent",
     "InvestigationCustomerPack",
+    "InvestigationPackDisclosure",
     # Workforce Development (Assessment & Induction)
     "Engineer",
     "CompetenceAssessmentBind",

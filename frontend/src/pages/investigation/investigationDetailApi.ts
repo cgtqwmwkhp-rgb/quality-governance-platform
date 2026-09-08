@@ -178,6 +178,58 @@ export async function fetchCustomerPackPdf(investigationId: number, packId: numb
   return response.data
 }
 
+export interface PackRedactionReviewResponse {
+  pack_id: number
+  investigation_id: number
+  cleared: boolean
+  note: string | null
+  reviewed_at: string
+  reviewed_by_id: number
+  issue_blockers: string[]
+}
+
+export interface PackIssuedResponse {
+  pack_id: number
+  pack_uuid: string
+  investigation_id: number
+  audience: string
+  recipient: string
+  recipient_email: string | null
+  note: string | null
+  disclosure_id: number
+  issued_at: string
+  issued_by_id: number
+  pdf_sha256: string
+  pdf_size_bytes: number
+  evidence_asset_id: number | null
+  pdf_newly_retained: boolean
+  disclosure_count: number
+}
+
+/** Record a human redaction review on a generated pack (INV-C17 / DEC-4). */
+export function reviewCustomerPack(
+  investigationId: number,
+  packId: number,
+  body: { cleared: boolean; note?: string },
+) {
+  return api.post<PackRedactionReviewResponse>(
+    `/api/v1/investigations/${investigationId}/packs/${packId}/redaction-review`,
+    body,
+  )
+}
+
+/** Issue a generated pack to a named recipient (INV-C17 / DEC-5). */
+export function issueCustomerPack(
+  investigationId: number,
+  packId: number,
+  body: { recipient: string; recipient_email?: string; note?: string },
+) {
+  return api.post<PackIssuedResponse>(
+    `/api/v1/investigations/${investigationId}/packs/${packId}/issue`,
+    body,
+  )
+}
+
 export function readCustomerPackVisibility(
   data: Record<string, unknown> | null | undefined,
 ): Record<string, CustomerPackVisibilityMeta> {

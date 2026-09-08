@@ -6064,8 +6064,8 @@
           "regulatory_reference": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 200
+                "maxLength": 200,
+                "type": "string"
               },
               {
                 "type": "null"
@@ -17825,6 +17825,18 @@
             ],
             "title": "Due Date"
           },
+          "five_whys_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "five_whys_analyses.id this CAPA came from; must be this run's tenant-scoped analysis",
+            "title": "Five Whys Id"
+          },
           "priority": {
             "anyOf": [
               {
@@ -17847,18 +17859,6 @@
               }
             ],
             "title": "Title"
-          },
-          "five_whys_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "five_whys_analyses.id this CAPA came from; must be this run's tenant-scoped analysis",
-            "title": "Five Whys Id"
           },
           "why_level": {
             "anyOf": [
@@ -31522,6 +31522,11 @@
             ],
             "title": "Checksum Sha256"
           },
+          "disclosure_count": {
+            "default": 0,
+            "title": "Disclosure Count",
+            "type": "integer"
+          },
           "generated_at": {
             "format": "date-time",
             "title": "Generated At",
@@ -31535,9 +31540,78 @@
             "title": "Investigation Id",
             "type": "integer"
           },
+          "issued_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued At"
+          },
+          "issued_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued By Id"
+          },
+          "issued_pdf_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued Pdf Sha256"
+          },
           "pack_uuid": {
             "title": "Pack Uuid",
             "type": "string"
+          },
+          "redaction_review_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redaction Review At"
+          },
+          "redaction_review_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redaction Review By Id"
+          },
+          "redaction_review_cleared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redaction Review Cleared At"
           }
         },
         "required": [
@@ -31959,6 +32033,235 @@
           "generated_at"
         ],
         "title": "InvestigationPackGeneratedResponse",
+        "type": "object"
+      },
+      "InvestigationPackIssueRequest": {
+        "additionalProperties": false,
+        "description": "Issue a generated pack to a named recipient (INV-C17 / DEC-5).",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was issued, or under what request.",
+            "title": "Note"
+          },
+          "recipient": {
+            "description": "Who is receiving this pack \u2014 a person, an organisation, or a regulator.",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Recipient",
+            "type": "string"
+          },
+          "recipient_email": {
+            "anyOf": [
+              {
+                "maxLength": 320,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Address the pack was sent to, when there was one.",
+            "title": "Recipient Email"
+          }
+        },
+        "required": [
+          "recipient"
+        ],
+        "title": "InvestigationPackIssueRequest",
+        "type": "object"
+      },
+      "InvestigationPackIssuedResponse": {
+        "description": "Confirmation of an issue, naming the bytes the recipient was given.",
+        "properties": {
+          "audience": {
+            "title": "Audience",
+            "type": "string"
+          },
+          "disclosure_count": {
+            "title": "Disclosure Count",
+            "type": "integer"
+          },
+          "disclosure_id": {
+            "title": "Disclosure Id",
+            "type": "integer"
+          },
+          "evidence_asset_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Asset Id"
+          },
+          "investigation_id": {
+            "title": "Investigation Id",
+            "type": "integer"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "issued_by_id": {
+            "title": "Issued By Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pack_id": {
+            "title": "Pack Id",
+            "type": "integer"
+          },
+          "pack_uuid": {
+            "title": "Pack Uuid",
+            "type": "string"
+          },
+          "pdf_newly_retained": {
+            "title": "Pdf Newly Retained",
+            "type": "boolean"
+          },
+          "pdf_sha256": {
+            "title": "Pdf Sha256",
+            "type": "string"
+          },
+          "pdf_size_bytes": {
+            "title": "Pdf Size Bytes",
+            "type": "integer"
+          },
+          "recipient": {
+            "title": "Recipient",
+            "type": "string"
+          },
+          "recipient_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Email"
+          }
+        },
+        "required": [
+          "pack_id",
+          "pack_uuid",
+          "investigation_id",
+          "audience",
+          "recipient",
+          "disclosure_id",
+          "issued_at",
+          "issued_by_id",
+          "pdf_sha256",
+          "pdf_size_bytes",
+          "pdf_newly_retained",
+          "disclosure_count"
+        ],
+        "title": "InvestigationPackIssuedResponse",
+        "type": "object"
+      },
+      "InvestigationPackRedactionReviewRequest": {
+        "additionalProperties": false,
+        "description": "Record the outcome of a human redaction review on a pack (INV-C17 / DEC-4).",
+        "properties": {
+          "cleared": {
+            "description": "True when the reviewer is content the pack is safe to issue to this audience.",
+            "title": "Cleared",
+            "type": "boolean"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the reviewer checked, or what still needs redacting.",
+            "title": "Note"
+          }
+        },
+        "required": [
+          "cleared"
+        ],
+        "title": "InvestigationPackRedactionReviewRequest",
+        "type": "object"
+      },
+      "InvestigationPackRedactionReviewResponse": {
+        "description": "The redaction review as recorded.",
+        "properties": {
+          "cleared": {
+            "title": "Cleared",
+            "type": "boolean"
+          },
+          "investigation_id": {
+            "title": "Investigation Id",
+            "type": "integer"
+          },
+          "issue_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issue Blockers",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pack_id": {
+            "title": "Pack Id",
+            "type": "integer"
+          },
+          "reviewed_at": {
+            "format": "date-time",
+            "title": "Reviewed At",
+            "type": "string"
+          },
+          "reviewed_by_id": {
+            "title": "Reviewed By Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pack_id",
+          "investigation_id",
+          "cleared",
+          "reviewed_at",
+          "reviewed_by_id"
+        ],
+        "title": "InvestigationPackRedactionReviewResponse",
         "type": "object"
       },
       "InvestigationPacksResponse": {
@@ -91984,9 +92287,76 @@
         ]
       }
     },
+    "/api/v1/investigations/{investigation_id}/packs/{pack_id}/issue": {
+      "post": {
+        "description": "Issue a generated pack to a named recipient (INV-C17 / DEC-4 + DEC-5).\n\nIssuing an **external** pack requires a complete investigation and a cleared\nredaction review; without both this refuses with 422 and records nothing.\nIssuing renders the PDF once, retains those bytes in the evidence library\nwith their checksum, and writes a disclosure row. A second disclosure of the\nsame pack re-uses the retained bytes rather than re-rendering them.",
+        "operationId": "issue_customer_pack_api_v1_investigations__investigation_id__packs__pack_id__issue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pack_id",
+            "required": true,
+            "schema": {
+              "title": "Pack Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationPackIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationPackIssuedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue Customer Pack",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
     "/api/v1/investigations/{investigation_id}/packs/{pack_id}/pdf": {
       "get": {
-        "description": "Render a previously generated customer pack as a branded PDF (PX-143).\n\nRenders the stored, already-redacted pack payload \u2014 this endpoint never\nre-reads the investigation, so it cannot leak content the pack omitted.",
+        "description": "Return a customer pack as a branded PDF (PX-143).\n\nTwo paths, and which one runs is a fact about the pack rather than a\nsetting. A pack that has been **issued** (INV-C17 / DEC-5) is served from\nthe bytes retained at that moment, so a later renderer change cannot alter\nwhat a customer was given. A pack that has not been issued is rendered from\nthe stored, already-redacted payload as before \u2014 this endpoint never\nre-reads the investigation, so it cannot leak content the pack omitted.",
         "operationId": "download_customer_pack_pdf_api_v1_investigations__investigation_id__packs__pack_id__pdf_get",
         "parameters": [
           {
@@ -92032,6 +92402,73 @@
           }
         ],
         "summary": "Download Customer Pack Pdf",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
+    "/api/v1/investigations/{investigation_id}/packs/{pack_id}/redaction-review": {
+      "post": {
+        "description": "Record a human redaction review on a generated pack (INV-C17 / DEC-4).\n\nGated on the same permission as approving a section omit, because it is the\nsame class of act: someone accountable deciding what a customer may see.\nThe review is only ever recorded here \u2014 the issue endpoint reads it and\nnever creates one.",
+        "operationId": "review_customer_pack_redaction_api_v1_investigations__investigation_id__packs__pack_id__redaction_review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pack_id",
+            "required": true,
+            "schema": {
+              "title": "Pack Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationPackRedactionReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationPackRedactionReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Review Customer Pack Redaction",
         "tags": [
           "Investigations"
         ]
