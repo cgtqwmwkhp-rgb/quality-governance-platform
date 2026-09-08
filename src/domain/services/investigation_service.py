@@ -38,6 +38,7 @@ from src.domain.models.investigation import (
     InvestigationTemplate,
 )
 from src.domain.models.user import User
+from src.domain.services.investigation_factors_service import FactorSnapshot
 from src.domain.services.investigation_pack_content import (
     expand_omitted_pack_keys,
     iter_source_section_items,
@@ -720,11 +721,12 @@ class InvestigationService:
         findings: Optional[Sequence[Any]] = None,
         rca: Optional[Dict[str, Any]] = None,
         capa_actions: Optional[Sequence[Any]] = None,
+        factors: Optional[FactorSnapshot] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         redaction_log: List[Dict[str, Any]] = []
         sections: Dict[str, Any] = {}
         section_items = iter_source_section_items(investigation)
-        overlay = overlay_investigation_sections(findings=findings, rca=rca, capa_actions=capa_actions)
+        overlay = overlay_investigation_sections(findings=findings, rca=rca, capa_actions=capa_actions, factors=factors)
         replaced = source_keys_replaced_by_overlay(findings=findings, rca=rca, capa_actions=capa_actions)
         present_keys = {key for key, _ in section_items} | set(overlay)
         withheld = expand_omitted_pack_keys(approved_omits, present_keys)
@@ -812,13 +814,15 @@ class InvestigationService:
         findings: Optional[Sequence[Any]] = None,
         rca: Optional[Dict[str, Any]] = None,
         capa_actions: Optional[Sequence[Any]] = None,
+        factors: Optional[FactorSnapshot] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
         """Generate customer pack with redaction rules applied.
 
-        ``findings``, ``rca`` and ``capa_actions`` are optional overlays the
-        generate path loads tenant-scoped. ``None`` means that overlay was not
-        consulted (unit tests, older callers). An empty list/dict is an honest
-        empty investigation section — nothing is invented.
+        ``findings``, ``rca``, ``capa_actions`` and ``factors`` are optional
+        overlays the generate path loads tenant-scoped. ``None`` means that
+        overlay was not consulted (unit tests, older callers). An empty
+        list/dict/snapshot is an honest empty investigation section — nothing is
+        invented.
 
         Returns:
             Tuple of (pack_content, redaction_log, included_assets)
@@ -831,6 +835,7 @@ class InvestigationService:
             findings=findings,
             rca=rca,
             capa_actions=capa_actions,
+            factors=factors,
         )
         content: Dict[str, Any] = {
             "investigation_reference": investigation.reference_number,
@@ -1735,6 +1740,7 @@ class InvestigationService:
             findings=sources.findings,
             rca=sources.rca,
             capa_actions=sources.capa_actions,
+            factors=sources.factors,
         )
 
         pack = cls.create_customer_pack_entity(
