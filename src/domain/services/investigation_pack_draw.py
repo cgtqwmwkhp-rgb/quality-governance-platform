@@ -1,12 +1,13 @@
-"""Vector drawing helpers and the chronology figure for investigation packs (INV-C15).
+"""Vector drawing helpers and the pack figures for investigation packs (INV-C15 / INV-C16).
 
-Absorbs PR-27 (drawing helpers) and PR-28 (graphical chronology). Two parts, kept
-in one module on purpose so a later diagram PR imports one place:
+Absorbs PR-27 (drawing helpers), PR-28 (graphical chronology) and PR-29 (ICAM
+contributing-factor diagram). Three parts, kept in one module on purpose so a
+pack figure imports one place:
 
 **Part 1 — primitives.** Text safety, colour arithmetic, page-space reservation
 and the vector calls themselves (lines, rectangles, markers, arrows, legends).
-Nothing here knows what an investigation is, so the ICAM diagram (C16) and any
-pack figure C13 needs can build on it without importing pack semantics.
+Nothing here knows what an investigation is, so the figures below build on them
+without importing pack semantics.
 
 **Part 2 — the chronology figure.** Normalises timeline events into a placeable
 set and draws them as a two-lane time axis: the parent record's chronology above
@@ -14,13 +15,22 @@ the axis, the investigation's own events below it. That split is exactly the
 distinction INV-C9 put in ``event_metadata["origin"]`` — this module reads that
 key and never re-derives origin from anything else.
 
+**Part 3 — the ICAM contributing-factor figure.** Four bands, one per ICAM
+category, listing the factors INV-C12 stores on ``fishbone_diagrams.causes``
+with their sub-causes and their HSG245 causal depth. Not a 6M fishbone: there is
+no fifth taxonomy, and a cause stored under a pre-DEC-1 6M key is counted and
+named rather than recategorised into a band it was never classified under.
+
 Deliberate non-coupling
 -----------------------
 ``ORIGIN_SOURCE`` / ``ORIGIN_INVESTIGATION`` are re-declared here rather than
-imported from :mod:`src.domain.services.investigation_parent_timeline`, because
-that module imports four ORM models to run its queries and the drawing layer must
-stay free of the database. The two spellings are pinned equal by a unit test, so
-a rename on the C9 side fails loudly instead of silently splitting the lanes.
+imported from :mod:`src.domain.services.investigation_parent_timeline`, and the
+ICAM category and depth vocabulary rather than from
+:mod:`src.domain.services.investigation_factors_service`, because both of those
+modules import ORM models to run their queries and the drawing layer must stay
+free of the database. Every copied spelling is pinned equal by a unit test, so a
+rename on the owning side fails loudly instead of silently emptying a lane or a
+band.
 
 Nothing in this module reads the database, and nothing writes anywhere. It draws
 the events it is handed, so tenant scoping and authorisation belong to whoever
@@ -758,3 +768,468 @@ def _draw_axis_labels(pdf: Any, frame: Frame, chronology: ChronologySet, brand: 
     half = max(10.0, (x1 - x0) / 2 - 2.0)
     draw_text(pdf, x0, baseline, format_date(first), size=7.0, rgb=label_rgb, align="L", max_width=half)
     draw_text(pdf, x1, baseline, format_date(last), size=7.0, rgb=label_rgb, align="R", max_width=half)
+
+
+# ---------------------------------------------------------------------------
+# Part 3 — the ICAM contributing-factor figure
+# ---------------------------------------------------------------------------
+
+# Must match src.domain.services.investigation_factors_service (see module
+# docstring for why these are copied rather than imported). Pinned by a test.
+ICAM_CATEGORIES: tuple[str, ...] = (
+    "organisational_factors",
+    "task_environmental_conditions",
+    "individual_team_actions",
+    "absent_failed_defences",
+)
+
+ICAM_CATEGORY_LABELS: dict[str, str] = {
+    "organisational_factors": "Organisational factors",
+    "task_environmental_conditions": "Task and environmental conditions",
+    "individual_team_actions": "Individual and team actions",
+    "absent_failed_defences": "Absent or failed defences",
+}
+
+ICAM_DEPTHS: tuple[str, ...] = ("immediate", "underlying", "root")
+
+ICAM_DEPTH_LABELS: dict[str, str] = {
+    "immediate": "Immediate cause",
+    "underlying": "Underlying cause",
+    "root": "Root cause",
+}
+
+# Depth carries a shape as well as a colour, so the classification still reads
+# when the pack is printed in mono.
+ICAM_DEPTH_SHAPES: dict[str, str] = {"immediate": "circle", "underlying": "square", "root": "diamond"}
+
+# Rows the figure will place. Past this the bands would not fit one page, and a
+# diagram spread over two pages is no longer a diagram. The excess is reported
+# rather than dropped quietly.
+ICAM_FACTOR_CAP = 24
+
+# Sub-causes read off one stored factor. Matches FACTOR_SUB_CAUSES_MAX in the
+# factors service, so the figure cannot silently show fewer than were stored.
+_ICAM_SUB_CAUSE_CAP = 20
+
+_ICAM_CAUSE_CHARS = 300
+_ICAM_SUB_CAUSE_CHARS = 120
+
+_ICAM_HEADER_H = 6.0
+_ICAM_STRIP_H = 5.4
+_ICAM_ROW_H = 4.8
+_ICAM_BAND_PAD = 1.2
+_ICAM_BAND_GAP = 1.6
+_ICAM_ROW_INSET = 2.2
+_ICAM_MARKER_SIZE = 1.8
+_ICAM_DEPTH_COL = 27.0
+_ICAM_COUNT_COL = 26.0
+
+
+@dataclass(frozen=True)
+class IcamFactor:
+    """One stored contributing factor as the diagram presents it.
+
+    ``category`` and ``depth`` are the *stored* values, not labels: the figure
+    resolves them through the maps above, so an unrecognised depth reads as no
+    recorded depth rather than as a guessed one.
+    """
+
+    id: int
+    category: str
+    cause: str
+    sub_causes: tuple[str, ...] = ()
+    depth: Optional[str] = None
+
+    @property
+    def category_label(self) -> str:
+        return ICAM_CATEGORY_LABELS.get(self.category, humanise_key(self.category))
+
+    @property
+    def depth_label(self) -> Optional[str]:
+        """The recorded depth in words, or ``None`` — never a default."""
+        return ICAM_DEPTH_LABELS.get(self.depth or "")
+
+    @property
+    def label(self) -> str:
+        """``cause (sub; sub)`` — the INV-C12 line without its category prefix or depth bracket.
+
+        Both of those are drawn separately (the band, and the depth chip), so
+        repeating them in the row would say the same thing twice on one line.
+        """
+        if not self.sub_causes:
+            return self.cause
+        return f"{self.cause} ({'; '.join(self.sub_causes)})"
+
+
+@dataclass(frozen=True)
+class IcamFactorSet:
+    """Placeable factors plus what could not be presented, so the pack can say so."""
+
+    factors: tuple[IcamFactor, ...] = ()
+    #: Stored keys outside the ICAM four (typically pre-DEC-1 6M names). Named,
+    #: never remapped.
+    unmapped_categories: tuple[str, ...] = ()
+    #: Stored causes this figure cannot place at all, including those under the
+    #: categories named above. INV-C12's own count, carried through.
+    unpresentable: int = 0
+    #: Factors beyond :data:`ICAM_FACTOR_CAP`.
+    omitted: int = 0
+
+    def __bool__(self) -> bool:
+        return bool(self.factors)
+
+    def for_category(self, category: str) -> tuple[IcamFactor, ...]:
+        return tuple(factor for factor in self.factors if factor.category == category)
+
+    @property
+    def recorded(self) -> int:
+        """Factors this set was built from, including those the cap left out.
+
+        The count a reader needs when the diagram is capped: "24 recorded" would
+        be false on an investigation with 60 factors, even with the shortfall
+        stated separately.
+        """
+        return len(self.factors) + self.omitted
+
+    @property
+    def with_depth(self) -> int:
+        """Drawn factors carrying a recorded depth. Not a claim about the omitted ones."""
+        return sum(1 for factor in self.factors if factor.depth is not None)
+
+
+def _stored_value(value: Any) -> Any:
+    """Unwrap an enum member to its stored value; anything else is itself.
+
+    ``FishboneCategory`` and ``CausalDepth`` are ``str`` enums, and ``str()`` on
+    a member of one renders ``FishboneCategory.ORGANISATIONAL`` rather than the
+    value stored in the JSON. Reading ``.value`` is what makes an INV-C12
+    ``InvestigationFactor`` object readable here as well as its payload dict.
+    """
+    return getattr(value, "value", value)
+
+
+def _count(value: Any) -> int:
+    """A non-negative integer from a stored number; anything unreadable is zero."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, float):
+        return max(0, int(value))
+    if isinstance(value, str):
+        try:
+            return max(0, int(value.strip() or 0))
+        except ValueError:
+            return 0
+    return 0
+
+
+def _icam_depth(value: Any) -> Optional[str]:
+    """A recorded depth, or ``None`` for absent/unrecognised — never guessed.
+
+    Mirrors the factors service, which stores no ``depth`` key at all when
+    nobody recorded one: a factor whose depth was never classified must not read
+    back as "immediate".
+    """
+    depth = str(_stored_value(value) or "").strip().lower()
+    return depth if depth in ICAM_DEPTH_LABELS else None
+
+
+def _icam_sub_causes(value: Any) -> tuple[str, ...]:
+    """Stored sub-causes as bounded, latin-1-safe text. Order kept, blanks dropped."""
+    if not isinstance(value, (list, tuple)):
+        return ()
+    cleaned: list[str] = []
+    for item in list(value)[:_ICAM_SUB_CAUSE_CAP]:
+        text = _clean(item, _ICAM_SUB_CAUSE_CHARS)
+        if text:
+            cleaned.append(text)
+    return tuple(cleaned)
+
+
+def normalise_icam_factors(raw: Any, *, cap: int = ICAM_FACTOR_CAP) -> IcamFactorSet:
+    """Turn stored ICAM factors into a placeable set, in ICAM category order.
+
+    Accepts what the pack payload stores — a mapping of ``factors`` plus
+    INV-C12's ``unmapped_categories`` / ``unpresentable`` counts — a bare list of
+    factor mappings, or objects carrying the same attribute names (an INV-C12
+    :class:`~src.domain.services.investigation_factors_service.InvestigationFactor`
+    works unchanged).
+
+    Never raises and never invents. A cause stored under a key outside the ICAM
+    four is counted and its key named, not moved into a band it was never
+    classified under. An entry with no readable cause text is counted, not
+    guessed at. Ordering is ICAM category order then stored order within a
+    category — the same order INV-C12 reads the diagram in, so a pack rendered
+    twice cannot draw the factors in a different sequence.
+    """
+    entries: Any = raw
+    unmapped: list[str] = []
+    unpresentable = 0
+
+    if isinstance(raw, Mapping):
+        entries = raw.get("factors")
+        stored_names = raw.get("unmapped_categories")
+        if isinstance(stored_names, (list, tuple)):
+            unmapped = [text for name in stored_names if (text := _clean(name, _ICAM_SUB_CAUSE_CHARS))]
+        unpresentable = _count(raw.get("unpresentable"))
+
+    if entries is None or isinstance(entries, (str, bytes, Mapping)) or not isinstance(entries, Sequence):
+        return IcamFactorSet(unmapped_categories=tuple(sorted(set(unmapped))), unpresentable=unpresentable)
+
+    by_category: dict[str, list[IcamFactor]] = {category: [] for category in ICAM_CATEGORIES}
+    for entry in entries:
+        category = str(_stored_value(_field(entry, "category")) or "").strip()
+        if category not in by_category:
+            if category:
+                unmapped.append(category)
+            unpresentable += 1
+            continue
+        cause = _clean(_field(entry, "cause"), _ICAM_CAUSE_CHARS)
+        if not cause:
+            unpresentable += 1
+            continue
+        by_category[category].append(
+            IcamFactor(
+                id=_count(_field(entry, "id")),
+                category=category,
+                cause=cause,
+                sub_causes=_icam_sub_causes(_field(entry, "sub_causes")),
+                depth=_icam_depth(_field(entry, "depth")),
+            )
+        )
+
+    ordered = [factor for category in ICAM_CATEGORIES for factor in by_category[category]]
+    omitted = 0
+    if cap > 0 and len(ordered) > cap:
+        # Keep the first in ICAM order rather than the last: unlike a
+        # chronology there is no "newest", and this is the order the
+        # investigator worked through. The count dropped is reported.
+        omitted = len(ordered) - cap
+        ordered = ordered[:cap]
+
+    return IcamFactorSet(
+        factors=tuple(ordered),
+        unmapped_categories=tuple(sorted(set(unmapped))),
+        unpresentable=unpresentable,
+        omitted=omitted,
+    )
+
+
+def icam_summary_line(factors: IcamFactorSet) -> str:
+    """One factual sentence about the diagram: how many factors, how many classified.
+
+    The count is always what is *recorded*, never what the figure happened to
+    fit. When the cap bites, the sentence says so rather than reporting the
+    drawn subset as the whole analysis.
+    """
+    if not factors.factors:
+        return "No ICAM contributing factors are recorded for this investigation."
+    if factors.omitted:
+        return (
+            f"{plural(factors.recorded, 'contributing factor', 'contributing factors')} recorded across the four "
+            f"ICAM categories; the diagram shows the first {len(factors.factors)}, {factors.with_depth} of them "
+            "with a recorded HSG245 causal depth."
+        )
+    return (
+        f"{plural(len(factors.factors), 'contributing factor', 'contributing factors')} recorded across the "
+        f"four ICAM categories, {factors.with_depth} with a recorded HSG245 causal depth."
+    )
+
+
+def icam_figure_height(factors: IcamFactorSet) -> float:
+    """Height the figure needs in mm — content-driven, because the bands are.
+
+    Zero for an empty set: there is nothing to place, and reserving space for a
+    blank rectangle would push the rest of the pack down the page to say
+    nothing. Bounded by :data:`ICAM_FACTOR_CAP`, so the tallest figure this
+    module will draw still fits inside one A4 page's printable height.
+    """
+    if not factors.factors:
+        return 0.0
+    rows = sum(max(1, len(factors.for_category(category))) for category in ICAM_CATEGORIES)
+    bands = len(ICAM_CATEGORIES) * (_ICAM_STRIP_H + _ICAM_BAND_PAD + _ICAM_BAND_GAP)
+    return _ICAM_HEADER_H + bands + rows * _ICAM_ROW_H
+
+
+def draw_icam_factors_figure(
+    pdf: Any,
+    factors: IcamFactorSet,
+    *,
+    brand: RGB,
+    width: Optional[float] = None,
+) -> Frame:
+    """Draw the four ICAM bands and return the frame they occupy.
+
+    One band per ICAM category, in the order INV-C12 works through them, each
+    listing the factors recorded under it with their sub-causes and the HSG245
+    depth recorded against them. A category with nothing recorded says "None
+    recorded" rather than being dropped: an empty band is a fact about the
+    investigation, and hiding it would make a partial analysis look complete.
+
+    An empty set draws nothing and reserves nothing — the caller should be
+    printing :func:`icam_summary_line` instead of an empty diagram.
+
+    Raises whatever fpdf2 raises; the caller decides whether a pack without its
+    figure beats a failed export. Callers must not rely on the cursor position
+    on failure beyond ``frame.bottom``.
+    """
+    if not factors.factors:
+        return Frame(
+            float(pdf.l_margin),
+            float(pdf.get_y()),
+            content_width(pdf) if width is None else width,
+            0.0,
+        )
+
+    frame = reserve_frame(pdf, icam_figure_height(factors), width=width, top_gap=1.0)
+    with vector_state(pdf):
+        _draw_icam_body(pdf, frame, factors, brand)
+    return frame
+
+
+def _icam_depth_rgb(brand: RGB, depth: Optional[str]) -> RGB:
+    """Immediate to root as an increasing depth of the tenant's own brand hue.
+
+    Deliberately not a red/amber/green scale: a root cause is not "worse" than
+    an immediate one, it sits further back in the causal chain. Darkening one
+    hue says "further" without asserting a severity nobody recorded.
+    """
+    if depth == "immediate":
+        return tint(brand, 0.45)
+    if depth == "root":
+        return shade(brand, 0.35)
+    return brand
+
+
+def _draw_icam_body(pdf: Any, frame: Frame, factors: IcamFactorSet, brand: RGB) -> None:
+    draw_legend(
+        pdf,
+        frame.x,
+        frame.y + 3.8,
+        [
+            LegendEntry(ICAM_DEPTH_LABELS[depth], _icam_depth_rgb(brand, depth), ICAM_DEPTH_SHAPES[depth])
+            for depth in ICAM_DEPTHS
+        ],
+        max_width=max(10.0, frame.w - _ICAM_COUNT_COL),
+    )
+    draw_text(
+        pdf,
+        frame.right,
+        frame.y + 3.8,
+        plural(len(factors.factors), "factor", "factors"),
+        size=7.0,
+        rgb=shade(brand, 0.2),
+        align="R",
+        max_width=_ICAM_COUNT_COL,
+    )
+
+    y = frame.y + _ICAM_HEADER_H
+    for category in ICAM_CATEGORIES:
+        y = _draw_icam_band(pdf, frame, y, category, factors.for_category(category), brand)
+
+
+def _draw_icam_band(
+    pdf: Any,
+    frame: Frame,
+    y: float,
+    category: str,
+    entries: Sequence[IcamFactor],
+    brand: RGB,
+) -> float:
+    """One category band: a titled strip, then a row per factor. Returns the next band's top."""
+    rows = max(1, len(entries))
+    height = _ICAM_STRIP_H + _ICAM_BAND_PAD + rows * _ICAM_ROW_H
+    if y + height > frame.bottom + 0.05:
+        # Unreachable through normalise_icam_factors, which caps the row count
+        # so every band fits. A hand-built set can still overrun, and painting
+        # over the footer is worse than stopping and saying so in the log.
+        logger.warning("pack_draw_icam_band_clipped category=%s rows=%d", category, rows)
+        return frame.bottom
+
+    strip_rgb = tint(brand, 0.78)
+    draw_rect(pdf, Frame(frame.x, y, frame.w, _ICAM_STRIP_H), fill=strip_rgb)
+    draw_rect(pdf, Frame(frame.x, y, frame.w, height), border=tint(BLACK, 0.78))
+
+    label_rgb = readable_text_rgb(strip_rgb)
+    draw_text(
+        pdf,
+        frame.x + 2.0,
+        y + 3.7,
+        ICAM_CATEGORY_LABELS[category],
+        size=7.5,
+        style="B",
+        rgb=label_rgb,
+        max_width=max(10.0, frame.w - _ICAM_COUNT_COL - 4.0),
+    )
+    draw_text(
+        pdf,
+        frame.right - 2.0,
+        y + 3.7,
+        plural(len(entries), "factor", "factors"),
+        size=7.0,
+        rgb=label_rgb,
+        align="R",
+        max_width=_ICAM_COUNT_COL,
+    )
+
+    row_y = y + _ICAM_STRIP_H + _ICAM_BAND_PAD
+    if not entries:
+        draw_text(
+            pdf,
+            _icam_row_text_x(frame),
+            row_y + 3.3,
+            "None recorded.",
+            size=7.5,
+            style="I",
+            rgb=tint(BLACK, 0.45),
+            max_width=max(10.0, frame.w - 2 * _ICAM_ROW_INSET),
+        )
+    for entry in entries:
+        _draw_icam_row(pdf, frame, row_y, entry, brand)
+        row_y += _ICAM_ROW_H
+
+    return y + height + _ICAM_BAND_GAP
+
+
+def _icam_row_text_x(frame: Frame) -> float:
+    """Left edge of the cause column, marker gutter included.
+
+    Fixed whether or not this row has a marker: a factor with no recorded depth
+    must line up with the others rather than being indented differently, which
+    would read as a second kind of row.
+    """
+    return frame.x + _ICAM_ROW_INSET + _ICAM_MARKER_SIZE + 1.6
+
+
+def _draw_icam_row(pdf: Any, frame: Frame, y: float, factor: IcamFactor, brand: RGB) -> None:
+    """One factor: depth marker, the cause with its sub-causes, and the depth in words."""
+    baseline = y + 3.3
+    text_x = _icam_row_text_x(frame)
+    available = frame.right - _ICAM_ROW_INSET - text_x
+    depth_label = factor.depth_label
+
+    if depth_label is not None and factor.depth is not None:
+        draw_marker(
+            pdf,
+            frame.x + _ICAM_ROW_INSET + _ICAM_MARKER_SIZE / 2,
+            baseline - 1.1,
+            _ICAM_MARKER_SIZE,
+            shape=ICAM_DEPTH_SHAPES.get(factor.depth, "circle"),
+            fill=_icam_depth_rgb(brand, factor.depth),
+        )
+        draw_text(
+            pdf,
+            frame.right - _ICAM_ROW_INSET,
+            baseline,
+            depth_label,
+            size=7.0,
+            rgb=shade(brand, 0.25),
+            align="R",
+            max_width=_ICAM_DEPTH_COL - 1.5,
+        )
+        # The depth column is only reserved when something is written in it, so
+        # an unclassified factor gets the full width for its own words.
+        available -= _ICAM_DEPTH_COL
+
+    draw_text(pdf, text_x, baseline, factor.label, size=7.5, max_width=max(6.0, available))

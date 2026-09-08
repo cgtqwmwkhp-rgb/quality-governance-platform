@@ -13,8 +13,15 @@ This module is the pack generator's investigation half:
   ``section_*`` keys that stand in for ``event-details``
 * load those rows tenant-scoped for the generate path
 
+INV-C16 adds one more overlay to the same RCA key: the stored ICAM contributing
+factors, structured, so the pack renderer can draw the diagram from the payload
+it already has. They are serialised **into the stored content** rather than read
+at render time on purpose — the renderer sees only the stored, already-redacted
+pack, which is the property that stops it showing what an omit withheld, and the
+content checksum then covers the diagram as well as the text.
+
 The PDF renderer still only draws what it is handed. This module does not query
-the timeline (C15) and does not invent ICAM categories or a fishbone (C16).
+the timeline (C15) and does not invent a fishbone or a fifth taxonomy.
 """
 
 from __future__ import annotations
@@ -27,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.capa import CAPAAction, CAPASource
 from src.domain.models.investigation import InvestigationRun
+from src.domain.services.investigation_factors_service import FactorSnapshot, InvestigationFactorsService
 from src.domain.services.investigation_findings_service import InvestigationFindingsService
 from src.domain.services.investigation_rca_service import InvestigationRcaService
 
@@ -34,6 +42,12 @@ from src.domain.services.investigation_rca_service import InvestigationRcaServic
 PACK_SECTION_FINDINGS = "findings"
 PACK_SECTION_ROOT_CAUSE = "root-cause"
 PACK_SECTION_CAPA = "capa"
+
+# Structured ICAM factors inside the RCA pack section (INV-C16). A field on the
+# existing section, not a section of its own: contributing factors are part of
+# the root-cause analysis, and giving them their own pack key would need a new
+# HSG245 omit id for something an existing omit already withholds.
+PACK_FIELD_ICAM_FACTORS = "icam_factors"
 
 # Template keys that correspond to each HSG245 pack section. Findings and RCA
 # are dual-write sources, so their legacy strings are skipped when an overlay is
@@ -74,6 +88,10 @@ class InvestigationPackSources:
     findings: list[Any]
     rca: Optional[dict[str, Any]]
     capa_actions: list[Any]
+    #: INV-C12 ICAM factors for the C16 diagram. ``None`` means they were not
+    #: consulted — a fail-closed load and an investigation with no factors are
+    #: not the same fact, and only the second one can honestly print "none".
+    factors: Optional[FactorSnapshot] = None
 
 
 def _tenants_match(investigation: Any, tenant_id: Any) -> bool:
@@ -214,8 +232,58 @@ def _why_entry(raw: Any) -> Optional[dict[str, Any]]:
     return entry
 
 
-def serialize_rca_section(rca: Mapping[str, Any]) -> dict[str, Any]:
-    """5-Whys, root cause, and leftover contributing-factor *text*. No ICAM categories."""
+def _stored_enum_value(value: Any) -> Any:
+    """The stored value behind an enum member; anything else is itself."""
+    return value.value if hasattr(value, "value") else value
+
+
+def serialize_icam_factors(snapshot: FactorSnapshot) -> dict[str, Any]:
+    """The stored ICAM factors as the pack payload carries them (INV-C16).
+
+    Keys mirror :meth:`InvestigationFactor.as_payload` minus ``investigation_id``
+    — the pack is already about one investigation, and repeating its primary key
+    on every factor would put a database id in front of a customer for nothing.
+
+    ``unmapped_categories`` and ``unpresentable`` are INV-C12's own counts of
+    what that surface could not present: a cause stored under a pre-DEC-1 6M
+    key, an entry that is not an object, an entry with no words. They are
+    carried so the pack can state the count. Nothing is recategorised here, and
+    nothing is dropped without being counted.
+
+    Order is the snapshot's order — ICAM category order, then the order the
+    investigator added them — so regenerating a pack cannot reshuffle the
+    diagram or change the content checksum for no reason.
+    """
+    return {
+        "factors": [
+            {
+                "id": int(factor.id or 0),
+                "category": _stored_enum_value(factor.category),
+                "cause": factor.cause,
+                "sub_causes": list(factor.sub_causes),
+                "depth": _stored_enum_value(factor.depth) if factor.depth is not None else None,
+            }
+            for factor in snapshot.factors
+        ],
+        "unmapped_categories": list(snapshot.unmapped_categories),
+        "unpresentable": int(snapshot.unreadable_total or 0),
+    }
+
+
+def serialize_rca_section(rca: Mapping[str, Any], *, factors: Optional[FactorSnapshot] = None) -> dict[str, Any]:
+    """5-Whys, root cause, leftover contributing-factor *text*, and the ICAM factors.
+
+    ``factors`` is the tenant-scoped INV-C12 snapshot. ``None`` means the factors
+    were not consulted, and then no ``icam_factors`` key is emitted at all —
+    which is not the same as an empty diagram. A pack generated before INV-C16
+    never asked, so claiming "no contributing factors are recorded" for it would
+    be asserting a fact about the investigation that nothing checked.
+
+    The leftover ``contributing_factors`` text stays alongside the structure
+    until C18 retires the string readers. The two are not independent: INV-C12
+    derives that text from these same factors on every mutation, so they say the
+    same thing in two shapes rather than disagreeing.
+    """
     contributing = rca.get("contributing_factors")
     if isinstance(contributing, list):
         contributing_text = "\n".join(_usable_text(part) for part in contributing if _usable_text(part))
@@ -230,12 +298,15 @@ def serialize_rca_section(rca: Mapping[str, Any]) -> dict[str, Any]:
             if entry is not None:
                 whys.append(entry)
 
-    return {
+    section: dict[str, Any] = {
         "problem_statement": _usable_text(rca.get("problem_statement")),
         "whys": whys,
         "root_cause": _usable_text(rca.get("root_cause")),
         "contributing_factors": contributing_text,
     }
+    if factors is not None:
+        section[PACK_FIELD_ICAM_FACTORS] = serialize_icam_factors(factors)
+    return section
 
 
 def _capa_item(row: Any) -> Optional[dict[str, Any]]:
@@ -267,13 +338,21 @@ def overlay_investigation_sections(
     findings: Optional[Sequence[Any]] = None,
     rca: Optional[Mapping[str, Any]] = None,
     capa_actions: Optional[Sequence[Any]] = None,
+    factors: Optional[FactorSnapshot] = None,
 ) -> dict[str, dict[str, Any]]:
-    """Investigation sections keyed by HSG245 pack ids. ``None`` means that overlay was not loaded."""
+    """Investigation sections keyed by HSG245 pack ids. ``None`` means that overlay was not loaded.
+
+    ``factors`` rides on the RCA section rather than being a section of its own,
+    so it is emitted only when the RCA overlay is. On the generate path the two
+    always arrive together — :func:`load_investigation_pack_sources` returns an
+    RCA payload whenever the tenant matches — and a caller that loads factors
+    without RCA gets no diagram rather than an invented root-cause section.
+    """
     overlay: dict[str, dict[str, Any]] = {}
     if findings is not None:
         overlay[PACK_SECTION_FINDINGS] = serialize_findings_section(findings)
     if rca is not None:
-        overlay[PACK_SECTION_ROOT_CAUSE] = serialize_rca_section(rca)
+        overlay[PACK_SECTION_ROOT_CAUSE] = serialize_rca_section(rca, factors=factors)
     if capa_actions is not None:
         overlay[PACK_SECTION_CAPA] = serialize_capa_section(capa_actions)
     return overlay
@@ -286,15 +365,21 @@ async def load_investigation_pack_sources(
     tenant_id: int,
     actor_id: Optional[int] = None,
 ) -> InvestigationPackSources:
-    """Load tenant-scoped findings, RCA and CAPA for this run.
+    """Load tenant-scoped findings, RCA, CAPA and ICAM factors for this run.
 
     Fail closed: a missing tenant, a mismatch, or another organisation's rows
     are empty sources, never a leak. Findings and RCA conversion is the same
     lazy path the workspace uses — leftover strings become rows rather than
     being invented as pack prose.
+
+    The ICAM factors come from the same tenant-scoped reader the C12 editor uses
+    (``InvestigationFactorsService.snapshot``), which re-filters on ``tenant_id``
+    itself and returns an empty snapshot for another organisation's diagram. The
+    diagram is therefore built from the same rows the investigator edits, not
+    from a second copy of them.
     """
     if not _tenants_match(investigation, tenant_id):
-        return InvestigationPackSources(findings=[], rca=None, capa_actions=[])
+        return InvestigationPackSources(findings=[], rca=None, capa_actions=[], factors=None)
 
     scoped_tenant = int(tenant_id)
     findings = await InvestigationFindingsService.list_findings(
@@ -306,6 +391,11 @@ async def load_investigation_pack_sources(
         tenant_id=scoped_tenant,
         actor_id=actor_id,
     )
+    factors = await InvestigationFactorsService.snapshot(
+        db,
+        investigation=investigation,
+        tenant_id=scoped_tenant,
+    )
     capa_result = await db.execute(
         select(CAPAAction)
         .where(
@@ -316,12 +406,18 @@ async def load_investigation_pack_sources(
         .order_by(CAPAAction.id.asc())
     )
     capa_actions = list(capa_result.scalars().all())
-    return InvestigationPackSources(findings=list(findings), rca=rca, capa_actions=capa_actions)
+    return InvestigationPackSources(
+        findings=list(findings),
+        rca=rca,
+        capa_actions=capa_actions,
+        factors=factors,
+    )
 
 
 __all__ = [
     "HSG245_PACK_ALIASES",
     "InvestigationPackSources",
+    "PACK_FIELD_ICAM_FACTORS",
     "PACK_SECTION_CAPA",
     "PACK_SECTION_FINDINGS",
     "PACK_SECTION_ROOT_CAUSE",
@@ -332,6 +428,7 @@ __all__ = [
     "overlay_investigation_sections",
     "serialize_capa_section",
     "serialize_findings_section",
+    "serialize_icam_factors",
     "serialize_rca_section",
     "source_keys_replaced_by_overlay",
 ]
