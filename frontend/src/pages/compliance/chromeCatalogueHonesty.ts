@@ -117,7 +117,7 @@ export function importedRecordMatchesChrome(
 ): boolean {
   const n = (scheme || '').trim().toLowerCase()
   if (frameworkId === 'pm') return n === 'planet_mark'
-  if (frameworkId === 'uvdb') return n === 'achilles_uvdb'
+  if (frameworkId === 'uvdb') return n === `achilles_${frameworkId}`
   if (frameworkId === 'chas') return n === 'chas'
   if (frameworkId === 'ssip') return n === 'ssip'
   return false
