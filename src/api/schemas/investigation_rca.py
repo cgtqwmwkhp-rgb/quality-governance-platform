@@ -92,9 +92,6 @@ class CreateCapaFromWhyRequest(BaseModel):
     why_level: int = Field(..., ge=1, le=20)
     title: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = None
-    assignee_id: Optional[int] = None
-    assignee_email: Optional[str] = None
-    assignee_name: Optional[str] = Field(default=None, max_length=200)
     due_date: Optional[str] = None
     priority: Optional[str] = None
     five_whys_id: Optional[int] = None

@@ -52,9 +52,6 @@ export function createCapaFromWhy(
     five_whys_id?: number
     priority?: string
     due_date?: string
-    assignee_id?: number
-    assignee_email?: string
-    assignee_name?: string
   },
 ) {
   return api.post<{

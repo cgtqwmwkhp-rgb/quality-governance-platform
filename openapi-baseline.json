@@ -17799,40 +17799,6 @@
         "additionalProperties": false,
         "description": "Create a CAPA from one Why on this investigation's 5-Whys analysis (INV-C11).\n\n``why_level`` is required. Empty Why is a 422, not invented CAPA text and\nnot a 500. Optional title/description override the Why answer; they are\nnot filled in from an empty slot.",
         "properties": {
-          "assignee_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assignee Email"
-          },
-          "assignee_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assignee Id"
-          },
-          "assignee_name": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assignee Name"
-          },
           "description": {
             "anyOf": [
               {

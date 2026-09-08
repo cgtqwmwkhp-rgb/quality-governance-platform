@@ -3,8 +3,7 @@
 > Adjacent, not fixed here: ICAM / contributing-factor rows are C12. Pack PDF/draw
 > (C15 LIVE `e4facada7`) and closure helpers (C8 LIVE) are not in this diff.
 > Dual-written `why_1`..`why_5` strings stay until C18. Findings CRUD is
-> untouched. C10 merge SHA `796c1115d` is the rollback once C10 is LIVE.
-> **Do not merge while C10 #1860 is chasing LIVE** — Azure is one SHA.
+> untouched. Kill SHA is C10 LIVE `796c1115d`. Azure stays one merge SHA.
 
 ## 1) Summary
 - **Feature / Change name:** INV-C11 — CAPA per Why (DEC-2)
@@ -22,8 +21,7 @@
 - **Out of scope:** pack PDF/draw, closure helpers, findings CRUD, ICAM (C12),
   dropping flat-key readers (C18), competence, PAMS, Entra, a second table,
   a second findings editor, size-limit raise.
-- **Feature flag / kill switch:** None. Kill SHA = LIVE `e4facada7` (INV-C15).
-  Once C10 is LIVE, rollback SHA is C10 squash `796c1115d`.
+- **Feature flag / kill switch:** None. Kill SHA = C10 LIVE `796c1115d`.
 
 ## 2) Impact Map (what changed)
 - **Database:** `capa_actions` gains nullable `five_whys_id` (FK to
@@ -107,6 +105,12 @@
   nothing; filled Why links `five_whys_id` / `why_level`.
 - [x] Frontend — vitest on InvestigationDetail + investigationDetailApi:
   per-Why control, empty Why disabled, create posts `/rca/capa`.
+- [x] Contract Guard 4 — `CreateCapaFromWhyRequest` does not advertise
+  `assignee_id` / `assignee_name` / `assignee_email` (UI never sent them;
+  `CAPAResponse` returns `assigned_to_id`). Local:
+  `test_every_request_field_is_readable_back[POST …/rca/capa]` and
+  `test_no_unrecorded_write_only_fields[POST …/rca/capa]` pass. Not recorded
+  in `KNOWN_UNREADABLE_REQUEST_FIELDS`.
 - [ ] Full CI — linked after PR checks
 
 ## 6) Critical Journeys Verified (CUJ)

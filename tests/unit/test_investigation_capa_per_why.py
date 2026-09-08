@@ -129,6 +129,14 @@ def test_create_capa_from_why_request_rejects_unknown_fields() -> None:
         CreateCapaFromWhyRequest(why_level=1, invented="no")  # type: ignore[call-arg]
 
 
+def test_create_capa_from_why_request_rejects_assignee_fields_it_cannot_echo() -> None:
+    """Guard 4: do not advertise assignee_* on create-from-Why; CAPAResponse uses assigned_to_id."""
+    with pytest.raises(ValueError):
+        CreateCapaFromWhyRequest(why_level=1, assignee_id=9)  # type: ignore[call-arg]
+    with pytest.raises(ValueError):
+        CreateCapaFromWhyRequest(why_level=1, assignee_name="Pat")  # type: ignore[call-arg]
+
+
 def test_create_capa_from_why_request_requires_why_level() -> None:
     with pytest.raises(ValueError):
         CreateCapaFromWhyRequest()
