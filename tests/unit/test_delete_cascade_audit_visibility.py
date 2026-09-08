@@ -13,7 +13,7 @@ issues the per-row DELETE, which requires a mapped relationship whose cascade
 includes ``delete`` and which does not set ``passive_deletes=True``. Every pair
 below fails that test, so the removal happens with no Python event:
 
-* 87 pairs have no relationship mapped from the parent at all.
+* 88 pairs have no relationship mapped from the parent at all.
 * 5 have a relationship without ``delete`` in its cascade — SQLAlchemy will try
   to de-associate the children instead of deleting them, so still no per-child
   delete event (and on a NOT NULL foreign key that attempt errors).
@@ -110,8 +110,24 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("ims_requirements", "ims_control_requirement_mappings"),
         ("incidents", "incident_running_sheet_entries"),
         ("investigation_runs", "barrier_analyses"),
+        # INV-C7 findings rows. They follow the three RCA children above, and for
+        # the same reason: mapping a delete-cascading relationship would hang a
+        # lazy collection off InvestigationRun, which the async run loads on any
+        # attribute touch outside a greenlet — the MissingGreenlet failure this
+        # file's header describes. Deleting a run therefore removes its findings
+        # with no per-row event, and the audit row for the run says nothing about
+        # them. The findings text also survives on investigation_runs.data, which
+        # the run's own delete row does cover.
+        ("investigation_runs", "investigation_findings"),
         ("investigation_runs", "fishbone_diagrams"),
         ("investigation_runs", "five_whys_analyses"),
+        # INV-C17 disclosure log. Same reason as findings: a delete-cascading
+        # relationship from InvestigationRun would hang a lazy collection off
+        # the async run. PostgreSQL therefore removes disclosure rows when the
+        # run is deleted, with no per-row event; the audit row for the run says
+        # nothing about who received a pack. The pack itself still cascades
+        # through the mapped customer_packs collection.
+        ("investigation_runs", "investigation_pack_disclosures"),
         # Not a new cascade, a newly visible one. The physical constraint
         # soa_control_entry_control_id_fkey has been ON DELETE CASCADE since
         # 20260120_add_iso27001_isms; SoAControlEntry simply did not declare it,

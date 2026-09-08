@@ -28,7 +28,7 @@ export function buildGeneratedPackDownload(
       {
         export_kind: 'full_json',
         pdf_note:
-          'The issuable document is the PDF (Download PDF on the Report tab). This JSON is the full machine-readable pack payload, including the complete redaction log.',
+          'The PDF on the Report tab is the generated pack. Issuing it to a customer is a separate act and retains those bytes. This JSON is the machine-readable pack payload, including the complete redaction log.',
         ...pack,
       },
       null,
@@ -50,7 +50,7 @@ export function buildPackManifestStubDownload(
       {
         export_kind: 'manifest_stub',
         pdf_note:
-          'Checksum metadata only. Use Download PDF for the issuable document, or regenerate the report for the full JSON payload.',
+          'Checksum metadata only. Use Download PDF for the generated pack, or Issue this pack to retain the bytes a customer is given.',
         investigation_reference: investigationReference,
         pack_uuid: pack.pack_uuid,
         audience: pack.audience,

@@ -1,7 +1,127 @@
 /**
  * Detail-lane API helpers (avoid colliding with InvList investigationsClient edits).
+ *
+ * INV-C10 RCA calls live here, not on the shell `investigationsApi` factory:
+ * InvestigationDetail is already a lazy route chunk, and two extra methods on
+ * the shell client were enough to push index-*.js over the 212 kB gzip ceiling.
  */
 import api from '../../api/client'
+
+export interface InvestigationRcaWhy {
+  level: number
+  why?: string
+  answer: string
+  evidence: string
+}
+
+export interface InvestigationRcaResponse {
+  id: number | null
+  investigation_id: number
+  problem_statement: string
+  whys: InvestigationRcaWhy[]
+  root_cause: string
+  contributing_factors: string
+}
+
+export interface InvestigationRcaUpsert {
+  problem_statement: string
+  whys: Array<{
+    level: number
+    answer: string
+    evidence?: string
+    why?: string
+  }>
+  root_cause: string
+  /**
+   * INV-C12: deliberately not sent by this page any more.
+   *
+   * The ICAM factor list below is the author of that text; the server derives
+   * it from the factors on every factor mutation. Sending a copy from here
+   * would be a second writer for one field, which is the PX-168 shape. Omitted
+   * means "leave it alone", which is exactly what this page wants.
+   */
+  contributing_factors?: string
+}
+
+/** ICAM contributing factor (INV-C12). `category` and `depth` are server enums. */
+export interface InvestigationFactor {
+  id: number
+  investigation_id: number
+  category: string
+  cause: string
+  sub_causes: string[]
+  depth: string | null
+}
+
+export interface InvestigationFactorListResponse {
+  items: InvestigationFactor[]
+  total: number
+  investigation_id: number
+  diagram_id: number | null
+  contributing_factors_text: string
+  unmapped_categories: string[]
+  unreadable_total: number
+}
+
+export interface InvestigationFactorInput {
+  category: string
+  cause: string
+  sub_causes?: string[]
+  depth?: string | null
+}
+
+export function getRca(id: number) {
+  return api.get<InvestigationRcaResponse>(`/api/v1/investigations/${id}/rca`)
+}
+
+export function saveRca(id: number, body: InvestigationRcaUpsert) {
+  return api.put<InvestigationRcaResponse>(`/api/v1/investigations/${id}/rca`, body)
+}
+
+export function createCapaFromWhy(
+  id: number,
+  body: {
+    why_level: number
+    title?: string
+    description?: string
+    five_whys_id?: number
+    priority?: string
+    due_date?: string
+  },
+) {
+  return api.post<{
+    id: number
+    reference_number: string
+    title: string
+    five_whys_id?: number | null
+    why_level?: number | null
+  }>(`/api/v1/investigations/${id}/rca/capa`, body)
+}
+
+export function listFactors(id: number) {
+  return api.get<InvestigationFactorListResponse>(`/api/v1/investigations/${id}/factors`)
+}
+
+export function createFactor(id: number, body: InvestigationFactorInput) {
+  return api.post<InvestigationFactorListResponse>(`/api/v1/investigations/${id}/factors`, body)
+}
+
+export function updateFactor(
+  id: number,
+  factorId: number,
+  body: Partial<InvestigationFactorInput>,
+) {
+  return api.patch<InvestigationFactorListResponse>(
+    `/api/v1/investigations/${id}/factors/${factorId}`,
+    body,
+  )
+}
+
+export function deleteFactor(id: number, factorId: number) {
+  return api.delete<InvestigationFactorListResponse>(
+    `/api/v1/investigations/${id}/factors/${factorId}`,
+  )
+}
 
 export type CustomerPackVisibilityMeta = {
   omit_requested?: boolean
@@ -50,15 +170,64 @@ export async function updateEvidenceVisibility(assetId: number, visibility: stri
  * The server renders the stored pack payload, so this cannot return content the pack's
  * redaction rules removed.
  */
-export async function fetchCustomerPackPdf(
-  investigationId: number,
-  packId: number,
-): Promise<Blob> {
+export async function fetchCustomerPackPdf(investigationId: number, packId: number): Promise<Blob> {
   const response = await api.get<Blob>(
     `/api/v1/investigations/${investigationId}/packs/${packId}/pdf`,
     { responseType: 'blob' },
   )
   return response.data
+}
+
+export interface PackRedactionReviewResponse {
+  pack_id: number
+  investigation_id: number
+  cleared: boolean
+  note: string | null
+  reviewed_at: string
+  reviewed_by_id: number
+  issue_blockers: string[]
+}
+
+export interface PackIssuedResponse {
+  pack_id: number
+  pack_uuid: string
+  investigation_id: number
+  audience: string
+  recipient: string
+  recipient_email: string | null
+  note: string | null
+  disclosure_id: number
+  issued_at: string
+  issued_by_id: number
+  pdf_sha256: string
+  pdf_size_bytes: number
+  evidence_asset_id: number | null
+  pdf_newly_retained: boolean
+  disclosure_count: number
+}
+
+/** Record a human redaction review on a generated pack (INV-C17 / DEC-4). */
+export function reviewCustomerPack(
+  investigationId: number,
+  packId: number,
+  body: { cleared: boolean; note?: string },
+) {
+  return api.post<PackRedactionReviewResponse>(
+    `/api/v1/investigations/${investigationId}/packs/${packId}/redaction-review`,
+    body,
+  )
+}
+
+/** Issue a generated pack to a named recipient (INV-C17 / DEC-5). */
+export function issueCustomerPack(
+  investigationId: number,
+  packId: number,
+  body: { recipient: string; recipient_email?: string; note?: string },
+) {
+  return api.post<PackIssuedResponse>(
+    `/api/v1/investigations/${investigationId}/packs/${packId}/issue`,
+    body,
+  )
 }
 
 export function readCustomerPackVisibility(

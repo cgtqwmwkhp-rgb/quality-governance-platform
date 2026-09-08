@@ -45,8 +45,15 @@ import {
   type Action,
   type EvidenceAsset,
   type PackCapability,
+  type InvestigationFinding,
   getApiErrorMessage,
 } from '../api/client'
+import type {
+  InvestigationFactor as InvestigationContributingFactor,
+  InvestigationFactorInput,
+  InvestigationFactorListResponse,
+  InvestigationRcaWhy,
+} from './investigation/investigationDetailApi'
 import { Button } from '../components/ui/Button'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
@@ -67,10 +74,7 @@ import {
 } from '../components/ui/Select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/Tooltip'
 import { cn } from '../helpers/utils'
-import {
-  getStatusDisplay,
-  type InvestigationStatusValue,
-} from '../utils/investigationStatusFilter'
+import { getStatusDisplay, type InvestigationStatusValue } from '../utils/investigationStatusFilter'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
 
 const WORKFLOW_STATUSES: InvestigationStatusValue[] = [
@@ -86,7 +90,14 @@ import InvestigationComments from './investigation/InvestigationComments'
 import InvestigationActions from './investigation/InvestigationActions'
 import type { ActionFormData } from './investigation/InvestigationActions'
 import InvestigationEvidence from './investigation/InvestigationEvidence'
+import InvestigationFindingsEditor from './investigation/InvestigationFindingsEditor'
+import InvestigationFactorsEditor from './investigation/InvestigationFactorsEditor'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
+import {
+  investigationLinkedEvidenceParams,
+  investigationNativeEvidenceParams,
+  mergeEvidenceAssetsById,
+} from './investigation/investigationEvidenceQuery'
 import { resolveInvestigationAssigneeSelection } from './workforce/employeePickerUtils'
 import {
   formatCapaActionsCount,
@@ -103,14 +114,25 @@ import {
   triggerPackPdfDownload,
 } from './investigation/investigationReportHelpers'
 import { getReportSectionsForLevel } from './investigation/hsg245ReportSections'
+import { readWorkspaceText, withWorkspaceFields } from './investigation/investigationNestedData'
 import {
   addManualTimelineEntry,
   approveCustomerPackOmit,
+  createFactor,
+  deleteFactor,
   fetchCustomerPackPdf,
+  getRca,
+  issueCustomerPack,
+  listFactors,
   readCustomerPackVisibility,
   requestCustomerPackOmit,
+  reviewCustomerPack,
+  saveRca,
+  updateFactor,
+  createCapaFromWhy,
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
+import PackIssueControls from './investigation/PackIssueControls'
 import { formatCodedValue, formatPermissionCode } from '../helpers/displayLabels'
 import { InvestigationCloseSummaryDialog } from '../components/investigations/InvestigationCloseSummaryDialog'
 
@@ -130,6 +152,38 @@ const TABS = [
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
+
+const EMPTY_RCA_WHYS: InvestigationRcaWhy[] = [1, 2, 3, 4, 5].map((level) => ({
+  level,
+  why: '',
+  answer: '',
+  evidence: '',
+}))
+
+function padRcaWhys(whys: InvestigationRcaWhy[] | undefined): InvestigationRcaWhy[] {
+  const byLevel = new Map((whys || []).map((item) => [item.level, item]))
+  const slots: InvestigationRcaWhy[] = EMPTY_RCA_WHYS.map((slot) => {
+    const stored = byLevel.get(slot.level)
+    return stored
+      ? {
+          level: slot.level,
+          why: stored.why || '',
+          answer: stored.answer || '',
+          evidence: stored.evidence || '',
+        }
+      : { ...slot }
+  })
+  const extras = (whys || [])
+    .filter((item) => item.level > 5)
+    .sort((a, b) => a.level - b.level)
+    .map((item) => ({
+      level: item.level,
+      why: item.why || '',
+      answer: item.answer || '',
+      evidence: item.evidence || '',
+    }))
+  return extras.length ? [...slots, ...extras] : slots
+}
 
 const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
   road_traffic_collision: Car,
@@ -162,6 +216,7 @@ export default function InvestigationDetail() {
   const [generatingPack, setGeneratingPack] = useState(false)
   const [downloadingPackId, setDownloadingPackId] = useState<number | null>(null)
   const [downloadingPdfPackId, setDownloadingPdfPackId] = useState<number | null>(null)
+  const [packIssueBusyId, setPackIssueBusyId] = useState<number | null>(null)
   const [packCapability, setPackCapability] = useState<PackCapability>({ canGenerate: true })
   const [packError, setPackError] = useState<string | null>(null)
 
@@ -172,9 +227,20 @@ export default function InvestigationDetail() {
   const [deletingEvidenceId, setDeletingEvidenceId] = useState<number | null>(null)
   const [deleteEvidenceTarget, setDeleteEvidenceTarget] = useState<number | null>(null)
 
-  const [rcaData, setRcaData] = useState<Record<string, string>>({})
+  const [rcaWhys, setRcaWhys] = useState<InvestigationRcaWhy[]>(EMPTY_RCA_WHYS)
+  const [rcaProblem, setRcaProblem] = useState('')
+  const [rcaRootCause, setRcaRootCause] = useState('')
+  // INV-C12: read-only after this PR. The RCA endpoint still returns the
+  // contributing-factors paragraph, but the ICAM factor list below is now its
+  // author; this holds it only so a run whose prose predates the picker still
+  // shows what was typed instead of appearing to have lost it.
+  const [rcaContributing, setRcaContributing] = useState('')
+  const [rcaAnalysisId, setRcaAnalysisId] = useState<number | null>(null)
   const [rcaUnsaved, setRcaUnsaved] = useState(false)
   const [savingRca, setSavingRca] = useState(false)
+  const [creatingCapaWhyLevel, setCreatingCapaWhyLevel] = useState<number | null>(null)
+  const [rcaLoading, setRcaLoading] = useState(false)
+  const [rcaLoadError, setRcaLoadError] = useState<string | null>(null)
   const [rcaSaveError, setRcaSaveError] = useState<string | null>(null)
   const [rcaSaveSuccess, setRcaSaveSuccess] = useState(false)
 
@@ -201,9 +267,28 @@ export default function InvestigationDetail() {
   const [omitBusySection, setOmitBusySection] = useState<string | null>(null)
   const [lastRedactionLog, setLastRedactionLog] = useState<Record<string, unknown>[] | null>(null)
 
-  const [summaryFindings, setSummaryFindings] = useState('')
+  // INV-C7: findings are rows, loaded from their own endpoint. They are deliberately
+  // not part of the summary save — that save still owns conclusion and lead, which
+  // are still strings on `data`.
+  const [findings, setFindings] = useState<InvestigationFinding[]>([])
+  const [findingsLoading, setFindingsLoading] = useState(false)
+  const [findingsSaving, setFindingsSaving] = useState(false)
+  const [findingsError, setFindingsError] = useState<string | null>(null)
+
+  // INV-C12: ICAM contributing factors, behind their own endpoint on
+  // fishbone_diagrams. Not part of the RCA save — that save still owns the
+  // problem statement, the Whys and the root cause.
+  const [factors, setFactors] = useState<InvestigationContributingFactor[]>([])
+  const [factorsLoading, setFactorsLoading] = useState(false)
+  const [factorsSaving, setFactorsSaving] = useState(false)
+  const [factorsError, setFactorsError] = useState<string | null>(null)
+  const [factorsText, setFactorsText] = useState('')
+  const [factorsUnmapped, setFactorsUnmapped] = useState<string[]>([])
+  const [factorsUnreadable, setFactorsUnreadable] = useState(0)
+
   const [summaryConclusion, setSummaryConclusion] = useState('')
   const [summaryLead, setSummaryLead] = useState('')
+  const [summaryLeadUserId, setSummaryLeadUserId] = useState<number | null>(null)
   const [summaryUnsaved, setSummaryUnsaved] = useState(false)
   const [savingSummary, setSavingSummary] = useState(false)
   const [summarySaveError, setSummarySaveError] = useState<string | null>(null)
@@ -249,6 +334,28 @@ export default function InvestigationDetail() {
       setTimelineLoading(false)
     }
   }, [investigationId, timelineFilter])
+
+  /**
+   * INV-C7: hydrate the findings rows.
+   *
+   * The first call for a run that still holds only the legacy `data.findings`
+   * string converts that string into rows server-side, so this is also what makes
+   * an older investigation's findings appear in the editor.
+   */
+  const loadFindings = useCallback(async () => {
+    if (!investigationId) return
+    setFindingsLoading(true)
+    setFindingsError(null)
+    try {
+      const response = await investigationsApi.listFindings(investigationId)
+      setFindings(response.data.items)
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'loadFindings' })
+      setFindingsError(getApiErrorMessage(err))
+    } finally {
+      setFindingsLoading(false)
+    }
+  }, [investigationId])
 
   const loadComments = useCallback(async () => {
     if (!investigationId) return
@@ -326,13 +433,11 @@ export default function InvestigationDetail() {
     setEvidenceLoading(true)
     setEvidenceError(null)
     try {
-      const response = await evidenceAssetsApi.list({
-        source_module: 'investigation',
-        source_id: investigationId,
-        page: 1,
-        page_size: 50,
-      })
-      setEvidenceAssets(response.data.items)
+      const [native, linked] = await Promise.all([
+        evidenceAssetsApi.list(investigationNativeEvidenceParams(investigationId)),
+        evidenceAssetsApi.list(investigationLinkedEvidenceParams(investigationId)),
+      ])
+      setEvidenceAssets(mergeEvidenceAssetsById([linked.data.items || [], native.data.items || []]))
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'loadEvidence' })
       setEvidenceError(getApiErrorMessage(err))
@@ -347,26 +452,81 @@ export default function InvestigationDetail() {
     setPackCapability(capability)
   }, [investigationId])
 
-  const initializeRcaData = useCallback(() => {
-    if (!investigation) return
-    const data = (investigation.data as Record<string, unknown>) || {}
-    const rcaFields: Record<string, string> = {}
-    for (let i = 1; i <= 5; i++) {
-      rcaFields[`why_${i}`] = String(data[`why_${i}`] || '')
+  /**
+   * INV-C10: hydrate the RCA tab from five_whys_analyses.
+   *
+   * The first call for a run that still holds only leftover `why_1`..`why_5`
+   * strings converts those strings into an analysis server-side, so this is
+   * also what makes an older investigation's Whys appear as structured steps
+   * instead of a single textarea.
+   */
+  const loadRca = useCallback(async () => {
+    if (!investigationId) return
+    setRcaLoading(true)
+    setRcaLoadError(null)
+    try {
+      const response = await getRca(investigationId)
+      const payload = response.data
+      setRcaProblem(payload.problem_statement || '')
+      setRcaWhys(padRcaWhys(payload.whys))
+      setRcaRootCause(payload.root_cause || '')
+      setRcaContributing(payload.contributing_factors || '')
+      setRcaAnalysisId(payload.id ?? null)
+      setRcaUnsaved(false)
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'loadRca' })
+      setRcaLoadError(getApiErrorMessage(err))
+    } finally {
+      setRcaLoading(false)
     }
-    rcaFields['root_cause'] = String(data['root_cause'] || '')
-    rcaFields['problem_statement'] = String(data['problem_statement'] || '')
-    rcaFields['contributing_factors'] = String(data['contributing_factors'] || '')
-    setRcaData(rcaFields)
-    setRcaUnsaved(false)
-  }, [investigation])
+  }, [investigationId])
+
+  /**
+   * Replace the factor list from a server response.
+   *
+   * Every factor endpoint answers with the whole ordered list plus the derived
+   * paragraph, so state is replaced rather than patched locally: the grouping
+   * on screen is then always the grouping stored, and the paragraph on screen
+   * is the one the closure gate and the pack will read.
+   */
+  const applyFactorsResponse = useCallback((payload: InvestigationFactorListResponse) => {
+    setFactors(payload.items || [])
+    setFactorsText(payload.contributing_factors_text || '')
+    setFactorsUnmapped(payload.unmapped_categories || [])
+    setFactorsUnreadable(payload.unreadable_total || 0)
+  }, [])
+
+  /**
+   * INV-C12: hydrate the ICAM contributing factors.
+   *
+   * Read-only: unlike findings and RCA there is no conversion here. The
+   * leftover contributing-factors paragraph is one box of prose, and splitting
+   * it into categorised factors would mean guessing which ICAM category
+   * somebody else's sentence belongs to. It stays visible below the list until
+   * an investigator files real factors, at which point the server overwrites it
+   * from them.
+   */
+  const loadFactors = useCallback(async () => {
+    if (!investigationId) return
+    setFactorsLoading(true)
+    setFactorsError(null)
+    try {
+      const response = await listFactors(investigationId)
+      applyFactorsResponse(response.data)
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'loadFactors' })
+      setFactorsError(getApiErrorMessage(err))
+    } finally {
+      setFactorsLoading(false)
+    }
+  }, [investigationId, applyFactorsResponse])
 
   const initializeSummaryData = useCallback(() => {
     if (!investigation) return
     const data = (investigation.data as Record<string, unknown>) || {}
-    setSummaryFindings(String(data['findings'] || ''))
-    setSummaryConclusion(String(data['conclusion'] || ''))
-    setSummaryLead(String(data['lead_investigator'] || ''))
+    setSummaryConclusion(readWorkspaceText(data, 'conclusion'))
+    setSummaryLead(readWorkspaceText(data, 'lead_investigator'))
+    setSummaryLeadUserId(investigation.assigned_to_user_id ?? null)
     setSummaryUnsaved(false)
     setSummarySaveError(null)
   }, [investigation])
@@ -441,21 +601,61 @@ export default function InvestigationDetail() {
     }
   }
 
-  const handleRcaFieldChange = (field: string, value: string) => {
-    setRcaData((prev) => ({ ...prev, [field]: value }))
+  /**
+   * The contributing-factors prose as it stands: derived from the ICAM factors
+   * once there are any, and the leftover paragraph the RCA endpoint returns
+   * until then. Not a second store — whichever of the two is non-empty is what
+   * the server has, and after the first factor is filed they are the same text.
+   */
+  const contributingFactorsText = factorsText || rcaContributing
+
+  /**
+   * True when the run still holds prose that no ICAM factor accounts for.
+   *
+   * Shown read-only rather than converted: nothing here may decide which ICAM
+   * category somebody else's sentence belongs to, and nothing may make it
+   * vanish from the screen either.
+   */
+  const hasLeftoverFactorProse =
+    factors.length === 0 && rcaContributing.trim().length > 0 && !factorsText.trim()
+
+  const markRcaDirty = () => {
     setRcaUnsaved(true)
     setRcaSaveSuccess(false)
   }
 
+  const handleRcaWhyChange = (level: number, field: 'answer' | 'evidence', value: string) => {
+    setRcaWhys((prev) =>
+      prev.map((item) => (item.level === level ? { ...item, [field]: value } : item)),
+    )
+    markRcaDirty()
+  }
+
   const handleSaveRca = async () => {
-    if (!investigationId || !investigation) return
+    if (!investigationId) return
     setSavingRca(true)
     setRcaSaveError(null)
     setRcaSaveSuccess(false)
     try {
-      const existingData = (investigation.data as Record<string, unknown>) || {}
-      await investigationsApi.update(investigationId, { data: { ...existingData, ...rcaData } })
-      await loadInvestigation()
+      const response = await saveRca(investigationId, {
+        problem_statement: rcaProblem,
+        whys: rcaWhys.map((item) => ({
+          level: item.level,
+          answer: item.answer,
+          evidence: item.evidence,
+        })),
+        root_cause: rcaRootCause,
+        // INV-C12: `contributing_factors` is no longer written here. The ICAM
+        // factor list is its only author, and the server derives the paragraph
+        // from those factors — sending a stale copy from this tab would
+        // overwrite whatever the factor editor just saved.
+      })
+      const payload = response.data
+      setRcaProblem(payload.problem_statement || '')
+      setRcaWhys(padRcaWhys(payload.whys))
+      setRcaRootCause(payload.root_cause || '')
+      setRcaContributing(payload.contributing_factors || '')
+      setRcaAnalysisId(payload.id ?? null)
       setRcaUnsaved(false)
       setRcaSaveSuccess(true)
       setTimeout(() => setRcaSaveSuccess(false), 3000)
@@ -489,7 +689,7 @@ export default function InvestigationDetail() {
     try {
       const payload = buildPackManifestStubDownload(pack, investigation.reference_number)
       triggerPackDownload(payload)
-      toast.success('Manifest stub downloaded — use PDF for the issuable document.')
+      toast.success('Manifest stub downloaded — use PDF for the generated pack.')
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'downloadPack' })
       setPackError(getApiErrorMessage(err))
@@ -517,6 +717,57 @@ export default function InvestigationDetail() {
     }
   }
 
+  const handleReviewPack = async (packId: number, cleared: boolean, note?: string) => {
+    if (!investigationId) return
+    setPackIssueBusyId(packId)
+    setPackError(null)
+    try {
+      await reviewCustomerPack(investigationId, packId, { cleared, note })
+      toast.success(
+        cleared
+          ? 'Redaction review cleared. This pack can be issued once the investigation is complete.'
+          : 'Redaction review recorded as needing changes. This pack cannot be issued yet.',
+      )
+      await loadPacks()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'reviewPack' })
+      const message = getApiErrorMessage(err, 'Could not record the redaction review.')
+      setPackError(message)
+      toast.error(message)
+      throw err
+    } finally {
+      setPackIssueBusyId(null)
+    }
+  }
+
+  const handleIssuePack = async (
+    packId: number,
+    recipient: string,
+    recipientEmail?: string,
+    note?: string,
+  ) => {
+    if (!investigationId) return
+    setPackIssueBusyId(packId)
+    setPackError(null)
+    try {
+      await issueCustomerPack(investigationId, packId, {
+        recipient,
+        recipient_email: recipientEmail,
+        note,
+      })
+      toast.success('Pack issued. Download now returns the retained copy.')
+      await loadPacks()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'issuePack' })
+      const message = getApiErrorMessage(err, 'Could not issue this pack.')
+      setPackError(message)
+      toast.error(message)
+      throw err
+    } finally {
+      setPackIssueBusyId(null)
+    }
+  }
+
   const handleGeneratePack = async (audience: string) => {
     if (!investigationId) return
     setGeneratingPack(true)
@@ -526,8 +777,9 @@ export default function InvestigationDetail() {
       triggerPackDownload(buildGeneratedPackDownload(response.data))
       const log = response.data.redaction_log
       setLastRedactionLog(Array.isArray(log) ? log : null)
-      toast.success('Report generated — downloading PDF and JSON record.')
-      // The PDF is the issuable document; the JSON above is the machine-readable record.
+      toast.success(
+        'Report generated — downloading PDF and JSON record. Issuing to a customer is a separate step.',
+      )
       await handleDownloadPackPdf(response.data.pack_id, response.data.pack_uuid)
       await loadPacks()
       await loadInvestigation()
@@ -643,10 +895,134 @@ export default function InvestigationDetail() {
       await loadClosureValidation()
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'reopenInvestigation' })
-      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
+      toast.error(
+        getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')),
+      )
     } finally {
       setReopening(false)
     }
+  }
+
+  /**
+   * INV-C7: run one findings mutation.
+   *
+   * Every findings endpoint answers with the whole ordered list, so the list is
+   * replaced from the response rather than patched locally — the order on screen
+   * is then always the order stored. A failure leaves the previous list untouched
+   * and shows why, instead of an optimistic row that does not exist server-side.
+   *
+   * The closure gate reads the concatenated string the server rewrites on each of
+   * these, so the run is re-read afterwards to keep the gate panel honest.
+   */
+  const runFindingsMutation = useCallback(
+    async (action: string, mutate: () => Promise<{ data: { items: InvestigationFinding[] } }>) => {
+      setFindingsSaving(true)
+      setFindingsError(null)
+      try {
+        const response = await mutate()
+        setFindings(response.data.items)
+        await loadInvestigation()
+        await loadClosureValidation()
+      } catch (err) {
+        trackError(err, { component: 'InvestigationDetail', action })
+        const message = getApiErrorMessage(err)
+        setFindingsError(message)
+        toast.error(message)
+      } finally {
+        setFindingsSaving(false)
+      }
+    },
+    [loadInvestigation, loadClosureValidation],
+  )
+
+  const handleAddFinding = async (body: string) => {
+    if (!investigationId) return
+    await runFindingsMutation('addFinding', () =>
+      investigationsApi.createFinding(investigationId, body),
+    )
+  }
+
+  const handleUpdateFinding = async (findingId: number, body: string) => {
+    if (!investigationId) return
+    await runFindingsMutation('updateFinding', () =>
+      investigationsApi.updateFinding(investigationId, findingId, body),
+    )
+  }
+
+  const handleDeleteFinding = async (findingId: number) => {
+    if (!investigationId) return
+    await runFindingsMutation('deleteFinding', () =>
+      investigationsApi.deleteFinding(investigationId, findingId),
+    )
+  }
+
+  /**
+   * Move one finding one place up or down.
+   *
+   * Sends the complete id list in the wanted order, which is what the endpoint
+   * requires: a partial list is refused rather than applied, so a move computed
+   * against a stale list fails loudly instead of dropping a finding somebody else
+   * added.
+   */
+  const handleMoveFinding = async (findingId: number, direction: -1 | 1) => {
+    if (!investigationId) return
+    const index = findings.findIndex((finding) => finding.id === findingId)
+    const target = index + direction
+    if (index < 0 || target < 0 || target >= findings.length) return
+    const order = findings.map((finding) => finding.id)
+    ;[order[index], order[target]] = [order[target], order[index]]
+    await runFindingsMutation('reorderFindings', () =>
+      investigationsApi.reorderFindings(investigationId, order),
+    )
+  }
+
+  /**
+   * INV-C12: run one contributing-factor mutation.
+   *
+   * The same shape as `runFindingsMutation`: the server's whole list replaces
+   * local state, a failure leaves the previous list untouched and says why, and
+   * the run is re-read afterwards because the server rewrites the paragraph the
+   * closure gate and the generated pack still read.
+   */
+  const runFactorsMutation = useCallback(
+    async (action: string, mutate: () => Promise<{ data: InvestigationFactorListResponse }>) => {
+      setFactorsSaving(true)
+      setFactorsError(null)
+      try {
+        const response = await mutate()
+        applyFactorsResponse(response.data)
+        await loadInvestigation()
+        await loadRca()
+      } catch (err) {
+        trackError(err, { component: 'InvestigationDetail', action })
+        const message = getApiErrorMessage(err)
+        setFactorsError(message)
+        toast.error(message)
+      } finally {
+        setFactorsSaving(false)
+      }
+    },
+    [applyFactorsResponse, loadInvestigation, loadRca],
+  )
+
+  const handleAddFactor = async (factor: InvestigationFactorInput) => {
+    if (!investigationId) return
+    await runFactorsMutation('addFactor', () => createFactor(investigationId, factor))
+  }
+
+  const handleUpdateFactor = async (
+    factorId: number,
+    changes: Partial<InvestigationFactorInput>,
+  ) => {
+    if (!investigationId) return
+    await runFactorsMutation('updateFactor', () =>
+      updateFactor(investigationId, factorId, changes),
+    )
+  }
+
+  const handleDeleteFactor = async (factorId: number) => {
+    if (!investigationId) return
+    await runFactorsMutation('deleteFactor', () => deleteFactor(investigationId, factorId))
   }
 
   const handleSaveSummary = async () => {
@@ -656,12 +1032,15 @@ export default function InvestigationDetail() {
     try {
       const existingData = (investigation.data as Record<string, unknown>) || {}
       await investigationsApi.update(investigationId, {
-        data: {
-          ...existingData,
-          findings: summaryFindings,
+        assigned_to_user_id: summaryLeadUserId,
+        // Dual-write (INV-C4): flat keys plus the nested findings section.
+        // INV-C7: `findings` is no longer written here. The rows are its only
+        // author, and the server derives the string from them — sending a stale
+        // copy from this form would overwrite whatever the row editor just saved.
+        data: withWorkspaceFields(existingData, {
           conclusion: summaryConclusion,
           lead_investigator: summaryLead,
-        },
+        }),
       })
       await loadInvestigation()
       setSummaryUnsaved(false)
@@ -747,11 +1126,25 @@ export default function InvestigationDetail() {
     loadActions()
   }, [loadActions])
   useEffect(() => {
-    initializeRcaData()
-  }, [investigation, initializeRcaData])
-  useEffect(() => {
     initializeSummaryData()
   }, [investigation, initializeSummaryData])
+  // INV-C7: findings live behind their own endpoint, so they are fetched once for
+  // the run rather than re-derived from `investigation.data` on every render.
+  useEffect(() => {
+    loadFindings()
+  }, [loadFindings])
+  // INV-C10: RCA lives on five_whys_analyses; the first GET converts leftover
+  // why_1..why_5 strings. Loaded with the run so conversion is not gated on
+  // opening the tab.
+  useEffect(() => {
+    loadRca()
+  }, [loadRca])
+  // INV-C12: ICAM contributing factors live behind their own endpoint on
+  // fishbone_diagrams, so they are fetched for the run rather than re-derived
+  // from `investigation.data`.
+  useEffect(() => {
+    loadFactors()
+  }, [loadFactors])
 
   useEffect(() => {
     if (!investigationId) return
@@ -774,7 +1167,8 @@ export default function InvestigationDetail() {
         loadEvidence()
         break
       case 'rca':
-        initializeRcaData()
+        loadRca()
+        loadFactors()
         break
     }
   }, [
@@ -787,7 +1181,8 @@ export default function InvestigationDetail() {
     loadPacks,
     loadPackCapability,
     loadEvidence,
-    initializeRcaData,
+    loadRca,
+    loadFactors,
   ])
 
   useEffect(() => {
@@ -870,22 +1265,45 @@ export default function InvestigationDetail() {
   }
 
   const handleCreateCapaFromRootCause = () => {
-    const root = (rcaData['root_cause'] || '').trim()
+    const root = rcaRootCause.trim()
     openCreateActionInTab({
       title: root
-        ? t('investigations.rca.capa_from_root_title', 'CAPA: {{root}}', { root: root.slice(0, 80) })
+        ? t('investigations.rca.capa_from_root_title', 'CAPA: {{root}}', {
+            root: root.slice(0, 80),
+          })
         : t('investigations.rca.capa_default_title', 'CAPA from root cause'),
       description: [
         root ? `Root cause: ${root}` : '',
-        rcaData['problem_statement'] ? `Problem: ${rcaData['problem_statement']}` : '',
-        rcaData['contributing_factors']
-          ? `Contributing factors: ${rcaData['contributing_factors']}`
-          : '',
+        rcaProblem ? `Problem: ${rcaProblem}` : '',
+        contributingFactorsText ? `Contributing factors: ${contributingFactorsText}` : '',
       ]
         .filter(Boolean)
         .join('\n\n'),
       priority: 'high',
     })
+  }
+
+  const handleCreateCapaFromWhy = async (level: number) => {
+    if (!investigationId) return
+    const item = rcaWhys.find((why) => why.level === level)
+    const answer = (item?.answer || '').trim()
+    // Empty Why: do not invent CAPA text. The server also refuses this.
+    if (!answer || rcaUnsaved) return
+    setCreatingCapaWhyLevel(level)
+    try {
+      await createCapaFromWhy(investigationId, {
+        why_level: level,
+        five_whys_id: rcaAnalysisId ?? undefined,
+      })
+      await loadActions()
+      await loadClosureValidation()
+      setActiveTab('actions')
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'createCapaFromWhy' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setCreatingCapaWhyLevel(null)
+    }
   }
 
   const handleRequestOmit = async (sectionId: string, omitRequested: boolean) => {
@@ -956,7 +1374,10 @@ export default function InvestigationDetail() {
         </Card>
       ) : null}
 
-      <Card className="p-5 border-primary/20 bg-primary/5" data-testid="investigation-capa-handoff-strip">
+      <Card
+        className="p-5 border-primary/20 bg-primary/5"
+        data-testid="investigation-capa-handoff-strip"
+      >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-medium text-primary">
@@ -1024,7 +1445,9 @@ export default function InvestigationDetail() {
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   isCurrent && 'border-primary bg-primary text-primary-foreground',
                   isPast && !isCurrent && 'border-primary/30 bg-primary/10 text-primary',
-                  !isCurrent && !isPast && 'border-border text-muted-foreground hover:border-primary/40',
+                  !isCurrent &&
+                    !isPast &&
+                    'border-border text-muted-foreground hover:border-primary/40',
                 )}
                 data-testid={`investigation-workflow-${status}`}
                 aria-current={isCurrent ? 'step' : undefined}
@@ -1058,9 +1481,7 @@ export default function InvestigationDetail() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 {t('investigations.handoff.proof_source', 'Source record')}
               </p>
-              <p className="mt-1 text-lg font-semibold text-foreground">
-                {sourceLink ? '1' : '0'}
-              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{sourceLink ? '1' : '0'}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {t('investigations.handoff.proof_source_caption')}
               </p>
@@ -1196,22 +1617,25 @@ export default function InvestigationDetail() {
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label
-                      htmlFor="inv-findings"
-                      className="block text-sm font-medium text-muted-foreground mb-1"
-                    >
+                    <h4 className="block text-sm font-medium text-muted-foreground mb-1">
                       {t('investigations.summary.findings')}
-                    </label>
-                    <Textarea
-                      id="inv-findings"
-                      rows={4}
-                      value={summaryFindings}
-                      onChange={(e) => {
-                        setSummaryFindings(e.target.value)
-                        setSummaryUnsaved(true)
-                      }}
-                      placeholder={t('investigations.summary.findings_placeholder')}
-                      data-testid="investigation-findings-input"
+                    </h4>
+                    {/*
+                      INV-C7: one row per finding. Each row saves itself through the
+                      findings endpoints, which is why this sits outside the Save
+                      button above — that button still owns conclusion and lead.
+                    */}
+                    <InvestigationFindingsEditor
+                      findings={findings}
+                      loading={findingsLoading}
+                      saving={findingsSaving}
+                      error={findingsError}
+                      readOnly={investigation.status === 'closed'}
+                      onAdd={handleAddFinding}
+                      onUpdate={handleUpdateFinding}
+                      onDelete={handleDeleteFinding}
+                      onMove={handleMoveFinding}
+                      onRetry={() => void loadFindings()}
                     />
                   </div>
                   <div>
@@ -1268,7 +1692,10 @@ export default function InvestigationDetail() {
                       {t('investigations.meta.status')}
                     </label>
                     {investigation.status === 'closed' ? (
-                      <p className="text-sm text-foreground" data-testid="investigation-status-readonly">
+                      <p
+                        className="text-sm text-foreground"
+                        data-testid="investigation-status-readonly"
+                      >
                         {statusDisplay.label}
                       </p>
                     ) : (
@@ -1313,10 +1740,7 @@ export default function InvestigationDetail() {
                     </p>
                   </div>
                   <div>
-                    <label
-                      htmlFor="inv-lead"
-                      className="block text-xs text-muted-foreground mb-1"
-                    >
+                    <label htmlFor="inv-lead" className="block text-xs text-muted-foreground mb-1">
                       {t('investigations.lead_investigator')}
                     </label>
                     <div className="flex items-center gap-2">
@@ -1327,8 +1751,12 @@ export default function InvestigationDetail() {
                         onChange={(selection) => {
                           const payload = resolveInvestigationAssigneeSelection(selection)
                           const next =
-                            payload.assignee_email || payload.assignee_name || selection?.label || ''
+                            payload.assignee_email ||
+                            payload.assignee_name ||
+                            selection?.label ||
+                            ''
                           setSummaryLead(next)
+                          setSummaryLeadUserId(payload.assignee_id ?? null)
                           setSummaryUnsaved(true)
                         }}
                         placeholder={t('investigations.meta.assignee_placeholder')}
@@ -1389,7 +1817,10 @@ export default function InvestigationDetail() {
                         <span className="font-medium">
                           {closureValidation.can_complete
                             ? t('investigations.closure.ready_to_complete', 'Ready to complete')
-                            : t('investigations.closure.cannot_complete_yet', 'Cannot complete yet')}
+                            : t(
+                                'investigations.closure.cannot_complete_yet',
+                                'Cannot complete yet',
+                              )}
                         </span>
                       </div>
                     ) : null}
@@ -1398,7 +1829,10 @@ export default function InvestigationDetail() {
                     completionBlockers.length > 0 ? (
                       <div className="space-y-1" data-testid="investigation-completion-blockers">
                         <p className="text-xs font-medium text-muted-foreground">
-                          {t('investigations.closure.completion_issues_label', 'Before completing:')}
+                          {t(
+                            'investigations.closure.completion_issues_label',
+                            'Before completing:',
+                          )}
                         </p>
                         <ul className="space-y-1">
                           {completionBlockers.map((blocker) => (
@@ -1427,9 +1861,7 @@ export default function InvestigationDetail() {
                         <XCircle className="w-5 h-5" />
                       )}
                       <span className="font-medium">
-                        {closureValidation.can_close
-                          ? 'Ready for Closure'
-                          : 'Cannot Close Yet'}
+                        {closureValidation.can_close ? 'Ready for Closure' : 'Cannot Close Yet'}
                       </span>
                     </div>
                     {closureValidation.can_close && investigation.status !== 'closed' ? (
@@ -1466,7 +1898,10 @@ export default function InvestigationDetail() {
                           className="text-sm text-muted-foreground"
                           data-testid="investigation-already-closed"
                         >
-                          {t('investigations.closure.already_closed', 'This investigation is closed.')}
+                          {t(
+                            'investigations.closure.already_closed',
+                            'This investigation is closed.',
+                          )}
                         </p>
                         <Button
                           variant="outline"
@@ -1635,7 +2070,32 @@ export default function InvestigationDetail() {
         )}
 
         {activeTab === 'rca' && (
-          <div className="space-y-6">
+          <div className="space-y-6" data-testid="investigation-rca-panel">
+            {rcaLoadError && (
+              <Card className="p-4 bg-destructive/10 border-destructive/30">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertCircle className="w-5 h-5" />
+                    <span className="font-medium">Error loading RCA:</span>
+                    <span data-testid="investigation-rca-error">{rcaLoadError}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void loadRca()}
+                    data-testid="investigation-rca-retry"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              </Card>
+            )}
+            {rcaLoading && (
+              <p className="text-sm text-muted-foreground" data-testid="investigation-rca-loading">
+                Loading 5 Whys…
+              </p>
+            )}
             {rcaUnsaved && (
               <Card className="p-4 bg-warning/10 border-warning/30">
                 <div className="flex items-center gap-2 text-warning">
@@ -1661,6 +2121,15 @@ export default function InvestigationDetail() {
                 </div>
               </Card>
             )}
+            {!rcaLoading &&
+            !rcaProblem.trim() &&
+            !rcaRootCause.trim() &&
+            !contributingFactorsText.trim() &&
+            rcaWhys.every((item) => !item.answer.trim() && !item.evidence.trim()) ? (
+              <p className="text-sm text-muted-foreground" data-testid="investigation-rca-empty">
+                No 5 Whys recorded yet. Empty answers stay empty — nothing is invented.
+              </p>
+            ) : null}
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 {t('investigations.problem_statement')}
@@ -1668,8 +2137,12 @@ export default function InvestigationDetail() {
               <Textarea
                 rows={3}
                 placeholder="Describe the problem or incident being investigated..."
-                value={rcaData['problem_statement'] || ''}
-                onChange={(e) => handleRcaFieldChange('problem_statement', e.target.value)}
+                value={rcaProblem}
+                onChange={(e) => {
+                  setRcaProblem(e.target.value)
+                  markRcaDirty()
+                }}
+                data-testid="investigation-rca-problem"
               />
             </Card>
             <Card className="p-6">
@@ -1677,26 +2150,68 @@ export default function InvestigationDetail() {
                 <GitBranch className="w-5 h-5 text-primary" />
                 {t('investigations.five_whys')}
               </h3>
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map((num) => (
-                  <div key={num} className="flex items-start gap-4">
+              <div className="space-y-6">
+                {rcaWhys.map((item) => (
+                  <div key={item.level} className="flex items-start gap-4">
                     <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 font-bold text-primary-foreground">
-                      {num}
+                      {item.level}
                     </div>
-                    <div className="flex-1">
-                      <label
-                        htmlFor={`rca-why-${num}`}
-                        className="block text-sm font-medium text-foreground mb-2"
-                      >
-                        Why {num}?
-                      </label>
-                      <Textarea
-                        id={`rca-why-${num}`}
-                        rows={2}
-                        placeholder={`Enter the ${num === 1 ? 'initial' : 'deeper'} cause...`}
-                        value={rcaData[`why_${num}`] || ''}
-                        onChange={(e) => handleRcaFieldChange(`why_${num}`, e.target.value)}
-                      />
+                    <div className="flex-1 space-y-3">
+                      <div>
+                        <label
+                          htmlFor={`rca-why-${item.level}`}
+                          className="block text-sm font-medium text-foreground mb-2"
+                        >
+                          Why {item.level}?
+                        </label>
+                        <Textarea
+                          id={`rca-why-${item.level}`}
+                          rows={2}
+                          placeholder={`Enter the ${item.level === 1 ? 'initial' : 'deeper'} cause...`}
+                          value={item.answer}
+                          onChange={(e) => handleRcaWhyChange(item.level, 'answer', e.target.value)}
+                          data-testid={`investigation-rca-why-${item.level}`}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor={`rca-why-${item.level}-evidence`}
+                          className="block text-sm font-medium text-muted-foreground mb-2"
+                        >
+                          {`Evidence for why ${item.level}`}
+                        </label>
+                        <Textarea
+                          id={`rca-why-${item.level}-evidence`}
+                          rows={2}
+                          placeholder="Optional. Leave empty when there is none."
+                          value={item.evidence}
+                          onChange={(e) =>
+                            handleRcaWhyChange(item.level, 'evidence', e.target.value)
+                          }
+                          data-testid={`investigation-rca-why-${item.level}-evidence`}
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            rcaUnsaved ||
+                            rcaLoading ||
+                            !item.answer.trim() ||
+                            creatingCapaWhyLevel !== null
+                          }
+                          onClick={() => handleCreateCapaFromWhy(item.level)}
+                          data-testid={`investigation-rca-create-capa-why-${item.level}`}
+                        >
+                          {creatingCapaWhyLevel === item.level ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <ListTodo className="w-4 h-4 mr-2" />
+                          )}
+                          Create CAPA from why {item.level}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1720,20 +2235,51 @@ export default function InvestigationDetail() {
               <Textarea
                 rows={3}
                 placeholder="Document the root cause based on your 5 Whys analysis..."
-                value={rcaData['root_cause'] || ''}
-                onChange={(e) => handleRcaFieldChange('root_cause', e.target.value)}
+                value={rcaRootCause}
+                onChange={(e) => {
+                  setRcaRootCause(e.target.value)
+                  markRcaDirty()
+                }}
                 data-testid="investigation-root-cause-input"
               />
             </Card>
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
+            <Card className="p-6" data-testid="investigation-factors-editor">
+              <h3 className="text-lg font-semibold text-foreground">
                 {t('investigations.contributing_factors')}
               </h3>
-              <Textarea
-                rows={3}
-                placeholder="List any contributing factors that led to the issue..."
-                value={rcaData['contributing_factors'] || ''}
-                onChange={(e) => handleRcaFieldChange('contributing_factors', e.target.value)}
+              <p className="mt-1 mb-4 text-sm text-muted-foreground">
+                Each factor sits under one ICAM category and states how far back it sits under
+                HSG245. Saved on its own as you add them, not with the RCA Save button.
+              </p>
+              {hasLeftoverFactorProse ? (
+                <div
+                  className="mb-4 rounded-md border border-border bg-muted/40 p-3"
+                  data-testid="investigation-factors-legacy"
+                >
+                  <p className="text-sm font-medium text-foreground">
+                    Recorded before this page used ICAM categories
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {rcaContributing}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Left exactly as written — nothing here decides which ICAM category somebody
+                    else&apos;s sentence belongs to. Adding a factor below replaces this text with
+                    the categorised list.
+                  </p>
+                </div>
+              ) : null}
+              <InvestigationFactorsEditor
+                factors={factors}
+                loading={factorsLoading}
+                saving={factorsSaving}
+                error={factorsError}
+                unmappedCategories={factorsUnmapped}
+                unreadableTotal={factorsUnreadable}
+                onAdd={handleAddFactor}
+                onUpdate={handleUpdateFactor}
+                onDelete={handleDeleteFactor}
+                onRetry={loadFactors}
               />
             </Card>
             <div className="flex items-center justify-between">
@@ -1746,6 +2292,7 @@ export default function InvestigationDetail() {
                 onClick={handleSaveRca}
                 disabled={savingRca || !rcaUnsaved}
                 className={cn(!rcaUnsaved && 'opacity-50')}
+                data-testid="investigation-rca-save"
               >
                 {savingRca ? (
                   <>
@@ -1783,10 +2330,10 @@ export default function InvestigationDetail() {
             <Card className="p-6" data-testid="investigation-hsg245-report-sections">
               <h3 className="text-lg font-semibold text-foreground">HSG245 report scope</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {String(investigation.level || 'medium').toUpperCase()} level sections required for this
-                investigation. You can ask for a section to be left out of the customer pack, but an
-                H&amp;S Advisor or Admin holding “{formatPermissionCode(OMIT_APPROVAL_PERMISSION)}”
-                has to approve it first.
+                {String(investigation.level || 'medium').toUpperCase()} level sections required for
+                this investigation. You can ask for a section to be left out of the customer pack,
+                but an H&amp;S Advisor or Admin holding “
+                {formatPermissionCode(OMIT_APPROVAL_PERMISSION)}” has to approve it first.
               </p>
               <div className="mt-4 space-y-3">
                 {getReportSectionsForLevel(investigation.level).map((section) => {
@@ -1812,7 +2359,10 @@ export default function InvestigationDetail() {
                           {approved
                             ? t('investigations.report.omit_status_approved', 'Omitted (approved)')
                             : pending
-                              ? t('investigations.report.omit_status_pending', 'Omit pending approval')
+                              ? t(
+                                  'investigations.report.omit_status_pending',
+                                  'Omit pending approval',
+                                )
                               : t('investigations.report.omit_status_included', 'Included in pack')}
                         </Badge>
                       </div>
@@ -1833,9 +2383,7 @@ export default function InvestigationDetail() {
                           size="sm"
                           variant="outline"
                           disabled={omitBusySection === section.id}
-                          onClick={() =>
-                            void handleRequestOmit(section.id, !(pending || approved))
-                          }
+                          onClick={() => void handleRequestOmit(section.id, !(pending || approved))}
                           data-testid={`report-section-omit-request-${section.id}`}
                         >
                           {pending || approved
@@ -1888,8 +2436,8 @@ export default function InvestigationDetail() {
               {/* Inline English: the locale copy still says the PDF is a follow-on, and
                   i18n files are owned by another lane this wave. */}
               <p className="text-sm text-muted-foreground mb-4">
-                Generating a pack produces a branded PDF for issue to the customer, plus a JSON
-                copy of the same payload for the record. Both carry a checksum for verification.
+                Generating a pack produces a branded PDF for issue to the customer, plus a JSON copy
+                of the same payload for the record. Both carry a checksum for verification.
               </p>
               {!packCapability.canGenerate && (
                 <div
@@ -2008,8 +2556,9 @@ export default function InvestigationDetail() {
                   {packs.map((pack) => (
                     <div
                       key={pack.id}
-                      className="flex items-center justify-between p-4 bg-surface rounded-lg border border-border"
+                      className="p-4 bg-surface rounded-lg border border-border"
                     >
+                      <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                           <Package className="w-5 h-5 text-primary" />
@@ -2074,6 +2623,17 @@ export default function InvestigationDetail() {
                           </Tooltip>
                         </TooltipProvider>
                       </div>
+                      </div>
+                      <PackIssueControls
+                        pack={pack}
+                        investigationStatus={investigation?.status}
+                        canIssue={packCapability.canGenerate}
+                        busy={packIssueBusyId === pack.id}
+                        onReview={(cleared, note) => handleReviewPack(pack.id, cleared, note)}
+                        onIssue={(recipient, recipientEmail, note) =>
+                          handleIssuePack(pack.id, recipient, recipientEmail, note)
+                        }
+                      />
                     </div>
                   ))}
                 </div>
@@ -2165,7 +2725,11 @@ export default function InvestigationDetail() {
             })}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReopenDialog(false)} disabled={reopening}>
+            <Button
+              variant="outline"
+              onClick={() => setShowReopenDialog(false)}
+              disabled={reopening}
+            >
               {t('common.cancel', 'Cancel')}
             </Button>
             <Button

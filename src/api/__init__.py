@@ -53,6 +53,9 @@ from src.api.routes import (
     ims_dashboard,
     incidents,
     inductions,
+    investigation_factors,
+    investigation_findings,
+    investigation_rca,
     investigation_templates,
     investigations,
     iso27001,
@@ -130,6 +133,31 @@ router.include_router(
     tags=["Investigations"],
 )
 router.include_router(investigations.router, prefix="/investigations", tags=["Investigations"])
+# INV-C7: findings rows are a child collection of a run, so they share the
+# /investigations prefix but not the module. Mounted after the run router; every
+# path here carries the literal /findings segment, so nothing in investigations.py
+# can shadow it and it can shadow nothing there.
+router.include_router(
+    investigation_findings.router,
+    prefix="/investigations",
+    tags=["Investigations"],
+)
+# INV-C10: workspace 5-Whys on five_whys_analyses. Same prefix, own module, so
+# investigations.py (run lifecycle / timeline) does not grow another child
+# collection. Path is the literal /rca segment; nothing else uses it.
+router.include_router(
+    investigation_rca.router,
+    prefix="/investigations",
+    tags=["Investigations"],
+)
+# INV-C12: ICAM contributing factors on fishbone_diagrams. Same prefix, own
+# module, mounted after the run and RCA routers. Path is the literal /factors
+# segment; nothing else uses it.
+router.include_router(
+    investigation_factors.router,
+    prefix="/investigations",
+    tags=["Investigations"],
+)
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])

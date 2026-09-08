@@ -6,6 +6,7 @@ function mockApi() {
     get: vi.fn(),
     post: vi.fn(),
     patch: vi.fn(),
+    put: vi.fn(),
     delete: vi.fn(),
   }
 }
@@ -89,7 +90,9 @@ describe('createInvestigationsApi', () => {
     })
     inv.updateTemplate(3, { name: 'RCA v2' })
     inv.deleteTemplate(3)
-    expect(api.get).toHaveBeenCalledWith('/api/v1/investigation-templates/?page=1&page_size=20&is_active=true')
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/investigation-templates/?page=1&page_size=20&is_active=true',
+    )
     expect(api.get).toHaveBeenCalledWith('/api/v1/investigation-templates/3')
     expect(api.post).toHaveBeenCalledWith('/api/v1/investigation-templates/', {
       name: 'RCA',
