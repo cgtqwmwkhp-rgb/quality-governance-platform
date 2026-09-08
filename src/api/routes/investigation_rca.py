@@ -4,7 +4,7 @@ Mounted under the same ``/investigations`` prefix as ``investigations.py`` but
 kept in its own module: that file owns the run lifecycle and the timeline
 (INV-C9), and RCA is a child document with its own lifecycle.
 
-Authorisation matches INV-C7 findings: both endpoints declare
+Authorisation matches INV-C7 findings: every endpoint declares
 ``investigation:update``, then run ``_get_investigation_or_404`` (cross-tenant
 is ``TENANT_ACCESS_DENIED`` before roles; in-tenant but not-yours is a 404).
 The read is gated on the write token because a new ``investigation:view``
@@ -12,7 +12,9 @@ token is granted to nobody — see ``investigation_findings.py``.
 ``AUTHENTICATED_ONLY_DEBT`` is at its ceiling, so ``CurrentUser`` alone is not
 an option.
 
-DEC-2 (CAPA per Why) is INV-C11 and is not folded in here.
+DEC-2 (CAPA per Why) is INV-C11: ``POST /{id}/rca/capa`` creates a CAPA
+from one Why on this run's analysis. Empty Why is 422, not invented text
+and not a 500.
 """
 
 from __future__ import annotations
@@ -20,13 +22,15 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from src.api.dependencies import DbSession, require_permission
 from src.api.routes.investigations import _get_investigation_or_404
-from src.api.schemas.investigation_rca import InvestigationRcaResponse, InvestigationRcaUpsert
-from src.domain.exceptions import AuthorizationError
+from src.api.schemas.capa import CAPAResponse
+from src.api.schemas.investigation_rca import CreateCapaFromWhyRequest, InvestigationRcaResponse, InvestigationRcaUpsert
+from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
 from src.domain.models.user import User
+from src.domain.services.capa_service import CAPAService
 from src.domain.services.investigation_rca_service import InvestigationRcaService
 
 logger = logging.getLogger(__name__)
@@ -116,3 +120,49 @@ async def put_investigation_rca(
         raise AuthorizationError("RCA cannot be stored for this tenant")
     await db.commit()
     return result
+
+
+@router.post(
+    "/{investigation_id:int}/rca/capa",
+    response_model=CAPAResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_capa_from_why(
+    investigation_id: int,
+    payload: CreateCapaFromWhyRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
+):
+    """Create a CAPA from one Why on this run's analysis.
+
+    Empty Why is 422 with no invented title. A missing or mismatched tenant
+    is a refused write, not a 500. The CAPA is stored on ``capa_actions``
+    with ``five_whys_id`` and ``why_level``; leftover ``why_1`` strings are
+    not dropped.
+    """
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    tenant_id = _tenant_id_or_none(investigation)
+    if tenant_id is None:
+        raise AuthorizationError("Investigation is missing a tenant and cannot store CAPA")
+
+    svc = CAPAService(db)
+    try:
+        capa = await svc.create_capa_from_why(
+            investigation_id,
+            user_id=current_user.id,
+            tenant_id=tenant_id,
+            why_level=payload.why_level,
+            title=payload.title,
+            description=payload.description,
+            assignee_id=payload.assignee_id,
+            assignee_email=payload.assignee_email,
+            assignee_name=payload.assignee_name,
+            due_date=payload.due_date,
+            priority=payload.priority,
+            five_whys_id=payload.five_whys_id,
+        )
+    except LookupError as exc:
+        raise NotFoundError(str(exc)) from exc
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
+    return CAPAResponse.model_validate(capa)

@@ -112,6 +112,7 @@ vi.mock('../investigation/investigationDetailApi', async (importOriginal) => ({
   fetchCustomerPackPdf: vi.fn(),
   getRca: vi.fn(),
   saveRca: vi.fn(),
+  createCapaFromWhy: vi.fn(),
 }))
 
 vi.mock('../../components/EngineerPeoplePicker', () => ({
@@ -299,6 +300,9 @@ describe('InvestigationDetail', () => {
     })
     client.investigationsApi.listFindings.mockResolvedValue(findingsResponse([]))
     vi.mocked(detailApi.getRca).mockResolvedValue(rcaResponse())
+    vi.mocked(detailApi.createCapaFromWhy).mockResolvedValue({
+      data: { id: 99, reference_number: 'CAPA-99', title: 'CAPA: the interlock was bypassed' },
+    })
     client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
     client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
     client.checkPackCapability.mockResolvedValue({ canGenerate: true })
@@ -731,6 +735,35 @@ describe('InvestigationDetail', () => {
     })
 
     fireEvent.click(screen.getByTestId('investigation-rca-create-capa'))
+    expect(screen.getByTestId('investigation-actions-panel')).toBeInTheDocument()
+  })
+
+  it('creates a CAPA from a saved Why and does not invent text for an empty Why', async () => {
+    vi.mocked(detailApi.getRca).mockResolvedValue(
+      rcaResponse({ id: 11, answers: ['The interlock was bypassed'] }),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-rca-create-capa-why-1')).toBeEnabled()
+    })
+    expect(screen.getByTestId('investigation-rca-create-capa-why-2')).toBeDisabled()
+
+    fireEvent.click(screen.getByTestId('investigation-rca-create-capa-why-1'))
+
+    await waitFor(() => {
+      expect(detailApi.createCapaFromWhy).toHaveBeenCalledWith(7, {
+        why_level: 1,
+        five_whys_id: 11,
+      })
+    })
     expect(screen.getByTestId('investigation-actions-panel')).toBeInTheDocument()
   })
 

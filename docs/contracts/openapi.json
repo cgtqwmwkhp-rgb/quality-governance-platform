@@ -10958,9 +10958,54 @@
             ],
             "title": "Effectiveness Criteria"
           },
+          "effectiveness_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectiveness Notes"
+          },
+          "effectiveness_review_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectiveness Review Date"
+          },
+          "five_whys_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Five Whys Id"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "is_effective": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Effective"
           },
           "iso_standard": {
             "anyOf": [
@@ -11097,6 +11142,17 @@
               }
             ],
             "title": "Verified By Id"
+          },
+          "why_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Level"
           }
         },
         "required": [
@@ -11255,6 +11311,40 @@
               }
             ],
             "title": "Effectiveness Criteria"
+          },
+          "effectiveness_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectiveness Notes"
+          },
+          "effectiveness_review_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectiveness Review Date"
+          },
+          "is_effective": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Effective"
           },
           "priority": {
             "anyOf": [
@@ -17592,6 +17682,7 @@
         "type": "object"
       },
       "CreateInvestigationCapaRequest": {
+        "additionalProperties": false,
         "description": "Optional overrides when creating a CAPA from an investigation.",
         "properties": {
           "assignee_email": {
@@ -17673,9 +17764,142 @@
               }
             ],
             "title": "Title"
+          },
+          "five_whys_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "five_whys_analyses.id this CAPA came from; must be this run's tenant-scoped analysis",
+            "title": "Five Whys Id"
+          },
+          "why_level": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which Why (1\u201320) this CAPA names. Empty Why is refused, not invented.",
+            "title": "Why Level"
           }
         },
         "title": "CreateInvestigationCapaRequest",
+        "type": "object"
+      },
+      "CreateCapaFromWhyRequest": {
+        "additionalProperties": false,
+        "description": "Create a CAPA from one Why on this investigation's 5-Whys analysis (INV-C11).\n\n``why_level`` is required. Empty Why is a 422, not invented CAPA text and\nnot a 500. Optional title/description override the Why answer; they are\nnot filled in from an empty slot.",
+        "properties": {
+          "assignee_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Email"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "assignee_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "five_whys_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Five Whys Id"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "why_level": {
+            "maximum": 20,
+            "minimum": 1,
+            "title": "Why Level",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "why_level"
+        ],
+        "title": "CreateCapaFromWhyRequest",
         "type": "object"
       },
       "CreateProfileRequest": {
@@ -91503,6 +91727,64 @@
           }
         ],
         "summary": "Put Investigation Rca",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
+    "/api/v1/investigations/{investigation_id}/rca/capa": {
+      "post": {
+        "description": "Create a CAPA from one Why on this run's analysis.\n\nEmpty Why is 422 with no invented title. A missing or mismatched tenant\nis a refused write, not a 500. The CAPA is stored on ``capa_actions``\nwith ``five_whys_id`` and ``why_level``; leftover ``why_1`` strings are\nnot dropped.",
+        "operationId": "create_capa_from_why_api_v1_investigations__investigation_id__rca_capa_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCapaFromWhyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAPAResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Capa From Why",
         "tags": [
           "Investigations"
         ]

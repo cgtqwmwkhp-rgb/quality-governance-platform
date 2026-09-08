@@ -43,6 +43,29 @@ export function saveRca(id: number, body: InvestigationRcaUpsert) {
   return api.put<InvestigationRcaResponse>(`/api/v1/investigations/${id}/rca`, body)
 }
 
+export function createCapaFromWhy(
+  id: number,
+  body: {
+    why_level: number
+    title?: string
+    description?: string
+    five_whys_id?: number
+    priority?: string
+    due_date?: string
+    assignee_id?: number
+    assignee_email?: string
+    assignee_name?: string
+  },
+) {
+  return api.post<{
+    id: number
+    reference_number: string
+    title: string
+    five_whys_id?: number | null
+    why_level?: number | null
+  }>(`/api/v1/investigations/${id}/rca/capa`, body)
+}
+
 export type CustomerPackVisibilityMeta = {
   omit_requested?: boolean
   omit_approved?: boolean

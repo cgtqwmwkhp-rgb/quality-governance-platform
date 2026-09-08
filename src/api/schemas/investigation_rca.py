@@ -77,3 +77,24 @@ class InvestigationRcaResponse(BaseModel):
     whys: List[InvestigationRcaWhy]
     root_cause: str
     contributing_factors: str
+
+
+class CreateCapaFromWhyRequest(BaseModel):
+    """Create a CAPA from one Why on this investigation's analysis (INV-C11).
+
+    ``why_level`` is required. Empty Why is a 422, not invented CAPA text and
+    not a 500. Optional title/description override the Why answer; they are
+    not filled in from an empty slot.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    why_level: int = Field(..., ge=1, le=20)
+    title: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = None
+    assignee_id: Optional[int] = None
+    assignee_email: Optional[str] = None
+    assignee_name: Optional[str] = Field(default=None, max_length=200)
+    due_date: Optional[str] = None
+    priority: Optional[str] = None
+    five_whys_id: Optional[int] = None
