@@ -121,6 +121,13 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("investigation_runs", "investigation_findings"),
         ("investigation_runs", "fishbone_diagrams"),
         ("investigation_runs", "five_whys_analyses"),
+        # INV-C17 disclosure log. Same reason as findings: a delete-cascading
+        # relationship from InvestigationRun would hang a lazy collection off
+        # the async run. PostgreSQL therefore removes disclosure rows when the
+        # run is deleted, with no per-row event; the audit row for the run says
+        # nothing about who received a pack. The pack itself still cascades
+        # through the mapped customer_packs collection.
+        ("investigation_runs", "investigation_pack_disclosures"),
         # Not a new cascade, a newly visible one. The physical constraint
         # soa_control_entry_control_id_fkey has been ON DELETE CASCADE since
         # 20260120_add_iso27001_isms; SoAControlEntry simply did not declare it,
