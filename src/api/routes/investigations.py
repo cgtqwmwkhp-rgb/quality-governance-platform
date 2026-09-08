@@ -2072,7 +2072,7 @@ async def generate_customer_pack(
     # Get investigation. A pack is the exportable copy of the record, so this is
     # a read of it and is gated exactly as the detail read is.
     investigation = await _load_investigation_or_404(investigation_id, db)
-    _assert_investigation_tenant(investigation, current_user)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
 
     pending = InvestigationService.pending_customer_omits(investigation)
     if pending:
@@ -2082,13 +2082,22 @@ async def generate_customer_pack(
 
     # Get linked evidence assets
     from src.domain.models.evidence_asset import EvidenceAsset
+    from src.domain.services.investigation_pack_content import load_investigation_pack_sources
 
     assets_query = select(EvidenceAsset).where(
         EvidenceAsset.linked_investigation_id == investigation_id,
+        EvidenceAsset.tenant_id == tenant_id,
         EvidenceAsset.deleted_at.is_(None),
     )
     assets_result = await db.execute(assets_query)
     evidence_assets = list(assets_result.scalars().all())
+
+    sources = await load_investigation_pack_sources(
+        db,
+        investigation=investigation,
+        tenant_id=tenant_id,
+        actor_id=current_user.id,
+    )
 
     # Generate pack with redaction
     content, redaction_log, included_assets = InvestigationService.generate_customer_pack(
@@ -2097,6 +2106,9 @@ async def generate_customer_pack(
         evidence_assets=evidence_assets,
         generated_by_id=current_user.id,
         generated_by_role=getattr(current_user, "role", None),
+        findings=sources.findings,
+        rca=sources.rca,
+        capa_actions=sources.capa_actions,
     )
 
     # Create pack entity

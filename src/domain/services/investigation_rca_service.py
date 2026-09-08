@@ -102,11 +102,13 @@ def _factors_to_text(value: Any) -> str:
     return ""
 
 
-def _factors_from_text(text: str) -> list[str]:
-    """Store the workspace string as a one-item list, or empty.
+def _factors_from_text(text: Optional[str]) -> list[str]:
+    """Store a legacy contributing-factors string as a one-item list, or empty.
 
-    Splitting on newlines would invent several factors from one box (C12 is
-    ICAM; this PR does not).
+    Splitting on newlines would invent several factors from one box. INV-C12
+    stores structured ICAM factors on ``fishbone_diagrams`` and writes one list
+    entry per factor; this path is only for the leftover single box, where the
+    line breaks are somebody's prose rather than a delimiter.
     """
     cleaned = (text or "").strip()
     return [cleaned] if cleaned else []
@@ -388,7 +390,7 @@ class InvestigationRcaService:
         problem_statement: str,
         whys: Sequence[dict[str, Any]],
         root_cause: str,
-        contributing_factors: str,
+        contributing_factors: Optional[str] = None,
         actor_id: Optional[int] = None,
     ) -> Optional[dict[str, Any]]:
         """Create or replace this run's analysis and dual-write the legacy strings.
@@ -396,6 +398,13 @@ class InvestigationRcaService:
         Returns ``None`` when the tenant does not match — fail closed, no write.
         Converts leftover strings first so a first save cannot orphan what was
         already typed as ``why_1``.
+
+        ``contributing_factors=None`` means "not authored by this request" and
+        leaves whatever is stored alone. After INV-C12 the ICAM factor list is
+        that text's author (``investigation_factors_service``), and a workspace
+        save that carried a stale copy of it would overwrite the paragraph the
+        factor editor had just derived. A string is still honoured, so a caller
+        that has not moved keeps the behaviour it had.
         """
         if not InvestigationRcaService._tenants_match(investigation, tenant_id):
             return None
@@ -407,7 +416,17 @@ class InvestigationRcaService:
         stored_whys = InvestigationRcaService._merge_whys(analysis.whys if analysis else None, whys)
         problem = (problem_statement or "").strip()
         root = (root_cause or "").strip()
-        factors = _factors_from_text(contributing_factors)
+        if contributing_factors is None:
+            stored_factors = getattr(analysis, "contributing_factors", None) if analysis is not None else None
+            # A stored string is not a list of one character each: run it back
+            # through the same renderer the response uses.
+            factors = (
+                [str(item) for item in stored_factors]
+                if isinstance(stored_factors, list)
+                else _factors_from_text(_factors_to_text(stored_factors))
+            )
+        else:
+            factors = _factors_from_text(contributing_factors)
 
         if analysis is None:
             analysis = FiveWhysAnalysis(
