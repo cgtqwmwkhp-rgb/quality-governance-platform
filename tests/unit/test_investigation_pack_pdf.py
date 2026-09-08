@@ -11,6 +11,7 @@ import pytest
 from src.domain.services import investigation_pack_pdf as pack_pdf
 from src.domain.services.investigation_pack_pdf import (
     InvestigationPackPdfService,
+    chronology_feed,
     confidentiality_notice,
     count_field_redactions,
     format_field_value,
@@ -289,3 +290,285 @@ class TestPackBranding:
             notice = confidentiality_notice(audience, [{"redaction_type": "IDENTITY_REDACTION"}])
 
             assert notice.encode("latin-1").decode("latin-1") == notice
+
+
+# ---------------------------------------------------------------------------
+# Chronology figure (INV-C15)
+# ---------------------------------------------------------------------------
+
+
+def _flat(text: str) -> str:
+    """Collapse the reader's line breaks so a wrapped sentence still matches."""
+    return " ".join(text.split())
+
+
+def _timeline_events() -> list[dict]:
+    """Events in the shape `GET /investigations/{id}/timeline` serialises (INV-C9)."""
+    return [
+        {
+            "id": -111,
+            "event_type": "SOURCE_AUDIT",
+            "new_value": "Incident raised",
+            "actor_name": "Dana Reporter",
+            "event_metadata": {"origin": "source", "source_label": "Incident \u00b7 create"},
+            "created_at": "2026-05-01T08:00:00+00:00",
+        },
+        {
+            "id": -212,
+            "event_type": "SOURCE_RUNNING_SHEET",
+            "new_value": "Brake wear noted on the nearside axle",
+            "actor_name": "Dana Reporter",
+            "event_metadata": {"origin": "source", "source_label": "Incident \u00b7 running sheet"},
+            "created_at": "2026-05-04T09:30:00+00:00",
+        },
+        {
+            "id": 7,
+            "event_type": "STATUS_CHANGED",
+            "new_value": "in_progress",
+            "event_metadata": {"origin": "investigation"},
+            "created_at": "2026-05-17T11:00:00+00:00",
+        },
+    ]
+
+
+class TestPackChronology:
+    def test_omitted_entirely_when_no_chronology_feed_is_supplied(self) -> None:
+        # Today's route passes no feed. Printing "no events" would claim the
+        # timeline had been consulted when it had not.
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(_pack(audience="internal_customer")))
+
+        assert "Chronology" not in text
+
+    def test_internal_pack_draws_the_figure_and_lists_the_entries(self) -> None:
+        out = InvestigationPackPdfService().build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            organisation_name="Plantexpand",
+            timeline_events=_timeline_events(),
+        )
+        text = _pdf_text(out)
+
+        assert out.startswith(b"%PDF-")
+        assert "Chronology" in text
+        assert "3 entries between 01 May 2026 and 17 May 2026" in text
+        assert "2 from the source record, 1 from the investigation" in text
+        assert "Source record" in text and "Investigation" in text
+        assert "01 May 2026 08:00 UTC - Source record - Incident" in text
+        assert "17 May 2026 11:00 UTC - Investigation - Status changed: in_progress" in text
+
+    def test_figure_geometry_reaches_the_document(self) -> None:
+        service = InvestigationPackPdfService()
+        without = service.build_pdf_bytes(_pack(audience="internal_customer"))
+        with_figure = service.build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            timeline_events=_timeline_events(),
+        )
+
+        # Markers, lanes and axis are vector operations, not text: the rendered
+        # document must grow by more than the words added to it.
+        assert len(with_figure) > len(without) + 400
+
+    def test_stored_chronology_is_declared_as_checksum_covered(self) -> None:
+        pack = _pack(audience="internal_customer")
+        pack["content"]["chronology"] = {"events": _timeline_events()}
+
+        # Normalised because the caption wraps: a line break must not decide
+        # whether the pack is judged to have told the truth.
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "covered by the content checksum" in text
+        assert "not covered by the content checksum" not in text
+
+    def test_render_time_chronology_says_it_is_outside_the_checksum(self) -> None:
+        text = _flat(
+            _pdf_text(
+                InvestigationPackPdfService().build_pdf_bytes(
+                    _pack(audience="internal_customer"),
+                    timeline_events=_timeline_events(),
+                )
+            )
+        )
+
+        assert "not part of the stored pack payload" in text
+        assert "not covered by the content checksum" in text
+
+    def test_a_bare_stored_list_is_accepted_as_well_as_an_events_mapping(self) -> None:
+        pack = _pack(audience="internal_customer")
+        pack["content"]["chronology"] = _timeline_events()
+
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+
+        assert "3 entries between 01 May 2026 and 17 May 2026" in text
+
+    def test_feed_precedence_is_argument_then_payload_then_stored_content(self) -> None:
+        pack = _pack(audience="internal_customer")
+        pack["content"]["chronology"] = _timeline_events()
+        pack["timeline_events"] = _timeline_events()[:2]
+
+        assert chronology_feed(pack, pack["content"], _timeline_events()[:1])[1] == "render"
+        assert len(chronology_feed(pack, pack["content"], _timeline_events()[:1])[0]) == 1
+        assert len(chronology_feed(pack, pack["content"], None)[0]) == 2
+
+        stored_only = _pack(audience="internal_customer")
+        stored_only["content"]["chronology"] = _timeline_events()
+        assert chronology_feed(stored_only, stored_only["content"], None)[1] == "pack"
+
+    def test_no_feed_is_distinguishable_from_an_empty_feed(self) -> None:
+        pack = _pack()
+
+        assert chronology_feed(pack, pack["content"], None) == (None, "")
+        assert chronology_feed(pack, pack["content"], []) == ([], "render")
+
+    def test_a_non_list_feed_is_ignored_rather_than_rendered(self) -> None:
+        pack = _pack(audience="internal_customer")
+        pack["timeline_events"] = "nonsense"
+
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack, timeline_events={"items": []}))
+
+        assert "Chronology" not in text
+
+    def test_empty_feed_states_the_absence_without_a_figure(self) -> None:
+        service = InvestigationPackPdfService()
+        empty = service.build_pdf_bytes(_pack(audience="internal_customer"), timeline_events=[])
+        text = _pdf_text(empty)
+
+        assert "No chronology entries are recorded for this investigation." in text
+        assert "Most recent entries" not in text
+        assert "compiled from" not in text
+
+    def test_external_pack_withholds_the_chronology_and_its_narrative(self) -> None:
+        # Timeline entries are outside the pack redaction pass: an actor name and
+        # a running-sheet narrative would be released unredacted.
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(
+                _pack(audience="external_customer"),
+                timeline_events=_timeline_events(),
+            )
+        )
+
+        assert "The chronology is withheld from this pack." in text
+        assert "Dana Reporter" not in text
+        assert "Brake wear noted" not in text
+        assert "Most recent entries" not in text
+
+    def test_unknown_audience_fails_closed_like_the_confidentiality_notice(self) -> None:
+        for audience in ("regulator", "", None):
+            text = _pdf_text(
+                InvestigationPackPdfService().build_pdf_bytes(
+                    _pack(audience=audience),
+                    timeline_events=_timeline_events(),
+                )
+            )
+
+            assert "The chronology is withheld from this pack." in text
+            assert "Brake wear noted" not in text
+
+    def test_external_pack_with_an_empty_feed_does_not_claim_a_withholding(self) -> None:
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(_pack(audience="external_customer"), timeline_events=[])
+        )
+
+        assert "No chronology entries are recorded for this investigation." in text
+        assert "The chronology is withheld from this pack." not in text
+
+    def test_undated_entries_are_declared_not_silently_missing(self) -> None:
+        events = _timeline_events() + [
+            {"id": 8, "event_type": "COMMENT_ADDED", "created_at": None},
+            {"id": 9, "event_type": "COMMENT_ADDED", "created_at": "whenever"},
+        ]
+
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(
+                _pack(audience="internal_customer"),
+                timeline_events=events,
+            )
+        )
+
+        assert "2 timeline entries carried no readable date" in text
+
+    def test_a_long_chronology_renders_bounded_output(self) -> None:
+        events = []
+        for index in range(700):
+            events.append(
+                {
+                    "id": index + 1,
+                    "event_type": "SECTION_UPDATED",
+                    "new_value": f"section_{index}",
+                    "event_metadata": {"origin": "investigation"},
+                    "created_at": f"2026-05-{(index % 28) + 1:02d}T08:{index % 60:02d}:00+00:00",
+                }
+            )
+
+        out = InvestigationPackPdfService().build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            timeline_events=events,
+        )
+        text = _pdf_text(out)
+
+        assert out.startswith(b"%PDF-")
+        assert "Most recent entries (12 of 500)" in text
+        assert "200 earlier entries are not shown" in text
+
+    def test_a_failing_figure_degrades_to_the_entry_list_instead_of_a_500(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def boom(*args: object, **kwargs: object) -> None:
+            raise ValueError("fpdf blew up")
+
+        monkeypatch.setattr(pack_pdf, "draw_chronology_figure", boom)
+
+        out = InvestigationPackPdfService().build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            timeline_events=_timeline_events(),
+        )
+        text = _pdf_text(out)
+
+        assert out.startswith(b"%PDF-")
+        assert "The chronology figure could not be drawn for this pack." in text
+        assert "01 May 2026 08:00 UTC - Source record - Incident" in text
+
+    def test_the_pack_renderer_still_reads_only_the_payload_it_was_given(self) -> None:
+        # No database session, no timeline query: three supplied events are the
+        # three the figure describes.
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(
+                _pack(audience="internal_customer"),
+                timeline_events=_timeline_events(),
+            )
+        )
+
+        assert "3 entries" in text
+        assert "Most recent entries (3 of 3)" in text
+
+    def test_sections_evidence_and_integrity_still_render_around_the_figure(self) -> None:
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(
+                _pack(audience="internal_customer"),
+                organisation_name="Plantexpand Ltd",
+                timeline_events=_timeline_events(),
+            )
+        )
+
+        for expected in (
+            "Report sections",
+            "Brake maintenance interval exceeded",
+            "Sections withheld from this pack",
+            "Chronology",
+            "Evidence schedule",
+            "Dashcam still",
+            "Redaction summary",
+            "Pack integrity",
+            "PLANTEXPAND",
+        ):
+            assert expected in text
+
+    def test_non_latin1_chronology_text_does_not_break_the_render(self) -> None:
+        events = _timeline_events()
+        events[0]["event_metadata"]["source_label"] = "Incident \u2014 Ystrad Mynach"
+        events[0]["new_value"] = "Driver said \u201cno warning\u201d \u2014 20\u00b0C"
+
+        out = InvestigationPackPdfService().build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            timeline_events=events,
+        )
+
+        assert out.startswith(b"%PDF-")
