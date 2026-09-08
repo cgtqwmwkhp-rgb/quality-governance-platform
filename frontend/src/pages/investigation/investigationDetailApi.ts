@@ -178,6 +178,14 @@ export async function fetchCustomerPackPdf(investigationId: number, packId: numb
   return response.data
 }
 
+export async function fetchCustomerPackDocx(investigationId: number, packId: number): Promise<Blob> {
+  const response = await api.get<Blob>(
+    `/api/v1/investigations/${investigationId}/packs/${packId}/docx`,
+    { responseType: 'blob' },
+  )
+  return response.data
+}
+
 export interface PackRedactionReviewResponse {
   pack_id: number
   investigation_id: number

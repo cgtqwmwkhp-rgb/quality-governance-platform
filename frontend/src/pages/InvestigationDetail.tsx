@@ -110,8 +110,10 @@ import {
   buildGeneratedPackDownload,
   buildPackManifestStubDownload,
   packPdfFilename,
+  packDocxFilename,
   triggerPackDownload,
   triggerPackPdfDownload,
+  triggerPackDocxDownload,
 } from './investigation/investigationReportHelpers'
 import { getReportSectionsForLevel } from './investigation/hsg245ReportSections'
 import { readWorkspaceText, withWorkspaceFields } from './investigation/investigationNestedData'
@@ -121,6 +123,7 @@ import {
   createFactor,
   deleteFactor,
   fetchCustomerPackPdf,
+  fetchCustomerPackDocx,
   getRca,
   issueCustomerPack,
   listFactors,
@@ -133,6 +136,7 @@ import {
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
 import PackIssueControls from './investigation/PackIssueControls'
+import { packIsIssued } from './investigation/packIssueCopy'
 import { formatCodedValue, formatPermissionCode } from '../helpers/displayLabels'
 import { InvestigationCloseSummaryDialog } from '../components/investigations/InvestigationCloseSummaryDialog'
 
@@ -216,6 +220,7 @@ export default function InvestigationDetail() {
   const [generatingPack, setGeneratingPack] = useState(false)
   const [downloadingPackId, setDownloadingPackId] = useState<number | null>(null)
   const [downloadingPdfPackId, setDownloadingPdfPackId] = useState<number | null>(null)
+  const [downloadingDocxPackId, setDownloadingDocxPackId] = useState<number | null>(null)
   const [packIssueBusyId, setPackIssueBusyId] = useState<number | null>(null)
   const [packCapability, setPackCapability] = useState<PackCapability>({ canGenerate: true })
   const [packError, setPackError] = useState<string | null>(null)
@@ -714,6 +719,24 @@ export default function InvestigationDetail() {
       toast.error(message)
     } finally {
       setDownloadingPdfPackId(null)
+    }
+  }
+
+  const handleDownloadPackDocx = async (packId: number, packUuid: string) => {
+    if (!investigation || !investigationId) return
+    setDownloadingDocxPackId(packId)
+    setPackError(null)
+    try {
+      const docx = await fetchCustomerPackDocx(investigationId, packId)
+      triggerPackDocxDownload(docx, packDocxFilename(investigation.reference_number, packUuid))
+      toast.success('Word working copy downloaded. Issue still retains the PDF.')
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'downloadPackDocx' })
+      const message = getApiErrorMessage(err, 'Could not build the Word working copy.')
+      setPackError(message)
+      toast.error(message)
+    } finally {
+      setDownloadingDocxPackId(null)
     }
   }
 
@@ -2600,6 +2623,35 @@ export default function InvestigationDetail() {
                           )}
                           PDF
                         </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  data-testid={`investigation-pack-download-docx-${pack.id}`}
+                                  disabled={
+                                    downloadingDocxPackId === pack.id || packIsIssued(pack)
+                                  }
+                                  onClick={() => void handleDownloadPackDocx(pack.id, pack.pack_uuid)}
+                                >
+                                  {downloadingDocxPackId === pack.id ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Download className="w-4 h-4 mr-2" />
+                                  )}
+                                  Word
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {packIsIssued(pack)
+                                ? 'Working copy closed after issue. Download the retained PDF.'
+                                : 'Editable working copy. Issue still retains the PDF.'}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
