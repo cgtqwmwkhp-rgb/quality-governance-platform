@@ -1048,7 +1048,6 @@ async def download_customer_pack_pdf(
     from src.domain.services.investigation_pack_issue import (
         RetainedPackUnavailableError,
         has_retained_pdf,
-        load_pack_branding,
         pack_render_payload,
         read_retained_pdf,
         render_pack_pdf,
@@ -1081,9 +1080,8 @@ async def download_customer_pack_pdf(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    branding = await load_pack_branding(db, investigation.tenant_id)
     try:
-        pdf_bytes = render_pack_pdf(pack_render_payload(investigation, pack), branding)
+        pdf_bytes = render_pack_pdf(pack_render_payload(investigation, pack))
     except RuntimeError as exc:
         # Fail loudly rather than handing back an empty or half-rendered file.
         raise HTTPException(status_code=500, detail=str(exc)) from exc
