@@ -143,6 +143,8 @@ vi.mock('../investigation/investigationDetailApi', async (importOriginal) => ({
   createFactor: vi.fn(),
   updateFactor: vi.fn(),
   deleteFactor: vi.fn(),
+  reviewCustomerPack: vi.fn(),
+  issueCustomerPack: vi.fn(),
 }))
 
 vi.mock('../../components/EngineerPeoplePicker', () => ({
@@ -366,6 +368,36 @@ describe('InvestigationDetail', () => {
     vi.mocked(detailApi.createFactor).mockResolvedValue(factorsResponse())
     vi.mocked(detailApi.updateFactor).mockResolvedValue(factorsResponse())
     vi.mocked(detailApi.deleteFactor).mockResolvedValue(factorsResponse())
+    vi.mocked(detailApi.reviewCustomerPack).mockResolvedValue({
+      data: {
+        pack_id: 1,
+        investigation_id: 7,
+        cleared: true,
+        note: null,
+        reviewed_at: '2026-09-08T12:00:00Z',
+        reviewed_by_id: 1,
+        issue_blockers: ['INVESTIGATION_NOT_COMPLETE'],
+      },
+    })
+    vi.mocked(detailApi.issueCustomerPack).mockResolvedValue({
+      data: {
+        pack_id: 1,
+        pack_uuid: 'abcdef1234567890',
+        investigation_id: 7,
+        audience: 'external_customer',
+        recipient: 'Bedford Borough Council',
+        recipient_email: null,
+        note: null,
+        disclosure_id: 9,
+        issued_at: '2026-09-08T12:00:00Z',
+        issued_by_id: 1,
+        pdf_sha256: 'a'.repeat(64),
+        pdf_size_bytes: 12,
+        evidence_asset_id: 3,
+        pdf_newly_retained: true,
+        disclosure_count: 1,
+      },
+    })
     vi.mocked(detailApi.createCapaFromWhy).mockResolvedValue({
       data: { id: 99, reference_number: 'CAPA-99', title: 'CAPA: the interlock was bypassed' },
     })
@@ -397,7 +429,7 @@ describe('InvestigationDetail', () => {
 
     const { toast } = await import('../../contexts/ToastContext')
     expect(toast.success).toHaveBeenCalledWith(
-      'Manifest stub downloaded — use PDF for the issuable document.',
+      'Manifest stub downloaded — use PDF for the generated pack.',
     )
   })
 
@@ -477,6 +509,76 @@ describe('InvestigationDetail', () => {
 
     expect(screen.getByText(/SHA256: 1234567890ab/i)).toBeInTheDocument()
     expect(client.investigationsApi.getPacks).toHaveBeenCalledWith(7, { page: 1, page_size: 50 })
+  })
+
+  it('names the issue gate on an unreviewed external pack (INV-C17)', async () => {
+    client.investigationsApi.getPacks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 1,
+            investigation_id: 7,
+            generated_at: '2026-03-05T10:00:00Z',
+            pack_uuid: 'abcdef1234567890',
+            audience: 'external_customer',
+            checksum_sha256: '1234567890abcdef1234567890abcdef',
+            redaction_review_cleared_at: null,
+            disclosure_count: 0,
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+        investigation_id: 7,
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    expect(await screen.findByTestId('pack-issue-blockers-1')).toHaveTextContent(
+      'This pack cannot be issued to a customer because the investigation is not complete and the redaction review has not been cleared.',
+    )
+    expect(screen.getByTestId('pack-issue-1')).toBeDisabled()
+  })
+
+  it('records a redaction review from the Report tab (INV-C17)', async () => {
+    client.investigationsApi.getPacks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 1,
+            investigation_id: 7,
+            generated_at: '2026-03-05T10:00:00Z',
+            pack_uuid: 'abcdef1234567890',
+            audience: 'external_customer',
+            checksum_sha256: '1234567890abcdef1234567890abcdef',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+        investigation_id: 7,
+      },
+    })
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+    fireEvent.click(await screen.findByTestId('pack-review-1'))
+    fireEvent.click(await screen.findByTestId('pack-review-clear-1'))
+
+    await waitFor(() => {
+      expect(detailApi.reviewCustomerPack).toHaveBeenCalledWith(7, 1, { cleared: true })
+    })
   })
 
   it('links back to the source record and opens in-context CAPA create when empty', async () => {
