@@ -249,6 +249,16 @@ export default function InvestigationDetail() {
     }
   }, [investigationId])
 
+  const refreshInvestigationSilently = useCallback(async () => {
+    if (!investigationId || investigationId === 0) return
+    try {
+      const response = await investigationsApi.get(investigationId)
+      setInvestigation(response.data)
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'refreshSilent' })
+    }
+  }, [investigationId])
+
   const loadTimeline = useCallback(async () => {
     if (!investigationId) return
     setTimelineLoading(true)
@@ -494,10 +504,11 @@ export default function InvestigationDetail() {
     setRcaSaveSuccess(false)
     try {
       const existingData = (investigation.data as Record<string, unknown>) || {}
+      const { findings: _, ...dataWithoutFindings } = existingData
       // Dual-write (INV-C4): the flat keys this page has always written, plus the nested
       // sections the closure walk and the pack read.
       await investigationsApi.update(investigationId, {
-        data: withWorkspaceFields(existingData, rcaData),
+        data: withWorkspaceFields(dataWithoutFindings, rcaData),
       })
       await loadInvestigation()
       setRcaUnsaved(false)
@@ -714,18 +725,19 @@ export default function InvestigationDetail() {
       try {
         const response = await mutate()
         setFindings(response.data.items)
-        await loadInvestigation()
+        await refreshInvestigationSilently()
         await loadClosureValidation()
       } catch (err) {
         trackError(err, { component: 'InvestigationDetail', action })
         const message = getApiErrorMessage(err)
         setFindingsError(message)
         toast.error(message)
+        throw err
       } finally {
         setFindingsSaving(false)
       }
     },
-    [loadInvestigation, loadClosureValidation],
+    [refreshInvestigationSilently, loadClosureValidation],
   )
 
   const handleAddFinding = async (body: string) => {
@@ -775,13 +787,14 @@ export default function InvestigationDetail() {
     setSummarySaveError(null)
     try {
       const existingData = (investigation.data as Record<string, unknown>) || {}
+      const { findings: _, ...dataWithoutFindings } = existingData
       await investigationsApi.update(investigationId, {
         assigned_to_user_id: summaryLeadUserId,
         // Dual-write (INV-C4): flat keys plus the nested findings section.
         // INV-C7: `findings` is no longer written here. The rows are its only
         // author, and the server derives the string from them — sending a stale
         // copy from this form would overwrite whatever the row editor just saved.
-        data: withWorkspaceFields(existingData, {
+        data: withWorkspaceFields(dataWithoutFindings, {
           conclusion: summaryConclusion,
           lead_investigator: summaryLead,
         }),
