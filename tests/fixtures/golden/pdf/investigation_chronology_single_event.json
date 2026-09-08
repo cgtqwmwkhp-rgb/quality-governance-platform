@@ -1,0 +1,485 @@
+[
+  {
+    "op": "set_y",
+    "args": [
+      81.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      96,
+      96,
+      96
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      96,
+      96,
+      96
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "ellipse",
+    "args": [
+      16.0,
+      43.5,
+      1.8,
+      1.8
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      19.0,
+      45.0,
+      "Source record"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      78,
+      118,
+      10
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      78,
+      118,
+      10
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "rect",
+    "args": [
+      39.51,
+      43.5,
+      1.8,
+      1.8
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      42.51,
+      45.0,
+      "Investigation"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      62,
+      94,
+      8
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      186.45,
+      45.0,
+      "1 entry"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      219,
+      219,
+      219
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_dash_pattern",
+    "args": [],
+    "kwargs": {
+      "dash": 1.0,
+      "gap": 1.0
+    }
+  },
+  {
+    "op": "line",
+    "args": [
+      21.0,
+      55.0,
+      189.0,
+      55.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_dash_pattern",
+    "args": [],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      219,
+      219,
+      219
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_dash_pattern",
+    "args": [],
+    "kwargs": {
+      "dash": 1.0,
+      "gap": 1.0
+    }
+  },
+  {
+    "op": "line",
+    "args": [
+      21.0,
+      69.0,
+      189.0,
+      69.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_dash_pattern",
+    "args": [],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      70,
+      106,
+      9
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.4
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "line",
+    "args": [
+      21.0,
+      62.0,
+      189.0,
+      62.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      70,
+      106,
+      9
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.4
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "line",
+    "args": [
+      21.0,
+      60.5,
+      21.0,
+      63.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      70,
+      106,
+      9
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.4
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "line",
+    "args": [
+      189.0,
+      60.5,
+      189.0,
+      63.5
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      178,
+      178,
+      178
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "line",
+    "args": [
+      105.0,
+      61.0,
+      105.0,
+      63.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      96,
+      96,
+      96
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      96,
+      96,
+      96
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "ellipse",
+    "args": [
+      104.05,
+      54.05,
+      1.9,
+      1.9
+    ],
+    "kwargs": {
+      "style": "F"
+    }
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "Helvetica",
+      "",
+      7.0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      66,
+      100,
+      8
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "text",
+    "args": [
+      91.55,
+      77.0,
+      "01 May 2026 08:00 UTC"
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_dash_pattern",
+    "args": [],
+    "kwargs": {}
+  },
+  {
+    "op": "set_line_width",
+    "args": [
+      0.2
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_draw_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_fill_color",
+    "args": [
+      255,
+      255,
+      255
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_text_color",
+    "args": [
+      0,
+      0,
+      0
+    ],
+    "kwargs": {}
+  },
+  {
+    "op": "set_font",
+    "args": [
+      "helvetica",
+      "",
+      10.0
+    ],
+    "kwargs": {}
+  }
+]

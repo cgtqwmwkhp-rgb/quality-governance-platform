@@ -12,7 +12,25 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from src.domain.services.investigation_pack_draw import (
+    ChronologySet,
+    chronology_summary_line,
+    draw_chronology_figure,
+    fit_text,
+    format_stamp,
+    humanise_key,
+    normalise_chronology_events,
+    pdf_safe,
+    plural,
+)
+
 logger = logging.getLogger(__name__)
+
+# Text and geometry helpers live in investigation_pack_draw (INV-C15) so the
+# drawing layer and this renderer cannot drift apart. Aliased at their original
+# private names because that is what the rest of this module already calls.
+_pdf_safe = pdf_safe
+_fit_cell_text = fit_text
 
 _MAX_FIELD_CHARS = 4000
 _MAX_ASSET_ROWS = 200
@@ -42,27 +60,42 @@ _REDACTION_SCOPE_NOTE = (
     "and may still identify individuals - review this pack before releasing it."
 )
 
+# ---------------------------------------------------------------------------
+# Chronology figure (INV-C15)
+# ---------------------------------------------------------------------------
 
-def _pdf_safe(value: Any, *, max_len: Optional[int] = None) -> str:
-    """Helvetica (latin-1) safe text; never invent content on failure."""
-    text = "" if value is None else str(value)
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = text.encode("latin-1", errors="replace").decode("latin-1")
-    if max_len is not None and len(text) > max_len:
-        text = text[: max_len - 3].rstrip() + "..."
-    return text
+# Internal audiences only. Timeline entries are *not* covered by the pack
+# redaction pass — that pass walks `content["sections"]` and rewrites recorded
+# identity fields, and a chronology entry carries an actor name and the source
+# record's running-sheet narrative instead. Drawing them into an external pack
+# would release identities the pack claims to have redacted, so an external or
+# unrecognised audience gets a stated withholding, not a figure. Widening this
+# set is a product decision about redacting timeline data, not a rendering one.
+_CHRONOLOGY_AUDIENCES = frozenset({"internal_customer"})
 
+_CHRONOLOGY_ENTRY_ROWS = 12
 
-def humanise_key(key: Any) -> str:
-    """Turn a stored section/field key into a report label (`root_cause` -> `Root cause`)."""
-    raw = str(key or "").strip()
-    if not raw:
-        return "Untitled"
-    words = raw.replace("-", " ").replace("_", " ").replace(".", " ").split()
-    if not words:
-        return raw
-    first, *rest = words
-    return " ".join([first[:1].upper() + first[1:], *(w.lower() for w in rest)])
+_CHRONOLOGY_WITHHELD = (
+    "The chronology is withheld from this pack. Timeline entries are outside the redaction pass "
+    "applied to the sections above, so they are not released to this audience."
+)
+
+# Where the events came from, which decides whether the checksum in Pack
+# integrity covers them. Saying so is the difference between a figure a reader
+# can verify against the stored record and one they cannot.
+_PROVENANCE_PACK = "pack"
+_PROVENANCE_RENDER = "render"
+_CHRONOLOGY_PROVENANCE = {
+    _PROVENANCE_PACK: (
+        "Chronology compiled from the stored pack payload, so it is covered by the content "
+        "checksum recorded under Pack integrity."
+    ),
+    _PROVENANCE_RENDER: (
+        "Chronology compiled from the investigation timeline when this document was rendered. "
+        "It is not part of the stored pack payload and is not covered by the content checksum "
+        "recorded under Pack integrity."
+    ),
+}
 
 
 def format_field_value(value: Any) -> str:
@@ -131,6 +164,52 @@ def confidentiality_notice(audience: Any, redaction_log: Any) -> str:
     )
 
 
+def chronology_feed(
+    pack: dict[str, Any],
+    content: dict[str, Any],
+    timeline_events: Any = None,
+) -> tuple[Any, str]:
+    """Find the chronology events for this pack, and say where they came from.
+
+    Three accepted sources, highest precedence first:
+
+    1. ``timeline_events`` passed by the caller — render-time.
+    2. ``pack["timeline_events"]`` on the payload dict — render-time.
+    3. ``content["chronology"]`` inside the stored pack content, either a list of
+       events or a mapping with an ``events`` list — checksum-covered.
+
+    Every one of them takes the shape ``GET /investigations/{id}/timeline``
+    serialises, so origin is read from ``event_metadata["origin"]`` exactly as
+    INV-C9 writes it. This renderer only ever sees the payload handed to it: it
+    does not query the timeline, the parent audit log or the running sheets, so
+    it cannot reach content the pack withheld.
+
+    That also fixes where tenant scoping lives. The feed must already be the
+    authorised, tenant-scoped timeline for this investigation — which is what
+    ``load_parent_timeline_rows`` produces, tenant-filtered and fail-closed. This
+    function has no session and no tenant id, so it can neither verify that nor
+    widen it; supplying an unscoped feed would be a defect in the caller.
+
+    Returns ``(None, "")`` when no source supplied a list at all — meaning the
+    section is omitted entirely. That is not the same as an empty list, which
+    means a source said there is nothing to show and the pack can say so.
+    """
+    if isinstance(timeline_events, list):
+        return timeline_events, _PROVENANCE_RENDER
+
+    payload_events = pack.get("timeline_events")
+    if isinstance(payload_events, list):
+        return payload_events, _PROVENANCE_RENDER
+
+    stored = content.get("chronology")
+    if isinstance(stored, dict):
+        stored = stored.get("events")
+    if isinstance(stored, list):
+        return stored, _PROVENANCE_PACK
+
+    return None, ""
+
+
 def _brand_rgb(primary_color: Optional[str]) -> tuple[int, int, int]:
     """Parse a `#rrggbb` tenant brand colour; fall back to the platform default."""
     raw = (primary_color or "").strip().lstrip("#")
@@ -146,27 +225,6 @@ def _write_line(pdf: Any, text: str, *, height: float = 5) -> None:
     """Write wrapped text from the left margin (avoids fpdf2 mid-line multi_cell errors)."""
     pdf.set_x(pdf.l_margin)
     pdf.multi_cell(0, height, _pdf_safe(text), new_x="LMARGIN", new_y="NEXT")
-
-
-def _fit_cell_text(pdf: Any, text: Any, max_width: float) -> str:
-    """Ellipsize latin-1-safe text so it cannot paint outside a fixed-width PDF cell."""
-    safe_text = _pdf_safe(text)
-    if pdf.get_string_width(safe_text) <= max_width:
-        return safe_text
-
-    ellipsis = "..."
-    available_width = max_width - pdf.get_string_width(ellipsis)
-    if available_width <= 0:
-        return ""
-
-    low, high = 0, len(safe_text)
-    while low < high:
-        midpoint = (low + high + 1) // 2
-        if pdf.get_string_width(safe_text[:midpoint].rstrip()) <= available_width:
-            low = midpoint
-        else:
-            high = midpoint - 1
-    return safe_text[:low].rstrip() + ellipsis
 
 
 def _make_pack_pdf_class(fpdf_cls: Any) -> Any:
@@ -212,8 +270,14 @@ class InvestigationPackPdfService:
         *,
         organisation_name: Optional[str] = None,
         primary_color: Optional[str] = None,
+        timeline_events: Any = None,
     ) -> bytes:
-        """Render pack bytes. Raises RuntimeError when fpdf2 is unavailable or rendering fails."""
+        """Render pack bytes. Raises RuntimeError when fpdf2 is unavailable or rendering fails.
+
+        ``timeline_events`` is the optional chronology feed described in
+        :func:`chronology_feed`, in the shape the timeline endpoint serialises.
+        Omit it and the pack renders exactly as it did before INV-C15.
+        """
         try:
             from fpdf import FPDF
         except ModuleNotFoundError as exc:
@@ -302,6 +366,15 @@ class InvestigationPackPdfService:
                 _write_line(pdf, f"- {humanise_key(section_key)}", height=4.5)
             pdf.ln(1)
 
+        self._render_chronology(
+            pdf,
+            pack=pack,
+            content=content,
+            audience=audience,
+            brand=brand,
+            timeline_events=timeline_events,
+        )
+
         self._section_heading(pdf, "Evidence schedule", brand)
         raw_assets = pack.get("included_assets")
         assets: list[Any] = raw_assets if isinstance(raw_assets, list) else []
@@ -354,6 +427,106 @@ class InvestigationPackPdfService:
         except Exception as exc:  # noqa: BLE001 - surfaced to the caller as a 500
             logger.exception("Investigation pack PDF render failed for pack %s", pack.get("pack_uuid"))
             raise RuntimeError(f"Investigation pack PDF build failed: {exc}") from exc
+
+    def _render_chronology(
+        self,
+        pdf: Any,
+        *,
+        pack: dict[str, Any],
+        content: dict[str, Any],
+        audience: str,
+        brand: tuple[int, int, int],
+        timeline_events: Any = None,
+    ) -> None:
+        """Chronology section (INV-C15): the figure, its entries, or an honest gap.
+
+        Four outcomes, and the difference between them matters:
+
+        * No feed supplied at all — the section is omitted. Printing "no events"
+          when nobody asked the timeline would be inventing a fact about the
+          investigation.
+        * A feed that yields no placeable event — the section says so.
+        * A feed on a pack whose audience is not allowed the chronology — the
+          section states the withholding instead of drawing it.
+        * Otherwise — summary line, figure, the most recent entries, and where
+          the events came from.
+
+        A figure that fails to draw degrades to the entry list with the failure
+        stated. A pack export is a client deliverable; losing the graphic is
+        recoverable, returning a 500 to someone trying to issue a report is not.
+        """
+        feed, provenance = chronology_feed(pack, content, timeline_events)
+        if feed is None:
+            return
+
+        chronology = normalise_chronology_events(feed)
+        self._section_heading(pdf, "Chronology", brand)
+        pdf.set_font("Helvetica", "", 10)
+
+        if not chronology.events:
+            _write_line(pdf, chronology_summary_line(chronology), height=4.5)
+            self._render_chronology_gaps(pdf, chronology)
+            pdf.ln(1)
+            return
+
+        if audience not in _CHRONOLOGY_AUDIENCES:
+            pdf.set_font("Helvetica", "I", 9)
+            _write_line(pdf, _CHRONOLOGY_WITHHELD, height=4.5)
+            pdf.ln(1)
+            return
+
+        _write_line(pdf, chronology_summary_line(chronology), height=4.5)
+        try:
+            draw_chronology_figure(pdf, chronology, brand=brand)
+        except Exception:  # noqa: BLE001 - a pack without its figure beats a failed export
+            logger.exception("Investigation pack chronology figure failed for pack %s", pack.get("pack_uuid"))
+            pdf.set_font("Helvetica", "I", 9)
+            _write_line(
+                pdf,
+                "The chronology figure could not be drawn for this pack. The entries are listed below.",
+                height=4.5,
+            )
+
+        self._render_chronology_entries(pdf, chronology)
+        self._render_chronology_gaps(pdf, chronology)
+        pdf.set_font("Helvetica", "I", 8)
+        _write_line(pdf, _CHRONOLOGY_PROVENANCE[provenance], height=4)
+        pdf.ln(1)
+
+    @staticmethod
+    def _render_chronology_entries(pdf: Any, chronology: ChronologySet) -> None:
+        """The newest entries in words, because markers alone cannot be read."""
+        events = list(reversed(chronology.events))[:_CHRONOLOGY_ENTRY_ROWS]
+        pdf.set_font("Helvetica", "B", 9)
+        _write_line(pdf, f"Most recent entries ({len(events)} of {len(chronology.events)})", height=5)
+        pdf.set_font("Helvetica", "", 9)
+        for event in events:
+            line = f"- {format_stamp(event.at)} - {event.origin_label} - {event.label}"
+            if event.detail:
+                line = f"{line}: {event.detail}"
+            _write_line(pdf, line, height=4.2)
+
+    @staticmethod
+    def _render_chronology_gaps(pdf: Any, chronology: ChronologySet) -> None:
+        """State what the chronology could not show, rather than quietly showing less."""
+        if not chronology.omitted and not chronology.unplaceable:
+            return
+        pdf.set_font("Helvetica", "", 9)
+        if chronology.omitted:
+            _write_line(
+                pdf,
+                f"{plural(chronology.omitted, 'earlier entry', 'earlier entries')} "
+                f"{'is' if chronology.omitted == 1 else 'are'} not shown: the chronology is capped at "
+                f"the newest {len(chronology.events)}.",
+                height=4.2,
+            )
+        if chronology.unplaceable:
+            _write_line(
+                pdf,
+                f"{plural(chronology.unplaceable, 'timeline entry', 'timeline entries')} carried no readable "
+                "date and could not be placed on the chronology.",
+                height=4.2,
+            )
 
     @staticmethod
     def _section_heading(pdf: Any, title: str, brand: tuple[int, int, int]) -> None:
