@@ -1866,7 +1866,7 @@ export default function InvestigationDetail() {
             )}
             {rcaLoading && (
               <p className="text-sm text-muted-foreground" data-testid="investigation-rca-loading">
-                {t('investigations.rca.loading', 'Loading 5 Whys…')}
+                Loading 5 Whys…
               </p>
             )}
             {rcaUnsaved && (
@@ -1900,10 +1900,7 @@ export default function InvestigationDetail() {
             !rcaContributing.trim() &&
             rcaWhys.every((item) => !item.answer.trim() && !item.evidence.trim()) ? (
               <p className="text-sm text-muted-foreground" data-testid="investigation-rca-empty">
-                {t(
-                  'investigations.rca.empty',
-                  'No 5 Whys recorded yet. Empty answers stay empty — nothing is invented.',
-                )}
+                No 5 Whys recorded yet. Empty answers stay empty — nothing is invented.
               </p>
             ) : null}
             <Card className="p-6">
@@ -1954,17 +1951,12 @@ export default function InvestigationDetail() {
                           htmlFor={`rca-why-${item.level}-evidence`}
                           className="block text-sm font-medium text-muted-foreground mb-2"
                         >
-                          {t('investigations.rca.why_evidence', 'Evidence for why {{n}}', {
-                            n: item.level,
-                          })}
+                          {`Evidence for why ${item.level}`}
                         </label>
                         <Textarea
                           id={`rca-why-${item.level}-evidence`}
                           rows={2}
-                          placeholder={t(
-                            'investigations.rca.why_evidence_placeholder',
-                            'Optional. Leave empty when there is none.',
-                          )}
+                          placeholder="Optional. Leave empty when there is none."
                           value={item.evidence}
                           onChange={(e) =>
                             handleRcaWhyChange(item.level, 'evidence', e.target.value)
