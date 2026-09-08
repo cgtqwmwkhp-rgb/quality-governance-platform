@@ -74,8 +74,10 @@ def _alembic_chain(tmp_path: Path) -> dict:
 
 
 def test_the_new_revision_is_the_only_head(tmp_path) -> None:
+    # The chain tip moves as later revisions land; the assertion under test is
+    # that there is exactly one of them. Currently INV-C17.
     chain = _alembic_chain(tmp_path)
-    assert chain["heads"] == [REVISION], f"expected a single head, found {chain['heads']}"
+    assert chain["heads"] == ["20261122_inv_c17_issue"], f"expected a single head, found {chain['heads']}"
     assert chain["parents"] == ["20261120_inv_c7_findings"]
 
 

@@ -159,6 +159,14 @@ export interface CustomerPackSummary {
   audience: string
   checksum_sha256?: string
   generated_by_id?: number
+  /** INV-C17 — server-owned review/issue facts. Absent on packs generated before C17. */
+  redaction_review_cleared_at?: string | null
+  redaction_review_at?: string | null
+  redaction_review_by_id?: number | null
+  issued_at?: string | null
+  issued_by_id?: number | null
+  issued_pdf_sha256?: string | null
+  disclosure_count?: number
 }
 
 export interface PacksResponse {
