@@ -149,6 +149,24 @@ def test_empty_findings_why_and_capa_are_stated_empty_and_invent_nothing():
     assert serialize_capa_section([])["items"] == []
 
 
+def test_empty_capa_overlay_preserves_written_corrective_action_prose():
+    investigation = _run(
+        data={
+            "sections": {
+                "section_1_details": {"location": "yard"},
+                "section_5_corrective_actions": {"corrective_actions": "Replace the damaged guard before restart"},
+            }
+        }
+    )
+
+    content, _, _ = _generate(investigation, findings=[], rca=None, capa_actions=[])
+
+    assert content["sections"]["section_5_corrective_actions"] == {
+        "corrective_actions": "Replace the damaged guard before restart"
+    }
+    assert content["sections"]["capa"]["items"] == []
+
+
 def test_without_overlays_the_pack_still_copies_source_sections_only():
     investigation = _run()
     content, _, _ = _generate(investigation)

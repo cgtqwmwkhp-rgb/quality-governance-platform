@@ -35,9 +35,10 @@ PACK_SECTION_FINDINGS = "findings"
 PACK_SECTION_ROOT_CAUSE = "root-cause"
 PACK_SECTION_CAPA = "capa"
 
-# Dual-write / template keys that reprint the same investigation content as the
-# overlay. When the overlay is supplied they are skipped so the pack does not
-# show a concatenated string and a list of the same words.
+# Template keys that correspond to each HSG245 pack section. Findings and RCA
+# are dual-write sources, so their legacy strings are skipped when an overlay is
+# supplied. Corrective-action prose is independent of CAPAAction rows and must
+# remain visible alongside the CAPA overlay.
 _FINDINGS_SOURCE_KEYS = frozenset({"section_3_investigation_findings", PACK_SECTION_FINDINGS})
 _RCA_SOURCE_KEYS = frozenset({"section_4_root_cause", "rca", PACK_SECTION_ROOT_CAUSE})
 _CAPA_SOURCE_KEYS = frozenset({"section_5_corrective_actions", PACK_SECTION_CAPA})
@@ -160,14 +161,16 @@ def source_keys_replaced_by_overlay(
     rca: Optional[Mapping[str, Any]],
     capa_actions: Optional[Sequence[Any]],
 ) -> set[str]:
-    """Source section keys the overlay replaces, so the concatenated string is not reprinted."""
+    """Dual-write source keys replaced by an overlay.
+
+    ``section_5_corrective_actions`` is not a CAPAAction dual-write target, so
+    loading CAPA rows (including the usual empty list) must not hide its prose.
+    """
     replaced: set[str] = set()
     if findings is not None:
         replaced.update(_FINDINGS_SOURCE_KEYS - {PACK_SECTION_FINDINGS})
     if rca is not None:
         replaced.update(_RCA_SOURCE_KEYS - {PACK_SECTION_ROOT_CAUSE})
-    if capa_actions is not None:
-        replaced.update(_CAPA_SOURCE_KEYS - {PACK_SECTION_CAPA})
     return replaced
 
 
