@@ -20,6 +20,25 @@ from src.domain.models.investigation import AssignedEntityType, InvestigationSta
 from src.domain.services.investigation_service import InvestigationService
 
 
+def _findings_present():
+    """Existing fixtures still carry a findings *string*; C8 reads rows.
+
+    These tests are not about the findings probe — they mock the database —
+    so the row read is stubbed rather than guessed at from JSON.
+    """
+    return patch(
+        "src.domain.services.investigation_closure_helpers.investigation_has_findings_for_closure",
+        AsyncMock(return_value=True),
+    )
+
+
+def _findings_missing():
+    return patch(
+        "src.domain.services.investigation_closure_helpers.investigation_has_findings_for_closure",
+        AsyncMock(return_value=False),
+    )
+
+
 def _investigation(**overrides):
     now = datetime.now(timezone.utc)
     base = dict(
@@ -75,6 +94,7 @@ async def test_collect_readiness_reasons_flags_empty_summary_on_complete_gate():
             "validate_closure",
             AsyncMock(return_value=_empty_validation()),
         ),
+        _findings_missing(),
     ):
         reasons, _open_work, missing = await _collect_readiness_reasons(
             db,
@@ -106,6 +126,7 @@ async def test_collect_readiness_reasons_adds_status_not_complete_for_close_gate
             "validate_closure",
             AsyncMock(return_value=_empty_validation()),
         ),
+        _findings_present(),
     ):
         reasons, _, _ = await _collect_readiness_reasons(
             db,
@@ -126,7 +147,7 @@ async def test_patch_completed_rejects_when_summary_incomplete():
     result.scalar_one_or_none = MagicMock(return_value=inv)
     db.execute = AsyncMock(return_value=result)
 
-    with pytest.raises(BadRequestError) as exc_info:
+    with _findings_missing(), pytest.raises(BadRequestError) as exc_info:
         await update_investigation(
             request=MagicMock(headers={"X-Request-ID": "req-1"}),
             investigation_id=7,
@@ -164,6 +185,7 @@ async def test_patch_completed_rejects_without_lead_and_start():
             "validate_closure",
             AsyncMock(return_value=_empty_validation()),
         ),
+        _findings_present(),
     ):
         with pytest.raises(BadRequestError) as exc_info:
             await update_investigation(
@@ -207,6 +229,7 @@ async def test_approve_rejects_without_lead_and_start():
             "validate_closure",
             AsyncMock(return_value=_empty_validation()),
         ),
+        _findings_present(),
     ):
         with pytest.raises(BadRequestError) as exc_info:
             await approve_investigation(
@@ -263,6 +286,7 @@ async def test_patch_completed_allows_supervisor_override_for_open_work():
             "src.domain.services.lessons_learnt_promote.promote_lessons_to_case",
             AsyncMock(),
         ),
+        _findings_present(),
     ):
         await update_investigation(
             request=MagicMock(headers={"X-Request-ID": "req-2"}),
@@ -306,6 +330,7 @@ async def test_patch_completed_override_requires_reason():
             "validate_closure",
             AsyncMock(return_value=_empty_validation()),
         ),
+        _findings_present(),
     ):
         with pytest.raises(BadRequestError) as exc_info:
             await _ensure_investigation_ready_for_status(
@@ -319,3 +344,63 @@ async def test_patch_completed_override_requires_reason():
             )
 
     assert exc_info.value.code == "CLOSURE_OVERRIDE_REASON_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_collect_readiness_reasons_treats_rows_as_findings_when_the_flat_key_is_empty():
+    """INV-C8: the summary gate no longer reads ``data.findings``."""
+    db = AsyncMock()
+    inv = _investigation(
+        data={"findings": "", "conclusion": "Improve housekeeping", "lead_investigator": "pat@example.com"}
+    )
+    with (
+        patch(
+            "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
+            AsyncMock(return_value=[]),
+        ),
+        patch.object(
+            InvestigationService,
+            "validate_closure",
+            AsyncMock(return_value=_empty_validation()),
+        ),
+        _findings_present(),
+    ):
+        reasons, _, missing = await _collect_readiness_reasons(
+            db,
+            investigation=inv,
+            investigation_id=7,
+            current_user=SimpleNamespace(id=11, tenant_id=1),
+            gate="complete",
+        )
+
+    assert ClosureReasonCode.MISSING_FINDINGS not in reasons
+    assert not any(getattr(item, "field_key", None) == "findings" for item in missing)
+
+
+@pytest.mark.asyncio
+async def test_collect_readiness_reasons_ignores_a_stale_flat_findings_string():
+    """A leftover paragraph must not close a run whose rows are empty."""
+    db = AsyncMock()
+    inv = _investigation()
+    with (
+        patch(
+            "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
+            AsyncMock(return_value=[]),
+        ),
+        patch.object(
+            InvestigationService,
+            "validate_closure",
+            AsyncMock(return_value=_empty_validation()),
+        ),
+        _findings_missing(),
+    ):
+        reasons, _, missing = await _collect_readiness_reasons(
+            db,
+            investigation=inv,
+            investigation_id=7,
+            current_user=SimpleNamespace(id=11, tenant_id=1),
+            gate="complete",
+        )
+
+    assert ClosureReasonCode.MISSING_FINDINGS in reasons
+    assert any(getattr(item, "field_key", None) == "findings" for item in missing)

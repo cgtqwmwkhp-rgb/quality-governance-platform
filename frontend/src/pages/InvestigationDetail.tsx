@@ -45,6 +45,7 @@ import {
   type Action,
   type EvidenceAsset,
   type PackCapability,
+  type InvestigationFinding,
   getApiErrorMessage,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -86,6 +87,7 @@ import InvestigationComments from './investigation/InvestigationComments'
 import InvestigationActions from './investigation/InvestigationActions'
 import type { ActionFormData } from './investigation/InvestigationActions'
 import InvestigationEvidence from './investigation/InvestigationEvidence'
+import InvestigationFindingsEditor from './investigation/InvestigationFindingsEditor'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import {
   investigationLinkedEvidenceParams,
@@ -207,7 +209,14 @@ export default function InvestigationDetail() {
   const [omitBusySection, setOmitBusySection] = useState<string | null>(null)
   const [lastRedactionLog, setLastRedactionLog] = useState<Record<string, unknown>[] | null>(null)
 
-  const [summaryFindings, setSummaryFindings] = useState('')
+  // INV-C7: findings are rows, loaded from their own endpoint. They are deliberately
+  // not part of the summary save — that save still owns conclusion and lead, which
+  // are still strings on `data`.
+  const [findings, setFindings] = useState<InvestigationFinding[]>([])
+  const [findingsLoading, setFindingsLoading] = useState(false)
+  const [findingsSaving, setFindingsSaving] = useState(false)
+  const [findingsError, setFindingsError] = useState<string | null>(null)
+
   const [summaryConclusion, setSummaryConclusion] = useState('')
   const [summaryLead, setSummaryLead] = useState('')
   const [summaryLeadUserId, setSummaryLeadUserId] = useState<number | null>(null)
@@ -256,6 +265,28 @@ export default function InvestigationDetail() {
       setTimelineLoading(false)
     }
   }, [investigationId, timelineFilter])
+
+  /**
+   * INV-C7: hydrate the findings rows.
+   *
+   * The first call for a run that still holds only the legacy `data.findings`
+   * string converts that string into rows server-side, so this is also what makes
+   * an older investigation's findings appear in the editor.
+   */
+  const loadFindings = useCallback(async () => {
+    if (!investigationId) return
+    setFindingsLoading(true)
+    setFindingsError(null)
+    try {
+      const response = await investigationsApi.listFindings(investigationId)
+      setFindings(response.data.items)
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'loadFindings' })
+      setFindingsError(getApiErrorMessage(err))
+    } finally {
+      setFindingsLoading(false)
+    }
+  }, [investigationId])
 
   const loadComments = useCallback(async () => {
     if (!investigationId) return
@@ -373,7 +404,6 @@ export default function InvestigationDetail() {
   const initializeSummaryData = useCallback(() => {
     if (!investigation) return
     const data = (investigation.data as Record<string, unknown>) || {}
-    setSummaryFindings(readWorkspaceText(data, 'findings'))
     setSummaryConclusion(readWorkspaceText(data, 'conclusion'))
     setSummaryLead(readWorkspaceText(data, 'lead_investigator'))
     setSummaryLeadUserId(investigation.assigned_to_user_id ?? null)
@@ -663,6 +693,82 @@ export default function InvestigationDetail() {
     }
   }
 
+  /**
+   * INV-C7: run one findings mutation.
+   *
+   * Every findings endpoint answers with the whole ordered list, so the list is
+   * replaced from the response rather than patched locally — the order on screen
+   * is then always the order stored. A failure leaves the previous list untouched
+   * and shows why, instead of an optimistic row that does not exist server-side.
+   *
+   * The closure gate reads the concatenated string the server rewrites on each of
+   * these, so the run is re-read afterwards to keep the gate panel honest.
+   */
+  const runFindingsMutation = useCallback(
+    async (
+      action: string,
+      mutate: () => Promise<{ data: { items: InvestigationFinding[] } }>,
+    ) => {
+      setFindingsSaving(true)
+      setFindingsError(null)
+      try {
+        const response = await mutate()
+        setFindings(response.data.items)
+        await loadInvestigation()
+        await loadClosureValidation()
+      } catch (err) {
+        trackError(err, { component: 'InvestigationDetail', action })
+        const message = getApiErrorMessage(err)
+        setFindingsError(message)
+        toast.error(message)
+      } finally {
+        setFindingsSaving(false)
+      }
+    },
+    [loadInvestigation, loadClosureValidation],
+  )
+
+  const handleAddFinding = async (body: string) => {
+    if (!investigationId) return
+    await runFindingsMutation('addFinding', () =>
+      investigationsApi.createFinding(investigationId, body),
+    )
+  }
+
+  const handleUpdateFinding = async (findingId: number, body: string) => {
+    if (!investigationId) return
+    await runFindingsMutation('updateFinding', () =>
+      investigationsApi.updateFinding(investigationId, findingId, body),
+    )
+  }
+
+  const handleDeleteFinding = async (findingId: number) => {
+    if (!investigationId) return
+    await runFindingsMutation('deleteFinding', () =>
+      investigationsApi.deleteFinding(investigationId, findingId),
+    )
+  }
+
+  /**
+   * Move one finding one place up or down.
+   *
+   * Sends the complete id list in the wanted order, which is what the endpoint
+   * requires: a partial list is refused rather than applied, so a move computed
+   * against a stale list fails loudly instead of dropping a finding somebody else
+   * added.
+   */
+  const handleMoveFinding = async (findingId: number, direction: -1 | 1) => {
+    if (!investigationId) return
+    const index = findings.findIndex((finding) => finding.id === findingId)
+    const target = index + direction
+    if (index < 0 || target < 0 || target >= findings.length) return
+    const order = findings.map((finding) => finding.id)
+    ;[order[index], order[target]] = [order[target], order[index]]
+    await runFindingsMutation('reorderFindings', () =>
+      investigationsApi.reorderFindings(investigationId, order),
+    )
+  }
+
   const handleSaveSummary = async () => {
     if (!investigationId || !investigation) return
     setSavingSummary(true)
@@ -672,8 +778,10 @@ export default function InvestigationDetail() {
       await investigationsApi.update(investigationId, {
         assigned_to_user_id: summaryLeadUserId,
         // Dual-write (INV-C4): flat keys plus the nested findings section.
+        // INV-C7: `findings` is no longer written here. The rows are its only
+        // author, and the server derives the string from them — sending a stale
+        // copy from this form would overwrite whatever the row editor just saved.
         data: withWorkspaceFields(existingData, {
-          findings: summaryFindings,
           conclusion: summaryConclusion,
           lead_investigator: summaryLead,
         }),
@@ -767,6 +875,11 @@ export default function InvestigationDetail() {
   useEffect(() => {
     initializeSummaryData()
   }, [investigation, initializeSummaryData])
+  // INV-C7: findings live behind their own endpoint, so they are fetched once for
+  // the run rather than re-derived from `investigation.data` on every render.
+  useEffect(() => {
+    loadFindings()
+  }, [loadFindings])
 
   useEffect(() => {
     if (!investigationId) return
@@ -1211,22 +1324,25 @@ export default function InvestigationDetail() {
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label
-                      htmlFor="inv-findings"
-                      className="block text-sm font-medium text-muted-foreground mb-1"
-                    >
+                    <h4 className="block text-sm font-medium text-muted-foreground mb-1">
                       {t('investigations.summary.findings')}
-                    </label>
-                    <Textarea
-                      id="inv-findings"
-                      rows={4}
-                      value={summaryFindings}
-                      onChange={(e) => {
-                        setSummaryFindings(e.target.value)
-                        setSummaryUnsaved(true)
-                      }}
-                      placeholder={t('investigations.summary.findings_placeholder')}
-                      data-testid="investigation-findings-input"
+                    </h4>
+                    {/*
+                      INV-C7: one row per finding. Each row saves itself through the
+                      findings endpoints, which is why this sits outside the Save
+                      button above — that button still owns conclusion and lead.
+                    */}
+                    <InvestigationFindingsEditor
+                      findings={findings}
+                      loading={findingsLoading}
+                      saving={findingsSaving}
+                      error={findingsError}
+                      readOnly={investigation.status === 'closed'}
+                      onAdd={handleAddFinding}
+                      onUpdate={handleUpdateFinding}
+                      onDelete={handleDeleteFinding}
+                      onMove={handleMoveFinding}
+                      onRetry={() => void loadFindings()}
                     />
                   </div>
                   <div>

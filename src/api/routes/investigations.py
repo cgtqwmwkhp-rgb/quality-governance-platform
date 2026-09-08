@@ -295,7 +295,11 @@ async def _collect_readiness_reasons(
     if not investigation.level:
         reasons.append(ClosureReasonCode.LEVEL_NOT_SET)
 
-    summary_reasons, summary_items = collect_summary_readiness_blockers(investigation)
+    summary_reasons, summary_items = await collect_summary_readiness_blockers(
+        investigation,
+        db=db,
+        tenant_id=tenant_id,
+    )
     for code in summary_reasons:
         if code not in reasons:
             reasons.append(code)

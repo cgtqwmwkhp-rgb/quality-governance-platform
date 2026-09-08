@@ -13,7 +13,7 @@ issues the per-row DELETE, which requires a mapped relationship whose cascade
 includes ``delete`` and which does not set ``passive_deletes=True``. Every pair
 below fails that test, so the removal happens with no Python event:
 
-* 87 pairs have no relationship mapped from the parent at all.
+* 88 pairs have no relationship mapped from the parent at all.
 * 5 have a relationship without ``delete`` in its cascade — SQLAlchemy will try
   to de-associate the children instead of deleting them, so still no per-child
   delete event (and on a NOT NULL foreign key that attempt errors).
@@ -110,6 +110,15 @@ CASCADES_INVISIBLE_TO_AN_ORM_HOOK: frozenset[tuple[str, str]] = frozenset(
         ("ims_requirements", "ims_control_requirement_mappings"),
         ("incidents", "incident_running_sheet_entries"),
         ("investigation_runs", "barrier_analyses"),
+        # INV-C7 findings rows. They follow the three RCA children above, and for
+        # the same reason: mapping a delete-cascading relationship would hang a
+        # lazy collection off InvestigationRun, which the async run loads on any
+        # attribute touch outside a greenlet — the MissingGreenlet failure this
+        # file's header describes. Deleting a run therefore removes its findings
+        # with no per-row event, and the audit row for the run says nothing about
+        # them. The findings text also survives on investigation_runs.data, which
+        # the run's own delete row does cover.
+        ("investigation_runs", "investigation_findings"),
         ("investigation_runs", "fishbone_diagrams"),
         ("investigation_runs", "five_whys_analyses"),
         # Not a new cascade, a newly visible one. The physical constraint
