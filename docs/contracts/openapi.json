@@ -31339,6 +31339,155 @@
         "title": "InvestigationCustomerPackResponse",
         "type": "object"
       },
+      "InvestigationFindingCreate": {
+        "additionalProperties": false,
+        "description": "Add one finding to the end of the list.",
+        "properties": {
+          "body": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "InvestigationFindingCreate",
+        "type": "object"
+      },
+      "InvestigationFindingListResponse": {
+        "description": "The run's findings, in order.\n\n``items: []`` is a valid, successful answer \u2014 a run with no findings is a\nnormal state, not an error, and the editor renders it as an empty list with an\nadd button rather than as a failure.\n\n``findings_text`` is the concatenation stored back into\n``investigation_runs.data``. It is returned so a caller can see exactly what\nthe closure gate and the generated pack will read, without having to re-derive\nit and risk deriving it differently.",
+        "properties": {
+          "findings_text": {
+            "title": "Findings Text",
+            "type": "string"
+          },
+          "investigation_id": {
+            "title": "Investigation Id",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InvestigationFindingResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "investigation_id",
+          "findings_text"
+        ],
+        "title": "InvestigationFindingListResponse",
+        "type": "object"
+      },
+      "InvestigationFindingReorderRequest": {
+        "additionalProperties": false,
+        "description": "The complete list of this run's finding ids, in the order wanted.\n\nComplete on purpose: a partial list is refused rather than applied, so a stale\neditor cannot drop a finding another tab has just added by omitting its id.",
+        "properties": {
+          "finding_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Finding Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "finding_ids"
+        ],
+        "title": "InvestigationFindingReorderRequest",
+        "type": "object"
+      },
+      "InvestigationFindingResponse": {
+        "description": "One finding row.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "investigation_id": {
+            "title": "Investigation Id",
+            "type": "integer"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "investigation_id",
+          "body",
+          "sort_order"
+        ],
+        "title": "InvestigationFindingResponse",
+        "type": "object"
+      },
+      "InvestigationFindingUpdate": {
+        "additionalProperties": false,
+        "description": "Rewrite one finding's text.\n\nOnly the text is editable here. Position is moved by the reorder endpoint, so\na text edit cannot reshuffle the list as a side effect.",
+        "properties": {
+          "body": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "InvestigationFindingUpdate",
+        "type": "object"
+      },
       "InvestigationPackGeneratedResponse": {
         "description": "Full response returned when generating a customer pack.",
         "properties": {
@@ -90680,6 +90829,290 @@
           }
         ],
         "summary": "Approve Customer Pack Omit",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
+    "/api/v1/investigations/{investigation_id}/findings": {
+      "get": {
+        "description": "List one run's findings, in order.\n\nFirst call for a run with no rows converts the legacy ``data.findings`` string\ninto rows and commits that conversion \u2014 a read that writes, once, deliberately.\nThe alternative (returning derived rows the client must adopt on first edit)\ngives every client a second way to create findings and a second way to create\nthem twice. It is idempotent: the conversion only fires at zero rows, under a\nrow lock on the run, so a second reader waits and then finds the rows.\n\nAn empty list is a successful answer, not a 404.",
+        "operationId": "list_investigation_findings_api_v1_investigations__investigation_id__findings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationFindingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Investigation Findings",
+        "tags": [
+          "Investigations"
+        ]
+      },
+      "post": {
+        "description": "Append a finding.\n\nReturns the whole ordered list, as every mutation here does: ``sort_order`` is\nassigned by the server, so a client that only received the new row would have\nto guess where it landed.",
+        "operationId": "create_investigation_finding_api_v1_investigations__investigation_id__findings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationFindingCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationFindingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Investigation Finding",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
+    "/api/v1/investigations/{investigation_id}/findings/reorder": {
+      "post": {
+        "description": "Apply a new order to the run's findings.\n\n``finding_ids`` must name exactly this run's findings, each once. A list that\ndoes not is refused with 400 rather than partially applied, because the\nplausible cause is a stale editor and applying it would silently move or lose\na finding another tab added.",
+        "operationId": "reorder_investigation_findings_api_v1_investigations__investigation_id__findings_reorder_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationFindingReorderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationFindingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reorder Investigation Findings",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
+    "/api/v1/investigations/{investigation_id}/findings/{finding_id}": {
+      "delete": {
+        "description": "Remove one finding. Deleting the last one leaves a valid empty list.",
+        "operationId": "delete_investigation_finding_api_v1_investigations__investigation_id__findings__finding_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "finding_id",
+            "required": true,
+            "schema": {
+              "title": "Finding Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationFindingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Investigation Finding",
+        "tags": [
+          "Investigations"
+        ]
+      },
+      "patch": {
+        "description": "Rewrite one finding's text.",
+        "operationId": "update_investigation_finding_api_v1_investigations__investigation_id__findings__finding_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "title": "Investigation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "finding_id",
+            "required": true,
+            "schema": {
+              "title": "Finding Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationFindingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationFindingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Investigation Finding",
         "tags": [
           "Investigations"
         ]
