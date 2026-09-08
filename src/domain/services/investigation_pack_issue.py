@@ -167,26 +167,6 @@ def assert_issuable(investigation: InvestigationRun, pack: InvestigationCustomer
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class PackBranding:
-    """Tenant branding applied to the rendered pack."""
-
-    organisation_name: Optional[str] = None
-    primary_color: Optional[str] = None
-
-
-async def load_pack_branding(db: AsyncSession, tenant_id: Optional[int]) -> PackBranding:
-    """Read the issuing tenant's name and colour, or plain branding if absent."""
-    if tenant_id is None:
-        return PackBranding()
-    from src.domain.models.tenant import Tenant
-
-    tenant = await db.scalar(select(Tenant).where(Tenant.id == tenant_id))
-    if tenant is None:
-        return PackBranding()
-    return PackBranding(organisation_name=tenant.name, primary_color=tenant.primary_color)
-
-
 def pack_render_payload(
     investigation: InvestigationRun,
     pack: InvestigationCustomerPack,
@@ -211,14 +191,14 @@ def pack_render_payload(
     }
 
 
-def render_pack_pdf(payload: dict[str, Any], branding: PackBranding) -> bytes:
-    """Render pack bytes. Raises ``RuntimeError`` when rendering is impossible."""
+def render_pack_pdf(payload: dict[str, Any]) -> bytes:
+    """Render pack bytes. Raises ``RuntimeError`` when rendering is impossible.
+
+    Letterhead is the Plantexpand brand kit. Tenant name and colour are not
+    inputs — a blue Default Organisation pack is the defect this lock removes.
+    """
     service = InvestigationPackPdfService()
-    return service.build_pdf_bytes(
-        payload,
-        organisation_name=branding.organisation_name,
-        primary_color=branding.primary_color,
-    )
+    return service.build_pdf_bytes(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -298,8 +278,7 @@ async def retain_issued_pdf(
             newly_retained=False,
         )
 
-    branding = await load_pack_branding(db, tenant_id)
-    pdf_bytes = render_pack_pdf(pack_render_payload(investigation, pack), branding)
+    pdf_bytes = render_pack_pdf(pack_render_payload(investigation, pack))
     checksum = hashlib.sha256(pdf_bytes).hexdigest()
     storage_key = retained_pdf_storage_key(int(investigation.id), str(pack.pack_uuid))
 

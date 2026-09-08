@@ -98,9 +98,18 @@ def humanise_key(key: Any) -> str:
     return " ".join([first[:1].upper() + first[1:], *(w.lower() for w in rest)])
 
 
+def _safe_for_document(pdf: Any, value: Any, *, max_len: Optional[int] = None) -> str:
+    """Use Inter coverage when the pack registered Inter; otherwise latin-1 Helvetica."""
+    if getattr(pdf, "_pack_font_family", None):
+        from src.domain.services.investigation_pack_brand import text_safe
+
+        return text_safe(value, max_len=max_len)
+    return pdf_safe(value, max_len=max_len)
+
+
 def fit_text(pdf: Any, text: Any, max_width: float) -> str:
-    """Ellipsize latin-1-safe text so it cannot paint outside a fixed-width PDF cell."""
-    safe_text = pdf_safe(text)
+    """Ellipsize document-safe text so it cannot paint outside a fixed-width PDF cell."""
+    safe_text = _safe_for_document(pdf, text)
     if pdf.get_string_width(safe_text) <= max_width:
         return safe_text
 
@@ -204,7 +213,7 @@ def vector_state(pdf: Any) -> Iterator[None]:
     values. Every text section in the pack sets its own font and colour before
     writing, so the default is the safe landing point.
     """
-    family = str(getattr(pdf, "font_family", "") or "Helvetica")
+    family = str(getattr(pdf, "font_family", "") or getattr(pdf, "_pack_font_family", None) or "Helvetica")
     style = str(getattr(pdf, "font_style", "") or "")
     size = float(getattr(pdf, "font_size_pt", 10) or 10)
     line_width = float(getattr(pdf, "line_width", 0.2) or 0.2)
@@ -382,7 +391,7 @@ def draw_text(
     rgb: RGB = BLACK,
     max_width: Optional[float] = None,
     align: str = "L",
-    family: str = "Helvetica",
+    family: str | None = None,
 ) -> str:
     """Draw one line of text with its baseline at ``y``; returns what was drawn.
 
@@ -390,9 +399,12 @@ def draw_text(
     centre (``C``). Text is latin-1 sanitised and, when ``max_width`` is given,
     ellipsized so it cannot paint over its neighbour.
     """
+    family = family or str(getattr(pdf, "_pack_font_family", None) or "Helvetica")
+    if "I" in (style or "") and getattr(pdf, "_pack_font_family", None):
+        style = (style or "").replace("I", "")
     pdf.set_font(family, style, size)
     pdf.set_text_color(*rgb)
-    label = pdf_safe(text)
+    label = _safe_for_document(pdf, text)
     if max_width is not None:
         label = fit_text(pdf, label, max_width)
     if not label:
@@ -431,16 +443,17 @@ def draw_legend(
     Stops early rather than overflowing when ``max_width`` is reached, so a long
     legend truncates instead of colliding with whatever sits to its right.
     """
+    family = str(getattr(pdf, "_pack_font_family", None) or "Helvetica")
     cursor = x
-    pdf.set_font("Helvetica", "", size)
+    pdf.set_font(family, "", size)
     for entry in entries:
-        label = pdf_safe(entry.label)
+        label = _safe_for_document(pdf, entry.label)
         needed = marker + 1.2 + pdf.get_string_width(label)
         if max_width is not None and (cursor - x) + needed > max_width:
             break
         draw_marker(pdf, cursor + marker / 2, y - marker / 3, marker, shape=entry.shape, fill=entry.rgb)
-        draw_text(pdf, cursor + marker + 1.2, y, label, size=size)
-        pdf.set_font("Helvetica", "", size)
+        draw_text(pdf, cursor + marker + 1.2, y, label, size=size, family=family)
+        pdf.set_font(family, "", size)
         cursor += needed + gap
     return max(0.0, cursor - x - gap) if cursor > x else 0.0
 
