@@ -246,7 +246,7 @@ def _next_free_id(causes: Any) -> int:
             if not isinstance(entry, dict):
                 continue
             try:
-                value = int(entry.get("id"))
+                value = int(entry.get("id") or 0)
             except (TypeError, ValueError):
                 continue
             highest = max(highest, value)
@@ -295,7 +295,7 @@ def read_factors(causes: Any, *, investigation_id: int) -> FactorSnapshot:
                 unreadable += 1
                 continue
             try:
-                factor_id = int(entry.get("id"))
+                factor_id = int(entry.get("id") or 0)
             except (TypeError, ValueError):
                 factor_id = 0
             if factor_id <= 0 or factor_id in taken:
