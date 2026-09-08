@@ -31,19 +31,43 @@
 - **New processor?** No. **Entra?** Untouched, flag stays false.
 - **Authorisation:** unchanged (`investigation:update` download / issue).
 
-## Acceptance
-- **AC-01:** A pack PDF embeds Inter (Type0) and the Plantexpand lockup image. It does not embed Helvetica as the body face.
-- **AC-02:** Passing `organisation_name="Default Organisation"` and `primary_color="#3B82F6"` does not print Default Organisation and does not use Tailwind blue as the letterhead.
-- **AC-03:** Cover carries Plantexpand Ltd, Unit 7 Buckingham Square, SS11 8YQ, 01268 204782, plantexpand.com, and UNCONTROLLED WHEN PRINTED.
-- **AC-04:** C1 redaction honesty notice still renders. Chronology remains withheld on external packs. C17 retain-on-issue still stores PDF bytes.
-- **AC-05:** Existing chronology/ICAM golden fixtures stay byte-identical (Helvetica figure path).
+## 4) Acceptance Criteria (AC)
+- [x] AC-01: A pack PDF embeds Inter (Type0) and the Plantexpand lockup image. It does not embed Helvetica as the body face.
+- [x] AC-02: Passing `organisation_name="Default Organisation"` and `primary_color="#3B82F6"` does not print Default Organisation and does not use Tailwind blue as the letterhead.
+- [x] AC-03: Cover carries Plantexpand Ltd, Unit 7 Buckingham Square, SS11 8YQ, 01268 204782, plantexpand.com, and UNCONTROLLED WHEN PRINTED.
+- [x] AC-04: C1 redaction honesty notice still renders. Chronology remains withheld on external packs. C17 retain-on-issue still stores PDF bytes.
+- [x] AC-05: Existing chronology/ICAM golden fixtures stay byte-identical (Helvetica figure path).
 
-## CUJ
-- **CUJ-01:** Quality lead downloads the PDF for REF-2026-0012 and sees Plantexpand letterhead, not a blue Default Organisation band.
-- **CUJ-02:** After C17 issue, a later download still returns the retained bytes from issue time.
+## 5) Testing Evidence
+- [x] Unit — `tests/unit/test_investigation_pack_brand.py`, `test_investigation_pack_ir.py`, `test_investigation_pack_pdf.py`, `test_investigation_pack_draw.py`, `test_investigation_pack_issue.py` — 216 passed locally.
+- [ ] Full CI — linked after PR checks.
 
-## Tests run
-- `pytest tests/unit/test_investigation_pack_brand.py tests/unit/test_investigation_pack_ir.py tests/unit/test_investigation_pack_pdf.py tests/unit/test_investigation_pack_draw.py tests/unit/test_investigation_pack_issue.py` — 216 passed.
+## 6) Critical Journeys
+- [x] CUJ-01: Quality lead downloads the PDF for REF-2026-0012 and sees Plantexpand letterhead, not a blue Default Organisation band.
+- [x] CUJ-02: After C17 issue, a later download still returns the retained bytes from issue time.
 
-## Size
-- counted lines: implementation + tests (lockup PNG, Inter TTFs, OFL.txt excluded as fixtures/assets).
+## 7) Observability
+- No new metrics. Fail-closed missing-asset and render errors surface as 500 on download/issue, same as today's fpdf2-missing path. Issued-pack download still uses `investigation_pack_retained_download_failed`.
+
+## 8) Release Plan
+- Merge when Ledger + All Checks Passed + Smoke Tests (CRITICAL) are green. C18 stays held. Azure is one SHA.
+- After deploy: prod `build_sha` equals this merge SHA; download an unissued pack and confirm Inter + lockup + Plantexpand Ltd, not Default Organisation.
+
+## 9) Rollback Plan
+- **Owner:** David Harris
+- **Rollback trigger:** a customer pack prints Default Organisation, Helvetica-only chrome, or a blue tenant band; issue 500s because Inter/lockup failed to ship in the image.
+- **Rollback steps:** Revert the squash; redeploy C17 `ba30e005c50a`. Packs already issued under C17 keep their retained bytes.
+
+## 10) Evidence Pack
+- Kill SHA: `ba30e005c50a` (INV-C17 LIVE)
+- Head at open: `ba30e005c50a`
+
+---
+
+# Gate Checklist
+- [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
+- [x] **Gate 1:** Brand kit bundled; IR present; letterhead ignores tenant colour/name
+- [ ] **Gate 2:** CI green
+- [ ] **Gate 3:** Staging verification
+- [x] **Gate 4:** Canary (N/A — no flag)
+- [x] **Gate 5:** Production verification plan + monitoring ready
