@@ -4,8 +4,8 @@ Three jobs, in the order that hurts if they drift:
 
 1. **Own the analysis** for this run on the existing ``five_whys_analyses``
    table — one tenant-scoped row the workspace reads and writes, with each Why
-   as ``{level, why, answer, evidence}``. No second table, and no CAPA-per-Why
-   column (INV-C11).
+   as ``{level, why, answer, evidence}``. No second table. CAPA-per-Why links
+   live on ``capa_actions`` (INV-C11), not on this analysis.
 2. **Keep the legacy strings in step.** Closure and the generated pack still
    read ``why_1``..``why_5``, ``problem_statement``, ``root_cause`` and
    ``contributing_factors`` (flat and nested) until C13/C18. Every workspace
@@ -293,6 +293,14 @@ def sync_rca_workspace_fields(  # noqa: C901 — three section shapes, many fiel
         if nested:
             merged["sections"] = nested
     return merged
+
+
+def why_answer_at_level(stored: Any, level: int) -> str:
+    """The answer at ``level``, or ``""``. Nothing is invented from a missing slot."""
+    for item in workspace_whys(stored):
+        if int(item["level"]) == level:
+            return str(item.get("answer") or "").strip()
+    return ""
 
 
 def _has_legacy_rca(data: Any) -> bool:
@@ -613,5 +621,6 @@ __all__ = [
     "empty_rca_payload",
     "legacy_why_strings",
     "sync_rca_workspace_fields",
+    "why_answer_at_level",
     "workspace_whys",
 ]

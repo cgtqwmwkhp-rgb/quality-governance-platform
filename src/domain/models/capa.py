@@ -3,7 +3,7 @@
 from enum import Enum as PyEnum
 from typing import Any
 
-from sqlalchemy import CheckConstraint, Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -66,6 +66,10 @@ class CAPAAction(Base):
             ") OR source_id IS NOT NULL",
             name="ck_capa_actions_gt_source_id",
         ),
+        CheckConstraint(
+            "why_level IS NULL OR (why_level >= 1 AND why_level <= 20)",
+            name="ck_capa_actions_why_level",
+        ),
     )
 
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
@@ -89,6 +93,13 @@ class CAPAAction(Base):
     verification_method = Column(Text, nullable=True)
     verification_result = Column(Text, nullable=True)
     effectiveness_criteria = Column(Text, nullable=True)
+    # INV-C11 / DEC-2: which Why this CAPA came from. Existing ``capa_items``
+    # already had ``five_whys_id``; the investigation register is ``capa_actions``.
+    five_whys_id = Column(Integer, ForeignKey("five_whys_analyses.id", ondelete="SET NULL"), nullable=True, index=True)
+    why_level = Column(Integer, nullable=True)
+    effectiveness_review_date = Column(DateTime(timezone=True), nullable=True)
+    is_effective = Column(Boolean, nullable=True)
+    effectiveness_notes = Column(Text, nullable=True)
 
     assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     verified_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)

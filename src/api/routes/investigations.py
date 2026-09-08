@@ -1229,6 +1229,8 @@ async def create_capa_for_investigation(
             assignee_name=payload.assignee_name,
             due_date=payload.due_date,
             priority=payload.priority,
+            why_level=payload.why_level,
+            five_whys_id=payload.five_whys_id,
         )
     except LookupError as exc:
         raise NotFoundError(str(exc)) from exc

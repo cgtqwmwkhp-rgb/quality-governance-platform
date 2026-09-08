@@ -117,6 +117,7 @@ import {
   readCustomerPackVisibility,
   requestCustomerPackOmit,
   saveRca,
+  createCapaFromWhy,
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
 import { formatCodedValue, formatPermissionCode } from '../helpers/displayLabels'
@@ -242,8 +243,10 @@ export default function InvestigationDetail() {
   const [rcaProblem, setRcaProblem] = useState('')
   const [rcaRootCause, setRcaRootCause] = useState('')
   const [rcaContributing, setRcaContributing] = useState('')
+  const [rcaAnalysisId, setRcaAnalysisId] = useState<number | null>(null)
   const [rcaUnsaved, setRcaUnsaved] = useState(false)
   const [savingRca, setSavingRca] = useState(false)
+  const [creatingCapaWhyLevel, setCreatingCapaWhyLevel] = useState<number | null>(null)
   const [rcaLoading, setRcaLoading] = useState(false)
   const [rcaLoadError, setRcaLoadError] = useState<string | null>(null)
   const [rcaSaveError, setRcaSaveError] = useState<string | null>(null)
@@ -475,6 +478,7 @@ export default function InvestigationDetail() {
       setRcaWhys(padRcaWhys(payload.whys))
       setRcaRootCause(payload.root_cause || '')
       setRcaContributing(payload.contributing_factors || '')
+      setRcaAnalysisId(payload.id ?? null)
       setRcaUnsaved(false)
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'loadRca' })
@@ -597,6 +601,7 @@ export default function InvestigationDetail() {
       setRcaWhys(padRcaWhys(payload.whys))
       setRcaRootCause(payload.root_cause || '')
       setRcaContributing(payload.contributing_factors || '')
+      setRcaAnalysisId(payload.id ?? null)
       setRcaUnsaved(false)
       setRcaSaveSuccess(true)
       setTimeout(() => setRcaSaveSuccess(false), 3000)
@@ -1116,6 +1121,29 @@ export default function InvestigationDetail() {
         .join('\n\n'),
       priority: 'high',
     })
+  }
+
+  const handleCreateCapaFromWhy = async (level: number) => {
+    if (!investigationId) return
+    const item = rcaWhys.find((why) => why.level === level)
+    const answer = (item?.answer || '').trim()
+    // Empty Why: do not invent CAPA text. The server also refuses this.
+    if (!answer || rcaUnsaved) return
+    setCreatingCapaWhyLevel(level)
+    try {
+      await createCapaFromWhy(investigationId, {
+        why_level: level,
+        five_whys_id: rcaAnalysisId ?? undefined,
+      })
+      await loadActions()
+      await loadClosureValidation()
+      setActiveTab('actions')
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'createCapaFromWhy' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setCreatingCapaWhyLevel(null)
+    }
   }
 
   const handleRequestOmit = async (sectionId: string, omitRequested: boolean) => {
@@ -2002,6 +2030,27 @@ export default function InvestigationDetail() {
                           }
                           data-testid={`investigation-rca-why-${item.level}-evidence`}
                         />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            rcaUnsaved ||
+                            rcaLoading ||
+                            !item.answer.trim() ||
+                            creatingCapaWhyLevel !== null
+                          }
+                          onClick={() => handleCreateCapaFromWhy(item.level)}
+                          data-testid={`investigation-rca-create-capa-why-${item.level}`}
+                        >
+                          {creatingCapaWhyLevel === item.level ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <ListTodo className="w-4 h-4 mr-2" />
+                          )}
+                          Create CAPA from why {item.level}
+                        </Button>
                       </div>
                     </div>
                   </div>
