@@ -159,6 +159,12 @@ vi.mock('../../api/client', () => ({
     addComment: vi.fn(),
     autosave: vi.fn(),
     createCapa: vi.fn(),
+    // INV-C7: findings are rows behind their own endpoints.
+    listFindings: vi.fn(),
+    createFinding: vi.fn(),
+    updateFinding: vi.fn(),
+    deleteFinding: vi.fn(),
+    reorderFindings: vi.fn(),
   },
   actionsApi: {
     list: vi.fn(),
@@ -188,6 +194,27 @@ const mockInvestigation = {
   data: {},
   created_at: '2026-03-01T10:00:00Z',
   updated_at: '2026-03-02T10:00:00Z',
+}
+
+/** INV-C7: build a findings list response the way the API returns it. */
+function findingsResponse(bodies: string[], startId = 1) {
+  const items = bodies.map((body, index) => ({
+    id: startId + index,
+    investigation_id: 7,
+    body,
+    sort_order: index,
+    created_by_id: null,
+    created_at: '2026-03-02T10:00:00Z',
+    updated_at: '2026-03-02T10:00:00Z',
+  }))
+  return {
+    data: {
+      items,
+      total: items.length,
+      investigation_id: 7,
+      findings_text: items.map((item, index) => `${index + 1}. ${item.body}`).join('\n'),
+    },
+  }
 }
 
 function renderPage() {
@@ -235,6 +262,7 @@ describe('InvestigationDetail', () => {
     client.investigationsApi.getClosureValidation.mockResolvedValue({
       data: { can_close: false, reasons: ['STATUS_NOT_COMPLETE'] },
     })
+    client.investigationsApi.listFindings.mockResolvedValue(findingsResponse([]))
     client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
     client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
     client.checkPackCapability.mockResolvedValue({ canGenerate: true })
@@ -390,7 +418,8 @@ describe('InvestigationDetail', () => {
     expect(screen.getByTestId('investigation-status-select')).toBeInTheDocument()
     expect(screen.getByTestId('investigation-level-display')).toBeInTheDocument()
     expect(screen.getByTestId('investigation-assignee-input')).toBeInTheDocument()
-    expect(screen.getByTestId('investigation-findings-input')).toBeInTheDocument()
+    // INV-C7: the single findings textarea is now a list editor.
+    expect(screen.getByTestId('investigation-findings-list')).toBeInTheDocument()
     expect(screen.getByTestId('investigation-notes-section')).toBeInTheDocument()
   })
 
@@ -765,8 +794,10 @@ describe('InvestigationDetail', () => {
     })
   })
 
-  // INV-C4: the report path walks data.sections only, so a save must land in both shapes.
-  it('saves findings to the nested section as well as the flat key', async () => {
+  // INV-C4: the report path walks data.sections only, so a save must land in both
+  // shapes. INV-C7 moved `findings` off this form onto its own rows, so the field
+  // exercising the dual-write here is `conclusion` — same handler, same helper.
+  it('saves the conclusion to the nested section as well as the flat key', async () => {
     client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
     client.investigationsApi.get.mockResolvedValue({
       data: {
@@ -778,11 +809,11 @@ describe('InvestigationDetail', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByTestId('investigation-findings-input')).toBeInTheDocument()
+      expect(screen.getByTestId('investigation-conclusion-input')).toBeInTheDocument()
     })
 
-    fireEvent.change(screen.getByTestId('investigation-findings-input'), {
-      target: { value: 'Guard was removed before the shift' },
+    fireEvent.change(screen.getByTestId('investigation-conclusion-input'), {
+      target: { value: 'Unsafe system of work' },
     })
     fireEvent.click(screen.getByTestId('investigation-summary-save'))
 
@@ -791,13 +822,44 @@ describe('InvestigationDetail', () => {
     })
 
     const payload = client.investigationsApi.update.mock.calls[0][1].data
-    expect(payload.findings).toBe('Guard was removed before the shift')
-    expect(payload.sections.section_3_investigation_findings.findings).toBe(
-      'Guard was removed before the shift',
+    expect(payload.conclusion).toBe('Unsafe system of work')
+    expect(payload.sections.section_3_investigation_findings.conclusion).toBe(
+      'Unsafe system of work',
     )
     // Unrelated data survives the dual-write.
     expect(payload.sections.section_1_details).toEqual({ location: 'yard' })
     expect(payload.source_snapshot).toEqual({ reference_number: 'RTA-42' })
+  })
+
+  // INV-C7: the rows are the only author of `findings`. A summary save that still
+  // carried a copy of the string would overwrite whatever the row editor just did.
+  it('does not write findings from the summary save any more', async () => {
+    client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
+    client.investigationsApi.get.mockResolvedValue({
+      data: { ...mockInvestigation, data: { findings: 'Guard was removed' } },
+    })
+    client.investigationsApi.listFindings.mockResolvedValue(
+      findingsResponse(['Guard was removed']),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-conclusion-input')).toBeInTheDocument()
+    })
+    fireEvent.change(screen.getByTestId('investigation-conclusion-input'), {
+      target: { value: 'Unsafe system of work' },
+    })
+    fireEvent.click(screen.getByTestId('investigation-summary-save'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.update).toHaveBeenCalled()
+    })
+
+    const payload = client.investigationsApi.update.mock.calls[0][1].data
+    // The stored value is carried over untouched; nothing is written from the form.
+    expect(payload.findings).toBe('Guard was removed')
+    expect(payload.sections?.section_3_investigation_findings?.findings).toBeUndefined()
   })
 
   it('saves RCA whys to the contract section and the legacy rca alias', async () => {
@@ -831,7 +893,7 @@ describe('InvestigationDetail', () => {
     }
   })
 
-  it('hydrates findings and whys from nested sections when the flat keys are empty', async () => {
+  it('hydrates the conclusion and whys from nested sections when the flat keys are empty', async () => {
     client.investigationsApi.get.mockResolvedValue({
       data: {
         ...mockInvestigation,
@@ -847,18 +909,172 @@ describe('InvestigationDetail', () => {
         },
       },
     })
+    // INV-C7: the nested findings string is converted to rows server-side; the page
+    // reads the rows, not the JSON.
+    client.investigationsApi.listFindings.mockResolvedValue(
+      findingsResponse(['Nested finding from the template run']),
+    )
 
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByTestId('investigation-findings-input')).toHaveValue(
-        'Nested finding from the template run',
-      )
+      expect(screen.getByTestId('investigation-conclusion-input')).toHaveValue('Nested conclusion')
     })
-    expect(screen.getByTestId('investigation-conclusion-input')).toHaveValue('Nested conclusion')
+    expect(screen.getByTestId('investigation-finding-body-1')).toHaveTextContent(
+      'Nested finding from the template run',
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
     expect(await screen.findByLabelText('Why 1?')).toHaveValue('Nested why one')
+  })
+
+  // ── INV-C7: the findings list editor ─────────────────────
+
+  it('hydrates the findings editor from the findings endpoint', async () => {
+    client.investigationsApi.listFindings.mockResolvedValue(
+      findingsResponse(['Guard was removed', 'No banksman present']),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(client.investigationsApi.listFindings).toHaveBeenCalledWith(7)
+    })
+    expect(await screen.findByTestId('investigation-finding-body-1')).toHaveTextContent(
+      'Guard was removed',
+    )
+    expect(screen.getByTestId('investigation-finding-body-2')).toHaveTextContent(
+      'No banksman present',
+    )
+    expect(screen.queryByTestId('investigation-findings-empty')).not.toBeInTheDocument()
+  })
+
+  it('says so plainly when a run has no findings yet', async () => {
+    renderPage()
+
+    expect(await screen.findByTestId('investigation-findings-empty')).toBeInTheDocument()
+  })
+
+  it('adds a finding and renders the list the server returns', async () => {
+    client.investigationsApi.listFindings.mockResolvedValue(findingsResponse([]))
+    client.investigationsApi.createFinding.mockResolvedValue(
+      findingsResponse(['Guard was removed']),
+    )
+
+    renderPage()
+
+    const input = await screen.findByTestId('investigation-finding-new-input')
+    fireEvent.change(input, { target: { value: '  Guard was removed  ' } })
+    fireEvent.click(screen.getByTestId('investigation-finding-add'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.createFinding).toHaveBeenCalledWith(7, 'Guard was removed')
+    })
+    expect(await screen.findByTestId('investigation-finding-body-1')).toHaveTextContent(
+      'Guard was removed',
+    )
+    // The draft box is cleared only once the call has succeeded.
+    expect(screen.getByTestId('investigation-finding-new-input')).toHaveValue('')
+  })
+
+  it('refuses to add a blank finding', async () => {
+    renderPage()
+
+    const input = await screen.findByTestId('investigation-finding-new-input')
+    fireEvent.change(input, { target: { value: '   ' } })
+
+    expect(screen.getByTestId('investigation-finding-add')).toBeDisabled()
+    fireEvent.click(screen.getByTestId('investigation-finding-add'))
+    expect(client.investigationsApi.createFinding).not.toHaveBeenCalled()
+  })
+
+  it('edits one finding in place', async () => {
+    client.investigationsApi.listFindings.mockResolvedValue(findingsResponse(['typo']))
+    client.investigationsApi.updateFinding.mockResolvedValue(
+      findingsResponse(['Guard was removed']),
+    )
+
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('investigation-finding-edit-1'))
+    fireEvent.change(screen.getByTestId('investigation-finding-edit-input-1'), {
+      target: { value: 'Guard was removed' },
+    })
+    fireEvent.click(screen.getByTestId('investigation-finding-save-1'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.updateFinding).toHaveBeenCalledWith(
+        7,
+        1,
+        'Guard was removed',
+      )
+    })
+    expect(await screen.findByTestId('investigation-finding-body-1')).toHaveTextContent(
+      'Guard was removed',
+    )
+  })
+
+  it('removes a finding', async () => {
+    client.investigationsApi.listFindings.mockResolvedValue(
+      findingsResponse(['Guard was removed', 'No banksman present']),
+    )
+    client.investigationsApi.deleteFinding.mockResolvedValue(findingsResponse([]))
+
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('investigation-finding-delete-1'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.deleteFinding).toHaveBeenCalledWith(7, 1)
+    })
+    expect(await screen.findByTestId('investigation-findings-empty')).toBeInTheDocument()
+  })
+
+  // The endpoint refuses a partial list, so a move has to send every id.
+  it('reorders by sending the complete id list in the wanted order', async () => {
+    client.investigationsApi.listFindings.mockResolvedValue(
+      findingsResponse(['first', 'second', 'third']),
+    )
+    client.investigationsApi.reorderFindings.mockResolvedValue(
+      findingsResponse(['first', 'third', 'second']),
+    )
+
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('investigation-finding-down-2'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.reorderFindings).toHaveBeenCalledWith(7, [1, 3, 2])
+    })
+    const rows = screen.getByTestId('investigation-findings-list').querySelectorAll('li')
+    expect(rows[1]).toHaveTextContent('third')
+    expect(rows[2]).toHaveTextContent('second')
+  })
+
+  it('cannot move the first finding up or the last one down', async () => {
+    client.investigationsApi.listFindings.mockResolvedValue(findingsResponse(['first', 'second']))
+
+    renderPage()
+
+    expect(await screen.findByTestId('investigation-finding-up-1')).toBeDisabled()
+    expect(screen.getByTestId('investigation-finding-down-2')).toBeDisabled()
+  })
+
+  it('keeps the previous list and reports the reason when a findings write fails', async () => {
+    client.investigationsApi.listFindings.mockResolvedValue(findingsResponse(['Guard was removed']))
+    client.investigationsApi.deleteFinding.mockRejectedValue(new Error('Findings are locked'))
+
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('investigation-finding-delete-1'))
+
+    expect(await screen.findByTestId('investigation-findings-error')).toHaveTextContent(
+      'Findings are locked',
+    )
+    // Nothing was removed optimistically.
+    expect(screen.getByTestId('investigation-finding-body-1')).toHaveTextContent(
+      'Guard was removed',
+    )
   })
 
   it('lists source-linked evidence as well as investigation uploads', async () => {

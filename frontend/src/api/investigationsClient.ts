@@ -254,6 +254,37 @@ export interface InvestigationTemplateListResponse {
   pages: number
 }
 
+/**
+ * One investigation finding, as a row (INV-C7).
+ *
+ * Before C7 `findings` was a single string on `investigation.data`. It is still
+ * written there — the closure gate and the generated pack read it — but the rows
+ * are now what the editor edits, and the string is derived from them server-side.
+ */
+export interface InvestigationFinding {
+  id: number
+  investigation_id: number
+  body: string
+  sort_order: number
+  created_by_id?: number | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+/**
+ * The run's findings, in order.
+ *
+ * `items: []` is a normal, successful answer. `findings_text` is the exact string
+ * the server stored back onto `investigation.data`, returned so callers never have
+ * to re-derive it (and risk deriving it differently).
+ */
+export interface InvestigationFindingsResponse {
+  items: InvestigationFinding[]
+  total: number
+  investigation_id: number
+  findings_text: string
+}
+
 /** Optional filters for investigation list (status / entity_type / smart search q). */
 export interface InvestigationListParams {
   status?: string
@@ -353,6 +384,53 @@ export function createInvestigationsApi(api: AxiosInstance) {
   addComment: (id: number, body: string) =>
     api.post<InvestigationComment>(`/api/v1/investigations/${id}/comments`, {
       content: body,
+    }),
+
+  // ============ Findings rows (INV-C7) ============
+
+  /**
+   * List an investigation's findings, in order.
+   *
+   * The first call for a run that still holds only the legacy `data.findings`
+   * string converts that string into rows server-side, once. Every call after
+   * that returns the stored rows, so calling this repeatedly is safe.
+   */
+  listFindings: (id: number) =>
+    api.get<InvestigationFindingsResponse>(`/api/v1/investigations/${id}/findings`),
+
+  /**
+   * Append a finding.
+   *
+   * All four mutations resolve to the whole ordered list, because `sort_order` is
+   * assigned server-side — a caller holding only the row it just changed would
+   * have to guess the new order.
+   */
+  createFinding: (id: number, body: string) =>
+    api.post<InvestigationFindingsResponse>(`/api/v1/investigations/${id}/findings`, { body }),
+
+  /** Rewrite one finding's text. Position is unaffected. */
+  updateFinding: (id: number, findingId: number, body: string) =>
+    api.patch<InvestigationFindingsResponse>(
+      `/api/v1/investigations/${id}/findings/${findingId}`,
+      { body },
+    ),
+
+  /** Remove one finding. Removing the last one leaves a valid empty list. */
+  deleteFinding: (id: number, findingId: number) =>
+    api.delete<InvestigationFindingsResponse>(
+      `/api/v1/investigations/${id}/findings/${findingId}`,
+    ),
+
+  /**
+   * Apply a new order.
+   *
+   * `findingIds` must be every one of this run's findings, each once — the server
+   * refuses a partial list with 400 rather than applying it, so a stale editor
+   * cannot drop a finding another tab added.
+   */
+  reorderFindings: (id: number, findingIds: number[]) =>
+    api.post<InvestigationFindingsResponse>(`/api/v1/investigations/${id}/findings/reorder`, {
+      finding_ids: findingIds,
     }),
 
   /**
