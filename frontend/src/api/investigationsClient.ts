@@ -285,52 +285,6 @@ export interface InvestigationFindingsResponse {
   findings_text: string
 }
 
-/**
- * One Why step on the investigation RCA tab (INV-C10).
- *
- * Before C10 the tab wrote `why_1`..`why_5` as strings on `investigation.data`.
- * Those strings are still dual-written — closure and the pack read them — but
- * the editor now reads `five_whys_analyses.whys`, including per-Why evidence.
- */
-export interface InvestigationRcaWhy {
-  level: number
-  why?: string
-  answer: string
-  evidence: string
-}
-
-/**
- * The run's workspace 5-Whys analysis.
- *
- * `analysis_id: null` is a successful empty answer. `why_1`..`why_5` are the
- * exact strings the server stored back onto `investigation.data`.
- */
-export interface InvestigationRcaResponse {
-  analysis_id: number | null
-  investigation_id: number
-  problem_statement: string
-  whys: InvestigationRcaWhy[]
-  root_cause: string
-  contributing_factors: string
-  why_1: string
-  why_2: string
-  why_3: string
-  why_4: string
-  why_5: string
-}
-
-export interface InvestigationRcaUpsert {
-  problem_statement: string
-  whys: Array<{
-    level: number
-    answer: string
-    evidence?: string
-    why?: string
-  }>
-  root_cause: string
-  contributing_factors: string
-}
-
 /** Optional filters for investigation list (status / entity_type / smart search q). */
 export interface InvestigationListParams {
   status?: string
@@ -472,26 +426,6 @@ export function createInvestigationsApi(api: AxiosInstance) {
       api.post<InvestigationFindingsResponse>(`/api/v1/investigations/${id}/findings/reorder`, {
         finding_ids: findingIds,
       }),
-
-    // ============ RCA / 5-Whys (INV-C10) ============
-
-    /**
-     * Load this run's workspace 5-Whys analysis.
-     *
-     * The first call for a run that still holds only leftover `why_1`..`why_5`
-     * strings converts those strings into `five_whys_analyses` server-side, once.
-     * An empty analysis is a successful payload with blank answers, not a 404.
-     */
-    getRca: (id: number) => api.get<InvestigationRcaResponse>(`/api/v1/investigations/${id}/rca`),
-
-    /**
-     * Replace the workspace 5-Whys analysis.
-     *
-     * Dual-writes `why_1`..`why_5` (and the other RCA strings) onto
-     * `investigation.data` so closure and the pack stay in step.
-     */
-    saveRca: (id: number, body: InvestigationRcaUpsert) =>
-      api.put<InvestigationRcaResponse>(`/api/v1/investigations/${id}/rca`, body),
 
     /**
      * Get customer pack summaries for an investigation.

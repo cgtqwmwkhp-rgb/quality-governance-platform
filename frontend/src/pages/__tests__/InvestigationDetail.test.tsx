@@ -110,6 +110,8 @@ vi.mock('../investigation/investigationReportHelpers', () => ({
 vi.mock('../investigation/investigationDetailApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../investigation/investigationDetailApi')>()),
   fetchCustomerPackPdf: vi.fn(),
+  getRca: vi.fn(),
+  saveRca: vi.fn(),
 }))
 
 vi.mock('../../components/EngineerPeoplePicker', () => ({
@@ -165,8 +167,6 @@ vi.mock('../../api/client', () => ({
     updateFinding: vi.fn(),
     deleteFinding: vi.fn(),
     reorderFindings: vi.fn(),
-    getRca: vi.fn(),
-    saveRca: vi.fn(),
   },
   actionsApi: {
     list: vi.fn(),
@@ -222,7 +222,7 @@ function findingsResponse(bodies: string[], startId = 1) {
 /** INV-C10: build a workspace RCA response the way the API returns it. */
 function rcaResponse(
   overrides: {
-    analysis_id?: number | null
+    id?: number | null
     problem_statement?: string
     answers?: string[]
     evidence?: string[]
@@ -240,17 +240,12 @@ function rcaResponse(
   }))
   return {
     data: {
-      analysis_id: overrides.analysis_id ?? (answers.some(Boolean) ? 11 : null),
+      id: overrides.id ?? (answers.some(Boolean) ? 11 : null),
       investigation_id: 7,
       problem_statement: overrides.problem_statement || '',
       whys,
       root_cause: overrides.root_cause || '',
       contributing_factors: overrides.contributing_factors || '',
-      why_1: answers[0] || '',
-      why_2: answers[1] || '',
-      why_3: answers[2] || '',
-      why_4: answers[3] || '',
-      why_5: answers[4] || '',
     },
   }
 }
@@ -265,11 +260,13 @@ function renderPage() {
 
 describe('InvestigationDetail', () => {
   let client: Awaited<typeof import('../../api/client')>
+  let detailApi: Awaited<typeof import('../investigation/investigationDetailApi')>
 
   beforeEach(async () => {
     vi.clearAllMocks()
     mockNavigate.mockReset()
     client = await import('../../api/client')
+    detailApi = await import('../investigation/investigationDetailApi')
 
     client.investigationsApi.get.mockResolvedValue({ data: mockInvestigation })
     client.investigationsApi.getTimeline.mockResolvedValue({
@@ -301,7 +298,7 @@ describe('InvestigationDetail', () => {
       data: { can_close: false, reasons: ['STATUS_NOT_COMPLETE'] },
     })
     client.investigationsApi.listFindings.mockResolvedValue(findingsResponse([]))
-    client.investigationsApi.getRca.mockResolvedValue(rcaResponse())
+    vi.mocked(detailApi.getRca).mockResolvedValue(rcaResponse())
     client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
     client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
     client.checkPackCapability.mockResolvedValue({ canGenerate: true })
@@ -902,9 +899,9 @@ describe('InvestigationDetail', () => {
   })
 
   it('saves RCA whys through the analyses endpoint, not the run JSON', async () => {
-    client.investigationsApi.saveRca.mockResolvedValue(
+    vi.mocked(detailApi.saveRca).mockResolvedValue(
       rcaResponse({
-        analysis_id: 11,
+        id: 11,
         answers: ['The driver could not see the walkway'],
         evidence: ['CCTV still 14:02'],
         root_cause: 'No banksman on site',
@@ -931,11 +928,11 @@ describe('InvestigationDetail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'investigations.save_rca' }))
 
     await waitFor(() => {
-      expect(client.investigationsApi.saveRca).toHaveBeenCalled()
+      expect(detailApi.saveRca).toHaveBeenCalled()
     })
     expect(client.investigationsApi.update).not.toHaveBeenCalled()
 
-    const payload = client.investigationsApi.saveRca.mock.calls[0][1]
+    const payload = vi.mocked(detailApi.saveRca).mock.calls[0][1]
     expect(payload.whys[0]).toEqual({
       level: 1,
       answer: 'The driver could not see the walkway',
@@ -966,8 +963,8 @@ describe('InvestigationDetail', () => {
       findingsResponse(['Nested finding from the template run']),
     )
     // INV-C10: leftover why_1 is converted server-side; the page reads the analysis.
-    client.investigationsApi.getRca.mockResolvedValue(
-      rcaResponse({ analysis_id: 11, answers: ['Nested why one'] }),
+    vi.mocked(detailApi.getRca).mockResolvedValue(
+      rcaResponse({ id: 11, answers: ['Nested why one'] }),
     )
 
     renderPage()

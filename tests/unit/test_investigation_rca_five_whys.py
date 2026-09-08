@@ -112,7 +112,7 @@ async def test_an_investigation_with_no_rca_lists_empty_rather_than_failing(sess
     async with session_factory() as db:
         run = await _run(db)
         payload = await InvestigationRcaService.get_workspace(db, investigation=run, tenant_id=TENANT)
-        assert payload["analysis_id"] is None
+        assert payload["id"] is None
         assert _answers(payload) == ["", "", "", "", ""]
         assert payload["why_1"] == ""
         assert await db.scalar(select(func.count(FiveWhysAnalysis.id))) == 0
@@ -124,7 +124,7 @@ async def test_whitespace_legacy_strings_invent_no_analysis(session_factory):
     async with session_factory() as db:
         run = await _run(db, data={"why_1": "   ", "root_cause": "\n"})
         payload = await InvestigationRcaService.get_workspace(db, investigation=run, tenant_id=TENANT)
-        assert payload["analysis_id"] is None
+        assert payload["id"] is None
         assert await db.scalar(select(func.count(FiveWhysAnalysis.id))) == 0
         assert run.data == {"why_1": "   ", "root_cause": "\n"}
 
@@ -147,7 +147,7 @@ async def test_flat_why_strings_convert_on_first_read(session_factory):
             },
         )
         payload = await InvestigationRcaService.get_workspace(db, investigation=run, tenant_id=TENANT)
-        assert payload["analysis_id"] is not None
+        assert payload["id"] is not None
         assert payload["why_1"] == "the interlock was bypassed"
         assert payload["why_2"] == "the guard had been removed"
         assert payload["root_cause"] == "no banksman"
@@ -174,7 +174,7 @@ async def test_conversion_does_not_repeat_on_every_read(session_factory):
         run = await _run(db, data={"why_1": "the interlock was bypassed"})
         first = await InvestigationRcaService.get_workspace(db, investigation=run, tenant_id=TENANT)
         second = await InvestigationRcaService.get_workspace(db, investigation=run, tenant_id=TENANT)
-        assert first["analysis_id"] == second["analysis_id"]
+        assert first["id"] == second["id"]
         assert await db.scalar(select(func.count(FiveWhysAnalysis.id))) == 1
 
 
@@ -326,7 +326,7 @@ async def test_another_tenants_analysis_is_invisible_even_with_the_right_run_id(
             version=1,
         )
         payload = await InvestigationRcaService.get_workspace(db, investigation=ours, tenant_id=TENANT)
-        assert payload["analysis_id"] is None
+        assert payload["id"] is None
         assert payload["why_1"] == ""
 
         refused = await InvestigationRcaService.upsert_workspace(
@@ -350,7 +350,7 @@ async def test_mismatched_tenant_on_the_run_fails_closed(session_factory):
     async with session_factory() as db:
         run = await _run(db, data={"why_1": "the interlock was bypassed"})
         payload = await InvestigationRcaService.get_workspace(db, investigation=run, tenant_id=OTHER_TENANT)
-        assert payload["analysis_id"] is None
+        assert payload["id"] is None
         assert payload["why_1"] == ""
         assert await db.scalar(select(func.count(FiveWhysAnalysis.id))) == 0
 

@@ -63,20 +63,17 @@ class InvestigationRcaUpsert(BaseModel):
 class InvestigationRcaResponse(BaseModel):
     """The run's workspace RCA.
 
-    ``analysis_id`` is null when the run has no analysis yet — a successful
-    empty answer, not a 404. ``why_1``..``why_5`` are the exact strings written
-    back onto ``investigation_runs.data`` so a caller can see what closure and
-    the pack will still read.
+    ``id`` is the ``five_whys_analyses`` row, or null when the run has no
+    analysis yet — a successful empty answer, not a 404. Dual-written
+    ``why_1``..``why_5`` strings stay on ``investigation_runs.data`` for
+    closure and the pack; they are not advertised here, because PUT authors
+    the analysis through ``whys`` and a leftover-string field would be a
+    second writer (PX-168).
     """
 
-    analysis_id: Optional[int] = None
+    id: Optional[int] = None
     investigation_id: int
     problem_statement: str
     whys: List[InvestigationRcaWhy]
     root_cause: str
     contributing_factors: str
-    why_1: str = ""
-    why_2: str = ""
-    why_3: str = ""
-    why_4: str = ""
-    why_5: str = ""

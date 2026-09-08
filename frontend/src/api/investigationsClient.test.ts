@@ -78,21 +78,6 @@ describe('createInvestigationsApi', () => {
     })
   })
 
-  it('investigation RCA workspace paths', () => {
-    const api = mockApi()
-    const inv = createInvestigationsApi(api as never)
-    const body = {
-      problem_statement: 'Guard removed',
-      whys: [{ level: 1, answer: 'Interlock bypassed', evidence: 'Photo 3' }],
-      root_cause: 'No banksman',
-      contributing_factors: '',
-    }
-    inv.getRca(4)
-    inv.saveRca(4, body)
-    expect(api.get).toHaveBeenCalledWith('/api/v1/investigations/4/rca')
-    expect(api.put).toHaveBeenCalledWith('/api/v1/investigations/4/rca', body)
-  })
-
   it('investigation template CRUD paths', () => {
     const api = mockApi()
     const inv = createInvestigationsApi(api as never)

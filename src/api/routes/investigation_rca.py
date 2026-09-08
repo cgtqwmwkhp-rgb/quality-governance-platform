@@ -81,7 +81,7 @@ async def get_investigation_rca(
         await db.commit()
         logger.info(
             "investigation_rca_converted",
-            extra={"investigation_id": investigation_id, "analysis_id": payload.get("analysis_id")},
+            extra={"investigation_id": investigation_id, "analysis_id": payload.get("id")},
         )
     return payload
 

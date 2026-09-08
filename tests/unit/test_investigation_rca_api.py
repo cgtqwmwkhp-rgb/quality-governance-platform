@@ -83,7 +83,7 @@ async def test_listing_a_run_with_no_rca_is_a_success_with_empty_whys(db_session
     with _authorised(run):
         payload = await routes.get_investigation_rca(7, db_session, USER)
 
-    assert payload["analysis_id"] is None
+    assert payload["id"] is None
     assert payload["investigation_id"] == 7
     assert payload["why_1"] == ""
     assert [item["answer"] for item in payload["whys"][:5]] == ["", "", "", "", ""]
@@ -98,7 +98,7 @@ async def test_listing_converts_the_legacy_strings_once_and_commits_them(session
             second = await routes.get_investigation_rca(7, first_session, USER)
 
     assert first["why_1"] == "the interlock was bypassed"
-    assert first["analysis_id"] == second["analysis_id"]
+    assert first["id"] == second["id"]
 
     async with session_factory() as later_session:
         reloaded = await later_session.get(InvestigationRun, 7)

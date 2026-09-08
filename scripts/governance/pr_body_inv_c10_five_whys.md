@@ -82,11 +82,18 @@
   `investigation_id`. A missing tenant, a mismatch, or another organisation's
   row is honest empty on GET and a refused write on PUT — never a 500 and
   never a Why that does not belong to this tenant.
-- **Empty Whys:** five blank slots, `analysis_id` null, HTTP 200. Not a 404
+- **Empty Whys:** five blank slots, `id` null, HTTP 200. Not a 404
   and not invented prose.
 - **Transactions:** the service never commits. The route owns the transaction,
   so an analysis write and its JSON sync land together or not at all. `data`
   is reassigned rather than mutated in place.
+- **Response contract (PX-168):** `GET`/`PUT` return `id` (the analysis row;
+  server-owned) plus the settable fields. Dual-written `why_1`..`why_5` stay
+  on `investigation_runs.data` and in the service payload used by tests; they
+  are not advertised on `InvestigationRcaResponse`, because a leftover-string
+  field would be a second writer of the same Why.
+- **Shell budget:** RCA `getRca`/`saveRca` live on the lazy
+  `investigationDetailApi` module, not the shell `investigationsApi` factory.
 - **Breaking changes:** none of the public run contract. The RCA tab no
   longer PATCHes `why_1` through the run update; callers that still PATCH the
   run JSON are overwritten the next time the tab saves (the analysis is now
@@ -145,7 +152,7 @@
   shapes. Clearing a Why overwrites a stale nested string. Flat-key readers
   are not dropped.
 - [x] AC-06: Empty Whys return HTTP 200 with five blank slots and
-  `analysis_id` null — not 404, not 500, not invented text. Whitespace-only
+  `id` null — not 404, not 500, not invented text. Whitespace-only
   leftover strings create no row.
 - [x] AC-07: Every analysis query filters on `tenant_id` and
   `investigation_id`. A missing or mismatched tenant is honest empty on GET

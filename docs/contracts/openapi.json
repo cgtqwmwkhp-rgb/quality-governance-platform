@@ -31603,9 +31603,13 @@
         "type": "object"
       },
       "InvestigationRcaResponse": {
-        "description": "The run's workspace RCA.\n\n``analysis_id`` is null when the run has no analysis yet \u2014 a successful\nempty answer, not a 404. ``why_1``..``why_5`` are the exact strings written\nback onto ``investigation_runs.data`` so a caller can see what closure and\nthe pack will still read.",
+        "description": "The run's workspace RCA.\n\n``id`` is the ``five_whys_analyses`` row, or null when the run has no\nanalysis yet \u2014 a successful empty answer, not a 404. Dual-written\n``why_1``..``why_5`` strings stay on ``investigation_runs.data`` for\nclosure and the pack; they are not advertised here, because PUT authors\nthe analysis through ``whys`` and a leftover-string field would be a\nsecond writer (PX-168).",
         "properties": {
-          "analysis_id": {
+          "contributing_factors": {
+            "title": "Contributing Factors",
+            "type": "string"
+          },
+          "id": {
             "anyOf": [
               {
                 "type": "integer"
@@ -31614,11 +31618,7 @@
                 "type": "null"
               }
             ],
-            "title": "Analysis Id"
-          },
-          "contributing_factors": {
-            "title": "Contributing Factors",
-            "type": "string"
+            "title": "Id"
           },
           "investigation_id": {
             "title": "Investigation Id",
@@ -31630,31 +31630,6 @@
           },
           "root_cause": {
             "title": "Root Cause",
-            "type": "string"
-          },
-          "why_1": {
-            "default": "",
-            "title": "Why 1",
-            "type": "string"
-          },
-          "why_2": {
-            "default": "",
-            "title": "Why 2",
-            "type": "string"
-          },
-          "why_3": {
-            "default": "",
-            "title": "Why 3",
-            "type": "string"
-          },
-          "why_4": {
-            "default": "",
-            "title": "Why 4",
-            "type": "string"
-          },
-          "why_5": {
-            "default": "",
-            "title": "Why 5",
             "type": "string"
           },
           "whys": {

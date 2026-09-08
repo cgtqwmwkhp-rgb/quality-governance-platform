@@ -69,10 +69,10 @@ async def test_legacy_why_strings_convert_and_empty_stays_empty():
             assert filled["why_1"] == "the interlock was bypassed"
             assert filled["root_cause"] == "no banksman"
             assert filled["whys"][0]["evidence"] == ""
-            assert filled["analysis_id"] is not None
+            assert filled["id"] is not None
             assert converted.data["why_1"] == "the interlock was bypassed"
 
-            assert blank["analysis_id"] is None
+            assert blank["id"] is None
             assert blank["why_1"] == ""
             assert [item["answer"] for item in blank["whys"][:5]] == ["", "", "", "", ""]
             assert await db.scalar(select(func.count(FiveWhysAnalysis.id))) == 1

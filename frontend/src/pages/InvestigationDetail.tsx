@@ -48,7 +48,7 @@ import {
   type InvestigationFinding,
   getApiErrorMessage,
 } from '../api/client'
-import type { InvestigationRcaWhy } from '../api/investigationsClient'
+import type { InvestigationRcaWhy } from './investigation/investigationDetailApi'
 import { Button } from '../components/ui/Button'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
@@ -113,8 +113,10 @@ import {
   addManualTimelineEntry,
   approveCustomerPackOmit,
   fetchCustomerPackPdf,
+  getRca,
   readCustomerPackVisibility,
   requestCustomerPackOmit,
+  saveRca,
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
 import { formatCodedValue, formatPermissionCode } from '../helpers/displayLabels'
@@ -431,7 +433,7 @@ export default function InvestigationDetail() {
     setRcaLoading(true)
     setRcaLoadError(null)
     try {
-      const response = await investigationsApi.getRca(investigationId)
+      const response = await getRca(investigationId)
       const payload = response.data
       setRcaProblem(payload.problem_statement || '')
       setRcaWhys(padRcaWhys(payload.whys))
@@ -544,7 +546,7 @@ export default function InvestigationDetail() {
     setRcaSaveError(null)
     setRcaSaveSuccess(false)
     try {
-      const response = await investigationsApi.saveRca(investigationId, {
+      const response = await saveRca(investigationId, {
         problem_statement: rcaProblem,
         whys: rcaWhys.map((item) => ({
           level: item.level,

@@ -178,10 +178,10 @@ def legacy_why_strings(whys: Sequence[dict[str, Any]]) -> dict[str, str]:
 
 
 def empty_rca_payload(investigation_id: int) -> dict[str, Any]:
-    """Honest empty: five blank Whys, no analysis id, no invented text."""
+    """Honest empty: five blank Whys, no analysis ``id``, no invented text."""
     whys = workspace_whys([])
     payload: dict[str, Any] = {
-        "analysis_id": None,
+        "id": None,
         "investigation_id": investigation_id,
         "problem_statement": "",
         "whys": whys,
@@ -343,7 +343,7 @@ class InvestigationRcaService:
             return empty_rca_payload(investigation_id)
         whys = workspace_whys(analysis.whys)
         payload: dict[str, Any] = {
-            "analysis_id": int(analysis.id) if analysis.id is not None else None,
+            "id": int(analysis.id) if analysis.id is not None else None,
             "investigation_id": investigation_id,
             "problem_statement": _as_text(analysis.problem_statement),
             "whys": whys,
