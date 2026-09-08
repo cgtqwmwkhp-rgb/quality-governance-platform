@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import InvestigationDetail from '../InvestigationDetail'
 
@@ -836,7 +836,17 @@ describe('InvestigationDetail', () => {
   it('does not write findings from the summary save any more', async () => {
     client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
     client.investigationsApi.get.mockResolvedValue({
-      data: { ...mockInvestigation, data: { findings: 'Guard was removed' } },
+      data: {
+        ...mockInvestigation,
+        data: {
+          findings: 'Guard was removed',
+          sections: {
+            section_3_investigation_findings: {
+              findings: 'Guard was removed',
+            },
+          },
+        },
+      },
     })
     client.investigationsApi.listFindings.mockResolvedValue(
       findingsResponse(['Guard was removed']),
@@ -857,13 +867,24 @@ describe('InvestigationDetail', () => {
     })
 
     const payload = client.investigationsApi.update.mock.calls[0][1].data
-    // The stored value is carried over untouched; nothing is written from the form.
-    expect(payload.findings).toBe('Guard was removed')
+    // Findings rows are the only author of either derived string.
+    expect(payload.findings).toBeUndefined()
     expect(payload.sections?.section_3_investigation_findings?.findings).toBeUndefined()
   })
 
   it('saves RCA whys to the contract section and the legacy rca alias', async () => {
     client.investigationsApi.update.mockResolvedValue({ data: mockInvestigation })
+    client.investigationsApi.get.mockResolvedValue({
+      data: {
+        ...mockInvestigation,
+        data: {
+          findings: 'Stale flat findings',
+          sections: {
+            section_3_investigation_findings: { findings: 'Stale nested findings' },
+          },
+        },
+      },
+    })
 
     renderPage()
 
@@ -891,6 +912,8 @@ describe('InvestigationDetail', () => {
       expect(payload.sections[sectionKey].why_1).toBe('The driver could not see the walkway')
       expect(payload.sections[sectionKey].root_cause).toBe('No banksman on site')
     }
+    expect(payload.findings).toBeUndefined()
+    expect(payload.sections.section_3_investigation_findings.findings).toBeUndefined()
   })
 
   it('hydrates the conclusion and whys from nested sections when the flat keys are empty', async () => {
@@ -977,6 +1000,75 @@ describe('InvestigationDetail', () => {
     expect(screen.getByTestId('investigation-finding-new-input')).toHaveValue('')
   })
 
+  it('silently refreshes findings without losing unsaved summary or RCA state', async () => {
+    let resolveRefresh!: (value: { data: typeof mockInvestigation }) => void
+    const refresh = new Promise<{ data: typeof mockInvestigation }>((resolve) => {
+      resolveRefresh = resolve
+    })
+    client.investigationsApi.get
+      .mockResolvedValueOnce({ data: mockInvestigation })
+      .mockReturnValueOnce(refresh)
+    client.investigationsApi.createFinding.mockResolvedValue(
+      findingsResponse(['Guard was removed']),
+    )
+
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Collision investigation' })
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+    const rootCause = await screen.findByTestId('investigation-root-cause-input')
+    fireEvent.change(rootCause, { target: { value: 'Unsaved root cause' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Summary' }))
+
+    const conclusion = await screen.findByTestId('investigation-conclusion-input')
+    fireEvent.change(conclusion, { target: { value: 'Unsaved conclusion' } })
+    fireEvent.change(screen.getByTestId('investigation-finding-new-input'), {
+      target: { value: 'Guard was removed' },
+    })
+    fireEvent.click(screen.getByTestId('investigation-finding-add'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.get).toHaveBeenCalledTimes(2)
+    })
+    // The full-page loading skeleton must not replace dirty editors while refreshing.
+    expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    expect(conclusion).toHaveValue('Unsaved conclusion')
+
+    await act(async () => {
+      resolveRefresh({
+        data: { ...mockInvestigation, title: 'Collision investigation refreshed' },
+      })
+      await refresh
+    })
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Collision investigation refreshed' }),
+      ).toBeInTheDocument()
+    })
+    expect(conclusion).toHaveValue('Unsaved conclusion')
+    expect(screen.getByTestId('investigation-summary-save')).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+    expect(await screen.findByTestId('investigation-root-cause-input')).toHaveValue(
+      'Unsaved root cause',
+    )
+  })
+
+  it('keeps a failed add draft in the editor', async () => {
+    client.investigationsApi.createFinding.mockRejectedValue(new Error('Findings are locked'))
+
+    renderPage()
+
+    const input = await screen.findByTestId('investigation-finding-new-input')
+    fireEvent.change(input, { target: { value: 'Guard was removed' } })
+    fireEvent.click(screen.getByTestId('investigation-finding-add'))
+
+    expect(await screen.findByTestId('investigation-findings-error')).toHaveTextContent(
+      'Findings are locked',
+    )
+    expect(input).toHaveValue('Guard was removed')
+  })
+
   it('refuses to add a blank finding', async () => {
     renderPage()
 
@@ -1012,6 +1104,23 @@ describe('InvestigationDetail', () => {
     expect(await screen.findByTestId('investigation-finding-body-1')).toHaveTextContent(
       'Guard was removed',
     )
+  })
+
+  it('keeps a failed edit draft in the editor', async () => {
+    client.investigationsApi.listFindings.mockResolvedValue(findingsResponse(['typo']))
+    client.investigationsApi.updateFinding.mockRejectedValue(new Error('Findings are locked'))
+
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('investigation-finding-edit-1'))
+    const input = screen.getByTestId('investigation-finding-edit-input-1')
+    fireEvent.change(input, { target: { value: 'Guard was removed' } })
+    fireEvent.click(screen.getByTestId('investigation-finding-save-1'))
+
+    expect(await screen.findByTestId('investigation-findings-error')).toHaveTextContent(
+      'Findings are locked',
+    )
+    expect(input).toHaveValue('Guard was removed')
   })
 
   it('removes a finding', async () => {
