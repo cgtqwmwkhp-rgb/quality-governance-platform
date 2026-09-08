@@ -1,7 +1,67 @@
 /**
  * Detail-lane API helpers (avoid colliding with InvList investigationsClient edits).
+ *
+ * INV-C10 RCA calls live here, not on the shell `investigationsApi` factory:
+ * InvestigationDetail is already a lazy route chunk, and two extra methods on
+ * the shell client were enough to push index-*.js over the 212 kB gzip ceiling.
  */
 import api from '../../api/client'
+
+export interface InvestigationRcaWhy {
+  level: number
+  why?: string
+  answer: string
+  evidence: string
+}
+
+export interface InvestigationRcaResponse {
+  id: number | null
+  investigation_id: number
+  problem_statement: string
+  whys: InvestigationRcaWhy[]
+  root_cause: string
+  contributing_factors: string
+}
+
+export interface InvestigationRcaUpsert {
+  problem_statement: string
+  whys: Array<{
+    level: number
+    answer: string
+    evidence?: string
+    why?: string
+  }>
+  root_cause: string
+  contributing_factors: string
+}
+
+export function getRca(id: number) {
+  return api.get<InvestigationRcaResponse>(`/api/v1/investigations/${id}/rca`)
+}
+
+export function saveRca(id: number, body: InvestigationRcaUpsert) {
+  return api.put<InvestigationRcaResponse>(`/api/v1/investigations/${id}/rca`, body)
+}
+
+export function createCapaFromWhy(
+  id: number,
+  body: {
+    why_level: number
+    title?: string
+    description?: string
+    five_whys_id?: number
+    priority?: string
+    due_date?: string
+  },
+) {
+  return api.post<{
+    id: number
+    reference_number: string
+    title: string
+    five_whys_id?: number | null
+    why_level?: number | null
+  }>(`/api/v1/investigations/${id}/rca/capa`, body)
+}
 
 export type CustomerPackVisibilityMeta = {
   omit_requested?: boolean
@@ -50,10 +110,7 @@ export async function updateEvidenceVisibility(assetId: number, visibility: stri
  * The server renders the stored pack payload, so this cannot return content the pack's
  * redaction rules removed.
  */
-export async function fetchCustomerPackPdf(
-  investigationId: number,
-  packId: number,
-): Promise<Blob> {
+export async function fetchCustomerPackPdf(investigationId: number, packId: number): Promise<Blob> {
   const response = await api.get<Blob>(
     `/api/v1/investigations/${investigationId}/packs/${packId}/pdf`,
     { responseType: 'blob' },

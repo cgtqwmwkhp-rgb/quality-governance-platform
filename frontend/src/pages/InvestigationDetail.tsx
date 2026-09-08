@@ -48,6 +48,7 @@ import {
   type InvestigationFinding,
   getApiErrorMessage,
 } from '../api/client'
+import type { InvestigationRcaWhy } from './investigation/investigationDetailApi'
 import { Button } from '../components/ui/Button'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
@@ -68,10 +69,7 @@ import {
 } from '../components/ui/Select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/Tooltip'
 import { cn } from '../helpers/utils'
-import {
-  getStatusDisplay,
-  type InvestigationStatusValue,
-} from '../utils/investigationStatusFilter'
+import { getStatusDisplay, type InvestigationStatusValue } from '../utils/investigationStatusFilter'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
 
 const WORKFLOW_STATUSES: InvestigationStatusValue[] = [
@@ -115,8 +113,11 @@ import {
   addManualTimelineEntry,
   approveCustomerPackOmit,
   fetchCustomerPackPdf,
+  getRca,
   readCustomerPackVisibility,
   requestCustomerPackOmit,
+  saveRca,
+  createCapaFromWhy,
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
 import { formatCodedValue, formatPermissionCode } from '../helpers/displayLabels'
@@ -138,6 +139,38 @@ const TABS = [
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
+
+const EMPTY_RCA_WHYS: InvestigationRcaWhy[] = [1, 2, 3, 4, 5].map((level) => ({
+  level,
+  why: '',
+  answer: '',
+  evidence: '',
+}))
+
+function padRcaWhys(whys: InvestigationRcaWhy[] | undefined): InvestigationRcaWhy[] {
+  const byLevel = new Map((whys || []).map((item) => [item.level, item]))
+  const slots: InvestigationRcaWhy[] = EMPTY_RCA_WHYS.map((slot) => {
+    const stored = byLevel.get(slot.level)
+    return stored
+      ? {
+          level: slot.level,
+          why: stored.why || '',
+          answer: stored.answer || '',
+          evidence: stored.evidence || '',
+        }
+      : { ...slot }
+  })
+  const extras = (whys || [])
+    .filter((item) => item.level > 5)
+    .sort((a, b) => a.level - b.level)
+    .map((item) => ({
+      level: item.level,
+      why: item.why || '',
+      answer: item.answer || '',
+      evidence: item.evidence || '',
+    }))
+  return extras.length ? [...slots, ...extras] : slots
+}
 
 const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
   road_traffic_collision: Car,
@@ -180,9 +213,16 @@ export default function InvestigationDetail() {
   const [deletingEvidenceId, setDeletingEvidenceId] = useState<number | null>(null)
   const [deleteEvidenceTarget, setDeleteEvidenceTarget] = useState<number | null>(null)
 
-  const [rcaData, setRcaData] = useState<Record<string, string>>({})
+  const [rcaWhys, setRcaWhys] = useState<InvestigationRcaWhy[]>(EMPTY_RCA_WHYS)
+  const [rcaProblem, setRcaProblem] = useState('')
+  const [rcaRootCause, setRcaRootCause] = useState('')
+  const [rcaContributing, setRcaContributing] = useState('')
+  const [rcaAnalysisId, setRcaAnalysisId] = useState<number | null>(null)
   const [rcaUnsaved, setRcaUnsaved] = useState(false)
   const [savingRca, setSavingRca] = useState(false)
+  const [creatingCapaWhyLevel, setCreatingCapaWhyLevel] = useState<number | null>(null)
+  const [rcaLoading, setRcaLoading] = useState(false)
+  const [rcaLoadError, setRcaLoadError] = useState<string | null>(null)
   const [rcaSaveError, setRcaSaveError] = useState<string | null>(null)
   const [rcaSaveSuccess, setRcaSaveSuccess] = useState(false)
 
@@ -368,9 +408,7 @@ export default function InvestigationDetail() {
         evidenceAssetsApi.list(investigationNativeEvidenceParams(investigationId)),
         evidenceAssetsApi.list(investigationLinkedEvidenceParams(investigationId)),
       ])
-      setEvidenceAssets(
-        mergeEvidenceAssetsById([linked.data.items || [], native.data.items || []]),
-      )
+      setEvidenceAssets(mergeEvidenceAssetsById([linked.data.items || [], native.data.items || []]))
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'loadEvidence' })
       setEvidenceError(getApiErrorMessage(err))
@@ -385,21 +423,34 @@ export default function InvestigationDetail() {
     setPackCapability(capability)
   }, [investigationId])
 
-  // INV-C4: hydrate from the nested section when the flat key is empty, so RCA and findings
-  // written by the template run show up in these editors instead of a blank box.
-  const initializeRcaData = useCallback(() => {
-    if (!investigation) return
-    const data = (investigation.data as Record<string, unknown>) || {}
-    const rcaFields: Record<string, string> = {}
-    for (let i = 1; i <= 5; i++) {
-      rcaFields[`why_${i}`] = readWorkspaceText(data, `why_${i}`)
+  /**
+   * INV-C10: hydrate the RCA tab from five_whys_analyses.
+   *
+   * The first call for a run that still holds only leftover `why_1`..`why_5`
+   * strings converts those strings into an analysis server-side, so this is
+   * also what makes an older investigation's Whys appear as structured steps
+   * instead of a single textarea.
+   */
+  const loadRca = useCallback(async () => {
+    if (!investigationId) return
+    setRcaLoading(true)
+    setRcaLoadError(null)
+    try {
+      const response = await getRca(investigationId)
+      const payload = response.data
+      setRcaProblem(payload.problem_statement || '')
+      setRcaWhys(padRcaWhys(payload.whys))
+      setRcaRootCause(payload.root_cause || '')
+      setRcaContributing(payload.contributing_factors || '')
+      setRcaAnalysisId(payload.id ?? null)
+      setRcaUnsaved(false)
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'loadRca' })
+      setRcaLoadError(getApiErrorMessage(err))
+    } finally {
+      setRcaLoading(false)
     }
-    rcaFields['root_cause'] = readWorkspaceText(data, 'root_cause')
-    rcaFields['problem_statement'] = readWorkspaceText(data, 'problem_statement')
-    rcaFields['contributing_factors'] = readWorkspaceText(data, 'contributing_factors')
-    setRcaData(rcaFields)
-    setRcaUnsaved(false)
-  }, [investigation])
+  }, [investigationId])
 
   const initializeSummaryData = useCallback(() => {
     if (!investigation) return
@@ -481,25 +532,40 @@ export default function InvestigationDetail() {
     }
   }
 
-  const handleRcaFieldChange = (field: string, value: string) => {
-    setRcaData((prev) => ({ ...prev, [field]: value }))
+  const markRcaDirty = () => {
     setRcaUnsaved(true)
     setRcaSaveSuccess(false)
   }
 
+  const handleRcaWhyChange = (level: number, field: 'answer' | 'evidence', value: string) => {
+    setRcaWhys((prev) =>
+      prev.map((item) => (item.level === level ? { ...item, [field]: value } : item)),
+    )
+    markRcaDirty()
+  }
+
   const handleSaveRca = async () => {
-    if (!investigationId || !investigation) return
+    if (!investigationId) return
     setSavingRca(true)
     setRcaSaveError(null)
     setRcaSaveSuccess(false)
     try {
-      const existingData = (investigation.data as Record<string, unknown>) || {}
-      // Dual-write (INV-C4): the flat keys this page has always written, plus the nested
-      // sections the closure walk and the pack read.
-      await investigationsApi.update(investigationId, {
-        data: withWorkspaceFields(existingData, rcaData),
+      const response = await saveRca(investigationId, {
+        problem_statement: rcaProblem,
+        whys: rcaWhys.map((item) => ({
+          level: item.level,
+          answer: item.answer,
+          evidence: item.evidence,
+        })),
+        root_cause: rcaRootCause,
+        contributing_factors: rcaContributing,
       })
-      await loadInvestigation()
+      const payload = response.data
+      setRcaProblem(payload.problem_statement || '')
+      setRcaWhys(padRcaWhys(payload.whys))
+      setRcaRootCause(payload.root_cause || '')
+      setRcaContributing(payload.contributing_factors || '')
+      setRcaAnalysisId(payload.id ?? null)
       setRcaUnsaved(false)
       setRcaSaveSuccess(true)
       setTimeout(() => setRcaSaveSuccess(false), 3000)
@@ -687,7 +753,9 @@ export default function InvestigationDetail() {
       await loadClosureValidation()
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'reopenInvestigation' })
-      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
+      toast.error(
+        getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')),
+      )
     } finally {
       setReopening(false)
     }
@@ -705,10 +773,7 @@ export default function InvestigationDetail() {
    * these, so the run is re-read afterwards to keep the gate panel honest.
    */
   const runFindingsMutation = useCallback(
-    async (
-      action: string,
-      mutate: () => Promise<{ data: { items: InvestigationFinding[] } }>,
-    ) => {
+    async (action: string, mutate: () => Promise<{ data: { items: InvestigationFinding[] } }>) => {
       setFindingsSaving(true)
       setFindingsError(null)
       try {
@@ -870,9 +935,6 @@ export default function InvestigationDetail() {
     loadActions()
   }, [loadActions])
   useEffect(() => {
-    initializeRcaData()
-  }, [investigation, initializeRcaData])
-  useEffect(() => {
     initializeSummaryData()
   }, [investigation, initializeSummaryData])
   // INV-C7: findings live behind their own endpoint, so they are fetched once for
@@ -880,6 +942,12 @@ export default function InvestigationDetail() {
   useEffect(() => {
     loadFindings()
   }, [loadFindings])
+  // INV-C10: RCA lives on five_whys_analyses; the first GET converts leftover
+  // why_1..why_5 strings. Loaded with the run so conversion is not gated on
+  // opening the tab.
+  useEffect(() => {
+    loadRca()
+  }, [loadRca])
 
   useEffect(() => {
     if (!investigationId) return
@@ -902,7 +970,7 @@ export default function InvestigationDetail() {
         loadEvidence()
         break
       case 'rca':
-        initializeRcaData()
+        loadRca()
         break
     }
   }, [
@@ -915,7 +983,7 @@ export default function InvestigationDetail() {
     loadPacks,
     loadPackCapability,
     loadEvidence,
-    initializeRcaData,
+    loadRca,
   ])
 
   useEffect(() => {
@@ -998,22 +1066,45 @@ export default function InvestigationDetail() {
   }
 
   const handleCreateCapaFromRootCause = () => {
-    const root = (rcaData['root_cause'] || '').trim()
+    const root = rcaRootCause.trim()
     openCreateActionInTab({
       title: root
-        ? t('investigations.rca.capa_from_root_title', 'CAPA: {{root}}', { root: root.slice(0, 80) })
+        ? t('investigations.rca.capa_from_root_title', 'CAPA: {{root}}', {
+            root: root.slice(0, 80),
+          })
         : t('investigations.rca.capa_default_title', 'CAPA from root cause'),
       description: [
         root ? `Root cause: ${root}` : '',
-        rcaData['problem_statement'] ? `Problem: ${rcaData['problem_statement']}` : '',
-        rcaData['contributing_factors']
-          ? `Contributing factors: ${rcaData['contributing_factors']}`
-          : '',
+        rcaProblem ? `Problem: ${rcaProblem}` : '',
+        rcaContributing ? `Contributing factors: ${rcaContributing}` : '',
       ]
         .filter(Boolean)
         .join('\n\n'),
       priority: 'high',
     })
+  }
+
+  const handleCreateCapaFromWhy = async (level: number) => {
+    if (!investigationId) return
+    const item = rcaWhys.find((why) => why.level === level)
+    const answer = (item?.answer || '').trim()
+    // Empty Why: do not invent CAPA text. The server also refuses this.
+    if (!answer || rcaUnsaved) return
+    setCreatingCapaWhyLevel(level)
+    try {
+      await createCapaFromWhy(investigationId, {
+        why_level: level,
+        five_whys_id: rcaAnalysisId ?? undefined,
+      })
+      await loadActions()
+      await loadClosureValidation()
+      setActiveTab('actions')
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'createCapaFromWhy' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setCreatingCapaWhyLevel(null)
+    }
   }
 
   const handleRequestOmit = async (sectionId: string, omitRequested: boolean) => {
@@ -1084,7 +1175,10 @@ export default function InvestigationDetail() {
         </Card>
       ) : null}
 
-      <Card className="p-5 border-primary/20 bg-primary/5" data-testid="investigation-capa-handoff-strip">
+      <Card
+        className="p-5 border-primary/20 bg-primary/5"
+        data-testid="investigation-capa-handoff-strip"
+      >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-medium text-primary">
@@ -1152,7 +1246,9 @@ export default function InvestigationDetail() {
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   isCurrent && 'border-primary bg-primary text-primary-foreground',
                   isPast && !isCurrent && 'border-primary/30 bg-primary/10 text-primary',
-                  !isCurrent && !isPast && 'border-border text-muted-foreground hover:border-primary/40',
+                  !isCurrent &&
+                    !isPast &&
+                    'border-border text-muted-foreground hover:border-primary/40',
                 )}
                 data-testid={`investigation-workflow-${status}`}
                 aria-current={isCurrent ? 'step' : undefined}
@@ -1186,9 +1282,7 @@ export default function InvestigationDetail() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 {t('investigations.handoff.proof_source', 'Source record')}
               </p>
-              <p className="mt-1 text-lg font-semibold text-foreground">
-                {sourceLink ? '1' : '0'}
-              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{sourceLink ? '1' : '0'}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {t('investigations.handoff.proof_source_caption')}
               </p>
@@ -1399,7 +1493,10 @@ export default function InvestigationDetail() {
                       {t('investigations.meta.status')}
                     </label>
                     {investigation.status === 'closed' ? (
-                      <p className="text-sm text-foreground" data-testid="investigation-status-readonly">
+                      <p
+                        className="text-sm text-foreground"
+                        data-testid="investigation-status-readonly"
+                      >
                         {statusDisplay.label}
                       </p>
                     ) : (
@@ -1444,10 +1541,7 @@ export default function InvestigationDetail() {
                     </p>
                   </div>
                   <div>
-                    <label
-                      htmlFor="inv-lead"
-                      className="block text-xs text-muted-foreground mb-1"
-                    >
+                    <label htmlFor="inv-lead" className="block text-xs text-muted-foreground mb-1">
                       {t('investigations.lead_investigator')}
                     </label>
                     <div className="flex items-center gap-2">
@@ -1458,7 +1552,10 @@ export default function InvestigationDetail() {
                         onChange={(selection) => {
                           const payload = resolveInvestigationAssigneeSelection(selection)
                           const next =
-                            payload.assignee_email || payload.assignee_name || selection?.label || ''
+                            payload.assignee_email ||
+                            payload.assignee_name ||
+                            selection?.label ||
+                            ''
                           setSummaryLead(next)
                           setSummaryLeadUserId(payload.assignee_id ?? null)
                           setSummaryUnsaved(true)
@@ -1521,7 +1618,10 @@ export default function InvestigationDetail() {
                         <span className="font-medium">
                           {closureValidation.can_complete
                             ? t('investigations.closure.ready_to_complete', 'Ready to complete')
-                            : t('investigations.closure.cannot_complete_yet', 'Cannot complete yet')}
+                            : t(
+                                'investigations.closure.cannot_complete_yet',
+                                'Cannot complete yet',
+                              )}
                         </span>
                       </div>
                     ) : null}
@@ -1530,7 +1630,10 @@ export default function InvestigationDetail() {
                     completionBlockers.length > 0 ? (
                       <div className="space-y-1" data-testid="investigation-completion-blockers">
                         <p className="text-xs font-medium text-muted-foreground">
-                          {t('investigations.closure.completion_issues_label', 'Before completing:')}
+                          {t(
+                            'investigations.closure.completion_issues_label',
+                            'Before completing:',
+                          )}
                         </p>
                         <ul className="space-y-1">
                           {completionBlockers.map((blocker) => (
@@ -1559,9 +1662,7 @@ export default function InvestigationDetail() {
                         <XCircle className="w-5 h-5" />
                       )}
                       <span className="font-medium">
-                        {closureValidation.can_close
-                          ? 'Ready for Closure'
-                          : 'Cannot Close Yet'}
+                        {closureValidation.can_close ? 'Ready for Closure' : 'Cannot Close Yet'}
                       </span>
                     </div>
                     {closureValidation.can_close && investigation.status !== 'closed' ? (
@@ -1598,7 +1699,10 @@ export default function InvestigationDetail() {
                           className="text-sm text-muted-foreground"
                           data-testid="investigation-already-closed"
                         >
-                          {t('investigations.closure.already_closed', 'This investigation is closed.')}
+                          {t(
+                            'investigations.closure.already_closed',
+                            'This investigation is closed.',
+                          )}
                         </p>
                         <Button
                           variant="outline"
@@ -1767,7 +1871,32 @@ export default function InvestigationDetail() {
         )}
 
         {activeTab === 'rca' && (
-          <div className="space-y-6">
+          <div className="space-y-6" data-testid="investigation-rca-panel">
+            {rcaLoadError && (
+              <Card className="p-4 bg-destructive/10 border-destructive/30">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertCircle className="w-5 h-5" />
+                    <span className="font-medium">Error loading RCA:</span>
+                    <span data-testid="investigation-rca-error">{rcaLoadError}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void loadRca()}
+                    data-testid="investigation-rca-retry"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              </Card>
+            )}
+            {rcaLoading && (
+              <p className="text-sm text-muted-foreground" data-testid="investigation-rca-loading">
+                Loading 5 Whys…
+              </p>
+            )}
             {rcaUnsaved && (
               <Card className="p-4 bg-warning/10 border-warning/30">
                 <div className="flex items-center gap-2 text-warning">
@@ -1793,6 +1922,15 @@ export default function InvestigationDetail() {
                 </div>
               </Card>
             )}
+            {!rcaLoading &&
+            !rcaProblem.trim() &&
+            !rcaRootCause.trim() &&
+            !rcaContributing.trim() &&
+            rcaWhys.every((item) => !item.answer.trim() && !item.evidence.trim()) ? (
+              <p className="text-sm text-muted-foreground" data-testid="investigation-rca-empty">
+                No 5 Whys recorded yet. Empty answers stay empty — nothing is invented.
+              </p>
+            ) : null}
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 {t('investigations.problem_statement')}
@@ -1800,8 +1938,12 @@ export default function InvestigationDetail() {
               <Textarea
                 rows={3}
                 placeholder="Describe the problem or incident being investigated..."
-                value={rcaData['problem_statement'] || ''}
-                onChange={(e) => handleRcaFieldChange('problem_statement', e.target.value)}
+                value={rcaProblem}
+                onChange={(e) => {
+                  setRcaProblem(e.target.value)
+                  markRcaDirty()
+                }}
+                data-testid="investigation-rca-problem"
               />
             </Card>
             <Card className="p-6">
@@ -1809,26 +1951,68 @@ export default function InvestigationDetail() {
                 <GitBranch className="w-5 h-5 text-primary" />
                 {t('investigations.five_whys')}
               </h3>
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map((num) => (
-                  <div key={num} className="flex items-start gap-4">
+              <div className="space-y-6">
+                {rcaWhys.map((item) => (
+                  <div key={item.level} className="flex items-start gap-4">
                     <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 font-bold text-primary-foreground">
-                      {num}
+                      {item.level}
                     </div>
-                    <div className="flex-1">
-                      <label
-                        htmlFor={`rca-why-${num}`}
-                        className="block text-sm font-medium text-foreground mb-2"
-                      >
-                        Why {num}?
-                      </label>
-                      <Textarea
-                        id={`rca-why-${num}`}
-                        rows={2}
-                        placeholder={`Enter the ${num === 1 ? 'initial' : 'deeper'} cause...`}
-                        value={rcaData[`why_${num}`] || ''}
-                        onChange={(e) => handleRcaFieldChange(`why_${num}`, e.target.value)}
-                      />
+                    <div className="flex-1 space-y-3">
+                      <div>
+                        <label
+                          htmlFor={`rca-why-${item.level}`}
+                          className="block text-sm font-medium text-foreground mb-2"
+                        >
+                          Why {item.level}?
+                        </label>
+                        <Textarea
+                          id={`rca-why-${item.level}`}
+                          rows={2}
+                          placeholder={`Enter the ${item.level === 1 ? 'initial' : 'deeper'} cause...`}
+                          value={item.answer}
+                          onChange={(e) => handleRcaWhyChange(item.level, 'answer', e.target.value)}
+                          data-testid={`investigation-rca-why-${item.level}`}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor={`rca-why-${item.level}-evidence`}
+                          className="block text-sm font-medium text-muted-foreground mb-2"
+                        >
+                          {`Evidence for why ${item.level}`}
+                        </label>
+                        <Textarea
+                          id={`rca-why-${item.level}-evidence`}
+                          rows={2}
+                          placeholder="Optional. Leave empty when there is none."
+                          value={item.evidence}
+                          onChange={(e) =>
+                            handleRcaWhyChange(item.level, 'evidence', e.target.value)
+                          }
+                          data-testid={`investigation-rca-why-${item.level}-evidence`}
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            rcaUnsaved ||
+                            rcaLoading ||
+                            !item.answer.trim() ||
+                            creatingCapaWhyLevel !== null
+                          }
+                          onClick={() => handleCreateCapaFromWhy(item.level)}
+                          data-testid={`investigation-rca-create-capa-why-${item.level}`}
+                        >
+                          {creatingCapaWhyLevel === item.level ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <ListTodo className="w-4 h-4 mr-2" />
+                          )}
+                          Create CAPA from why {item.level}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1852,8 +2036,11 @@ export default function InvestigationDetail() {
               <Textarea
                 rows={3}
                 placeholder="Document the root cause based on your 5 Whys analysis..."
-                value={rcaData['root_cause'] || ''}
-                onChange={(e) => handleRcaFieldChange('root_cause', e.target.value)}
+                value={rcaRootCause}
+                onChange={(e) => {
+                  setRcaRootCause(e.target.value)
+                  markRcaDirty()
+                }}
                 data-testid="investigation-root-cause-input"
               />
             </Card>
@@ -1864,8 +2051,12 @@ export default function InvestigationDetail() {
               <Textarea
                 rows={3}
                 placeholder="List any contributing factors that led to the issue..."
-                value={rcaData['contributing_factors'] || ''}
-                onChange={(e) => handleRcaFieldChange('contributing_factors', e.target.value)}
+                value={rcaContributing}
+                onChange={(e) => {
+                  setRcaContributing(e.target.value)
+                  markRcaDirty()
+                }}
+                data-testid="investigation-rca-contributing"
               />
             </Card>
             <div className="flex items-center justify-between">
@@ -1878,6 +2069,7 @@ export default function InvestigationDetail() {
                 onClick={handleSaveRca}
                 disabled={savingRca || !rcaUnsaved}
                 className={cn(!rcaUnsaved && 'opacity-50')}
+                data-testid="investigation-rca-save"
               >
                 {savingRca ? (
                   <>
@@ -1915,10 +2107,10 @@ export default function InvestigationDetail() {
             <Card className="p-6" data-testid="investigation-hsg245-report-sections">
               <h3 className="text-lg font-semibold text-foreground">HSG245 report scope</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {String(investigation.level || 'medium').toUpperCase()} level sections required for this
-                investigation. You can ask for a section to be left out of the customer pack, but an
-                H&amp;S Advisor or Admin holding “{formatPermissionCode(OMIT_APPROVAL_PERMISSION)}”
-                has to approve it first.
+                {String(investigation.level || 'medium').toUpperCase()} level sections required for
+                this investigation. You can ask for a section to be left out of the customer pack,
+                but an H&amp;S Advisor or Admin holding “
+                {formatPermissionCode(OMIT_APPROVAL_PERMISSION)}” has to approve it first.
               </p>
               <div className="mt-4 space-y-3">
                 {getReportSectionsForLevel(investigation.level).map((section) => {
@@ -1944,7 +2136,10 @@ export default function InvestigationDetail() {
                           {approved
                             ? t('investigations.report.omit_status_approved', 'Omitted (approved)')
                             : pending
-                              ? t('investigations.report.omit_status_pending', 'Omit pending approval')
+                              ? t(
+                                  'investigations.report.omit_status_pending',
+                                  'Omit pending approval',
+                                )
                               : t('investigations.report.omit_status_included', 'Included in pack')}
                         </Badge>
                       </div>
@@ -1965,9 +2160,7 @@ export default function InvestigationDetail() {
                           size="sm"
                           variant="outline"
                           disabled={omitBusySection === section.id}
-                          onClick={() =>
-                            void handleRequestOmit(section.id, !(pending || approved))
-                          }
+                          onClick={() => void handleRequestOmit(section.id, !(pending || approved))}
                           data-testid={`report-section-omit-request-${section.id}`}
                         >
                           {pending || approved
@@ -2020,8 +2213,8 @@ export default function InvestigationDetail() {
               {/* Inline English: the locale copy still says the PDF is a follow-on, and
                   i18n files are owned by another lane this wave. */}
               <p className="text-sm text-muted-foreground mb-4">
-                Generating a pack produces a branded PDF for issue to the customer, plus a JSON
-                copy of the same payload for the record. Both carry a checksum for verification.
+                Generating a pack produces a branded PDF for issue to the customer, plus a JSON copy
+                of the same payload for the record. Both carry a checksum for verification.
               </p>
               {!packCapability.canGenerate && (
                 <div
@@ -2297,7 +2490,11 @@ export default function InvestigationDetail() {
             })}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReopenDialog(false)} disabled={reopening}>
+            <Button
+              variant="outline"
+              onClick={() => setShowReopenDialog(false)}
+              disabled={reopening}
+            >
               {t('common.cancel', 'Cancel')}
             </Button>
             <Button

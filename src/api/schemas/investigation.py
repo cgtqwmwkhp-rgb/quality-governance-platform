@@ -395,6 +395,8 @@ class InvestigationClosureValidationResponse(BaseModel):
 class CreateInvestigationCapaRequest(BaseModel):
     """Optional overrides when creating a CAPA from an investigation."""
 
+    model_config = ConfigDict(extra="forbid")
+
     title: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = None
     assignee_id: Optional[int] = None
@@ -406,6 +408,16 @@ class CreateInvestigationCapaRequest(BaseModel):
     )
     due_date: Optional[str] = None
     priority: Optional[str] = None
+    five_whys_id: Optional[int] = Field(
+        default=None,
+        description="five_whys_analyses.id this CAPA came from; must be this run's tenant-scoped analysis",
+    )
+    why_level: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=20,
+        description="Which Why (1–20) this CAPA names. Empty Why is refused, not invented.",
+    )
 
 
 # === W2 hard-spine: normalized template/run structure (additive) ===
