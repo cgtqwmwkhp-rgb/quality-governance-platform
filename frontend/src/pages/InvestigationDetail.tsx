@@ -122,14 +122,17 @@ import {
   deleteFactor,
   fetchCustomerPackPdf,
   getRca,
+  issueCustomerPack,
   listFactors,
   readCustomerPackVisibility,
   requestCustomerPackOmit,
+  reviewCustomerPack,
   saveRca,
   updateFactor,
   createCapaFromWhy,
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
+import PackIssueControls from './investigation/PackIssueControls'
 import { formatCodedValue, formatPermissionCode } from '../helpers/displayLabels'
 import { InvestigationCloseSummaryDialog } from '../components/investigations/InvestigationCloseSummaryDialog'
 
@@ -213,6 +216,7 @@ export default function InvestigationDetail() {
   const [generatingPack, setGeneratingPack] = useState(false)
   const [downloadingPackId, setDownloadingPackId] = useState<number | null>(null)
   const [downloadingPdfPackId, setDownloadingPdfPackId] = useState<number | null>(null)
+  const [packIssueBusyId, setPackIssueBusyId] = useState<number | null>(null)
   const [packCapability, setPackCapability] = useState<PackCapability>({ canGenerate: true })
   const [packError, setPackError] = useState<string | null>(null)
 
@@ -685,7 +689,7 @@ export default function InvestigationDetail() {
     try {
       const payload = buildPackManifestStubDownload(pack, investigation.reference_number)
       triggerPackDownload(payload)
-      toast.success('Manifest stub downloaded — use PDF for the issuable document.')
+      toast.success('Manifest stub downloaded — use PDF for the generated pack.')
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'downloadPack' })
       setPackError(getApiErrorMessage(err))
@@ -713,6 +717,57 @@ export default function InvestigationDetail() {
     }
   }
 
+  const handleReviewPack = async (packId: number, cleared: boolean, note?: string) => {
+    if (!investigationId) return
+    setPackIssueBusyId(packId)
+    setPackError(null)
+    try {
+      await reviewCustomerPack(investigationId, packId, { cleared, note })
+      toast.success(
+        cleared
+          ? 'Redaction review cleared. This pack can be issued once the investigation is complete.'
+          : 'Redaction review recorded as needing changes. This pack cannot be issued yet.',
+      )
+      await loadPacks()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'reviewPack' })
+      const message = getApiErrorMessage(err, 'Could not record the redaction review.')
+      setPackError(message)
+      toast.error(message)
+      throw err
+    } finally {
+      setPackIssueBusyId(null)
+    }
+  }
+
+  const handleIssuePack = async (
+    packId: number,
+    recipient: string,
+    recipientEmail?: string,
+    note?: string,
+  ) => {
+    if (!investigationId) return
+    setPackIssueBusyId(packId)
+    setPackError(null)
+    try {
+      await issueCustomerPack(investigationId, packId, {
+        recipient,
+        recipient_email: recipientEmail,
+        note,
+      })
+      toast.success('Pack issued. Download now returns the retained copy.')
+      await loadPacks()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'issuePack' })
+      const message = getApiErrorMessage(err, 'Could not issue this pack.')
+      setPackError(message)
+      toast.error(message)
+      throw err
+    } finally {
+      setPackIssueBusyId(null)
+    }
+  }
+
   const handleGeneratePack = async (audience: string) => {
     if (!investigationId) return
     setGeneratingPack(true)
@@ -722,8 +777,9 @@ export default function InvestigationDetail() {
       triggerPackDownload(buildGeneratedPackDownload(response.data))
       const log = response.data.redaction_log
       setLastRedactionLog(Array.isArray(log) ? log : null)
-      toast.success('Report generated — downloading PDF and JSON record.')
-      // The PDF is the issuable document; the JSON above is the machine-readable record.
+      toast.success(
+        'Report generated — downloading PDF and JSON record. Issuing to a customer is a separate step.',
+      )
       await handleDownloadPackPdf(response.data.pack_id, response.data.pack_uuid)
       await loadPacks()
       await loadInvestigation()
@@ -2500,8 +2556,9 @@ export default function InvestigationDetail() {
                   {packs.map((pack) => (
                     <div
                       key={pack.id}
-                      className="flex items-center justify-between p-4 bg-surface rounded-lg border border-border"
+                      className="p-4 bg-surface rounded-lg border border-border"
                     >
+                      <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                           <Package className="w-5 h-5 text-primary" />
@@ -2566,6 +2623,17 @@ export default function InvestigationDetail() {
                           </Tooltip>
                         </TooltipProvider>
                       </div>
+                      </div>
+                      <PackIssueControls
+                        pack={pack}
+                        investigationStatus={investigation?.status}
+                        canIssue={packCapability.canGenerate}
+                        busy={packIssueBusyId === pack.id}
+                        onReview={(cleared, note) => handleReviewPack(pack.id, cleared, note)}
+                        onIssue={(recipient, recipientEmail, note) =>
+                          handleIssuePack(pack.id, recipient, recipientEmail, note)
+                        }
+                      />
                     </div>
                   ))}
                 </div>
