@@ -51,11 +51,13 @@ def _require_fpdf() -> Any:
                 _ = replacement_text
                 return orig(fragment, str(max(len(self.pages) - 1, 0)))
 
-            TotalPagesSubstitutionFragment.render_text_substitution = _body_total
+            # setattr via Any: mypy forbids method assignment and the repo is at the type-ignore cap.
+            target: Any = TotalPagesSubstitutionFragment
+            setattr(target, "render_text_substitution", _body_total)
             try:
                 return super().output(*args, **kwargs)
             finally:
-                TotalPagesSubstitutionFragment.render_text_substitution = orig
+                setattr(target, "render_text_substitution", orig)
 
     _PackFPDF = PackFPDF
     return PackFPDF
