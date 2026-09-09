@@ -93,6 +93,29 @@ def _add_bookmark(paragraph: Any, name: str, bookmark_id: int) -> None:
     paragraph._p.append(end)
 
 
+def _add_page_field(paragraph: Any) -> None:
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    run = paragraph.add_run()
+    begin = OxmlElement("w:fldChar")
+    begin.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText")
+    instr.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    instr.text = " PAGE "
+    separate = OxmlElement("w:fldChar")
+    separate.set(qn("w:fldCharType"), "separate")
+    result = OxmlElement("w:t")
+    result.text = "1"
+    end = OxmlElement("w:fldChar")
+    end.set(qn("w:fldCharType"), "end")
+    run._r.append(begin)
+    run._r.append(instr)
+    run._r.append(separate)
+    run._r.append(result)
+    run._r.append(end)
+
+
 def _add_toc_hyperlink(paragraph: Any, text: str, anchor: str) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
@@ -155,21 +178,42 @@ class InvestigationPackDocxService:
 
         doc = Document()
         section = doc.sections[0]
-        section.top_margin = Inches(0.7)
+        section.top_margin = Inches(0.85)
         section.bottom_margin = Inches(0.7)
         section.left_margin = Inches(0.75)
         section.right_margin = Inches(0.75)
+        section.different_first_page_header_footer = True
 
         crimson = RGBColor(*pack_brand.CRIMSON)
         jet = RGBColor(*pack_brand.JET_GREY)
 
+        header = section.header
+        header.is_linked_to_previous = False
+        header_p = header.paragraphs[0]
+        header_run = header_p.add_run(f"INVESTIGATION REPORT  ·  {reference}")
+        header_run.font.size = Pt(9)
+        header_run.font.color.rgb = jet
+        header_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+        first_footer = section.first_page_footer
+        first_footer.is_linked_to_previous = False
+        first_p = first_footer.paragraphs[0]
+        first_p.text = pack_brand.legal_footer_line()
+        first_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if first_p.runs:
+            first_p.runs[0].font.size = Pt(8)
+            first_p.runs[0].font.color.rgb = jet
+
         footer = section.footer
+        footer.is_linked_to_previous = False
         footer_p = footer.paragraphs[0]
-        footer_p.text = pack_brand.legal_footer_line()
-        footer_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        if footer_p.runs:
-            footer_p.runs[0].font.size = Pt(8)
-            footer_p.runs[0].font.color.rgb = jet
+        left_run = footer_p.add_run(f"{reference}  ·  {pack_brand.CLASSIFICATION}    ")
+        left_run.font.size = Pt(8)
+        left_run.font.color.rgb = jet
+        right_run = footer_p.add_run(f"{audience_label.upper()}  ·  PAGE ")
+        right_run.font.size = Pt(8)
+        right_run.font.color.rgb = jet
+        _add_page_field(footer_p)
 
         try:
             doc.add_picture(str(pack_brand.lockup_path()), width=Inches(2.6))
@@ -226,10 +270,10 @@ class InvestigationPackDocxService:
             contents.append("Chronology")
         contents.extend(("Evidence schedule", "Redaction summary", "Pack integrity"))
 
-        self._heading(doc, "Contents", jet, size=16)
+        self._heading(doc, "\u2014 CONTENTS", crimson, size=16)
         for index, heading in enumerate(contents, start=1):
             para = doc.add_paragraph()
-            _add_toc_hyperlink(para, f"{index:02d} {heading}", _section_bookmark(index))
+            _add_toc_hyperlink(para, f"{index} {heading}", _section_bookmark(index))
 
         chapter = 1
         if not section_map:
