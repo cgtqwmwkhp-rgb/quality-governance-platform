@@ -38,7 +38,8 @@ describe('chromeCatalogueHonesty', () => {
   it('matches imported records on exact scheme keys only', () => {
     expect(importedRecordMatchesChrome('planet_mark', 'pm')).toBe(true)
     expect(importedRecordMatchesChrome('Planet Mark', 'pm')).toBe(false)
-    expect(importedRecordMatchesChrome('uvdb', 'uvdb')).toBe(true)
+    expect(importedRecordMatchesChrome('achilles_uvdb', 'uvdb')).toBe(true)
+    expect(importedRecordMatchesChrome('uvdb', 'uvdb')).toBe(false)
     expect(importedRecordMatchesChrome('achilles', 'uvdb')).toBe(false)
     expect(importedRecordMatchesChrome('chas', 'chas')).toBe(true)
     expect(importedRecordMatchesChrome('ssip', 'ssip')).toBe(true)
