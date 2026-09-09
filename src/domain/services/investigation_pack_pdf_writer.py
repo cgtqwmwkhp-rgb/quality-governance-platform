@@ -135,6 +135,30 @@ def create_pack_pdf(meta: DocumentMeta) -> Any:
     return pdf
 
 
+def _tracked_text_width(pdf: Any, text: str, spacing: float) -> float:
+    """Measure text plus fpdf's point-based character spacing in document units."""
+    safe_text = brand.text_safe(text)
+    tracking_width = max(len(safe_text) - 1, 0) * spacing / float(pdf.k)
+    return float(pdf.get_string_width(safe_text)) + tracking_width
+
+
+def _cover_legal_lines(pdf: Any, width: float, spacing: float) -> tuple[str, ...]:
+    """Keep complete legal segments inside the cover-band text column."""
+    parts = brand.legal_footer_line().upper().split(" · ")
+    lines: list[str] = []
+    current = ""
+    for part in parts:
+        candidate = f"{current} · {part}" if current else part
+        if current and _tracked_text_width(pdf, candidate, spacing) > width:
+            lines.append(current)
+            current = part
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return tuple(lines)
+
+
 def _paint_cover_band(pdf: Any) -> None:
     """Solid Jet Grey foot — reverse lockup plus the legal line, including the web."""
     y = float(pdf.h) - _COVER_BAND_H
@@ -144,15 +168,19 @@ def _paint_cover_band(pdf: Any) -> None:
     pdf.image(str(brand.reverse_lockup_path()), x=pdf.l_margin, y=y + 4.2, w=lockup_w)
     pdf.set_text_color(*brand.WHITE)
     pdf.set_font(brand.FAMILY_MEDIUM, "", 6.5)
-    pdf.set_xy(pdf.l_margin + lockup_w + 4.0, y + 7.6)
-    brand.write_tracked(
-        pdf,
-        brand.legal_footer_line().upper(),
-        width=210 - pdf.l_margin - pdf.r_margin - lockup_w - 4.0,
-        height=4.5,
-        spacing=0.28,
-        align="L",
-    )
+    legal_x = float(pdf.l_margin) + lockup_w + 4.0
+    legal_width = float(pdf.w) - float(pdf.r_margin) - legal_x
+    spacing = 0.28
+    for index, line in enumerate(_cover_legal_lines(pdf, legal_width, spacing)):
+        pdf.set_xy(legal_x, y + 5.4 + index * 4.1)
+        brand.write_tracked(
+            pdf,
+            line,
+            width=legal_width,
+            height=4.1,
+            spacing=spacing,
+            align="L",
+        )
     pdf.set_text_color(*brand.JET_GREY)
 
 

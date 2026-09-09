@@ -78,10 +78,18 @@ def _paint_lines(
         cursor += leading
 
 
-def write_wrapped_paragraph(pdf: Any, text: str, *, size: float = 10, leading: float = _LINE) -> None:
+def write_wrapped_paragraph(
+    pdf: Any,
+    text: str,
+    *,
+    size: float = 10,
+    leading: float = _LINE,
+    family: str = brand.FAMILY_REGULAR,
+    rgb: tuple[int, int, int] = brand.JET_GREY,
+) -> None:
     """Body text that wraps to the content width. Never clips, never ellipsizes."""
-    pdf.set_font(brand.FAMILY_REGULAR, "", size)
-    pdf.set_text_color(*brand.JET_GREY)
+    pdf.set_font(family, "", size)
+    pdf.set_text_color(*rgb)
     width = inner_width(pdf)
     lines = wrap_paragraphs(pdf, text, max(8.0, width - _WRAP_SLACK))
     for line in lines:
@@ -242,9 +250,13 @@ def write_kv_rows(pdf: Any, rows: Sequence[tuple[str, str]], *, panel_keys: froz
     for label, value in rows:
         key = label.strip().lower()
         if key in panel_keys:
-            pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
-            pdf.set_text_color(*brand.CRIMSON)
-            write_wrapped_paragraph(pdf, label.upper(), size=8)
+            write_wrapped_paragraph(
+                pdf,
+                label.upper(),
+                size=8,
+                family=brand.FAMILY_MEDIUM,
+                rgb=brand.CRIMSON,
+            )
             write_panel(pdf, value, bar=brand.JET_GREY)
             continue
         pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
