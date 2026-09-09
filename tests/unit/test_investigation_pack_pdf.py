@@ -1105,3 +1105,30 @@ class TestPackLayoutWrap:
         assert "No refresher training schedule" in text
         assert "Budget withdrawn" in text
         assert "HSG245" in text
+
+
+class TestPackContentsLinks:
+    def test_contents_rows_are_internal_links_and_the_outline_names_chapters(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "section_1_details": {"location": "East Dean"},
+                    "findings": {"items": [{"body": "Guard was missing from the mill"}]},
+                }
+            }
+        )
+        data = InvestigationPackPdfService().build_pdf_bytes(pack)
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(data))
+        contents_page = next(page for page in reader.pages if "Contents" in (page.extract_text() or ""))
+        annots = contents_page.get("/Annots")
+        assert annots is not None
+        assert len(list(annots)) >= 2
+        titles = []
+        for item in reader.outline or []:
+            title = getattr(item, "title", None) or str(item)
+            titles.append(str(title))
+        joined = " ".join(titles)
+        assert "01 Incident details" in joined
+        assert "02 Findings" in joined

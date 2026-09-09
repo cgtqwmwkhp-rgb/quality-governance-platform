@@ -9,6 +9,7 @@ re-render a working copy.
 from __future__ import annotations
 
 import io
+import re
 from typing import Any, Optional
 
 from src.domain.services import investigation_pack_brand as pack_brand
@@ -70,6 +71,52 @@ def _clip(text: str) -> str:
     if len(text) <= _MAX_FIELD_CHARS:
         return text
     return text[: _MAX_FIELD_CHARS - 3] + "..."
+
+
+_CHAPTER_PREFIX = re.compile(r"^(\d{2})\b")
+
+
+def _section_bookmark(number: int) -> str:
+    return f"pack-sec-{number:02d}"
+
+
+def _add_bookmark(paragraph: Any, name: str, bookmark_id: int) -> None:
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), str(bookmark_id))
+    start.set(qn("w:name"), name)
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), str(bookmark_id))
+    paragraph._p.insert(0, start)
+    paragraph._p.append(end)
+
+
+def _add_toc_hyperlink(paragraph: Any, text: str, anchor: str) -> None:
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("w:anchor"), anchor)
+    run = OxmlElement("w:r")
+    r_pr = OxmlElement("w:rPr")
+    colour = OxmlElement("w:color")
+    colour.set(qn("w:val"), "443C38")
+    r_pr.append(colour)
+    size = OxmlElement("w:sz")
+    size.set(qn("w:val"), "22")
+    r_pr.append(size)
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    r_pr.append(underline)
+    run.append(r_pr)
+    text_el = OxmlElement("w:t")
+    text_el.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    text_el.text = text
+    run.append(text_el)
+    hyperlink.append(run)
+    paragraph._p.append(hyperlink)
 
 
 class InvestigationPackDocxService:
@@ -181,7 +228,8 @@ class InvestigationPackDocxService:
 
         self._heading(doc, "Contents", jet, size=16)
         for index, heading in enumerate(contents, start=1):
-            self._body(doc, f"{index:02d} {heading}", jet)
+            para = doc.add_paragraph()
+            _add_toc_hyperlink(para, f"{index:02d} {heading}", _section_bookmark(index))
 
         chapter = 1
         if not section_map:
@@ -286,10 +334,15 @@ class InvestigationPackDocxService:
         from docx.shared import Pt
 
         para = doc.add_paragraph()
-        run = para.add_run(_clip(text))
+        label = _clip(text)
+        run = para.add_run(label)
         run.bold = True
         run.font.size = Pt(size)
         run.font.color.rgb = colour
+        match = _CHAPTER_PREFIX.match(label.strip())
+        if match:
+            number = int(match.group(1))
+            _add_bookmark(para, _section_bookmark(number), number)
 
     @staticmethod
     def _body(doc: Any, text: str, colour: Any) -> None:
