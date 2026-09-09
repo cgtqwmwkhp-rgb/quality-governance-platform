@@ -1,9 +1,9 @@
-"""Investigation pack Word working copy (INV-PACK-R3).
+"""Investigation pack Word (INV-PACK-R3 working copy, INV-PACK-R10 frozen export).
 
-python-docx from the same stored pack payload the PDF renders. This file is how
-a quality lead amends wording *before* issue. INV-C17 still retains PDF bytes
-only — Word is not a second disclosure log, and an issued pack must not live
-re-render a working copy.
+python-docx from the same stored pack payload the PDF renders. Before issue this
+is an editable working copy. At issue, INV-PACK-R10 retains those bytes from the
+checksummed payload; the working copy is not reopened, and there is still no
+``issued_docx_sha256`` column — the disclosure log names the PDF.
 """
 
 from __future__ import annotations
@@ -52,7 +52,10 @@ from src.domain.services.investigation_pack_pdf import (
 
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 WORKING_COPY_CLOSED = "PACK_WORKING_COPY_CLOSED"
-WORKING_COPY_CLOSED_MESSAGE = "This pack has been issued. The Word working copy is closed; download the retained PDF."
+WORKING_COPY_CLOSED_MESSAGE = (
+    "The Word working copy is closed after issue. Download returns the frozen "
+    "export retained at issue, not a live re-render."
+)
 _ICAM_WORD_NOTE = (
     "The ICAM diagram is drawn in the PDF. This Word file lists the same stored factors "
     "so the wording can be edited before issue."
@@ -379,6 +382,8 @@ class InvestigationPackDocxService:
 
         para = doc.add_paragraph()
         label = _clip(text)
+        if _CHAPTER_PREFIX.match(label.strip()):
+            label = label.upper()
         run = para.add_run(label)
         run.bold = True
         run.font.size = Pt(size)

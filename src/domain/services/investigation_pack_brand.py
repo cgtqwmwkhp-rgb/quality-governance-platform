@@ -21,9 +21,13 @@ from src.domain.services.investigation_pack_ir import Emphasis
 
 RGB = tuple[int, int, int]
 
-CRIMSON: RGB = (176, 44, 48)  # #B02C30 — sampled from the Pantone lockup
-JET_GREY: RGB = (68, 60, 56)  # #443C38 — sampled from the wordmark "Plant"
-PLATINUM: RGB = (232, 228, 223)
+# Plantexpand_Colour_Palette.pdf (1 Aug 2022). Chrome uses Jet and Crimson.
+# Lime and Dodger are alerts / distinguishing chips, never page chrome.
+CRIMSON: RGB = (186, 55, 55)  # #BA3737 — Pantone 1805 C
+JET_GREY: RGB = (51, 48, 48)  # #333030 — Pantone 412 C
+LIME: RGB = (190, 218, 65)  # #BEDA41
+DODGER: RGB = (40, 104, 206)  # #2868CE — Pantone 2386 C
+PLATINUM: RGB = (235, 232, 232)  # #EBE8E8 — Pantone 663 C
 WHITE: RGB = (255, 255, 255)
 BLACK: RGB = (JET_GREY[0], JET_GREY[1], JET_GREY[2])
 
@@ -44,6 +48,7 @@ _FONT_FILES = {
     "bold": "Inter-Bold.ttf",
 }
 _LOCKUP_FILE = "plantexpand-lockup.png"
+_REVERSE_LOCKUP_FILE = "plantexpand-lockup-reverse.png"
 _OFL_FILE = "OFL.txt"
 
 FAMILY_REGULAR = "Inter"
@@ -90,6 +95,13 @@ def lockup_path() -> Path:
     return path
 
 
+def reverse_lockup_path() -> Path:
+    path = _ASSET_DIR / _REVERSE_LOCKUP_FILE
+    if not path.is_file():
+        raise BrandAssetError(f"Pack reverse lockup missing: {path.name}")
+    return path
+
+
 def ofl_path() -> Path:
     path = _ASSET_DIR / _OFL_FILE
     if not path.is_file():
@@ -102,6 +114,7 @@ def resolve_typeface() -> Typeface:
     for weight in _FONT_FILES:
         font_path(weight)
     lockup_path()
+    reverse_lockup_path()
     ofl_path()
     return Typeface()
 

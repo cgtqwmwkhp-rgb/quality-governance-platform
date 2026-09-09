@@ -32,6 +32,7 @@ from src.domain.services.investigation_pack_ir import DocumentMeta, KeyValueBloc
 from src.domain.services.investigation_pack_layout import (
     write_finding_card,
     write_integrity,
+    write_panel,
     write_section_banner,
     write_wrapped_paragraph,
     write_wrapped_table,
@@ -121,6 +122,8 @@ _PACK_CAPA = "capa"
 # template's 01 Incident details … 09 Pack integrity numbering.
 _CATALOGUE_TITLES = {
     "section_1_details": "Incident details",
+    "section_2_immediate_actions": "Immediate actions",
+    "immediate-actions": "Immediate actions",
     _PACK_FINDINGS: "Findings",
     _PACK_ROOT_CAUSE: "Root cause analysis",
     "contributing-factors": "Contributing factors",
@@ -650,15 +653,15 @@ class InvestigationPackPdfService:
             return
         body = _pdf_safe(format_field_value(value), max_len=_MAX_FIELD_CHARS)
         if panel:
-            write_wrapped_paragraph(pdf, body, size=10)
-            pdf.ln(1)
+            write_panel(pdf, body, bar=pack_brand.CRIMSON, fill=pack_brand.PLATINUM)
             return
-        _write_line(pdf, body, height=4.5)
+        write_wrapped_paragraph(pdf, body, size=10)
+        pdf.ln(1)
 
     def _render_rca_core(self, pdf: Any, fields: dict[str, Any]) -> None:
         """Problem, 5 Whys, root cause. Contributing prose stays here only when ICAM was never stored."""
         self._render_stated_field(
-            pdf, "Problem statement", fields.get("problem_statement"), "No problem statement was recorded."
+            pdf, "Problem statement", fields.get("problem_statement"), "No problem statement was recorded.", panel=True
         )
         self._render_why_entries(pdf, fields.get("whys"))
         self._render_stated_field(pdf, "Root cause", fields.get("root_cause"), _EMPTY_ROOT_CAUSE, panel=True)

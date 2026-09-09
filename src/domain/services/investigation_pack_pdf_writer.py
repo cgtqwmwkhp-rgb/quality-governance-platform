@@ -29,7 +29,7 @@ from src.domain.services.investigation_pack_layout import (
 )
 
 _PackFPDF: Any = None
-_COVER_BAND_H = 16.0
+_COVER_BAND_H = 20.0
 
 
 def _require_fpdf() -> Any:
@@ -136,21 +136,22 @@ def create_pack_pdf(meta: DocumentMeta) -> Any:
 
 
 def _paint_cover_band(pdf: Any) -> None:
-    """Solid Jet Grey foot on the cover — address lives here, not in the running footer."""
+    """Solid Jet Grey foot — reverse lockup plus the legal line, including the web."""
     y = float(pdf.h) - _COVER_BAND_H
     pdf.set_fill_color(*brand.JET_GREY)
     pdf.rect(0, y, 210, _COVER_BAND_H, style="F")
+    lockup_w = 38.0
+    pdf.image(str(brand.reverse_lockup_path()), x=pdf.l_margin, y=y + 4.2, w=lockup_w)
     pdf.set_text_color(*brand.WHITE)
-    pdf.set_font(brand.FAMILY_MEDIUM, "", 7)
-    pdf.set_xy(pdf.l_margin, y + 5.2)
-    band = f"{brand.LEGAL_NAME}  ·  {brand.ADDRESS_LINE}  ·  {brand.PHONE}"
+    pdf.set_font(brand.FAMILY_MEDIUM, "", 6.5)
+    pdf.set_xy(pdf.l_margin + lockup_w + 4.0, y + 7.6)
     brand.write_tracked(
         pdf,
-        band.upper(),
-        width=210 - pdf.l_margin - pdf.r_margin,
-        height=5,
-        spacing=0.48,
-        align="C",
+        brand.legal_footer_line().upper(),
+        width=210 - pdf.l_margin - pdf.r_margin - lockup_w - 4.0,
+        height=4.5,
+        spacing=0.28,
+        align="L",
     )
     pdf.set_text_color(*brand.JET_GREY)
 
@@ -226,9 +227,26 @@ def write_cover(pdf: Any, meta: DocumentMeta) -> None:
             new_x="LMARGIN",
             new_y="NEXT",
         )
-        pdf.set_font(brand.FAMILY_REGULAR, "", 9)
-        pdf.set_text_color(*brand.JET_GREY)
-        pdf.multi_cell(0, 4.5, brand.text_safe(meta.confidentiality), new_x="LMARGIN", new_y="NEXT")
+        from src.domain.services.investigation_pack_draw import Frame, draw_rect
+        from src.domain.services.investigation_pack_layout import inner_width, wrap_paragraphs
+
+        avail = band_ceiling - float(pdf.get_y()) - 2.0
+        if avail > 10:
+            pdf.set_font(brand.FAMILY_REGULAR, "", 9)
+            width = inner_width(pdf)
+            lines = wrap_paragraphs(pdf, meta.confidentiality, max(12.0, width - 8.0))
+            line_h = 4.5
+            max_lines = max(1, int((avail - 4.0) / line_h))
+            chunk = lines[:max_lines]
+            height = min(avail, 3.0 + max(1, len(chunk)) * line_h)
+            y = float(pdf.get_y())
+            x = float(pdf.l_margin)
+            draw_rect(pdf, Frame(x, y, width, height), fill=brand.PLATINUM)
+            draw_rect(pdf, Frame(x, y, 2.2, height), fill=brand.LIME)
+            pdf.set_text_color(*brand.JET_GREY)
+            pdf.set_xy(x + 4.0, y + 1.2)
+            pdf.multi_cell(width - 6.0, line_h, "\n".join(chunk))
+            pdf.set_y(y + height + 1.0)
 
     _paint_cover_band(pdf)
     pdf.set_auto_page_break(auto=True, margin=22)
@@ -251,24 +269,37 @@ def write_contents(pdf: Any, document: PackDocument) -> None:
         new_x="LMARGIN",
         new_y="NEXT",
     )
-    pdf.ln(5)
+    pdf.ln(8)
     links: dict[int, int] = {}
     for number, heading in entries:
         link_id = pdf.add_link()
         links[number] = link_id
         pdf.set_font(brand.FAMILY_REGULAR, "", 11)
         pdf.set_text_color(*brand.JET_GREY)
-        pdf.cell(10, 8, str(number), align="L", link=link_id)
-        pdf.cell(0, 8, brand.text_safe(heading), new_x="LMARGIN", new_y="NEXT", link=link_id)
+        pdf.cell(10, 9, str(number), align="L", link=link_id)
+        pdf.cell(0, 9, brand.text_safe(heading), new_x="LMARGIN", new_y="NEXT", link=link_id)
     pdf._pack_toc_links = links  # noqa: SLF001 - consumed by bind_section_destination
-    pdf.ln(6)
+    pdf.ln(8)
+
+
+_NARRATIVE_PANEL_KEYS = frozenset(
+    {
+        "description",
+        "recording notes",
+        "immediate harm",
+        "rationale for scope",
+        "proposed actions",
+        "actions taken",
+        "problem statement",
+    }
+)
 
 
 def write_key_value_block(pdf: Any, block: KeyValueBlock) -> None:
     write_kv_rows(
         pdf,
         tuple((row.label, row.value) for row in block.rows),
-        panel_keys=frozenset(),
+        panel_keys=_NARRATIVE_PANEL_KEYS,
     )
 
 
