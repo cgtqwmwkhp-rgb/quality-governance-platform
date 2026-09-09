@@ -58,8 +58,8 @@ export function packIssueSummary(pack: CustomerPackSummary): string {
   if (packIsIssued(pack)) {
     const times = disclosures === 1 ? 'once' : `${disclosures} times`
     return disclosures > 0
-      ? `Issued ${times}. Download returns the retained copy, not a live re-render.`
-      : 'Issued. Download returns the retained copy, not a live re-render.'
+      ? `Issued ${times}. Download returns the retained PDF and frozen Word, not a live re-render.`
+      : 'Issued. Download returns the retained PDF and frozen Word, not a live re-render.'
   }
   if (isExternalPack(pack) && redactionReviewIsCleared(pack)) {
     return 'Redaction review cleared. Not yet issued to a customer.'
