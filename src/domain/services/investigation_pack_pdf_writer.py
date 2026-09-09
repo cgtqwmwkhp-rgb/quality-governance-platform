@@ -28,13 +28,39 @@ from src.domain.services.investigation_pack_layout import (
     write_wrapped_table,
 )
 
+_PackFPDF: Any = None
+_COVER_BAND_H = 16.0
+
 
 def _require_fpdf() -> Any:
+    """Return the pack FPDF subclass. Cover is outside the PAGE n count."""
+    global _PackFPDF
     try:
         from fpdf import FPDF
+        from fpdf.line_break import TotalPagesSubstitutionFragment
     except ModuleNotFoundError as exc:
         raise RuntimeError("PDF export unavailable: fpdf2 is not installed in this environment") from exc
-    return FPDF
+    if _PackFPDF is not None:
+        return _PackFPDF
+
+    class PackFPDF(FPDF):
+        def output(self, *args: Any, **kwargs: Any) -> Any:
+            orig = TotalPagesSubstitutionFragment.render_text_substitution
+
+            def _body_total(fragment: Any, replacement_text: str) -> str:
+                _ = replacement_text
+                return orig(fragment, str(max(len(self.pages) - 1, 0)))
+
+            # setattr via Any: mypy forbids method assignment and the repo is at the type-ignore cap.
+            target: Any = TotalPagesSubstitutionFragment
+            setattr(target, "render_text_substitution", _body_total)
+            try:
+                return super().output(*args, **kwargs)
+            finally:
+                setattr(target, "render_text_substitution", orig)
+
+    _PackFPDF = PackFPDF
+    return PackFPDF
 
 
 class UnknownBlockError(RuntimeError):
@@ -47,40 +73,50 @@ def _attach_chrome(pdf: Any, meta: DocumentMeta) -> None:
     def header() -> None:  # noqa: N802 - fpdf2 hook
         if pdf.page_no() == 1:
             return
-        pdf.set_y(8)
-        pdf.image(str(brand.lockup_path()), x=pdf.l_margin, y=8, w=42)
-        pdf.set_xy(pdf.l_margin + 46, 10)
+        pdf.set_y(10)
+        pdf.image(str(brand.lockup_path()), x=pdf.l_margin, y=10, w=42)
+        pdf.set_xy(pdf.l_margin + 46, 12)
         pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
         pdf.set_text_color(*brand.JET_GREY)
-        pdf.cell(
-            0,
-            5,
-            brand.text_safe(f"Investigation report · {meta.reference}"),
+        brand.write_tracked(
+            pdf,
+            f"INVESTIGATION REPORT  ·  {meta.reference}",
+            width=0,
+            height=5,
+            spacing=0.42,
             align="R",
         )
-        pdf.set_draw_color(*brand.CRIMSON)
-        pdf.set_line_width(0.35)
-        pdf.line(pdf.l_margin, 22, 210 - pdf.r_margin, 22)
-        pdf.set_y(26)
+        pdf.set_draw_color(*brand.JET_GREY)
+        pdf.set_line_width(0.15)
+        pdf.line(pdf.l_margin, 24, 210 - pdf.r_margin, 24)
+        pdf.set_y(32)
         pdf.set_text_color(*brand.JET_GREY)
 
     def footer() -> None:  # noqa: N802 - fpdf2 hook
-        pdf.set_y(-18)
-        pdf.set_draw_color(*brand.JET_GREY)
-        pdf.set_line_width(0.2)
-        pdf.line(pdf.l_margin, pdf.get_y(), 210 - pdf.r_margin, pdf.get_y())
+        if pdf.page_no() == 1:
+            return
         pdf.set_y(-16)
-        pdf.set_font(brand.FAMILY_REGULAR, "", 7)
+        pdf.set_draw_color(*brand.JET_GREY)
+        pdf.set_line_width(0.15)
+        pdf.line(pdf.l_margin, pdf.get_y(), 210 - pdf.r_margin, pdf.get_y())
+        pdf.set_y(-14)
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font(brand.FAMILY_MEDIUM, "", 7)
         pdf.set_text_color(*brand.JET_GREY)
-        left = brand.text_safe(f"Investigation report · {meta.reference}")
-        right = brand.text_safe(
-            f"{meta.reference} · {meta.classification} · " f"{meta.audience_label} · Page {pdf.page_no()} of {{nb}}"
-        )
-        pdf.cell(95, 4, left, align="L")
-        pdf.cell(0, 4, right, align="R")
-        pdf.set_y(-12)
-        pdf.set_font(brand.FAMILY_REGULAR, "", 6.5)
-        pdf.cell(0, 4, brand.text_safe(brand.legal_footer_line()), align="C")
+        left = f"{meta.reference}  ·  {meta.classification}"
+        body_page = pdf.page_no() - 1
+        brand.write_tracked(pdf, left, width=100, height=4, spacing=0.28, align="L")
+        pdf.set_font(brand.FAMILY_MEDIUM, "", 7)
+        pdf.set_char_spacing(0.28)
+        try:
+            pdf.cell(
+                0,
+                4,
+                brand.text_safe(f"{meta.audience_label.upper()}  ·  PAGE {body_page} OF ") + "{nb}",
+                align="R",
+            )
+        finally:
+            pdf.set_char_spacing(0)
 
     pdf.header = header
     pdf.footer = footer
@@ -94,21 +130,50 @@ def create_pack_pdf(meta: DocumentMeta) -> Any:
     brand.register_fonts(pdf)
     _attach_chrome(pdf, meta)
     pdf.alias_nb_pages()
-    pdf.set_auto_page_break(auto=True, margin=26)
-    pdf.set_margins(left=16, top=28, right=16)
+    pdf.set_auto_page_break(auto=True, margin=22)
+    pdf.set_margins(left=16, top=32, right=16)
     return pdf
 
 
+def _paint_cover_band(pdf: Any) -> None:
+    """Solid Jet Grey foot on the cover — address lives here, not in the running footer."""
+    y = float(pdf.h) - _COVER_BAND_H
+    pdf.set_fill_color(*brand.JET_GREY)
+    pdf.rect(0, y, 210, _COVER_BAND_H, style="F")
+    pdf.set_text_color(*brand.WHITE)
+    pdf.set_font(brand.FAMILY_MEDIUM, "", 7)
+    pdf.set_xy(pdf.l_margin, y + 5.2)
+    band = f"{brand.LEGAL_NAME}  ·  {brand.ADDRESS_LINE}  ·  {brand.PHONE}"
+    brand.write_tracked(
+        pdf,
+        band.upper(),
+        width=210 - pdf.l_margin - pdf.r_margin,
+        height=5,
+        spacing=0.48,
+        align="C",
+    )
+    pdf.set_text_color(*brand.JET_GREY)
+
+
 def write_cover(pdf: Any, meta: DocumentMeta) -> None:
-    """Page 1 — lockup, title, metadata, confidentiality, legal line."""
+    """Unnumbered cover — lockup, title, metadata, confidentiality, Jet band."""
+    pdf.set_auto_page_break(auto=False)
     pdf.add_page()
     pdf.set_y(18)
     pdf.image(str(brand.lockup_path()), x=pdf.l_margin, y=16, w=72)
     pdf.set_y(42)
     pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
     pdf.set_text_color(*brand.CRIMSON)
-    eyebrow = brand.text_safe(f"QUALITY GOVERNANCE PORTAL · {meta.audience_label.upper()}")
-    pdf.cell(0, 5, eyebrow, new_x="LMARGIN", new_y="NEXT")
+    brand.write_tracked(
+        pdf,
+        f"QUALITY GOVERNANCE PORTAL  ·  {meta.audience_label.upper()}",
+        width=0,
+        height=5,
+        spacing=0.55,
+        align="L",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
     pdf.ln(2)
     pdf.set_font(brand.FAMILY_REGULAR, "B", 28)
     pdf.set_text_color(*brand.JET_GREY)
@@ -135,23 +200,38 @@ def write_cover(pdf: Any, meta: DocumentMeta) -> None:
         ("Generated", meta.generated_at_label),
         ("Issued by", brand.ISSUED_BY),
     )
+    band_ceiling = float(pdf.h) - _COVER_BAND_H - 6
     for label, value in rows:
+        if float(pdf.get_y()) > band_ceiling:
+            break
         pdf.set_x(pdf.l_margin)
         pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
         pdf.set_text_color(*brand.CRIMSON)
-        pdf.cell(48, 5, brand.text_safe(label.upper()), align="L")
+        brand.write_tracked(pdf, label.upper(), width=48, height=5, spacing=0.38, align="L")
         pdf.set_font(brand.FAMILY_REGULAR, "", 10)
         pdf.set_text_color(*brand.JET_GREY)
         pdf.multi_cell(0, 5, brand.text_safe(value), new_x="LMARGIN", new_y="NEXT")
 
-    if meta.confidentiality:
+    if meta.confidentiality and float(pdf.get_y()) < band_ceiling - 12:
         pdf.ln(4)
-        pdf.set_font(brand.FAMILY_REGULAR, "B", 8)
+        pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
         pdf.set_text_color(*brand.CRIMSON)
-        pdf.cell(0, 5, "CONFIDENTIALITY", new_x="LMARGIN", new_y="NEXT")
+        brand.write_tracked(
+            pdf,
+            "CONFIDENTIALITY",
+            width=0,
+            height=5,
+            spacing=0.5,
+            align="L",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
         pdf.set_font(brand.FAMILY_REGULAR, "", 9)
         pdf.set_text_color(*brand.JET_GREY)
         pdf.multi_cell(0, 4.5, brand.text_safe(meta.confidentiality), new_x="LMARGIN", new_y="NEXT")
+
+    _paint_cover_band(pdf)
+    pdf.set_auto_page_break(auto=True, margin=22)
 
 
 def write_contents(pdf: Any, document: PackDocument) -> None:
@@ -159,17 +239,29 @@ def write_contents(pdf: Any, document: PackDocument) -> None:
     if not entries:
         return
     pdf.add_page()
-    write_section_banner(pdf, "Contents")
+    pdf.set_font(brand.FAMILY_MEDIUM, "", 9)
+    pdf.set_text_color(*brand.CRIMSON)
+    brand.write_tracked(
+        pdf,
+        "\u2014 CONTENTS",
+        width=0,
+        height=7,
+        spacing=0.7,
+        align="L",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    pdf.ln(5)
     links: dict[int, int] = {}
     for number, heading in entries:
         link_id = pdf.add_link()
         links[number] = link_id
-        pdf.set_font(brand.FAMILY_REGULAR, "", 10)
+        pdf.set_font(brand.FAMILY_REGULAR, "", 11)
         pdf.set_text_color(*brand.JET_GREY)
-        pdf.cell(12, 6, f"{number:02d}", align="L", link=link_id)
-        pdf.cell(0, 6, brand.text_safe(heading), new_x="LMARGIN", new_y="NEXT", link=link_id)
+        pdf.cell(10, 8, str(number), align="L", link=link_id)
+        pdf.cell(0, 8, brand.text_safe(heading), new_x="LMARGIN", new_y="NEXT", link=link_id)
     pdf._pack_toc_links = links  # noqa: SLF001 - consumed by bind_section_destination
-    pdf.ln(4)
+    pdf.ln(6)
 
 
 def write_key_value_block(pdf: Any, block: KeyValueBlock) -> None:
