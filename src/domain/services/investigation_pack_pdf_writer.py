@@ -9,6 +9,12 @@ from __future__ import annotations
 from typing import Any, Callable, Optional
 
 from src.domain.services import investigation_pack_brand as brand
+from src.domain.services.investigation_pack_layout import (
+    write_kv_rows,
+    write_section_banner,
+    write_wrapped_paragraph,
+    write_wrapped_table,
+)
 from src.domain.services.investigation_pack_ir import (
     Block,
     DocumentMeta,
@@ -88,7 +94,7 @@ def create_pack_pdf(meta: DocumentMeta) -> Any:
     brand.register_fonts(pdf)
     _attach_chrome(pdf, meta)
     pdf.alias_nb_pages()
-    pdf.set_auto_page_break(auto=True, margin=24)
+    pdf.set_auto_page_break(auto=True, margin=26)
     pdf.set_margins(left=16, top=28, right=16)
     return pdf
 
@@ -153,26 +159,21 @@ def write_contents(pdf: Any, document: PackDocument) -> None:
     if not entries:
         return
     pdf.add_page()
-    pdf.set_font(brand.FAMILY_REGULAR, "B", 14)
-    pdf.set_text_color(*brand.JET_GREY)
-    pdf.cell(0, 8, "Contents", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(2)
+    write_section_banner(pdf, "Contents")
     for number, heading in entries:
         pdf.set_font(brand.FAMILY_REGULAR, "", 10)
         pdf.set_text_color(*brand.JET_GREY)
         pdf.cell(12, 6, f"{number:02d}", align="L")
         pdf.cell(0, 6, brand.text_safe(heading), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
 
 
 def write_key_value_block(pdf: Any, block: KeyValueBlock) -> None:
-    for row in block.rows:
-        pdf.set_x(pdf.l_margin)
-        pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
-        pdf.set_text_color(*brand.CRIMSON)
-        pdf.cell(48, 5, brand.text_safe(row.label.upper()), align="L")
-        pdf.set_font(brand.FAMILY_REGULAR, "", 10)
-        pdf.set_text_color(*brand.JET_GREY)
-        pdf.multi_cell(0, 5, brand.text_safe(row.value), new_x="LMARGIN", new_y="NEXT")
+    write_kv_rows(
+        pdf,
+        tuple((row.label, row.value) for row in block.rows),
+        panel_keys=frozenset({"description"}),
+    )
 
 
 def write_block(
@@ -183,21 +184,19 @@ def write_block(
     on_figure: Optional[Callable[[Any, FigureBlock], None]] = None,
 ) -> None:
     if isinstance(block, Heading):
-        pdf.set_font(brand.FAMILY_REGULAR, "B", 13 if block.level <= 1 else 11)
-        pdf.set_text_color(*brand.JET_GREY)
         label = f"{block.number} {block.text}".strip() if block.number else block.text
-        pdf.multi_cell(0, 7, brand.text_safe(label), new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(1)
+        if block.level <= 1:
+            write_section_banner(pdf, label)
+        else:
+            pdf.set_font(brand.FAMILY_REGULAR, "B", 11)
+            pdf.set_text_color(*brand.JET_GREY)
+            write_wrapped_paragraph(pdf, label, size=11)
         return
     if isinstance(block, Paragraph):
         from src.domain.services.investigation_pack_ir import Emphasis
 
         size = 9 if block.emphasis is Emphasis.NOTE else 10
-        family, style, _, rgb = brand.Typeface().slot(block.emphasis, size)
-        pdf.set_font(family, style, size)
-        pdf.set_text_color(*rgb)
-        pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 5, brand.text_safe(block.text), new_x="LMARGIN", new_y="NEXT")
+        write_wrapped_paragraph(pdf, block.text, size=size)
         pdf.ln(1)
         return
     if isinstance(block, KeyValueBlock):
@@ -206,37 +205,21 @@ def write_block(
         return
     if isinstance(block, ListBlock):
         if not block.items and block.empty_message:
-            pdf.set_font(brand.FAMILY_REGULAR, "", 10)
-            pdf.set_text_color(*brand.JET_GREY)
-            pdf.multi_cell(0, 5, brand.text_safe(block.empty_message), new_x="LMARGIN", new_y="NEXT")
+            write_wrapped_paragraph(pdf, block.empty_message)
             return
-        pdf.set_font(brand.FAMILY_REGULAR, "", 10)
-        pdf.set_text_color(*brand.JET_GREY)
         for index, item in enumerate(block.items, start=1):
             prefix = f"{index}. " if block.ordered else "- "
-            pdf.set_x(pdf.l_margin)
-            pdf.multi_cell(0, 5, brand.text_safe(prefix + item), new_x="LMARGIN", new_y="NEXT")
+            write_wrapped_paragraph(pdf, prefix + item)
         pdf.ln(1)
         return
     if isinstance(block, TableBlock):
-        if not block.rows and block.empty_message:
-            pdf.set_font(brand.FAMILY_REGULAR, "", 10)
-            pdf.set_text_color(*brand.JET_GREY)
-            pdf.multi_cell(0, 5, brand.text_safe(block.empty_message), new_x="LMARGIN", new_y="NEXT")
-            return
-        col_w = (210 - pdf.l_margin - pdf.r_margin) / max(1, len(block.columns))
-        pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
-        pdf.set_text_color(*brand.CRIMSON)
-        for heading in block.columns:
-            pdf.cell(col_w, 6, brand.text_safe(heading.upper()), border=0)
-        pdf.ln()
-        pdf.set_font(brand.FAMILY_REGULAR, "", 9)
-        pdf.set_text_color(*brand.JET_GREY)
-        for row in block.rows:
-            for cell in row:
-                pdf.cell(col_w, 6, brand.text_safe(cell)[:80], border=0)
-            pdf.ln()
-        pdf.ln(1)
+        write_wrapped_table(
+            pdf,
+            block.columns,
+            block.rows,
+            widths=block.widths,
+            empty_message=block.empty_message,
+        )
         return
     if isinstance(block, FigureBlock):
         if on_figure is None:
@@ -260,11 +243,7 @@ def write_document(
 ) -> None:
     write_cover(pdf, document.meta)
     write_contents(pdf, document)
-    pdf.add_page()
     for section in document.sections:
-        pdf.set_font(brand.FAMILY_REGULAR, "B", 13)
-        pdf.set_text_color(*brand.JET_GREY)
-        pdf.multi_cell(0, 7, brand.text_safe(section.heading), new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(1)
+        write_section_banner(pdf, section.heading)
         for block in section.blocks:
             write_block(pdf, block, on_legacy=on_legacy, on_figure=on_figure)

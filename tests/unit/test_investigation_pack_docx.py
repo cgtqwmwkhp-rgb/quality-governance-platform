@@ -172,3 +172,20 @@ def test_pdf_and_word_filenames_share_the_same_stem() -> None:
     docx = InvestigationPackDocxService.docx_filename("INV-2026-0007", "6f1c2d3e-0000")
 
     assert pdf.replace(".pdf", "") == docx.replace(".docx", "")
+
+
+def test_long_capa_titles_are_not_clipped_in_word() -> None:
+    pack = _pack()
+    pack["content"]["sections"]["capa"] = {
+        "items": [
+            {
+                "title": "Containment: restrict S Leggitt from chainsaw work on Forestry England sites",
+                "reference": "CAPA-2026-0010",
+            }
+        ]
+    }
+    text = _docx_text(InvestigationPackDocxService().build_docx_bytes(pack))
+
+    assert "Forestry England sites" in text
+    assert "CAPA-2026-0010" in text
+

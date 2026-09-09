@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timezone
-from functools import partial
 from typing import Any, Callable, Optional
 
 from src.domain.services import investigation_pack_brand as pack_brand
@@ -36,6 +35,14 @@ from src.domain.services.investigation_pack_ir import (
     PackDocument,
     Section,
     TableBlock,
+)
+from src.domain.services.investigation_pack_layout import (
+    write_finding_card,
+    write_panel,
+    write_section_banner,
+    write_why_card,
+    write_wrapped_paragraph,
+    write_wrapped_table,
 )
 from src.domain.services.investigation_pack_pdf_writer import create_pack_pdf, write_block, write_contents, write_cover
 
@@ -124,6 +131,8 @@ _CATALOGUE_TITLES = {
     "section_1_details": "Incident details",
     _PACK_FINDINGS: "Findings",
     _PACK_ROOT_CAUSE: "Root cause analysis",
+    "contributing-factors": "Contributing factors",
+    "icam-factors": "ICAM contributing factors",
     _PACK_CAPA: "CAPA",
 }
 
@@ -174,6 +183,43 @@ def format_field_value(value: Any) -> str:
 def _catalogue_title(section_key: Any) -> str:
     key = str(section_key or "")
     return _CATALOGUE_TITLES.get(key, humanise_key(key))
+
+
+def _icam_payload(fields: dict[str, Any]) -> Any:
+    """Stored ICAM snapshot, or None when the pack never consulted factors."""
+    if "icam_factors" not in fields:
+        return None
+    raw = fields.get("icam_factors")
+    if raw is None:
+        return None
+    return raw
+
+
+def _contents_sections(section_map: dict[str, Any], *, include_chronology: bool) -> list[Section]:
+    """Contents headings, including template chapters 04/05 when ICAM is stored."""
+    contents_list: list[Section] = []
+    for key in section_map:
+        contents_list.append(Section(id=str(key), heading=_catalogue_title(key), blocks=(), in_contents=True))
+        if str(key) != _PACK_ROOT_CAUSE:
+            continue
+        fields = section_map[key]
+        if isinstance(fields, dict) and _icam_payload(fields) is not None:
+            contents_list.append(
+                Section(id="contributing-factors", heading="Contributing factors", blocks=(), in_contents=True)
+            )
+            contents_list.append(
+                Section(id="icam-factors", heading="ICAM contributing factors", blocks=(), in_contents=True)
+            )
+    if include_chronology:
+        contents_list.append(Section(id="chronology", heading="Chronology", blocks=(), in_contents=True))
+    contents_list.extend(
+        (
+            Section(id="evidence", heading="Evidence schedule", blocks=(), in_contents=True),
+            Section(id="redaction", heading="Redaction summary", blocks=(), in_contents=True),
+            Section(id="integrity", heading="Pack integrity", blocks=(), in_contents=True),
+        )
+    )
+    return contents_list
 
 
 def _uk_stamp(value: str) -> str | None:
@@ -319,10 +365,9 @@ def _incident_reference(pack: dict[str, Any], content: dict[str, Any]) -> str:
 
 
 def _write_line(pdf: Any, text: str, *, height: float = 5) -> None:
-    """Write wrapped text from the left margin (avoids fpdf2 mid-line multi_cell errors)."""
-    pdf.set_x(pdf.l_margin)
-    pdf.set_text_color(*pack_brand.JET_GREY)
-    pdf.multi_cell(0, height, _pdf_safe(text), new_x="LMARGIN", new_y="NEXT")
+    """Write wrapped text from the left margin. ``height`` is kept for callers; wrap is measured."""
+    _ = height
+    write_wrapped_paragraph(pdf, text)
 
 
 def _set_pack_font(pdf: Any, *, bold: bool = False, size: float = 10) -> None:
@@ -384,24 +429,16 @@ class InvestigationPackPdfService:
         raw_sections = content.get("sections")
         section_map: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
         chronology_feed_data, _chronology_provenance = chronology_feed(pack, content, timeline_events)
-        contents_list = [
-            Section(id=str(key), heading=_catalogue_title(key), blocks=(), in_contents=True) for key in section_map
-        ]
-        if chronology_feed_data is not None:
-            contents_list.append(Section(id="chronology", heading="Chronology", blocks=(), in_contents=True))
-        contents_list.extend(
-            (
-                Section(id="evidence", heading="Evidence schedule", blocks=(), in_contents=True),
-                Section(id="redaction", heading="Redaction summary", blocks=(), in_contents=True),
-                Section(id="integrity", heading="Pack integrity", blocks=(), in_contents=True),
-            )
+        document = PackDocument(
+            meta=meta,
+            sections=tuple(
+                _contents_sections(section_map, include_chronology=chronology_feed_data is not None)
+            ),
         )
-        document = PackDocument(meta=meta, sections=tuple(contents_list))
 
         pdf = create_pack_pdf(meta)
         write_cover(pdf, meta)
         write_contents(pdf, document)
-        pdf.add_page()
 
         chapter = self._render_report_sections(
             pdf, section_map, brand=brand, pack_uuid=pack.get("pack_uuid"), start_at=1
@@ -471,14 +508,13 @@ class InvestigationPackPdfService:
         pdf.ln(1)
 
         self._section_heading(pdf, f"{chapter:02d} Pack integrity", brand)
-        _set_pack_font(pdf, size=9)
-        _write_line(pdf, f"Pack UUID: {pack.get('pack_uuid') or 'unknown'}", height=4.5)
-        _write_line(pdf, f"Content SHA-256: {pack.get('checksum_sha256') or 'not recorded'}", height=4.5)
-        _write_line(
+        write_panel(
             pdf,
+            f"Pack UUID: {pack.get('pack_uuid') or 'unknown'}\n"
+            f"Content SHA-256: {pack.get('checksum_sha256') or 'not recorded'}\n"
             "This PDF renders the stored pack payload. The SHA-256 above is the checksum of that "
             "payload, so this document can be checked against the record it was issued from.",
-            height=4.5,
+            bar=pack_brand.CRIMSON,
         )
 
         try:
@@ -510,11 +546,27 @@ class InvestigationPackPdfService:
             return start_at
         renderers: dict[str, Callable[[Any, dict[str, Any]], None]] = {
             _PACK_FINDINGS: self._render_findings_section,
-            _PACK_ROOT_CAUSE: partial(self._render_rca_section, brand=brand, pack_uuid=pack_uuid),
             _PACK_CAPA: self._render_capa_section,
         }
         chapter = start_at
         for section_key, fields in sections.items():
+            if str(section_key) == _PACK_ROOT_CAUSE and isinstance(fields, dict):
+                self._section_heading(pdf, f"{chapter:02d} {_catalogue_title(section_key)}", brand)
+                chapter += 1
+                if not fields:
+                    _write_line(pdf, "No content recorded for this section.", height=4.5)
+                    pdf.ln(1)
+                    continue
+                self._render_rca_core(pdf, fields)
+                if _icam_payload(fields) is not None:
+                    self._section_heading(pdf, f"{chapter:02d} Contributing factors", brand)
+                    chapter += 1
+                    self._render_contributing_factors(pdf, fields)
+                    self._section_heading(pdf, f"{chapter:02d} {_ICAM_HEADING}", brand)
+                    chapter += 1
+                    self._render_icam_factors(pdf, fields, brand=brand, pack_uuid=pack_uuid)
+                pdf.ln(1)
+                continue
             self._section_heading(pdf, f"{chapter:02d} {_catalogue_title(section_key)}", brand)
             chapter += 1
             _set_pack_font(pdf, size=10)
@@ -554,8 +606,7 @@ class InvestigationPackPdfService:
             else:
                 body = item
             rendered = format_field_value(body)
-            _set_pack_font(pdf, size=10)
-            _write_line(pdf, _pdf_safe(f"{index:02d}. {rendered}", max_len=_MAX_FIELD_CHARS), height=4.5)
+            write_finding_card(pdf, index, _pdf_safe(f"{index:02d}. {rendered}", max_len=_MAX_FIELD_CHARS))
 
     @staticmethod
     def _render_why_entries(pdf: Any, whys: Any) -> None:
@@ -575,31 +626,20 @@ class InvestigationPackPdfService:
                 level = int(level_raw)
             except (TypeError, ValueError):
                 continue
-            _set_pack_font(pdf, bold=True, size=9)
-            _write_line(pdf, f"Why {level}", height=4.5)
-            _set_pack_font(pdf, size=10)
             question = raw.get("why")
-            if isinstance(question, str) and question.strip():
-                _write_line(
-                    pdf,
-                    _pdf_safe(f"Question: {question.strip()}", max_len=_MAX_FIELD_CHARS),
-                    height=4.5,
-                )
-            _write_line(
-                pdf,
-                _pdf_safe(f"Answer: {format_pack_field(raw.get('answer'))}", max_len=_MAX_FIELD_CHARS),
-                height=4.5,
-            )
+            question_text = question.strip() if isinstance(question, str) and question.strip() else None
             evidence = raw.get("evidence")
-            if isinstance(evidence, str) and evidence.strip():
-                _write_line(
-                    pdf,
-                    _pdf_safe(f"Evidence: {evidence.strip()}", max_len=_MAX_FIELD_CHARS),
-                    height=4.5,
-                )
+            evidence_text = evidence.strip() if isinstance(evidence, str) and evidence.strip() else None
+            write_why_card(
+                pdf,
+                level,
+                _pdf_safe(format_pack_field(raw.get("answer")), max_len=_MAX_FIELD_CHARS),
+                _pdf_safe(evidence_text, max_len=_MAX_FIELD_CHARS) if evidence_text else None,
+                _pdf_safe(question_text, max_len=_MAX_FIELD_CHARS) if question_text else None,
+            )
 
     @staticmethod
-    def _render_stated_field(pdf: Any, heading: str, value: Any, empty_message: str) -> None:
+    def _render_stated_field(pdf: Any, heading: str, value: Any, empty_message: str, *, panel: bool = False) -> None:
         _set_pack_font(pdf, bold=True, size=9)
         _write_line(pdf, heading, height=4.5)
         _set_pack_font(pdf, size=10)
@@ -609,23 +649,48 @@ class InvestigationPackPdfService:
         if isinstance(value, list) and not value:
             _write_line(pdf, empty_message, height=4.5)
             return
-        _write_line(pdf, _pdf_safe(format_field_value(value), max_len=_MAX_FIELD_CHARS), height=4.5)
+        body = _pdf_safe(format_field_value(value), max_len=_MAX_FIELD_CHARS)
+        if panel:
+            write_panel(pdf, body, bar=pack_brand.CRIMSON)
+            return
+        _write_line(pdf, body, height=4.5)
 
-    def _render_rca_section(
-        self,
-        pdf: Any,
-        fields: dict[str, Any],
-        *,
-        brand: tuple[int, int, int] = pack_brand.CRIMSON,
-        pack_uuid: Any = None,
-    ) -> None:
+    def _render_rca_core(self, pdf: Any, fields: dict[str, Any]) -> None:
+        """Problem, 5 Whys, root cause. Contributing prose stays here only when ICAM was never stored."""
         self._render_stated_field(
             pdf, "Problem statement", fields.get("problem_statement"), "No problem statement was recorded."
         )
         self._render_why_entries(pdf, fields.get("whys"))
-        self._render_stated_field(pdf, "Root cause", fields.get("root_cause"), _EMPTY_ROOT_CAUSE)
-        self._render_stated_field(pdf, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING)
-        self._render_icam_factors(pdf, fields, brand=brand, pack_uuid=pack_uuid)
+        self._render_stated_field(pdf, "Root cause", fields.get("root_cause"), _EMPTY_ROOT_CAUSE, panel=True)
+        if _icam_payload(fields) is None:
+            self._render_stated_field(
+                pdf, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING
+            )
+
+    @staticmethod
+    def _render_contributing_factors(pdf: Any, fields: dict[str, Any]) -> None:
+        """Template chapter 04: category / factor / depth from stored ICAM rows."""
+        raw = _icam_payload(fields)
+        factors = normalise_icam_factors(raw)
+        if factors.factors:
+            rows: list[tuple[str, str, str]] = []
+            for factor in factors.factors:
+                if factor.sub_causes:
+                    bullets = "\n".join(f"- {sub}" for sub in factor.sub_causes)
+                    body = f"{factor.cause}\n{bullets}"
+                else:
+                    body = factor.cause
+                rows.append((factor.category_label, body, factor.depth_label or "—"))
+            write_wrapped_table(
+                pdf,
+                ("ICAM category", "Contributing factor", "HSG245 causal depth"),
+                rows,
+                widths=(0.22, 0.56, 0.22),
+            )
+            return
+        InvestigationPackPdfService._render_stated_field(
+            pdf, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING
+        )
 
     def _render_icam_factors(
         self,
@@ -669,8 +734,6 @@ class InvestigationPackPdfService:
             return
 
         factors = normalise_icam_factors(raw)
-        _set_pack_font(pdf, bold=True, size=9)
-        _write_line(pdf, _ICAM_HEADING, height=4.5)
         _set_pack_font(pdf, size=10)
         _write_line(pdf, icam_summary_line(factors), height=4.5)
 
@@ -755,6 +818,7 @@ class InvestigationPackPdfService:
             TableBlock(
                 columns=("Reference", "Action"),
                 rows=tuple(rows),
+                widths=(0.28, 0.72),
             ),
         )
 
@@ -861,8 +925,5 @@ class InvestigationPackPdfService:
 
     @staticmethod
     def _section_heading(pdf: Any, title: str, brand: tuple[int, int, int]) -> None:
-        pdf.set_text_color(*brand)
-        _set_pack_font(pdf, bold=True, size=12)
-        _write_line(pdf, title, height=7)
-        pdf.set_text_color(0, 0, 0)
-        _set_pack_font(pdf, size=10)
+        _ = brand
+        write_section_banner(pdf, title)

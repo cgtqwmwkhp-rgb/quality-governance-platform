@@ -40,6 +40,7 @@ from src.domain.services.investigation_pack_pdf import (
     _PACK_ROOT_CAUSE,
     _catalogue_title,
     _human_generated_label,
+    _icam_payload,
     _incident_reference,
     chronology_feed,
     confidentiality_notice,
@@ -167,7 +168,13 @@ class InvestigationPackDocxService:
         raw_sections = content.get("sections")
         section_map: dict[str, Any] = raw_sections if isinstance(raw_sections, dict) else {}
         chronology_feed_data, chronology_provenance = chronology_feed(pack, content, timeline_events)
-        contents: list[str] = [_catalogue_title(key) for key in section_map]
+        contents: list[str] = []
+        for key in section_map:
+            contents.append(_catalogue_title(key))
+            fields = section_map[key]
+            if str(key) == _PACK_ROOT_CAUSE and isinstance(fields, dict) and _icam_payload(fields) is not None:
+                contents.append("Contributing factors")
+                contents.append(_ICAM_HEADING)
         if chronology_feed_data is not None:
             contents.append("Chronology")
         contents.extend(("Evidence schedule", "Redaction summary", "Pack integrity"))
@@ -190,7 +197,14 @@ class InvestigationPackDocxService:
                 if key == _PACK_FINDINGS:
                     self._render_findings(doc, fields, jet)
                 elif key == _PACK_ROOT_CAUSE:
-                    self._render_rca(doc, fields, jet)
+                    self._render_rca_core(doc, fields, jet)
+                    if _icam_payload(fields) is not None:
+                        self._heading(doc, f"{chapter:02d} Contributing factors", jet, size=14)
+                        chapter += 1
+                        self._render_contributing(doc, fields, jet, crimson)
+                        self._heading(doc, f"{chapter:02d} {_ICAM_HEADING}", jet, size=14)
+                        chapter += 1
+                        self._render_icam_list(doc, fields, jet)
                 elif key == _PACK_CAPA:
                     self._render_capa(doc, fields, jet, crimson)
                 else:
@@ -287,22 +301,28 @@ class InvestigationPackDocxService:
         run.font.color.rgb = colour
 
     @staticmethod
-    def _write_kv_table(doc: Any, rows: tuple[tuple[str, str], ...], crimson: Any, jet: Any) -> None:
+    def _write_grid(doc: Any, rows: list[tuple[str, ...]], crimson: Any, jet: Any) -> None:
         from docx.shared import Pt
 
-        table = doc.add_table(rows=len(rows), cols=2)
+        if not rows:
+            return
+        cols = max(len(row) for row in rows)
+        table = doc.add_table(rows=len(rows), cols=cols)
         table.style = "Table Grid"
-        for index, (label, value) in enumerate(rows):
-            cells = table.rows[index].cells
-            cells[0].text = str(label).upper()
-            cells[1].text = _clip(str(value))
-            if cells[0].paragraphs[0].runs:
-                cells[0].paragraphs[0].runs[0].font.size = Pt(8)
-                cells[0].paragraphs[0].runs[0].font.color.rgb = crimson
-                cells[0].paragraphs[0].runs[0].bold = True
-            if cells[1].paragraphs[0].runs:
-                cells[1].paragraphs[0].runs[0].font.size = Pt(10)
-                cells[1].paragraphs[0].runs[0].font.color.rgb = jet
+        for r_index, row in enumerate(rows):
+            for c_index in range(cols):
+                value = row[c_index] if c_index < len(row) else ""
+                cell = table.rows[r_index].cells[c_index]
+                cell.text = str(value)
+                if not cell.paragraphs[0].runs:
+                    continue
+                run = cell.paragraphs[0].runs[0]
+                run.font.size = Pt(8 if r_index == 0 else 10)
+                run.font.color.rgb = crimson if r_index == 0 else jet
+                run.bold = r_index == 0
+
+    def _write_kv_table(self, doc: Any, rows: tuple[tuple[str, str], ...], crimson: Any, jet: Any) -> None:
+        self._write_grid(doc, [(label, value) for label, value in rows], crimson, jet)
 
     def _render_findings(self, doc: Any, fields: dict[str, Any], jet: Any) -> None:
         items = fields.get("items")
@@ -337,19 +357,36 @@ class InvestigationPackDocxService:
             if isinstance(evidence, str) and evidence.strip():
                 self._body(doc, f"Evidence: {evidence.strip()}", jet)
 
-    def _render_rca(self, doc: Any, fields: dict[str, Any], jet: Any) -> None:
+    def _render_rca_core(self, doc: Any, fields: dict[str, Any], jet: Any) -> None:
         self._stated(
             doc, "Problem statement", fields.get("problem_statement"), "No problem statement was recorded.", jet
         )
         self._render_why(doc, fields.get("whys"), jet)
         self._stated(doc, "Root cause", fields.get("root_cause"), _EMPTY_ROOT_CAUSE, jet)
+        if _icam_payload(fields) is None:
+            self._stated(doc, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING, jet)
+
+    def _render_contributing(self, doc: Any, fields: dict[str, Any], jet: Any, crimson: Any) -> None:
+        raw = _icam_payload(fields)
+        factors = normalise_icam_factors(raw)
+        if factors.factors:
+            rows: list[tuple[str, ...]] = [("ICAM category", "Contributing factor", "HSG245 causal depth")]
+            for factor in factors.factors:
+                if factor.sub_causes:
+                    bullets = "; ".join(factor.sub_causes)
+                    body = f"{factor.cause} ({bullets})"
+                else:
+                    body = factor.cause
+                rows.append((factor.category_label, body, factor.depth_label or "—"))
+            self._write_grid(doc, rows, crimson, jet)
+            return
         self._stated(doc, "Contributing factors", fields.get("contributing_factors"), _EMPTY_CONTRIBUTING, jet)
 
+    def _render_icam_list(self, doc: Any, fields: dict[str, Any], jet: Any) -> None:
         raw = fields.get(_PACK_ICAM_FACTORS)
         if raw is None:
             return
         factors = normalise_icam_factors(raw)
-        self._heading(doc, _ICAM_HEADING, jet, size=12)
         self._body(doc, icam_summary_line(factors), jet)
         self._body(doc, _ICAM_WORD_NOTE, jet)
         for factor in factors.factors:
@@ -396,4 +433,4 @@ class InvestigationPackDocxService:
                 except (TypeError, ValueError):
                     pass
             rows.append((reference, action))
-        self._write_kv_table(doc, (("Reference", "Action"), *rows), crimson, jet)
+        self._write_grid(doc, [("Reference", "Action"), *rows], crimson, jet)

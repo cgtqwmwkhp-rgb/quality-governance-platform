@@ -1062,3 +1062,49 @@ class TestPackIcamDiagram:
         assert "the whole of the shift" in text
         assert "Factor wording is wrapped in the category block" in text
         assert "permit-to-work..." not in text
+
+
+class TestPackLayoutWrap:
+    def test_long_capa_titles_are_not_clipped(self) -> None:
+        title = (
+            "Containment: restrict S Leggitt from chainsaw work on Forestry England sites"
+        )
+        pack = _pack(
+            content={
+                "sections": {
+                    "capa": {"items": [{"title": title, "reference": "CAPA-2026-0010"}]},
+                }
+            }
+        )
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "Forestry England sites" in text
+        assert "restrict S Leggitt" in text
+
+    def test_long_finding_is_not_truncated_at_a_box_edge(self) -> None:
+        body = (
+            "Hearing protection, accounts in conflict and not determined. Forestry England report "
+            "that a saw was run at full revs on the workbench without hearing protection while a "
+            "helmet with ear defenders was on the bench, and that when queried the engineer replied "
+            "that he was deaf anyway. The engineer's account is that the Forestry England face guard "
+            "could not be fitted because its mounting passes through the ear defenders on the supplied "
+            "helmet, that he ran the first saw without defenders as a result, and that the site contact "
+            "then lent him a helmet with defenders which he used from that point. These accounts cannot "
+            "be reconciled on the evidence held. No determination is made pending a written statement "
+            "from the Forestry England site contact."
+        )
+        pack = _pack(content={"sections": {"findings": {"items": [{"body": body}]}}})
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "These accounts cannot be reconciled on the evidence held" in text
+        assert "Forestry England site contact." in text
+
+    def test_icam_payload_splits_contributing_and_icam_chapters(self) -> None:
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(_rca_section()))))
+
+        assert "Contributing factors" in text
+        assert "ICAM contributing factors" in text
+        assert "No refresher training schedule" in text
+        assert "Budget withdrawn" in text
+        assert "HSG245" in text
+
