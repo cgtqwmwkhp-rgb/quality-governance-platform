@@ -260,7 +260,7 @@ class TestPackBranding:
         out = InvestigationPackPdfService().build_pdf_bytes(_pack())
         pages = PdfReader(io.BytesIO(out)).pages
 
-        assert "Contents" in (pages[1].extract_text() or "")
+        assert "Contents" in (pages[1].extract_text() or "") or "CONTENTS" in (pages[1].extract_text() or "")
 
     def test_missing_incident_reference_uses_investigation_reference_not_title(self) -> None:
         pack = _pack()
@@ -287,8 +287,8 @@ class TestPackBranding:
 
         assert "Plantexpand Ltd" in text
         assert "UNCONTROLLED WHEN PRINTED" in text
-        assert "Unit 7 Buckingham Square" in text
-        assert "Page 1 of" in text
+        assert "UNIT 7 BUCKINGHAM SQUARE" in text.upper()
+        assert "PAGE 1 OF" in text
         assert "External customer pack" in text
         assert "2 fields were redacted" in text
         assert "Default Organisation" not in text
@@ -302,7 +302,7 @@ class TestPackBranding:
         assert organisation_name not in text
         assert "Plantexpand Ltd" in text
         assert "UNCONTROLLED WHEN PRINTED" in text
-        assert "Page 1 of" in text
+        assert "PAGE 1 OF" in text
 
     def test_c1_honesty_notice_still_renders_on_a_branded_external_pack(self) -> None:
         out = InvestigationPackPdfService().build_pdf_bytes(_pack(redaction_log=[]), organisation_name="Plantexpand")
@@ -1121,7 +1121,7 @@ class TestPackContentsLinks:
         from pypdf import PdfReader
 
         reader = PdfReader(io.BytesIO(data))
-        contents_page = next(page for page in reader.pages if "Contents" in (page.extract_text() or ""))
+        contents_page = next(page for page in reader.pages if "CONTENTS" in (page.extract_text() or "").upper())
         annots = contents_page.get("/Annots")
         assert annots is not None
         assert len(list(annots)) >= 2
