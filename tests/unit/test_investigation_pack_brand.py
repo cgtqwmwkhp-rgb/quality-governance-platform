@@ -91,7 +91,7 @@ class TestLetterheadLock:
         assert "Default Organisation" not in text
         assert "Plantexpand Ltd" in text
         assert "UNCONTROLLED WHEN PRINTED" in text
-        assert "Unit 7 Buckingham Square" in text
+        assert "UNIT 7 BUCKINGHAM SQUARE" in text.upper()
         assert b"Helvetica" not in out
         from pypdf import PdfReader
 
@@ -106,17 +106,27 @@ class TestLetterheadLock:
         assert any("Inter" in name for name in names)
         assert first.images, "cover must embed the lockup"
 
-    def test_cover_is_page_one_and_page_count_matches_footer(self) -> None:
+    def test_cover_is_unnumbered_and_body_pages_start_at_one(self) -> None:
         out = InvestigationPackPdfService().build_pdf_bytes(_pack())
         text = _pdf_text(out)
-        assert "Investigation" in text
+        assert "INVESTIGATION REPORT" in text
         assert "Report" in text
-        assert "Contents" in text
-        assert "Page 1 of" in text
+        assert "CONTENTS" in text
+        assert "PAGE 1 OF" in text
         from pypdf import PdfReader
 
-        pages = len(PdfReader(io.BytesIO(out)).pages)
-        assert f"Page 1 of {pages}" in text or f"Page 1 of {pages}".lower() in text.lower()
+        reader = PdfReader(io.BytesIO(out))
+        pages = len(reader.pages)
+        cover = reader.pages[0].extract_text() or ""
+        assert "PAGE 1" not in cover
+        assert "PAGE 1 OF" not in cover
+        body_pages = pages - 1
+        assert f"PAGE 1 OF {body_pages}" in text
+        body = reader.pages[1].extract_text() or ""
+        assert "CONTENTS" in body.upper()
+        assert "INVESTIGATION REPORT" in text
+        assert "UNCONTROLLED WHEN PRINTED" in text
+        assert "EXTERNAL CUSTOMER PACK" in text.upper() or "External customer pack" in text
 
     def test_unknown_block_raises_rather_than_skipping(self) -> None:
         class Mystery:
