@@ -26,7 +26,9 @@ import { toast } from '../contexts/ToastContext'
 export default function ComplianceScheduleDetail() {
   const { id } = useParams<{ id: string }>()
   const requirementId = Number(id)
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const copy = (key: string, english: string) =>
+    i18n.language.toLowerCase().startsWith('cy') ? t(key, english) : english
   const currentUserId = useMemo(() => getCurrentUserId(), [])
   const ownershipLabel = useOwnershipLabel()
   const [requirement, setRequirement] = useState<ComplianceRequirement | null>(null)
@@ -137,10 +139,10 @@ export default function ComplianceScheduleDetail() {
           data-testid="compliance-schedule-inactive-banner"
         >
           <p className="font-medium">
-            {t('compliance.schedule.inactive.banner_title', 'This obligation is retired')}
+            {copy('compliance.schedule.inactive.banner_title', 'This obligation is retired')}
           </p>
           <p className="mt-1">
-            {t(
+            {copy(
               'compliance.schedule.inactive.banner_body',
               'It is off the active register and generates no reminders. Its history below is unchanged. Reactivate it to put it back on the schedule.',
             )}

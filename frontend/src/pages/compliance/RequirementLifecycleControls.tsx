@@ -30,7 +30,9 @@ export function RequirementLifecycleControls({
   requirement,
   onChanged,
 }: RequirementLifecycleControlsProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const copy = (key: string, english: string) =>
+    i18n.language.toLowerCase().startsWith('cy') ? t(key, english) : english
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -102,7 +104,7 @@ export function RequirementLifecycleControls({
               {t('compliance.schedule.deactivate.title', 'Retire this obligation?')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t(
+              {copy(
                 'compliance.schedule.deactivate.description',
                 'It leaves the active register and stops generating reminders. Its completion history is kept, and you can bring it back from the Retired view.',
               )}
