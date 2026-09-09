@@ -28,7 +28,7 @@ what the drawing layer asked for, not what fpdf2 did about it.
 |---|---|
 | `investigation_chronology_two_lane.json` | Chronology with both origins: source-record entries above the time axis, the investigation's own below it |
 | `investigation_chronology_single_event.json` | Chronology with one entry — zero time span, so the axis has a single centred stamp instead of two end dates |
-| `investigation_icam_four_bands.json` | ICAM contributing factors with all four categories populated: sub-causes, all three HSG245 depths, and one factor whose depth nobody recorded (no chip, same text column) |
+| `investigation_icam_four_bands.json` | ICAM four category bands across three HSG245 columns (Immediate / Underlying / Root); sub-causes as hyphen lines; one unclassified factor under its band, not assigned a depth |
 | `investigation_icam_partial_bands.json` | ICAM contributing factors in two categories only — the other two bands state "None recorded" rather than being dropped |
 
 ## Regenerating
