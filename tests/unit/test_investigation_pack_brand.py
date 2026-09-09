@@ -71,16 +71,17 @@ class TestBrandAssets:
         with pytest.raises(brand.BrandAssetError, match="reverse lockup"):
             brand.reverse_lockup_path()
 
-    def test_cover_band_carries_the_reverse_lockup_and_the_web(self) -> None:
+    def test_cover_band_carries_the_reverse_lockup_and_the_legal_line(self) -> None:
         from pypdf import PdfReader
 
         out = InvestigationPackPdfService().build_pdf_bytes(_pack())
         reader = PdfReader(io.BytesIO(out))
         cover = reader.pages[0]
         assert len(cover.images) >= 2
-        text = (cover.extract_text() or "").upper()
-        assert "PLANTEXPAND.COM" in text
-        assert "CONFIDENTIAL" in text
+        cover_text = (cover.extract_text() or "").upper()
+        assert brand.PHONE in (cover.extract_text() or "")
+        assert "UNIT 7 BUCKINGHAM SQUARE" in cover_text
+        assert "CONFIDENTIAL" in cover_text
 
     def test_missing_lockup_fails_closed_without_helvetica(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(brand, "_LOCKUP_FILE", "missing-lockup.png")
