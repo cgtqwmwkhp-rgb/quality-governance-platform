@@ -188,3 +188,13 @@ def test_long_capa_titles_are_not_clipped_in_word() -> None:
 
     assert "Forestry England sites" in text
     assert "CAPA-2026-0010" in text
+
+
+def test_contents_rows_hyperlink_to_section_bookmarks() -> None:
+    from docx import Document
+
+    document = Document(io.BytesIO(InvestigationPackDocxService().build_docx_bytes(_pack())))
+    body = document.element.body.xml
+    assert 'w:anchor="pack-sec-01"' in body
+    assert 'w:name="pack-sec-01"' in body
+    assert 'w:name="pack-sec-02"' in body
