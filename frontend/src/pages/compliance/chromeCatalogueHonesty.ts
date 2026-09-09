@@ -115,7 +115,7 @@ export function importedRecordMatchesChrome(
   scheme: string | null | undefined,
   frameworkId: ChromeWithoutClauseCatalogue,
 ): boolean {
-  const n = (scheme || '').trim().toLowerCase()
+  const n = scheme?.trim().toLowerCase()
   if (frameworkId === 'pm') return n === 'planet_mark'
   if (frameworkId === 'uvdb') return n === `achilles_${frameworkId}`
   if (frameworkId === 'chas') return n === 'chas'
