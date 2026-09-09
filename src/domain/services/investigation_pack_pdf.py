@@ -431,9 +431,7 @@ class InvestigationPackPdfService:
         chronology_feed_data, _chronology_provenance = chronology_feed(pack, content, timeline_events)
         document = PackDocument(
             meta=meta,
-            sections=tuple(
-                _contents_sections(section_map, include_chronology=chronology_feed_data is not None)
-            ),
+            sections=tuple(_contents_sections(section_map, include_chronology=chronology_feed_data is not None)),
         )
 
         pdf = create_pack_pdf(meta)

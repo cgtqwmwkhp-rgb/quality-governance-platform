@@ -1066,9 +1066,7 @@ class TestPackIcamDiagram:
 
 class TestPackLayoutWrap:
     def test_long_capa_titles_are_not_clipped(self) -> None:
-        title = (
-            "Containment: restrict S Leggitt from chainsaw work on Forestry England sites"
-        )
+        title = "Containment: restrict S Leggitt from chainsaw work on Forestry England sites"
         pack = _pack(
             content={
                 "sections": {
@@ -1107,4 +1105,3 @@ class TestPackLayoutWrap:
         assert "No refresher training schedule" in text
         assert "Budget withdrawn" in text
         assert "HSG245" in text
-

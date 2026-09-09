@@ -188,4 +188,3 @@ def test_long_capa_titles_are_not_clipped_in_word() -> None:
 
     assert "Forestry England sites" in text
     assert "CAPA-2026-0010" in text
-
