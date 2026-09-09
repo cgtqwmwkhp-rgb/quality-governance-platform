@@ -159,13 +159,12 @@ def write_panel(
 
 
 def write_finding_card(pdf: Any, index: int, body: str) -> None:
-    """Numbered finding in a platinum frame. ``index`` is painted as a bar label."""
-    _ = index
-    badge_w = _BAR
+    """Display numeral 01–09 on white paper. No platinum slab, no left bar."""
+    numeral = f"{index:02d}"
+    numeral_w = 16.0
     width = inner_width(pdf)
-    inset = 3.6
     pdf.set_font(brand.FAMILY_REGULAR, "", 10)
-    text_width = max(20.0, width - badge_w - inset - _WRAP_SLACK)
+    text_width = max(20.0, width - numeral_w - _WRAP_SLACK)
     remaining = wrap_paragraphs(pdf, body, text_width)
     while remaining:
         avail = space_remaining(pdf)
@@ -175,79 +174,57 @@ def write_finding_card(pdf: Any, index: int, body: str) -> None:
             continue
         chunk = remaining[:max_lines]
         remaining = remaining[max_lines:]
-        height = _box_height(len(chunk))
+        height = max(10.0, _box_height(len(chunk)))
         ensure_space(pdf, height)
         y = float(pdf.get_y())
-        frame = Frame(float(pdf.l_margin), y, width, height)
-        draw_rect(pdf, frame, fill=brand.PLATINUM, border=(210, 206, 201))
-        draw_rect(pdf, Frame(frame.x, frame.y, badge_w, height), fill=brand.JET_GREY)
+        x = float(pdf.l_margin)
+        pdf.set_font(brand.FAMILY_REGULAR, "B", 16)
+        pdf.set_text_color(*brand.CRIMSON)
+        pdf.text(x, y + 6.2, numeral)
         pdf.set_font(brand.FAMILY_REGULAR, "", 10)
         _paint_lines(
             pdf,
             chunk,
-            x=frame.x + badge_w + inset,
-            y=frame.y + _FIRST_BASELINE,
+            x=x + numeral_w,
+            y=y + _FIRST_BASELINE,
             leading=_LINE,
         )
-        pdf.set_y(frame.bottom + 2.4)
+        pdf.set_y(y + height + 4.0)
 
 
 def write_why_card(pdf: Any, level: int, answer: str, evidence: str | None, question: str | None) -> None:
-    """WHY n badge plus Answer / Evidence, framed as one card."""
-    parts: list[tuple[str, str, str]] = []
-    if question:
-        parts.append(("Question", question, brand.FAMILY_REGULAR))
-    parts.append(("Answer", answer, brand.FAMILY_REGULAR))
-    if evidence:
-        parts.append(("Evidence", evidence, brand.FAMILY_REGULAR))
+    """WHY n / ANSWER / EVIDENCE on white. Empty questions are omitted, not Not recorded."""
+    _ = question
+    write_wrapped_table(
+        pdf,
+        ("WHY", "ANSWER", "EVIDENCE"),
+        ((f"WHY {level}", answer, evidence or ""),),
+        widths=(0.16, 0.52, 0.32),
+        row_gap=3.0,
+        boxed=False,
+    )
 
-    width = inner_width(pdf)
-    label_w = 24.0
-    text_w = max(20.0, width - label_w - 8.0)
-    line_blocks: list[tuple[str, list[str]]] = []
-    total = 10.0
-    pdf.set_font(brand.FAMILY_REGULAR, "", 9.5)
-    for label, value, _family in parts:
-        lines = wrap_paragraphs(pdf, value, max(12.0, text_w - 2.0))
-        line_blocks.append((label, lines))
-        total += max(6.0, len(lines) * _LINE) + 2.0
-    ensure_space(pdf, min(total, space_remaining(pdf) if space_remaining(pdf) > 20 else total))
-    if space_remaining(pdf) < 22:
-        pdf.add_page()
 
-    y0 = float(pdf.get_y())
-    # Draw after measuring; if the card is taller than the page, fall back to
-    # stacked wrapped paragraphs rather than overflowing the footer.
-    if total > space_remaining(pdf) - 1:
-        pdf.set_font(brand.FAMILY_REGULAR, "B", 9)
-        pdf.set_text_color(*brand.JET_GREY)
-        write_wrapped_paragraph(pdf, f"Why {level}", size=10)
-        for label, value, _family in parts:
-            pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
-            pdf.set_text_color(*brand.CRIMSON)
-            write_wrapped_paragraph(pdf, f"{label}: {value}", size=9.5)
-        return
-
-    frame = Frame(float(pdf.l_margin), y0, width, total)
-    draw_rect(pdf, frame, fill=brand.WHITE, border=(210, 206, 201))
-    badge = Frame(frame.x, frame.y, 22.0, 8.0)
-    draw_rect(pdf, badge, fill=brand.JET_GREY)
-    pdf.set_font(brand.FAMILY_REGULAR, "B", 8)
-    pdf.set_text_color(*brand.WHITE)
-    pdf.text(badge.x + 2.0, badge.y + 5.6, f"Why {level}")
-    cursor = frame.y + 12.0
-    for label, lines in line_blocks:
-        pdf.set_font(brand.FAMILY_MEDIUM, "", 7.5)
-        pdf.set_text_color(*brand.CRIMSON)
-        pdf.text(frame.x + 3.0, cursor + 0.4, label.upper())
-        pdf.set_font(brand.FAMILY_REGULAR, "", 9.5)
-        _paint_lines(pdf, lines, x=frame.x + label_w, y=cursor + 0.4, leading=_LINE)
-        cursor += max(6.0, len(lines) * _LINE) + 2.0
-    pdf.set_y(frame.bottom + 2.5)
+def write_integrity(pdf: Any, pack_uuid: str, sha256: str, note: str) -> None:
+    """Pack UUID as a kv row; checksum tracked (Inter stands in for the model's mono)."""
+    write_kv_rows(pdf, (("Pack UUID", pack_uuid),), panel_keys=frozenset())
+    pdf.set_font(brand.FAMILY_MEDIUM, "", 8)
+    pdf.set_text_color(*brand.CRIMSON)
+    write_wrapped_paragraph(pdf, "CONTENT SHA-256", size=8)
+    pdf.set_font(brand.FAMILY_REGULAR, "", 8)
+    pdf.set_text_color(*brand.JET_GREY)
+    pdf.set_char_spacing(0.22)
+    try:
+        write_wrapped_paragraph(pdf, sha256, size=8)
+    finally:
+        pdf.set_char_spacing(0)
+    pdf.set_font(brand.FAMILY_REGULAR, "", 9)
+    write_wrapped_paragraph(pdf, note, size=9)
+    pdf.ln(1)
 
 
 def write_kv_rows(pdf: Any, rows: Sequence[tuple[str, str]], *, panel_keys: frozenset[str] | None = None) -> None:
-    """Label / value rows with a hairline rule. Named keys (description) become panels."""
+    """Label / value rows with a hairline rule. Platinum panels are opt-in (alerts only)."""
     panel_keys = panel_keys or frozenset()
     for label, value in rows:
         key = label.strip().lower()
@@ -294,6 +271,8 @@ def write_wrapped_table(
     *,
     widths: Sequence[float] | None = None,
     empty_message: str | None = None,
+    row_gap: float = 0.0,
+    boxed: bool = True,
 ) -> None:
     """Header bar + wrapping cells. Repeats the header after a page break."""
     if not rows:
@@ -332,10 +311,11 @@ def write_wrapped_table(
             pdf.set_font(brand.FAMILY_REGULAR, "", 9)
         y = float(pdf.get_y())
         x = float(pdf.l_margin)
-        draw_rect(pdf, Frame(x, y, inner_width(pdf), row_h), border=(210, 206, 201))
+        if boxed:
+            draw_rect(pdf, Frame(x, y, inner_width(pdf), row_h), border=(210, 206, 201))
         cx = x
         for lines, width in zip(wrapped, col_w, strict=False):
             _paint_lines(pdf, lines, x=cx + 1.6, y=y + _FIRST_BASELINE, leading=_LINE)
             cx += width
-        pdf.set_y(y + row_h)
+        pdf.set_y(y + row_h + row_gap)
     pdf.ln(2)

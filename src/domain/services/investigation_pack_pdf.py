@@ -28,19 +28,11 @@ from src.domain.services.investigation_pack_draw import (
     normalise_icam_factors,
     plural,
 )
-from src.domain.services.investigation_pack_ir import (
-    DocumentMeta,
-    KeyValueBlock,
-    KeyValueRow,
-    PackDocument,
-    Section,
-    TableBlock,
-)
+from src.domain.services.investigation_pack_ir import DocumentMeta, KeyValueBlock, KeyValueRow, PackDocument, Section
 from src.domain.services.investigation_pack_layout import (
     write_finding_card,
-    write_panel,
+    write_integrity,
     write_section_banner,
-    write_why_card,
     write_wrapped_paragraph,
     write_wrapped_table,
 )
@@ -506,13 +498,12 @@ class InvestigationPackPdfService:
         pdf.ln(1)
 
         self._section_heading(pdf, f"{chapter:02d} Pack integrity", brand)
-        write_panel(
+        write_integrity(
             pdf,
-            f"Pack UUID: {pack.get('pack_uuid') or 'unknown'}\n"
-            f"Content SHA-256: {pack.get('checksum_sha256') or 'not recorded'}\n"
+            str(pack.get("pack_uuid") or "unknown"),
+            str(pack.get("checksum_sha256") or "not recorded"),
             "This PDF renders the stored pack payload. The SHA-256 above is the checksum of that "
             "payload, so this document can be checked against the record it was issued from.",
-            bar=pack_brand.CRIMSON,
         )
 
         try:
@@ -604,7 +595,7 @@ class InvestigationPackPdfService:
             else:
                 body = item
             rendered = format_field_value(body)
-            write_finding_card(pdf, index, _pdf_safe(f"{index:02d}. {rendered}", max_len=_MAX_FIELD_CHARS))
+            write_finding_card(pdf, index, _pdf_safe(rendered, max_len=_MAX_FIELD_CHARS))
 
     @staticmethod
     def _render_why_entries(pdf: Any, whys: Any) -> None:
@@ -614,6 +605,7 @@ class InvestigationPackPdfService:
         if not isinstance(whys, list) or not whys:
             _write_line(pdf, _EMPTY_WHYS, height=4.5)
             return
+        table_rows: list[tuple[str, str, str]] = []
         for raw in whys:
             if not isinstance(raw, dict):
                 continue
@@ -624,17 +616,26 @@ class InvestigationPackPdfService:
                 level = int(level_raw)
             except (TypeError, ValueError):
                 continue
-            question = raw.get("why")
-            question_text = question.strip() if isinstance(question, str) and question.strip() else None
             evidence = raw.get("evidence")
-            evidence_text = evidence.strip() if isinstance(evidence, str) and evidence.strip() else None
-            write_why_card(
-                pdf,
-                level,
-                _pdf_safe(format_pack_field(raw.get("answer")), max_len=_MAX_FIELD_CHARS),
-                _pdf_safe(evidence_text, max_len=_MAX_FIELD_CHARS) if evidence_text else None,
-                _pdf_safe(question_text, max_len=_MAX_FIELD_CHARS) if question_text else None,
+            evidence_text = evidence.strip() if isinstance(evidence, str) and evidence.strip() else ""
+            table_rows.append(
+                (
+                    f"WHY {level}",
+                    _pdf_safe(format_pack_field(raw.get("answer")), max_len=_MAX_FIELD_CHARS),
+                    _pdf_safe(evidence_text, max_len=_MAX_FIELD_CHARS) if evidence_text else "",
+                )
             )
+        if not table_rows:
+            _write_line(pdf, _EMPTY_WHYS, height=4.5)
+            return
+        write_wrapped_table(
+            pdf,
+            ("WHY", "ANSWER", "EVIDENCE"),
+            table_rows,
+            widths=(0.16, 0.52, 0.32),
+            row_gap=3.0,
+            boxed=False,
+        )
 
     @staticmethod
     def _render_stated_field(pdf: Any, heading: str, value: Any, empty_message: str, *, panel: bool = False) -> None:
@@ -649,7 +650,8 @@ class InvestigationPackPdfService:
             return
         body = _pdf_safe(format_field_value(value), max_len=_MAX_FIELD_CHARS)
         if panel:
-            write_panel(pdf, body, bar=pack_brand.CRIMSON)
+            write_wrapped_paragraph(pdf, body, size=10)
+            pdf.ln(1)
             return
         _write_line(pdf, body, height=4.5)
 
@@ -811,13 +813,13 @@ class InvestigationPackPdfService:
                 except (TypeError, ValueError):
                     pass
             rows.append((reference or "—", action))
-        write_block(
+        write_wrapped_table(
             pdf,
-            TableBlock(
-                columns=("Reference", "Action"),
-                rows=tuple(rows),
-                widths=(0.28, 0.72),
-            ),
+            ("Reference", "Action"),
+            rows,
+            widths=(0.28, 0.72),
+            row_gap=3.5,
+            boxed=False,
         )
 
     def _render_chronology(
