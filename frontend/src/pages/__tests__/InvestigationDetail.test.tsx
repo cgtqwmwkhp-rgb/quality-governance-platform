@@ -128,13 +128,16 @@ vi.mock('../investigation/investigationReportHelpers', () => ({
     exportKind: 'manifest_stub',
   })),
   packPdfFilename: vi.fn(() => 'investigation-report-INV-7-abcdef12.pdf'),
+  packDocxFilename: vi.fn(() => 'investigation-report-INV-7-abcdef12.docx'),
   triggerPackDownload: vi.fn(),
   triggerPackPdfDownload: vi.fn(),
+  triggerPackDocxDownload: vi.fn(),
 }))
 
 vi.mock('../investigation/investigationDetailApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../investigation/investigationDetailApi')>()),
   fetchCustomerPackPdf: vi.fn(),
+  fetchCustomerPackDocx: vi.fn(),
   getRca: vi.fn(),
   saveRca: vi.fn(),
   createCapaFromWhy: vi.fn(),
@@ -457,6 +460,70 @@ describe('InvestigationDetail', () => {
       pdfBlob,
       'investigation-report-INV-7-abcdef12.pdf',
     )
+  })
+
+  it('downloads a Word working copy for an unissued pack', async () => {
+    const detailApi = await import('../investigation/investigationDetailApi')
+    const helpers = await import('../investigation/investigationReportHelpers')
+    const docxBlob = new Blob(['PK'], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    vi.mocked(detailApi.fetchCustomerPackDocx).mockResolvedValue(docxBlob)
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    const wordButton = await screen.findByTestId('investigation-pack-download-docx-1')
+    fireEvent.click(wordButton)
+
+    await waitFor(() => {
+      expect(detailApi.fetchCustomerPackDocx).toHaveBeenCalledWith(7, 1)
+    })
+    expect(helpers.triggerPackDocxDownload).toHaveBeenCalledWith(
+      docxBlob,
+      'investigation-report-INV-7-abcdef12.docx',
+    )
+  })
+
+  it('disables the Word working copy after the pack is issued', async () => {
+    const detailApi = await import('../investigation/investigationDetailApi')
+    client.investigationsApi.getPacks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 1,
+            investigation_id: 7,
+            generated_at: '2026-03-05T10:00:00Z',
+            pack_uuid: 'abcdef1234567890',
+            audience: 'external_customer',
+            checksum_sha256: '1234567890abcdef1234567890abcdef',
+            issued_at: '2026-09-08T12:00:00Z',
+            issued_pdf_sha256: 'a'.repeat(64),
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+        investigation_id: 7,
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    const wordButton = await screen.findByTestId('investigation-pack-download-docx-1')
+    expect(wordButton).toBeDisabled()
+    fireEvent.click(wordButton)
+    expect(detailApi.fetchCustomerPackDocx).not.toHaveBeenCalled()
   })
 
   it('surfaces a PDF build failure instead of downloading an empty file', async () => {
