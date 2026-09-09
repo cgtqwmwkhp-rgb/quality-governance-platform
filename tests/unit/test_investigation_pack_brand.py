@@ -7,6 +7,8 @@ import io
 import pytest
 
 from src.domain.services import investigation_pack_brand as brand
+from src.domain.services import investigation_pack_layout as pack_layout
+from src.domain.services import investigation_pack_pdf_writer as pack_writer
 from src.domain.services.investigation_pack_pdf import InvestigationPackPdfService
 from src.domain.services.investigation_pack_pdf_writer import UnknownBlockError, write_block
 
@@ -83,6 +85,33 @@ class TestBrandAssets:
         assert "UNIT 7 BUCKINGHAM SQUARE" in cover_text
         assert "CONFIDENTIAL" in cover_text
 
+    def test_cover_legal_line_wraps_inside_its_text_column(self) -> None:
+        from src.domain.services.investigation_pack_ir import DocumentMeta
+
+        meta = DocumentMeta(
+            reference="INV-2026-0007",
+            title="Collision",
+            audience_label="External customer pack",
+            status_label="Completed",
+            level_label="High",
+            generated_at_label="20 July 2026",
+            pack_uuid="6f1c2d3e",
+            content_sha256="a" * 64,
+            classification=brand.CLASSIFICATION,
+            confidentiality="",
+        )
+        pdf = pack_writer.create_pack_pdf(meta)
+        pdf.add_page()
+        pdf.set_font(brand.FAMILY_MEDIUM, "", 6.5)
+        legal_width = float(pdf.w) - float(pdf.r_margin) - (float(pdf.l_margin) + 38.0 + 4.0)
+        spacing = 0.28
+
+        lines = pack_writer._cover_legal_lines(pdf, legal_width, spacing)
+
+        assert len(lines) == 2
+        assert " · ".join(lines) == brand.legal_footer_line().upper()
+        assert all(pack_writer._tracked_text_width(pdf, line, spacing) <= legal_width for line in lines)
+
     def test_missing_lockup_fails_closed_without_helvetica(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(brand, "_LOCKUP_FILE", "missing-lockup.png")
         with pytest.raises(brand.BrandAssetError, match="lockup"):
@@ -102,6 +131,32 @@ class TestBrandAssets:
 
 
 class TestLetterheadLock:
+    def test_narrative_panel_labels_keep_crimson_medium_style(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        labels: list[tuple[str, dict]] = []
+        monkeypatch.setattr(
+            pack_layout,
+            "write_wrapped_paragraph",
+            lambda _pdf, text, **kwargs: labels.append((text, kwargs)),
+        )
+        monkeypatch.setattr(pack_layout, "write_panel", lambda *_args, **_kwargs: None)
+
+        pack_layout.write_kv_rows(
+            object(),
+            (("Description", "Vehicle versus pedestrian near miss."),),
+            panel_keys=frozenset({"description"}),
+        )
+
+        assert labels == [
+            (
+                "DESCRIPTION",
+                {
+                    "size": 8,
+                    "family": brand.FAMILY_MEDIUM,
+                    "rgb": brand.CRIMSON,
+                },
+            )
+        ]
+
     def test_tenant_name_and_tailwind_blue_do_not_become_the_letterhead(self) -> None:
         out = InvestigationPackPdfService().build_pdf_bytes(
             _pack(),
