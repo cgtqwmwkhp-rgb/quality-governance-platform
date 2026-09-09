@@ -1101,7 +1101,7 @@ async def download_customer_pack_pdf(
             "content": {
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {},
             },
-            "description": "Editable working copy (.docx). Not retained at issue.",
+            "description": "Working copy before issue, or frozen Word retained at issue.",
         }
     },
 )
@@ -1111,19 +1111,23 @@ async def download_customer_pack_docx(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("investigation:update"))],
 ) -> Response:
-    """Return a Word working copy of an unissued pack (INV-PACK-R3).
+    """Return Word for a pack: working copy before issue, frozen bytes after.
 
-    Issued packs keep the C17 retained PDF as the disclosure. Word is how the
-    report is amended *before* issue; after issue the working copy is closed so
-    this cannot become a live re-render of what a customer was given.
+    INV-PACK-R10 retains .docx at issue from the same payload as the PDF.
+    That is not a second disclosure log (no ``issued_docx_sha256``). Issued
+    packs must not live re-render. Packs issued before R10 have no Word blob
+    and refuse rather than invent one.
     """
     from src.domain.services.investigation_pack_docx import (
         DOCX_MEDIA_TYPE,
-        WORKING_COPY_CLOSED,
-        WORKING_COPY_CLOSED_MESSAGE,
         InvestigationPackDocxService,
     )
-    from src.domain.services.investigation_pack_issue import has_retained_pdf, pack_render_payload
+    from src.domain.services.investigation_pack_issue import (
+        RetainedPackUnavailableError,
+        has_retained_pdf,
+        pack_render_payload,
+        read_retained_docx,
+    )
 
     investigation = await _get_investigation_or_404(investigation_id, db, current_user)
     tenant_id = _assert_investigation_tenant(investigation, current_user)
@@ -1131,10 +1135,19 @@ async def download_customer_pack_docx(
         db, investigation_id=investigation_id, pack_id=pack_id, tenant_id=tenant_id
     )
 
-    if has_retained_pdf(pack):
-        raise ConflictError(WORKING_COPY_CLOSED_MESSAGE, code=WORKING_COPY_CLOSED)
-
     filename = InvestigationPackDocxService.docx_filename(investigation.reference_number, pack.pack_uuid)
+
+    if has_retained_pdf(pack):
+        try:
+            docx_bytes = await read_retained_docx(pack)
+        except RetainedPackUnavailableError as exc:
+            raise ConflictError(exc.message, code=exc.code) from exc
+        return Response(
+            content=docx_bytes,
+            media_type=DOCX_MEDIA_TYPE,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     try:
         docx_bytes = InvestigationPackDocxService().build_docx_bytes(pack_render_payload(investigation, pack))
     except RuntimeError as exc:
