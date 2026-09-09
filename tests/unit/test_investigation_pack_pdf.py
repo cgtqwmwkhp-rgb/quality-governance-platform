@@ -826,7 +826,8 @@ class TestPackIcamDiagram:
             "Absent or failed defences",
         ):
             assert label in text
-        assert "No refresher training schedule (Budget withdrawn)" in text
+        assert "No refresher training schedule" in text
+        assert "Budget withdrawn" in text
         assert "groups the recorded contributing factors by ICAM category" in text
 
     def test_the_figure_geometry_reaches_the_document(self) -> None:
@@ -963,7 +964,7 @@ class TestPackIcamDiagram:
         internal = _flat(_pdf_text(service.build_pdf_bytes(_icam_pack(_rca_section()))))
         external = _flat(_pdf_text(service.build_pdf_bytes(_icam_pack(_rca_section(), audience="external_customer"))))
 
-        for expected in ("ICAM contributing factors", "No refresher training schedule (Budget withdrawn)"):
+        for expected in ("ICAM contributing factors", "No refresher training schedule", "Budget withdrawn"):
             assert expected in internal
             assert expected in external
         assert "withheld" not in external.replace("Sections withheld from this pack", "")

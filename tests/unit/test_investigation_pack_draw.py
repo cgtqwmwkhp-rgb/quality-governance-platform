@@ -679,6 +679,10 @@ def _baseline_of(ops: list[dict], needle: str) -> float:
     return next(op["args"][1] for op in ops if op["op"] == "text" and needle in op["args"][2])
 
 
+def _x_of(ops: list[dict], needle: str) -> float:
+    return next(op["args"][0] for op in ops if op["op"] == "text" and needle in op["args"][2])
+
+
 class TestIcamVocabularyContract:
     def test_categories_labels_and_depths_are_pinned_to_the_c12_service(self) -> None:
         # The drawing layer copies this vocabulary rather than importing the
@@ -976,12 +980,26 @@ class TestIcamFigure:
         ops, _, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
         texts = _texts(ops)
 
-        assert "No refresher training schedule (Budget withdrawn; No owner named)" in texts
-        # Three legend keys plus one chip per classified factor; the unclassified
-        # factor contributes no chip.
+        assert "No refresher training schedule" in texts
+        assert "- Budget withdrawn" in texts
+        assert "- No owner named" in texts
+        # Legend plus one HSG245 column header per depth. Column position is the
+        # classification; there is no per-row depth chip label.
         assert texts.count("Underlying cause") == 2
         assert texts.count("Root cause") == 2
-        assert texts.count("Immediate cause") == 3
+        assert texts.count("Immediate cause") == 2
+
+    def test_hsg245_columns_place_immediate_left_of_root(self) -> None:
+        factors = normalise_icam_factors(
+            [
+                _factor(id=1, cause="Immediate mill stop", depth="immediate"),
+                _factor(id=2, cause="Root training gap", depth="root"),
+            ]
+        )
+
+        ops, _, _ = record(lambda pdf: draw_icam_factors_figure(pdf, factors, brand=BRAND))
+
+        assert _x_of(ops, "Immediate mill stop") < _x_of(ops, "Root training gap")
 
     def test_a_factor_with_no_recorded_depth_is_drawn_without_a_depth_claim(self) -> None:
         factors = normalise_icam_factors([_factor(cause="Operator reached in", depth=None)])
@@ -990,8 +1008,8 @@ class TestIcamFigure:
         texts = _texts(ops)
 
         assert "Operator reached in" in texts
-        # Only the three legend keys, so no chip was drawn against the row.
-        assert [texts.count(ICAM_DEPTH_LABELS[depth]) for depth in ICAM_DEPTHS] == [1, 1, 1]
+        # Legend plus the three column headers. The unclassified row adds none.
+        assert [texts.count(ICAM_DEPTH_LABELS[depth]) for depth in ICAM_DEPTHS] == [2, 2, 2]
 
     def test_an_empty_category_says_so_rather_than_being_dropped(self) -> None:
         factors = normalise_icam_factors([_factor(id=1)])
@@ -1075,7 +1093,8 @@ class TestIcamFigure:
         row = next(op for op in ops if op["op"] == "text" and op["args"][2].startswith("An extremely long"))
 
         assert row["args"][2].endswith("...")
-        assert row["args"][0] + 100 < frame.right
+        assert row["args"][0] >= frame.x + 2 * frame.w / 3 - 0.5
+        assert row["args"][0] < frame.right
 
     def test_depth_colours_are_a_single_hue_not_a_rag_scale(self) -> None:
         # A root cause sits further back than an immediate one; it is not worse.
