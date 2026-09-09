@@ -8,10 +8,13 @@ line cannot leave its box.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Sequence
 
 from src.domain.services import investigation_pack_brand as brand
 from src.domain.services.investigation_pack_draw import Frame, content_width, draw_rect, space_remaining, wrap_text
+
+_CHAPTER_PREFIX = re.compile(r"^(\d{2})\b")
 
 _LINE = 4.6
 _PAD = 2.8
@@ -85,9 +88,29 @@ def write_wrapped_paragraph(pdf: Any, text: str, *, size: float = 10, leading: f
         pdf.cell(width, leading, line, new_x="LMARGIN", new_y="NEXT")
 
 
+def bind_section_destination(pdf: Any, title: str) -> None:
+    """Point the contents link and PDF outline at this chapter banner.
+
+    ``write_contents`` creates the link ids first. Numbered banners (``01 …``)
+    call ``set_link`` here so a click on Contents lands on the heading, not the
+    cover. Unnumbered titles (Contents itself) are not destinations.
+    """
+    text = brand.text_safe(title).strip()
+    match = _CHAPTER_PREFIX.match(text)
+    if match is None:
+        return
+    number = int(match.group(1))
+    links = getattr(pdf, "_pack_toc_links", None) or {}
+    link_id = links.get(number)
+    if link_id is not None:
+        pdf.set_link(link_id, y=float(pdf.get_y()), x=float(pdf.l_margin), page=int(pdf.page_no()))
+    pdf.start_section(text, level=0, strict=False)
+
+
 def write_section_banner(pdf: Any, title: str) -> None:
     """Crimson heading with a Jet Grey rule — the template's chapter chrome."""
     ensure_space(pdf, 14)
+    bind_section_destination(pdf, title)
     pdf.set_font(brand.FAMILY_REGULAR, "B", 12)
     pdf.set_text_color(*brand.CRIMSON)
     width = inner_width(pdf)
