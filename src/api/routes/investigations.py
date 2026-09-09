@@ -1118,10 +1118,7 @@ async def download_customer_pack_docx(
     packs must not live re-render. Packs issued before R10 have no Word blob
     and refuse rather than invent one.
     """
-    from src.domain.services.investigation_pack_docx import (
-        DOCX_MEDIA_TYPE,
-        InvestigationPackDocxService,
-    )
+    from src.domain.services.investigation_pack_docx import DOCX_MEDIA_TYPE, InvestigationPackDocxService
     from src.domain.services.investigation_pack_issue import (
         RetainedPackUnavailableError,
         has_retained_pdf,
