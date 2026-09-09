@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -173,5 +173,51 @@ describe('Training matrix roster delta admin', () => {
     await user.click(screen.getByTestId('training-matrix-roster-link'))
     expect(upsertNameMap).toHaveBeenCalledWith('An Example', 9)
     confirm.mockRestore()
+  })
+
+  it('does not report an empty roster while the request is still loading', async () => {
+    let resolveRoster = (_value: typeof emptyDelta) => {}
+    getRosterDelta.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRoster = resolve
+        }),
+    )
+
+    render(
+      <MemoryRouter>
+        <TrainingMatrixAdminPanel />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('training-matrix-roster-loading')).toBeInTheDocument()
+    expect(screen.queryByTestId('training-matrix-roster-empty')).not.toBeInTheDocument()
+
+    await act(async () => resolveRoster(emptyDelta))
+    expect(await screen.findByTestId('training-matrix-roster-empty')).toBeInTheDocument()
+    expect(screen.queryByTestId('training-matrix-roster-loading')).not.toBeInTheDocument()
+  })
+
+  it('shows a retryable error instead of an empty roster when loading fails', async () => {
+    const user = userEvent.setup()
+    getRosterDelta
+      .mockRejectedValueOnce(new Error('Atlas roster unavailable'))
+      .mockResolvedValueOnce(emptyDelta)
+
+    render(
+      <MemoryRouter>
+        <TrainingMatrixAdminPanel />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('training-matrix-roster-error')).toHaveTextContent(
+      'Atlas roster unavailable',
+    )
+    expect(screen.queryByTestId('training-matrix-roster-empty')).not.toBeInTheDocument()
+
+    await user.click(screen.getByTestId('training-matrix-roster-retry'))
+    expect(await screen.findByTestId('training-matrix-roster-empty')).toBeInTheDocument()
+    expect(screen.queryByTestId('training-matrix-roster-error')).not.toBeInTheDocument()
+    expect(getRosterDelta).toHaveBeenCalledTimes(2)
   })
 })

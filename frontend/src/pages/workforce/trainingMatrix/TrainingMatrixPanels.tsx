@@ -1400,6 +1400,8 @@ export function TrainingMatrixAdminPanel() {
   const [approverEmail, setApproverEmail] = useState('david.harris@plantexpand.com')
   const [reviewingId, setReviewingId] = useState<number | null>(null)
   const [rosterDelta, setRosterDelta] = useState<TrainingMatrixRosterDelta | null>(null)
+  const [rosterLoading, setRosterLoading] = useState(true)
+  const [rosterError, setRosterError] = useState<string | null>(null)
   const [rosterActingId, setRosterActingId] = useState<number | null>(null)
   const [linkPick, setLinkPick] = useState<Record<number, string>>({})
 
@@ -1415,6 +1417,22 @@ export function TrainingMatrixAdminPanel() {
         setPendingProposals([])
         setViewerCanApprove(false)
       })
+  }
+
+  const reloadRosterDelta = () => {
+    setRosterLoading(true)
+    setRosterError(null)
+    setRosterDelta(null)
+    trainingMatrixApi
+      .getRosterDelta()
+      .then((delta) => {
+        setRosterDelta(delta)
+        if (delta.appeared_count + delta.disappeared_count > 0) setOpenRoster(true)
+      })
+      .catch((err) => {
+        setRosterError(getApiErrorMessage(err, 'Could not load Atlas roster changes.'))
+      })
+      .finally(() => setRosterLoading(false))
   }
 
   const reload = () => {
@@ -1436,13 +1454,7 @@ export function TrainingMatrixAdminPanel() {
       .getLatestImport()
       .then(setLatestImport)
       .catch(() => setLatestImport(null))
-    trainingMatrixApi
-      .getRosterDelta()
-      .then((delta) => {
-        setRosterDelta(delta)
-        if (delta.appeared_count + delta.disappeared_count > 0) setOpenRoster(true)
-      })
-      .catch(() => setRosterDelta(null))
+    reloadRosterDelta()
     reloadProposals()
     workforceApi
       .listEngineers({ page: '1', page_size: '500' })
@@ -1762,6 +1774,25 @@ export function TrainingMatrixAdminPanel() {
           never creates a user account. Link an existing employee with People mapping below — do not
           duplicate that list here.
         </p>
+        {rosterLoading ? (
+          <p className="text-sm text-muted-foreground" data-testid="training-matrix-roster-loading">
+            Loading roster changes…
+          </p>
+        ) : null}
+        {rosterError ? (
+          <div className="space-y-2" role="alert" data-testid="training-matrix-roster-error">
+            <p className="text-sm text-destructive">{rosterError}</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={reloadRosterDelta}
+              data-testid="training-matrix-roster-retry"
+            >
+              Retry
+            </Button>
+          </div>
+        ) : null}
         {disappearedCount > 0 ? (
           <div className="space-y-2" data-testid="training-matrix-roster-disappeared">
             <p className="text-sm font-medium">Left the Atlas roster</p>
@@ -1867,7 +1898,7 @@ export function TrainingMatrixAdminPanel() {
             ))}
           </div>
         ) : null}
-        {rosterTotal === 0 ? (
+        {!rosterLoading && !rosterError && rosterDelta && rosterTotal === 0 ? (
           <p className="text-sm text-muted-foreground" data-testid="training-matrix-roster-empty">
             No unresolved joiners or leavers. Upload a fresh Atlas CSV when people join or leave, then
             choose Archive or Create person record here.
