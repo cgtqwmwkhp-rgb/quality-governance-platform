@@ -58,13 +58,14 @@ from src.domain.models.investigation import (
 )
 from src.domain.models.tenant import Tenant
 from src.domain.services import investigation_pack_issue as issue_service
-from src.domain.services.investigation_pack_docx import WORKING_COPY_CLOSED
+from src.domain.services.investigation_pack_docx import InvestigationPackDocxService
 from src.domain.services.investigation_pack_issue import (
     BLOCKER_NOT_COMPLETE,
     BLOCKER_REDACTION_REVIEW_NOT_CLEARED,
     PACK_ISSUE_BLOCKED,
     external_issue_blockers,
     pack_evidence_assets_query,
+    retained_docx_storage_key,
 )
 from src.domain.services.investigation_pack_pdf import InvestigationPackPdfService
 from src.infrastructure.storage import StorageError
@@ -94,6 +95,8 @@ OTHER_USER = SimpleNamespace(id=12, tenant_id=OTHER_TENANT, is_superuser=False)
 
 FIRST_RENDER = b"%PDF-1.4 first render"
 SECOND_RENDER = b"%PDF-1.4 renderer has changed since"
+FIRST_DOCX = b"PK\x03\x04 first word"
+SECOND_DOCX = b"PK\x03\x04 renderer has changed since"
 
 
 # ---------------------------------------------------------------------------
@@ -418,9 +421,14 @@ def storage():
 
 @pytest.fixture
 def renderer():
-    render = _CountingRenderer(FIRST_RENDER, SECOND_RENDER)
-    with patch.object(InvestigationPackPdfService, "build_pdf_bytes", render):
-        yield render
+    pdf = _CountingRenderer(FIRST_RENDER, SECOND_RENDER)
+    docx = _CountingRenderer(FIRST_DOCX, SECOND_DOCX)
+    with (
+        patch.object(InvestigationPackPdfService, "build_pdf_bytes", pdf),
+        patch.object(InvestigationPackDocxService, "build_docx_bytes", docx),
+    ):
+        pdf.docx = docx
+        yield pdf
 
 
 async def _seed_run(db: AsyncSession, *, status=InvestigationStatus.COMPLETED, tenant_id: int = TENANT):
@@ -590,22 +598,44 @@ async def test_a_download_after_issue_returns_the_retained_bytes(db_session, sto
 
 
 @pytest.mark.asyncio
-async def test_word_working_copy_is_closed_after_issue(db_session, storage, renderer):
-    """Issue retains PDF only. Word must not live-render an issued pack."""
+async def test_word_after_issue_returns_the_frozen_bytes(db_session, storage, renderer):
+    """Issue retains Word from the same payload. A later renderer must not win."""
     run = await _seed_run(db_session)
     await _seed_pack(db_session)
 
     with _authorised(run):
         await routes.issue_customer_pack(INVESTIGATION_ID, 1, _issue_body(), db_session, USER)
-        with pytest.raises(ConflictError) as exc:
-            await routes.download_customer_pack_docx(INVESTIGATION_ID, 1, db_session, USER)
+        assert renderer.calls == 1
+        assert renderer.docx.calls == 1
+        first = await routes.download_customer_pack_docx(INVESTIGATION_ID, 1, db_session, USER)
+        second = await routes.download_customer_pack_docx(INVESTIGATION_ID, 1, db_session, USER)
 
-    assert exc.value.code == WORKING_COPY_CLOSED
+    assert first.body == FIRST_DOCX
+    assert second.body == FIRST_DOCX
+    assert "wordprocessingml" in (first.media_type or "")
     pack = await db_session.get(InvestigationCustomerPack, 1)
     assert pack is not None
     assert pack.issued_pdf_sha256
     assert "issued_docx_sha256" not in InvestigationCustomerPack.__table__.c
     assert renderer.calls == 1
+    assert renderer.docx.calls == 1
+    assert storage.blobs[retained_docx_storage_key(INVESTIGATION_ID, "pack-uuid-1")] == FIRST_DOCX
+
+
+@pytest.mark.asyncio
+async def test_word_after_issue_refuses_when_no_frozen_blob(db_session, storage, renderer):
+    """Packs issued before R10 have no Word blob. Do not live re-render one."""
+    run = await _seed_run(db_session)
+    await _seed_pack(db_session)
+
+    with _authorised(run):
+        await routes.issue_customer_pack(INVESTIGATION_ID, 1, _issue_body(), db_session, USER)
+        del storage.blobs[retained_docx_storage_key(INVESTIGATION_ID, "pack-uuid-1")]
+        with pytest.raises(ConflictError) as exc:
+            await routes.download_customer_pack_docx(INVESTIGATION_ID, 1, db_session, USER)
+
+    assert exc.value.code == "ISSUED_DOCX_UNAVAILABLE"
+    assert renderer.docx.calls == 1
 
 
 @pytest.mark.asyncio
@@ -644,7 +674,8 @@ async def test_a_second_disclosure_reuses_the_retained_bytes(db_session, storage
         second = await routes.issue_customer_pack(INVESTIGATION_ID, 1, _issue_body("HSE"), db_session, USER)
 
     assert renderer.calls == 1, "a re-issue must not re-render the issued record"
-    assert storage.uploads == 1
+    assert renderer.docx.calls == 1
+    assert storage.uploads == 2
     assert second["pdf_newly_retained"] is False
     assert second["pdf_sha256"] == first["pdf_sha256"]
     assert second["disclosure_count"] == 2
