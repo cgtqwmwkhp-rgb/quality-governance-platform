@@ -160,11 +160,15 @@ def write_contents(pdf: Any, document: PackDocument) -> None:
         return
     pdf.add_page()
     write_section_banner(pdf, "Contents")
+    links: dict[int, int] = {}
     for number, heading in entries:
+        link_id = pdf.add_link()
+        links[number] = link_id
         pdf.set_font(brand.FAMILY_REGULAR, "", 10)
         pdf.set_text_color(*brand.JET_GREY)
-        pdf.cell(12, 6, f"{number:02d}", align="L")
-        pdf.cell(0, 6, brand.text_safe(heading), new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(12, 6, f"{number:02d}", align="L", link=link_id)
+        pdf.cell(0, 6, brand.text_safe(heading), new_x="LMARGIN", new_y="NEXT", link=link_id)
+    pdf._pack_toc_links = links  # noqa: SLF001 - consumed by bind_section_destination
     pdf.ln(4)
 
 
