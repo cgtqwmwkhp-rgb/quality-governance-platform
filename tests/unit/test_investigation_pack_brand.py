@@ -45,12 +45,16 @@ class TestBrandAssets:
         for weight in ("regular", "medium", "semibold", "bold"):
             assert brand.font_path(weight).is_file()
         assert brand.lockup_path().is_file()
+        assert brand.reverse_lockup_path().is_file()
         assert brand.ofl_path().is_file()
         assert "SIL OPEN FONT LICENSE" in brand.ofl_path().read_text()
 
     def test_palette_is_the_kit_not_tailwind_blue(self) -> None:
-        assert brand.CRIMSON == (176, 44, 48)
-        assert brand.JET_GREY == (68, 60, 56)
+        assert brand.CRIMSON == (186, 55, 55)
+        assert brand.JET_GREY == (51, 48, 48)
+        assert brand.LIME == (190, 218, 65)
+        assert brand.DODGER == (40, 104, 206)
+        assert brand.PLATINUM == (235, 232, 232)
         assert brand.CRIMSON != brand.TAILWIND_BLUE
         assert brand.JET_GREY != brand.TAILWIND_BLUE
 
@@ -61,6 +65,23 @@ class TestBrandAssets:
         assert "SS11 8YQ" in line
         assert "01268 204782" in line
         assert "PLANTEXPAND.COM" in line
+
+    def test_missing_reverse_lockup_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(brand, "_REVERSE_LOCKUP_FILE", "missing-reverse.png")
+        with pytest.raises(brand.BrandAssetError, match="reverse lockup"):
+            brand.reverse_lockup_path()
+
+    def test_cover_band_carries_the_reverse_lockup_and_the_legal_line(self) -> None:
+        from pypdf import PdfReader
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack())
+        reader = PdfReader(io.BytesIO(out))
+        cover = reader.pages[0]
+        assert len(cover.images) >= 2
+        cover_text = (cover.extract_text() or "").upper()
+        assert brand.PHONE in (cover.extract_text() or "")
+        assert "UNIT 7 BUCKINGHAM SQUARE" in cover_text
+        assert "CONFIDENTIAL" in cover_text
 
     def test_missing_lockup_fails_closed_without_helvetica(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(brand, "_LOCKUP_FILE", "missing-lockup.png")

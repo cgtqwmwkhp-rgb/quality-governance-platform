@@ -249,8 +249,8 @@ class TestPackBranding:
     def test_letterhead_is_crimson_and_jet_grey_not_tailwind_blue(self) -> None:
         from src.domain.services import investigation_pack_brand as brand
 
-        assert brand.CRIMSON == (176, 44, 48)
-        assert brand.JET_GREY == (68, 60, 56)
+        assert brand.CRIMSON == (186, 55, 55)
+        assert brand.JET_GREY == (51, 48, 48)
         assert brand.CRIMSON != (59, 130, 246)
         assert brand.JET_GREY != (59, 130, 246)
 
@@ -583,7 +583,7 @@ class TestPackChronology:
         )
 
         for expected in (
-            "01 Incident details",
+            "01 INCIDENT DETAILS",
             "Brake maintenance interval exceeded",
             "Sections withheld from this pack",
             "Chronology",
@@ -662,8 +662,8 @@ class TestInvestigationSectionRendering:
         assert "Items:" not in text
         assert "Body: Guard" not in text
         assert "17 May 2026" in text
-        assert "01 Incident details" in text
-        assert "02 Findings" in text
+        assert "01 INCIDENT DETAILS" in text
+        assert "02 FINDINGS" in text
         assert "Root cause analysis" in text
 
     def test_empty_investigation_lists_are_stated_empty(self) -> None:
@@ -1024,7 +1024,7 @@ class TestPackIcamDiagram:
         )
 
         for expected in (
-            "01 Incident details",
+            "01 INCIDENT DETAILS",
             "Guard was missing from the mill",
             "No permit for guard removal",
             "ICAM contributing factors",
@@ -1136,3 +1136,21 @@ class TestPackContentsLinks:
         joined = " ".join(titles)
         assert "01 Incident details" in joined
         assert "02 Findings" in joined
+
+    def test_immediate_actions_uses_the_catalogue_title(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "section_1_details": {
+                        "location": "Bidder Street",
+                        "description": "Vehicle versus pedestrian near miss.",
+                    },
+                    "section_2_immediate_actions": {"actions_taken": "Engineer removed from site."},
+                }
+            }
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+        assert "Immediate actions" in text
+        assert "02 IMMEDIATE ACTIONS" in text
+        assert "Section 2 immediate actions" not in text
+        assert "Vehicle versus pedestrian near miss." in text
