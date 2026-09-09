@@ -9,12 +9,6 @@ from __future__ import annotations
 from typing import Any, Callable, Optional
 
 from src.domain.services import investigation_pack_brand as brand
-from src.domain.services.investigation_pack_layout import (
-    write_kv_rows,
-    write_section_banner,
-    write_wrapped_paragraph,
-    write_wrapped_table,
-)
 from src.domain.services.investigation_pack_ir import (
     Block,
     DocumentMeta,
@@ -26,6 +20,12 @@ from src.domain.services.investigation_pack_ir import (
     PackDocument,
     Paragraph,
     TableBlock,
+)
+from src.domain.services.investigation_pack_layout import (
+    write_kv_rows,
+    write_section_banner,
+    write_wrapped_paragraph,
+    write_wrapped_table,
 )
 
 

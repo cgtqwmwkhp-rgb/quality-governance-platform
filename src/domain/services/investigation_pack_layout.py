@@ -11,13 +11,7 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 from src.domain.services import investigation_pack_brand as brand
-from src.domain.services.investigation_pack_draw import (
-    Frame,
-    content_width,
-    draw_rect,
-    space_remaining,
-    wrap_text,
-)
+from src.domain.services.investigation_pack_draw import Frame, content_width, draw_rect, space_remaining, wrap_text
 
 _LINE = 4.6
 _PAD = 2.8
