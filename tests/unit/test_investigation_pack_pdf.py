@@ -591,6 +591,8 @@ class TestPackChronology:
             "Dashcam still",
             "Redaction summary",
             "Pack integrity",
+            "PACK UUID",
+            "CONTENT SHA-256",
             "Plantexpand Ltd",
             "UNCONTROLLED WHEN PRINTED",
         ):
@@ -650,8 +652,8 @@ class TestInvestigationSectionRendering:
         )
         text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
 
-        assert "01. Guard was missing from the mill" in text
-        assert "Why 1" in text
+        assert "Guard was missing from the mill" in text
+        assert "WHY 1" in text
         assert "It had been removed for cleaning" in text
         assert "No permit for guard removal" in text
         assert "Cleaning was treated as informal" in text
@@ -704,7 +706,8 @@ class TestInvestigationSectionRendering:
         )
         text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
 
-        assert "Why 1" in text
+        assert "WHY 1" in text
+        assert "ANSWER" in text
         assert "The guard had been removed" in text
         assert "Why: Not recorded" not in text
         assert "Question:" not in text
@@ -738,7 +741,7 @@ class TestInvestigationSectionRendering:
         )
         text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack, timeline_events=_timeline_events()))
 
-        assert "01. Guard was missing from the mill" in text
+        assert "Guard was missing from the mill" in text
         assert "The chronology is withheld from this pack." in text
         assert "Dana Reporter" not in text
         assert "Brake wear noted" not in text
@@ -1021,7 +1024,7 @@ class TestPackIcamDiagram:
 
         for expected in (
             "01 Incident details",
-            "01. Guard was missing from the mill",
+            "Guard was missing from the mill",
             "No permit for guard removal",
             "ICAM contributing factors",
             "CAPA-2026-0042",

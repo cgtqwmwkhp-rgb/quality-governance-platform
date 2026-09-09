@@ -77,7 +77,7 @@ def test_contents_and_body_match_the_pdf_catalogue() -> None:
     assert "01 Incident details" in text
     assert "02 Findings" in text
     assert "17 May 2026" in text
-    assert "01. Guard was missing from the mill" in text
+    assert "01  Guard was missing from the mill" in text
     assert "Why 1" in text
     assert "The guard had been removed" in text
     assert "Why: Not recorded" not in text

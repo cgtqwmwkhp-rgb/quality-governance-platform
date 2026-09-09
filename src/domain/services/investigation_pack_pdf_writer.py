@@ -268,7 +268,7 @@ def write_key_value_block(pdf: Any, block: KeyValueBlock) -> None:
     write_kv_rows(
         pdf,
         tuple((row.label, row.value) for row in block.rows),
-        panel_keys=frozenset({"description"}),
+        panel_keys=frozenset(),
     )
 
 
