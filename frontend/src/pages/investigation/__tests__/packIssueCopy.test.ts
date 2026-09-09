@@ -55,6 +55,6 @@ describe('packIssueCopy', () => {
           disclosure_count: 1,
         }),
       ),
-    ).toBe('Issued once. Download returns the retained copy, not a live re-render.')
+    ).toBe('Issued once. Download returns the retained PDF and frozen Word, not a live re-render.')
   })
 })
