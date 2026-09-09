@@ -379,6 +379,8 @@ class InvestigationPackDocxService:
 
         para = doc.add_paragraph()
         label = _clip(text)
+        if _CHAPTER_PREFIX.match(label.strip()):
+            label = label.upper()
         run = para.add_run(label)
         run.bold = True
         run.font.size = Pt(size)

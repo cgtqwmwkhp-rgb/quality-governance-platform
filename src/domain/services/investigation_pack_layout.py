@@ -16,13 +16,15 @@ from src.domain.services.investigation_pack_draw import Frame, content_width, dr
 
 _CHAPTER_PREFIX = re.compile(r"^(\d{2})\b")
 
-_LINE = 4.6
-_PAD = 2.8
+_LINE = 5.0
+_PAD = 3.2
 _BAR = 2.2
 _LABEL_COL = 48.0
 _DESCENT = 1.8
 _FIRST_BASELINE = _PAD + 3.6
 _WRAP_SLACK = 6.0  # Inter width vs paint; wrap a little tighter than the frame.
+_FINDING_GAP = 6.5
+_KV_ROW_GAP = 2.2
 
 
 def inner_width(pdf: Any) -> float:
@@ -108,21 +110,32 @@ def bind_section_destination(pdf: Any, title: str) -> None:
 
 
 def write_section_banner(pdf: Any, title: str) -> None:
-    """Crimson heading with a Jet Grey rule — the template's chapter chrome."""
-    ensure_space(pdf, 14)
+    """Crimson tracked chapter title — the model's 01 INCIDENT DETAILS chrome."""
+    ensure_space(pdf, 16)
     bind_section_destination(pdf, title)
-    pdf.set_font(brand.FAMILY_REGULAR, "B", 12)
+    raw = brand.text_safe(title).strip()
+    display = raw.upper() if _CHAPTER_PREFIX.match(raw) else raw
+    pdf.set_font(brand.FAMILY_MEDIUM, "", 11)
     pdf.set_text_color(*brand.CRIMSON)
     width = inner_width(pdf)
-    lines = wrap_text(pdf, brand.text_safe(title), width) or [brand.text_safe(title)]
+    lines = wrap_text(pdf, display, max(8.0, width - 10.0)) or [display]
     for line in lines:
         pdf.set_x(pdf.l_margin)
-        pdf.cell(width, 6.5, line, new_x="LMARGIN", new_y="NEXT")
-    y = float(pdf.get_y()) + 0.6
+        brand.write_tracked(
+            pdf,
+            line,
+            width=width,
+            height=6.5,
+            spacing=0.18,
+            align="L",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+    y = float(pdf.get_y()) + 0.8
     pdf.set_draw_color(*brand.JET_GREY)
     pdf.set_line_width(0.55)
     pdf.line(float(pdf.l_margin), y, float(pdf.w) - float(pdf.r_margin), y)
-    pdf.set_y(y + 3.2)
+    pdf.set_y(y + 4.5)
     pdf.set_text_color(*brand.JET_GREY)
 
 
@@ -189,7 +202,7 @@ def write_finding_card(pdf: Any, index: int, body: str) -> None:
             y=y + _FIRST_BASELINE,
             leading=_LINE,
         )
-        pdf.set_y(y + height + 4.0)
+        pdf.set_y(y + height + _FINDING_GAP)
 
 
 def write_why_card(pdf: Any, level: int, answer: str, evidence: str | None, question: str | None) -> None:
@@ -251,7 +264,7 @@ def write_kv_rows(pdf: Any, rows: Sequence[tuple[str, str]], *, panel_keys: froz
         pdf.set_draw_color(210, 206, 201)
         pdf.set_line_width(0.2)
         pdf.line(float(pdf.l_margin), bottom, float(pdf.w) - float(pdf.r_margin), bottom)
-        pdf.set_y(bottom + 1.4)
+        pdf.set_y(bottom + _KV_ROW_GAP)
 
 
 def _column_widths(pdf: Any, columns: Sequence[str], fractions: Sequence[float] | None) -> list[float]:

@@ -74,8 +74,8 @@ def test_renders_an_ooxml_document() -> None:
 def test_contents_and_body_match_the_pdf_catalogue() -> None:
     text = _docx_text(InvestigationPackDocxService().build_docx_bytes(_pack()))
 
-    assert "01 Incident details" in text
-    assert "02 Findings" in text
+    assert "01 INCIDENT DETAILS" in text
+    assert "02 FINDINGS" in text
     assert "17 May 2026" in text
     assert "01  Guard was missing from the mill" in text
     assert "Why 1" in text
