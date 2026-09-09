@@ -428,7 +428,7 @@ class InvestigationPackDocxService:
             return
         for index, item in enumerate(items, start=1):
             body = item.get("body") if isinstance(item, dict) else item
-            self._body(doc, f"{index:02d}. {format_field_value(body)}", jet)
+            self._body(doc, f"{index:02d}  {format_field_value(body)}", jet)
 
     def _render_why(self, doc: Any, whys: Any, jet: Any) -> None:
         self._heading(doc, "5 Whys", jet, size=12)
