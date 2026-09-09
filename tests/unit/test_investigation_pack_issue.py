@@ -46,7 +46,7 @@ from src.api.schemas.investigation import (
     InvestigationPackRedactionReviewResponse,
     InvestigationPacksResponse,
 )
-from src.domain.exceptions import NotFoundError, TenantAccessError, ValidationError
+from src.domain.exceptions import ConflictError, NotFoundError, TenantAccessError, ValidationError
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule, EvidenceVisibility
 from src.domain.models.investigation import (
     CustomerPackAudience,
@@ -58,6 +58,7 @@ from src.domain.models.investigation import (
 )
 from src.domain.models.tenant import Tenant
 from src.domain.services import investigation_pack_issue as issue_service
+from src.domain.services.investigation_pack_docx import WORKING_COPY_CLOSED
 from src.domain.services.investigation_pack_issue import (
     BLOCKER_NOT_COMPLETE,
     BLOCKER_REDACTION_REVIEW_NOT_CLEARED,
@@ -586,6 +587,38 @@ async def test_a_download_after_issue_returns_the_retained_bytes(db_session, sto
     assert response.media_type == "application/pdf"
     # Not a re-render dressed up as a retained copy.
     assert renderer.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_word_working_copy_is_closed_after_issue(db_session, storage, renderer):
+    """Issue retains PDF only. Word must not live-render an issued pack."""
+    run = await _seed_run(db_session)
+    await _seed_pack(db_session)
+
+    with _authorised(run):
+        await routes.issue_customer_pack(INVESTIGATION_ID, 1, _issue_body(), db_session, USER)
+        with pytest.raises(ConflictError) as exc:
+            await routes.download_customer_pack_docx(INVESTIGATION_ID, 1, db_session, USER)
+
+    assert exc.value.code == WORKING_COPY_CLOSED
+    pack = await db_session.get(InvestigationCustomerPack, 1)
+    assert pack is not None
+    assert pack.issued_pdf_sha256
+    assert "issued_docx_sha256" not in InvestigationCustomerPack.__table__.c
+    assert renderer.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_word_working_copy_renders_before_issue(db_session, storage, renderer):
+    run = await _seed_run(db_session)
+    await _seed_pack(db_session)
+
+    with _authorised(run):
+        response = await routes.download_customer_pack_docx(INVESTIGATION_ID, 1, db_session, USER)
+
+    assert response.body.startswith(b"PK")
+    assert "wordprocessingml" in (response.media_type or "")
+    assert renderer.calls == 0
 
 
 @pytest.mark.asyncio
