@@ -32,7 +32,13 @@ bytes. A renderer change afterwards therefore cannot rewrite what a customer
 was given: the retained copy is what the download returns, and the disclosure
 log names its checksum.
 
-Both the storage key and the asset id are held on the pack on purpose. If the
+INV-PACK-R10 also writes a Word file from **the same payload**, at a sibling
+storage key, in the same first-issue pass. That is a frozen export, not a
+second disclosure log: there is no ``issued_docx_sha256`` column, and a later
+download must not live re-render. Packs issued before R10 have no Word blob;
+those downloads refuse rather than invent one.
+
+Both the PDF storage key and the asset id are held on the pack on purpose. If the
 asset row is ever removed the key still resolves, so a missing library row
 cannot silently downgrade a retained pack back into a live re-render.
 """
@@ -201,6 +207,17 @@ def render_pack_pdf(payload: dict[str, Any]) -> bytes:
     return service.build_pdf_bytes(payload)
 
 
+def render_pack_docx(payload: dict[str, Any]) -> bytes:
+    """Render the same payload as Word. Raises ``RuntimeError`` when impossible.
+
+    Called from the first-issue path so the frozen .docx is the same document
+    the PDF checksum names, not a later live pass.
+    """
+    from src.domain.services.investigation_pack_docx import InvestigationPackDocxService
+
+    return InvestigationPackDocxService().build_docx_bytes(payload)
+
+
 # ---------------------------------------------------------------------------
 # Retention
 # ---------------------------------------------------------------------------
@@ -214,6 +231,11 @@ def retained_pdf_storage_key(investigation_id: int, pack_uuid: str) -> str:
     orphan blob behind for every attempt.
     """
     return f"evidence/investigation/{investigation_id}/issued-packs/{pack_uuid}.pdf"
+
+
+def retained_docx_storage_key(investigation_id: int, pack_uuid: str) -> str:
+    """Sibling of the retained PDF. No pack column — Word is not the disclosure."""
+    return f"evidence/investigation/{investigation_id}/issued-packs/{pack_uuid}.docx"
 
 
 def has_retained_pdf(pack: InvestigationCustomerPack) -> bool:
@@ -278,9 +300,16 @@ async def retain_issued_pdf(
             newly_retained=False,
         )
 
-    pdf_bytes = render_pack_pdf(pack_render_payload(investigation, pack))
+    payload = pack_render_payload(investigation, pack)
+    # Render both before any upload so a Word failure cannot leave an issued PDF
+    # without its frozen sibling.
+    from src.domain.services.investigation_pack_docx import DOCX_MEDIA_TYPE
+
+    pdf_bytes = render_pack_pdf(payload)
+    docx_bytes = render_pack_docx(payload)
     checksum = hashlib.sha256(pdf_bytes).hexdigest()
     storage_key = retained_pdf_storage_key(int(investigation.id), str(pack.pack_uuid))
+    docx_key = retained_docx_storage_key(int(investigation.id), str(pack.pack_uuid))
 
     await storage_service().upload(
         storage_key=storage_key,
@@ -291,6 +320,18 @@ async def retain_issued_pdf(
             "source_id": str(investigation.id),
             "pack_uuid": str(pack.pack_uuid),
             "checksum_sha256": checksum,
+        },
+    )
+    await storage_service().upload(
+        storage_key=docx_key,
+        content=docx_bytes,
+        content_type=DOCX_MEDIA_TYPE,
+        metadata={
+            "source_module": EvidenceSourceModule.INVESTIGATION.value,
+            "source_id": str(investigation.id),
+            "pack_uuid": str(pack.pack_uuid),
+            "kind": "issued-docx",
+            "checksum_sha256": hashlib.sha256(docx_bytes).hexdigest(),
         },
     )
 
@@ -376,6 +417,27 @@ async def read_retained_pdf(pack: InvestigationCustomerPack) -> bytes:
             code="RETAINED_PACK_CHECKSUM_MISMATCH",
         )
     return content
+
+
+async def read_retained_docx(pack: InvestigationCustomerPack) -> bytes:
+    """Fetch the frozen Word export written at issue.
+
+    Missing bytes refuse rather than live re-render: packs issued before R10
+    have no Word blob, and a renderer that has changed since must not invent one.
+    """
+    if not has_retained_pdf(pack):
+        raise RetainedPackUnavailableError(
+            "This pack has not been issued, so there is no frozen Word export.",
+            code="ISSUED_DOCX_UNAVAILABLE",
+        )
+    storage_key = retained_docx_storage_key(int(pack.investigation_id), str(pack.pack_uuid))
+    try:
+        return await storage_service().download(storage_key)
+    except StorageError as exc:
+        raise RetainedPackUnavailableError(
+            "This issued pack has no frozen Word export. Download the retained PDF.",
+            code="ISSUED_DOCX_UNAVAILABLE",
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
