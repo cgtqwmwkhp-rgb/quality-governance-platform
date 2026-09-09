@@ -77,6 +77,9 @@ class TableBlock:
     columns: tuple[str, ...]
     rows: tuple[tuple[str, ...], ...]
     empty_message: str | None = None
+    #: Column fractions of the content width. When omitted, two columns are
+    #: 28/72 (reference / action); otherwise equal.
+    widths: tuple[float, ...] | None = None
 
 
 @dataclass(frozen=True)
