@@ -73,6 +73,15 @@ export function packPdfFilename(
   return `investigation-report-${ref}-${packUuid.slice(0, 8)}.pdf`
 }
 
+/** Filename for a customer pack Word working copy, matching the server. */
+export function packDocxFilename(
+  investigationReference: string,
+  packUuid: string,
+): string {
+  const ref = investigationReference.replace(/[^\w-]+/g, '_')
+  return `investigation-report-${ref}-${packUuid.slice(0, 8)}.docx`
+}
+
 function triggerBlobDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -94,4 +103,11 @@ export function triggerPackDownload(payload: PackDownloadPayload): void {
 /** Trigger a browser download for pack PDF bytes returned by the API. */
 export function triggerPackPdfDownload(pdf: Blob, filename: string): void {
   triggerBlobDownload(new Blob([pdf], { type: 'application/pdf' }), filename)
+}
+
+const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+/** Trigger a browser download for pack Word bytes returned by the API. */
+export function triggerPackDocxDownload(docx: Blob, filename: string): void {
+  triggerBlobDownload(new Blob([docx], { type: DOCX_TYPE }), filename)
 }
