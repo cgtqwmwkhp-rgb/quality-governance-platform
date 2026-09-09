@@ -881,6 +881,7 @@ _ICAM_CAUSE_CHARS = 300
 _ICAM_SUB_CAUSE_CHARS = 120
 
 _ICAM_HEADER_H = 6.0
+_ICAM_COL_HEADER_H = 6.2
 _ICAM_STRIP_H = 5.4
 _ICAM_ROW_H = 4.8
 _ICAM_WRAP_LEADING = 3.2
@@ -888,8 +889,8 @@ _ICAM_BAND_PAD = 1.2
 _ICAM_BAND_GAP = 1.6
 _ICAM_ROW_INSET = 2.2
 _ICAM_MARKER_SIZE = 1.8
-_ICAM_DEPTH_COL = 27.0
 _ICAM_COUNT_COL = 26.0
+_ICAM_DEPTH_COUNT = len(ICAM_DEPTHS)
 
 
 @dataclass(frozen=True)
@@ -920,8 +921,8 @@ class IcamFactor:
     def label(self) -> str:
         """``cause (sub; sub)`` — the INV-C12 line without its category prefix or depth bracket.
 
-        Both of those are drawn separately (the band, and the depth chip), so
-        repeating them in the row would say the same thing twice on one line.
+        Both of those are drawn separately (the category band, and the HSG245
+        column), so repeating them in the cell would say the same thing twice.
         """
         if not self.sub_causes:
             return self.cause
@@ -1114,36 +1115,94 @@ def icam_figure_height(factors: IcamFactorSet) -> float:
     """
     if not factors.factors:
         return 0.0
-    rows = sum(max(1, len(factors.for_category(category))) for category in ICAM_CATEGORIES)
-    bands = len(ICAM_CATEGORIES) * (_ICAM_STRIP_H + _ICAM_BAND_PAD + _ICAM_BAND_GAP)
-    return _ICAM_HEADER_H + bands + rows * _ICAM_ROW_H
+    body = 0.0
+    for category in ICAM_CATEGORIES:
+        entries = factors.for_category(category)
+        columns, unclassified = _icam_split(entries)
+        if not entries:
+            body_h = _ICAM_ROW_H
+        else:
+            stacked = max(sum(_icam_helvetica_step(factor) for factor in columns[depth]) for depth in ICAM_DEPTHS)
+            extra = sum(_icam_helvetica_step(factor) for factor in unclassified)
+            body_h = stacked + extra if stacked or extra else _ICAM_ROW_H
+        body += _ICAM_STRIP_H + _ICAM_BAND_PAD + _ICAM_BAND_GAP + body_h
+    return _ICAM_HEADER_H + _ICAM_COL_HEADER_H + body
 
 
 def _icam_wraps(pdf: Any) -> bool:
     return bool(getattr(pdf, "_pack_font_family", None))
 
 
-def _icam_cause_width(frame: Frame, factor: IcamFactor) -> float:
-    available = frame.right - _ICAM_ROW_INSET - _icam_row_text_x(frame)
-    if factor.depth_label is not None and factor.depth is not None:
-        available -= _ICAM_DEPTH_COL
-    return max(6.0, available)
+def _icam_split(entries: Sequence[IcamFactor]) -> tuple[dict[str, list[IcamFactor]], list[IcamFactor]]:
+    """Partition a category's factors into the three HSG245 columns, plus unclassified."""
+    columns: dict[str, list[IcamFactor]] = {depth: [] for depth in ICAM_DEPTHS}
+    unclassified: list[IcamFactor] = []
+    for entry in entries:
+        if entry.depth in columns:
+            columns[entry.depth].append(entry)
+        else:
+            unclassified.append(entry)
+    return columns, unclassified
 
 
-def _icam_row_step(pdf: Any, frame: Frame, factor: IcamFactor) -> float:
+def _icam_column_width(frame: Frame) -> float:
+    return frame.w / float(_ICAM_DEPTH_COUNT)
+
+
+def _icam_column_frame(frame: Frame, index: int) -> Frame:
+    width = _icam_column_width(frame)
+    return Frame(frame.x + index * width, frame.y, width, frame.h)
+
+
+def _icam_cell_text_width(column_width: float) -> float:
+    return max(6.0, column_width - 2 * _ICAM_ROW_INSET - _ICAM_MARKER_SIZE - 1.6)
+
+
+def _icam_helvetica_step(factor: IcamFactor) -> float:
+    lines = 1 + len(factor.sub_causes)
+    return max(_ICAM_ROW_H, 2.0 + lines * _ICAM_WRAP_LEADING)
+
+
+def _icam_cell_lines(pdf: Any, factor: IcamFactor, width: float) -> list[str]:
+    """Cause, then each stored sub-cause. Never invents a sub-cause or a depth."""
+    if _icam_wraps(pdf):
+        pdf.set_font(str(pdf._pack_font_family), "", 7.5)
+        lines = wrap_text(pdf, factor.cause, width)
+        indent = max(6.0, width - 2.0)
+        for sub in factor.sub_causes:
+            lines.extend(wrap_text(pdf, f"- {sub}", indent))
+        return lines
+    lines = [fit_text(pdf, factor.cause, width)]
+    indent = max(6.0, width - 2.0)
+    for sub in factor.sub_causes:
+        lines.append(fit_text(pdf, f"- {sub}", indent))
+    return lines
+
+
+def _icam_cell_step(pdf: Any, column_width: float, factor: IcamFactor) -> float:
     if not _icam_wraps(pdf):
+        return _icam_helvetica_step(factor)
+    width = _icam_cell_text_width(column_width)
+    return max(_ICAM_ROW_H, 2.0 + max(1, len(_icam_cell_lines(pdf, factor, width))) * _ICAM_WRAP_LEADING)
+
+
+def _icam_band_body_height(pdf: Any, frame: Frame, entries: Sequence[IcamFactor]) -> float:
+    if not entries:
         return _ICAM_ROW_H
-    pdf.set_font(str(pdf._pack_font_family), "", 7.5)
-    lines = wrap_text(pdf, factor.label, _icam_cause_width(frame, factor))
-    return max(_ICAM_ROW_H, 2.0 + max(1, len(lines)) * _ICAM_WRAP_LEADING)
+    columns, unclassified = _icam_split(entries)
+    column_width = _icam_column_width(frame)
+    stacked = max((_icam_stack_height(pdf, column_width, columns[depth]) for depth in ICAM_DEPTHS), default=0.0)
+    extra = sum(_icam_cell_step(pdf, frame.w, factor) for factor in unclassified)
+    body = stacked + extra
+    return body if body else _ICAM_ROW_H
+
+
+def _icam_stack_height(pdf: Any, column_width: float, entries: Sequence[IcamFactor]) -> float:
+    return sum(_icam_cell_step(pdf, column_width, factor) for factor in entries)
 
 
 def _icam_band_box_height(pdf: Any, frame: Frame, entries: Sequence[IcamFactor]) -> float:
-    if not entries:
-        return _ICAM_STRIP_H + _ICAM_BAND_PAD + _ICAM_ROW_H
-    if not _icam_wraps(pdf):
-        return _ICAM_STRIP_H + _ICAM_BAND_PAD + len(entries) * _ICAM_ROW_H
-    return _ICAM_STRIP_H + _ICAM_BAND_PAD + sum(_icam_row_step(pdf, frame, entry) for entry in entries)
+    return _ICAM_STRIP_H + _ICAM_BAND_PAD + _icam_band_body_height(pdf, frame, entries)
 
 
 def _icam_wrapped_figure_height(pdf: Any, factors: IcamFactorSet, width: float) -> float:
@@ -1152,7 +1211,7 @@ def _icam_wrapped_figure_height(pdf: Any, factors: IcamFactorSet, width: float) 
         _icam_band_box_height(pdf, probe, factors.for_category(category)) + _ICAM_BAND_GAP
         for category in ICAM_CATEGORIES
     )
-    return _ICAM_HEADER_H + bands
+    return _ICAM_HEADER_H + _ICAM_COL_HEADER_H + bands
 
 
 def draw_icam_factors_figure(
@@ -1162,13 +1221,14 @@ def draw_icam_factors_figure(
     brand: RGB,
     width: Optional[float] = None,
 ) -> Frame:
-    """Draw the four ICAM bands and return the frame they occupy.
+    """Draw the four ICAM bands across three HSG245 depth columns.
 
-    One band per ICAM category, in the order INV-C12 works through them, each
-    listing the factors recorded under it with their sub-causes and the HSG245
-    depth recorded against them. A category with nothing recorded says "None
-    recorded" rather than being dropped: an empty band is a fact about the
-    investigation, and hiding it would make a partial analysis look complete.
+    One band per ICAM category, in the order INV-C12 works through them. Factors
+    sit in the Immediate / Underlying / Root column matching the recorded depth.
+    A factor with no recorded depth sits under the columns in that band, still
+    without a depth claim. A category with nothing recorded says "None recorded"
+    rather than being dropped: an empty band is a fact about the investigation,
+    and hiding it would make a partial analysis look complete.
 
     An empty set draws nothing and reserves nothing — the caller should be
     printing :func:`icam_summary_line` instead of an empty diagram.
@@ -1228,10 +1288,36 @@ def _draw_icam_body(pdf: Any, frame: Frame, factors: IcamFactorSet, brand: RGB) 
         align="R",
         max_width=_ICAM_COUNT_COL,
     )
+    _draw_icam_column_headers(pdf, frame, brand)
 
-    y = frame.y + _ICAM_HEADER_H
+    y = frame.y + _ICAM_HEADER_H + _ICAM_COL_HEADER_H
     for category in ICAM_CATEGORIES:
         y = _draw_icam_band(pdf, frame, y, category, factors.for_category(category), brand)
+
+
+def _draw_icam_column_headers(pdf: Any, frame: Frame, brand: RGB) -> None:
+    """HSG245 Immediate / Underlying / Root as the three columns of every band."""
+    y = frame.y + _ICAM_HEADER_H
+    for index, depth in enumerate(ICAM_DEPTHS):
+        column = _icam_column_frame(frame, index)
+        draw_marker(
+            pdf,
+            column.x + _ICAM_ROW_INSET + _ICAM_MARKER_SIZE / 2,
+            y + 3.2,
+            _ICAM_MARKER_SIZE,
+            shape=ICAM_DEPTH_SHAPES[depth],
+            fill=_icam_depth_rgb(brand, depth),
+        )
+        draw_text(
+            pdf,
+            column.x + _ICAM_ROW_INSET + _ICAM_MARKER_SIZE + 1.6,
+            y + 3.8,
+            ICAM_DEPTH_LABELS[depth],
+            size=7.0,
+            style="B",
+            rgb=shade(brand, 0.2),
+            max_width=max(8.0, column.w - 2 * _ICAM_ROW_INSET - _ICAM_MARKER_SIZE - 1.6),
+        )
 
 
 def _draw_icam_band(
@@ -1242,7 +1328,7 @@ def _draw_icam_band(
     entries: Sequence[IcamFactor],
     brand: RGB,
 ) -> float:
-    """One category band: a titled strip, then a row per factor. Returns the next band's top."""
+    """One category band across the three depth columns. Returns the next band's top."""
     height = _icam_band_box_height(pdf, frame, entries)
     if y + height > frame.bottom + 0.05:
         # Unreachable through normalise_icam_factors, which caps the row count
@@ -1277,21 +1363,35 @@ def _draw_icam_band(
         max_width=_ICAM_COUNT_COL,
     )
 
-    row_y = y + _ICAM_STRIP_H + _ICAM_BAND_PAD
+    body_y = y + _ICAM_STRIP_H + _ICAM_BAND_PAD
     if not entries:
         draw_text(
             pdf,
             _icam_row_text_x(frame),
-            row_y + 3.3,
+            body_y + 3.3,
             "None recorded.",
             size=7.5,
             style="I",
             rgb=tint(BLACK, 0.45),
             max_width=max(10.0, frame.w - 2 * _ICAM_ROW_INSET),
         )
-    for entry in entries:
-        _draw_icam_row(pdf, frame, row_y, entry, brand)
-        row_y += _icam_row_step(pdf, frame, entry)
+        return y + height + _ICAM_BAND_GAP
+
+    columns, unclassified = _icam_split(entries)
+    column_width = _icam_column_width(frame)
+    for index, depth in enumerate(ICAM_DEPTHS):
+        row_y = body_y
+        for entry in columns[depth]:
+            _draw_icam_cell(pdf, _icam_column_frame(frame, index), row_y, entry, brand)
+            row_y += _icam_cell_step(pdf, column_width, entry)
+
+    unclassified_y = body_y + max(
+        (_icam_stack_height(pdf, column_width, columns[depth]) for depth in ICAM_DEPTHS),
+        default=0.0,
+    )
+    for entry in unclassified:
+        _draw_icam_cell(pdf, frame, unclassified_y, entry, brand, marker=False)
+        unclassified_y += _icam_cell_step(pdf, frame.w, entry)
 
     return y + height + _ICAM_BAND_GAP
 
@@ -1299,22 +1399,29 @@ def _draw_icam_band(
 def _icam_row_text_x(frame: Frame) -> float:
     """Left edge of the cause column, marker gutter included.
 
-    Fixed whether or not this row has a marker: a factor with no recorded depth
+    Fixed whether or not this cell has a marker: a factor with no recorded depth
     must line up with the others rather than being indented differently, which
     would read as a second kind of row.
     """
     return frame.x + _ICAM_ROW_INSET + _ICAM_MARKER_SIZE + 1.6
 
 
-def _draw_icam_row(pdf: Any, frame: Frame, y: float, factor: IcamFactor, brand: RGB) -> None:
-    """One factor: depth marker, the cause with its sub-causes, and the depth in words."""
+def _draw_icam_cell(
+    pdf: Any,
+    frame: Frame,
+    y: float,
+    factor: IcamFactor,
+    brand: RGB,
+    *,
+    marker: bool = True,
+) -> None:
+    """One factor in a depth column (or the unclassified strip)."""
     baseline = y + 3.3
     text_x = _icam_row_text_x(frame)
-    available = frame.right - _ICAM_ROW_INSET - text_x
-    depth_label = factor.depth_label
+    available = max(6.0, frame.right - _ICAM_ROW_INSET - text_x)
     wrap = bool(getattr(pdf, "_pack_font_family", None))
 
-    if depth_label is not None and factor.depth is not None:
+    if marker and factor.depth is not None:
         draw_marker(
             pdf,
             frame.x + _ICAM_ROW_INSET + _ICAM_MARKER_SIZE / 2,
@@ -1323,27 +1430,16 @@ def _draw_icam_row(pdf: Any, frame: Frame, y: float, factor: IcamFactor, brand: 
             shape=ICAM_DEPTH_SHAPES.get(factor.depth, "circle"),
             fill=_icam_depth_rgb(brand, factor.depth),
         )
-        draw_text(
-            pdf,
-            frame.right - _ICAM_ROW_INSET,
-            baseline,
-            depth_label,
-            size=7.0,
-            rgb=shade(brand, 0.25),
-            align="R",
-            max_width=_ICAM_DEPTH_COL - 1.5,
-        )
-        # The depth column is only reserved when something is written in it, so
-        # an unclassified factor gets the full width for its own words.
-        available -= _ICAM_DEPTH_COL
 
-    cause_width = max(6.0, available)
     if wrap:
         pdf.set_font(str(pdf._pack_font_family), "", 7.5)
         pdf.set_text_color(*BLACK)
         line_y = baseline
-        for line in wrap_text(pdf, factor.label, cause_width):
+        for line in _icam_cell_lines(pdf, factor, available):
             pdf.text(text_x, line_y, line)
             line_y += _ICAM_WRAP_LEADING
         return
-    draw_text(pdf, text_x, baseline, factor.label, size=7.5, max_width=cause_width)
+    line_y = baseline
+    for line in _icam_cell_lines(pdf, factor, available):
+        draw_text(pdf, text_x, line_y, line, size=7.5, max_width=available)
+        line_y += _ICAM_WRAP_LEADING
