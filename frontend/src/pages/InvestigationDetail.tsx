@@ -2641,7 +2641,7 @@ export default function InvestigationDetail() {
                                   ) : (
                                     <Download className="w-4 h-4 mr-2" />
                                   )}
-                                  Word
+                                  Download Word
                                 </Button>
                               </span>
                             </TooltipTrigger>
