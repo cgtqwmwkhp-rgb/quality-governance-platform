@@ -167,3 +167,21 @@ def text_safe(value: Any, *, max_len: Optional[int] = None) -> str:
 
 def legal_footer_line() -> str:
     return f"{LEGAL_NAME} · {ADDRESS_LINE} · {PHONE} · {WEB.upper()}"
+
+
+def write_tracked(
+    pdf: Any,
+    text: str,
+    *,
+    width: float,
+    height: float,
+    spacing: float = 0.32,
+    align: str = "L",
+    **cell_kw: Any,
+) -> None:
+    """Paint a caps label with letter-spacing. Always reset spacing afterwards."""
+    pdf.set_char_spacing(spacing)
+    try:
+        pdf.cell(width, height, text_safe(text), align=align, **cell_kw)
+    finally:
+        pdf.set_char_spacing(0)
