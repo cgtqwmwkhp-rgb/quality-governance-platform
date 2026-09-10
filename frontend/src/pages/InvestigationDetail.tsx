@@ -146,6 +146,32 @@ const INVESTIGATION_REOPEN_STATUS = 'under_review'
 /** Permission a section omit needs; always rendered through formatPermissionCode (PX-144). */
 const OMIT_APPROVAL_PERMISSION = 'investigation:approve_customer_omit'
 
+function withoutDerivedFindings(data: Record<string, unknown>): Record<string, unknown> {
+  const { findings: _flatFindings, ...withoutFlatFindings } = data
+  const sections = withoutFlatFindings.sections
+  if (!sections || typeof sections !== 'object' || Array.isArray(sections)) {
+    return withoutFlatFindings
+  }
+
+  const sectionMap = sections as Record<string, unknown>
+  const findingsSection = sectionMap.section_3_investigation_findings
+  if (!findingsSection || typeof findingsSection !== 'object' || Array.isArray(findingsSection)) {
+    return withoutFlatFindings
+  }
+
+  const { findings: _nestedFindings, ...withoutNestedFindings } = findingsSection as Record<
+    string,
+    unknown
+  >
+  return {
+    ...withoutFlatFindings,
+    sections: {
+      ...sectionMap,
+      section_3_investigation_findings: withoutNestedFindings,
+    },
+  }
+}
+
 const TABS = [
   { id: 'summary', label: 'Summary', icon: FileText },
   { id: 'timeline', label: 'Timeline', icon: History },
@@ -320,6 +346,16 @@ export default function InvestigationDetail() {
       setError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
+    }
+  }, [investigationId])
+
+  const refreshInvestigationSilently = useCallback(async () => {
+    if (!investigationId || investigationId === 0) return
+    try {
+      const response = await investigationsApi.get(investigationId)
+      setInvestigation(response.data)
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'refreshSilent' })
     }
   }, [investigationId])
 
@@ -948,37 +984,39 @@ export default function InvestigationDetail() {
       try {
         const response = await mutate()
         setFindings(response.data.items)
-        await loadInvestigation()
+        await refreshInvestigationSilently()
         await loadClosureValidation()
+        return true
       } catch (err) {
         trackError(err, { component: 'InvestigationDetail', action })
         const message = getApiErrorMessage(err)
         setFindingsError(message)
         toast.error(message)
+        return false
       } finally {
         setFindingsSaving(false)
       }
     },
-    [loadInvestigation, loadClosureValidation],
+    [refreshInvestigationSilently, loadClosureValidation],
   )
 
   const handleAddFinding = async (body: string) => {
-    if (!investigationId) return
-    await runFindingsMutation('addFinding', () =>
+    if (!investigationId) return false
+    return runFindingsMutation('addFinding', () =>
       investigationsApi.createFinding(investigationId, body),
     )
   }
 
   const handleUpdateFinding = async (findingId: number, body: string) => {
-    if (!investigationId) return
-    await runFindingsMutation('updateFinding', () =>
+    if (!investigationId) return false
+    return runFindingsMutation('updateFinding', () =>
       investigationsApi.updateFinding(investigationId, findingId, body),
     )
   }
 
   const handleDeleteFinding = async (findingId: number) => {
-    if (!investigationId) return
-    await runFindingsMutation('deleteFinding', () =>
+    if (!investigationId) return false
+    return runFindingsMutation('deleteFinding', () =>
       investigationsApi.deleteFinding(investigationId, findingId),
     )
   }
@@ -992,13 +1030,13 @@ export default function InvestigationDetail() {
    * added.
    */
   const handleMoveFinding = async (findingId: number, direction: -1 | 1) => {
-    if (!investigationId) return
+    if (!investigationId) return false
     const index = findings.findIndex((finding) => finding.id === findingId)
     const target = index + direction
-    if (index < 0 || target < 0 || target >= findings.length) return
+    if (index < 0 || target < 0 || target >= findings.length) return false
     const order = findings.map((finding) => finding.id)
     ;[order[index], order[target]] = [order[target], order[index]]
-    await runFindingsMutation('reorderFindings', () =>
+    return runFindingsMutation('reorderFindings', () =>
       investigationsApi.reorderFindings(investigationId, order),
     )
   }
@@ -1064,7 +1102,7 @@ export default function InvestigationDetail() {
         // INV-C7: `findings` is no longer written here. The rows are its only
         // author, and the server derives the string from them — sending a stale
         // copy from this form would overwrite whatever the row editor just saved.
-        data: withWorkspaceFields(existingData, {
+        data: withWorkspaceFields(withoutDerivedFindings(existingData), {
           conclusion: summaryConclusion,
           lead_investigator: summaryLead,
         }),
@@ -1153,8 +1191,8 @@ export default function InvestigationDetail() {
     loadActions()
   }, [loadActions])
   useEffect(() => {
-    initializeSummaryData()
-  }, [investigation, initializeSummaryData])
+    if (!summaryUnsaved) initializeSummaryData()
+  }, [investigation, initializeSummaryData, summaryUnsaved])
   // INV-C7: findings live behind their own endpoint, so they are fetched once for
   // the run rather than re-derived from `investigation.data` on every render.
   useEffect(() => {
@@ -1194,7 +1232,7 @@ export default function InvestigationDetail() {
         loadEvidence()
         break
       case 'rca':
-        loadRca()
+        if (!rcaUnsaved) loadRca()
         loadFactors()
         break
     }
@@ -1209,6 +1247,7 @@ export default function InvestigationDetail() {
     loadPackCapability,
     loadEvidence,
     loadRca,
+    rcaUnsaved,
     loadFactors,
   ])
 

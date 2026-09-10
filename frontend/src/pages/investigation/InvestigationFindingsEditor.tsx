@@ -27,10 +27,10 @@ export interface InvestigationFindingsEditorProps {
   saving: boolean
   error: string | null
   readOnly?: boolean
-  onAdd: (body: string) => Promise<void>
-  onUpdate: (findingId: number, body: string) => Promise<void>
-  onDelete: (findingId: number) => Promise<void>
-  onMove: (findingId: number, direction: -1 | 1) => Promise<void>
+  onAdd: (body: string) => Promise<boolean>
+  onUpdate: (findingId: number, body: string) => Promise<boolean>
+  onDelete: (findingId: number) => Promise<boolean>
+  onMove: (findingId: number, direction: -1 | 1) => Promise<boolean>
   onRetry: () => void
 }
 
@@ -66,17 +66,19 @@ export default function InvestigationFindingsEditor({
   const handleAdd = async () => {
     if (!canAdd) return
     const body = draft.trim()
-    await onAdd(body)
-    // Cleared only after the call resolves, so a failed add does not lose the text.
-    setDraft('')
+    const saved = await onAdd(body)
+    // Cleared only after the parent confirms success, so a failed add keeps the text.
+    if (saved) setDraft('')
   }
 
   const handleSaveEdit = async (findingId: number) => {
     const body = editingBody.trim()
     if (!body) return
-    await onUpdate(findingId, body)
-    setEditingId(null)
-    setEditingBody('')
+    const saved = await onUpdate(findingId, body)
+    if (saved) {
+      setEditingId(null)
+      setEditingBody('')
+    }
   }
 
   return (
