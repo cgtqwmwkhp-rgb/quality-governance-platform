@@ -758,14 +758,18 @@ export default function InvestigationDetail() {
     }
   }
 
-  const handleDownloadPackDocx = async (packId: number, packUuid: string) => {
+  const handleDownloadPackDocx = async (packId: number, packUuid: string, issued: boolean) => {
     if (!investigation || !investigationId) return
     setDownloadingDocxPackId(packId)
     setPackError(null)
     try {
       const docx = await fetchCustomerPackDocx(investigationId, packId)
       triggerPackDocxDownload(docx, packDocxFilename(investigation.reference_number, packUuid))
-      toast.success('Word working copy downloaded. Issue still retains the PDF.')
+      toast.success(
+        issued
+          ? 'Frozen Word of the issued pack downloaded.'
+          : 'Word working copy downloaded. Issue still retains the PDF.',
+      )
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'downloadPackDocx' })
       const message = getApiErrorMessage(err, 'Could not build the Word working copy.')
@@ -814,7 +818,7 @@ export default function InvestigationDetail() {
         recipient_email: recipientEmail,
         note,
       })
-      toast.success('Pack issued. Download now returns the retained copy.')
+      toast.success('Pack issued. Download now returns the retained PDF and frozen Word.')
       await loadPacks()
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'issuePack' })
@@ -2670,10 +2674,10 @@ export default function InvestigationDetail() {
                                   variant="outline"
                                   size="sm"
                                   data-testid={`investigation-pack-download-docx-${pack.id}`}
-                                  disabled={
-                                    downloadingDocxPackId === pack.id || packIsIssued(pack)
+                                  disabled={downloadingDocxPackId === pack.id}
+                                  onClick={() =>
+                                    void handleDownloadPackDocx(pack.id, pack.pack_uuid, packIsIssued(pack))
                                   }
-                                  onClick={() => void handleDownloadPackDocx(pack.id, pack.pack_uuid)}
                                 >
                                   {downloadingDocxPackId === pack.id ? (
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -2686,7 +2690,7 @@ export default function InvestigationDetail() {
                             </TooltipTrigger>
                             <TooltipContent>
                               {packIsIssued(pack)
-                                ? 'Working copy closed after issue. Download the retained PDF.'
+                                ? 'Frozen Word of the issued pack. The working copy stays closed.'
                                 : 'Editable working copy. Issue still retains the PDF.'}
                             </TooltipContent>
                           </Tooltip>

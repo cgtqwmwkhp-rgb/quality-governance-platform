@@ -489,8 +489,13 @@ describe('InvestigationDetail', () => {
     )
   })
 
-  it('disables the Word working copy after the pack is issued', async () => {
+  it('downloads frozen Word after the pack is issued', async () => {
     const detailApi = await import('../investigation/investigationDetailApi')
+    const helpers = await import('../investigation/investigationReportHelpers')
+    const docxBlob = new Blob(['PK'], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    vi.mocked(detailApi.fetchCustomerPackDocx).mockResolvedValue(docxBlob)
     client.investigationsApi.getPacks.mockResolvedValue({
       data: {
         items: [
@@ -521,9 +526,16 @@ describe('InvestigationDetail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Report' }))
 
     const wordButton = await screen.findByTestId('investigation-pack-download-docx-1')
-    expect(wordButton).toBeDisabled()
+    expect(wordButton).not.toBeDisabled()
     fireEvent.click(wordButton)
-    expect(detailApi.fetchCustomerPackDocx).not.toHaveBeenCalled()
+
+    await waitFor(() => {
+      expect(detailApi.fetchCustomerPackDocx).toHaveBeenCalledWith(7, 1)
+    })
+    expect(helpers.triggerPackDocxDownload).toHaveBeenCalledWith(
+      docxBlob,
+      'investigation-report-INV-7-abcdef12.docx',
+    )
   })
 
   it('surfaces a PDF build failure instead of downloading an empty file', async () => {
