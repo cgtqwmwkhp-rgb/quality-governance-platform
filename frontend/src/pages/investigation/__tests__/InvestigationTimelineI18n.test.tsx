@@ -4,7 +4,11 @@ import { createInstance, type i18n as I18n } from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { render, screen } from '@testing-library/react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import InvestigationTimeline, { KIND_LABEL, TIMELINE_FILTER_OPTIONS } from '../InvestigationTimeline'
+import InvestigationTimeline, {
+  KIND_LABEL,
+  TIMELINE_FILTER_OPTIONS,
+  TIMELINE_ORIGIN_OPTIONS,
+} from '../InvestigationTimeline'
 import en from '../../../i18n/locales/en.json'
 import type { TimelineEvent } from '../../../api/client'
 
@@ -63,6 +67,13 @@ function collectSourceFiles(dir: string, acc: string[] = []): string[] {
 describe('investigation timeline i18n coverage', () => {
   it('resolves every filter option label from en.json rather than a developer fallback', () => {
     const unresolved = TIMELINE_FILTER_OPTIONS.filter((opt) => !i18n.exists(opt.labelKey)).map(
+      (opt) => opt.labelKey,
+    )
+    expect(unresolved).toEqual([])
+  })
+
+  it('resolves every origin option label from en.json rather than a developer fallback', () => {
+    const unresolved = TIMELINE_ORIGIN_OPTIONS.filter((opt) => !i18n.exists(opt.labelKey)).map(
       (opt) => opt.labelKey,
     )
     expect(unresolved).toEqual([])
@@ -139,5 +150,29 @@ describe('investigation timeline rendered copy', () => {
 
     expect(screen.getByText('No timeline events')).toBeInTheDocument()
     expect(screen.queryByText(`${TIMELINE_NAMESPACE}empty_title`)).not.toBeInTheDocument()
+  })
+
+  it('names the parent-source row and its filter from en.json', () => {
+    renderWithI18n({
+      timeline: [
+        {
+          id: -91,
+          created_at: '2026-07-02T10:00:00Z',
+          event_type: 'SOURCE_AUDIT',
+          new_value: 'Incident INC-2026-0001 closed',
+          event_metadata: { origin: 'source', source_label: 'Incident · update' },
+        },
+      ] as TimelineEvent[],
+    })
+
+    expect(screen.getByTestId('timeline-activity-src-91')).toHaveTextContent('Source record')
+    expect(screen.getByTestId('investigation-timeline-origin-filter')).toHaveAccessibleName(
+      'Chronology origin',
+    )
+    expect(screen.getByTestId('investigation-timeline-origin-all')).toHaveTextContent('All origins')
+    expect(screen.getByTestId('investigation-timeline-origin-investigation')).toHaveTextContent(
+      'Investigation',
+    )
+    expect(screen.queryByText(`${TIMELINE_NAMESPACE}origin_source`)).not.toBeInTheDocument()
   })
 })

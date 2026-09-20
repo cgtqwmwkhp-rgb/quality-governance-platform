@@ -44,4 +44,14 @@ describe('investigationReportHelpers', () => {
     expect(parsed.pack_uuid).toBe('abcdef1234567890')
     expect(parsed.pdf_note).toMatch(/PDF/i)
   })
+
+  it('names the Word working copy with the same stem as the PDF', async () => {
+    const { packPdfFilename, packDocxFilename } = await import('../investigationReportHelpers')
+    expect(packDocxFilename('INV-2026-0007', 'abcdef12xxxx')).toBe(
+      'investigation-report-INV-2026-0007-abcdef12.docx',
+    )
+    expect(packPdfFilename('INV-2026-0007', 'abcdef12xxxx').replace('.pdf', '')).toBe(
+      packDocxFilename('INV-2026-0007', 'abcdef12xxxx').replace('.docx', ''),
+    )
+  })
 })

@@ -508,12 +508,106 @@ class InvestigationCustomerPack(Base, TimestampMixin):
     # Optional expiry
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # === INV-C17 / DEC-4: redaction review ===
+    # The pack states the redaction it actually performed (INV-C1). Whether that
+    # was enough for this audience is a human judgement about narrative text the
+    # redaction rules cannot reach, so it is recorded rather than inferred from
+    # the log. NULL means no review has been completed, which is what the issue
+    # gate refuses on. A review that found changes were required is recorded on
+    # the pack too, with cleared_at left NULL.
+    redaction_review_cleared_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    redaction_review_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id", name="fk_inv_packs_redaction_review_by_id"),
+        nullable=True,
+    )
+    redaction_review_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    redaction_review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # === INV-C17 / DEC-5: the bytes that were issued ===
+    # Set once, at the first act of issue. A later render from a changed
+    # renderer must not replace them, so the download path reads
+    # ``issued_pdf_storage_key`` and verifies ``issued_pdf_sha256`` rather than
+    # re-rendering. The storage key is held here as well as on the evidence
+    # asset so a deleted asset row cannot silently turn a retained pack back
+    # into a live re-render.
+    issued_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    issued_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id", name="fk_inv_packs_issued_by_id"),
+        nullable=True,
+    )
+    issued_pdf_asset_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("evidence_assets.id", ondelete="SET NULL", name="fk_inv_packs_issued_pdf_asset_id"),
+        nullable=True,
+        index=True,
+    )
+    issued_pdf_storage_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    issued_pdf_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    issued_pdf_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # Relationships
     investigation: Mapped["InvestigationRun"] = relationship("InvestigationRun", back_populates="customer_packs")
     generated_by = relationship("User", foreign_keys=[generated_by_id])
+    disclosures: Mapped[List["InvestigationPackDisclosure"]] = relationship(
+        "InvestigationPackDisclosure",
+        back_populates="pack",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<InvestigationCustomerPack(id={self.id}, audience='{self.audience.value}')>"
+
+
+class InvestigationPackDisclosure(Base, TimestampMixin):
+    """Who a customer pack was issued to, when, and the bytes they received.
+
+    One row per act of disclosure (INV-C17 / DEC-5). The retained PDF is written
+    once, at first issue; disclosing the same pack to a second recipient records
+    another row against the same ``pdf_sha256`` rather than re-rendering, so the
+    log always names bytes that still exist.
+
+    tenant_id is NOT NULL and inherited from the parent investigation — a
+    disclosure that cannot be attributed to a tenant is refused, not stored.
+    """
+
+    __tablename__ = "investigation_pack_disclosures"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    investigation_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pack_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("investigation_customer_packs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Who received it. Free text because a recipient is frequently an
+    # organisation or a named officer with no account on this platform.
+    recipient: Mapped[str] = mapped_column(String(300), nullable=False)
+    recipient_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # SHA-256 of the retained PDF bytes, not of the pack JSON.
+    pdf_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    pack: Mapped["InvestigationCustomerPack"] = relationship(
+        "InvestigationCustomerPack",
+        back_populates="disclosures",
+    )
+    actor = relationship("User", foreign_keys=[actor_id])
+
+    def __repr__(self) -> str:
+        return f"<InvestigationPackDisclosure(id={self.id}, pack_id={self.pack_id})>"
 
 
 class InvestigationActionStatus(str, enum.Enum):

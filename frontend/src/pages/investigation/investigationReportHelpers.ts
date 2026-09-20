@@ -28,7 +28,7 @@ export function buildGeneratedPackDownload(
       {
         export_kind: 'full_json',
         pdf_note:
-          'The issuable document is the PDF (Download PDF on the Report tab). This JSON is the full machine-readable pack payload, including the complete redaction log.',
+          'The PDF on the Report tab is the generated pack. Issuing it to a customer is a separate act and retains those bytes. This JSON is the machine-readable pack payload, including the complete redaction log.',
         ...pack,
       },
       null,
@@ -50,7 +50,7 @@ export function buildPackManifestStubDownload(
       {
         export_kind: 'manifest_stub',
         pdf_note:
-          'Checksum metadata only. Use Download PDF for the issuable document, or regenerate the report for the full JSON payload.',
+          'Checksum metadata only. Use Download PDF for the generated pack, or Issue this pack to retain the bytes a customer is given.',
         investigation_reference: investigationReference,
         pack_uuid: pack.pack_uuid,
         audience: pack.audience,
@@ -71,6 +71,15 @@ export function packPdfFilename(
 ): string {
   const ref = investigationReference.replace(/[^\w-]+/g, '_')
   return `investigation-report-${ref}-${packUuid.slice(0, 8)}.pdf`
+}
+
+/** Filename for a customer pack Word working copy, matching the server. */
+export function packDocxFilename(
+  investigationReference: string,
+  packUuid: string,
+): string {
+  const ref = investigationReference.replace(/[^\w-]+/g, '_')
+  return `investigation-report-${ref}-${packUuid.slice(0, 8)}.docx`
 }
 
 function triggerBlobDownload(blob: Blob, filename: string): void {
@@ -94,4 +103,11 @@ export function triggerPackDownload(payload: PackDownloadPayload): void {
 /** Trigger a browser download for pack PDF bytes returned by the API. */
 export function triggerPackPdfDownload(pdf: Blob, filename: string): void {
   triggerBlobDownload(new Blob([pdf], { type: 'application/pdf' }), filename)
+}
+
+const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+/** Trigger a browser download for pack Word bytes returned by the API. */
+export function triggerPackDocxDownload(docx: Blob, filename: string): void {
+  triggerBlobDownload(new Blob([docx], { type: DOCX_TYPE }), filename)
 }

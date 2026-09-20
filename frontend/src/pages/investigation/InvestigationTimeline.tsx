@@ -10,6 +10,7 @@ import {
   FileQuestion,
   Package,
   PenLine,
+  Link2,
 } from 'lucide-react'
 import type {
   Action,
@@ -29,7 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/Select'
-import { buildActivitySpine, filterActivitySpine, type ActivityKind } from './activitySpine'
+import {
+  buildActivitySpine,
+  filterActivitySpine,
+  filterActivitySpineByOrigin,
+  type ActivityKind,
+} from './activitySpine'
 
 /** Backend event_type values + spine kinds for GET .../timeline?event_type= / local filter. */
 export const TIMELINE_FILTER_OPTIONS = [
@@ -46,6 +52,21 @@ export const TIMELINE_FILTER_OPTIONS = [
   { value: 'REJECTED', labelKey: 'investigations.timeline.filter_rejected' },
 ] as const
 
+/**
+ * Origin filter (INV-C9 / D7). Local to this panel rather than part of
+ * TIMELINE_FILTER_OPTIONS, because that value is forwarded to the API as
+ * `?event_type=` and an origin is not an event type.
+ */
+export const TIMELINE_ORIGIN_OPTIONS = [
+  { value: 'all', labelKey: 'investigations.timeline.origin_all', fallback: 'All origins' },
+  {
+    value: 'investigation',
+    labelKey: 'investigations.timeline.origin_investigation',
+    fallback: 'Investigation',
+  },
+  { value: 'source', labelKey: 'investigations.timeline.origin_source', fallback: 'Source record' },
+] as const
+
 const KIND_ICON: Record<ActivityKind, typeof History> = {
   revision: History,
   comment: MessageSquare,
@@ -53,6 +74,7 @@ const KIND_ICON: Record<ActivityKind, typeof History> = {
   evidence: FileQuestion,
   pack: Package,
   manual: PenLine,
+  source: Link2,
 }
 
 /** Human-readable label per spine kind; the raw kind is an internal discriminator. */
@@ -63,6 +85,9 @@ export const KIND_LABEL: Record<ActivityKind, { key: string; fallback: string }>
   evidence: { key: 'investigations.timeline.kind_evidence', fallback: 'Evidence' },
   pack: { key: 'investigations.timeline.kind_pack', fallback: 'Customer pack' },
   manual: { key: 'investigations.timeline.kind_manual', fallback: 'Manual entry' },
+  // Shares the origin key: a source row's kind badge and its origin are the
+  // same statement, and duplicating the copy would let the two drift apart.
+  source: { key: 'investigations.timeline.origin_source', fallback: 'Source record' },
 }
 
 interface InvestigationTimelineProps {
@@ -96,14 +121,18 @@ export default function InvestigationTimeline({
 }: InvestigationTimelineProps) {
   const { t } = useTranslation()
   const [manualText, setManualText] = useState('')
+  const [originFilter, setOriginFilter] = useState<string>('all')
 
   const spine = useMemo(
     () =>
-      filterActivitySpine(
-        buildActivitySpine({ timeline, comments, actions, evidence, packs }),
-        timelineFilter,
+      filterActivitySpineByOrigin(
+        filterActivitySpine(
+          buildActivitySpine({ timeline, comments, actions, evidence, packs }),
+          timelineFilter,
+        ),
+        originFilter,
       ),
-    [timeline, comments, actions, evidence, packs, timelineFilter],
+    [timeline, comments, actions, evidence, packs, timelineFilter, originFilter],
   )
 
   const submitManual = async () => {
@@ -135,6 +164,26 @@ export default function InvestigationTimeline({
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div
+          className="flex items-center gap-2"
+          role="group"
+          aria-label={t('investigations.timeline.origin_filter_label', 'Chronology origin')}
+          data-testid="investigation-timeline-origin-filter"
+        >
+          <Link2 className="w-4 h-4 text-muted-foreground" />
+          {TIMELINE_ORIGIN_OPTIONS.map((opt) => (
+            <Button
+              key={opt.value}
+              variant={originFilter === opt.value ? 'default' : 'outline'}
+              size="sm"
+              aria-pressed={originFilter === opt.value}
+              onClick={() => setOriginFilter(opt.value)}
+              data-testid={`investigation-timeline-origin-${opt.value}`}
+            >
+              {t(opt.labelKey, opt.fallback)}
+            </Button>
+          ))}
         </div>
         <Button
           variant="outline"

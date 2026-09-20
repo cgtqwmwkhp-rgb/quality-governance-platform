@@ -63,6 +63,17 @@ describe('EngineerPeoplePicker', () => {
       fireEvent.click(await screen.findByRole('button', { name: /Warwick, C/ }))
       expect(onChange).not.toHaveBeenCalled()
     })
+
+    it('still clears a typed value so assignment cannot skip the roster', async () => {
+      mockRoster([WITH_LOGIN])
+      const onChange = vi.fn()
+      render(<EngineerPeoplePicker onChange={onChange} requireLogin />)
+      const input = await openPicker()
+
+      fireEvent.change(input, { target: { value: 'not-on-roster' } })
+
+      expect(onChange).toHaveBeenCalledWith(null)
+    })
   })
 
   describe('when a login is not required (investigation lead, named roles)', () => {
@@ -97,6 +108,21 @@ describe('EngineerPeoplePicker', () => {
           hasLogin: false,
         }),
       )
+    })
+
+    it('keeps a typed name that is not on the roster, instead of clearing it', async () => {
+      mockRoster([ROSTER_ONLY])
+      const onChange = vi.fn()
+      render(<EngineerPeoplePicker onChange={onChange} requireLogin={false} />)
+      const input = await openPicker()
+
+      fireEvent.change(input, { target: { value: 'External investigator' } })
+
+      expect(onChange).toHaveBeenCalledWith({
+        label: 'External investigator',
+        hasLogin: false,
+      })
+      expect(onChange).not.toHaveBeenCalledWith(null)
     })
   })
 

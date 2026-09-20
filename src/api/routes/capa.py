@@ -73,6 +73,9 @@ class CAPAUpdate(BaseModel):
     verification_method: str | None = None
     verification_result: str | None = None
     effectiveness_criteria: str | None = None
+    effectiveness_review_date: datetime | None = None
+    is_effective: bool | None = None
+    effectiveness_notes: str | None = None
     assigned_to_id: int | None = None
     due_date: datetime | None = None
 
@@ -84,6 +87,7 @@ class CAPAUpdate(BaseModel):
         "verification_method",
         "verification_result",
         "effectiveness_criteria",
+        "effectiveness_notes",
         mode="before",
     )
     @classmethod

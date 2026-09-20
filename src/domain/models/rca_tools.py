@@ -29,14 +29,39 @@ class RCAToolType(str, enum.Enum):
 
 
 class FishboneCategory(str, enum.Enum):
-    """Standard Fishbone (6M) categories."""
+    """ICAM contributing-factor categories (INV-C12 / DEC-1).
 
-    MANPOWER = "manpower"  # People
-    METHOD = "method"  # Process
-    MACHINE = "machine"  # Equipment
-    MATERIAL = "material"  # Materials
-    MEASUREMENT = "measurement"  # Metrics
-    MOTHER_NATURE = "mother_nature"  # Environment
+    Re-specified from the manufacturing 6M set (manpower / method / machine /
+    material / measurement / mother nature) to the four ICAM categories an
+    incident investigator actually classifies against. The 6M names were never
+    populated: no route, service or UI in this repository wrote a
+    ``fishbone_diagrams`` row, so re-specifying is a contract change on an
+    unused surface rather than a migration of stored meaning.
+
+    Nothing is dropped from any row that does exist. ``causes`` is a JSON map
+    keyed by these values, so a pre-existing diagram keyed by a 6M name is
+    still readable — :meth:`FishboneDiagram.get_all_causes` iterates whatever
+    keys are stored. Only *adding* under a 6M name stops working, and that is
+    the intended refusal: there is no fifth taxonomy.
+    """
+
+    ORGANISATIONAL = "organisational_factors"
+    TASK_ENVIRONMENTAL = "task_environmental_conditions"
+    INDIVIDUAL_TEAM = "individual_team_actions"
+    ABSENT_FAILED_DEFENCES = "absent_failed_defences"
+
+
+class CausalDepth(str, enum.Enum):
+    """HSG245 causal depth of one contributing factor (INV-C12 / DEC-1).
+
+    Crossed with :class:`FishboneCategory` rather than replacing it: ICAM says
+    *what kind* of factor this is, HSG245 says *how far back* it sits. Storing
+    them as one flattened label would be the fifth taxonomy DEC-1 refuses.
+    """
+
+    IMMEDIATE = "immediate"
+    UNDERLYING = "underlying"
+    ROOT = "root"
 
 
 class FiveWhysAnalysis(Base, TimestampMixin, AuditTrailMixin):
@@ -121,9 +146,12 @@ class FiveWhysAnalysis(Base, TimestampMixin, AuditTrailMixin):
 
 
 class FishboneDiagram(Base, TimestampMixin, AuditTrailMixin):
-    """Fishbone (Ishikawa) Diagram for cause-and-effect analysis.
+    """Cause-and-effect analysis, keyed by the four ICAM categories.
 
-    Uses 6M categories: Manpower, Method, Machine, Material, Measurement, Mother Nature
+    INV-C12 makes this the store for an investigation's contributing factors:
+    one diagram per run, each factor a cause under one ICAM category, carrying
+    its optional sub-causes and its HSG245 depth. See
+    ``src/domain/services/investigation_factors_service.py``.
     """
 
     __tablename__ = "fishbone_diagrams"
@@ -144,19 +172,29 @@ class FishboneDiagram(Base, TimestampMixin, AuditTrailMixin):
     # The effect (head of the fish)
     effect_statement: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Causes by category (bones of the fish)
+    # Causes by ICAM category (bones of the fish).
     # JSON structure:
     # {
-    #   "manpower": [
-    #     {"cause": "Inadequate training", "sub_causes": ["No refresher courses", "Outdated materials"]},
-    #     {"cause": "Fatigue", "sub_causes": ["Long shifts", "Poor scheduling"]}
+    #   "organisational_factors": [
+    #     {"id": 1, "cause": "No refresher training schedule",
+    #      "sub_causes": ["Budget withdrawn", "No owner named"], "depth": "underlying"}
     #   ],
-    #   "method": [...],
-    #   "machine": [...],
-    #   "material": [...],
-    #   "measurement": [...],
-    #   "mother_nature": [...]
+    #   "task_environmental_conditions": [...],
+    #   "individual_team_actions": [...],
+    #   "absent_failed_defences": [...],
+    #   "_next_factor_id": 4
     # }
+    #
+    # ``id`` is unique within the diagram and is what the investigation factor
+    # endpoints address, because a list position is not stable under a
+    # concurrent edit. ``depth`` is a CausalDepth value, or absent on a row
+    # written before INV-C12 — absent means "not stated", never a guessed depth.
+    #
+    # ``_next_factor_id`` is the high-water mark, not a category. It is here
+    # rather than in a column because a deleted id must never be handed out
+    # again: highest-stored-plus-one would reissue the id of the factor just
+    # deleted, and a second tab still holding it would then silently edit a
+    # different factor. Readers of this map skip keys whose value is not a list.
     causes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     # Primary causes identified (from any category)
@@ -182,46 +220,102 @@ class FishboneDiagram(Base, TimestampMixin, AuditTrailMixin):
     def __repr__(self) -> str:
         return f"<FishboneDiagram(id={self.id}, entity={self.entity_type}:{self.entity_id})>"
 
+    #: Key inside ``causes`` holding the id high-water mark. Not a category:
+    #: every reader here skips values that are not lists.
+    NEXT_FACTOR_ID_KEY = "_next_factor_id"
+
+    def next_cause_id(self) -> int:
+        """The next unused cause id for this diagram.
+
+        The stored high-water mark, or highest-stored-plus-one for a diagram
+        written before INV-C12 that has no mark yet, whichever is larger. Taking
+        the larger of the two is what makes a hand-edited or partially converted
+        row safe: the mark can only ever move forward, so an id that has been
+        issued is never issued again even after its factor is deleted.
+        """
+        causes = self.causes or {}
+        highest = 0
+        for key, cause_list in causes.items():
+            if key == self.NEXT_FACTOR_ID_KEY or not isinstance(cause_list, list):
+                continue
+            for entry in cause_list:
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    highest = max(highest, int(entry.get("id") or 0))
+                except (TypeError, ValueError):
+                    continue
+        try:
+            marked = int(causes.get(self.NEXT_FACTOR_ID_KEY) or 0)
+        except (TypeError, ValueError):
+            marked = 0
+        return max(marked, highest + 1)
+
     def add_cause(
         self,
         category: FishboneCategory,
         cause: str,
         sub_causes: Optional[List[str]] = None,
-    ) -> None:
-        """Add a cause to a specific category."""
-        causes = self.causes or {}
+        depth: Optional["CausalDepth"] = None,
+    ) -> dict:
+        """Add a cause to one ICAM category and return the stored entry.
+
+        ``depth`` is omitted from the entry when it is not given rather than
+        defaulted: a factor whose HSG245 depth nobody recorded must not read
+        back as "immediate".
+
+        Reassigns ``self.causes`` rather than mutating it in place — this is a
+        plain JSON column with no mutation tracking, so an in-place edit would
+        not be persisted.
+        """
+        causes = {
+            key: (list(value) if isinstance(value, list) else value) for key, value in (self.causes or {}).items()
+        }
         cat_key = category.value
 
-        if cat_key not in causes:
-            causes[cat_key] = []
+        cause_id = self.next_cause_id()
+        entry: dict = {
+            "id": cause_id,
+            "cause": cause,
+            "sub_causes": list(sub_causes or []),
+        }
+        if depth is not None:
+            entry["depth"] = depth.value
 
-        causes[cat_key].append(
-            {
-                "cause": cause,
-                "sub_causes": sub_causes or [],
-            }
-        )
-
+        causes.setdefault(cat_key, []).append(entry)
+        causes[self.NEXT_FACTOR_ID_KEY] = cause_id + 1
         self.causes = causes
+        return entry
 
     def get_all_causes(self) -> List[dict]:
-        """Get all causes across categories."""
+        """Get all causes across categories.
+
+        Skips any key whose value is not a list — the id high-water mark lives
+        in this map and is not a category.
+        """
         all_causes = []
         for category, cause_list in (self.causes or {}).items():
+            if not isinstance(cause_list, list):
+                continue
             for cause in cause_list:
+                if not isinstance(cause, dict):
+                    continue
                 all_causes.append(
                     {
                         "category": category,
-                        "cause": cause["cause"],
+                        "cause": cause.get("cause"),
                         "sub_causes": cause.get("sub_causes", []),
+                        "depth": cause.get("depth"),
                     }
                 )
         return all_causes
 
     def count_causes(self) -> dict:
-        """Count causes by category."""
+        """Count causes by category. Non-category keys are not counted."""
         counts = {}
         for category, cause_list in (self.causes or {}).items():
+            if not isinstance(cause_list, list):
+                continue
             counts[category] = len(cause_list)
         return counts
 

@@ -197,11 +197,13 @@ from src.domain.models.investigation import (
     InvestigationComment,
     InvestigationCustomerPack,
     InvestigationLevel,
+    InvestigationPackDisclosure,
     InvestigationRevisionEvent,
     InvestigationRun,
     InvestigationStatus,
     InvestigationTemplate,
 )
+from src.domain.models.investigation_finding import InvestigationFinding
 
 # ISO 27001 Information Security (Tier 1)
 from src.domain.models.iso27001 import (
@@ -546,6 +548,7 @@ __all__ = [
     # Investigations (Stage 2)
     "InvestigationTemplate",
     "InvestigationRun",
+    "InvestigationFinding",
     "InvestigationStatus",
     "InvestigationLevel",
     "AssignedEntityType",
@@ -553,6 +556,7 @@ __all__ = [
     "InvestigationComment",
     "InvestigationRevisionEvent",
     "InvestigationCustomerPack",
+    "InvestigationPackDisclosure",
     # Workforce Development (Assessment & Induction)
     "Engineer",
     "CompetenceAssessmentBind",

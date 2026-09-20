@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import InvestigationTimeline, { TIMELINE_FILTER_OPTIONS } from '../InvestigationTimeline'
+import { fireEvent, render, screen } from '@testing-library/react'
+import type { TimelineEvent } from '../../../api/client'
+import InvestigationTimeline, {
+  TIMELINE_FILTER_OPTIONS,
+  TIMELINE_ORIGIN_OPTIONS,
+} from '../InvestigationTimeline'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -44,5 +48,83 @@ describe('InvestigationTimeline filters', () => {
       'Unified activity spine',
     )
     expect(screen.getByTestId('investigation-timeline-manual-input')).toBeInTheDocument()
+  })
+})
+
+describe('InvestigationTimeline source origin (INV-C9)', () => {
+  const timeline: TimelineEvent[] = [
+    {
+      id: -91,
+      event_type: 'SOURCE_AUDIT',
+      created_at: '2026-07-02T10:00:00Z',
+      new_value: 'Incident INC-2026-0001 closed',
+      event_metadata: {
+        origin: 'source',
+        source_feed: 'audit',
+        source_label: 'Incident · update',
+      },
+    },
+    {
+      id: 1,
+      event_type: 'STATUS_CHANGED',
+      created_at: '2026-07-01T10:00:00Z',
+      event_metadata: { origin: 'investigation' },
+    },
+  ]
+
+  it('keeps origin out of the event_type filter, which is forwarded to the API', () => {
+    const eventTypeValues = TIMELINE_FILTER_OPTIONS.map((o) => o.value)
+
+    expect(eventTypeValues).not.toContain('source')
+    expect(eventTypeValues).not.toContain('investigation')
+    expect(TIMELINE_ORIGIN_OPTIONS.map((o) => o.value)).toEqual(['all', 'investigation', 'source'])
+  })
+
+  it('labels a parent-source row as a source record, not as an investigation audit event', () => {
+    render(<InvestigationTimeline {...baseProps} timeline={timeline} />)
+
+    const sourceRow = screen.getByTestId('timeline-activity-src-91')
+    expect(sourceRow).toHaveTextContent('Source record')
+    expect(sourceRow).toHaveTextContent('Incident · update')
+    expect(screen.getByTestId('timeline-activity-rev-1')).toHaveTextContent('Audit event')
+  })
+
+  it('shows both origins until the reader narrows to one', () => {
+    render(<InvestigationTimeline {...baseProps} timeline={timeline} />)
+
+    expect(screen.getByTestId('timeline-activity-src-91')).toBeInTheDocument()
+    expect(screen.getByTestId('timeline-activity-rev-1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('investigation-timeline-origin-source'))
+    expect(screen.getByTestId('timeline-activity-src-91')).toBeInTheDocument()
+    expect(screen.queryByTestId('timeline-activity-rev-1')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('investigation-timeline-origin-investigation'))
+    expect(screen.queryByTestId('timeline-activity-src-91')).not.toBeInTheDocument()
+    expect(screen.getByTestId('timeline-activity-rev-1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('investigation-timeline-origin-all'))
+    expect(screen.getByTestId('timeline-activity-src-91')).toBeInTheDocument()
+    expect(screen.getByTestId('timeline-activity-rev-1')).toBeInTheDocument()
+  })
+
+  it('announces which origin is selected', () => {
+    render(<InvestigationTimeline {...baseProps} timeline={timeline} />)
+
+    expect(screen.getByTestId('investigation-timeline-origin-all')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.click(screen.getByTestId('investigation-timeline-origin-source'))
+
+    expect(screen.getByTestId('investigation-timeline-origin-source')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByTestId('investigation-timeline-origin-all')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 })

@@ -15,16 +15,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.pagination import PaginatedResponse, PaginationInput, paginate
 from src.core.update import apply_updates
-from src.domain.exceptions import StateTransitionError
+from src.domain.exceptions import StateTransitionError, ValidationError
 from src.domain.models.audit import AuditFinding
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.incident import Incident
 from src.domain.models.investigation import InvestigationRun
 from src.domain.models.near_miss import NearMiss
+from src.domain.models.rca_tools import FiveWhysAnalysis
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.rta import RoadTrafficCollision
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.investigation_rca_service import why_answer_at_level
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -370,6 +372,76 @@ class CAPAService:
             "overdue": overdue.scalar_one(),
         }
 
+    async def _resolve_why_link(
+        self,
+        *,
+        investigation_id: int,
+        tenant_id: int,
+        why_level: int | None,
+        five_whys_id: int | None,
+    ) -> tuple[int | None, int | None, str]:
+        """Tenant-scoped Why this CAPA names. Empty Why is ``""``, never invented.
+
+        A missing analysis, another organisation's row, or a ``five_whys_id``
+        that is not this run's analysis is fail-closed: LookupError /
+        ValidationError, never a 500 and never a Why that does not belong to
+        this tenant.
+        """
+        if why_level is None and five_whys_id is None:
+            return None, None, ""
+        if why_level is not None and (why_level < 1 or why_level > 20):
+            raise ValidationError("why_level must be between 1 and 20")
+
+        query = select(FiveWhysAnalysis).where(
+            FiveWhysAnalysis.investigation_id == investigation_id,
+            FiveWhysAnalysis.tenant_id == tenant_id,
+        )
+        if five_whys_id is not None:
+            query = query.where(FiveWhysAnalysis.id == five_whys_id)
+        result = await self.db.execute(query.order_by(FiveWhysAnalysis.id.desc()))
+        analysis = result.scalars().first()
+        if analysis is None:
+            if five_whys_id is not None:
+                raise LookupError("five_whys analysis not found for this investigation")
+            raise ValidationError("No RCA analysis for this investigation")
+
+        why_text = why_answer_at_level(analysis.whys, why_level) if why_level is not None else ""
+        if why_level is not None and not why_text:
+            raise ValidationError("Why is empty; CAPA text is not invented")
+        return int(analysis.id), why_level, why_text
+
+    async def create_capa_from_why(
+        self,
+        investigation_id: int,
+        *,
+        user_id: int,
+        tenant_id: int,
+        why_level: int,
+        title: str | None = None,
+        description: str | None = None,
+        assignee_id: int | None = None,
+        assignee_email: str | None = None,
+        assignee_name: str | None = None,
+        due_date: str | datetime | None = None,
+        priority: str | None = None,
+        five_whys_id: int | None = None,
+    ) -> CAPAAction:
+        """Create a CAPA from one Why. Empty Why is refused, not invented."""
+        return await self.create_capa_for_investigation(
+            investigation_id,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            title=title,
+            description=description,
+            assignee_id=assignee_id,
+            assignee_email=assignee_email,
+            assignee_name=assignee_name,
+            due_date=due_date,
+            priority=priority,
+            why_level=why_level,
+            five_whys_id=five_whys_id,
+        )
+
     async def create_capa_for_investigation(
         self,
         investigation_id: int,
@@ -383,6 +455,8 @@ class CAPAService:
         assignee_name: str | None = None,
         due_date: str | datetime | None = None,
         priority: str | None = None,
+        why_level: int | None = None,
+        five_whys_id: int | None = None,
     ) -> CAPAAction:
         """Create a CAPA linked to an investigation (idempotent if already linked)."""
         inv_result = await self.db.execute(
@@ -395,10 +469,22 @@ class CAPAService:
         if investigation is None:
             raise LookupError(f"Investigation with ID {investigation_id} not found")
 
+        linked_five_whys_id, linked_why_level, why_text = await self._resolve_why_link(
+            investigation_id=investigation_id,
+            tenant_id=tenant_id,
+            why_level=why_level,
+            five_whys_id=five_whys_id,
+        )
+        if why_level is not None and not (title and title.strip()):
+            title = f"CAPA: {why_text}"[:255]
+        if why_level is not None and description is None:
+            description = why_text
+
         # Idempotent only for empty convenience creates (no explicit title).
         # When the user supplies a title, always create a new CAPA so investigators
         # can add multiple corrective actions against one investigation.
-        if not (title and title.strip()):
+        # Per-Why creates always carry a title (from the Why or the client).
+        if not (title and title.strip()) and why_level is None:
             prior = await self.db.execute(
                 select(CAPAAction)
                 .where(
@@ -467,6 +553,8 @@ class CAPAService:
             source_type=CAPASource.INVESTIGATION,
             source_id=investigation_id,
             source_reference=f"investigation:{investigation_id}",
+            five_whys_id=linked_five_whys_id,
+            why_level=linked_why_level,
             assigned_to_id=resolved_assignee,
             created_by_id=user_id,
             due_date=parsed_due,
@@ -487,6 +575,8 @@ class CAPAService:
                 "investigation_id": investigation_id,
                 "capa_id": capa.id,
                 "reference_number": ref,
+                "five_whys_id": linked_five_whys_id,
+                "why_level": linked_why_level,
             },
             user_id=user_id,
             tenant_id=tenant_id,

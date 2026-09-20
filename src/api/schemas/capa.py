@@ -27,6 +27,11 @@ class CAPAResponse(BaseModel):
     verification_method: Optional[str] = None
     verification_result: Optional[str] = None
     effectiveness_criteria: Optional[str] = None
+    five_whys_id: Optional[int] = None
+    why_level: Optional[int] = None
+    effectiveness_review_date: Optional[datetime] = None
+    is_effective: Optional[bool] = None
+    effectiveness_notes: Optional[str] = None
     assigned_to_id: Optional[int] = None
     verified_by_id: Optional[int] = None
     created_by_id: int

@@ -1,4 +1,4 @@
-"""Helpers for investigation closure gates (open CAPA / actions)."""
+"""Helpers for investigation closure gates (open CAPA / actions / findings)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from src.domain.models.capa import CAPAAction, CAPASource, CAPAStatus
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus
 from src.domain.models.rca_tools import CAPAItem
 from src.domain.services.case_closure import resolve_case_tenant_id
+from src.domain.services.investigation_findings_service import InvestigationFindingsService
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +218,47 @@ def _non_empty_text(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def collect_summary_readiness_blockers(investigation: Any) -> tuple[list[str], list]:
+async def investigation_has_findings_for_closure(
+    db: AsyncSession,
+    *,
+    investigation: Any,
+    tenant_id: int,
+) -> bool:
+    """True when the closure gate may treat findings as present.
+
+    Findings are present iff there is at least one **non-empty**
+    ``investigation_findings`` row for this run, scoped to ``tenant_id``.
+    A leftover flat or nested legacy string is converted once through C7's
+    existing splitter — nothing is invented. Empty rows plus an empty string
+    stay missing.
+
+    Fail closed: a tenant mismatch, a missing id, or a probe error is
+    ``False``, never a pass over findings the caller cannot see.
+    """
+    try:
+        record_tenant = getattr(investigation, "tenant_id", None)
+        if record_tenant is None or int(record_tenant) != int(tenant_id):
+            return False
+        return await InvestigationFindingsService.has_non_empty_findings(
+            db, investigation=investigation, tenant_id=int(tenant_id)
+        )
+    except Exception:  # noqa: BLE001 — never hard-500 close / closure-validation
+        logger.exception(
+            "investigation_closure_findings_probe_failed",
+            extra={
+                "investigation_id": getattr(investigation, "id", None),
+                "tenant_id": tenant_id,
+            },
+        )
+        return False
+
+
+async def collect_summary_readiness_blockers(
+    investigation: Any,
+    *,
+    db: AsyncSession,
+    tenant_id: int,
+) -> tuple[list[str], list]:
     """Return reason codes + missing_items for summary-tab narrative gates."""
     from src.domain.models.investigation import InvestigationStatus
     from src.domain.services.investigation_service import ClosureMissingItem, ClosureReasonCode
@@ -252,7 +293,7 @@ def collect_summary_readiness_blockers(investigation: Any) -> tuple[list[str], l
             )
         )
 
-    if not _non_empty_text(raw_data.get("findings")):
+    if not await investigation_has_findings_for_closure(db, investigation=investigation, tenant_id=tenant_id):
         reasons.append(ClosureReasonCode.MISSING_FINDINGS)
         missing_items.append(
             ClosureMissingItem(

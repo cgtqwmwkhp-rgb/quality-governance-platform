@@ -3,18 +3,28 @@
 from __future__ import annotations
 
 import builtins
+import io
 import re
 
 import pytest
 
+from src.domain.services import investigation_pack_pdf as pack_pdf
 from src.domain.services.investigation_pack_pdf import (
     InvestigationPackPdfService,
+    chronology_feed,
     confidentiality_notice,
     count_field_redactions,
     format_field_value,
+    format_pack_field,
     humanise_key,
     summarise_redactions,
 )
+
+
+def _pdf_text(data: bytes) -> str:
+    from pypdf import PdfReader
+
+    return "\n".join((page.extract_text() or "") for page in PdfReader(io.BytesIO(data)).pages)
 
 
 def _pack(**overrides) -> dict:
@@ -154,6 +164,12 @@ class TestFieldRendering:
         assert format_field_value(["a", "b"]) == "- a\n- b"
         assert format_field_value({"root_cause": "Wear"}) == "Root cause: Wear"
 
+    def test_iso_body_stamps_render_as_uk_dates(self) -> None:
+        assert format_pack_field("2026-05-17") == "17 May 2026"
+        assert format_pack_field("2026-05-17T11:00:00+00:00") == "17 May 2026, 11:00 UTC"
+        assert format_pack_field("Wet road surface") == "Wet road surface"
+        assert format_pack_field(None) == "Not recorded"
+
 
 class TestRedactionSummary:
     def test_counts_by_type(self) -> None:
@@ -228,8 +244,913 @@ class TestConfidentialityNotice:
         assert confidentiality_notice("regulator", []) == ""
         assert confidentiality_notice(None, []) == ""
 
-    def test_notice_is_latin1_safe_for_the_pdf_font(self) -> None:
+
+class TestPackBranding:
+    def test_letterhead_is_crimson_and_jet_grey_not_tailwind_blue(self) -> None:
+        from src.domain.services import investigation_pack_brand as brand
+
+        assert brand.CRIMSON == (186, 55, 55)
+        assert brand.JET_GREY == (51, 48, 48)
+        assert brand.CRIMSON != (59, 130, 246)
+        assert brand.JET_GREY != (59, 130, 246)
+
+    def test_cover_does_not_create_a_footer_only_page(self) -> None:
+        from pypdf import PdfReader
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack())
+        pages = PdfReader(io.BytesIO(out)).pages
+
+        assert "Contents" in (pages[1].extract_text() or "") or "CONTENTS" in (pages[1].extract_text() or "")
+
+    def test_missing_incident_reference_uses_investigation_reference_not_title(self) -> None:
+        pack = _pack()
+
+        assert pack_pdf._incident_reference(pack, pack["content"]) == ""
+        cover = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+        assert "INCIDENT REFERENCE INV-2026-0007" in cover
+
+    def test_fixed_cell_text_is_ellipsized_to_its_rendered_width(self) -> None:
+        from fpdf import FPDF
+
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+
+        fitted = pack_pdf._fit_cell_text(pdf, "A very long tenant organisation name " * 10, 110)
+
+        assert fitted.endswith("...")
+        assert pdf.get_string_width(fitted) <= 110
+
+    def test_header_wordmark_footer_and_page_numbers_are_on_the_page(self) -> None:
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack(), organisation_name="Plantexpand Ltd")
+        text = _pdf_text(out)
+
+        assert "Plantexpand Ltd" in text
+        assert "UNCONTROLLED WHEN PRINTED" in text
+        assert "UNIT 7 BUCKINGHAM SQUARE" in text.upper()
+        assert "PAGE 1 OF" in text
+        assert "External customer pack" in text
+        assert "2 fields were redacted" in text
+        assert "Default Organisation" not in text
+
+    def test_tenant_organisation_name_is_not_the_letterhead(self) -> None:
+        organisation_name = "A very long tenant organisation name " * 10
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack(), organisation_name=organisation_name)
+        text = _pdf_text(out)
+
+        assert organisation_name not in text
+        assert "Plantexpand Ltd" in text
+        assert "UNCONTROLLED WHEN PRINTED" in text
+        assert "PAGE 1 OF" in text
+
+    def test_c1_honesty_notice_still_renders_on_a_branded_external_pack(self) -> None:
+        out = InvestigationPackPdfService().build_pdf_bytes(_pack(redaction_log=[]), organisation_name="Plantexpand")
+        text = _pdf_text(out)
+
+        assert "No fields were redacted from the sections below." in text
+        assert "Personal identities are redacted" not in text
+        assert "Narrative text is reproduced as written" in text
+        assert "Plantexpand Ltd" in text
+        assert "UNCONTROLLED WHEN PRINTED" in text
+
+    def test_notice_is_within_the_bundled_font_coverage(self) -> None:
+        from src.domain.services import investigation_pack_brand as brand
+
+        cmap = brand.covered_codepoints()
         for audience in ("internal_customer", "external_customer"):
             notice = confidentiality_notice(audience, [{"redaction_type": "IDENTITY_REDACTION"}])
+            for ch in notice:
+                if ch in "\n":
+                    continue
+                assert ord(ch) in cmap, ch
 
-            assert notice.encode("latin-1").decode("latin-1") == notice
+
+# ---------------------------------------------------------------------------
+# Chronology figure (INV-C15)
+# ---------------------------------------------------------------------------
+
+
+def _flat(text: str) -> str:
+    """Collapse the reader's line breaks so a wrapped sentence still matches."""
+    return " ".join(text.split())
+
+
+def _timeline_events() -> list[dict]:
+    """Events in the shape `GET /investigations/{id}/timeline` serialises (INV-C9)."""
+    return [
+        {
+            "id": -111,
+            "event_type": "SOURCE_AUDIT",
+            "new_value": "Incident raised",
+            "actor_name": "Dana Reporter",
+            "event_metadata": {"origin": "source", "source_label": "Incident \u00b7 create"},
+            "created_at": "2026-05-01T08:00:00+00:00",
+        },
+        {
+            "id": -212,
+            "event_type": "SOURCE_RUNNING_SHEET",
+            "new_value": "Brake wear noted on the nearside axle",
+            "actor_name": "Dana Reporter",
+            "event_metadata": {"origin": "source", "source_label": "Incident \u00b7 running sheet"},
+            "created_at": "2026-05-04T09:30:00+00:00",
+        },
+        {
+            "id": 7,
+            "event_type": "STATUS_CHANGED",
+            "new_value": "in_progress",
+            "event_metadata": {"origin": "investigation"},
+            "created_at": "2026-05-17T11:00:00+00:00",
+        },
+    ]
+
+
+class TestPackChronology:
+    def test_omitted_entirely_when_no_chronology_feed_is_supplied(self) -> None:
+        # Today's route passes no feed. Printing "no events" would claim the
+        # timeline had been consulted when it had not.
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(_pack(audience="internal_customer")))
+
+        assert "Chronology" not in text
+
+    def test_internal_pack_draws_the_figure_and_lists_the_entries(self) -> None:
+        out = InvestigationPackPdfService().build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            organisation_name="Plantexpand",
+            timeline_events=_timeline_events(),
+        )
+        text = _pdf_text(out)
+
+        assert out.startswith(b"%PDF-")
+        assert "Chronology" in text
+        assert "3 entries between 01 May 2026 and 17 May 2026" in text
+        assert "2 from the source record, 1 from the investigation" in text
+        assert "Source record" in text and "Investigation" in text
+        assert "01 May 2026 08:00 UTC - Source record - Incident" in text
+        assert "17 May 2026 11:00 UTC - Investigation - Status changed: in_progress" in text
+
+    def test_figure_geometry_reaches_the_document(self) -> None:
+        service = InvestigationPackPdfService()
+        without = service.build_pdf_bytes(_pack(audience="internal_customer"))
+        with_figure = service.build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            timeline_events=_timeline_events(),
+        )
+
+        # Markers, lanes and axis are vector operations, not text: the rendered
+        # document must grow by more than the words added to it.
+        assert len(with_figure) > len(without) + 400
+
+    def test_stored_chronology_is_declared_as_checksum_covered(self) -> None:
+        pack = _pack(audience="internal_customer")
+        pack["content"]["chronology"] = {"events": _timeline_events()}
+
+        # Normalised because the caption wraps: a line break must not decide
+        # whether the pack is judged to have told the truth.
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "covered by the content checksum" in text
+        assert "not covered by the content checksum" not in text
+
+    def test_render_time_chronology_says_it_is_outside_the_checksum(self) -> None:
+        text = _flat(
+            _pdf_text(
+                InvestigationPackPdfService().build_pdf_bytes(
+                    _pack(audience="internal_customer"),
+                    timeline_events=_timeline_events(),
+                )
+            )
+        )
+
+        assert "not part of the stored pack payload" in text
+        assert "not covered by the content checksum" in text
+
+    def test_a_bare_stored_list_is_accepted_as_well_as_an_events_mapping(self) -> None:
+        pack = _pack(audience="internal_customer")
+        pack["content"]["chronology"] = _timeline_events()
+
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+
+        assert "3 entries between 01 May 2026 and 17 May 2026" in text
+
+    def test_feed_precedence_is_argument_then_payload_then_stored_content(self) -> None:
+        pack = _pack(audience="internal_customer")
+        pack["content"]["chronology"] = _timeline_events()
+        pack["timeline_events"] = _timeline_events()[:2]
+
+        assert chronology_feed(pack, pack["content"], _timeline_events()[:1])[1] == "render"
+        assert len(chronology_feed(pack, pack["content"], _timeline_events()[:1])[0]) == 1
+        assert len(chronology_feed(pack, pack["content"], None)[0]) == 2
+
+        stored_only = _pack(audience="internal_customer")
+        stored_only["content"]["chronology"] = _timeline_events()
+        assert chronology_feed(stored_only, stored_only["content"], None)[1] == "pack"
+
+    def test_no_feed_is_distinguishable_from_an_empty_feed(self) -> None:
+        pack = _pack()
+
+        assert chronology_feed(pack, pack["content"], None) == (None, "")
+        assert chronology_feed(pack, pack["content"], []) == ([], "render")
+
+    def test_a_non_list_feed_is_ignored_rather_than_rendered(self) -> None:
+        pack = _pack(audience="internal_customer")
+        pack["timeline_events"] = "nonsense"
+
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack, timeline_events={"items": []}))
+
+        assert "Chronology" not in text
+
+    def test_empty_feed_states_the_absence_without_a_figure(self) -> None:
+        service = InvestigationPackPdfService()
+        empty = service.build_pdf_bytes(_pack(audience="internal_customer"), timeline_events=[])
+        text = _pdf_text(empty)
+
+        assert "No chronology entries are recorded for this investigation." in text
+        assert "Most recent entries" not in text
+        assert "compiled from" not in text
+
+    def test_external_pack_withholds_the_chronology_and_its_narrative(self) -> None:
+        # Timeline entries are outside the pack redaction pass: an actor name and
+        # a running-sheet narrative would be released unredacted.
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(
+                _pack(audience="external_customer"),
+                timeline_events=_timeline_events(),
+            )
+        )
+
+        assert "The chronology is withheld from this pack." in text
+        assert "Dana Reporter" not in text
+        assert "Brake wear noted" not in text
+        assert "Most recent entries" not in text
+
+    def test_unknown_audience_fails_closed_like_the_confidentiality_notice(self) -> None:
+        for audience in ("regulator", "", None):
+            text = _pdf_text(
+                InvestigationPackPdfService().build_pdf_bytes(
+                    _pack(audience=audience),
+                    timeline_events=_timeline_events(),
+                )
+            )
+
+            assert "The chronology is withheld from this pack." in text
+            assert "Brake wear noted" not in text
+
+    def test_external_pack_with_an_empty_feed_does_not_claim_a_withholding(self) -> None:
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(_pack(audience="external_customer"), timeline_events=[])
+        )
+
+        assert "No chronology entries are recorded for this investigation." in text
+        assert "The chronology is withheld from this pack." not in text
+
+    def test_undated_entries_are_declared_not_silently_missing(self) -> None:
+        events = _timeline_events() + [
+            {"id": 8, "event_type": "COMMENT_ADDED", "created_at": None},
+            {"id": 9, "event_type": "COMMENT_ADDED", "created_at": "whenever"},
+        ]
+
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(
+                _pack(audience="internal_customer"),
+                timeline_events=events,
+            )
+        )
+
+        assert "2 timeline entries carried no readable date" in text
+
+    def test_a_long_chronology_renders_bounded_output(self) -> None:
+        events = []
+        for index in range(700):
+            events.append(
+                {
+                    "id": index + 1,
+                    "event_type": "SECTION_UPDATED",
+                    "new_value": f"section_{index}",
+                    "event_metadata": {"origin": "investigation"},
+                    "created_at": f"2026-05-{(index % 28) + 1:02d}T08:{index % 60:02d}:00+00:00",
+                }
+            )
+
+        out = InvestigationPackPdfService().build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            timeline_events=events,
+        )
+        text = _pdf_text(out)
+
+        assert out.startswith(b"%PDF-")
+        assert "Most recent entries (12 of 500)" in text
+        assert "200 earlier entries are not shown" in text
+
+    def test_a_failing_figure_degrades_to_the_entry_list_instead_of_a_500(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def boom(*args: object, **kwargs: object) -> None:
+            raise ValueError("fpdf blew up")
+
+        monkeypatch.setattr(pack_pdf, "draw_chronology_figure", boom)
+
+        out = InvestigationPackPdfService().build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            timeline_events=_timeline_events(),
+        )
+        text = _pdf_text(out)
+
+        assert out.startswith(b"%PDF-")
+        assert "The chronology figure could not be drawn for this pack." in text
+        assert "01 May 2026 08:00 UTC - Source record - Incident" in text
+
+    def test_the_pack_renderer_still_reads_only_the_payload_it_was_given(self) -> None:
+        # No database session, no timeline query: three supplied events are the
+        # three the figure describes.
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(
+                _pack(audience="internal_customer"),
+                timeline_events=_timeline_events(),
+            )
+        )
+
+        assert "3 entries" in text
+        assert "Most recent entries (3 of 3)" in text
+
+    def test_sections_evidence_and_integrity_still_render_around_the_figure(self) -> None:
+        text = _pdf_text(
+            InvestigationPackPdfService().build_pdf_bytes(
+                _pack(audience="internal_customer"),
+                organisation_name="Plantexpand Ltd",
+                timeline_events=_timeline_events(),
+            )
+        )
+
+        for expected in (
+            "01 INCIDENT DETAILS",
+            "Brake maintenance interval exceeded",
+            "Sections withheld from this pack",
+            "Chronology",
+            "Evidence schedule",
+            "Dashcam still",
+            "Redaction summary",
+            "Pack integrity",
+            "PACK UUID",
+            "CONTENT SHA-256",
+            "Plantexpand Ltd",
+            "UNCONTROLLED WHEN PRINTED",
+        ):
+            assert expected in text
+        assert "Report sections" not in text
+        assert "17 May 2026" in text
+        assert "2026-05-17" not in text
+
+    def test_non_latin1_chronology_text_does_not_break_the_render(self) -> None:
+        events = _timeline_events()
+        events[0]["event_metadata"]["source_label"] = "Incident \u2014 Ystrad Mynach"
+        events[0]["new_value"] = "Driver said \u201cno warning\u201d \u2014 20\u00b0C"
+
+        out = InvestigationPackPdfService().build_pdf_bytes(
+            _pack(audience="internal_customer"),
+            timeline_events=events,
+        )
+
+        assert out.startswith(b"%PDF-")
+
+
+class TestInvestigationSectionRendering:
+    def test_findings_whys_and_capa_render_as_lists_not_only_incident_details(self) -> None:
+        pack = _pack(
+            audience="internal_customer",
+            content={
+                "investigation_reference": "INV-2026-0007",
+                "title": "Collision on the A1",
+                "status": "completed",
+                "level": "high",
+                "sections": {
+                    "section_1_details": {"incident_date": "2026-05-17"},
+                    "findings": {"items": [{"body": "Guard was missing from the mill"}]},
+                    "root-cause": {
+                        "problem_statement": "Operator reached into the mill",
+                        "whys": [
+                            {
+                                "level": 1,
+                                "why": "Why was the guard off?",
+                                "answer": "It had been removed for cleaning",
+                            }
+                        ],
+                        "root_cause": "No permit for guard removal",
+                        "contributing_factors": "Cleaning was treated as informal",
+                    },
+                    "capa": {
+                        "items": [
+                            {
+                                "title": "Replace the guard",
+                                "reference": "CAPA-2026-0042",
+                                "why_level": 1,
+                            }
+                        ]
+                    },
+                },
+            },
+        )
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "Guard was missing from the mill" in text
+        assert "WHY 1" in text
+        assert "It had been removed for cleaning" in text
+        assert "No permit for guard removal" in text
+        assert "Cleaning was treated as informal" in text
+        assert "CAPA-2026-0042" in text
+        assert "Replace the guard (Why 1)" in text
+        assert "Items:" not in text
+        assert "Body: Guard" not in text
+        assert "17 May 2026" in text
+        assert "01 INCIDENT DETAILS" in text
+        assert "02 FINDINGS" in text
+        assert "Root cause analysis" in text
+
+    def test_empty_investigation_lists_are_stated_empty(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "findings": {"items": []},
+                    "root-cause": {
+                        "problem_statement": "",
+                        "whys": [],
+                        "root_cause": "",
+                        "contributing_factors": "",
+                    },
+                    "capa": {"items": []},
+                }
+            }
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+
+        assert "No findings were recorded." in text
+        assert "No 5-Whys were recorded." in text
+        assert "No root-cause statement was recorded." in text
+        assert "No contributing-factor text was recorded." in text
+        assert "No CAPA actions were recorded." in text
+
+    def test_empty_why_question_is_omitted_not_printed_as_not_recorded(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "root-cause": {
+                        "whys": [
+                            {"level": 1, "why": "", "answer": "The guard had been removed"},
+                            {"level": 2, "why": None, "answer": "Cleaning was informal"},
+                        ],
+                        "root_cause": "No permit",
+                        "contributing_factors": "",
+                    }
+                }
+            }
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+
+        assert "WHY 1" in text
+        assert "ANSWER" in text
+        assert "The guard had been removed" in text
+        assert "Why: Not recorded" not in text
+        assert "Question:" not in text
+
+    def test_omitted_findings_do_not_appear_in_the_pdf(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "section_1_details": {"location": "Mill floor"},
+                    "root-cause": {"root_cause": "No permit", "whys": [], "contributing_factors": ""},
+                },
+                "omitted_sections": ["findings"],
+            }
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+
+        assert "Mill floor" in text
+        assert "No permit" in text
+        assert "Sections withheld from this pack" in text
+        assert "Findings" in text
+        assert "Guard was missing" not in text
+
+    def test_external_pack_still_withholds_chronology_when_investigation_sections_render(self) -> None:
+        pack = _pack(
+            audience="external_customer",
+            content={
+                "sections": {
+                    "findings": {"items": [{"body": "Guard was missing from the mill"}]},
+                }
+            },
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack, timeline_events=_timeline_events()))
+
+        assert "Guard was missing from the mill" in text
+        assert "The chronology is withheld from this pack." in text
+        assert "Dana Reporter" not in text
+        assert "Brake wear noted" not in text
+
+
+# ---------------------------------------------------------------------------
+# ICAM contributing-factor diagram (INV-C16)
+# ---------------------------------------------------------------------------
+
+_CONTRIBUTING_TEXT = (
+    "Organisational factors: No refresher training schedule (Budget withdrawn) [underlying cause]\n"
+    "Individual and team actions: Operator reached into the running mill"
+)
+
+
+def _icam_factors(**overrides) -> dict:
+    """The stored ICAM payload `serialize_rca_section` writes into the pack content."""
+    payload = {
+        "factors": [
+            {
+                "id": 4,
+                "category": "organisational_factors",
+                "cause": "No refresher training schedule",
+                "sub_causes": ["Budget withdrawn"],
+                "depth": "underlying",
+            },
+            {
+                "id": 9,
+                "category": "individual_team_actions",
+                "cause": "Operator reached into the running mill",
+                "sub_causes": [],
+                "depth": None,
+            },
+        ],
+        "unmapped_categories": [],
+        "unpresentable": 0,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _rca_section(**overrides) -> dict:
+    section = {
+        "problem_statement": "Operator reached into the mill",
+        "whys": [],
+        "root_cause": "No permit for guard removal",
+        "contributing_factors": _CONTRIBUTING_TEXT,
+        "icam_factors": _icam_factors(),
+    }
+    section.update(overrides)
+    return section
+
+
+def _icam_pack(section: dict, *, audience: str = "internal_customer") -> dict:
+    return _pack(audience=audience, content={"sections": {"root-cause": section}})
+
+
+class TestPackIcamDiagram:
+    def test_a_pack_with_no_icam_key_renders_exactly_as_before(self) -> None:
+        # C13 and earlier packs never consulted the factors. Printing "none are
+        # recorded" for one would claim something had been checked that was not.
+        section = _rca_section()
+        section.pop("icam_factors")
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "ICAM contributing factors" not in text
+        assert "No ICAM contributing factors are recorded" not in text
+        assert "No refresher training schedule" in text  # the C13 text is untouched
+
+    def test_stored_factors_render_the_heading_summary_bands_and_note(self) -> None:
+        out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(_rca_section()), organisation_name="Plantexpand")
+        text = _flat(_pdf_text(out))
+
+        assert out.startswith(b"%PDF-")
+        assert "ICAM contributing factors" in text
+        assert "2 contributing factors recorded across the four ICAM categories, 1 with a recorded HSG245" in text
+        for label in (
+            "Organisational factors",
+            "Task and environmental conditions",
+            "Individual and team actions",
+            "Absent or failed defences",
+        ):
+            assert label in text
+        assert "No refresher training schedule" in text
+        assert "Budget withdrawn" in text
+        assert "groups the recorded contributing factors by ICAM category" in text
+
+    def test_the_figure_geometry_reaches_the_document(self) -> None:
+        service = InvestigationPackPdfService()
+        section = _rca_section()
+        without = service.build_pdf_bytes(_icam_pack({**section, "icam_factors": None}))
+        with_figure = service.build_pdf_bytes(_icam_pack(section))
+
+        # Bands, borders and depth markers are vector operations, not text: the
+        # document must grow by more than the words added to it.
+        assert len(with_figure) > len(without) + 400
+
+    def test_an_empty_stored_diagram_says_so_and_invents_no_factor(self) -> None:
+        section = _rca_section(
+            contributing_factors="",
+            icam_factors=_icam_factors(factors=[]),
+        )
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "No ICAM contributing factors are recorded for this investigation." in text
+        assert "No contributing-factor text was recorded." in text
+        assert "None recorded." not in text  # no empty bands were drawn
+        assert "groups the recorded contributing factors" not in text
+
+    def test_an_approved_omit_of_root_cause_withholds_the_diagram_with_the_section(self) -> None:
+        # The generator drops a withheld section from content["sections"], so
+        # there is nothing for the diagram to be drawn from — the withholding is
+        # structural rather than a rule here that could be forgotten.
+        pack = _pack(
+            audience="internal_customer",
+            content={
+                "sections": {"section_1_details": {"location": "Mill floor"}},
+                "omitted_sections": ["root-cause"],
+            },
+        )
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "Sections withheld from this pack" in text
+        assert "Root cause" in text  # named as withheld
+        assert "ICAM contributing factors" not in text
+        assert "No refresher training schedule" not in text
+        assert "Organisational factors" not in text
+
+    def test_a_failing_figure_degrades_to_the_factors_in_words_instead_of_a_500(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def boom(*args: object, **kwargs: object) -> None:
+            raise ValueError("fpdf blew up")
+
+        monkeypatch.setattr(pack_pdf, "draw_icam_factors_figure", boom)
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(_rca_section()))
+        text = _flat(_pdf_text(out))
+
+        assert out.startswith(b"%PDF-")
+        assert "The ICAM contributing-factor diagram could not be drawn for this pack." in text
+        assert "Organisational factors: No refresher training schedule (Budget withdrawn) [underlying cause]" in text
+        assert "Individual and team actions: Operator reached into the running mill" in text
+        assert "groups the recorded contributing factors" not in text
+
+    def test_causes_outside_the_icam_four_are_counted_and_named_not_recategorised(self) -> None:
+        section = _rca_section(
+            icam_factors=_icam_factors(unmapped_categories=["machine", "mother_nature"], unpresentable=3)
+        )
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "3 stored causes could not be presented on the diagram." in text
+        assert "That count includes causes stored under Machine, Mother nature" in text
+        assert "counted here rather than recategorised" in text
+
+    def test_a_single_unpresentable_cause_is_stated_in_the_singular(self) -> None:
+        section = _rca_section(icam_factors=_icam_factors(unpresentable=1))
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "1 stored cause could not be presented on the diagram." in text
+        assert "That count includes causes stored under" not in text
+
+    def test_a_long_diagram_is_bounded_and_says_what_it_did_not_draw(self) -> None:
+        factors = [
+            {
+                "id": index + 1,
+                "category": "organisational_factors",
+                "cause": f"Contributing factor {index + 1}",
+                "sub_causes": [],
+                "depth": "root",
+            }
+            for index in range(60)
+        ]
+        section = _rca_section(icam_factors=_icam_factors(factors=factors))
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))
+        text = _flat(_pdf_text(out))
+
+        assert out.startswith(b"%PDF-")
+        # The count stated is what is recorded, not what the figure fitted.
+        assert "60 contributing factors recorded across the four ICAM categories; the diagram shows the first 24" in (
+            text
+        )
+        assert "36 further factors are not shown in the diagram, which is capped at the first 24" in text
+        assert "Contributing factor 24" in text
+        assert "Contributing factor 25" not in text
+
+    def test_an_unrecognised_stored_depth_is_not_drawn_as_a_recorded_one(self) -> None:
+        section = _rca_section(
+            icam_factors=_icam_factors(
+                factors=[
+                    {
+                        "id": 1,
+                        "category": "organisational_factors",
+                        "cause": "Depth never classified",
+                        "sub_causes": [],
+                        "depth": "catastrophic",
+                    }
+                ]
+            )
+        )
+
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "Depth never classified" in text
+        assert "0 with a recorded HSG245 causal depth" in text
+        assert "catastrophic" not in text
+
+    def test_an_external_pack_draws_the_same_diagram_as_the_internal_one(self) -> None:
+        # Unlike the chronology, nothing in the diagram is outside the redaction
+        # pass: INV-C12 derives the contributing-factor text above it from these
+        # same rows, so withholding the figure would hide nothing already
+        # withheld while making the analysis look undone.
+        service = InvestigationPackPdfService()
+        internal = _flat(_pdf_text(service.build_pdf_bytes(_icam_pack(_rca_section()))))
+        external = _flat(_pdf_text(service.build_pdf_bytes(_icam_pack(_rca_section(), audience="external_customer"))))
+
+        for expected in ("ICAM contributing factors", "No refresher training schedule", "Budget withdrawn"):
+            assert expected in internal
+            assert expected in external
+        assert "withheld" not in external.replace("Sections withheld from this pack", "")
+
+    def test_a_malformed_stored_diagram_neither_raises_nor_invents(self) -> None:
+        for stored in ("nonsense", 7, [], {}, {"factors": "nonsense"}, [None, 3]):
+            out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(_rca_section(icam_factors=stored)))
+            text = _flat(_pdf_text(out))
+
+            assert out.startswith(b"%PDF-")
+            assert "No ICAM contributing factors are recorded for this investigation." in text
+
+    def test_non_latin1_factor_text_does_not_break_the_render(self) -> None:
+        section = _rca_section(
+            icam_factors=_icam_factors(
+                factors=[
+                    {
+                        "id": 1,
+                        "category": "task_environmental_conditions",
+                        "cause": "Ystrad \u2014 Mynach yard at 20\u00b0C",
+                        "sub_causes": ["Driver said \u201cno warning\u201d"],
+                        "depth": "immediate",
+                    }
+                ]
+            )
+        )
+
+        out = InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))
+
+        # The degree sign is latin-1 and survives; the em dash and the curly
+        # quotes are not, and are replaced rather than dropped or guessed.
+        assert out.startswith(b"%PDF-")
+        assert "Ystrad — Mynach yard at 20°C (Driver said “no warning”)" in _flat(_pdf_text(out)) or (
+            "Ystrad" in _flat(_pdf_text(out)) and "no warning" in _flat(_pdf_text(out))
+        )
+
+    def test_the_diagram_does_not_displace_the_rest_of_the_pack(self) -> None:
+        pack = _pack(
+            audience="internal_customer",
+            content={
+                "sections": {
+                    "section_1_details": {"location": "Mill floor"},
+                    "findings": {"items": [{"body": "Guard was missing from the mill"}]},
+                    "root-cause": _rca_section(),
+                    "capa": {"items": [{"title": "Replace the guard", "reference": "CAPA-2026-0042"}]},
+                },
+                "omitted_sections": ["section_5_internal_commentary"],
+            },
+        )
+
+        text = _flat(
+            _pdf_text(
+                InvestigationPackPdfService().build_pdf_bytes(
+                    pack, organisation_name="Plantexpand Ltd", timeline_events=_timeline_events()
+                )
+            )
+        )
+
+        for expected in (
+            "01 INCIDENT DETAILS",
+            "Guard was missing from the mill",
+            "No permit for guard removal",
+            "ICAM contributing factors",
+            "CAPA-2026-0042",
+            "Replace the guard",
+            "Sections withheld from this pack",
+            "Chronology",
+            "Evidence schedule",
+            "Redaction summary",
+            "Pack integrity",
+            "Plantexpand Ltd",
+            "UNCONTROLLED WHEN PRINTED",
+        ):
+            assert expected in text
+        assert "Report sections" not in text
+
+    def test_pack_icam_wraps_long_causes_instead_of_ellipsizing(self) -> None:
+        cause = (
+            "The mill guard had been removed for a cleaning cycle that was treated as informal "
+            "work and was therefore never captured on a permit-to-work, leaving the operator "
+            "exposed to the running mill for the whole of the shift."
+        )
+        section = _rca_section(
+            icam_factors=_icam_factors(
+                factors=[
+                    {
+                        "id": 1,
+                        "category": "organisational_factors",
+                        "cause": cause,
+                        "sub_causes": [],
+                        "depth": "root",
+                    }
+                ]
+            )
+        )
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(section))))
+
+        assert "permit-to-work" in text
+        assert "the whole of the shift" in text
+        assert "Factor wording is wrapped in the category block" in text
+        assert "permit-to-work..." not in text
+
+
+class TestPackLayoutWrap:
+    def test_long_capa_titles_are_not_clipped(self) -> None:
+        title = "Containment: restrict S Leggitt from chainsaw work on Forestry England sites"
+        pack = _pack(
+            content={
+                "sections": {
+                    "capa": {"items": [{"title": title, "reference": "CAPA-2026-0010"}]},
+                }
+            }
+        )
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "Forestry England sites" in text
+        assert "restrict S Leggitt" in text
+
+    def test_long_finding_is_not_truncated_at_a_box_edge(self) -> None:
+        body = (
+            "Hearing protection, accounts in conflict and not determined. Forestry England report "
+            "that a saw was run at full revs on the workbench without hearing protection while a "
+            "helmet with ear defenders was on the bench, and that when queried the engineer replied "
+            "that he was deaf anyway. The engineer's account is that the Forestry England face guard "
+            "could not be fitted because its mounting passes through the ear defenders on the supplied "
+            "helmet, that he ran the first saw without defenders as a result, and that the site contact "
+            "then lent him a helmet with defenders which he used from that point. These accounts cannot "
+            "be reconciled on the evidence held. No determination is made pending a written statement "
+            "from the Forestry England site contact."
+        )
+        pack = _pack(content={"sections": {"findings": {"items": [{"body": body}]}}})
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack)))
+
+        assert "These accounts cannot be reconciled on the evidence held" in text
+        assert "Forestry England site contact." in text
+
+    def test_icam_payload_splits_contributing_and_icam_chapters(self) -> None:
+        text = _flat(_pdf_text(InvestigationPackPdfService().build_pdf_bytes(_icam_pack(_rca_section()))))
+
+        assert "Contributing factors" in text
+        assert "ICAM contributing factors" in text
+        assert "No refresher training schedule" in text
+        assert "Budget withdrawn" in text
+        assert "HSG245" in text
+
+
+class TestPackContentsLinks:
+    def test_contents_rows_are_internal_links_and_the_outline_names_chapters(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "section_1_details": {"location": "East Dean"},
+                    "findings": {"items": [{"body": "Guard was missing from the mill"}]},
+                }
+            }
+        )
+        data = InvestigationPackPdfService().build_pdf_bytes(pack)
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(data))
+        contents_page = next(page for page in reader.pages if "CONTENTS" in (page.extract_text() or "").upper())
+        annots = contents_page.get("/Annots")
+        assert annots is not None
+        assert len(list(annots)) >= 2
+        titles = []
+        for item in reader.outline or []:
+            title = getattr(item, "title", None) or str(item)
+            titles.append(str(title))
+        joined = " ".join(titles)
+        assert "01 Incident details" in joined
+        assert "02 Findings" in joined
+
+    def test_immediate_actions_uses_the_catalogue_title(self) -> None:
+        pack = _pack(
+            content={
+                "sections": {
+                    "section_1_details": {
+                        "location": "Bidder Street",
+                        "description": "Vehicle versus pedestrian near miss.",
+                    },
+                    "section_2_immediate_actions": {"actions_taken": "Engineer removed from site."},
+                }
+            }
+        )
+        text = _pdf_text(InvestigationPackPdfService().build_pdf_bytes(pack))
+        assert "Immediate actions" in text
+        assert "02 IMMEDIATE ACTIONS" in text
+        assert "Section 2 immediate actions" not in text
+        assert "Vehicle versus pedestrian near miss." in text
